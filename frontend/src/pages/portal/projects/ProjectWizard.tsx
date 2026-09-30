@@ -1,0 +1,355 @@
+import React, { useState } from 'react';
+import { NewBuildAnswers, BuildSize } from './projectsStore';
+import { useIsExplorer } from '../useIsExplorer';
+import { fetchIntakeQuestions, previewIntake, IntakeQuestion, CoveredAngle, IntakePreview } from '../../../services/sbpApi';
+import IntakeReviewPane, { phoneLooksValid, type CallChoice } from './IntakeReviewPane';
+
+// "Start a new build" — the questionnaire that shapes an idea into a project.
+// Three steps: (1) idea + size, (2) interview questions generated from THAT
+// idea, (3) review + confirm. On confirm it hands the answers up; the parent
+// kicks off the background build.
+//
+// Step 2 used to ask three hardcoded questions, identical for every student and
+// pre-filled with a support-inbox example — so a student building a warehouse
+// robot was asked about their Zendesk. It now asks the server, which reads the
+// idea and writes the questions. Step 3 used to render a fabricated plan (four
+// invented requirements, three invented tasks) that called nothing; the real
+// plan only exists minutes after Confirm, so step 3 now shows the student what
+// the server UNDERSTOOD from their inputs (the same statements it will record
+// when they confirm), what it still does not know, and what actually happens
+// next. Nothing here is presented as generated unless it was.
+
+// Tier copy states DEPTH, not a duration. It used to advertise a fixed number
+// of minutes per tier — figures with no telemetry behind them, on a pipeline
+// whose measured worst case under a 20-student rush was 237s. FR-002 wants the
+// displayed estimate derived from a trailing-7-day p50; that telemetry does not
+// exist yet, so rather than invent a second set of numbers these describe what
+// the tier actually produces.
+//
+// The counts MUST match TIER_DEPTH in backend/src/services/sbp/buildTiers.ts,
+// which is what the decomposer is actually told to hit. A backend test
+// (buildTiers.wizardCopy.test.ts) reads this file and fails if they drift.
+const SIZES: { key: BuildSize; title: string; depth: string; desc: string }[] = [
+  { key: 'workflow', title: 'A workflow', depth: '8-12 requirements', desc: 'A focused automation across 3 releases. Cory drafts a tailored requirements doc — no repo needed.' },
+  { key: 'project', title: 'A full project', depth: '18-24 requirements', desc: 'The full build across 5 releases: requirements, an MCP server or app, reliability, and a showcase.' },
+  { key: 'autonomous', title: 'Fully autonomous', depth: '30-40 requirements', desc: 'A complete agent system across 7 releases, designed end to end — the deepest build.' },
+];
+
+const STEPS = ['Your idea', 'Sharpen it', 'Review & confirm'];
+
+// These mirror startSchema in backend/src/routes/sbpRoutes.ts. They are enforced
+// HERE, in the box, because the alternative is what happened to Taiwo Oludimimu
+// on 2026-08-14: he pasted a full requirements document into an interview
+// answer, pressed Confirm, and the server refused the request on a length he
+// was never shown, on a field he never filled in. A limit a student cannot see
+// until they have violated it is not a limit, it is a trapdoor.
+const IDEA_MAX = 20_000;
+const ANSWER_MAX = 4_000;
+const NAME_MAX = 200;
+
+/** Shows a count only once it is worth knowing about. */
+const Counter: React.FC<{ value: string; max: number }> = ({ value, max }) => {
+  if (value.length < max * 0.8) return null;
+  const full = value.length >= max;
+  return (
+    <div className="small" style={{ marginTop: 4, color: full ? '#B5710A' : undefined, opacity: full ? 1 : .75 }}>
+      {value.length.toLocaleString()} / {max.toLocaleString()} characters
+      {full && ' — that is as much as we can take here. Anything more is best kept for the build itself.'}
+    </div>
+  );
+};
+
+const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise<void> }> = ({ onCreate }) => {
+  const demo = useIsExplorer();
+  const [step, setStep] = useState(1);
+  const [qIndex, setQIndex] = useState(0);   // which interview question is on screen
+  const [idea, setIdea] = useState('');
+  const [name, setName] = useState('');
+  // Size is no longer asked. A student cannot know on day one whether their idea
+  // is "8-12 requirements" or "30-40" — that is a judgement about a system that
+  // does not exist yet, and the pipeline works it out from the interview anyway.
+  // Held as a constant so the request shape and the tier targets are unchanged.
+  const size: BuildSize = 'project';
+  const [weeks, setWeeks] = useState(6);
+
+  // Step 2 is server-driven. `generated` false means the model was unreachable
+  // and the server sent its generic set — usable, but we must not call it
+  // tailored.
+  const [questions, setQuestions] = useState<IntakeQuestion[]>([]);
+  const [generated, setGenerated] = useState(true);
+  // What the description already answered, as the server reported it. Shown
+  // in the review so a short interview reads as deliberate rather than broken.
+  const [covered, setCovered] = useState<CoveredAngle[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [replies, setReplies] = useState<Record<string, string>>({});
+  // Which idea the current questions were written for, so going Back and
+  // Next again doesn't re-ask the server for the same thing.
+  const [askedFor, setAskedFor] = useState<string | null>(null);
+
+  // Step 3 is the confirmation gate. The server computes what it WOULD record
+  // from these exact inputs, using the same code that records it, so what the
+  // student confirms is what gets written. Nothing is stored until Confirm.
+  const [preview, setPreview] = useState<IntakePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewedFor, setPreviewedFor] = useState<string | null>(null);
+  // "Have an AI call me about what is still unanswered." Offered only when the
+  // preview says a call can happen; carried up with the answers and sent by
+  // the parent once the build has started, because the call continues the
+  // stored interview rather than opening one.
+  const [call, setCall] = useState<CallChoice>({ wanted: false, phone: '' });
+
+  // `angle` rides along with each answer. Without it the server cannot file
+  // the answer against a truth dimension and reports it unmapped, which is
+  // what happened to every answer before this line existed.
+  const answered = questions
+    .map((q) => ({ id: q.id, question: q.question, answer: (replies[q.id] || '').trim(), angle: q.angle }))
+    .filter((a) => a.answer.length > 0);
+
+  const currentQ = questions[qIndex] ?? null;
+
+  const callOffer = preview?.callOffer;
+  const callRequested = call.wanted && Boolean(callOffer?.available);
+  const answers: NewBuildAnswers = {
+    idea, name, size, weeks, answers: answered, covered,
+    call: callRequested && callOffer && phoneLooksValid(call.phone)
+      ? { phone: call.phone.trim(), consentVersion: callOffer.consentVersion }
+      : undefined,
+  };
+
+  async function loadQuestions(force = false): Promise<void> {
+    const current = idea.trim();
+    if (!force && askedFor === current && questions.length > 0) return;
+    setLoading(true);
+    setError(null);
+    const res = await fetchIntakeQuestions({ idea: current, size, name: name.trim() || undefined });
+    setLoading(false);
+    if (res.ok) {
+      setQuestions(res.result.questions);
+      setGenerated(res.result.generated !== false);
+      setCovered(res.result.covered ?? []);
+      setAskedFor(current);
+    } else {
+      // The server degrades internally, so a failure here means the request
+      // never landed. Say so and let them retry or move on — never strand them.
+      setError(res.error.message);
+    }
+  }
+
+  function goSharpen(): void {
+    setStep(2);
+    void loadQuestions();
+  }
+
+  async function loadPreview(): Promise<void> {
+    const input = { idea: idea.trim(), answers: answered, covered };
+    const key = JSON.stringify(input);
+    if (previewedFor === key && preview) return;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    const res = await previewIntake(input);
+    setPreviewLoading(false);
+    if (res.ok) {
+      setPreview(res.preview);
+      setPreviewedFor(key);
+    } else {
+      // Not a refusal, a missed connection. The fallback below shows the raw
+      // answers instead, and Confirm still works: the truth is written from
+      // the same inputs either way, the student just loses the read-back.
+      setPreview(null);
+      setPreviewError(res.error.message);
+    }
+  }
+
+  function goReview(): void {
+    setStep(3);
+    void loadPreview();
+  }
+
+  const blocked = preview?.review.blocksPlanning === true;
+  // A ticked call box with no usable number is an unfinished intention, not a
+  // request. Confirm waits for one rather than quietly dropping the call.
+  const callIncomplete = callRequested && !phoneLooksValid(call.phone);
+
+  return (
+    <div>
+      <div className="pjw-steps">
+        {STEPS.map((s, i) => (
+          <div key={s} className={`pjw-step${i + 1 === step ? ' active' : i + 1 < step ? ' done' : ''}`}>
+            <div className="n">{i + 1 < step ? '✓' : i + 1}</div>{s}
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div className="card pjw-pane">
+          <h3>What do you want to build?</h3>
+          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise. The next step reads what you wrote and asks only about what it could not find: the more detail you give here, the fewer questions we ask.</p>
+          <textarea value={idea} maxLength={IDEA_MAX} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
+          <Counter value={idea} max={IDEA_MAX} />
+          <label className="pjw-label">Give it a name (optional)</label>
+          <input className="txt" value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
+          <div className="pjw-actions">
+            <button className="btn primary grow" disabled={idea.trim().length < 20} onClick={goSharpen}>Sharpen my idea
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
+          {idea.trim().length > 0 && idea.trim().length < 20 && (
+            <div className="small" style={{ marginTop: 8, color: '#B5710A' }}>A few more words and we can start asking about it.</div>
+          )}
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="card pjw-pane">
+          <h3>A few questions to sharpen scope</h3>
+
+          {loading && (
+            <>
+              <p className="lead">Reading your idea and writing questions about it…</p>
+              <div className="small" style={{ opacity: .75 }}>This takes a few seconds.</div>
+            </>
+          )}
+
+          {!loading && error && (
+            <>
+              <p className="lead" style={{ color: '#B5710A' }}>We couldn't reach the server to write your questions. {error}</p>
+              <div className="pjw-actions">
+                <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
+                <button className="btn ghost" onClick={() => { void loadQuestions(true); }}>Try again</button>
+                <button className="btn primary grow" onClick={goReview}>Continue without them</button>
+              </div>
+            </>
+          )}
+
+          {!loading && !error && (
+            <>
+              <p className="lead">
+                {generated
+                  ? 'These come from what you just wrote. Answer what you can — anything you skip, we infer.'
+                  : 'Our standard scoping questions. Answer what you can — anything you skip, we infer.'}
+              </p>
+              {/* ONE question at a time. Seven boxes on a page reads as a form and
+                  gets form answers — short, hedged, and written to get to the
+                  end. One at a time, with the count visible so it feels finite,
+                  gets a sentence that is actually about their work. */}
+              {currentQ && (
+                <div className="pjw-q">
+                  <div className="pjw-qprog">
+                    <span className="small">Question {qIndex + 1} of {questions.length}</span>
+                    <span className="pjw-qbar" aria-hidden="true">
+                      <i style={{ width: `${((qIndex + 1) / questions.length) * 100}%` }} />
+                    </span>
+                  </div>
+
+                  <label className="pjw-label" htmlFor={`q-${currentQ.id}`} style={{ fontSize: 17 }}>{currentQ.question}</label>
+                  {currentQ.why && <div className="small" style={{ opacity: .75, margin: '-2px 0 10px' }}>{currentQ.why}</div>}
+
+                  <textarea
+                    id={`q-${currentQ.id}`}
+                    className="txt"
+                    style={{ minHeight: 96 }}
+                    maxLength={ANSWER_MAX}
+                    value={replies[currentQ.id] || ''}
+                    placeholder={currentQ.placeholder}
+                    onChange={(e) => setReplies((r) => ({ ...r, [currentQ.id]: e.target.value }))}
+                  />
+                  <Counter value={replies[currentQ.id] || ''} max={ANSWER_MAX} />
+
+                  {/* Tappable example answers. Half of why a beginner can answer
+                      this at all, and where they find out what they can ask for
+                      — "let me undo it afterwards" is not a thing most people
+                      know to want. Tapping fills the box so they can edit it,
+                      rather than submitting for them. */}
+                  {currentQ.suggestions && currentQ.suggestions.length > 0 && (
+                    <div className="pjw-sugs">
+                      <span className="small" style={{ opacity: .75 }}>Not sure? Start from one of these:</span>
+                      <div className="pjw-sugrow">
+                        {currentQ.suggestions.map((sug) => (
+                          <button
+                            key={sug}
+                            type="button"
+                            className="pjw-sug"
+                            onClick={() => setReplies((r) => ({ ...r, [currentQ.id]: sug }))}
+                          >
+                            {sug}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="pjw-actions">
+                <button
+                  className="btn ghost"
+                  onClick={() => (qIndex === 0 ? setStep(1) : setQIndex((i) => i - 1))}
+                >
+                  Back
+                </button>
+                {qIndex < questions.length - 1 ? (
+                  <button className="btn primary grow" onClick={() => setQIndex((i) => i + 1)}>
+                    {(replies[currentQ?.id || ''] || '').trim() ? 'Next' : 'Skip this one'}
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                ) : (
+                  <button className="btn primary grow" onClick={goReview}>Review &amp; confirm
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="card pjw-pane">
+          <h3>Review &amp; confirm</h3>
+          <p className="lead">This is what we understood, and what we still don't know. Nothing has been generated yet — that starts when you confirm. If something is wrong, go back and change your answer.</p>
+
+          <IntakeReviewPane
+            idea={idea.trim()}
+            answered={answered}
+            preview={preview}
+            loading={previewLoading}
+            error={previewError}
+            call={call}
+            onCallChange={setCall}
+          />
+
+          <div className="section-title" style={{ margin: '18px 0 10px' }}>What happens next</div>
+          <ol className="pjw-next">
+            <li>Your requirements are written server-side from your idea and answers.</li>
+            <li>They're broken into releases and tasks, then checked — every task has to trace back to a requirement.</li>
+            <li>The tasks appear on your Path as a new branch. You can keep working while it builds.</li>
+          </ol>
+
+          <div className="section-title" style={{ margin: '18px 0 10px' }}>Timeline</div>
+          <div className="pjw-tf">
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <label className="pjw-label" style={{ marginTop: 0 }}>Finish this build in</label>
+              <select value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
+                {[4, 6, 8, 10].map((w) => <option key={w} value={w}>{w} weeks</option>)}
+              </select>
+            </div>
+            <div className="small" style={{ flex: 1, minWidth: 160 }}>Due dates back-schedule from your target, around the fixed 12-week training. A new branch appears on your Path.</div>
+          </div>
+
+          {demo && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>This is a demo — you can shape the whole build, but enroll to actually create it.</div>}
+          {callIncomplete && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>Add your phone number for the call, or untick the box.</div>}
+          <div className="pjw-actions">
+            <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
+            <button className="btn primary grow" onClick={() => { void onCreate(answers); }} disabled={demo || blocked || callIncomplete} title={demo ? 'Demo — enroll to build for real' : blocked ? 'Settle the contradiction above first' : callIncomplete ? 'Add a phone number or untick the call box' : undefined}>
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg> {demo ? 'Enroll to build for real' : 'Confirm & build in background'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ProjectWizard;

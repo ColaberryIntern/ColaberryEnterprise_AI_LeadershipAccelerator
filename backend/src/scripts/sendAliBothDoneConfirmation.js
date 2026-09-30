@@ -100,7 +100,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114, // AI_ProjectArchitect Overview todo
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - both done: backfill complete + sendWithBcAttach helper in place (this email is the proof)',
     html: HTML, text: TEXT,
     bcSummary: '<p>Confirmation email to Ali that the operating-doctrine gap is closed. Backfilled 5 previously-missed emails to their BC tickets + built <code>sendWithBcAttach</code> helper that forces <code>ticketId</code> at call site. This very comment was created automatically by the new helper as proof of the workflow.</p>',

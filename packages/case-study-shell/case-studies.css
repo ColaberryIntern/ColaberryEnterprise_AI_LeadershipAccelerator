@@ -1,0 +1,661 @@
+/* ============================================================================
+   The case-study shell: structure for the published-records index and the
+   record page, shared by every brand app.
+
+   NOT ONE COLOUR IS DECIDED HERE. Every value below is a `--cs-*` custom
+   property the HOST app maps to its own palette, which is what lets one
+   stylesheet serve Colaberry Enterprise, AI Flotation and (next)
+   training.colaberry.com without any of them looking like each other. A literal
+   hex in this file would be one brand's decision imposed on the others.
+
+   Ali, 2026-09-05: the record page should "look almost identical to enterprise
+   but filtered, colored, etc... for this brand". Identical is the job of the
+   structure below; different is the job of the six variables above it.
+
+   THE HOST MUST DEFINE THESE, or the page renders unstyled rather than wrong:
+     --cs-fg, --cs-fg-muted, --cs-bg, --cs-surface, --cs-line, --cs-accent,
+     --cs-accent-contrast, --cs-radius
+   ========================================================================= */
+
+.cs-record { display: grid; gap: var(--cs-gap, 2.5rem); padding-block: 2.5rem; }
+
+/* --------------------------------------------------------------- masthead --- */
+
+/* Words left, cover right. The picture costs no vertical space there, and it
+   sits beside the standfirst that explains it. One column below 60rem, cover
+   last, because on a phone the title answers "what is this" fastest. */
+.cs-hero { display: grid; gap: 1.5rem; align-items: center; }
+@media (min-width: 60rem) {
+  .cs-hero { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 3rem; }
+}
+.cs-hero-copy { display: grid; gap: .75rem; justify-items: start; min-width: 0; }
+.cs-title { margin: 0; overflow-wrap: anywhere; }
+.cs-standfirst { margin: 0; color: var(--cs-fg-muted); max-width: 60ch; }
+.cs-eyebrow {
+  margin: 0;
+  font-size: .8rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.cs-back { color: var(--cs-fg-muted); text-decoration: underline; text-underline-offset: 2px; }
+
+.cs-cover { margin: 0; min-width: 0; }
+.cs-cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+
+/* The verification class, printed as a word. Colour is never the only carrier:
+   a reader who cannot see the accent still reads "verified". */
+.cs-verify {
+  margin: 0;
+  font-size: .78rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+
+/* ------------------------------------------------------------------ facts --- */
+
+/* Six short label/value pairs across one row, not two-across down three. The
+   Enterprise page shipped the narrow version once and left a screen-height void
+   beside it; the fix is a full-width row and it belongs in the shared shell so
+   no brand re-earns that bug. */
+.cs-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding-block: 1.5rem;
+  border-block: 1px solid var(--cs-line);
+}
+.cs-fact { display: grid; gap: .2rem; min-width: 0; }
+.cs-term {
+  margin: 0;
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+.cs-value { margin: 0; overflow-wrap: anywhere; }
+
+/* ------------------------------------------------------------------ bands --- */
+
+.cs-band { display: grid; gap: 1rem; }
+.cs-band-title { margin: 0; }
+.cs-sub { margin: .5rem 0 0; font-size: 1rem; }
+.cs-prose { margin: 0; max-width: 68ch; line-height: 1.65; }
+.cs-list { margin: 0; padding-left: 1.15rem; display: grid; gap: .4rem; max-width: 68ch; }
+
+/* ---------------------------------------------------------------- metrics --- */
+
+/* 24rem, not 20: a metric card carries a baseline, a unit, a sample and a
+   paragraph of methodology, so its floor has to be a width that paragraph can
+   be read at. Narrower and every card becomes a tower of forty-character lines. */
+.cs-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-metric {
+  display: grid;
+  gap: .6rem;
+  align-content: start;
+  padding: 1.5rem;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cs-metric-value { margin: 0; font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.cs-metric-label { margin: 0; color: var(--cs-fg-muted); }
+
+/* Label beside its value, not above it. Four rows printing a small-caps label
+   on its own line is eight lines of card height to carry four facts. */
+.cs-metric-context { display: grid; gap: .5rem; margin: 0; }
+@media (min-width: 34rem) {
+  .cs-metric-context > div {
+    display: grid;
+    grid-template-columns: minmax(0, 8rem) minmax(0, 1fr);
+    column-gap: 1rem;
+    align-items: baseline;
+  }
+}
+.cs-limits {
+  margin: .3rem 0 0;
+  padding-left: 1.1rem;
+  font-size: .9rem;
+  color: var(--cs-fg-muted);
+}
+
+/* ------------------------------------------------- timeline, roadmap, chips --- */
+
+.cs-timeline, .cs-roadmap, .cs-people, .cs-repos, .cs-chips, .cs-artifacts {
+  margin: 0; padding: 0; list-style: none;
+}
+.cs-timeline, .cs-roadmap { display: grid; gap: .9rem; }
+.cs-timeline-item, .cs-roadmap-item {
+  display: grid;
+  gap: .2rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--cs-line);
+}
+.cs-timeline-date, .cs-roadmap-status {
+  font-size: .74rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.cs-timeline-label, .cs-roadmap-label { font-weight: 600; }
+.cs-timeline-detail, .cs-roadmap-detail { margin: 0; color: var(--cs-fg-muted); max-width: 68ch; }
+
+.cs-chipset { display: grid; gap: .5rem; }
+.cs-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.cs-chip {
+  padding: .15rem .6rem;
+  font-size: .85rem;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------- diagram --- */
+
+/* A FLOWCHART IS TALL AND NARROW, AND THE LAYOUT HAS TO EXPECT THAT SHAPE.
+   These are rendered portrait - the Repo2Reputation chart is 776 x 1434 - so
+   letting it run to the full band width would blow a screen and a half of
+   height into the middle of the architecture section. It is capped at a width
+   that keeps the node labels readable and centred, and it scrolls rather than
+   pushing the page sideways on a phone. */
+.cs-diagram {
+  margin: .5rem 0 0;
+  padding: 1rem;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  overflow-x: auto;
+}
+.cs-diagram-img {
+  display: block;
+  width: 100%;
+  max-width: 34rem;
+  height: auto;
+  margin-inline: auto;
+}
+.cs-diagram-caption {
+  margin: .75rem 0 0;
+  font-size: .8rem;
+  text-align: center;
+  color: var(--cs-fg-muted);
+}
+
+.cs-people, .cs-repos { display: grid; gap: .5rem; }
+.cs-repo { display: flex; gap: .75rem; align-items: baseline; }
+.cs-repo-date { font-size: .8rem; color: var(--cs-fg-muted); }
+
+/* -------------------------------------------------------------- artifacts --- */
+
+.cs-artifacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1.25rem;
+}
+.cs-artifact { display: grid; gap: .5rem; align-content: start; min-width: 0; }
+.cs-artifact img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-artifact-title { margin: 0; font-weight: 600; }
+.cs-artifact-note { margin: 0; font-size: .9rem; color: var(--cs-fg-muted); max-width: 60ch; }
+
+/* -------------------------------------------------------------- not found --- */
+
+.cs-notfound { display: grid; gap: 1rem; justify-items: start; padding-block: 3rem; }
+
+/* ========================================================== the record card ===
+   Shaped like the portal's event cards: picture, a line of context, the title,
+   the summary. Ali, 2026-09-06: "make them look like Event cards and use the
+   picture."
+
+   THE WHOLE CARD IS THE LINK. An event card offers "Register" because
+   registering is a different act from reading about the event. A record has one
+   thing you can do with it, so a small button would be a smaller target for the
+   only available action. The `record-cta` below is an affordance, not a control.
+
+   Colour comes from the host's `--cs-*` mapping, as everywhere else here.
+   ========================================================================== */
+
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+  justify-content: start;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.record-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.record-card:hover { border-color: var(--cs-accent); transform: translateY(-2px); }
+.record-card:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .record-card { transition: none; }
+  .record-card:hover { transform: none; }
+}
+
+/* A FIXED ASPECT, so a grid of records is a row of equal objects rather than a
+   ragged edge set by whatever proportions each screenshot happened to have.
+   `cover` crops rather than letterboxes: a band of empty surface around a
+   screenshot reads as a loading failure. */
+.record-media {
+  /* `position: relative` is doing real work here, not tidiness. The image is
+     sized `height: 100%`, and a PERCENTAGE HEIGHT NEEDS A DEFINITE PARENT
+     HEIGHT to resolve against. A height that `aspect-ratio` derives from the
+     width is not definite, so the percentage silently falls back to `auto`, the
+     image takes its own intrinsic height, and it pushes the box past the ratio
+     it was told to hold - a 16/9 rule that measured 368x318. Taking the image
+     out of flow leaves the box's own height as the only thing to size it from. */
+  position: relative;
+  /* 16/10, matching the Enterprise and training cards. All three sites show
+     the same records, so a picture that is a different shape on each one makes
+     one library look like three. Measured 2026-09-08: enterprise 444px wide,
+     training 447px - the cards already agreed, the pictures did not. It also
+     gives a screenshot more room than 16/9 did. (The walkthrough player below
+     stays 16/9: that is the video's own shape, not a card's.) */
+  aspect-ratio: 16 / 10;
+  background: var(--cs-bg);
+  border-bottom: 1px solid var(--cs-line);
+}
+.record-media img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* TOP, not centre. Almost every cover here is a screenshot of a screen,
+     and a screen puts its title bar and its first heading at the top. A
+     centred 16/9 crop of a tall page throws both away and frames whatever
+     happened to be halfway down - here, six rows out of the middle of a
+     requirements table, which tells a reader nothing about the record. */
+  object-position: center top;
+}
+/* A record with no approved cover keeps the card's shape instead of collapsing
+   it, so one missing picture does not break the row. */
+.record-media[data-empty='true'] { background: var(--cs-bg); }
+
+.record-body { display: flex; flex-direction: column; gap: .5rem; flex: 1; padding: 1.1rem 1.25rem 1.25rem; }
+
+.record-meta {
+  margin: 0;
+  font-size: .78rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.record-title { margin: 0; font-size: 1.1rem; line-height: 1.3; }
+.record-summary {
+  margin: 0;
+  font-size: .95rem;
+  line-height: 1.55;
+  color: var(--cs-fg-muted);
+  /* Four lines, so a long standfirst cannot make one card twice the height of
+     its neighbours. The full text is on the record page, one click away. */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Pushed to the bottom so the verification word and the affordance line up
+   across cards of different summary lengths. */
+.record-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: .6rem;
+}
+.record-verify {
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+.record-cta { font-size: .9rem; font-weight: 600; color: var(--cs-accent); }
+.record-cta::after { content: ' \2192'; }
+
+/* The byline sits with the summary, not in the foot: it is part of what the
+   record IS, where the foot carries what you can do about it. */
+.record-byline {
+  margin: 0;
+  font-size: .85rem;
+  color: var(--cs-fg-muted);
+}
+
+/* ------------------------------------------------------------ walkthrough --- */
+
+/* The walkthrough player IN THE MASTHEAD, in the slot the cover image otherwise holds.
+
+   It reuses `.cs-cover` for placement so the hero grid is unchanged and a record without a
+   walkthrough is untouched. Only the picture differs: a video needs a fixed 16:9 box
+   rather than an image's intrinsic height, or the masthead reflows the moment the poster
+   loads. */
+.cs-cover--video { display: grid; gap: .6rem; }
+.cs-walkthrough-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /* The poster is a frame of the video, so it fills the box like the video it stands in
+     for rather than being letterboxed inside its own frame. */
+  object-fit: cover;
+  background: #11161a;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+/* An operator's own YouTube or Vimeo video. Same box as the generated player so the hero
+   does not change shape depending on which one a record carries. No `object-fit`: the
+   provider letterboxes inside its own frame, and cropping an iframe would cut the player
+   controls off. */
+.cs-walkthrough-embed {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  background: #11161a;
+}
+.cs-cover--embed .cs-walkthrough-note a { margin-left: .25rem; }
+.cs-walkthrough-note {
+  margin: 0;
+  font-size: .82rem;
+  line-height: 1.5;
+  color: var(--cs-fg-muted);
+}
+
+/* A figure BETWEEN two bands. Full width and unindented on purpose: it belongs
+   to neither neighbour, and anything that visually tucked it under the heading
+   above would make that heading its caption. These replaced a trailing band of
+   three-across thumbnails — the size IS the change. */
+.cs-figure { margin: 0; display: grid; gap: .6rem; }
+.cs-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+}
+.cs-figure figcaption {
+  display: grid;
+  gap: .25rem;
+  font-size: .9rem;
+  color: var(--cs-fg-muted);
+  max-width: 68ch;
+}
+
+/* ---------- KEEP READING: other records on THIS site ---------- */
+/* Ali, 2026-09-08: "show other related project at the end of the Case Study's
+   so they can continue looking through related case studys." The surface is the
+   filter and it is the server's, so a record not published to this brand cannot
+   appear here. Three at most: an invitation to keep reading, not a second index. */
+.cs-related-list {
+  display: grid;
+  /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each
+     fill the whole row: the "Keep reading" cards measured 710px on Enterprise
+     and 1024px on AI Flotation against the 368px index card Ali called the
+     right size. `justify-content: start` plus a fixed upper track keeps a card
+     the same object whether the row holds one of them or four. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 23rem));
+  justify-content: start;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cs-related-link {
+  display: grid;
+  gap: .6rem;
+  height: 100%;
+  align-content: start;
+  color: inherit;
+  text-decoration: none;
+}
+.cs-related-link img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: center top;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  background: var(--cs-bg);
+}
+.cs-related-link:hover .cs-related-title { text-decoration: underline; }
+.cs-related-link:focus-visible { outline: 2px solid var(--cs-accent); outline-offset: 3px; }
+.cs-related-meta {
+  margin: 0;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--cs-accent);
+}
+.cs-related-title { margin: 0; font-size: 1rem; line-height: 1.3; }
+.cs-related-note {
+  margin: 0;
+  font-size: .88rem;
+  line-height: 1.5;
+  color: var(--cs-fg-muted);
+  /* Three lines: a standfirst here is a taste of the record, not the record. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* The related card carries the same last two rows as the index card, so the two
+   grids hold one object rather than two that merely resemble each other. */
+.cs-related-body { display: flex; flex-direction: column; gap: .5rem; flex: 1; }
+.cs-related-builder { margin: 0; font-size: .85rem; color: var(--cs-fg-muted); }
+.cs-related-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: .6rem;
+}
+.cs-related-verify {
+  font-size: .72rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--cs-fg-muted);
+}
+.cs-related-cta { font-size: .9rem; font-weight: 600; color: var(--cs-accent); }
+.cs-related-cta::after { content: ' \2192'; }
+.cs-related-link { display: flex; flex-direction: column; }
+
+/* THE SAME CARD, not a lookalike. Ali, 2026-09-09: "All the cards should be the
+   same size." Same chrome as `.record-card` - border, surface, radius, padding,
+   hover - and the same 4-line clamp on the summary, so an index card and a
+   "Keep reading" card are one object in two places rather than two that happen
+   to resemble each other. Measured before this: 368x541 against 368x427. */
+.cs-related-link {
+  overflow: hidden;
+  background: var(--cs-surface);
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.cs-related-link:hover { border-color: var(--cs-accent); transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .cs-related-link { transition: none; }
+  .cs-related-link:hover { transform: none; }
+}
+.cs-related-link img { border: 0; border-radius: 0; border-bottom: 1px solid var(--cs-line); }
+.cs-related-body { padding: 1.1rem 1.25rem 1.25rem; }
+.cs-related-note { -webkit-line-clamp: 4; }
+
+/* ------------------------------------------------------- the story sections --- */
+/* The decision cards, Meet the builder and the closing (case-study-record.js),
+   placed by the surface profile. The same structure training.colaberry.com
+   draws; every colour is a --cs-* token this site answers. */
+.cs-builder-mark { display: inline-grid; place-items: center; width: 3.5rem; height: 3.5rem; border-radius: 999px; background: var(--cs-accent); color: var(--cs-accent-contrast, #fff); font-family: var(--cs-font-display, inherit); font-size: 1.5rem; font-weight: 700; }
+.cs-builder-photo { width: 3.5rem; height: 3.5rem; border-radius: 999px; object-fit: cover; }
+.cs-builder__card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; padding: 1.5rem; background: var(--cs-surface); border: 1px solid var(--cs-line); border-radius: var(--cs-radius, 10px); }
+@media (min-width: 900px) {
+  .cs-builder__card { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 2rem; }
+  .cs-builder__did { border-left: 1px solid var(--cs-line); padding-left: 2rem; }
+}
+.cs-builder__who, .cs-builder__did { display: grid; gap: .9rem; align-content: start; min-width: 0; }
+.cs-builder__head { display: flex; align-items: center; gap: 1rem; }
+.cs-builder__name { margin: 0; font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+.cs-builder__role { margin: 0; color: var(--cs-fg-muted); }
+.cs-builder__progression { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: .5rem; margin: .25rem 0 0; padding: 0; list-style: none; }
+.cs-builder__progression li { position: relative; padding-top: 1.1rem; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-fg-muted); }
+.cs-builder__progression li::before { content: ""; position: absolute; top: .25rem; left: 0; width: .7rem; height: .7rem; border-radius: 999px; border: 2px solid var(--cs-accent); background: var(--cs-surface); }
+.cs-builder__progression li::after { content: ""; position: absolute; top: .55rem; left: .9rem; right: .25rem; height: 1px; background: var(--cs-line); }
+.cs-builder__progression li:last-child::after { display: none; }
+.cs-builder__progression li[data-current="true"] { color: var(--cs-fg); }
+.cs-builder__progression li[data-current="true"]::before { background: var(--cs-accent); }
+.cs-builder__contribution { margin: 0; line-height: 1.55; }
+.cs-builder__skills { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: .75rem; margin: 0; padding: 0; list-style: none; }
+.cs-builder__skill { display: grid; gap: .35rem; padding: .9rem 1rem; border: 1px solid var(--cs-line); border-radius: var(--cs-radius, 10px); font-size: .92rem; line-height: 1.5; }
+.cs-builder__skill span { color: var(--cs-fg-muted); }
+.cs-builder__provenance { margin: 0; font-size: .8rem; color: var(--cs-fg-muted); }
+.cs-decisions__lead { margin: -.5rem 0 .25rem; max-width: 68ch; color: var(--cs-fg-muted); line-height: 1.55; }
+.cs-decisions__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; margin: 0; padding: 0; list-style: none; }
+.cs-decision { display: grid; gap: .75rem; align-content: start; min-width: 0; padding: 1.5rem; background: var(--cs-surface); border: 1px solid var(--cs-line); border-radius: var(--cs-radius, 10px); }
+.cs-decision__top { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.cs-decision__index { font-family: var(--cs-font-display, inherit); font-size: 2rem; font-weight: 700; line-height: 1; color: var(--cs-accent); }
+/* A stage name may be longer than the card is wide ("Separate history from next action"): the label
+   wraps inside the card instead of running past its edge. Labels that fit stay on one line. */
+.cs-decision__stage { min-width: 0; padding: .2rem .6rem; border: 1px solid var(--cs-line); border-radius: 999px; font-family: var(--cs-font-mono, ui-monospace, monospace); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-fg-muted); overflow-wrap: anywhere; }
+.cs-decision__title { margin: 0; font-size: 1.1rem; line-height: 1.3; }
+.cs-decision__text { margin: 0; line-height: 1.55; }
+.cs-decision__evidence { margin: 0; font-size: .88rem; line-height: 1.5; color: var(--cs-fg-muted); }
+.cs-decision__evidence .cs-term { display: inline; margin-right: .35rem; }
+.cs-decision__outcome { display: flex; align-items: baseline; gap: .75rem; margin: .25rem 0 0; padding-top: .9rem; border-top: 1px solid var(--cs-line); font-size: .88rem; line-height: 1.45; color: var(--cs-fg-muted); }
+.cs-decision__figure { flex: none; font-family: var(--cs-font-display, inherit); font-size: 1.6rem; font-weight: 700; line-height: 1; color: var(--cs-fg); }
+.cs-closing__text { max-width: 68ch; font-size: 1.05rem; }
+
+/* ------------------------------------------------ the compact ending ------ *
+ * The format Ali approved on training.colaberry.com, ported to the sites this
+ * shell draws. Structure, not pixels: the same rail, board and folds, dressed
+ * in this stylesheet's tokens. Ali, 2026-09-17, looking at aiflotation.com:
+ * "the timeline is not on the aiflotation side ... it doesn't have a timeline
+ * and bottom format."
+ */
+
+/* The build: one dot per step, labels staggered above and below so neighbours
+   can each take two columns and still be read. */
+.cs-rail {
+  --cs-rail-n: 1;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(calc(var(--cs-rail-n) + 1), minmax(0, 1fr));
+  grid-template-rows: auto 1.25rem auto;
+  column-gap: .5rem;
+  margin: .5rem 0 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.cs-rail::before {
+  content: "";
+  grid-row: 2;
+  grid-column: 1 / -1;
+  align-self: center;
+  height: 2px;
+  background: var(--cs-line);
+}
+.cs-rail__item { display: contents; }
+.cs-rail__dot {
+  grid-row: 2;
+  grid-column: var(--cs-rail-i);
+  justify-self: start;
+  align-self: center;
+  width: .8rem;
+  height: .8rem;
+  border-radius: 999px;
+  background: var(--cs-accent);
+  box-shadow: 0 0 0 3px var(--cs-bg, #fff);
+}
+.cs-rail__label {
+  grid-column: var(--cs-rail-i) / span 2;
+  display: grid;
+  gap: .15rem;
+  min-width: 0;
+  padding-right: 1rem;
+  font-size: .86rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.cs-rail__item[data-side="up"] .cs-rail__label { grid-row: 1; align-self: end; padding-bottom: .6rem; }
+.cs-rail__item[data-side="down"] .cs-rail__label { grid-row: 3; padding-top: .6rem; }
+.cs-rail__label time { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cs-accent); }
+.cs-rail__notes { display: grid; gap: .45rem; margin: .75rem 0 0; padding-left: 1.1rem; max-width: 72ch; color: var(--cs-fg-muted); }
+.cs-rail__notes strong { color: var(--cs-fg); }
+
+/* Narrow: the same steps as compact rows; no rail, nothing to overflow. */
+@media (max-width: 899px) {
+  .cs-rail { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: auto; gap: .6rem; }
+  .cs-rail::before { display: none; }
+  .cs-rail__item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem; align-items: start; }
+  .cs-rail__dot { grid-column: 1; grid-row: 1; align-self: start; margin-top: .35rem; }
+  .cs-rail__label,
+  .cs-rail__item[data-side="up"] .cs-rail__label,
+  .cs-rail__item[data-side="down"] .cs-rail__label { grid-column: 2; grid-row: 1; padding: 0; align-self: start; }
+}
+
+/* What happened next: a status board, one column per status. */
+.cs-next { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem 2rem; }
+.cs-next__group { display: grid; gap: .4rem; align-content: start; }
+.cs-next__group .cs-term { margin: 0; }
+.cs-next__list { display: grid; gap: .35rem; margin: 0; padding: 0; list-style: none; font-size: .92rem; line-height: 1.45; }
+.cs-next__list li { position: relative; padding-left: 1.1rem; }
+.cs-next__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .5em;
+  width: .55rem;
+  height: .55rem;
+  border-radius: 999px;
+  border: 2px solid var(--cs-accent);
+}
+.cs-next__group[data-status="shipped"] .cs-next__list li::before { background: var(--cs-accent); }
+
+.cs-fold-body { display: grid; gap: .75rem; margin-top: .75rem; }
+
+/* The measurement narrative reads across two columns on a wide screen, so one
+   paragraph does not stand a screen tall beside empty space. */
+@media (min-width: 1100px) {
+  [data-band="measurement"] > .cs-prose-group { max-width: none; column-count: 2; column-gap: 2.5rem; }
+}

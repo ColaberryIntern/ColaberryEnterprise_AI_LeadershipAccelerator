@@ -1,0 +1,1131 @@
+/*
+ * AI Flotation — public site.
+ *
+ * The palette, type, spacing, radius, shadow and motion here are NOT invented. They come
+ * from the AI Flotation design system, vendored verbatim into `design/` from the
+ * Multi-Brand Tokens source. Variant A ("Forge") is the default: rust accent on warm
+ * paper-grey, Space Grotesk headings over Archivo body, 2px radius, flat.
+ *
+ * Read `design/DESIGN_SYSTEM.md` before changing anything in here. Two rules from it are
+ * load-bearing and easy to break by accident:
+ *
+ *   1. ONE accent does all the work. One filled primary action per view; the accent marks
+ *      that action and active state, nothing else. `--accent-soft` is the only tint.
+ *   2. Reference semantic tokens (`--bg`, `--accent`, `--fg-muted`), never raw hex. The
+ *      contrast pairs are guaranteed by the token set, not by anything measured here.
+ *
+ * Switching the whole site to variant B ("Harbor", teal) is one attribute on <html>:
+ * data-variant="harbor". Nothing in this file needs to change for that to work.
+ *
+ * Deliberately absent, per the source: gradients, imagery, textures, icon sets, emoji.
+ *
+ * Dependency-free by design. No framework, no build step beyond token substitution. This
+ * file is copied verbatim by packages/app-build (only .html is transformed), which is why
+ * it carries no {{brand.*}} tokens.
+ */
+
+/* The design system is vendored from its own repository by
+   backend/src/scripts/syncDesignSystems.js. Import its published entry point rather
+   than individual token files: styles.css declares the order the design system
+   itself depends on (fonts, tokens, base, components), and following it means a
+   reorganisation upstream cannot silently drop a stylesheet from this build. */
+@import url('design/styles.css');
+
+:root {
+  /* Site-local additions, both flagged as deviations from the source.
+     --mono: the source defines no monospace face, but this site sets record-like material
+     in one - the eyebrows, the stratum tags and the release-record block on
+     /delivery-standard/. Dropping it would change what that content communicates, so it
+     is kept and named here rather than hidden inside a rule.
+     --wrap: a layout measure, not a brand token; the source takes no position on it. */
+  --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --wrap: 68rem;
+}
+
+/* The design system switches themes on an attribute (`data-theme="dark"`), which needs a
+   deliberate choice somewhere. This site has no theme control and no JavaScript to set
+   one, so it honours the reader's OS preference instead.
+
+   These values MIRROR the `[data-theme="dark"]` block in design/tokens/colors.css. They are
+   duplicated because CSS cannot alias one selector's declarations to another - if that
+   file's dark set changes, change this too. The attribute still wins where it is set. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121110;
+    --bg-elevated: #1C1A18;
+    --fg: #EDEAE6;
+    --fg-muted: #ADA79E;
+    --accent: #F0813C;
+    --accent-contrast: #221206;
+    --accent-soft: #3A2313;
+    --line: #35322E;
+    --success: #57BE7C;
+    --warning: #DFA83E;
+    --danger: #F0736B;
+    --accent-hover: color-mix(in srgb, var(--accent) 88%, #fff);
+    --accent-press: color-mix(in srgb, var(--accent) 78%, #fff);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--page-padding); }
+.measure { max-width: 62ch; }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  font-weight: var(--fw-heading);
+  text-wrap: balance;
+  margin: 0;
+  line-height: 1.2;
+  color: var(--fg);
+}
+/* Clamped between the scale's own steps, which the source explicitly permits for fluid
+   layouts. The ceilings are --fs-h1 (46px) and --fs-h2 (35px); nothing is invented. */
+h1 { font-size: clamp(2rem, 5vw, var(--fs-h1)); letter-spacing: -.035em; }
+h2 { font-size: clamp(1.4rem, 3vw, var(--fs-h2)); letter-spacing: -.025em; }
+h3 { font-size: var(--fs-h4); letter-spacing: -.01em; }
+h4 { font-size: var(--fs-body); }
+p { margin: 0; }
+
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+/* The source's focus treatment: a soft accent ring, :focus-visible only. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius);
+}
+
+.skip {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--accent); color: var(--accent-contrast);
+  padding: var(--space-2) var(--space-4); z-index: 20;
+}
+.skip:focus { left: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.eyebrow.quiet { color: var(--fg-muted); }
+
+/* ---------- header ---------- */
+.masthead { border-bottom: 1px solid var(--line); background: var(--bg-elevated); }
+.masthead .bar {
+  display: flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-4) 0; flex-wrap: wrap;
+}
+.logo {
+  font-family: var(--font-heading); font-weight: var(--fw-heading); font-size: var(--fs-h4);
+  letter-spacing: -.03em; color: var(--fg); text-decoration: none;
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.logo:hover { color: var(--fg); }
+.logo svg { flex: none; }
+/* The mark, in tokens.
+   It shipped with the pre-rebrand brass and navy hardcoded into the SVG, so the one piece
+   of brand on every page was the one piece still wearing the old identity - and no token
+   change could reach it. The float takes the accent, the waterline and what sits under it
+   take the ink. Both follow dark mode for free. */
+.logo .mark-hull { fill: var(--fg); }
+.logo .mark-float { fill: var(--accent); }
+.nav { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
+/* :not(.btn) is load-bearing, not decoration. `.nav a` (0,1,1) outranks `.btn-primary`
+   (0,1,0), so without it the nav's muted colour won and both masthead buttons were
+   painted with it - "Start a Project" came out at 2.5:1, below the 4.5:1 AA floor and
+   reading as a disabled control on the primary call to action of the site. Excluding
+   buttons from the rule fixes it where it starts. */
+.nav a:not(.btn) { font-size: var(--fs-caption); color: var(--fg-muted); text-decoration: none; }
+.nav a:not(.btn):hover, .nav a[aria-current="page"]:not(.btn) { color: var(--accent); }
+.nav a.btn { text-decoration: none; }
+.spacer { flex: 1 1 auto; }
+
+/* Mirrors the source's .b-btn, including the 44px touch target it requires everywhere. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--touch-target); padding: 10px 18px;
+  border-radius: var(--radius); border: 1px solid transparent;
+  font: 600 15px var(--font-body); text-decoration: none; cursor: pointer;
+  transition: background var(--motion-fast) var(--ease),
+              transform var(--motion-fast) var(--ease),
+              box-shadow var(--motion-fast) var(--ease);
+}
+.btn-primary { background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow); }
+.btn-primary:hover { background: var(--accent-hover); color: var(--accent-contrast); }
+.btn-primary:active { background: var(--accent-press); transform: scale(var(--press-scale)); transition-duration: 40ms; }
+.btn-ghost { background: var(--bg-elevated); color: var(--fg); border-color: var(--line); }
+.btn-ghost:hover { background: var(--accent-soft); color: var(--fg); }
+
+/* ---------- sections ---------- */
+main { display: block; }
+.band { padding: var(--space-12) 0; border-bottom: 1px solid var(--line); }
+.band.alt { background: var(--bg-elevated); }
+.band > .wrap { display: flex; flex-direction: column; gap: var(--space-6); }
+
+.hero { padding: var(--space-16) 0 var(--space-12); }
+/* Sized to sit under the flotation column below it. At 20ch the headline wrapped to
+   three lines and left a ragged gap beside a full-width figure, which reads as
+   unfinished rather than deliberate. */
+.hero h1 { max-width: 26ch; }
+.hero .sub { color: var(--fg-muted); font-size: var(--fs-h4); max-width: 62ch; }
+.cta-row { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-2); }
+
+/* The idea input. The primary action of the whole site, so it is the largest control on
+   the page and the first thing reachable by keyboard after the skip link and nav. */
+.idea { margin-top: var(--space-6); max-width: 40rem; }
+.idea-label { display: block; font: 600 14px var(--font-body); margin-bottom: 6px; }
+.idea-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.idea-row input {
+  flex: 1 1 20rem; min-height: var(--touch-target); padding: 11px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-elevated); color: var(--fg);
+  font-family: inherit; font-size: var(--fs-body);
+}
+.idea-row input:focus-visible { border-color: var(--accent); }
+.idea-row .btn { flex: 0 0 auto; }
+.idea-note { margin-top: var(--space-2); font-size: var(--fs-caption); color: var(--fg-muted); }
+
+/* One column on a phone: a submit button beside a text field at 360px leaves the field
+   too narrow to read what you typed. */
+@media (max-width: 640px) {
+  .idea-row input { flex: 1 1 100%; }
+  .idea-row .btn { width: 100%; }
+}
+
+/* The flotation column. The one figure on the site, and it carries the argument:
+   what rises is visible and governed; what stays below is where the cost hides.
+   --accent-soft is the source's only tint, and this is exactly what it is for. */
+.column { border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); overflow: hidden; margin-top: var(--space-4); }
+.stratum { padding: var(--space-3) var(--space-4); display: flex; gap: var(--space-4); align-items: baseline; font-size: var(--fs-body); flex-wrap: wrap; }
+.stratum .tag {
+  font-family: var(--mono); font-size: var(--fs-caption); letter-spacing: .12em;
+  text-transform: uppercase; flex: none; min-width: 7.5rem;
+}
+.stratum.up { background: var(--accent-soft); }
+.stratum.up .tag { color: var(--accent); }
+.stratum.down { background: var(--bg); color: var(--fg-muted); }
+.stratum.down .tag { color: var(--fg-muted); }
+.waterline { height: 0; border-top: 2px solid var(--accent); }
+
+/* ---------- grids ---------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: var(--space-4); }
+/* The source's card: elevated white surface, hairline, one small shadow, radius + 4. */
+.tile {
+  background: var(--bg-elevated); border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px); padding: 20px 22px; box-shadow: var(--shadow);
+}
+.tile h3 { margin-bottom: var(--space-1); }
+.tile p { font-size: var(--fs-body); color: var(--fg-muted); }
+
+/* Seven items in an auto-fit grid left one orphan on a second row, which reads as a
+   layout that ran out rather than a deliberate seventh thing. A stack is also the honest
+   shape for layers: one per row, in order. */
+.steps.stacked { grid-template-columns: 1fr; }
+.steps.stacked .step { border-right: none; display: flex; gap: var(--space-4); align-items: baseline; }
+.steps.stacked .step .n { flex: 0 0 2.5rem; }
+.steps.stacked .step .l { flex: 0 0 12rem; margin-top: 0; }
+.steps.stacked .step .d { margin-top: 0; }
+@media (max-width: 640px) {
+  .steps.stacked .step { display: block; }
+  .steps.stacked .step .l { margin-top: var(--space-1); }
+}
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); overflow: hidden; }
+.step { padding: var(--space-4); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--bg-elevated); }
+.step .n { font-family: var(--mono); font-size: var(--fs-caption); letter-spacing: .1em; color: var(--accent); }
+.step .l { font-family: var(--font-heading); font-weight: var(--fw-heading); font-size: var(--fs-body); margin-top: var(--space-1); }
+.step .d { font-size: var(--fs-caption); color: var(--fg-muted); margin-top: var(--space-1); }
+
+.note {
+  font-family: var(--mono); font-size: var(--fs-caption); line-height: 1.6; color: var(--fg-muted);
+  background: var(--bg-elevated); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent); border-radius: var(--radius); padding: var(--space-4);
+}
+.note b { color: var(--fg); font-weight: 500; }
+
+ul.list { margin: 0; padding-left: var(--space-6); display: flex; flex-direction: column; gap: var(--space-2); }
+ul.list li::marker { color: var(--accent); }
+
+dl.defs { margin: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+dl.defs dt { font-family: var(--font-heading); font-weight: var(--fw-heading); font-size: var(--fs-body); }
+dl.defs dd { margin: var(--space-1) 0 0; color: var(--fg-muted); font-size: var(--fs-body); }
+
+/* The one pill in the system. Status colours only - never the accent. */
+.pill {
+  display: inline-block; font-family: var(--mono); font-size: var(--fs-caption);
+  letter-spacing: .07em; text-transform: uppercase; padding: 2px var(--space-2);
+  border-radius: 999px; white-space: nowrap;
+}
+.pill.pass { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.pill.waived { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.pill.unknown { background: color-mix(in srgb, var(--fg-muted) 15%, transparent); color: var(--fg-muted); }
+
+.empty {
+  border: 1px dashed var(--line); border-radius: calc(var(--radius) + 4px);
+  padding: var(--space-12) var(--space-6); text-align: center; background: var(--bg-elevated);
+}
+.empty h3 { margin-bottom: var(--space-2); }
+.empty p { color: var(--fg-muted); font-size: var(--fs-body); max-width: 48ch; margin: 0 auto; }
+
+/* ---------- form ---------- */
+form.intake {
+  border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px);
+  padding: var(--space-6); background: var(--bg-elevated); max-width: 40rem;
+  box-shadow: var(--shadow);
+}
+/* The two-step intake. `hidden` is set by script, never here - see the note in start/. */
+.callme { margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--line); max-width: 40rem; }
+.callme .intake { margin-top: var(--space-4); }
+.step-hint { color: var(--fg-muted); font-size: var(--fs-caption); margin: 6px 0 var(--space-3); }
+.step-2[hidden] { display: none; }
+.step-2 { border-top: 1px solid var(--line); margin-top: var(--space-6); padding-top: var(--space-2); }
+.step-next {
+  margin-top: var(--space-4); min-height: var(--touch-target);
+  padding: 10px 18px; border: 1px solid transparent; border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow);
+  font: 600 15px var(--font-body); cursor: pointer;
+}
+.step-next:hover { background: var(--accent-hover); }
+.step-next[hidden] { display: none; }
+/* The first question is the page's whole purpose, so its label carries the h2 weight. */
+.step-1 h2 label { font: inherit; color: inherit; display: inline; margin: 0; }
+
+form.intake label { display: block; font: 600 14px var(--font-body); margin: var(--space-4) 0 6px; }
+/* :not([type="checkbox"]) for the same reason as `.nav a:not(.btn)` above:
+   `form.intake input` (0,1,2) outranks `.consent input` (0,1,1), so without it the
+   consent checkbox inherits the text-field sizing and renders as a 44px square. Excluded
+   here rather than overridden there, so the exclusion sits next to the rule causing it. */
+form.intake input:not([type="checkbox"]), form.intake textarea {
+  min-height: var(--touch-target); width: 100%; padding: 11px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-elevated); color: var(--fg);
+  font-family: inherit; font-size: var(--fs-body);
+}
+form.intake textarea { min-height: 6rem; }
+form.intake input:focus-visible, form.intake textarea:focus-visible { border-color: var(--accent); }
+.consent { display: flex; gap: var(--space-2); align-items: flex-start; margin-top: var(--space-4); font-size: var(--fs-caption); color: var(--fg-muted); }
+.consent input { width: auto; min-height: 0; margin-top: 6px; }
+.consent label { margin: 0; font-weight: 400; font-size: var(--fs-caption); }
+form.intake button {
+  margin-top: var(--space-6); width: 100%; min-height: var(--touch-target);
+  padding: var(--space-3) var(--space-4); border: 1px solid transparent; border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow);
+  font: 600 15px var(--font-body); cursor: pointer;
+  transition: background var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease);
+}
+form.intake button:hover { background: var(--accent-hover); }
+form.intake button:active { background: var(--accent-press); transform: scale(var(--press-scale)); transition-duration: 40ms; }
+form.intake button:disabled { opacity: .55; cursor: progress; }
+#status { margin-top: var(--space-4); font-size: var(--fs-body); min-height: 1.5rem; }
+#status[data-state="ok"] { color: var(--success); }
+#status[data-state="error"] { color: var(--danger); }
+
+/* ---------- footer ---------- */
+footer.site { padding: var(--space-12) 0 var(--space-16); background: var(--bg-elevated); border-top: 1px solid var(--line); }
+footer.site .cols { display: flex; gap: var(--space-8); flex-wrap: wrap; justify-content: space-between; }
+footer.site a { color: var(--fg-muted); text-decoration: none; font-size: var(--fs-caption); display: block; margin-bottom: var(--space-1); }
+footer.site a:hover { color: var(--accent); }
+footer.site .fine { font-size: var(--fs-caption); color: var(--fg-muted); margin-top: var(--space-8); padding-top: var(--space-4); border-top: 1px solid var(--line); }
+
+/* The header, small.
+   Left to wrap, seven nav items produced four ragged rows before any content - the
+   sort of thing a DOM assertion passes and a person immediately reads as broken. A
+   stacked list costs vertical space and is unambiguous, keyboard-navigable, and needs
+   no JavaScript, which a dependency-free site cannot spend. */
+@media (max-width: 860px) {
+  .masthead .bar { flex-direction: column; align-items: stretch; gap: 0; padding-bottom: var(--space-3); }
+  .masthead .logo { padding-bottom: var(--space-3); }
+  .spacer { display: none; }
+  .nav { flex-direction: column; align-items: stretch; gap: 0; }
+  .nav a:not(.btn) { padding: var(--space-3) 0; border-top: 1px solid var(--line); }
+  .nav a.btn { margin-top: var(--space-3); }
+  .nav a.btn-ghost { margin-top: var(--space-4); }
+}
+
+@media (max-width: 640px) {
+  .band { padding: var(--space-8) 0; }
+  .hero { padding: var(--space-8) 0; }
+  .stratum .tag { min-width: 0; width: 100%; }
+}
+
+/* design/tokens/motion.css already collapses motion under this query; this covers the
+   scroll-behaviour it does not set. */
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; }
+}
+
+/* ── The write-up panel ──────────────────────────────────────────────
+   Appears on /start after a call is requested. It is the first thing on this
+   site that shows a person their own words back, so it is styled as a document
+   rather than as a widget: generous measure, quiet rules, nothing that reads as
+   a marketing module.
+
+   The inferred tag is the load-bearing piece of design here. An inference
+   sitting beside something the customer actually said, with no way to tell them
+   apart, is the failure the whole build guards against - so it is marked in
+   TEXT as well as colour, because colour alone fails for anyone who cannot see
+   it (WCAG 1.4.1).
+   ------------------------------------------------------------------ */
+/* Wider than a reading measure because the design frames inside it are the point of the
+   panel, and a desktop design shown at half scale is a thumbnail, not a design. The prose
+   keeps its old measure below, so the extra width goes only to the things that need it. */
+.preview {
+  margin-top: 2.5rem;
+  padding: 2rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  max-width: 74rem;
+  /* The design frames are the point of this panel, so it takes back whatever the
+     window has spare either side of the site container. Capped, and clamped to zero
+     on a narrow screen, so it can never cause a sideways scroll. */
+  margin-inline: calc(-1 * max(0px, min(3rem, (100vw - var(--wrap)) / 2)));
+}
+
+/* ------------------------------------------------------------------
+   The scope reads as a document with a rail, not as one long column.
+   Ten sections of somebody's project scrolled end to end is a wall, and
+   the part worth paying for sits below the fold with nothing announcing
+   it.
+   ------------------------------------------------------------------ */
+.scope-shell {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 3rem;
+  align-items: start;
+}
+
+.scope-main { min-width: 0; }
+.scope-main > section { scroll-margin-top: 1.5rem; }
+
+.scope-rail {
+  position: sticky;
+  top: 1.5rem;
+  align-self: start;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+}
+
+.scope-rail-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.scope-rail nav { display: flex; flex-direction: column; }
+
+.scope-rail a {
+  padding: 0.4rem 0 0.4rem 0.8rem;
+  border-left: 2px solid var(--line);
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.scope-rail a:hover { color: var(--fg); }
+.scope-rail a.on { color: var(--fg); font-weight: 600; border-left-color: var(--accent); }
+
+/* Their own words. Promoted out of a collapsed <details>: nothing that earns
+   trust should need a click to find. */
+.scope-quotes { list-style: none; margin: 0; padding: 0; }
+
+.scope-quotes li {
+  padding: 0.85rem 0 0.85rem 1.1rem;
+  border-left: 2px solid var(--line);
+  color: var(--fg-muted);
+  max-width: 42rem;
+  margin-bottom: 0.5rem;
+}
+
+/* The fact/assumption split, stated rather than implied. */
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1px;
+  margin: 0 0 1.75rem;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.trust { background: var(--bg); padding: 1rem 1.2rem; }
+
+.trust dt {
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.3rem;
+}
+
+.trust dd {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.trust dd small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--fg-muted);
+  font-variant-numeric: normal;
+}
+
+.trust-missing-lead { margin-bottom: 0.75rem; }
+
+.chip {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  margin: 0 0.3rem 0.4rem 0;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chip-open { color: var(--warning); border-color: var(--warning); }
+
+@media (max-width: 60rem) {
+  /* The rail becomes a scroll strip above the content. Hiding it would put the
+     reader back in the wall of text it exists to prevent. */
+  .scope-shell { grid-template-columns: 1fr; gap: 1.5rem; }
+  .scope-rail { position: static; max-height: none; }
+  .scope-rail nav { flex-direction: row; overflow-x: auto; gap: 0.25rem; padding-bottom: 0.4rem; }
+  .scope-rail a {
+    border-left: 0;
+    border-bottom: 2px solid var(--line);
+    white-space: nowrap;
+    padding: 0.4rem 0.7rem;
+  }
+  .scope-rail a.on { border-left: 0; border-bottom-color: var(--accent); }
+}
+
+/* Prose keeps a reading measure. The figures strip is deliberately not in this list:
+   it is a card grid, and a 42rem cap squashes it into the corner of its column. */
+.preview-status,
+.preview-title,
+.scope-summary,
+.scope-lead,
+.preview-items,
+.preview-surfaces,
+.preview-open,
+.preview-note { max-width: 42rem; }
+
+.preview-status {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 0.95rem;
+}
+
+.preview-status:empty { display: none; }
+
+.preview-title {
+  margin: 0.35rem 0 1.5rem;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 1.2;
+}
+
+/* A card per figure. Laid out as bare dt/dd grid items, each label and its number
+   landed in different cells and the strip read as a sparse two-column list rather
+   than as a set of counts. */
+.preview-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 1px;
+  margin: 0 0 2rem;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.preview-counts .figure { background: var(--bg); padding: 1rem 1.2rem; }
+
+.preview-counts dt {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.3rem;
+}
+
+.preview-counts dd {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--fg);
+}
+
+.preview-h3 {
+  margin: 1.75rem 0 0.75rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.preview-items,
+.preview-surfaces,
+.preview-open {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.preview-items li,
+.preview-surfaces li,
+.preview-open li {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.5;
+}
+
+.preview-items li:last-child,
+.preview-surfaces li:last-child,
+.preview-open li:last-child { border-bottom: 0; }
+
+.preview-open li::before {
+  content: "?";
+  display: inline-block;
+  width: 1.25rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: 0.1em;
+}
+
+.tag-inferred {
+  background: var(--accent-soft);
+  color: var(--fg);
+  border: 1px solid var(--line);
+}
+
+.preview-note { margin-top: 1.75rem; }
+
+/* ── The interview ───────────────────────────────────────────────────
+   Styled as a conversation, not a chat widget: no bubbles, no avatars, no
+   typing dots. Two voices in a document, because the person is describing
+   their business and the page should feel like it is listening rather than
+   performing.
+
+   The speaker label is TEXT rather than alignment or colour, so who said what
+   survives a screen reader and does not depend on seeing the layout.
+   ------------------------------------------------------------------ */
+.interview {
+  margin-top: 2.5rem;
+  padding: 2rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  max-width: 46rem;
+}
+
+.interview-log {
+  max-height: 26rem;
+  overflow-y: auto;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.turn { padding: 0.85rem 0; border-bottom: 1px solid var(--line); }
+.turn:last-child { border-bottom: 0; }
+
+.turn-who {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 0.3rem;
+}
+
+.turn-user .turn-who { color: var(--accent); }
+
+.turn-text {
+  margin: 0;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.interview-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.interview-form textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.interview-form textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.interview-form button {
+  flex: 0 0 auto;
+  padding: 0.7rem 1.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.interview-form button:disabled { opacity: 0.6; cursor: default; }
+.interview-form button:hover:not(:disabled) { background: var(--accent-hover); }
+
+.interview-note { margin-top: 1.25rem; }
+
+/* Visible to screen readers only — the reply field is labelled without a
+   redundant visual label above a textarea that already has placeholder text. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 30rem) {
+  .interview { padding: 1.25rem; }
+  .interview-form { flex-direction: column; align-items: stretch; }
+}
+
+/* ── The scope ───────────────────────────────────────────────────────
+   Reads as a document someone wrote, not a dashboard someone generated.
+   The lead line under each heading is what turns a list of bullets into an
+   argument: it says why the section is there before showing what is in it.
+   ------------------------------------------------------------------ */
+.scope-summary {
+  margin: 0 0 1.75rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--fg);
+}
+
+.scope-summary:empty { display: none; }
+
+.scope-lead {
+  margin: -0.35rem 0 0.75rem;
+  font-size: 0.92rem;
+  color: var(--fg-muted);
+}
+
+#scope-sections .preview-h3 { margin-top: 2rem; }
+#scope-sections .preview-h3:first-child { margin-top: 0.5rem; }
+
+.scope-heard {
+  margin-top: 2.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.scope-heard summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.scope-heard summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.scope-heard[open] summary { margin-bottom: 0.75rem; }
+
+/* ── Prototypes: their app, on their phone ───────────────────────────
+   Cards sized so the QR is the first thing the eye lands on, because the
+   code is the call to action. The recommended one carries a rule in the
+   accent rather than a larger card: emphasis without breaking the grid.
+   ------------------------------------------------------------------ */
+.prototypes { margin: 2.25rem 0 2.5rem; }
+
+/* When this held a gallery of three concepts, auto-fit columns were right. It now holds
+   one design and the aside under it, and those columns were cutting the desktop frame to
+   a third of the width it needs to be a design at all. */
+.proto-grid {
+  display: block;
+  margin-top: 1rem;
+}
+
+.proto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.1rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.proto-recommended { border-top: 3px solid var(--accent); }
+
+.proto-qr {
+  align-self: flex-start;
+  width: 8.5rem;
+  max-width: 100%;
+  background: #fff;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.proto-qr svg { display: block; width: 100%; height: auto; }
+
+.proto-name {
+  margin: 0.35rem 0 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.proto-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--fg);
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: 0.12em;
+  white-space: nowrap;
+}
+
+.proto-why {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--fg-muted);
+}
+
+.proto-open {
+  margin-top: auto;
+  padding-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.proto-open:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ============================================================ records index ===
+   The published-records shelf on /results: a weighted word cloud, a filter
+   sidebar and type-to-filter search.
+
+   SAME CAPABILITIES AS THE ENTERPRISE INDEX, NOT THE SAME PIXELS. Ali asked for
+   it to work "the same way it shows up on enterprise page with the word chart
+   and filters to the left". This wears AI Flotation's typeface, palette and
+   spacing - copying Colaberry Enterprise's styling onto this domain would undo
+   the brand separation the surface system exists to keep.
+
+   THE CATEGORICAL HUES ARE SCOPED HERE, NOT ADDED TO THE PALETTE. A word cloud
+   mixing three vocabularies needs a reader to tell a capability from a language
+   at a glance, which needs three distinguishable hues - and this site's brand is
+   deliberately one accent. So they live on these classes rather than becoming
+   brand tokens, and they are muted to sit inside a restrained palette rather
+   than shouting over it. `--accent` leads, because capability is what the work
+   DOES and that is the thing this site is about.
+   ========================================================================== */
+
+.records-layout { display: grid; gap: var(--space-6); align-items: start; }
+@media (min-width: 900px) {
+  .records-layout { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); }
+}
+
+.records-main { min-width: 0; }
+
+/* ------------------------------------------------------------ the search --- */
+
+.records-search-label {
+  display: block;
+  font-size: var(--fs-small);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: var(--space-2);
+}
+.records-search {
+  width: 100%;
+  padding: .7rem .9rem;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.records-search::placeholder { color: var(--fg-muted); }
+.records-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Reserves its line, so the cards below do not jump when a count appears. */
+.records-count {
+  min-height: 1.4em;
+  margin: var(--space-3) 0 var(--space-4);
+  font-size: var(--fs-body);
+  color: var(--fg-muted);
+}
+
+/* ----------------------------------------------------------- the filters --- */
+
+.records-filters { display: grid; gap: var(--space-5); }
+.filter-group h3 {
+  font-size: var(--fs-small);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: var(--space-2);
+}
+.filter-row {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  padding: .2rem 0;
+  font-size: var(--fs-body);
+  cursor: pointer;
+}
+.filter-row input { accent-color: var(--accent); }
+.filter-count { margin-left: auto; color: var(--fg-muted); font-size: var(--fs-small); }
+
+/* --------------------------------------------------------- the word cloud --- */
+
+.cloud {
+  margin-bottom: var(--space-6);
+  padding: var(--space-5);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+}
+.cloud-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-5);
+  margin-bottom: var(--space-4);
+}
+.cloud-head h3 { margin-bottom: .2rem; }
+.cloud-head p { font-size: var(--fs-body); color: var(--fg-muted); margin: 0; }
+
+.cloud-key { display: flex; flex-wrap: wrap; gap: .4rem 1rem; list-style: none; margin: 0; padding: 0; }
+.cloud-key li { display: inline-flex; align-items: center; gap: .45rem; font-size: var(--fs-small); color: var(--fg-muted); }
+.cloud-swatch { width: .7rem; height: .7rem; border-radius: 3px; background: var(--cloud-hue); }
+
+.cloud-terms { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem .6rem; list-style: none; margin: 0; padding: 0; }
+
+/* The hue, set once per field; every rule below reads it, so a fourth field is
+   one declaration rather than another block. */
+.cloud-term, .cloud-key li { --cloud-hue: var(--fg-muted); }
+.cloud-term[data-field='capability'], .cloud-key li[data-field='capability'] { --cloud-hue: var(--accent); }
+.cloud-term[data-field='stack'], .cloud-key li[data-field='stack'] { --cloud-hue: #2E6A86; }
+.cloud-term[data-field='industry'], .cloud-key li[data-field='industry'] { --cloud-hue: #5B6E3C; }
+
+.cloud-term {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .3rem;
+  padding: .2rem .7rem;
+  font: inherit;
+  font-weight: 500;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--cloud-hue) 80%, var(--fg));
+  background: color-mix(in srgb, var(--cloud-hue) 9%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--cloud-hue) 28%, var(--bg-elevated));
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.cloud-term:hover {
+  background: color-mix(in srgb, var(--cloud-hue) 18%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--cloud-hue) 45%, var(--bg-elevated));
+}
+.cloud-term:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Selected is not signalled by colour alone: the chip fills, the weight rises,
+   and the button carries aria-pressed. */
+.cloud-term[data-on='true'] {
+  color: var(--accent-contrast);
+  background: var(--cloud-hue);
+  border-color: var(--cloud-hue);
+  font-weight: 600;
+}
+.cloud-count { font-size: var(--fs-small); font-weight: 400; color: color-mix(in srgb, var(--cloud-hue) 55%, var(--fg-muted)); }
+.cloud-term[data-on='true'] .cloud-count { color: var(--accent-contrast); }
+
+@media (prefers-reduced-motion: reduce) { .cloud-term { transition: none; } }
+
+/* ------------------------------------------------------------ the records --- */
+
+/* The card is a link. `.tile` already carries the surface; this adds the
+   affordance and the verification word every record must print. */
+a.record { display: block; text-decoration: none; color: inherit; }
+a.record:hover { border-color: var(--accent); }
+a.record:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.record-verify {
+  display: inline-block;
+  margin-top: .8rem;
+  font-size: var(--fs-small);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* ── The workflow diagram ────────────────────────────────────────────
+   Server-generated SVG that references the page's own custom properties,
+   so it picks up light and dark without a second copy of the drawing.
+   ------------------------------------------------------------------ */
+.workflow { margin: 2.25rem 0 2.5rem; }
+
+.workflow-svg {
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.workflow-svg svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 40rem;
+}
+
+/* ================================================= case-study shell mapping ===
+   `packages/case-study-shell/case-studies.css` decides no colour. It reads
+   `--cs-*` and this is where AI Flotation answers, so the shared record page
+   comes out in this brand's palette without the shared file knowing this brand
+   exists. training.colaberry.com will answer the same six names differently.
+   ========================================================================== */
+
+:root {
+  --cs-fg: var(--fg);
+  --cs-fg-muted: var(--fg-muted);
+  --cs-bg: var(--bg);
+  --cs-surface: var(--bg-elevated);
+  --cs-line: var(--line);
+  --cs-accent: var(--accent);
+  --cs-accent-contrast: var(--accent-contrast);
+  --cs-radius: calc(var(--radius) + 4px);
+  /* The visual story band's three status tokens (case-study-visual-story.css):
+     resolved, needs attention, failed. Semantic, and already in this palette. */
+  --cs-ok: var(--success);
+  --cs-warn: var(--warning);
+  --cs-bad: var(--danger);
+  --cs-font-mono: var(--mono);
+}
+
+/* ── The design: one page, two widths ────────────────────────────────
+   The phone frame is narrow on purpose — it is the actual viewport the
+   design has to survive, not a decorative device mockup. Both frames are
+   sandboxed iframes of the same document, so what you see at 390px is
+   genuinely what a phone gets.
+   ------------------------------------------------------------------ */
+/* Stacked, not side by side. Two frames sharing a row means neither gets a true
+   viewport width, and a "phone view" that is really a squeezed desktop is worse
+   than showing no phone view at all. */
+.design-views {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.design-frame { min-width: 0; }
+.design-phone { width: 24.4rem; max-width: 100%; }
+
+.design-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+/* The box is the window frame; the iframe inside is rendered at a true viewport size
+   and scaled down by `fitDesignFrames`, so the layout on screen is the layout a real
+   browser at that width would produce. Height is set in script from that scale. */
+.design-box {
+  position: relative;
+  overflow: hidden;
+  min-height: 16rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(26, 25, 23, 0.05), 0 16px 36px -24px rgba(26, 25, 23, 0.4);
+}
+
+.design-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  display: block;
+  transform-origin: top left;
+}
+
+.design-phone .design-box { border-radius: 14px; }
+
+.design-aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem 1.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.design-aside .proto-qr { width: 7.5rem; margin: 0; }
+.design-aside .proto-why { flex: 1 1 14rem; margin: 0; }
+.design-aside .proto-open { margin: 0; }
+
+@media (max-width: 46rem) {
+  /* On a real phone the phone frame is already close to native width, so it only needs
+     to stop being wider than the screen. */
+  .design-phone { width: 100%; }
+}

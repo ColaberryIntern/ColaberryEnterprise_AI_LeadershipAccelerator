@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import { OfficeParser } from 'officeparser';
 
 const MAX_EXTRACTED_LENGTH = 50_000;
@@ -33,5 +34,21 @@ export async function extractText(filePath: string): Promise<string> {
   } catch (err: any) {
     console.error('[FileExtraction] Failed to extract text:', err.message);
     throw new Error(`Text extraction failed: ${err.message}`);
+  }
+}
+
+/**
+ * Extract text from an in-memory file buffer (e.g. a base64 resume stored in the
+ * DB). Writes to a temp file, reuses `extractText`, then cleans up. `fileName`
+ * only supplies the extension so the parser picks the right decoder.
+ */
+export async function extractTextFromBuffer(buffer: Buffer, fileName: string): Promise<string> {
+  const ext = path.extname(fileName || '').toLowerCase() || '.bin';
+  const tmp = path.join(os.tmpdir(), `resume_${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`);
+  try {
+    await fs.writeFile(tmp, buffer);
+    return await extractText(tmp);
+  } finally {
+    try { await fs.unlink(tmp); } catch { /* ignore */ }
   }
 }

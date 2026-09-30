@@ -42,9 +42,11 @@ CRITICAL FORMATTING RULES:
     {
       delay_days: 5,
       channel: 'email' as const,
-      subject: 'How a 200-person company deployed AI in 11 days',
+      subject: 'How one company went from a bottleneck to a working AI system',
       body_template: '',
-      ai_instructions: `Write a storytelling email about a case study. A 200-person company deployed an AI system in 11 days through the pilot program. The system automated their core operational bottleneck, saving 70% of the time their team spent on the process. That translated to $180K in annual savings. Walk through the timeline: Day 1-3 scoping, Day 4-10 build, Day 11 live in production. The key insight is that the system was built on their infrastructure, with their data, solving their specific problem. Not a generic demo. After the first system proved its value, they continued building. We trained their team to work alongside AI systems and helped them identify the next set of processes to automate. That is the model: start with one system, prove the value, then keep building and improving. We stay on as a long-term partner so the company can keep pace with how fast AI is moving. CTA: Book a 30-minute call at https://enterprise.colaberry.ai/pilot/zero-risk
+      ai_instructions: `Write a storytelling email about how a pilot engagement runs. A company brought us one operational bottleneck and left with a working AI system running in production. Walk through the shape of it: a short scoping phase, a focused build, and the system live in production at the end of it — measured in weeks, not quarters.
+
+DO NOT STATE ANY SPECIFIC FIGURE. No headcounts, no day counts, no percentages, no dollar amounts, no timelines with numbers in them. If a number would make the story stronger, leave it out and describe the change qualitatively instead. Every figure this business publishes has to trace to something a reader could check, and this email has nothing behind it yet. The key insight is that the system was built on their infrastructure, with their data, solving their specific problem. Not a generic demo. After the first system proved its value, they continued building. We trained their team to work alongside AI systems and helped them identify the next set of processes to automate. That is the model: start with one system, prove the value, then keep building and improving. We stay on as a long-term partner so the company can keep pace with how fast AI is moving. CTA: Book a 30-minute call at https://enterprise.colaberry.ai/pilot/zero-risk
 
 CRITICAL FORMATTING RULES:
 - Do NOT include ANY sign-off. The signature block is appended automatically.
@@ -92,7 +94,7 @@ Key context:
 - Founding rate locks in first year pricing
 - Target: CEOs, Founders, Presidents, Owners at companies with 51-500 employees
 - Industries: Logistics, Transportation, Professional Services, Staffing
-- Case study: 200-person company, 11-day deploy, 70% time savings, $180K annual savings
+- Case study figures: NONE ARE APPROVED FOR USE. Do not state a headcount, a day count, a percentage or a dollar amount for any past engagement. Describe outcomes qualitatively until a figure exists that a reader could check.
 
 Tone: Direct and confident. You are offering something genuinely valuable with zero risk. No hype, no buzzwords. Just the facts about what you build and how it works.
 
@@ -313,6 +315,28 @@ Rules:
 
 // ─── Seed Function ──────────────────────────────────────────────────────────
 
+/**
+ * Keep an EXISTING campaign`s AI instructions in step with this file.
+ *
+ * `findOrCreate` puts `ai_system_prompt` in `defaults`, which applies only when
+ * the row is created. Every campaign here already exists in production, so an
+ * edit to a prompt in this file reached nothing: the sequences updated (they use
+ * findOne + update) while the prompt the model actually receives did not.
+ *
+ * That was not theoretical. Four unverified client figures were removed from
+ * this file and from the sequence steps, and stayed live in the campaign prompt
+ * because of this gap — so the model kept being handed the numbers the copy had
+ * stopped stating.
+ *
+ * Only the prompt is synced. Name, status, targeting and schedule are operational
+ * settings a human may have tuned in the admin UI, and a seed that overwrote those
+ * on every boot would undo their work.
+ */
+async function syncCampaignPrompt(campaign: any, prompt: string): Promise<void> {
+  if (!campaign || campaign.ai_system_prompt === prompt) return;
+  await campaign.update({ ai_system_prompt: prompt });
+  console.log(`[Seed] Synced AI prompt for campaign: ${campaign.name}`);
+}
 export async function seedPilotProgramCampaigns(): Promise<void> {
   const admin = await AdminUser.findOne();
   const createdBy = admin?.id || null;
@@ -407,6 +431,7 @@ export async function seedPilotProgramCampaigns(): Promise<void> {
     } as any,
   });
   console.log(`[Seed] Campaign A (Zero Risk). ID: ${campaignA.id}`);
+  await syncCampaignPrompt(campaignA, ZERO_RISK_SYSTEM_PROMPT);
 
   // ── Campaign B: AI Team Replacement ────────────────────────────────────
   const [campaignB] = await Campaign.findOrCreate({
@@ -447,6 +472,7 @@ export async function seedPilotProgramCampaigns(): Promise<void> {
     } as any,
   });
   console.log(`[Seed] Campaign B (AI Team Replacement). ID: ${campaignB.id}`);
+  await syncCampaignPrompt(campaignB, COST_REPLACEMENT_SYSTEM_PROMPT);
 
   // ── Campaign C: Exclusive Build Program ────────────────────────────────
   const [campaignC] = await Campaign.findOrCreate({
@@ -487,6 +513,7 @@ export async function seedPilotProgramCampaigns(): Promise<void> {
     } as any,
   });
   console.log(`[Seed] Campaign C (Exclusive Build). ID: ${campaignC.id}`);
+  await syncCampaignPrompt(campaignC, EXCLUSIVE_BUILD_SYSTEM_PROMPT);
 
   // ── Landing Pages ─────────────────────────────────────────────────────
   await LandingPage.findOrCreate({

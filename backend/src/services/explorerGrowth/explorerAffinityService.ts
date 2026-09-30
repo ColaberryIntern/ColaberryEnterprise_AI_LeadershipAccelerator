@@ -1,0 +1,287 @@
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
+import { redactForLogs } from '../../utils/piiRedaction';
+import type { ExplorerAffinity } from '../../types/explorerGrowth';
+
+/**
+ * Explorer Growth OS — affinity. Plan §7.6, EPIC 3 T002.
+ *
+ *   confidence(tag) = clamp(0, 1, 0.4 × declared + 0.6 × observed_decayed)
+ *
+ * A tag needs confidence >= 0.35 to influence anything.
+ *
+ * RECOMPUTED FROM SCRATCH EVERY RUN, never merged with a previous result. §7.6
+ * is explicit that no learner is ever locked to a persona: a tag that no longer
+ * has evidence must DISAPPEAR, not decay slowly from a stored value. Merging
+ * would weld someone permanently to an interest they showed once.
+ *
+ * The 0.6 weighting on observed is what makes "observed outranks stale
+ * declared" true — someone who ticked `leadership` at signup but has only ever
+ * opened agent-building content should be read as an agent builder.
+ */
+
+/** §7.6's closed vocabulary. Anything outside it is not a tag we act on. */
+export const AFFINITY_TAGS = [
+  'ai_career', 'ai_builder', 'ai_systems_architecture', 'leadership',
+  'career_change', 'data_analytics', 'automation', 'agentic_ai',
+  'ai_governance', 'entrepreneurship', 'community', 'certification',
+  'ai_internship', 'ai_consulting', 'enterprise_ai', 'ai_workforce', 'instructor',
+] as const;
+
+export type AffinityTag = (typeof AFFINITY_TAGS)[number];
+
+export const AFFINITY_THRESHOLD = 0.35;
+export const DECLARED_WEIGHT = 0.4;
+export const OBSERVED_WEIGHT = 0.6;
+/** §7.6: observed evidence decays on a 30-day half-life. */
+export const OBSERVED_HALF_LIFE_DAYS = 30;
+
+/**
+ * Maps free-text a learner declared onto the tag vocabulary.
+ *
+ * Substring matching on lowercased text, deliberately: the declared fields are
+ * open text boxes and dropdowns whose option lists have changed over time, so
+ * an exact-match table would silently score everyone at zero the first time
+ * someone edits a dropdown. Matching is generous because declared evidence only
+ * carries 0.4 weight — a false positive here cannot on its own clear 0.35.
+ *
+ * Every pattern is SUFFIX-TOLERANT (\w* before the closing boundary). A bare
+ * agent does NOT match "agents", and "I want to build agents" is exactly how
+ * people write these fields — that miss cost the tag its 0.4 and dropped it below
+ * threshold entirely. Plurals and gerunds dominate free text; requiring the exact
+ * stem would under-score real learners silently. Found by a failing test.
+ */
+const DECLARED_PATTERNS: Record<AffinityTag, RegExp> = {
+  ai_career: /\b(career|job|employment|hired|hiring)\w*\b/i,
+  ai_builder: /\b(build|builder|developer|engineer|hands.?on)\w*\b/i,
+  ai_systems_architecture: /\b(architect|architecture|system design|systems)\w*\b/i,
+  leadership: /\b(lead|leader|leadership|manager|director|executive|vp|head of)\w*\b/i,
+  career_change: /\b(transition|switch|pivot|change career|new field)\w*\b/i,
+  data_analytics: /\b(data|analytics|analyst|sql|reporting|bi)\w*\b/i,
+  automation: /\b(automat|workflow|process|efficiency|rpa)\w*\b/i,
+  agentic_ai: /\b(agent|agentic|autonomous|multi.?agent)\w*\b/i,
+  ai_governance: /\b(governance|compliance|risk|policy|ethic|regulat)\w*\b/i,
+  entrepreneurship: /\b(founder|startup|entrepreneur|business owner|my own)\w*\b/i,
+  community: /\b(community|network|peer|cohort|connect)\w*\b/i,
+  certification: /\b(certif|credential|badge|accredit)\w*\b/i,
+  ai_internship: /\b(intern|internship|apprentic|experience|portfolio)\w*\b/i,
+  ai_consulting: /\b(consult|advisor|freelance|contractor|client)\w*\b/i,
+  enterprise_ai: /\b(enterprise|corporate|organization|company.?wide|scale)\w*\b/i,
+  ai_workforce: /\b(workforce|team|upskill|reskill|training staff)\w*\b/i,
+  instructor: /\b(teach|instructor|mentor|train others|educator)\w*\b/i,
+};
+
+interface DeclaredRow {
+  goal: string | null;
+  industry: string | null;
+  role: string | null;
+  identified_use_case: string | null;
+  resume_text: string | null;
+  linkedin_url: string | null;
+  resume_version: number | null;
+}
+
+/**
+ * Declared affinity, 0 or 1 per tag.
+ *
+ * `resume_version = 0` means the résumé was never ingested, so `resume_text` is
+ * absent rather than empty — it contributes nothing rather than a false zero.
+ */
+async function readDeclared(enrollmentId: string): Promise<Map<AffinityTag, number>> {
+  const out = new Map<AffinityTag, number>();
+  let row: DeclaredRow | undefined;
+
+  try {
+    const rows = await sequelize.query<DeclaredRow>(
+      `SELECT ucp.goal, ucp.industry, ucp.role, ucp.identified_use_case,
+              op.resume_text, op.linkedin_url, op.resume_version
+         FROM enrollments e
+         LEFT JOIN user_curriculum_profiles ucp ON ucp.enrollment_id = e.id
+         LEFT JOIN onboarding_profiles op ON op.enrollment_id = e.id
+        WHERE e.id = :enrollmentId
+        LIMIT 1`,
+      { replacements: { enrollmentId }, type: QueryTypes.SELECT },
+    );
+    row = rows[0];
+  } catch (err: any) {
+    // Degrade to observed-only rather than blinding the whole profile.
+    console.warn(
+      redactForLogs(
+        JSON.stringify({
+          event: 'explorer.affinity_declared_read_failed',
+          service: 'explorer-growth',
+          level: 'warn',
+          outcome: 'failure',
+          error_class: err?.name || 'AffinityDeclaredError',
+          enrollment_id: enrollmentId,
+        }),
+      ),
+    );
+    return out;
+  }
+  if (!row) return out;
+
+  const parts = [row.goal, row.industry, row.role, row.identified_use_case];
+  // Only trust résumé text once it has actually been ingested.
+  if ((row.resume_version ?? 0) > 0 && row.resume_text) parts.push(row.resume_text);
+  const haystack = parts.filter(Boolean).join(' \n ');
+  if (!haystack.trim()) return out;
+
+  for (const tag of AFFINITY_TAGS) {
+    if (DECLARED_PATTERNS[tag].test(haystack)) out.set(tag, 1);
+  }
+  return out;
+}
+
+interface ObservedRow {
+  card_type: string;
+  occurred_at: Date;
+}
+
+/**
+ * Curriculum type -> affinity tags. Verified against `accelerator_dev1`: these
+ * are the values `timeline_cards.type` actually holds.
+ *
+ * THIS TABLE EXISTS BECAUSE SUBSTRING MATCHING DOES NOT WORK. The first version
+ * of this service tried `tag.includes(type) || type.includes(tag)` on the
+ * assumption that curriculum slugs would resemble affinity tags. They do not:
+ * the real values are `claude_code_technique`, `build_breakdown`,
+ * `ai_quote_of_the_day`. Not one of the 34 would have matched, so observed
+ * affinity would have returned nothing for every learner, forever, with no
+ * error - the profile would simply have been scored on declared evidence alone.
+ *
+ * Types that say nothing about interest (announcement, survey, github_sync) are
+ * deliberately absent rather than mapped to something vague. Several types map
+ * to more than one tag, which is correct: a mock interview is evidence of both
+ * career intent and certification intent.
+ */
+const TYPE_TO_TAGS: Record<string, AffinityTag[]> = {
+  ai_architecture_breakdown: ['ai_systems_architecture', 'ai_builder'],
+  ai_news_flash: ['ai_career'],
+  ai_research_digest: ['ai_systems_architecture'],
+  ai_tool_of_the_day: ['ai_builder', 'automation'],
+  ai_video_stream: ['ai_career'],
+  anthropic_skills_jar: ['ai_builder', 'certification'],
+  architect_mindset: ['ai_systems_architecture', 'leadership'],
+  artifact_submission: ['ai_builder'],
+  blog: ['ai_career'],
+  build_breakdown: ['ai_builder', 'ai_systems_architecture'],
+  certification_exercise: ['certification'],
+  claude_code_technique: ['ai_builder', 'agentic_ai'],
+  community_discussion: ['community'],
+  deep_dive: ['ai_systems_architecture'],
+  demo: ['ai_builder'],
+  evaluation: ['certification'],
+  implementation_task: ['ai_builder', 'automation'],
+  knowledge_check: ['certification'],
+  live_class: ['community'],
+  market_intelligence: ['enterprise_ai', 'leadership'],
+  mcp_server_spotlight: ['agentic_ai', 'ai_builder'],
+  milestone: ['ai_career'],
+  mock_interview: ['ai_career', 'certification'],
+  podcast: ['ai_career'],
+  prompt_challenge: ['agentic_ai'],
+  prompt_lab: ['agentic_ai', 'ai_builder'],
+  reflection: ['career_change'],
+  setup_lab: ['ai_builder'],
+  video: ['ai_career'],
+  warmup: ['ai_career'],
+};
+
+/**
+ * Observed affinity from curriculum types the learner actually engaged with.
+ *
+ * Normalised by a saturating curve rather than a hard count threshold:
+ * `1 - 2^(-n)` reaches 0.5 at one engagement and 0.875 at three, so a single
+ * genuine interaction registers while repetition cannot run away.
+ */
+async function readObserved(
+  enrollmentId: string,
+  asOf: Date,
+): Promise<Map<AffinityTag, number>> {
+  const out = new Map<AffinityTag, number>();
+  let rows: ObservedRow[] = [];
+
+  try {
+    // NO join to a curriculum-type table: `timeline_cards.type` holds the slug
+    // itself. Verified on accelerator_dev1 - a `curriculum_types` table does not
+    // exist at all (the real one is `curriculum_type_definitions`), so the third
+    // join was both wrong and unnecessary.
+    rows = await sequelize.query<ObservedRow>(
+      `SELECT LOWER(tc.type) AS card_type, tcp.updated_at AS occurred_at
+         FROM timeline_card_progress tcp
+         JOIN timeline_cards tc ON tc.id = tcp.card_id
+        WHERE tcp.enrollment_id = :enrollmentId
+          AND tcp.updated_at IS NOT NULL
+          AND tc.type IS NOT NULL
+        ORDER BY tcp.updated_at DESC
+        LIMIT 500`,
+      { replacements: { enrollmentId }, type: QueryTypes.SELECT },
+    );
+  } catch (err: any) {
+    // Degrading to declared-only keeps a usable profile rather than none - but
+    // this path is now genuinely exceptional. Previously it was the ONLY path,
+    // silently, because the query referenced a table that does not exist.
+    console.warn(
+      redactForLogs(
+        JSON.stringify({
+          event: 'explorer.affinity_observed_read_failed',
+          service: 'explorer-growth',
+          level: 'warn',
+          outcome: 'failure',
+          error_class: err?.name || 'AffinityObservedError',
+          enrollment_id: enrollmentId,
+        }),
+      ),
+    );
+    return out;
+  }
+
+  const weighted = new Map<AffinityTag, number>();
+  for (const r of rows) {
+    const tags = TYPE_TO_TAGS[r.card_type];
+    if (!tags) continue; // a type that says nothing about interest
+    const ageDays = (asOf.getTime() - new Date(r.occurred_at).getTime()) / 86_400_000;
+    const decayed = Math.pow(2, -Math.max(0, ageDays) / OBSERVED_HALF_LIFE_DAYS);
+    for (const tag of tags) {
+      weighted.set(tag, (weighted.get(tag) ?? 0) + decayed);
+    }
+  }
+
+  for (const [tag, n] of weighted) {
+    out.set(tag, 1 - Math.pow(2, -n));
+  }
+  return out;
+}
+
+/**
+ * Compute a learner's affinities. Recomputed from scratch — a tag with no
+ * current evidence is absent from the result, never carried forward.
+ */
+export async function computeAffinities(
+  enrollmentId: string,
+  options: { asOf?: Date } = {},
+): Promise<ExplorerAffinity[]> {
+  const asOf = options.asOf ?? new Date();
+  const [declared, observed] = await Promise.all([
+    readDeclared(enrollmentId),
+    readObserved(enrollmentId, asOf),
+  ]);
+
+  const out: ExplorerAffinity[] = [];
+  for (const tag of AFFINITY_TAGS) {
+    const d = declared.get(tag) ?? 0;
+    const o = observed.get(tag) ?? 0;
+    if (d === 0 && o === 0) continue;
+
+    const confidence = Math.max(0, Math.min(1, DECLARED_WEIGHT * d + OBSERVED_WEIGHT * o));
+    if (confidence < AFFINITY_THRESHOLD) continue;
+
+    const sources: string[] = [];
+    if (d > 0) sources.push('declared');
+    if (o > 0) sources.push('observed');
+    out.push({ tag, confidence: Math.round(confidence * 1000) / 1000, sources });
+  }
+
+  return out.sort((a, b) => b.confidence - a.confidence);
+}

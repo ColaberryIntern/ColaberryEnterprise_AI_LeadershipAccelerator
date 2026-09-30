@@ -1,9 +1,17 @@
 import { z } from 'zod';
-import { Op } from 'sequelize';
+import { Op, literal, col, fn, type Order } from 'sequelize';
 import Lead from '../models/Lead';
 import { AdminUser, AutomationLog, Campaign, FollowUpSequence } from '../models';
 import { Parser } from 'json2csv';
 import { enrollLeadInSequence } from './sequenceService';
+import {
+  LEAD_SOURCE_GROUPS,
+  UNGROUPED_KEY,
+  sourcesForGroup,
+  allKnownSources,
+  sourcePriorityPairs,
+  type LeadSourceGroupSummary,
+} from './leads/leadSourceGroups';
 
 /* ── Phone normalization ─────────────────────────────────────────── */
 
@@ -154,17 +162,32 @@ export async function createLead(data: LeadInput) {
       await tryEnrollInWarmCampaign(recentDuplicate);
       return { lead: recentDuplicate, isDuplicate: true };
     }
+  }
 
-    // Duplicate check: same email (any age) — prevents unique constraint violation
-    const existingByEmail = await Lead.findOne({
-      where: { email: data.email },
-      order: [['created_at', 'DESC']],
-    });
-    if (existingByEmail) {
-      await tryEnrollInWarmCampaign(existingByEmail);
-      return { lead: existingByEmail, isDuplicate: true };
-    }
+  // Existing email — checked even for bypass phones, deliberately.
+  //
+  // This is not a dedup POLICY, it is a database INVARIANT: `leads_email_unique` is a
+  // unique index on lower(email). Skipping it does not create a second lead, it throws
+  // SequelizeUniqueConstraintError — whose default `.message` is the famously unhelpful
+  // string "Validation error" — which the ingest service turns into a 500.
+  //
+  // That is exactly how it failed: the bypass exists so a tester can re-run the full flow,
+  // but by also skipping this check it made the second run impossible for any email that
+  // already existed. The bypass worked once, then 500'd forever.
+  //
+  // Nothing is lost by deduping here. Ingest dispatches routing rules on the returned lead
+  // regardless of `isDuplicate` (leadIngestionService step 11), so the callback still
+  // places, the alert still sends, and the flow is still re-testable end to end.
+  const existingByEmail = await Lead.findOne({
+    where: { email: data.email },
+    order: [['created_at', 'DESC']],
+  });
+  if (existingByEmail) {
+    await tryEnrollInWarmCampaign(existingByEmail);
+    return { lead: existingByEmail, isDuplicate: true };
+  }
 
+  if (!isBypassPhone) {
     // Duplicate check: same phone (normalized)
     if (data.phone) {
       const phoneMatch = await findLeadByNormalizedPhone(data.phone);
@@ -204,27 +227,119 @@ export async function createLead(data: LeadInput) {
   return { lead, isDuplicate: false };
 }
 
-interface ListLeadsParams {
+/**
+ * Filters shared by the Leads table and the CSV export.
+ *
+ * Split out from ListLeadsParams so the two paths cannot drift again: before
+ * 2026-08-25 the export ignored every filter and dumped the whole table, because
+ * it had no params argument at all and the controller read none.
+ */
+export interface LeadFilterParams {
   status?: string;
   search?: string;
   source?: string;
+  /**
+   * Website filter: one or more `leadSourceGroups` keys, comma-separated.
+   * Distinct from `source`, which (confusingly, for historical reasons) filters
+   * `form_type`. This one filters the real origin.
+   *
+   * The controller resolves this before calling: an explicit request parameter
+   * wins, then the caller's saved+locked preference, then the role default
+   * (sales opens on enterprise sources only). See leadViewPreferenceService.
+   */
+  website?: string;
+  /**
+   * Declared rather than read through `as any`, which is how it used to be
+   * accessed here. An undeclared field silently disappears the moment another
+   * caller spreads a typed object into this one.
+   */
+  temperature?: string;
   scoreMin?: number;
   scoreMax?: number;
   dateFrom?: string;
   dateTo?: string;
+}
+
+interface ListLeadsParams extends LeadFilterParams {
   page?: number;
   limit?: number;
   sort?: string;
   order?: 'ASC' | 'DESC';
 }
 
-export async function listLeads(params: ListLeadsParams) {
-  const page = params.page || 1;
-  const limit = params.limit || 25;
-  const offset = (page - 1) * limit;
-  const sort = params.sort || 'created_at';
-  const order = params.order || 'DESC';
+/**
+ * SQL that maps `leads.source` to its priority tier, so "website signups
+ * first" is done by the database and survives pagination. Built from
+ * leadSourceGroups, escaped here because raw source strings reach SQL.
+ */
+function priorityCaseSql(): string {
+  const escape = (v: string) => `'${v.replace(/'/g, "''")}'`;
+  const byTier = new Map<number, string[]>();
+  for (const { source, tier } of sourcePriorityPairs()) {
+    if (!byTier.has(tier)) byTier.set(tier, []);
+    byTier.get(tier)!.push(source);
+  }
+  const whens = [...byTier.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([tier, sources]) => `WHEN "Lead"."source" IN (${sources.map(escape).join(', ')}) THEN ${tier}`);
+  // Unrecognised sources fall to 5 — after internal (4), before test (9) —
+  // matching priorityForSource() so the SQL and the TS agree.
+  return `CASE ${whens.join(' ')} ELSE 5 END`;
+}
 
+/**
+ * Every website/origin group with its current lead count, for the filter
+ * dropdown. Groups with zero leads are still returned so a rep can see that a
+ * site is wired but quiet, rather than wondering where it went. The catch-all
+ * 'other' group is appended only when something actually landed in it.
+ */
+export async function getLeadSourceGroups(): Promise<LeadSourceGroupSummary[]> {
+  const rows = (await Lead.findAll({
+    attributes: ['source', [fn('COUNT', col('id')), 'count']],
+    group: ['source'],
+    raw: true,
+  })) as unknown as Array<{ source: string | null; count: string }>;
+
+  const countBySource = new Map<string, number>();
+  for (const r of rows) {
+    countBySource.set((r.source ?? '').toLowerCase(), Number(r.count) || 0);
+  }
+
+  const groups: LeadSourceGroupSummary[] = LEAD_SOURCE_GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label,
+    domain: g.domain,
+    kind: g.kind,
+    count: g.sources.reduce((n, s) => n + (countBySource.get(s.toLowerCase()) ?? 0), 0),
+  }));
+
+  const known = new Set(allKnownSources().map((s) => s.toLowerCase()));
+  const ungrouped = rows
+    .filter((r) => !known.has((r.source ?? '').toLowerCase()))
+    .reduce((n, r) => n + (Number(r.count) || 0), 0);
+
+  if (ungrouped > 0) {
+    groups.push({
+      key: UNGROUPED_KEY,
+      label: 'Other',
+      domain: 'source not recognised yet',
+      kind: 'internal',
+      count: ungrouped,
+    });
+  }
+
+  return groups;
+}
+
+/**
+ * Translates the Leads-page filter set into a Sequelize `where`.
+ *
+ * Exported so `listLeads` and `generateLeadCsv` share one definition. They used
+ * to disagree completely: the table filtered and the export did not, so "Export
+ * CSV" on a filtered view handed back all ~24k rows (reported by Kes,
+ * 2026-08-25). Any new filter added here reaches both surfaces at once.
+ */
+export function buildLeadWhere(params: LeadFilterParams): any {
   const where: any = {};
 
   if (params.status) {
@@ -235,6 +350,41 @@ export async function listLeads(params: ListLeadsParams) {
     where.sponsorship_kit_requested = true;
   } else if (params.source) {
     where.form_type = params.source;
+  }
+
+  // Website filter. Each key expands to the raw `source` values it covers;
+  // 'other' is the complement of everything we know about, so it cannot be an
+  // IN list. An unknown key yields an empty list and therefore matches nothing,
+  // which is the safe direction for a bad query string.
+  if (params.website) {
+    const keys = params.website.split(',').map((k) => k.trim()).filter(Boolean);
+    const inList: string[] = [];
+    let includeUngrouped = false;
+
+    for (const key of keys) {
+      if (key === UNGROUPED_KEY) { includeUngrouped = true; continue; }
+      inList.push(...(sourcesForGroup(key) ?? []));
+    }
+
+    const clauses: any[] = [];
+    if (inList.length) clauses.push({ source: { [Op.in]: inList } });
+    if (includeUngrouped) {
+      clauses.push({
+        [Op.or]: [
+          { source: null },
+          { source: { [Op.notIn]: allKnownSources() } },
+        ],
+      });
+    }
+
+    if (!clauses.length) {
+      // Every key was unrecognised — match nothing rather than everything.
+      where.id = { [Op.is]: null };
+    } else if (clauses.length === 1) {
+      Object.assign(where, clauses[0]);
+    } else {
+      where[Op.and] = [...(where[Op.and] || []), { [Op.or]: clauses }];
+    }
   }
 
   if (params.scoreMin !== undefined || params.scoreMax !== undefined) {
@@ -257,8 +407,8 @@ export async function listLeads(params: ListLeadsParams) {
     }
   }
 
-  if ((params as any).temperature) {
-    where.lead_temperature = (params as any).temperature;
+  if (params.temperature) {
+    where.lead_temperature = params.temperature;
   }
 
   if (params.search) {
@@ -269,10 +419,29 @@ export async function listLeads(params: ListLeadsParams) {
     ];
   }
 
+  return where;
+}
+
+export async function listLeads(params: ListLeadsParams) {
+  const page = params.page || 1;
+  const limit = params.limit || 25;
+  const offset = (page - 1) * limit;
+  const sort = params.sort || 'created_at';
+  const order = params.order || 'DESC';
+
+  const where = buildLeadWhere(params);
+
+  // 'priority' is the sales-facing default: website signups above pulled-list
+  // names, then newest first inside each tier. Every other sort is unchanged.
+  const orderBy: Order =
+    sort === 'priority'
+      ? [[literal(priorityCaseSql()), 'ASC'], ['created_at', 'DESC']]
+      : [[sort, order]];
+
   const { rows: leads, count: total } = await Lead.findAndCountAll({
     where,
     include: [{ model: AdminUser, as: 'assignedAdmin', attributes: ['id', 'email'] }],
-    order: [[sort, order]],
+    order: orderBy,
     limit,
     offset,
   });
@@ -353,11 +522,54 @@ export async function getLeadStats() {
   return { total, byStatus, conversionRate, highIntent, thisMonth, bookedCalls };
 }
 
-export async function generateLeadCsv() {
-  const leads = await Lead.findAll({
+/**
+ * Ceiling on a single CSV export.
+ *
+ * The whole result set is materialised in memory and then serialised in one
+ * pass, so an unfiltered export of the full table (~24k rows plus an admin join
+ * per row) is a real memory event on a shared box. Anything above this is
+ * reported rather than silently trimmed - see the `truncated` flag.
+ */
+export const LEAD_EXPORT_MAX_ROWS = 25000;
+
+/**
+ * Column order of the export, declared rather than inferred from the first row.
+ *
+ * json2csv derives headers from the data and throws outright on an empty array
+ * ('Data should not be empty or the "fields" option should be included'). Once
+ * the export started honouring filters, "no lead matches" became an ordinary
+ * outcome, so an inferred header would turn an empty result into a 500. With
+ * the fields pinned, that case returns a header-only CSV.
+ */
+export const LEAD_CSV_FIELDS = [
+  'id', 'name', 'email', 'company', 'role', 'title', 'phone', 'company_size',
+  'lead_score', 'status', 'interest_area', 'interest_level', 'evaluating_90_days',
+  'source', 'form_type', 'utm_source', 'utm_campaign', 'page_url',
+  'consent_contact', 'assigned_admin', 'notes', 'created_at', 'updated_at',
+];
+
+/**
+ * CSV of the leads matching `params`, using the same filters as the table.
+ *
+ * Passing no params exports everything, which is what the Export CSV button did
+ * unconditionally until 2026-08-25.
+ */
+export async function generateLeadCsv(
+  params: LeadFilterParams = {}
+): Promise<{ csv: string; rowCount: number; truncated: boolean }> {
+  const where = buildLeadWhere(params);
+
+  // One row over the cap, so "there was more" is distinguishable from
+  // "it landed exactly on the limit" without a second COUNT query.
+  const rows = await Lead.findAll({
+    where,
     include: [{ model: AdminUser, as: 'assignedAdmin', attributes: ['id', 'email'] }],
     order: [['created_at', 'DESC']],
+    limit: LEAD_EXPORT_MAX_ROWS + 1,
   });
+
+  const truncated = rows.length > LEAD_EXPORT_MAX_ROWS;
+  const leads = truncated ? rows.slice(0, LEAD_EXPORT_MAX_ROWS) : rows;
 
   const data = leads.map((l) => ({
     id: l.id,
@@ -385,8 +597,8 @@ export async function generateLeadCsv() {
     updated_at: l.updated_at?.toISOString() || '',
   }));
 
-  const parser = new Parser();
-  return parser.parse(data);
+  const parser = new Parser({ fields: LEAD_CSV_FIELDS });
+  return { csv: parser.parse(data), rowCount: leads.length, truncated };
 }
 
 export async function createLeadAdmin(data: {

@@ -1,5 +1,11 @@
 # Brand + Pricing Reference
 
+> **THE PRICING SECTION BELOW IS SUPERSEDED. DO NOT QUOTE IT.**
+>
+> The $499 intensive / $1,497 bundle / $79 network / $499 consulting lab model was **retired by the 2026-07-13 offer pivot**. Live pricing is $149 a month billed annually ($1,788 a year) or $199 a month billed monthly, and it is documented in **`../STUDENT_PLANS_AND_INTERNSHIP_POLICY.md`**, which is authoritative for tuition, duration, curriculum, internship terms, and lead ownership.
+>
+> The rest of this file (brand, voice, anti-positioning, audience, intensive names, industry tracks, URL strategy) is still current and still worth reading.
+
 **Locked decisions. Use these exact values across landing pages, sales material, emails, Stripe SKUs.**
 
 ---

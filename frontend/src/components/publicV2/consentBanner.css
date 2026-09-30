@@ -1,0 +1,66 @@
+/* ============================================================================
+   consentBanner.css
+   Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+.cbv2-consent-banner {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: var(--surface-card);
+  border-top: var(--border-2, 2px) solid var(--text-strong);
+  box-shadow: var(--shadow-lg, 0 -8px 24px rgba(0, 0, 0, 0.18));
+  padding: var(--space-5);
+  /* Respect a device notch / home indicator so Decline is never unreachable. */
+  padding-bottom: max(var(--space-5), env(safe-area-inset-bottom));
+}
+
+.cbv2-consent-banner__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.cbv2-consent-banner__title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  color: var(--text-strong);
+}
+
+.cbv2-consent-banner__body {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.6;
+}
+.cbv2-consent-banner__body a {
+  color: var(--text-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Allow and Decline are the same size and sit side by side. A decline that is
+   smaller, greyer or further away than accept is a dark pattern, not a style. */
+.cbv2-consent-banner__actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.cbv2-consent-banner__actions .cbv2-btn {
+  min-width: 128px;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .cbv2-consent-banner__inner { flex-direction: column; gap: var(--space-4); }
+  .cbv2-consent-banner__actions { width: 100%; }
+  .cbv2-consent-banner__actions .cbv2-btn { flex: 1; }
+}

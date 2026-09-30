@@ -1,10 +1,13 @@
 import CurriculumModule from '../models/CurriculumModule';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import CurriculumLesson from '../models/CurriculumLesson';
 import LessonInstance from '../models/LessonInstance';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import SessionGate from '../models/SessionGate';
 import { Enrollment, Cohort, SectionConfig, ArtifactDefinition, PromptTemplate, AssignmentSubmission } from '../models';
 import MiniSection from '../models/MiniSection';
+import { getCourseLinkMap } from './courseLinkService';
+import { awardLessonCompletionPoints } from './progression/cardPointsService';
 import { generateLessonContent } from './contentGenerationService';
 import * as variableService from './variableService';
 import * as artifactService from './artifactService';
@@ -155,6 +158,15 @@ export async function getParticipantCurriculum(enrollmentId: string) {
     };
   });
 
+  // Attach the per-week Skilljar course link to each module (deep-link delivery,
+  // BC decision 9985688697). Fail-soft: getCourseLinkMap returns an empty map if the
+  // catalog table is unseeded/unavailable, so modules just render without a CTA.
+  const courseLinkMap = await getCourseLinkMap();
+  const modulesWithCourseLinks = modulesWithProgress.map((m) => ({
+    ...m,
+    course_link: courseLinkMap.get(m.module_number) ?? null,
+  }));
+
   return {
     enrollment_id: enrollmentId,
     cohort_name: (enrollment as any).cohort?.name || '',
@@ -163,7 +175,7 @@ export async function getParticipantCurriculum(enrollmentId: string) {
     completed_lessons: completedLessons,
     total_modules: modules.length,
     hours_remaining: Math.round((totalMinutes - completedMinutes) / 60 * 10) / 10,
-    modules: modulesWithProgress,
+    modules: modulesWithCourseLinks,
   };
 }
 
@@ -364,6 +376,9 @@ export async function completeLesson(
   // Mark complete
   await instance.update({ status: 'completed', completed_at: new Date() });
 
+  // Engagement points for the HUD (idempotent per lesson; non-fatal).
+  const points_awarded = await awardLessonCompletionPoints(enrollmentId, lessonId);
+
   // Unlock next lesson
   await unlockNextLesson(enrollmentId, lesson);
 
@@ -377,7 +392,7 @@ export async function completeLesson(
     title: (nextInstance as any).lesson?.title,
   } : null;
 
-  return { passed: true, score: payload.quiz_score, next_lesson: nextLesson };
+  return { passed: true, score: payload.quiz_score, next_lesson: nextLesson, points_awarded };
 }
 
 /* ------------------------------------------------------------------ */
@@ -537,9 +552,16 @@ export async function getModulesForCohort(cohortId: string) {
     ],
   });
 
+  // Same per-week course link as the participant view, so the admin module list
+  // surfaces which weeks are confirmed / pending / Colaberry-original. Fail-soft.
+  const courseLinkMap = await getCourseLinkMap();
   return modules.map((mod) => {
     const plain = mod.toJSON() as any;
-    return { ...plain, total_lessons: plain.lessons?.length ?? 0 };
+    return {
+      ...plain,
+      total_lessons: plain.lessons?.length ?? 0,
+      course_link: courseLinkMap.get(plain.module_number) ?? null,
+    };
   });
 }
 
@@ -609,8 +631,7 @@ export async function gradeArtifacts(
   });
   if (!instance) throw new Error('Lesson instance not found');
 
-  const { default: OpenAI } = await import('openai');
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getInstrumentedOpenAI({ workflow_id: 'curriculum' });
 
   const gradingResults: Array<{
     name: string;
@@ -921,4 +942,23 @@ async function getPriorLabResponses(enrollmentId: string, currentLessonId: strin
   }
 
   return labResponses;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Save Survey Response (per-week feedback survey)                     */
+/* ------------------------------------------------------------------ */
+
+export async function saveSurveyResponse(
+  enrollmentId: string,
+  lessonId: string,
+  responses: Record<string, number | string>
+): Promise<{ saved: boolean }> {
+  const instance = await LessonInstance.findOne({
+    where: { lesson_id: lessonId, enrollment_id: enrollmentId },
+  });
+  if (!instance) throw new Error('Lesson instance not found');
+
+  await instance.update({ reflection_responses_json: responses });
+
+  return { saved: true };
 }

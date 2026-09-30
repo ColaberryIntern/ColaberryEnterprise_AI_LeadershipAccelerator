@@ -1,23 +1,108 @@
 import { Op, fn, col, literal, QueryTypes } from 'sequelize';
 import { Visitor, VisitorSession, PageEvent, Lead, IntentScore, Campaign } from '../models';
 import { sequelize } from '../config/database';
+import {
+  botExclusionSql,
+  isBotUserAgent,
+  isLikelyAutomatedSession,
+  notAutomatedSessionSql,
+} from './visitorBotDetection';
+
+/**
+ * The start of a `days`-long window, as a real timestamp.
+ *
+ * Five queries in this file wrote their window as `INTERVAL ':days days'` — the
+ * placeholder INSIDE a string literal, where Sequelize deliberately does not
+ * substitute. Postgres received the characters ":days days" and answered
+ * `invalid input syntax for type interval`, so getVisitorDashboard,
+ * getConversionFunnel, getTopPages, getDeviceBreakdown and getSitesBreakdown
+ * threw on every call any of them has ever received. Confirmed one at a time
+ * against the production database before this was written.
+ *
+ * They failed invisibly because each caller wraps the request in
+ * `.catch(() => null)` and renders an empty state: a 500 and "no data" look
+ * identical on screen.
+ *
+ * Binding a timestamp removes the interpolation question rather than re-solving
+ * it per query, which is why this is one helper and not five careful edits.
+ */
+function sinceDays(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * "This session belongs to a person", as SQL, for a query that has
+ * `visitor_sessions` in scope under the given alias.
+ *
+ * WHY EVERY STAT NEEDS THIS AND NOT JUST THE LIVE LIST. The live table was
+ * filtered first because that is where the crawlers were visible. The counts
+ * around it were not, and they are read far more often: production reported
+ * 1,025 visitors and 41,034 sessions over 30 days, of which roughly three
+ * quarters are crawler sessions, and an average bounce rate of 93.8% that is
+ * mostly a machine fetching one page and leaving. Those are the numbers someone
+ * would quote in a board meeting.
+ *
+ * A dashboard that hides bots in one panel and counts them in the next is worse
+ * than one that counts them everywhere, because the disagreement is invisible
+ * and the reader has no way to know which panel to believe. One definition of
+ * "a person", applied everywhere.
+ */
+function humanSessionSql(sessionAlias: string, visitorIdColumn: string): string {
+  return (
+    `EXISTS (SELECT 1 FROM "visitors" hv WHERE hv."id" = ${visitorIdColumn} ` +
+    `AND ${botExclusionSql('hv."user_agent"')}) ` +
+    `AND ${notAutomatedSessionSql(`${sessionAlias}."pageview_count"`, `${sessionAlias}."duration_seconds"`)}`
+  );
+}
+
+/**
+ * The same rule as a Sequelize `where` fragment, for the model-based queries.
+ *
+ * `VisitorSession` is the alias Sequelize uses for the root model in these
+ * calls, which is why it is spelled out rather than parameterised — getting it
+ * wrong produces a SQL error rather than a wrong number, so it fails loudly.
+ */
+function humanSessionWhere(includeBots: boolean): Record<symbol, unknown> {
+  if (includeBots) return {};
+  return {
+    [Op.and]: [literal(humanSessionSql('"VisitorSession"', '"VisitorSession"."visitor_id"'))],
+  };
+}
 
 // ---------------------------------------------------------------------------
 // 1. Live Visitors
 // ---------------------------------------------------------------------------
 
-export async function getLiveVisitors(limit = 50): Promise<any[]> {
+export async function getLiveVisitors(limit = 50, includeBots = false): Promise<any[]> {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
   // Find sessions that have at least one PageEvent with timestamp within the
   // last 5 minutes. Use a literal subquery in the WHERE clause so Sequelize
   // does not need a raw query.
+  //
+  // The bot predicate is applied HERE, in the same WHERE as the recency test,
+  // rather than by filtering the returned rows. Post-filtering would interact
+  // with LIMIT — asking for 50 and dropping the bots among them returns fewer
+  // than 50 while more live humans exist further down, which looks like a quiet
+  // site rather than a truncated query.
   const sessions = await VisitorSession.findAll({
     where: {
       [Op.and]: [
         literal(
           `EXISTS (SELECT 1 FROM "page_events" WHERE "page_events"."session_id" = "VisitorSession"."id" AND "page_events"."timestamp" > '${fiveMinutesAgo.toISOString()}')`
         ),
+        ...(includeBots
+          ? []
+          : [
+              literal(
+                `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "VisitorSession"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+              ),
+              // Second gate: crawlers that present a clean browser string and are
+              // only detectable by what they did. See visitorBotDetection.
+              literal(
+                notAutomatedSessionSql('"VisitorSession"."pageview_count"', '"VisitorSession"."duration_seconds"')
+              ),
+            ]),
       ],
     },
     include: [
@@ -50,6 +135,13 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
     const intentScore = visitor?.intentScore;
 
     return {
+      // `id` and `fingerprint` are the names the admin view model declares
+      // (frontend AdminVisitorsPage `Visitor`). They were previously emitted only
+      // as `visitor_id` / `visitor_fingerprint`, so every live row rendered with
+      // an undefined React key and an "Anonymous" label with no fingerprint tail,
+      // and clicking a row called `/api/admin/visitors/undefined/sessions`.
+      id: s.visitor_id,
+      fingerprint: visitor?.fingerprint ?? null,
       session_id: s.id,
       visitor_id: s.visitor_id,
       visitor_fingerprint: visitor?.fingerprint ?? null,
@@ -57,18 +149,148 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
       lead_name: lead?.name ?? null,
       current_page: s.exit_page,
       started_at: s.started_at,
+      // Same number under both names, deliberately. The table reads
+      // `session_duration`; `duration_seconds` is kept because it is the column
+      // name and the shape every other session payload in this service uses.
+      session_duration: s.duration_seconds,
       duration_seconds: s.duration_seconds,
       pageview_count: s.pageview_count,
       referrer_domain: s.referrer_domain,
+      // Which property the visitor is actually on. The tracker feeds eight
+      // hostnames into one table, so a live row without this is unattributable —
+      // a crawler on worldoftaxonomy.com and a buyer on enterprise.colaberry.ai
+      // render identically without it.
+      site_slug: s.site_slug ?? visitor?.site_slug ?? null,
       device_type: s.device_type ?? visitor?.device_type ?? null,
       ip_address: s.ip_address ?? visitor?.ip_address ?? null,
       city: visitor?.city ?? null,
       country: visitor?.country ?? null,
       is_identified: !!lead,
+      // Labelled even when bots are excluded, so turning "Show bots" on gives a
+      // list where the machines are marked rather than merely present.
+      //
+      // Two flags, not one. `is_bot` means the client said so; `is_likely_bot`
+      // means we inferred it from 40+ pages over 2+ hours or a crawl rate no
+      // person sustains. The second is a judgement call and is labelled as one,
+      // so a row hidden by inference is never mistaken for a row that identified
+      // itself.
+      is_bot: isBotUserAgent(visitor?.user_agent),
+      is_likely_bot: isLikelyAutomatedSession({
+        pageview_count: s.pageview_count,
+        duration_seconds: s.duration_seconds,
+      }),
       intent_score: intentScore?.score ?? null,
       intent_level: intentScore?.intent_level ?? null,
     };
   });
+}
+
+/**
+ * How many distinct visitors have fired a page event in the last 5 minutes.
+ *
+ * Counted separately from `getLiveVisitors` rather than derived from its length:
+ * that function is LIMITed (50 by default) for the table, so using its length as
+ * the "Live Now" figure would silently cap the headline number at the page size
+ * and read as a plateau rather than a truncation.
+ */
+export async function countLiveVisitors(includeBots = false): Promise<number> {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+  // Counted over SESSIONS, matching the list query exactly.
+  //
+  // This used to count distinct visitors straight off `page_events`, which was
+  // fine while the only filter was the user agent. It stopped being fine the
+  // moment a rule looked at session shape: pageview_count and duration_seconds
+  // live on `visitor_sessions`, so a page-event-based count could not apply the
+  // behavioural rule at all and the headline would have drifted above the table
+  // the instant a disguised crawler appeared. Same source, same predicates, no
+  // drift possible.
+  const botFilter = includeBots
+    ? ''
+    : `AND ${botExclusionSql('v."user_agent"')}
+       AND ${notAutomatedSessionSql('vs."pageview_count"', 'vs."duration_seconds"')}`;
+
+  const [row] = await sequelize.query<{ count: string }>(
+    `SELECT COUNT(DISTINCT vs.visitor_id)::int AS count
+       FROM visitor_sessions vs
+       JOIN visitors v ON v.id = vs.visitor_id
+      WHERE EXISTS (
+              SELECT 1 FROM page_events pe
+               WHERE pe.session_id = vs.id AND pe.timestamp > :since
+            )
+        ${botFilter}`,
+    { replacements: { since: fiveMinutesAgo }, type: QueryTypes.SELECT }
+  );
+
+  return Number(row?.count ?? 0);
+}
+
+// ---------------------------------------------------------------------------
+// 1b. Signed-in people (portal presence)
+// ---------------------------------------------------------------------------
+
+/**
+ * The people who are logged into the portal right now, by name.
+ *
+ * WHY THIS EXISTS. "Live Visitors" showed only anonymous fingerprints, and Ali
+ * asked why a colleague plainly using the site did not appear. The answer was
+ * structural: `initTracker()` has twenty call sites and not one of them is in the
+ * portal — it runs from `PublicLayout`, `PublicLayoutV2` and individual marketing
+ * landing pages only. Anyone signed in was invisible to that table by
+ * construction, no matter how long they stayed.
+ *
+ * WHY PRESENCE RATHER THAN TRACKING. The obvious fix — mount the tracker on the
+ * portal — would device-fingerprint logged-in learners and file them alongside
+ * anonymous marketing traffic. That is a privacy decision, not a bug fix, and it
+ * is not one to make by reflex while repairing a dashboard. The portal ALREADY
+ * maintains presence for its own "Online now" rail (`community_members.
+ * last_active_at`, touched by POST /api/portal/community/presence/ping), which
+ * knows real names and collects nothing new. Reading what already exists beats
+ * collecting more, so this reads it.
+ *
+ * The two halves of the live view therefore answer different questions on
+ * purpose: anonymous visitors are "who is on the marketing sites", signed-in
+ * people are "who is in the product". They are never merged into one number,
+ * because a fingerprint and a named human are not the same unit and adding them
+ * would produce a total that means nothing.
+ */
+export interface LiveSignedInPerson {
+  enrollment_id: string;
+  name: string;
+  avatar_url: string | null;
+  last_active_at: Date;
+  cohort_id: string | null;
+  presence_status: string;
+}
+
+export async function getLiveSignedInPeople(windowMinutes = 5, limit = 100): Promise<LiveSignedInPerson[]> {
+  const { CommunityMember, Enrollment } = require('../models');
+  const since = new Date(Date.now() - windowMinutes * 60 * 1000);
+
+  const rows = await CommunityMember.findAll({
+    where: { last_active_at: { [Op.gt]: since } },
+    include: [
+      {
+        model: Enrollment,
+        as: 'enrollment',
+        attributes: ['id', 'full_name', 'cohort_id'],
+        required: true,
+      },
+    ],
+    order: [['last_active_at', 'DESC']],
+    limit,
+  });
+
+  return rows.map((m: any) => ({
+    enrollment_id: m.enrollment?.id ?? m.enrollment_id,
+    // `display_name` is the community handle and can be unset; the enrolment's
+    // full name is the one an admin will recognise, so it leads.
+    name: m.enrollment?.full_name || m.display_name || 'Member',
+    avatar_url: m.avatar_url ?? null,
+    last_active_at: m.last_active_at,
+    cohort_id: m.enrollment?.cohort_id ?? null,
+    presence_status: m.presence_status ?? 'online',
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +298,8 @@ export async function getLiveVisitors(limit = 50): Promise<any[]> {
 // ---------------------------------------------------------------------------
 
 export async function getVisitorStats(
-  dateRange?: { from: string; to: string }
+  dateRange?: { from: string; to: string },
+  includeBots = false
 ): Promise<object> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -85,8 +308,13 @@ export async function getVisitorStats(
 
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const rangeWhere = { started_at: { [Op.between]: [from, to] } };
-  const todayWhere = { started_at: { [Op.gte]: todayStart } };
+  // Every figure on this card row now counts people only, matching the live list
+  // it sits above. Previously `liveCount` excluded bots and the four numbers
+  // beside it did not, so the same screen answered "who is here" and "how many
+  // came" using two different definitions of a visitor.
+  const human = humanSessionWhere(includeBots);
+  const rangeWhere = { started_at: { [Op.between]: [from, to] }, ...human };
+  const todayWhere = { started_at: { [Op.gte]: todayStart }, ...human };
 
   const [
     totalVisitors,
@@ -96,6 +324,7 @@ export async function getVisitorStats(
     bounceData,
     visitorsToday,
     sessionsToday,
+    liveCount,
   ] = await Promise.all([
     VisitorSession.count({
       where: rangeWhere,
@@ -123,6 +352,7 @@ export async function getVisitorStats(
       col: 'visitor_id',
     }),
     VisitorSession.count({ where: todayWhere }),
+    countLiveVisitors(),
   ]);
 
   const avgDurationVal = (avgDuration as any)?.avg_duration ?? 0;
@@ -130,7 +360,29 @@ export async function getVisitorStats(
   const totalCount = Number((bounceData as any)?.total_count ?? 0);
   const bounceRate = totalCount > 0 ? Math.round((bounceCount / totalCount) * 10000) / 100 : 0;
 
+  // Two naming conventions on purpose, and this is the fix rather than a wart.
+  //
+  // The admin page declares its `VisitorStats` in camelCase (liveCount,
+  // todayVisitors, todaySessions, visitors30d, sessions30d, avgDuration,
+  // bounceRate) and this function only ever returned snake_case. Nothing threw:
+  // every card read `stats.todayVisitors ?? 0` off an object that had
+  // `visitors_today`, so the whole dashboard rendered a confident 0 against a
+  // table holding 40,788 sessions. `liveCount` had no server-side source at all.
+  //
+  // The snake_case keys are retained because they are this endpoint's shipped
+  // shape and match the column names every other query in this file returns;
+  // dropping them would trade one silent contract break for another.
   return {
+    // camelCase — the shape the admin view model consumes
+    liveCount,
+    todayVisitors: visitorsToday,
+    todaySessions: sessionsToday,
+    visitors30d: totalVisitors,
+    sessions30d: totalSessions,
+    pageviews30d: pageviewSum ?? 0,
+    avgDuration: Math.round(Number(avgDurationVal)),
+    bounceRate,
+    // snake_case — retained for the shipped contract
     total_visitors: totalVisitors,
     total_sessions: totalSessions,
     total_pageviews: pageviewSum ?? 0,
@@ -138,6 +390,7 @@ export async function getVisitorStats(
     bounce_rate: bounceRate,
     visitors_today: visitorsToday,
     sessions_today: sessionsToday,
+    live_count: liveCount,
   };
 }
 
@@ -146,12 +399,14 @@ export async function getVisitorStats(
 // ---------------------------------------------------------------------------
 
 export async function getVisitorTrend(
-  days = 30
+  days = 30,
+  includeBots = false
 ): Promise<Array<{ date: string; visitors: number; sessions: number; pageviews: number }>> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const rows: any[] = await VisitorSession.findAll({
-    where: { started_at: { [Op.gte]: since } },
+    // Same definition of a visitor as the cards above the chart.
+    where: { started_at: { [Op.gte]: since }, ...humanSessionWhere(includeBots) },
     attributes: [
       [fn('DATE', col('started_at')), 'date'],
       [fn('COUNT', literal('DISTINCT "visitor_id"')), 'visitors'],
@@ -210,7 +465,8 @@ export async function getPagePopularity(
 // ---------------------------------------------------------------------------
 
 export async function getTrafficSources(
-  dateRange?: { from: string; to: string }
+  dateRange?: { from: string; to: string },
+  includeBots = false
 ): Promise<Array<{ source: string; visitors: number; sessions: number }>> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -220,6 +476,16 @@ export async function getTrafficSources(
   const rows: any[] = await VisitorSession.findAll({
     where: {
       started_at: { [Op.between]: [from, to] },
+      // Same rule as the live list, so "Traffic Sources" describes people.
+      ...(includeBots
+        ? {}
+        : {
+            [Op.and]: [
+              literal(
+                `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "VisitorSession"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+              ),
+            ],
+          }),
     },
     attributes: [
       [fn('COALESCE', col('referrer_domain'), literal("'direct'")), 'source'],
@@ -252,6 +518,7 @@ export async function listVisitors(params: {
   limit?: number;
   sort?: string;
   order?: string;
+  includeBots?: boolean;
 }): Promise<{ visitors: any[]; total: number; page: number; totalPages: number }> {
   const page = Math.max(params.page ?? 1, 1);
   const limit = Math.min(Math.max(params.limit ?? 25, 1), 100);
@@ -261,6 +528,13 @@ export async function listVisitors(params: {
   const sortOrder = (params.order ?? 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
   const where: any = {};
+
+  // The same definition of a person the live view and the stat cards use.
+  // Without it this list is 1,802 rows of which 54 are crawlers, sorted by
+  // last-seen — so the machines, which never stop, sit permanently at the top.
+  if (!params.includeBots) {
+    where[Op.and] = [literal(botExclusionSql('"Visitor"."user_agent"'))];
+  }
 
   // Identified filter
   if (params.identified === 'true') {
@@ -304,20 +578,61 @@ export async function listVisitors(params: {
         attributes: ['score', 'intent_level', 'signals_count', 'last_signal_at', 'score_updated_at'],
         required: false,
       },
-      {
-        model: Campaign,
-        as: 'campaign',
-        attributes: ['id', 'name'],
-        required: false,
-      },
+      // NO Campaign include here, deliberately. See the campaign lookup below.
     ],
     order: [[sortField, sortOrder]],
     limit,
     offset,
   });
+  /**
+   * Campaign names are resolved in a SECOND QUERY, not by an association.
+   *
+   * This list previously included `{ model: Campaign, as: 'campaign' }` — and
+   * there is no Visitor↔Campaign association anywhere in models/index.ts, so
+   * Sequelize threw `Campaign is not associated to Visitor!` on EVERY call.
+   * The page catches and logs, so the All Visitors tab has simply always shown
+   * "No visitor data yet." It has never worked.
+   *
+   * Adding the association would swap one runtime error for another: 
+   * `visitors.campaign_id` is VARCHAR while `campaigns.id` is UUID, so the join
+   * Sequelize generates fails with `operator does not exist: character varying
+   * = uuid`. Verified against the production schema before choosing this route.
+   *
+   * Two queries, no cast, no schema change, and the ids that are not valid UUIDs
+   * are dropped before they can reach Postgres and error.
+   */
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const campaignIds = Array.from(
+    new Set(
+      rows
+        .map((v: any) => (v.campaign_id ? String(v.campaign_id) : ''))
+        .filter((id: string) => UUID_RE.test(id)),
+    ),
+  );
+  const campaignsById = new Map<string, { id: string; name: string }>();
+  if (campaignIds.length > 0) {
+    try {
+      const campaigns: any[] = await Campaign.findAll({
+        where: { id: campaignIds },
+        attributes: ['id', 'name'],
+      });
+      for (const c of campaigns) campaignsById.set(String(c.id), { id: String(c.id), name: c.name });
+    } catch {
+      // A campaign name is a nicety; the visitor list is not. Never let the
+      // lookup take the list down again.
+    }
+  }
+
 
   return {
-    visitors: rows,
+    // `is_bot` is emitted even though bots are filtered out by default, so that
+    // turning the filter off produces a list where the machines are LABELLED
+    // rather than merely present and indistinguishable from people.
+    visitors: rows.map((v: any) => ({
+      ...(typeof v.toJSON === 'function' ? v.toJSON() : v),
+      campaign: campaignsById.get(String(v.campaign_id)) ?? null,
+      is_bot: isBotUserAgent(v.user_agent),
+    })),
     total: count,
     page,
     totalPages: Math.ceil(count / limit),
@@ -378,7 +693,11 @@ export interface VisitorDashboardSummary {
   page_views_per_session: number;
 }
 
-export async function getVisitorDashboard(days = 30): Promise<VisitorDashboardSummary> {
+export async function getVisitorDashboard(days = 30, includeBots = false): Promise<VisitorDashboardSummary> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('"visitor_sessions"', '"visitor_sessions"."visitor_id"')}`;
+
   const [row] = await sequelize.query<VisitorDashboardSummary>(
     `SELECT
        COUNT(*)::int                                          AS total_sessions,
@@ -391,9 +710,10 @@ export async function getVisitorDashboard(days = 30): Promise<VisitorDashboardSu
             ELSE ROUND(SUM(pageview_count)::numeric / COUNT(*), 1)
        END::float                                             AS page_views_per_session
      FROM visitor_sessions
-     WHERE started_at >= NOW() - INTERVAL ':days days'`,
+     WHERE started_at >= :since
+       ${humanFilter}`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );
@@ -417,16 +737,21 @@ export interface ConversionFunnel {
   total_leads: number;
 }
 
-export async function getConversionFunnel(days = 30): Promise<ConversionFunnel> {
+export async function getConversionFunnel(days = 30, includeBots = false): Promise<ConversionFunnel> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('vs', 'vs."visitor_id"')}`;
+
   const [row] = await sequelize.query<ConversionFunnel>(
     `SELECT
        COUNT(DISTINCT vs.visitor_id)::int   AS total_visitors,
        COUNT(DISTINCT vs.id)::int           AS total_sessions,
        COUNT(DISTINCT vs.lead_id)::int      AS total_leads
      FROM visitor_sessions vs
-     WHERE vs.started_at >= NOW() - INTERVAL ':days days'`,
+     WHERE vs.started_at >= :since
+       ${humanFilter}`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );
@@ -445,7 +770,27 @@ export interface TopPage {
   unique_visitors: number;
 }
 
-export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
+export async function getTopPages(days = 30, limit = 20, includeBots = false): Promise<TopPage[]> {
+  // `INTERVAL ':days days'` put the placeholder INSIDE a string literal, and
+  // Sequelize deliberately does not substitute inside quotes — so Postgres
+  // received the characters ":days days" and threw
+  // `invalid input syntax for type interval`. Every call to this function has
+  // failed since it was written, which means /api/admin/visitor-analytics/pages
+  // has never once returned a row: it 500s, the page catches, and the panel
+  // renders its empty state. A bug that only ever produced "no data" rather than
+  // a visible error.
+  //
+  // The window is computed in JS and passed as a real timestamp, which removes
+  // the string-interpolation question rather than re-solving it.
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  // Bots excluded by default, matching the live view. Without this the list is
+  // just the crawler's sitemap: production holds 275,587 pageviews under a
+  // single category, nearly all of it automated traffic on one property, which
+  // would bury every page a person actually read.
+  const botJoin = includeBots ? '' : 'JOIN visitors v ON v.id = pe.visitor_id';
+  const botFilter = includeBots ? '' : `AND ${botExclusionSql('v."user_agent"')}`;
+
   const rows = await sequelize.query<TopPage>(
     `SELECT
        pe.page_path,
@@ -453,13 +798,15 @@ export async function getTopPages(days = 30, limit = 20): Promise<TopPage[]> {
        COUNT(*)::int                             AS view_count,
        COUNT(DISTINCT pe.visitor_id)::int        AS unique_visitors
      FROM page_events pe
+     ${botJoin}
      WHERE pe.event_type = 'pageview'
-       AND pe.timestamp >= NOW() - INTERVAL ':days days'
+       AND pe.timestamp >= :since
+       ${botFilter}
      GROUP BY pe.page_path
      ORDER BY view_count DESC
      LIMIT :limit`,
     {
-      replacements: { days, limit },
+      replacements: { since, limit },
       type: QueryTypes.SELECT,
     },
   );
@@ -477,18 +824,23 @@ export interface DeviceBreakdown {
   percentage: number;
 }
 
-export async function getDeviceBreakdown(days = 30): Promise<DeviceBreakdown[]> {
+export async function getDeviceBreakdown(days = 30, includeBots = false): Promise<DeviceBreakdown[]> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('"visitor_sessions"', '"visitor_sessions"."visitor_id"')}`;
+
   const rows = await sequelize.query<DeviceBreakdown>(
     `SELECT
        COALESCE(device_type, 'unknown')           AS device_type,
        COUNT(*)::int                               AS session_count,
        ROUND(COUNT(*)::numeric * 100.0 / NULLIF(SUM(COUNT(*)) OVER (), 0), 1)::float AS percentage
      FROM visitor_sessions
-     WHERE started_at >= NOW() - INTERVAL ':days days'
+     WHERE started_at >= :since
+       ${humanFilter}
      GROUP BY device_type
      ORDER BY session_count DESC`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );
@@ -519,7 +871,11 @@ const SITE_DISPLAY_NAMES: Record<string, string> = {
  * and page_events for pageview totals, scoped to last N days. Powers the "By Site"
  * panel on the admin visitor analytics page so we can see traffic per external site.
  */
-export async function getSitesBreakdown(days = 30): Promise<SiteBreakdown[]> {
+export async function getSitesBreakdown(days = 30, includeBots = false): Promise<SiteBreakdown[]> {
+  // Crawlers are excluded here for the same reason they are on the live
+  // list: this number is read as "how many people".
+  const humanFilter = includeBots ? '' : `AND ${humanSessionSql('vs', 'vs."visitor_id"')}`;
+
   const rows = await sequelize.query<{
     site_slug: string;
     sessions: string;
@@ -534,11 +890,12 @@ export async function getSitesBreakdown(days = 30): Promise<SiteBreakdown[]> {
        COALESCE(SUM(vs.pageview_count), 0)         AS pageviews,
        MAX(vs.started_at)                          AS last_seen_at
      FROM visitor_sessions vs
-     WHERE vs.started_at >= NOW() - INTERVAL ':days days'
+     WHERE vs.started_at >= :since
+       ${humanFilter}
      GROUP BY 1
      ORDER BY sessions DESC`,
     {
-      replacements: { days },
+      replacements: { since: sinceDays(days) },
       type: QueryTypes.SELECT,
     },
   );

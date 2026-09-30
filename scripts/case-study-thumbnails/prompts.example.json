@@ -1,0 +1,171 @@
+{
+  "style": "High-click YouTube thumbnail, the kind on videos with millions of views: ONE dominant subject filling most of the frame, extreme contrast, saturated complementary colours, dramatic rim lighting, shallow depth of field, clean uncluttered background, a single instantly readable visual idea, photoreal cinematic look with a slight 3D-render polish, 16:9 composition. No watermark, no logos, no small text, no numbers, no user interface screenshots, no fine print.",
+  "records": [
+    {
+      "slug": "recovering-the-calls-the-workflow-lost",
+      "label": "Case 01",
+      "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/shot-cora-recovery-panel.png"
+    },
+    {
+      "slug": "turning-call-intent-into-the-next-action",
+      "label": "Case 02",
+      "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/shot-cora-intent-lead-lifecycle.png"
+    },
+    {
+      "slug": "the-ai-proposes-a-verified-human-decides",
+      "label": "CoreOps",
+      "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/shot-coreops-traceability.png"
+    },
+    {
+      "slug": "your-repositories-already-wrote-your-resume",
+      "label": "Repo to Reputation",
+      "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/shot-repo2reputation-builder.png"
+    },
+    {
+      "slug": "ai-systems-architect-training-system",
+      "label": "Training system",
+      "currentHeroUrl": "https://enterprise.colaberry.ai/site-v2/shot-today.png"
+    },
+    {
+      "slug": "testing-ai-actions-before-they-reach-customers",
+      "label": "Case 03",
+      "currentHeroUrl": null
+    }
+  ],
+  "picked": {
+    "recovering-the-calls-the-workflow-lost": "A",
+    "turning-call-intent-into-the-next-action": "B",
+    "the-ai-proposes-a-verified-human-decides": "C",
+    "your-repositories-already-wrote-your-resume": "C (words on the card repainted with edit.js)",
+    "ai-systems-architect-training-system": "A",
+    "testing-ai-actions-before-they-reach-customers": "B"
+  },
+  "items": [
+    {
+      "slug": "recovering-the-calls-the-workflow-lost",
+      "title": "Recovering the Calls the Workflow Lost",
+      "concept": "A",
+      "name": "Caught before they hit the floor",
+      "prompt": "An operations manager in his forties, sleeves rolled up, face lit with startled relief, catching a glowing orange telephone handset a split second before it falls into a black void, while dozens more tiny glowing phones fall around him into a bright safety net that stretches across the bottom of the frame. Deep navy background, electric orange highlights. Huge bold condensed white text with a thick black outline in the upper left reading exactly: LOST CALLS, and a red angled sticker under it reading exactly: FOUND."
+    },
+    {
+      "slug": "recovering-the-calls-the-workflow-lost",
+      "title": "Recovering the Calls the Workflow Lost",
+      "concept": "B",
+      "name": "The net under the rain of calls",
+      "prompt": "Hundreds of small glowing telephone icons pour like rain out of a dark cloud at the top of the frame. Below, a single sleek mechanical arm with a glowing green tray sweeps across and catches them, so that the ones that were about to vanish into darkness land neatly in the light. Black background, neon green and amber, dramatic volumetric light, macro depth of field. No text."
+    },
+    {
+      "slug": "recovering-the-calls-the-workflow-lost",
+      "title": "Recovering the Calls the Workflow Lost",
+      "concept": "C",
+      "name": "2 AM spreadsheet vs the quiet system",
+      "prompt": "Dramatic split-frame thumbnail. Left half, cold blue and dim: an exhausted engineer at 2 AM hunched over a laptop full of spreadsheet rows, coffee cups, rubbing his eyes. Right half, warm and bright: the same desk empty and tidy in morning light, the laptop showing a calm glowing green check mark. A giant glossy red arrow sweeps from left to right across the divide. Huge bold white text with black outline at the top reading exactly: BY HAND vs BY SYSTEM."
+    },
+    {
+      "slug": "turning-call-intent-into-the-next-action",
+      "title": "The Call Ended. The Next Step Didn't Have To.",
+      "concept": "A",
+      "name": "Three roads out of one call",
+      "prompt": "A confident dispatcher in her thirties, headset on, leaning toward the camera with a knowing half-smile, one hand on a glowing control desk. From a big glowing smartphone on the desk three thick neon arrows shoot outward: one blue arrow toward a friendly human colleague waving, one green arrow toward a glowing calendar, one red arrow ending in a bold stop sign. Dark teal background, hot magenta and cyan rim light. Huge bold condensed white text with thick black outline in the upper right reading exactly: WHAT NEXT?"
+    },
+    {
+      "slug": "turning-call-intent-into-the-next-action",
+      "title": "The Call Ended. The Next Step Didn't Have To.",
+      "concept": "B",
+      "name": "The railway switch",
+      "prompt": "A giant glowing railway junction at night seen from a low dramatic angle: a sleek train shaped like a glowing telephone handset arrives at a switch where the track splits into three brightly lit destinations, one warm gold, one electric green, one red with a barrier down. Wet reflective ground, fog, cinematic blue and orange lighting, ultra sharp foreground. No text."
+    },
+    {
+      "slug": "turning-call-intent-into-the-next-action",
+      "title": "The Call Ended. The Next Step Didn't Have To.",
+      "concept": "C",
+      "name": "The call ends, the path lights up",
+      "prompt": "Extreme close-up of a thumb pressing a huge glossy red END CALL button on a phone screen that fills the lower half of the frame. Out of the button, a bright glowing green path of stepping stones rises and curves upward into the distance, each stone lit like a runway light. Pitch black background, red and green complementary glow, dramatic bokeh. Bold white text with black outline in the upper left reading exactly: THE CALL ENDED."
+    },
+    {
+      "slug": "the-ai-proposes-a-verified-human-decides",
+      "title": "The AI Proposes, A Verified Human Decides",
+      "concept": "A",
+      "name": "The stamp",
+      "prompt": "A sleek white robotic hand offers a glowing blue holographic document across a desk. Opposite it, a human hand in a rolled white shirt sleeve holds a heavy red rubber stamp poised in mid-air, not yet down. In the soft background, the human's face, a thoughtful woman in her forties, eyebrows raised, studying the document. Deep charcoal background, cool blue versus warm red, dramatic spotlight. Huge bold condensed white text with a thick black outline in the upper left reading exactly: WHO DECIDES?"
+    },
+    {
+      "slug": "the-ai-proposes-a-verified-human-decides",
+      "title": "The AI Proposes, A Verified Human Decides",
+      "concept": "B",
+      "name": "The fingerprint button",
+      "prompt": "A giant glossy green APPROVE button with a glowing fingerprint scanner in its centre, filling the right two thirds of the frame, and a human thumb descending toward it, frozen a centimetre above the surface. Behind it, out of focus, the cold blue rows of a server room. The button's edge glows warm green, the rest of the scene is dark and blue. The single short word on the button reads exactly: APPROVE. No other text."
+    },
+    {
+      "slug": "the-ai-proposes-a-verified-human-decides",
+      "title": "The AI Proposes, A Verified Human Decides",
+      "concept": "C",
+      "name": "The glass wall",
+      "prompt": "Split composition with a tall clear glass wall down the centre. Left of the glass, dim and blue: a glowing holographic AI made of floating text and diagrams, pushing suggestion cards toward the glass. Right of the glass, warm and bright: a calm woman in a blazer holding a magnifying glass up to one of the cards, a large green check mark glowing beside her. Only she has a door in the glass. Cinematic contrast, strong rim light, dark background. No text."
+    },
+    {
+      "slug": "your-repositories-already-wrote-your-resume",
+      "title": "Your Repositories Already Wrote Your Resume",
+      "concept": "A",
+      "name": "The code that folds into a resume",
+      "prompt": "A young developer in a hoodie, mouth open in delighted surprise, leaning back from a laptop as thousands of glowing lines of code stream up out of the screen and fold themselves in mid-air into a crisp white paper resume that hovers, lit like a trophy. Deep purple background, electric cyan and warm gold light. Huge bold condensed white text with a thick black outline in the upper left reading exactly: YOUR CODE TALKS."
+    },
+    {
+      "slug": "your-repositories-already-wrote-your-resume",
+      "title": "Your Repositories Already Wrote Your Resume",
+      "concept": "B",
+      "name": "Commit graph becomes a portrait",
+      "prompt": "A glowing green contribution grid of small squares, like a coding activity calendar, fills the frame and rises on the right into a three-dimensional relief that becomes the silhouette of a confident professional's head and shoulders, made entirely of the glowing squares. Black background, green to gold gradient light, macro sharpness, cinematic. No text."
+    },
+    {
+      "slug": "your-repositories-already-wrote-your-resume",
+      "title": "Your Repositories Already Wrote Your Resume",
+      "concept": "C",
+      "name": "What the recruiter sees",
+      "prompt": "Split-frame thumbnail. Left, dull grey and flat: a recruiter squinting at a phone showing a boring plain list of folder names. Right, vivid and warm: the same recruiter's eyes wide and bright, holding up a glowing story card with a bold headline and a photo, the card lit like a stage. A big glossy yellow arrow points from left to right. Bold white text with black outline at the top reading exactly: SAME CODE."
+    },
+    {
+      "slug": "ai-systems-architect-training-system",
+      "title": "From AI Lessons to Verifiable AI Capability",
+      "concept": "A",
+      "name": "Proof in a glass cube",
+      "prompt": "A proud learner in her late twenties holds up, with both hands, a glowing transparent glass cube that contains a tiny working miniature system: little servers, pipelines with moving lights, a small dashboard. On the desk in front of her lies a flat, dull paper certificate, ignored. Her face is lit by the cube, eyebrows raised in pride. Dark slate background, warm amber cube glow against cool blue. Huge bold condensed white text with a thick black outline in the upper left reading exactly: PROOF, NOT ATTENDANCE."
+    },
+    {
+      "slug": "ai-systems-architect-training-system",
+      "title": "From AI Lessons to Verifiable AI Capability",
+      "concept": "B",
+      "name": "Certificates vs the evidence vault",
+      "prompt": "Left of frame, a sagging stack of beige paper certificates with gold seals, lit dull and flat. Right of frame, a heavy transparent vault door swung open to reveal glowing sealed glass artefacts on lit shelves: code, diagrams, a small working machine, each with a bright wax seal. A spotlight falls only on the vault. Dark background, gold versus electric blue. No text."
+    },
+    {
+      "slug": "ai-systems-architect-training-system",
+      "title": "From AI Lessons to Verifiable AI Capability",
+      "concept": "C",
+      "name": "The manager inspects the hologram",
+      "prompt": "A skeptical hiring manager in his fifties, glasses pushed up, leans in with a magnifying glass toward a glowing three-dimensional hologram of a working system rising from a laptop: pipelines, a small database, a dashboard, all in crisp light. His expression is turning from doubt to being impressed. Dark navy background, hologram in cyan and gold, strong rim light on his face. Bold white text with black outline in the upper right reading exactly: SHOW ME."
+    },
+    {
+      "slug": "testing-ai-actions-before-they-reach-customers",
+      "title": "Test the Action. Before It Reaches a Customer.",
+      "concept": "A",
+      "name": "Stopped at the glass",
+      "prompt": "A calm operator in her thirties stands with arms folded in front of a towering transparent glass wall. On her side, glowing envelopes, chat bubbles and telephone icons fired by a sleek robot fly toward the glass and stop against it, piling up neatly in the light for her to read. On the far side of the glass, softly out of focus, an ordinary customer scrolls his phone at a kitchen table, unaware. Dark amber and teal palette, dramatic rim light. Huge bold condensed white text with a thick black outline in the upper left reading exactly: NOT YET."
+    },
+    {
+      "slug": "testing-ai-actions-before-they-reach-customers",
+      "title": "Test the Action. Before It Reaches a Customer.",
+      "concept": "B",
+      "name": "The big lever",
+      "prompt": "A giant industrial lever switch fills the frame, seen from a low dramatic angle, a human hand resting on its handle. The lever sits on the left position, which glows deep amber and is labelled with the single word SHADOW; the right position glows bright green and is labelled with the single word LIVE. Sparks of light and a faint fog, black background, cinematic. No other text."
+    },
+    {
+      "slug": "testing-ai-actions-before-they-reach-customers",
+      "title": "Test the Action. Before It Reaches a Customer.",
+      "concept": "C",
+      "name": "Dress rehearsal for an empty theatre",
+      "prompt": "A sleek white robot stands centre stage in a single spotlight, mid-performance, holding a telephone handset, playing to a grand theatre of completely empty red velvet seats. In the wings, half in shadow, a human director in a headset watches with a clipboard, pen raised. Deep red and gold theatre, cool blue spotlight on the robot, cinematic depth. No text."
+    }
+  ]
+}

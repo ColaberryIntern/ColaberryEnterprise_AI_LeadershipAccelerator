@@ -3,6 +3,11 @@ import { requireAdmin, requireSalesOrAdmin } from '../../middlewares/authMiddlew
 import {
   handleAdminListLeads,
   handleAdminGetLeadStats,
+  handleAdminGetLeadSourceGroups,
+  handleAdminGetLeadViewPreference,
+  handleAdminSaveLeadViewPreference,
+  handleAdminGetApolloLists,
+  handleAdminApolloImport,
   handleAdminGetLead,
   handleAdminUpdateLead,
   handleAdminExportLeads,
@@ -49,6 +54,18 @@ const router = Router();
 // Leads — sales reps can read + update stage/temperature; PII export, create,
 // batch, and delete stay admin-only.
 router.get('/api/admin/leads/stats', requireSalesOrAdmin, handleAdminGetLeadStats);
+// MUST stay above '/api/admin/leads/:id' — Express matches in order, and the
+// param route would otherwise swallow 'source-groups' as an id.
+router.get('/api/admin/leads/source-groups', requireSalesOrAdmin, handleAdminGetLeadSourceGroups);
+// Apollo pull-in. Sales-callable because it can only read contacts the account
+// already owns (apolloAccountClient's allowlist) — it cannot spend credits.
+// Also above '/:id' for the same route-ordering reason.
+// Saved lead-list settings ("lock my settings"). Own-row only; the identity
+// comes from the verified JWT. Above '/:id' like the rest.
+router.get('/api/admin/leads/view-preference', requireSalesOrAdmin, handleAdminGetLeadViewPreference);
+router.put('/api/admin/leads/view-preference', requireSalesOrAdmin, handleAdminSaveLeadViewPreference);
+router.get('/api/admin/leads/apollo-lists', requireSalesOrAdmin, handleAdminGetApolloLists);
+router.post('/api/admin/leads/apollo-import', requireSalesOrAdmin, handleAdminApolloImport);
 router.get('/api/admin/leads/export', requireAdmin, handleAdminExportLeads);
 router.get('/api/admin/leads', requireSalesOrAdmin, handleAdminListLeads);
 router.post('/api/admin/leads', requireAdmin, handleAdminCreateLead);

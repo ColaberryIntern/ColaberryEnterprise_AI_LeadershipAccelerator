@@ -1,0 +1,249 @@
+/**
+ * progressionService — the orchestrator that runs when a card is completed.
+ * Routes the completion to the right engine (Learning vs Evidence), records
+ * community XP where relevant, recomputes competency, then re-evaluates the
+ * promotion gate. Also composes the student progression summary the feed shows.
+ *
+ * The three engines stay independent (learningEngine / evidenceEngine /
+ * competencyEngine); this module only sequences them.
+ */
+import TimelineCard from '../../models/TimelineCard';
+import TimelineCardProgress from '../../models/TimelineCardProgress';
+import XpEvent from '../../models/XpEvent';
+import StudentLevel from '../../models/StudentLevel';
+import { EvidenceSource } from '../../models/EvidenceRecord';
+import { resolve as resolveType } from '../timeline/typeRegistry';
+import { getTypeXp } from './pointsConfigService';
+import { awardCardCompletionPoints } from './cardPointsService';
+import { awardLearningXp } from './learningEngine';
+import { recordCardEvidence } from './evidenceEngine';
+import { recomputeForEnrollment, getStudentCompetency } from './competencyEngine';
+import { evaluateForEnrollment, PromotionOutcome } from './promotionService';
+import { aggregateXp, XpTotals } from './scoring';
+import { getPointsSummary } from '../pointsService';
+import { computeBand, BandResult } from './bandLadder';
+
+const EVIDENCE_SOURCE_BY_TYPE: Record<string, EvidenceSource> = {
+  prompt_lab: 'prompt_lab',
+  prompt_challenge: 'prompt_lab',
+  implementation_task: 'implementation',
+  project_task: 'implementation',
+  internship_activity: 'implementation',
+  artifact_submission: 'artifact',
+  evaluation: 'instructor_review',
+  certification_exercise: 'instructor_review',
+  mock_interview: 'deliverable',
+  presentation: 'deliverable',
+  demo: 'deliverable',
+  build_story: 'deliverable',
+  ai_video_feedback: 'deliverable',
+};
+
+async function awardCommunityXp(enrollmentId: string, card: { id: string; type: string }, amount: number): Promise<number> {
+  if (amount <= 0) return 0;
+  const key = `community:${enrollmentId}:${card.id}`;
+  await XpEvent.findOrCreate({
+    where: { idempotency_key: key },
+    defaults: { enrollment_id: enrollmentId, stream: 'community', card_id: card.id, amount, reason: `community:${card.type}`, idempotency_key: key },
+  });
+  return amount;
+}
+
+export interface CardCompletionOutcome {
+  card_id: string;
+  learning_xp: number;
+  builder_xp: number;
+  community_xp: number;
+  points_awarded: number;   // engagement points credited to the HUD total (0 if already earned)
+  promotion: PromotionOutcome;
+}
+
+/**
+ * Mark a card completed for a student and run the progression pipeline.
+ * Idempotent end-to-end: XP/evidence are keyed, competency is a full
+ * recompute, and progress upserts to 'completed'.
+ */
+export async function onCardCompleted(enrollmentId: string, cardId: string): Promise<CardCompletionOutcome> {
+  const card = await TimelineCard.findByPk(cardId);
+  if (!card) throw new Error(`card ${cardId} not found`);
+
+  // Gating: a card whose prerequisites are unmet can't be force-completed by a
+  // direct API call. Single choke point — covers the classroom + runtime complete
+  // paths. Already-engaged cards never re-gate; fail-open on error.
+  // Throws { status: 423, code: 'card_locked' } when locked.
+  const { assertCardUnlocked } = await import('../timeline/timelineGatingService');
+  await assertCardUnlocked(enrollmentId, card);
+
+  // Watch gate: video-bearing cards (video/testimonial/podcast) require the
+  // configured share actually watched (default 75%) BEFORE completion + XP.
+  // Single choke point — covers the classroom drawer, Today, and the runtime.
+  // Throws { status: 422, code: 'watch_requirement' } when below threshold.
+  const { assertWatchRequirement } = await import('../runtime/watchProgressService');
+  await assertWatchRequirement(enrollmentId, card);
+
+  // Field Guide gate: a Week-1+ Deep Dive requires the student to upload the HTML
+  // Field Guide they built in their own Claude Code before it can be completed.
+  // Single choke point — covers the classroom drawer + runtime workspace.
+  // Throws { status: 422, code: 'field_guide_required' } when not yet uploaded.
+  const { assertFieldGuideRequirement } = await import('../runtime/fieldGuideService');
+  await assertFieldGuideRequirement(enrollmentId, card);
+
+  // Dwell gate: passive-content types (intel breakdowns, reflection, discussion,
+  // study, Q&A) award points but have no other criteria, so they require N
+  // continuous seconds with the content open (≥2 min, per type) before completion.
+  // No-op for every other type. Throws { status: 422, code: 'dwell_requirement' }.
+  const { assertDwellRequirement } = await import('../runtime/cardDwellService');
+  await assertDwellRequirement(enrollmentId, card);
+
+  // Mark progress complete (idempotent).
+  const [progress] = await TimelineCardProgress.findOrCreate({
+    where: { card_id: cardId, enrollment_id: enrollmentId },
+    defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'completed', completed_at: new Date() },
+  });
+  if (progress.status !== 'completed') {
+    await progress.update({ status: 'completed', completed_at: new Date() });
+  }
+
+  const def = resolveType(card.type);
+  let learning_xp = 0;
+  let builder_xp = 0;
+
+  if (def?.evidence_required) {
+    const source = EVIDENCE_SOURCE_BY_TYPE[card.type] || 'deliverable';
+    const ev = await recordCardEvidence(enrollmentId, { id: card.id, type: card.type, competencies: card.competencies }, source);
+    builder_xp = ev.builder_xp;
+  } else {
+    learning_xp = await awardLearningXp(enrollmentId, { id: card.id, type: card.type });
+  }
+
+  const community_xp = await awardCommunityXp(enrollmentId, { id: card.id, type: card.type }, (await getTypeXp(card.type)).community);
+
+  // Engagement points for the HUD (StudentPointsEvent) — a separate ledger from XP.
+  // Amount = the card's "+N pts" badge value (sum of card.points). Non-fatal +
+  // idempotent per (enrollment, card): re-completing awards 0.
+  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type, points: card.points });
+
+  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — additive, non-fatal skill
+  // evidence write. Runs from this single choke point ONLY (never from click/dwell/
+  // streak alone), and a failure here never blocks XP/points/promotion above.
+  // Fully separate ledger from XpEvent/EvidenceRecord — see capeTimelineEvidenceBridge.ts.
+  // recordCapeEvidenceForCompletedCard already swallows its own errors; this
+  // try/catch is defense-in-depth against a failure in the dynamic import itself.
+  try {
+    const { recordCapeEvidenceForCompletedCard } = await import('../cape/capeTimelineEvidenceBridge');
+    await recordCapeEvidenceForCompletedCard(enrollmentId, { id: card.id, type: card.type });
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'cape_evidence_bridge_import_failed', error_class: err?.name || 'Error',
+      outcome: 'failure', context: { enrollment_id: enrollmentId, card_id: card.id },
+    }));
+  }
+
+  // Cert Prep evidence write-back — same shape as the CAPE bridge above and for
+  // the same reason: additive, non-fatal, from this one choke point. A card
+  // whose TYPE carries a certification_mapping proposes evidence for the
+  // objectives that mapping names. Every row lands `pending`; readiness counts
+  // only what a named human verified, so this can never move a student's
+  // readiness by itself. proposeEvidenceFromCard swallows its own errors; this
+  // try/catch covers a failure in the dynamic import.
+  try {
+    const { proposeEvidenceFromCard } = await import('../certPrep/certEvidenceFromCard');
+    await proposeEvidenceFromCard(enrollmentId, { id: card.id, type: card.type });
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'cert_evidence_writeback_import_failed', error_class: err?.name || 'Error',
+      outcome: 'failure', context: { enrollment_id: enrollmentId, card_id: card.id },
+    }));
+  }
+
+  await recomputeForEnrollment(enrollmentId);
+  const promotion = await evaluateForEnrollment(enrollmentId);
+
+  return { card_id: cardId, learning_xp, builder_xp, community_xp, points_awarded, promotion };
+}
+
+export interface ProgressionSummary {
+  xp: XpTotals;
+  competencies: Array<{ domain_id: string; confidence: number; evidence_count: number }>;
+  level: { slug: string; rank: number; readiness: number };
+  // Canonical 5-band identity (AI Aware → AI Enabled → AI Builder → AI Architect).
+  // Additive: combines the learner's canonical points total (the HUD source) with
+  // their build-competency rank. A build promotion overrides points; without one,
+  // points cap at AI Enabled. See bandLadder.computeBand.
+  band: BandResult;
+}
+
+/**
+ * Lightweight canonical band for an enrollment — the HUD path. Reuses the points
+ * total the caller already fetched (getPointsSummary) so it needs only the
+ * StudentLevel row, then runs the SAME pure computeBand the full summary uses
+ * (single source of truth, no drift). Additive: read-only apart from the
+ * idempotent StudentLevel.findOrCreate that every learner already gets.
+ */
+export async function getBandForEnrollment(enrollmentId: string, pointsTotal: number): Promise<BandResult> {
+  const [level] = await StudentLevel.findOrCreate({
+    where: { enrollment_id: enrollmentId },
+    defaults: { enrollment_id: enrollmentId, level_slug: 'builder', rank: 0 },
+  });
+  return computeBand({
+    pointsTotal,
+    builderLevelSlug: level.level_slug,
+    builderRank: level.rank,
+  });
+}
+
+/**
+ * Rung names for many enrollments at once, read-only — for surfaces that list
+ * people (community posts, the people directory) and must not run one
+ * StudentLevel round-trip per row. Takes the points totals the caller already
+ * batched. An enrollment with no StudentLevel row derives from points alone,
+ * exactly as computeBand's entry state would.
+ */
+export async function getRungNamesForEnrollments(
+  enrollmentIds: string[],
+  totals: Map<string, number>,
+): Promise<Map<string, string>> {
+  const ids = [...new Set(enrollmentIds.filter(Boolean))];
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  const rows = await StudentLevel.findAll({ where: { enrollment_id: ids }, attributes: ['enrollment_id', 'level_slug', 'rank'] });
+  const byId = new Map(rows.map((r) => [r.enrollment_id, r]));
+  for (const id of ids) {
+    const lvl = byId.get(id);
+    out.set(id, computeBand({
+      pointsTotal: totals.get(id) ?? 0,
+      builderLevelSlug: lvl?.level_slug ?? 'builder',
+      builderRank: lvl?.rank ?? 0,
+    }).rungName);
+  }
+  return out;
+}
+
+export async function getProgressionSummary(enrollmentId: string): Promise<ProgressionSummary> {
+  const events = await XpEvent.findAll({ where: { enrollment_id: enrollmentId } });
+  const xp = aggregateXp(events.map((e) => ({ stream: e.stream, amount: e.amount })));
+
+  const comps = await getStudentCompetency(enrollmentId);
+  const [level] = await StudentLevel.findOrCreate({
+    where: { enrollment_id: enrollmentId },
+    defaults: { enrollment_id: enrollmentId, level_slug: 'builder', rank: 0 },
+  });
+
+  // Canonical points total — the SAME source the HUD/leaderboard use
+  // (StudentPointsEvent via pointsService), not XP. Feeds the free bands.
+  const pointsSummary = await getPointsSummary(enrollmentId);
+  const band = computeBand({
+    pointsTotal: pointsSummary.total,
+    builderLevelSlug: level.level_slug,
+    builderRank: level.rank,
+  });
+
+  return {
+    xp,
+    competencies: comps.map((c) => ({ domain_id: c.domain_id, confidence: c.confidence, evidence_count: c.evidence_count })),
+    level: { slug: level.level_slug, rank: level.rank, readiness: level.architect_readiness },
+    band,
+  };
+}

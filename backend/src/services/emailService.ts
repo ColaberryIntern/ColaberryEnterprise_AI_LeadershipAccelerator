@@ -1,7 +1,14 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { getTestOverrides, getSetting } from './settingsService';
+import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
+import { redactForLogs } from '../utils/piiRedaction';
+import { sessionDayLabel } from './centralDate';
+import { SessionReminderData, buildSessionReminderHtml } from './email/sessionReminderEmail';
+import { isDev } from '../config/featureFlags';
+import { decideDevEmailRouting } from './devEmailGuard';
+import { buildLeadAlert, decideNotify, type AlertLead } from './leadAlertMessage';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -26,18 +33,120 @@ const transporter = env.mandrillApiKey
       })
     : null;
 
-async function resolveEmailRecipient(
+/**
+ * SECURITY (TBI audit P0-2): the global kill switch previously did NOT stop outbound email —
+ * it only flipped a DB flag the send paths never read. Every send in this module now routes
+ * through this guard, so an active kill switch actually blocks delivery. Fail-open if the
+ * switch state cannot be read (a transient settings-DB error must not halt all transactional
+ * mail). Returns a SentMessageInfo-shaped stub when blocked so callers keep working.
+ */
+export async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nodemailer.SentMessageInfo> {
+  if (await isKillSwitchActive()) {
+    const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
+    console.warn(`[Email] BLOCKED by kill switch — not sending to ${redactForLogs(to)} (subject: ${options.subject ?? ''})`);
+    return {
+      messageId: '',
+      accepted: [],
+      rejected: to ? [to] : [],
+      pending: [],
+      response: 'blocked_by_kill_switch',
+      envelope: { from: '', to: [] },
+    } as unknown as nodemailer.SentMessageInfo;
+  }
+  // Environment backstop. Every send in this file funnels through here, so this
+  // is the one place that can guarantee a dev process cannot reach a real
+  // address regardless of database state — see devEmailGuard.ts for why a
+  // settings row alone was not enough.
+  const routed = await applyDevEmailGuard(options);
+  if (!routed) {
+    const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
+    return {
+      messageId: '',
+      accepted: [],
+      rejected: to ? [to] : [],
+      pending: [],
+      response: 'blocked_by_dev_email_guard',
+      envelope: { from: '', to: [] },
+    } as unknown as nodemailer.SentMessageInfo;
+  }
+
+  return transporter!.sendMail(routed);
+}
+
+/**
+ * Apply the dev-environment guard, resolving the sink at call time.
+ *
+ * Returns the options to send, or null when the send must be blocked.
+ *
+ * Sink precedence is env-var first, DB setting second, deliberately: the guard
+ * exists because a database value can vanish on a refresh, so the durable
+ * source is checked ahead of the fragile one. If both are absent the send is
+ * blocked rather than delivered.
+ */
+async function applyDevEmailGuard(
+  options: nodemailer.SendMailOptions
+): Promise<nodemailer.SendMailOptions | null> {
+  if (!isDev) return options;
+
+  let sink = (process.env.DEV_EMAIL_SINK || '').trim();
+  if (!sink) {
+    try {
+      const test = await getTestOverrides();
+      if (test.email) sink = test.email;
+    } catch {
+      // Settings unreadable — fall through with no sink, which fails closed.
+    }
+  }
+
+  const decision = decideDevEmailRouting(options as any, sink || null, true);
+  if (decision.action === 'block') {
+    console.warn(
+      `[Email] BLOCKED by dev guard — APP_ENV=dev with no DEV_EMAIL_SINK and no test_email setting. ` +
+        `Refusing to send to ${redactForLogs(decision.originalRecipients)} (subject: ${options.subject ?? ''})`
+    );
+    return null;
+  }
+  if (decision.action === 'redirect') {
+    console.warn(
+      `[Email] DEV REDIRECT — ${redactForLogs(decision.originalRecipients)} -> ${redactForLogs(sink)} ` +
+        `(subject: ${options.subject ?? ''})`
+    );
+    return decision.options as nodemailer.SendMailOptions;
+  }
+  return options;
+}
+
+async function resolveTestRedirect(): Promise<string | null> {
+  try {
+    const test = await getTestOverrides();
+    if (test.enabled && test.email) return test.email;
+  } catch {
+    // If settings DB fails, don't block email sending
+  }
+  return null;
+}
+
+/**
+ * The mailbox an email addressed to `intended` will actually be delivered to.
+ *
+ * Test mode does not suppress sends, it rewrites the recipient \u2014 so several
+ * distinct intended recipients can collapse into a single mailbox. Any caller
+ * that dedups "one email per recipient" must dedup on THIS address, not on the
+ * intended one, or it will still deliver one copy per intended recipient into
+ * the same inbox.
+ */
+export async function resolveDeliveryAddress(intended: string): Promise<string> {
+  return (await resolveTestRedirect()) ?? intended;
+}
+
+export async function resolveEmailRecipient(
   intended: string,
   subject: string
 ): Promise<{ to: string; subject: string }> {
-  try {
-    const test = await getTestOverrides();
-    if (test.enabled && test.email) {
-      console.log(`[Email] TEST MODE: redirecting from ${intended} to ${test.email}`);
-      return { to: test.email, subject: `[TEST \u2192 ${intended}] ${subject}` };
-    }
-  } catch {
-    // If settings DB fails, don't block email sending
+  const redirect = await resolveTestRedirect();
+  if (redirect) {
+    console.log(`[Email] TEST MODE: redirecting from ${redactForLogs(intended)} to ${redactForLogs(redirect)}`);
+    return { to: redirect, subject: `[TEST \u2192 ${intended}] ${subject}` };
   }
   return { to: intended, subject };
 }
@@ -52,7 +161,7 @@ async function getAdminRecipients(): Promise<string> {
   return env.emailFrom;
 }
 
-function htmlToPlainText(html: string): string {
+export function htmlToPlainText(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
@@ -71,11 +180,212 @@ function htmlToPlainText(html: string): string {
     .trim();
 }
 
-function emailHeaders(tag: string) {
+export function emailHeaders(tag: string) {
   return {
     'List-Unsubscribe': `<mailto:${env.emailFrom}?subject=unsubscribe>`,
     'X-MC-Tags': tag,
   };
+}
+
+/* ── Training signup welcome (training.colaberry.com registrants) ───────────
+ * Branded, transactional welcome sent by enterprise.colaberry.ai but styled +
+ * addressed as the Colaberry Training team. Carries a one-click portal magic
+ * link so a fresh registrant lands straight in their portal. From-address is a
+ * Mandrill-verified colaberry.com sender (see env.trainingWelcomeFromEmail).
+ */
+export interface TrainingWelcomeData {
+  to: string;
+  fullName: string;
+  portalLink: string;
+}
+
+function escapeHtml(s: string): string {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export interface CommunityReplyEmailData {
+  to: string;
+  recipientName: string;
+  actorName: string;
+  preview: string;
+  postId: string;
+  onOwnPost: boolean;
+  /** The comment id — the business event this mail is about. */
+  eventId: string;
+}
+
+export function buildCommunityReplyHtml(data: CommunityReplyEmailData): string {
+  const first = escapeHtml((data.recipientName || '').trim().split(/\s+/)[0] || 'there');
+  const actor = escapeHtml(data.actorName || 'A classmate');
+  const preview = escapeHtml(data.preview || '');
+  const where = data.onOwnPost ? 'your post' : 'your comment';
+  const link = `https://enterprise.colaberry.ai/portal/community?post=${encodeURIComponent(data.postId)}`;
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${actor} replied to you</title></head>
+<body style="margin:0; padding:0; background:#f7fafc;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${actor} replied to ${where} in the Colaberry community.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc; padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; font-family:'Segoe UI', system-ui, -apple-system, sans-serif;">
+        <tr><td style="background:#ffffff; padding:24px 32px 20px; border-bottom:3px solid #1a365d;">
+          <img src="https://enterprise.colaberry.ai/colaberry-logo-transparent.png" alt="Colaberry" width="150" style="display:block; width:150px; max-width:150px; height:auto; border:0;">
+          <div style="color:#1a365d; font-size:12px; font-weight:600; letter-spacing:0.5px; margin-top:10px; text-transform:uppercase;">Community</div>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 16px; color:#1a365d; font-size:22px; font-weight:700; line-height:1.3;">${actor} replied to ${where}.</h1>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+            <tr><td style="background:#f6f7f8; border-left:3px solid #367895; border-radius:0 8px 8px 0; padding:14px 16px; color:#2d3748; font-size:15px; line-height:1.6;">${preview}</td></tr>
+          </table>
+          <p style="margin:0 0 22px; color:#2d3748; font-size:15px; line-height:1.6;">Hi ${first}, someone in your cohort took the time to answer you. Replying back is worth 2 points, and it keeps the thread alive for everyone reading it.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background:#FB2832; border-radius:8px;">
+            <a href="${link}" style="display:inline-block; padding:13px 26px; color:#ffffff; font-size:15px; font-weight:700; text-decoration:none;">Read and reply</a>
+          </td></tr></table>
+        </td></tr>
+        <tr><td style="padding:18px 32px 26px; border-top:1px solid #e2e8f0; color:#6b7280; font-size:12px; line-height:1.6;">
+          You are getting this because someone replied to you in the Colaberry community.
+          Turn these off any time in <a href="https://enterprise.colaberry.ai/portal/settings" style="color:#367895;">Settings &#8250; Preferences</a>.
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * One email per reply, to the person who was replied to. Idempotency is carried
+ * on the Mandrill metadata + tag keyed to the comment id, so a retry of the
+ * caller cannot produce a second mail for the same comment.
+ */
+export async function sendCommunityReplyEmail(data: CommunityReplyEmailData): Promise<{ sent: boolean; messageId?: string }> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping community reply to:', redactForLogs(data.to));
+    return { sent: false };
+  }
+  const subject = `${data.actorName} replied to ${data.onOwnPost ? 'your post' : 'your comment'}`;
+  const r = await resolveEmailRecipient(data.to, subject);
+  const html = buildCommunityReplyHtml(data);
+  const fromHeader = `"Colaberry Community" <${env.trainingWelcomeFromEmail}>`;
+  const info = await guardedSendMail({
+    from: fromHeader,
+    replyTo: fromHeader,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: {
+      'X-MC-Tags': 'community-reply',
+      // Per-event key: the same comment can never mail twice.
+      'X-MC-Metadata': JSON.stringify({ comment_id: data.eventId }),
+    },
+  });
+  const sent = Boolean(info.messageId);
+  console.log(`[Email] Community reply ${sent ? 'sent' : 'BLOCKED (kill switch)'} to: ${redactForLogs(r.to)} | comment: ${data.eventId}`);
+  return { sent, messageId: info.messageId };
+}
+
+export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
+  const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
+  const name = escapeHtml(firstName);
+  const link = data.portalLink;
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Colaberry</title>
+</head>
+<body style="margin:0; padding:0; background:#f7fafc;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">Your seat is ready — step inside your Colaberry portal and get started.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc; padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; font-family:'Segoe UI', system-ui, -apple-system, sans-serif;">
+        <!-- Header band: white with the Colaberry logo -->
+        <tr><td style="background:#ffffff; padding:24px 32px 20px; border-bottom:3px solid #1a365d;">
+          <img src="https://enterprise.colaberry.ai/colaberry-logo-transparent.png" alt="Colaberry" width="150" style="display:block; width:150px; max-width:150px; height:auto; border:0;">
+          <div style="color:#1a365d; font-size:12px; font-weight:600; letter-spacing:0.5px; margin-top:10px; text-transform:uppercase;">AI Training &amp; Career Acceleration</div>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 16px; color:#1a365d; font-size:24px; font-weight:700; line-height:1.25;">You're in, ${name}. Welcome to Colaberry.</h1>
+          <p style="margin:0 0 16px; color:#2d3748; font-size:16px; line-height:1.6;">
+            You just took the first real step toward building with AI, not just reading about it. Your seat is reserved and your learning portal is ready right now.
+          </p>
+          <p style="margin:0 0 20px; color:#2d3748; font-size:16px; line-height:1.6;">
+            Inside, you'll find everything you need to hit the ground running:
+          </p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Your program roadmap and what to expect week one</td></tr>
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Hands-on projects you'll build and keep for your portfolio</td></tr>
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; A clear path from where you are to a real AI-ready role</td></tr>
+          </table>
+          <!-- CTA -->
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;">
+            <tr><td style="border-radius:6px; background:#e53e3e;">
+              <a href="${link}" style="display:inline-block; padding:14px 32px; color:#ffffff; font-size:16px; font-weight:600; text-decoration:none; border-radius:6px;">Access Your Portal &rarr;</a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 8px; color:#718096; font-size:13px; line-height:1.5;">
+            Button not working? Copy and paste this secure link into your browser:
+          </p>
+          <p style="margin:0 0 20px; font-size:13px; line-height:1.5; word-break:break-all;">
+            <a href="${link}" style="color:#2b6cb0;">${escapeHtml(link)}</a>
+          </p>
+          <p style="margin:0; color:#718096; font-size:13px; line-height:1.5;">
+            This sign-in link is unique to you and stays active for the next 30 days. We can't wait to see what you build.
+          </p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 32px; border-top:1px solid #e2e8f0; background:#f7fafc;">
+          <div style="color:#1a365d; font-size:14px; font-weight:600;">The Colaberry Training Team</div>
+          <div style="color:#718096; font-size:12px; line-height:1.5; margin-top:4px;">
+            Colaberry &bull; AI Training, Architecture &amp; Career Acceleration<br>
+            You received this because you registered at training.colaberry.com.
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ sent: boolean; messageId?: string }> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping training welcome to:', redactForLogs(data.to));
+    return { sent: false };
+  }
+  const subject = 'Welcome to Colaberry — your AI journey starts now';
+  const r = await resolveEmailRecipient(data.to, subject);
+  const html = buildTrainingWelcomeHtml(data);
+  const fromHeader = `"${env.trainingWelcomeFromName}" <${env.trainingWelcomeFromEmail}>`;
+  const info = await guardedSendMail({
+    from: fromHeader,
+    replyTo: fromHeader,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    // Intentionally NO List-Unsubscribe header: this is a transactional welcome
+    // (a login link), not a bulk/marketing send. The header both misrepresents the
+    // message and trips inbox-manager "automation" hard rules that archive it out of
+    // the inbox. Just the Mandrill tag for reporting.
+    headers: { 'X-MC-Tags': 'training-welcome' },
+  });
+  // guardedSendMail returns an empty messageId when the global kill switch blocks
+  // the send — treat that as not-sent so callers can log/retry instead of assuming
+  // delivery.
+  const sent = Boolean(info.messageId);
+  console.log(`[Email] Training welcome ${sent ? 'sent' : 'BLOCKED (kill switch)'} to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | rejected: ${info.rejected}`);
+  return { sent, messageId: info.messageId };
 }
 
 interface EnrollmentConfirmationData {
@@ -90,14 +400,14 @@ interface EnrollmentConfirmationData {
 
 export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured (SMTP_USER/SMTP_PASS missing). Skipping email to:', data.to);
-    console.log('[Email] Would have sent enrollment confirmation to:', data.to, 'for cohort:', data.cohortName);
+    console.warn('[Email] SMTP not configured (SMTP_USER/SMTP_PASS missing). Skipping email to:', redactForLogs(data.to));
+    console.log('[Email] Would have sent enrollment confirmation to:', redactForLogs(data.to), 'for cohort:', data.cohortName);
     return;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Welcome to the Enterprise AI Leadership Accelerator');
   const html = buildConfirmationHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -107,7 +417,7 @@ export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationDat
     headers: emailHeaders('enrollment-confirmation'),
   });
 
-  console.log(`[Email] Enrollment confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Enrollment confirmation sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 interface InvoiceRequestConfirmationData {
@@ -122,7 +432,7 @@ interface InvoiceRequestConfirmationData {
 
 export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirmationData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping invoice confirmation to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping invoice confirmation to:', redactForLogs(data.to));
     return;
   }
 
@@ -175,7 +485,7 @@ export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirm
     </div>
   `;
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -185,7 +495,7 @@ export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirm
     headers: emailHeaders('invoice-request-confirmation'),
   });
 
-  console.log(`[Email] Invoice request confirmation sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Invoice request confirmation sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 interface InterestEmailData {
@@ -196,12 +506,12 @@ interface InterestEmailData {
 export async function sendInterestEmail(data: InterestEmailData): Promise<string> {
   const html = buildInterestHtml(data);
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping interest email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping interest email to:', redactForLogs(data.to));
     return html;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Enterprise AI Leadership Accelerator Details');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -211,7 +521,7 @@ export async function sendInterestEmail(data: InterestEmailData): Promise<string
     headers: emailHeaders('interest-email'),
   });
 
-  console.log(`[Email] Interest email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Interest email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
   return html;
 }
 
@@ -223,12 +533,12 @@ interface ExecutiveOverviewEmailData {
 export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailData): Promise<string> {
   const html = buildExecutiveOverviewHtml(data);
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping executive overview email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping executive overview email to:', redactForLogs(data.to));
     return html;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Overview + ROI Framework');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -238,7 +548,7 @@ export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailDat
     headers: emailHeaders('executive-overview'),
   });
 
-  console.log(`[Email] Executive overview email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Executive overview email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
   return html;
 }
 
@@ -254,7 +564,7 @@ interface HighIntentAlertData {
 
 export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping high-intent alert for:', data.name);
+    console.warn('[Email] SMTP not configured. Skipping high-intent alert for:', redactForLogs(data.name));
     return;
   }
 
@@ -262,7 +572,7 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
   const r = await resolveEmailRecipient(alertTo, `High-Intent Executive Lead: ${data.name} (Score: ${data.score})`);
 
   const html = buildHighIntentAlertHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Lead Alert" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -272,7 +582,80 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
     headers: emailHeaders('high-intent-alert'),
   });
 
-  console.log(`[Email] High-intent alert sent for: ${data.name} (score: ${data.score}) | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] High-intent alert sent for: ${redactForLogs(data.name)} (score: ${data.score}) | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+}
+
+export interface NewLeadAlertResult {
+  sent: boolean;
+  /** Always present when `sent` is false. The caller reports this rather than "ok". */
+  reason?: string;
+  messageId?: string;
+  to?: string;
+}
+
+/**
+ * Tell a human that a lead arrived.
+ *
+ * Unlike every other sender in this file, this one **returns whether it sent**. That is
+ * the entire point of it existing: the routing action it replaces logged an intent and
+ * returned `ok: true`, so the system reported a successful notification while sending
+ * nothing, and any dashboard or operator reading that outcome believed it.
+ *
+ * It is an INTERNAL alert, so it deliberately does not run the lead-consent pipeline the
+ * marketing senders use. Suppressing "a prospect contacted you" because that prospect is
+ * unsubscribed from marketing would be the wrong gate on the wrong message.
+ *
+ * It never throws. Lead ingest must not fail because an alert could not go out — but the
+ * failure must be reported, not swallowed, which is what the reason string is for.
+ */
+export async function sendNewLeadAlert(params: {
+  lead: AlertLead;
+  /** Overrides the admin recipients, so a routing rule can direct its own alerts. */
+  recipients?: string | null;
+  convertUrl?: string;
+  alreadyNotified?: boolean;
+}): Promise<NewLeadAlertResult> {
+  let recipients = (params.recipients || '').trim();
+  if (!recipients) {
+    try {
+      recipients = await getAdminRecipients();
+    } catch {
+      // Falls through to the no-recipient decision below, which names the problem.
+      recipients = '';
+    }
+  }
+
+  const decision = decideNotify({
+    transporterConfigured: Boolean(transporter),
+    recipients,
+    alreadyNotified: Boolean(params.alreadyNotified),
+  });
+  if (!decision.send) return { sent: false, reason: decision.reason, to: decision.recipients || undefined };
+
+  const alert = buildLeadAlert(params.lead, { convertUrl: params.convertUrl });
+
+  try {
+    const r = await resolveEmailRecipient(decision.recipients, alert.subject);
+    const info = await guardedSendMail({
+      from: `"New Lead" <${env.emailFrom}>`,
+      replyTo: params.lead.email ? `"${params.lead.name || 'Lead'}" <${params.lead.email}>` : undefined,
+      to: r.to,
+      subject: r.subject,
+      html: alert.html,
+      text: alert.text,
+      headers: emailHeaders('new-lead-alert'),
+    });
+    console.log(`[Email] New lead alert sent for lead ${params.lead.id} | msgId: ${info.messageId}`);
+    return { sent: true, messageId: info.messageId, to: r.to };
+  } catch (err: any) {
+    // Reported, not swallowed. The caller turns this into ok:false.
+    console.error('[Email] New lead alert FAILED:', {
+      error_class: err?.name || 'UnknownError',
+      message: err?.message,
+      lead_id: params.lead.id,
+    });
+    return { sent: false, reason: `send_failed:${err?.name || 'UnknownError'}`, to: decision.recipients };
+  }
 }
 
 interface SponsorshipKitEmailData {
@@ -286,12 +669,12 @@ export async function sendSponsorshipKitEmail(data: SponsorshipKitEmailData): Pr
   const html = buildSponsorshipKitHtml(data);
 
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping sponsorship kit email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping sponsorship kit email to:', redactForLogs(data.to));
     return;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Corporate Sponsorship Kit - Building the Internal AI Execution Engine');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -301,7 +684,7 @@ export async function sendSponsorshipKitEmail(data: SponsorshipKitEmailData): Pr
     headers: emailHeaders('sponsorship-kit'),
   });
 
-  console.log(`[Email] Sponsorship kit email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Sponsorship kit email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildSponsorshipKitHtml(data: SponsorshipKitEmailData): string {
@@ -380,12 +763,12 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
   const html = buildStrategyCallConfirmationHtml(data);
 
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping strategy call confirmation to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping strategy call confirmation to:', redactForLogs(data.to));
     return html;
   }
 
   const r = await resolveEmailRecipient(data.to, 'Your Executive AI Strategy Call is Confirmed');
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -395,7 +778,7 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
     headers: emailHeaders('strategy-call-confirmation'),
   });
 
-  console.log(`[Email] Strategy call confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Strategy call confirmation sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
   return html;
 }
 
@@ -484,7 +867,7 @@ export interface IntelligenceBriefData {
 
 export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping intelligence brief for:', data.name);
+    console.warn('[Email] SMTP not configured. Skipping intelligence brief for:', redactForLogs(data.name));
     return;
   }
 
@@ -492,7 +875,7 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
   const r = await resolveEmailRecipient(alertTo, `Strategy Call Prep: ${data.name} (${data.company || 'No Company'}) - Score: ${data.completionScore}%`);
 
   const html = buildIntelligenceBriefHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Strategy Intel" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -502,7 +885,7 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
     headers: emailHeaders('intelligence-brief'),
   });
 
-  console.log(`[Email] Intelligence brief sent for: ${data.name} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Intelligence brief sent for: ${redactForLogs(data.name)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildIntelligenceBriefHtml(data: IntelligenceBriefData): string {
@@ -892,7 +1275,7 @@ export async function sendDigestEmail(data: DigestData): Promise<void> {
   const r = await resolveEmailRecipient(alertTo, subject);
   const html = buildDigestHtml(data);
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Admin Digest" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -902,7 +1285,7 @@ export async function sendDigestEmail(data: DigestData): Promise<void> {
     headers: emailHeaders('admin-digest'),
   });
 
-  console.log(`[Email] ${periodLabel} digest sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] ${periodLabel} digest sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildDigestHtml(data: DigestData): string {
@@ -1080,93 +1463,126 @@ function buildDigestHtml(data: DigestData): string {
 }
 // --- Accelerator Session Emails ---
 
-interface SessionReminderData {
-  to: string;
-  fullName: string;
-  sessionTitle: string;
-  sessionNumber: number;
-  sessionDate: string;
-  startTime: string;
-  meetingLink: string | null;
-  materialsJson: any[] | null;
-  isOneHour: boolean;
-}
-
 export async function sendSessionReminder(data: SessionReminderData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping session reminder to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping session reminder to:', redactForLogs(data.to));
     return;
   }
 
-  const urgency = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
+  // Computed ONCE and threaded into the body, so the subject line and the banner
+  // inside the email can never disagree about which day the class is — two
+  // independent Date.now() reads could straddle midnight and do exactly that.
+  const urgency = data.isOneHour
+    ? 'Starting in 1 Hour'
+    : sessionDayLabel(data.sessionDate, Date.now());
   const r = await resolveEmailRecipient(
     data.to,
     `[Accelerator] ${urgency}: Session ${data.sessionNumber} - ${data.sessionTitle}`
   );
-  const html = buildSessionReminderHtml(data);
-  const info = await transporter.sendMail({
-    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
-    to: r.to,
-    subject: r.subject,
-    html,
-    text: htmlToPlainText(html),
-    headers: emailHeaders('accelerator-session-reminder'),
-  });
+  const html = buildSessionReminderHtml(data, urgency);
 
-  console.log(`[Email] Session reminder sent to: ${r.to} | msgId: ${info.messageId}`);
+  let info: any;
+  try {
+    info = await guardedSendMail({
+      from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+      replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+      to: r.to,
+      subject: r.subject,
+      html,
+      text: htmlToPlainText(html),
+      headers: emailHeaders('accelerator-session-reminder'),
+    });
+  } catch (err: any) {
+    // Log the failure before rethrowing. The scheduler's per-recipient .catch()
+    // swallows this into a console line, so without a row here a failed reminder
+    // leaves no queryable trace at all.
+    await recordSessionReminderLog(data, r, urgency, null, err);
+    throw err;
+  }
+
+  // guardedSendMail resolves with an empty messageId instead of throwing when a
+  // guard stops the send (kill switch, or the dev-environment guard). Recording
+  // that as 'sent' would put a delivery in communication_logs that never
+  // happened — which defeats the point of the audit row. Same
+  // Boolean(info.messageId) test the training-welcome sender already uses.
+  const delivered = Boolean(info?.messageId);
+  await recordSessionReminderLog(data, r, urgency, info, null, delivered);
+  console.log(
+    `[Email] Session reminder ${delivered ? 'sent' : `BLOCKED (${info?.response || 'guard'})`} to: ` +
+      `${redactForLogs(r.to)} | msgId: ${info?.messageId || ''}`
+  );
 }
 
-function buildSessionReminderHtml(data: SessionReminderData): string {
-  const urgencyLabel = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
-  const materialsHtml = data.materialsJson?.length
-    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
-    : '';
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
-    h1 { color: #1a365d; font-size: 24px; }
-    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
-    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
-    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
-    .urgency { background: #fff3cd; border: 1px solid #ffc107; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-weight: 600; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
-  </style>
-</head>
-<body>
-  <h1>Session ${data.sessionNumber}: ${data.sessionTitle}</h1>
-
-  <div class="urgency">${urgencyLabel}</div>
-
-  <p>Dear ${data.fullName},</p>
-
-  <p>This is a reminder for your upcoming Accelerator session.</p>
-
-  <div class="highlight">
-    <strong>Session:</strong> #${data.sessionNumber} - ${data.sessionTitle}<br>
-    <strong>Date:</strong> ${data.sessionDate}<br>
-    <strong>Time:</strong> ${data.startTime} ET
-  </div>
-
-  ${data.meetingLink ? `<p><a href="${data.meetingLink}" class="cta">Join Session</a></p>` : '<p><em>Meeting link will be shared before the session starts.</em></p>'}
-
-  ${materialsHtml}
-
-  <p>Please ensure you have completed any pre-work assignments before the session begins.</p>
-
-  <div class="footer">
-    <p>Colaberry Enterprise AI Division<br>
-    AI Leadership | Architecture | Implementation | Advisory</p>
-  </div>
-</body>
-</html>
-  `.trim();
+/**
+ * Audit row for one session-reminder send.
+ *
+ * Added because the 2026-08-13 "Tomorrow"-on-the-day incident could not be
+ * queried: `SELECT ... FROM communication_logs WHERE subject ILIKE '%Session 7%'`
+ * returned zero rows for an email 55 people had received, so who-got-what had to
+ * be reconstructed from Docker container timestamps and a git pull time. Every
+ * other outbound channel in this codebase (admissions email/SMS/calls, alerts,
+ * callbacks, the Mandrill webhooks) already writes here; session reminders were
+ * the gap.
+ *
+ * NEVER throws. logCommunication() rethrows on failure by contract, and this runs
+ * inside the send path — a DB hiccup must not turn a delivered email into a
+ * thrown reminder, nor a failed one into a lost error. Audit is strictly
+ * best-effort relative to delivery.
+ */
+async function recordSessionReminderLog(
+  data: SessionReminderData,
+  r: { to: string; subject: string },
+  urgency: string,
+  info: any | null,
+  err: any | null,
+  delivered: boolean = true
+): Promise<void> {
+  try {
+    // Required lazily, NOT imported at the top of the file — do not "tidy" this
+    // into a static import. communicationLogService imports ../models, which
+    // loads the whole Sequelize model graph and constructs the connection at
+    // module load. A static import therefore makes emailService unimportable
+    // without a live DATABASE_URL, which immediately broke two existing suites
+    // (emailService.digest, trainingWelcomeEmail) that mock ./config/env with no
+    // databaseUrl. Same deferral pattern schedulerService uses for its heavier
+    // service requires.
+    const { logCommunication } = require('./communicationLogService');
+    await logCommunication({
+      channel: 'email',
+      direction: 'outbound',
+      // resolveEmailRecipient rewrites the recipient when the test-override
+      // setting is on; recording which mode was in play is the difference
+      // between "55 students were mailed" and "55 copies went to one inbox".
+      delivery_mode: r.to === data.to ? 'live' : 'test_redirect',
+      // 'blocked' is a third outcome, distinct from both: the message was never
+      // handed to the transport (kill switch or dev guard). Collapsing it into
+      // 'sent' would record a delivery that did not occur; collapsing it into
+      // 'failed' would imply something went wrong when the block was deliberate.
+      status: err ? 'failed' : delivered ? 'sent' : 'blocked',
+      to_address: r.to,
+      from_address: env.emailFrom,
+      subject: r.subject,
+      provider: 'smtp',
+      provider_message_id: info?.messageId || null,
+      error_message: err ? String(err?.message || err) : null,
+      metadata: {
+        email_type: 'accelerator-session-reminder',
+        reminder_type: data.isOneHour ? '1h' : '24h',
+        // The rendered day word, so a future "why did it say that?" is one query
+        // rather than another forensic reconstruction.
+        urgency_label: urgency,
+        session_number: data.sessionNumber,
+        session_date: data.sessionDate,
+        start_time: data.startTime,
+        intended_to: data.to,
+      },
+    });
+  } catch (logErr: any) {
+    console.error('[Email] Session reminder audit log failed:', logErr?.message);
+  }
 }
+
+// buildSessionReminderHtml and SessionReminderData live in ./email/sessionReminderEmail.ts
 
 interface MissedSessionData {
   to: string;
@@ -1181,7 +1597,7 @@ interface MissedSessionData {
 
 export async function sendMissedSessionEmail(data: MissedSessionData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping missed session email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping missed session email to:', redactForLogs(data.to));
     return;
   }
 
@@ -1190,7 +1606,7 @@ export async function sendMissedSessionEmail(data: MissedSessionData): Promise<v
     `[Accelerator] Missed Session ${data.sessionNumber}: ${data.sessionTitle} - Catch Up`
   );
   const html = buildMissedSessionHtml(data);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1200,7 +1616,7 @@ export async function sendMissedSessionEmail(data: MissedSessionData): Promise<v
     headers: emailHeaders('accelerator-missed-session'),
   });
 
-  console.log(`[Email] Missed session email sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Missed session email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 function buildMissedSessionHtml(data: MissedSessionData): string {
@@ -1263,7 +1679,7 @@ interface AbsenceAlertData {
 
 export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping absence alert for:', data.enrollmentName);
+    console.warn('[Email] SMTP not configured. Skipping absence alert for:', redactForLogs(data.enrollmentName));
     return;
   }
 
@@ -1306,7 +1722,7 @@ export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Accelerator Alert" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1316,7 +1732,7 @@ export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
     headers: emailHeaders('accelerator-absence-alert'),
   });
 
-  console.log(`[Email] Absence alert sent for: ${data.enrollmentName} | msgId: ${info.messageId}`);
+  console.log(`[Email] Absence alert sent for: ${redactForLogs(data.enrollmentName)} | msgId: ${info.messageId}`);
 }
 
 
@@ -1327,23 +1743,37 @@ interface PortalMagicLinkData {
   fullName: string;
   token: string;
   cohortName: string;
+  /**
+   * Optional same-origin portal path to land on after verifying, instead of the
+   * default dashboard — e.g. "/portal/class-checkin/<id>" so a student who
+   * scanned the class QR while signed out completes their check-in. Callers MUST
+   * pass a value already through safeNextPath(); this is not re-validated here.
+   */
+  next?: string;
 }
 
 export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping magic link email to:', data.to);
+    // NOTE: this returns success to the caller, so a misconfigured SMTP env
+    // shows the student "Check your email" for a mail that was never sent.
+    // Logged loudly here; fixing the silent-success contract is tracked
+    // separately (see the QR check-in audit, 2026-07-27).
+    console.warn('[Email] SMTP not configured. Skipping magic link email to:', redactForLogs(data.to));
     return;
   }
 
   const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
-  const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}`;
+  // `next` is already sanitized to a same-origin /portal/ path by safeNextPath()
+  // in participantService — encoded here so it survives as a single query value.
+  const nextParam = data.next ? `&next=${encodeURIComponent(data.next)}` : '';
+  const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}${nextParam}`;
 
   const r = await resolveEmailRecipient(
     data.to,
     `[Accelerator] Your Portal Access Link`
   );
   const html = buildPortalMagicLinkHtml(data, magicLink);
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1353,7 +1783,196 @@ export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<vo
     headers: emailHeaders('accelerator-portal-magic-link'),
   });
 
-  console.log(`[Email] Portal magic link sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Portal magic link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
+// --- Organization Invite Email (free member account, magic-link style) ---
+
+interface OrgInviteData {
+  to: string;
+  fullName: string;
+  orgName: string;
+  token: string;
+}
+
+export async function sendOrgInviteEmail(data: OrgInviteData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping org invite to:', redactForLogs(data.to));
+    return;
+  }
+
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}`;
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    `You're invited to join ${data.orgName} on Colaberry`,
+  );
+  const html = buildOrgInviteHtml(data, magicLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-org-invite'),
+  });
+
+  console.log(`[Email] Org invite sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
+function buildOrgInviteHtml(data: OrgInviteData, magicLink: string): string {
+  const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
+  const name = escapeHtml(firstName);
+  const org = escapeHtml(data.orgName);
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>You're invited to ${org}</h1>
+
+  <p>Hi ${name},</p>
+
+  <p>Your team lead set up <strong>${org}</strong> on the Colaberry Enterprise AI platform and invited you to join. A free member account is ready for you — click below to activate it and start building.</p>
+
+  <p><a href="${magicLink}" class="cta">Activate My Free Account</a></p>
+
+  <div class="highlight">
+    <strong>Your account includes:</strong><br>
+    &bull; Your personal Builder learning track<br>
+    &bull; Hands-on labs and AI mentor<br>
+    &bull; Skill progress your team lead can support you on
+  </div>
+
+  <p class="notice">This activation link expires in 30 days. If you weren't expecting this invitation, you can safely ignore this email.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+// --- Business-account welcome ---
+
+interface OrgWelcomeData {
+  to: string;
+  fullName: string;
+  orgName: string;
+  /** True when the person typed a company name; false when we fell back to their own name. */
+  hasRealCompanyName: boolean;
+}
+
+/**
+ * Welcome the person who just created a business account.
+ *
+ * Registration previously sent NOTHING — someone created a company account on
+ * the public site and heard back only silence. This is the counterpart to
+ * `sendOrgInviteEmail`, which their teammates already receive.
+ *
+ * It is NOT idempotent by itself, deliberately: this function sends whenever it
+ * is called, and `registerManager` owns the "only on first creation" decision
+ * via the `created` flag from `findOrCreate`. Putting the guard at the call site
+ * keeps the rule next to the state that decides it, rather than making this
+ * function query the database to find out whether it should run.
+ *
+ * No magic-link token here, unlike the invite: the person is already signed in
+ * (registration mints their JWT and redirects them into the workspace), so a
+ * second activation link would be confusing. The CTA is a plain portal link.
+ */
+export async function sendOrgWelcomeEmail(data: OrgWelcomeData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping org welcome to:', redactForLogs(data.to));
+    return;
+  }
+
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const companyLink = `${portalBaseUrl}/portal/company`;
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    data.hasRealCompanyName
+      ? `${data.orgName} is set up on Colaberry`
+      : 'Your Colaberry business account is ready',
+  );
+  const html = buildOrgWelcomeHtml(data, companyLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-org-welcome'),
+  });
+
+  console.log(`[Email] Org welcome sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
+function buildOrgWelcomeHtml(data: OrgWelcomeData, companyLink: string): string {
+  const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
+  const name = escapeHtml(firstName);
+  const org = escapeHtml(data.orgName);
+
+  // When no company name was supplied the org is named after the person, so
+  // "Welcome to Dana Reyes" would read as nonsense. Address the account instead.
+  const heading = data.hasRealCompanyName
+    ? `${org} is set up`
+    : 'Your business account is ready';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(heading)}</h1>
+
+  <p>Hi ${name},</p>
+
+  <p>Your business account on the Colaberry Enterprise AI platform is ready. You can invite your team, see what each person is building, and track readiness across the company from one place.</p>
+
+  <p><a href="${companyLink}" class="cta">Open Your Company Workspace</a></p>
+
+  <div class="highlight">
+    <strong>What you can do now:</strong><br>
+    &bull; Invite teammates &mdash; each gets their own free builder account<br>
+    &bull; Watch skills, evidence and readiness roll up across your team<br>
+    &bull; Keep your own builder track alongside the manager view
+  </div>
+
+  <p class="notice">You are signed in already &mdash; this link opens your workspace directly. If you did not create this account, reply to this email and we will remove it.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
 }
 
 // --- Admissions Document Delivery ---
@@ -1368,7 +1987,7 @@ interface AdmissionsDocumentParams {
 
 export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping admissions document to:', params.to);
+    console.warn('[Email] SMTP not configured. Skipping admissions document to:', redactForLogs(params.to));
     return;
   }
 
@@ -1424,7 +2043,7 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Maya - Colaberry Admissions" <${env.emailFrom}>`,
     replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
     to: r.to,
@@ -1434,14 +2053,14 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
     headers: emailHeaders('admissions-document'),
   });
 
-  console.log(`[Email] Admissions document (${params.documentType}) sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Admissions document (${params.documentType}) sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 // ─── Alert Email ──────────────────────────────────────────────────────────
 
 export async function sendAlertEmail(to: string, alert: { type: string; severity: number; title: string; description?: string; impact_area?: string; source_type?: string; urgency?: string; created_at?: Date }): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping alert email to:', to);
+    console.warn('[Email] SMTP not configured. Skipping alert email to:', redactForLogs(to));
     return;
   }
 
@@ -1485,7 +2104,7 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Cory - AI Operations" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
@@ -1494,7 +2113,173 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
     headers: emailHeaders('alert-notification'),
   });
 
-  console.log(`[Email] Alert email sent to: ${r.to} | type: ${alert.type} | msgId: ${info.messageId}`);
+  console.log(`[Email] Alert email sent to: ${redactForLogs(r.to)} | type: ${alert.type} | msgId: ${info.messageId}`);
+}
+
+// ─── AI Workforce Ticket Approval Email ────────────────────────────────────
+// Fires ONLY when an AI Workforce director's action needs a human decision
+// before it can proceed (today: the Marketing director's content-idea
+// proposal) — never for the 9 directors that work independently. Deep-links
+// straight to the ticket so the recipient can act without hunting for it.
+
+export async function sendTicketApprovalEmail(data: {
+  ticketId: string;
+  replyToken: string;
+  title: string;
+  description?: string;
+  directorName: string;
+}): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping ticket approval email for ticket:', data.ticketId);
+    return;
+  }
+
+  const to = await getAdminRecipients();
+  // Title/description originate from LLM output (the Marketing director's content
+  // idea) constrained only by a prompt instruction, not guaranteed plain text —
+  // escape before interpolating, same as this file's other user/model-sourced fields.
+  const safeTitle = escapeHtml(data.title);
+  const safeDescription = data.description ? escapeHtml(data.description).replace(/\n/g, '<br>') : '';
+  const subject = `[Approval needed] ${safeTitle}`;
+  const r = await resolveEmailRecipient(to, subject);
+  const ticketUrl = `${env.frontendUrl}/admin/tickets?open=${encodeURIComponent(data.ticketId)}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 22px; }
+    .alert-bar { background: #d69e2e; color: #fff; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 16px; margin-bottom: 16px; }
+    .detail { background: #f7fafc; border-left: 4px solid #d69e2e; padding: 14px 18px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+    .meta { font-size: 13px; color: #718096; margin-top: 8px; }
+    .cta { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #2b6cb0; color: #fff !important; border-radius: 6px; font-weight: 600; text-decoration: none; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+  </style>
+</head>
+<body>
+  <div class="alert-bar">AI Workforce — approval needed</div>
+  <h1>${safeTitle}</h1>
+  ${safeDescription ? `<div class="detail">${safeDescription}</div>` : ''}
+  <div class="meta"><strong>Raised by:</strong> ${escapeHtml(data.directorName)}</div>
+  <p><a href="${ticketUrl}" class="cta">Review the ticket</a></p>
+  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. Everything else here runs on its own — you're only hearing about this one because it needs a decision first.</p>
+  <div class="footer">
+    <p>Colaberry AI Workforce</p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  // reply.colaberry.ai is the only Mandrill-inbound-routed domain colaberry.com mail
+  // actually reaches — colaberry.com addresses (where Ali's real inbox lives) are plain
+  // Google Workspace mailboxes Mandrill has no visibility into. The ticket ID + a random
+  // per-ticket token live in the reply address's local part: the ID routes the reply back
+  // to this exact ticket without needing Message-ID/In-Reply-To correlation, and the token
+  // (only ever sent in this email, never rendered in the dashboard) is what actually
+  // authorizes the reply — the ticket UUID alone is visible to any admin on the board.
+  const replyToAddr = `ticket-${data.ticketId}-${data.replyToken}@${env.mandrillInboundDomain}`;
+
+  const info = await guardedSendMail({
+    from: `"Colaberry AI Workforce" <${env.emailFrom}>`,
+    replyTo: `"Colaberry AI Workforce" <${replyToAddr}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('ai-workforce-ticket-approval'),
+  });
+
+  console.log(`[Email] Ticket approval email sent to: ${redactForLogs(r.to)} | ticket: ${data.ticketId} | msgId: ${info.messageId}`);
+}
+
+/** Brief plain-text confirmation that an email-reply approve/reject registered — closes
+ *  the loop so a reply never silently no-ops without the sender knowing. */
+export async function sendTicketReplyConfirmation(data: {
+  to: string;
+  ticketNumber: number;
+  title: string;
+  outcome: 'done' | 'cancelled' | 'commented';
+}): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping ticket reply confirmation.');
+    return;
+  }
+  const outcomeText = data.outcome === 'done' ? 'approved and marked done' : data.outcome === 'cancelled' ? 'rejected and cancelled' : 'recorded as a comment (no status change)';
+  const text = `Got it — ticket #${data.ticketNumber} ("${data.title}") ${outcomeText}.\n\n— Colaberry AI Workforce`;
+  const r = await resolveEmailRecipient(data.to, `Re: [Approval needed] ${data.title}`);
+  const info = await guardedSendMail({
+    from: `"Colaberry AI Workforce" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    text,
+    headers: emailHeaders('ai-workforce-ticket-reply-confirmation'),
+  });
+  console.log(`[Email] Ticket reply confirmation sent to: ${redactForLogs(r.to)} | ticket #${data.ticketNumber} | msgId: ${info.messageId}`);
+}
+
+// ─── Generic Send (EmailSendFn adapter) ────────────────────────────────────
+// Matches intelligence/systemStateEngine/incidents/subscribers/emailSubscriber.ts's
+// injected send_fn shape — lets any {to, subject, html, text} caller ride the
+// same guarded/kill-switch-aware transport as every purpose-built sender above,
+// without needing to know about Mandrill/nodemailer directly.
+
+export async function sendRawEmail(input: {
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+  /**
+   * Sender identity. Optional and defaulted to the historical
+   * "Cory - AI Operations" so every existing caller is unchanged. Supplied by
+   * campaigns that are NOT from Cory — a personal note from Ali arriving under
+   * an ops-agent byline is a content defect, not a cosmetic one.
+   */
+  fromName?: string;
+  fromEmail?: string;
+  replyTo?: string;
+  /** Mandrill X-MC-Tags value, for per-campaign reporting. */
+  tag?: string;
+}): Promise<{ ok: boolean; error?: string; messageId?: string }> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping send to:', input.to.join(', '));
+    return { ok: false, error: 'SMTP not configured' };
+  }
+  if (input.to.length === 0) {
+    return { ok: false, error: 'No recipients' };
+  }
+
+  try {
+    const info = await guardedSendMail({
+      from: `"${input.fromName ?? 'Cory - AI Operations'}" <${input.fromEmail ?? env.emailFrom}>`,
+      ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+      to: input.to.join(', '),
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      headers: emailHeaders(input.tag ?? 'incident-notification'),
+    });
+    // guardedSendMail resolves (doesn't throw) when the kill switch blocks the
+    // send — callers of this adapter (e.g. the incident subscriber) treat
+    // ok:true as "actually delivered," so a blocked send must report false,
+    // not silently look like success.
+    if (info.response === 'blocked_by_kill_switch') {
+      return { ok: false, error: 'blocked by kill switch' };
+    }
+    if (info.response === 'blocked_by_dev_email_guard') {
+      return { ok: false, error: 'blocked by dev email guard' };
+    }
+    console.log(`[Email] Raw send to: ${input.to.join(', ')} | msgId: ${info.messageId}`);
+    // The provider's message id is RETURNED, not merely logged. An idempotent
+    // send ledger has to record which provider message a claim produced, and a
+    // value that exists only inside a log line cannot be written to a row.
+    return { ok: true, messageId: info.messageId };
+  } catch (err: any) {
+    console.error(`[Email] Raw send failed to ${input.to.join(', ')}: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
 }
 
 // ─── Executive Briefing Email ─────────────────────────────────────────────
@@ -1503,7 +2288,7 @@ import type { ExecutiveBriefingData } from './executiveBriefingService';
 
 export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping briefing email to:', to);
+    console.warn('[Email] SMTP not configured. Skipping briefing email to:', redactForLogs(to));
     return;
   }
 
@@ -1600,7 +2385,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Cory - AI COO" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
@@ -1609,7 +2394,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
     headers: emailHeaders('executive-briefing'),
   });
 
-  console.log(`[Email] ${isWeekly ? 'Weekly' : 'Daily'} briefing sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] ${isWeekly ? 'Weekly' : 'Daily'} briefing sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 function buildPortalMagicLinkHtml(data: PortalMagicLinkData, magicLink: string): string {
@@ -1670,7 +2455,7 @@ export async function sendCurriculumImpactDigest(
   items: CurriculumImpactItem[],
 ): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping curriculum impact digest to:', to);
+    console.warn('[Email] SMTP not configured. Skipping curriculum impact digest to:', redactForLogs(to));
     return;
   }
 
@@ -1734,7 +2519,7 @@ export async function sendCurriculumImpactDigest(
 </html>
   `.trim();
 
-  const info = await transporter.sendMail({
+  const info = await guardedSendMail({
     from: `"Cory - AI Operations" <${env.emailFrom}>`,
     to: r.to,
     subject: r.subject,
@@ -1744,6 +2529,292 @@ export async function sendCurriculumImpactDigest(
   });
 
   console.log(
-    `[Email] Curriculum impact digest sent to: ${r.to} | items: ${items.length} | msgId: ${info.messageId}`,
+    `[Email] Curriculum impact digest sent to: ${redactForLogs(r.to)} | items: ${items.length} | msgId: ${info.messageId}`,
+  );
+}
+
+// --- AI Mock Interview Result ---
+
+export interface InterviewResultEmailData {
+  to: string;
+  full_name: string;
+  week_number: number;
+  total_score: number;
+  feedback: string;
+}
+
+export async function sendInterviewResult(data: InterviewResultEmailData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping interview result email to:', redactForLogs(data.to));
+    return;
+  }
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    `[Accelerator] Week ${data.week_number} Mock Interview Results`
+  );
+
+  const scoreColor = data.total_score >= 70 ? '#10b981' : data.total_score >= 50 ? '#f59e0b' : '#ef4444';
+  const html = `
+<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+  <h2 style="color:#1e293b">Week ${data.week_number} Mock Interview Complete</h2>
+  <p>Hi ${data.full_name},</p>
+  <p>Your Week ${data.week_number} AI mock interview has been scored.</p>
+  <div style="background:#f8fafc;border-radius:8px;padding:20px;margin:20px 0;text-align:center">
+    <div style="font-size:48px;font-weight:700;color:${scoreColor}">${data.total_score}</div>
+    <div style="color:#64748b;font-size:14px">out of 100</div>
+  </div>
+  <h3 style="color:#1e293b">Feedback</h3>
+  <p style="color:#374151;line-height:1.6">${data.feedback}</p>
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+  <p style="color:#64748b;font-size:13px">Colaberry Enterprise AI · AI Systems Architect Accelerator</p>
+</body></html>`;
+
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-interview-result'),
+  });
+
+  console.log(`[Email] Interview result sent to: ${redactForLogs(r.to)} | week: ${data.week_number} | score: ${data.total_score} | msgId: ${info.messageId}`);
+}
+
+export interface CommunityDigestEmailEvent {
+  title: string;
+  event_type: string;
+  starts_at: Date;
+}
+
+export interface CommunityDigestEmailData {
+  to: string;
+  fullName: string;
+  digestDate: string;
+  unreadNotificationCount: number;
+  unreadDmCount: number;
+  newPostCount: number;
+  upcomingEvents: CommunityDigestEmailEvent[];
+}
+
+// Daily community digest (REQ-C6) — one deduped send per (member, date),
+// enforced upstream by CommunityDigestLog's unique constraint in
+// communityDigestService.ts, not by anything in this function.
+export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping community digest to:', redactForLogs(data.to));
+    return;
+  }
+
+  const r = await resolveEmailRecipient(data.to, '[Accelerator] Your Community Digest');
+
+  const eventsHtml = data.upcomingEvents.length
+    ? `<ul style="padding-left:20px;color:#374151">${data.upcomingEvents
+        .slice(0, 5)
+        .map(
+          (e) =>
+            `<li><strong>${e.title}</strong> — ${e.starts_at.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</li>`
+        )
+        .join('')}</ul>`
+    : '<p style="color:#64748b">No upcoming sessions or Open Houses scheduled.</p>';
+
+  // DM line only appears when there's something to report (offline-DM-
+  // notification fix) — matches this template's existing posture of not
+  // printing a zero-value line (see the empty-state branch for eventsHtml
+  // above); a "0 new messages" line would just be noise every single day.
+  const dmLineHtml = data.unreadDmCount > 0
+    ? `<p style="margin:8px 0 0"><strong>${data.unreadDmCount}</strong> new message${data.unreadDmCount === 1 ? '' : 's'}</p>`
+    : '';
+
+  const html = `
+<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+  <h2 style="color:#1e293b">Your Community Digest</h2>
+  <p>Hi ${data.fullName},</p>
+  <div style="background:#f8fafc;border-radius:8px;padding:20px;margin:20px 0">
+    <p style="margin:0 0 8px"><strong>${data.unreadNotificationCount}</strong> unread mention${data.unreadNotificationCount === 1 ? '' : 's'}/repl${data.unreadNotificationCount === 1 ? 'y' : 'ies'}</p>
+    <p style="margin:0"><strong>${data.newPostCount}</strong> new post${data.newPostCount === 1 ? '' : 's'} in your cohort since yesterday</p>
+    ${dmLineHtml}
+  </div>
+  <h3 style="color:#1e293b">Upcoming</h3>
+  ${eventsHtml}
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+  <p style="color:#64748b;font-size:13px">Colaberry Enterprise AI · AI Systems Architect Accelerator</p>
+</body></html>`;
+
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('community-digest'),
+  });
+
+  console.log(`[Email] Community digest sent to: ${redactForLogs(r.to)} | date: ${data.digestDate} | msgId: ${info.messageId}`);
+}
+
+// --- Sponsor (Door B employer) Portal Magic Link Email ---
+
+interface SponsorMagicLinkData {
+  to: string;
+  contactName: string;
+  companyName: string;
+  token: string;
+}
+
+function buildSponsorMagicLinkHtml(data: SponsorMagicLinkData, magicLink: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Access Your Sponsor Dashboard</h1>
+
+  <p>Dear ${data.contactName},</p>
+
+  <p>You requested access to the <strong>${data.companyName}</strong> sponsor dashboard. Click the button below to sign in:</p>
+
+  <p><a href="${magicLink}" class="cta">Access My Dashboard</a></p>
+
+  <div class="highlight">
+    <strong>Your dashboard includes:</strong><br>
+    &bull; Seat usage (purchased, redeemed, available)<br>
+    &bull; Your sponsored team, ranked<br>
+    &bull; Demo Day candidates
+  </div>
+
+  <p class="notice">This link expires in 30 days. If you did not request this link, you can safely ignore this email.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendSponsorMagicLink(data: SponsorMagicLinkData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping sponsor magic link email to:', redactForLogs(data.to));
+    return;
+  }
+
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const magicLink = `${portalBaseUrl}/sponsor/dashboard?token=${data.token}`;
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    `[Accelerator] Your Sponsor Dashboard Access Link`
+  );
+  const html = buildSponsorMagicLinkHtml(data, magicLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-sponsor-magic-link'),
+  });
+
+  console.log(`[Email] Sponsor magic link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+}
+
+interface DeliveryClientMagicLinkData {
+  to: string;
+  displayName?: string | null;
+  brandName?: string | null;
+  token: string;
+}
+
+/**
+ * The sign-in link for a client reviewer.
+ *
+ * Deliberately says almost nothing. It names no project, no engagement and no company,
+ * because a mailbox is not a controlled surface: it is forwarded, quoted into threads,
+ * synced to phones and read on screens in meetings. Everything specific waits until the
+ * link is redeemed and the session is scoped.
+ *
+ * It also does not say who invited them or which brand's engagement it is unless the
+ * brand is already known - the same reason the sign-in refusal is uniform.
+ */
+function buildDeliveryClientMagicLinkHtml(
+  data: DeliveryClientMagicLinkData,
+  magicLink: string,
+): string {
+  const who = data.displayName ? escapeHtml(data.displayName) : 'there';
+  const brand = data.brandName ? escapeHtml(data.brandName) : 'Colaberry';
+  return `
+<div style="font-family:Segoe UI,system-ui,-apple-system,sans-serif;color:#2d3748;line-height:1.6;max-width:520px">
+  <p>Hi ${who},</p>
+  <p>Here is your sign-in link for your ${brand} project review.</p>
+  <p style="margin:28px 0">
+    <a href="${magicLink}"
+       style="background:#FB2832;color:#fff;padding:12px 22px;border-radius:6px;
+              text-decoration:none;font-weight:600;display:inline-block">
+      Open your review
+    </a>
+  </p>
+  <p style="font-size:13px;color:#718096">
+    This link works once and expires in one hour. If it has expired, request a new one
+    from the sign-in page.
+  </p>
+  <p style="font-size:13px;color:#718096">
+    If you were not expecting this, you can ignore it - the link only works for the
+    address it was sent to, and nothing happens until it is opened.
+  </p>
+</div>`;
+}
+
+/**
+ * Send a client reviewer their sign-in link.
+ *
+ * The token reaches this function raw because it has to travel in the URL. It is never
+ * logged: `redactForLogs` covers the address, and the link itself is deliberately absent
+ * from the log line, since a magic link in a log file is a credential in a log file.
+ */
+export async function sendDeliveryClientMagicLink(
+  data: DeliveryClientMagicLinkData,
+): Promise<void> {
+  if (!transporter) {
+    console.warn(
+      '[Email] SMTP not configured. Skipping client sign-in link to:',
+      redactForLogs(data.to),
+    );
+    return;
+  }
+
+  const baseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const magicLink = `${baseUrl}/client?token=${encodeURIComponent(data.token)}`;
+
+  const r = await resolveEmailRecipient(data.to, 'Your project review sign-in link');
+  const html = buildDeliveryClientMagicLinkHtml(data, magicLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry" <${env.emailFrom}>`,
+    replyTo: `"Colaberry" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('delivery-client-magic-link'),
+  });
+
+  // Address redacted, link omitted entirely.
+  console.log(
+    `[Email] Client sign-in link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`,
   );
 }

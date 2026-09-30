@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../utils/api';
+import { roleFromAdminToken } from '../../utils/adminToken';
 
 function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -23,8 +24,12 @@ function AdminLoginPage() {
     setSubmitting(true);
     try {
       const res = await api.post('/api/admin/login', { email, password });
-      login(res.data.token);
-      navigate('/admin/dashboard');
+      const token = res.data.token;
+      login(token);
+      // A sales rep has no dashboard section, so sending them there would render
+      // a page whose every request 403s before ProtectedRoute bounced them off
+      // it. Land them on the lead queue directly.
+      navigate(roleFromAdminToken(token) === 'sales' ? '/admin/leads' : '/admin/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed. Please try again.');
     } finally {

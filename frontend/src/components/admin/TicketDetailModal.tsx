@@ -1,10 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { fmtCentralDateTime } from '../../utils/centralTime';
+import { timeAgo } from './shell/trust';
+import StatusBadge from './shell/StatusBadge';
+import { isTicketStale, formatNextCheckLabel, TicketAutoCheck } from '../../utils/ticketTypeMeta';
+import StoryTab from './ticketDetailTabs/StoryTab';
+import VisualProofTab from './ticketDetailTabs/VisualProofTab';
+import DecisionsTab from './ticketDetailTabs/DecisionsTab';
+import ReferencesTab from './ticketDetailTabs/ReferencesTab';
+import WorkGraphTab from './ticketDetailTabs/WorkGraphTab';
 
 interface Activity {
   id: string;
   actor_type: string;
   actor_id: string;
+  // Resolved server-side by getTicketById() (ProofDesk actor-name resolution, round
+  // 2 — see backend/src/services/actorIdentity/resolveActorDisplayName.ts). Optional
+  // because older/unrelated callers of this same shape may not send it — every
+  // render site falls back to actor_id when absent, never shows literal `undefined`.
+  actor_display_name?: string;
   action: string;
   from_value: string | null;
   to_value: string | null;
@@ -26,6 +40,14 @@ interface Ticket {
   created_by_id: string;
   assigned_to_type: string | null;
   assigned_to_id: string | null;
+  // Resolved server-side by getTicketById() — see the Activity interface's
+  // actor_display_name comment above for the same optionality/fallback rationale.
+  assigned_to_display_name?: string | null;
+  // Ticket Board UX fixes (2026-08-17) — the SAME two additive fields the board
+  // card gets, resolved server-side by getTicketById(). Optional/nullable for
+  // the same not-yet-redeployed-backend reason as every other new field here.
+  created_by_display_name?: string | null;
+  auto_check?: TicketAutoCheck | null;
   parent_ticket_id: string | null;
   entity_type: string | null;
   entity_id: string | null;
@@ -35,6 +57,7 @@ interface Ticket {
   due_date: string | null;
   completed_at: string | null;
   created_at: string;
+  updated_at: string | null;
 }
 
 interface SubTask {
@@ -53,6 +76,7 @@ interface Props {
 
 const STATUS_OPTIONS = ['backlog', 'todo', 'in_progress', 'in_review', 'done', 'cancelled'];
 const PRIORITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 const PRIORITY_BADGES: Record<string, string> = {
   critical: 'danger',
@@ -70,6 +94,21 @@ const ACTION_ICONS: Record<string, string> = {
   updated: 'pencil',
 };
 
+// ProofDesk Milestone 2 — Proof & Ticket Experience (spec §15.3). Six tabs replace the
+// old single flat view. This task (T007) moves every pre-existing capability into the
+// Technical tab unchanged, as a zero-regression structural refactor; T008-T011 fill in
+// the other 5 tabs with real content on top of this shell.
+type TabKey = 'story' | 'visual-proof' | 'work-graph' | 'decisions' | 'technical' | 'references';
+
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'story', label: 'Story' },
+  { key: 'visual-proof', label: 'Visual Proof' },
+  { key: 'work-graph', label: 'Work Graph' },
+  { key: 'decisions', label: 'Decisions' },
+  { key: 'technical', label: 'Technical' },
+  { key: 'references', label: 'References' },
+];
+
 export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props) {
   const { token } = useAuth();
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -79,6 +118,9 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+  // T008: default tab is now 'story', matching spec §15.3's tab order, now that the
+  // Story tab has real content. Technical (the old flat view) remains one click away.
+  const [activeTab, setActiveTab] = useState<TabKey>('story');
 
   useEffect(() => {
     fetchDetail();
@@ -167,11 +209,6 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
     }
   }
 
-  function formatDate(dateStr: string) {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
-
   function renderActivityLine(a: Activity) {
     switch (a.action) {
       case 'created':
@@ -200,6 +237,137 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
         return <span>updated {a.metadata?.fields_changed?.join(', ')}</span>;
       default:
         return <span>{a.action}</span>;
+    }
+  }
+
+  function renderTechnicalTab() {
+    // Everything the old flat view showed, unchanged: status/priority controls,
+    // dispatch button, meta info, sub-tasks, full activity feed, comment box.
+    if (!ticket) return null;
+    return (
+      <>
+        {/* Controls */}
+        <div className="row g-2 mb-3">
+          <div className="col-auto">
+            <label className="form-label small fw-medium mb-1">Status</label>
+            <select className="form-select form-select-sm" value={ticket.status} onChange={(e) => handleStatusChange(e.target.value)}>
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+            </select>
+          </div>
+          <div className="col-auto">
+            <label className="form-label small fw-medium mb-1">Priority</label>
+            <select className="form-select form-select-sm" value={ticket.priority} onChange={(e) => handlePriorityChange(e.target.value)}>
+              {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="col-auto d-flex align-items-end">
+            <button className="btn btn-sm btn-outline-primary" onClick={handleDispatch} disabled={dispatching}>
+              {dispatching ? 'Dispatching...' : 'Dispatch to Agent'}
+            </button>
+          </div>
+        </div>
+
+        {/* Meta info */}
+        <div className="d-flex gap-3 flex-wrap mb-3 small text-muted">
+          <span>Source: <strong>{ticket.source}</strong></span>
+          {ticket.assigned_to_id && (
+            <span>
+              Assigned: <strong>{ticket.assigned_to_display_name || ticket.assigned_to_id}</strong>
+              {/* Raw id kept visible for technical fidelity (this IS the Technical
+                  tab) — but only as a secondary, muted parenthetical, never as the
+                  only identifier a human sees. Omitted when it would just repeat
+                  the name (no resolved name yet, or name === id). */}
+              {ticket.assigned_to_display_name && ticket.assigned_to_display_name !== ticket.assigned_to_id && (
+                <span className="text-muted ms-1" style={{ fontSize: '0.7rem' }}>({ticket.assigned_to_id})</span>
+              )}
+            </span>
+          )}
+          {ticket.confidence != null && <span>Confidence: <strong>{ticket.confidence}%</strong></span>}
+          {ticket.estimated_effort && <span>Effort: <strong>{ticket.estimated_effort}</strong></span>}
+          <span>Created: <strong>{fmtCentralDateTime(ticket.created_at)}</strong></span>
+          <span>Last activity: <strong>{timeAgo(ticket.updated_at)}</strong></span>
+        </div>
+
+        {/* Sub-tasks */}
+        {subTasks.length > 0 && (
+          <div className="mb-3">
+            <h6 className="fw-semibold small mb-2">Sub-tasks ({subTasks.length})</h6>
+            <div className="list-group list-group-flush">
+              {subTasks.map((st) => (
+                <div key={st.id} className="list-group-item px-0 py-1 d-flex align-items-center gap-2 small">
+                  <span className={`badge bg-${st.status === 'done' ? 'success' : st.status === 'in_progress' ? 'primary' : 'secondary'}`} style={{ fontSize: '0.6rem', minWidth: 60 }}>
+                    {st.status.replace('_', ' ')}
+                  </span>
+                  <span>TK-{st.ticket_number}</span>
+                  <span className="text-truncate">{st.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Activity Timeline */}
+        <h6 className="fw-semibold small mb-2">Activity</h6>
+        <div className="mb-3" style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {activities.map((a) => (
+            <div key={a.id} className="d-flex gap-2 mb-2 small">
+              <div className="text-muted" style={{ minWidth: 110, fontSize: '0.7rem' }}>{fmtCentralDateTime(a.created_at)}</div>
+              <div>
+                <span className={`badge bg-${a.actor_type === 'agent' ? 'info' : a.actor_type === 'cory' ? 'primary' : 'secondary'} me-1`} style={{ fontSize: '0.6rem' }}>
+                  {a.actor_type}
+                </span>
+                {/* Resolved name is the visible text; the raw id moves to a hover
+                    tooltip rather than disappearing — same "technical fidelity, but
+                    never a bare UUID as the only identifier" rule as the Assigned
+                    line above. */}
+                <span className="text-muted me-1" style={{ fontSize: '0.7rem' }} title={a.actor_id}>
+                  {a.actor_display_name || a.actor_id}
+                </span>
+                {renderActivityLine(a)}
+              </div>
+            </div>
+          ))}
+          {activities.length === 0 && <p className="text-muted small">No activity yet</p>}
+        </div>
+
+        {/* Comment input */}
+        <div className="d-flex gap-2">
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            placeholder="Add a comment..."
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleComment()}
+          />
+          <button className="btn btn-sm btn-outline-primary" onClick={handleComment} disabled={submitting || !comment.trim()}>
+            {submitting ? '...' : 'Post'}
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  function renderTabContent() {
+    if (!ticket) return null;
+    switch (activeTab) {
+      case 'technical':
+        return renderTechnicalTab();
+      case 'story':
+        return <StoryTab ticketId={ticketId} token={token} description={ticket.description} metadata={ticket.metadata} />;
+      case 'visual-proof':
+        return <VisualProofTab ticketId={ticketId} token={token} />;
+      case 'work-graph':
+        // ProofDesk Milestone 3: WorkGraphTab went from a static, no-props
+        // placeholder (M2) to a real data-fetching component — same ticketId/
+        // token props DecisionsTab/VisualProofTab already take, two lines away.
+        return <WorkGraphTab ticketId={ticketId} token={token} />;
+      case 'decisions':
+        return <DecisionsTab ticketId={ticketId} token={token} />;
+      case 'references':
+        return <ReferencesTab ticket={ticket} />;
+      default:
+        return null;
     }
   }
 
@@ -243,85 +411,70 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
               <h5 className="fw-bold mb-2">{ticket.title}</h5>
               {ticket.description && <p className="text-muted small mb-3">{ticket.description}</p>}
 
-              {/* Controls */}
-              <div className="row g-2 mb-3">
-                <div className="col-auto">
-                  <label className="form-label small fw-medium mb-1">Status</label>
-                  <select className="form-select form-select-sm" value={ticket.status} onChange={(e) => handleStatusChange(e.target.value)}>
-                    {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                  </select>
-                </div>
-                <div className="col-auto">
-                  <label className="form-label small fw-medium mb-1">Priority</label>
-                  <select className="form-select form-select-sm" value={ticket.priority} onChange={(e) => handlePriorityChange(e.target.value)}>
-                    {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div className="col-auto d-flex align-items-end">
-                  <button className="btn btn-sm btn-outline-primary" onClick={handleDispatch} disabled={dispatching}>
-                    {dispatching ? 'Dispatching...' : 'Dispatch to Agent'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Meta info */}
-              <div className="d-flex gap-3 flex-wrap mb-3 small text-muted">
-                <span>Source: <strong>{ticket.source}</strong></span>
-                {ticket.assigned_to_id && <span>Assigned: <strong>{ticket.assigned_to_id}</strong></span>}
-                {ticket.confidence != null && <span>Confidence: <strong>{ticket.confidence}%</strong></span>}
-                {ticket.estimated_effort && <span>Effort: <strong>{ticket.estimated_effort}</strong></span>}
-                <span>Created: <strong>{formatDate(ticket.created_at)}</strong></span>
-              </div>
-
-              {/* Sub-tasks */}
-              {subTasks.length > 0 && (
-                <div className="mb-3">
-                  <h6 className="fw-semibold small mb-2">Sub-tasks ({subTasks.length})</h6>
-                  <div className="list-group list-group-flush">
-                    {subTasks.map((st) => (
-                      <div key={st.id} className="list-group-item px-0 py-1 d-flex align-items-center gap-2 small">
-                        <span className={`badge bg-${st.status === 'done' ? 'success' : st.status === 'in_progress' ? 'primary' : 'secondary'}`} style={{ fontSize: '0.6rem', minWidth: 60 }}>
-                          {st.status.replace('_', ' ')}
-                        </span>
-                        <span>TK-{st.ticket_number}</span>
-                        <span className="text-truncate">{st.title}</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Stale-ticket flag — "Anything over 3 days old should have a
+                  valid reason why it's still open" (Ali, live feedback).
+                  Visibility only: never auto-closes, never auto-escalates,
+                  never changes status — see isTicketStale's own contract. */}
+              {isTicketStale(ticket.updated_at, ticket.status) && (
+                <div className="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+                  <StatusBadge label="Stale" tone="warning" icon="time-line" />
+                  <span>
+                    No activity in{' '}
+                    {ticket.updated_at
+                      ? Math.floor((Date.now() - new Date(ticket.updated_at).getTime()) / ONE_DAY_MS)
+                      : '3+'}{' '}
+                    days — needs a reason it&apos;s still open.
+                  </span>
                 </div>
               )}
 
-              {/* Activity Timeline */}
-              <h6 className="fw-semibold small mb-2">Activity</h6>
-              <div className="mb-3" style={{ maxHeight: 300, overflowY: 'auto' }}>
-                {activities.map((a) => (
-                  <div key={a.id} className="d-flex gap-2 mb-2 small">
-                    <div className="text-muted" style={{ minWidth: 100, fontSize: '0.7rem' }}>{formatDate(a.created_at)}</div>
-                    <div>
-                      <span className={`badge bg-${a.actor_type === 'agent' ? 'info' : a.actor_type === 'cory' ? 'primary' : 'secondary'} me-1`} style={{ fontSize: '0.6rem' }}>
-                        {a.actor_type}
-                      </span>
-                      <span className="text-muted me-1" style={{ fontSize: '0.7rem' }}>{a.actor_id}</span>
-                      {renderActivityLine(a)}
-                    </div>
-                  </div>
-                ))}
-                {activities.length === 0 && <p className="text-muted small">No activity yet</p>}
-              </div>
+              {/* Ticket Board UX fixes (2026-08-17) — the full honest auto-check
+                  disclosure lives here (not repeated on every board card — see
+                  execution-contract.md Assumption 2): a real "next check" time
+                  when one of the 6 registered auto-resolvers owns this ticket
+                  and is actually live, or an explicit, non-alarming statement
+                  when none does — never silence, never a fabricated timer. */}
+              {ticket.auto_check && (
+                <div className="alert alert-light border d-flex align-items-center gap-2 mb-3" role="status">
+                  <StatusBadge
+                    label={ticket.auto_check.hasAutoCheck ? 'Auto-check active' : 'No automated check'}
+                    tone={ticket.auto_check.hasAutoCheck ? 'info' : 'neutral'}
+                    icon="refresh-line"
+                  />
+                  <span className="text-muted small">
+                    {ticket.auto_check.hasAutoCheck
+                      ? // Defensive: formatNextCheckLabel() only returns non-null when
+                        // hasAutoCheck is true AND nextCheckLabel is present, but a
+                        // malformed/future backend response could theoretically send
+                        // hasAutoCheck:true with no label — fall back to an honest
+                        // resolver-only line rather than ever rendering "null, by...".
+                        formatNextCheckLabel(ticket.auto_check)
+                        ? `${formatNextCheckLabel(ticket.auto_check)}, by ${ticket.auto_check.resolverAgentName}.`
+                        : `Auto-checked by ${ticket.auto_check.resolverAgentName}.`
+                      : ticket.auto_check.reason || 'No automated resolver owns this ticket type.'}
+                  </span>
+                </div>
+              )}
 
-              {/* Comment input */}
-              <div className="d-flex gap-2">
-                <input
-                  type="text"
-                  className="form-control form-control-sm"
-                  placeholder="Add a comment..."
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleComment()}
-                />
-                <button className="btn btn-sm btn-outline-primary" onClick={handleComment} disabled={submitting || !comment.trim()}>
-                  {submitting ? '...' : 'Post'}
-                </button>
+              {/* Tab bar */}
+              <ul className="nav nav-tabs mb-3" role="tablist">
+                {TABS.map((t) => (
+                  <li className="nav-item" key={t.key} role="presentation">
+                    <button
+                      type="button"
+                      className={`nav-link${activeTab === t.key ? ' active' : ''}`}
+                      onClick={() => setActiveTab(t.key)}
+                      role="tab"
+                      aria-selected={activeTab === t.key}
+                    >
+                      {t.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <div role="tabpanel">
+                {renderTabContent()}
               </div>
             </div>
           </div>

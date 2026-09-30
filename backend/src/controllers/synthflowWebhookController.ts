@@ -6,9 +6,12 @@ import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
 import { logActivity } from '../services/activityService';
+import { completeFlotationCall } from '../services/delivery/flotationCallCompletion';
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
 import { getTestOverrides } from '../services/settingsService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /**
  * POST /api/webhook/synthflow/call-complete
@@ -18,7 +21,7 @@ import { getTestOverrides } from '../services/settingsService';
 export async function handleSynthflowCallComplete(req: Request, res: Response): Promise<void> {
   try {
     // Log raw payload to diagnose Synthflow's field names
-    console.log('[Synthflow Webhook] Raw payload:', JSON.stringify(req.body).slice(0, 2000));
+    console.log('[Synthflow Webhook] Raw payload:', redactForLogs(JSON.stringify(req.body)).slice(0, 2000));
 
     const body = req.body || {};
 
@@ -130,6 +133,92 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       }
     }
 
+    // AI Flotation: the call IS the discovery interview, so turn it into structured
+    // project truth rather than leaving the customer's own description of their business
+    // sitting unread in a transcript column.
+    //
+    // Scoped to this brand on purpose. The other agents on this number run bootcamp
+    // callbacks, where there is no project to understand and an extraction would be spend
+    // with no consumer.
+    //
+    // Non-fatal and deliberately last: recording that the call happened is this endpoint's
+    // actual contract with the vendor, and it must not be lost because a downstream step
+    // failed. `completeFlotationCall` never throws past a missing row, but the guard stays
+    // because that is a promise made by another module and this one should not depend on
+    // it holding forever.
+    // ── AI Internship interview calls ──────────────────────────────────────
+    // Scoped to this source for the same reason the branch below is: the other
+    // agents on this number run bootcamp callbacks, where there is no interview to
+    // extract and doing so would be spend with no consumer.
+    //
+    // Deliberately runs even when the call did NOT complete cleanly and even with
+    // no transcript, unlike the branch below — a failed or silent interview call is
+    // a fact the applicant needs reflected in the portal ("the call did not work,
+    // finish online"), not something to drop. The service decides what a given
+    // outcome means.
+    //
+    // Non-fatal: recording that the call happened is this endpoint's contract with
+    // the vendor and must not be lost because extraction failed.
+    if (commMeta.source === 'internship-interview') {
+      try {
+        const { handleInternshipCallCompleted } = await import('../services/internship/internshipCallCompletion');
+        const outcome = await handleInternshipCallCompleted({
+          callId: call_id ? String(call_id) : null,
+          applicationId: commMeta.application_id ?? null,
+          sessionId: commMeta.session_id ?? null,
+          transcript: transcript || '',
+          status,
+          disposition,
+          recordingUrl: recording_url ?? null,
+          durationSeconds: typeof duration === 'number' ? duration : null,
+        });
+        console.log(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          service: 'backend',
+          event: 'internship_call_completion_handled',
+          outcome: outcome.handled ? 'success' : 'partial',
+          context: outcome,
+        }));
+      } catch (intErr: any) {
+        console.warn(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'backend',
+          event: 'internship_call_completion_failed',
+          outcome: 'failure',
+          error_class: intErr?.constructor?.name ?? 'Error',
+          context: { message: intErr?.message },
+        }));
+      }
+    }
+
+    if (commMeta.source === 'ai-flotation') {
+      try {
+        // The spoken mouth of the ONE intake. Everything after the last word - extraction,
+        // and the build that starts on its own - is `completeFlotationCall`, which the admin
+        // page's poll and the five-minute sweep also call when this webhook does not arrive.
+        // The log row was written above; the completion skips that part on a terminal row.
+        const outcome = await completeFlotationCall({
+          callId: String(call_id),
+          status: String(status || ''),
+          transcript: transcript || '',
+          durationSeconds: typeof duration === 'number' ? duration : null,
+          endReason: disposition ?? null,
+          recordingUrl: recording_url ?? null,
+        });
+        console.log(
+          `[Synthflow Webhook] flotation call ${outcome.handled ? (outcome.completed ? 'completed' : 'ended without a conversation') : outcome.reason}` +
+            (outcome.handled && outcome.intake
+              ? ` understanding=${outcome.intake.understanding}` +
+                (outcome.intake.build ? ` build=${outcome.intake.build.started ? outcome.intake.build.project_id : 'not started: ' + outcome.intake.build.reason}` : '')
+              : ''),
+        );
+      } catch (undErr: any) {
+        console.warn('[Synthflow Webhook] flotation completion error:', undErr.message);
+      }
+    }
+
     // If this was a simulation step, update step details with transcript
     if (commLog.simulation_step_id) {
       const simStep = await CampaignSimulationStep.findByPk(commLog.simulation_step_id);
@@ -230,7 +319,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
               // Enroll in Strategy Call Readiness
               const { enrollLeadInSequence } = require('../services/sequenceService');
               await enrollLeadInSequence(commLog.lead_id, strategyCampaignId);
-              console.log(`[Synthflow Webhook] Hot lead ${(lead as any)?.name} moved to Strategy Call Readiness (interest: ${interestArea})`);
+              console.log(`[Synthflow Webhook] Hot lead ${redactForLogs((lead as any)?.name)} moved to Strategy Call Readiness (interest: ${interestArea})`);
 
               // ── Maya→Ali Handoff: auto-enroll interested leads in Ali Personal Outreach ──
               try {
@@ -329,7 +418,7 @@ async function sendPostCallSms(leadId: number, transcript: string, callId: strin
 
   // Summarize transcript via AI
   const smsBody = await summarizeTranscriptForSms(firstName, transcript);
-  console.log(`[PostCallSMS] Sending SMS to lead ${leadId} (${smsBody.length} chars): ${smsBody.substring(0, 80)}...`);
+  console.log(`[PostCallSMS] Sending SMS to lead ${leadId} (${smsBody.length} chars): ${redactForLogs(smsBody).substring(0, 80)}...`);
 
   const result = await sendSmsViaGhl(ghlContactId, smsBody);
   if (result.success) {
@@ -359,7 +448,7 @@ async function summarizeTranscriptForSms(firstName: string, transcript: string):
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('No OpenAI key');
 
-    const client = new OpenAI({ apiKey });
+    const client = getInstrumentedOpenAI({ workflow_id: 'voice_summary' }, { apiKey });
     const response = await client.chat.completions.create({
       model: env.chatModel,
       max_tokens: 150,
@@ -426,7 +515,7 @@ async function sendVoicemailFallbackSms(leadId: number): Promise<void> {
 
   const result = await sendSmsViaGhl(ghlContactId, smsBody);
   if (result.success) {
-    console.log(`[VM-SMS] Voicemail fallback SMS sent to lead ${leadId} (${firstName})`);
+    console.log(`[VM-SMS] Voicemail fallback SMS sent to lead ${leadId} (${redactForLogs(firstName)})`);
   } else {
     console.error(`[VM-SMS] SMS failed for lead ${leadId}: ${result.error}`);
   }

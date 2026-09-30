@@ -64,7 +64,7 @@ export default function IntelScatterChart({ data, config }: IntelScatterChartPro
             borderRadius: 6,
             fontSize: 12,
           }}
-          formatter={(value: any, name?: string) => [value, name ?? '']}
+          formatter={(value: any, name?: any) => [value, name ?? '']}
           labelFormatter={(label) => `${config.x_label || xKey}: ${label}`}
         />
         <Scatter data={data} name={config.label || 'Entities'}>

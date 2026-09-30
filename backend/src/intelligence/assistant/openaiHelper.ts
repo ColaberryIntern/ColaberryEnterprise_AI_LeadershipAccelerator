@@ -3,13 +3,17 @@
 // Returns null when API key is missing — callers fall back to rule-based logic.
 
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../../services/openaiInstrumented';
 import type { ChatCompletionMessageParam, ChatCompletionTool, ChatCompletion } from 'openai/resources/chat/completions';
 
 let _client: OpenAI | null = null;
 
 export function getOpenAIClient(): OpenAI | null {
   if (!process.env.OPENAI_API_KEY) return null;
-  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  // prompt_version is a coarse label for this shared client (TBI T003 / P2-3) — the
+  // 'assistant' workflow_id covers more than just Cory's agentic tool loop, so this
+  // intentionally names the pipeline, not one specific system prompt.
+  if (!_client) _client = getInstrumentedOpenAI({ workflow_id: 'assistant', prompt_version: 'assistant-pipeline-v1' });
   return _client;
 }
 

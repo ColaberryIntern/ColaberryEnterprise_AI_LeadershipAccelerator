@@ -44,7 +44,7 @@ export default function AISimulationWorkspace({ miniSections, lessonTitle, lesso
                 </div>
               </div>
               {/* Right: Prompt Debugger */}
-              <div className="col-lg-5" style={{ maxHeight: 'calc(100vh - 140px)', overflowY: 'auto', background: 'var(--color-bg-alt, #f7fafc)' }}>
+              <div className="col-lg-5" style={{ maxHeight: 'calc(100vh - 140px)', overflowY: 'auto', background: 'var(--neutral-50)' }}>
                 <div className="p-3">
                   <PromptDebuggerPanel
                     lessonId={lessonId}

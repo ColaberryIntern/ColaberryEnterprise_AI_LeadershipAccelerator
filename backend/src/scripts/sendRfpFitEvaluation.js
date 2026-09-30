@@ -194,7 +194,7 @@ ${SIG_TEXT}`;
     ticketId: TRACKING_TODO,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'RFP fit eval - 14 zips read, 3 OP dates wrong, recommended picks inside',
     html: HTML,

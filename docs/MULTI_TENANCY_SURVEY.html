@@ -1,0 +1,1345 @@
+<title>Multi-Tenancy Survey</title>
+<style>
+:root {
+  --ground:#eef0f4; --surface:#ffffff; --surface-2:#f6f7f9;
+  --ink:#171c24; --ink-2:#3d4653; --muted:#5f6a78; --rule:#d7dbe2;
+  --accent:#9c3d1e; --accent-soft:#f4e6e0;
+  --ok:#1b6b4f; --warn:#8a5d00; --stop:#a32020;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#101319; --surface:#171b22; --surface-2:#1d222a;
+    --ink:#e7eaef; --ink-2:#c3cad4; --muted:#94a0af; --rule:#2b323c;
+    --accent:#e0714a; --accent-soft:#2e2019;
+    --ok:#4fbf93; --warn:#d9a441; --stop:#e36565;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#101319; --surface:#171b22; --surface-2:#1d222a;
+  --ink:#e7eaef; --ink-2:#c3cad4; --muted:#94a0af; --rule:#2b323c;
+  --accent:#e0714a; --accent-soft:#2e2019;
+  --ok:#4fbf93; --warn:#d9a441; --stop:#e36565;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+     font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{display:grid;grid-template-columns:280px minmax(0,1fr);gap:0;max-width:1240px;margin:0 auto}
+
+/* masthead */
+.mast{grid-column:1/-1;padding:56px 40px 28px;border-bottom:1px solid var(--rule)}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+         color:var(--accent);margin:0 0 14px}
+.mast h1{font-family:var(--serif);font-weight:700;font-size:clamp(30px,4.4vw,46px);line-height:1.08;
+         letter-spacing:-.015em;margin:0 0 14px;text-wrap:balance;max-width:20ch}
+.standfirst{font-size:18px;color:var(--ink-2);max-width:62ch;margin:0 0 30px}
+.facts{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--rule);border-radius:3px;
+       background:var(--surface);overflow:hidden}
+.fact{flex:1 1 170px;padding:14px 18px;border-right:1px solid var(--rule)}
+.fact:last-child{border-right:0}
+.fact dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+         color:var(--muted);margin:0 0 5px}
+.fact dd{margin:0;font-family:var(--mono);font-size:19px;font-weight:600;
+         font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.fact dd small{display:block;font-family:var(--sans);font-size:12px;font-weight:400;
+               color:var(--muted);letter-spacing:0;margin-top:2px}
+.v-stop{color:var(--stop)} .v-ok{color:var(--ok)} .v-warn{color:var(--warn)}
+.alert{margin:18px 0 0;padding:13px 17px;background:var(--accent-soft);
+       border-left:3px solid var(--accent);border-radius:0 3px 3px 0;
+       font-size:14.5px;line-height:1.6;color:var(--ink-2);max-width:78ch}
+.alert strong{color:var(--ink)}
+.alert-stop{background:transparent;border-left-color:var(--stop);
+            background:color-mix(in srgb,var(--stop) 9%, transparent)}
+.alert-stop a{color:var(--stop)}
+.alert a{color:var(--accent)}
+main a{color:var(--accent)}
+/* findings register: also match D-NN headings written with an en/em dash */
+
+/* nav */
+nav{padding:34px 22px 80px;border-right:1px solid var(--rule);position:sticky;top:0;
+    align-self:start;max-height:100vh;overflow-y:auto}
+.navgroup{margin-bottom:22px}
+.navlabel{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.13em;
+          text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.navlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.navlist a{display:flex;gap:9px;align-items:baseline;padding:5px 9px;border-radius:3px;
+           text-decoration:none;color:var(--ink-2);font-size:13.5px;line-height:1.4}
+.navlist a:hover{background:var(--surface);color:var(--accent)}
+.navlist .n{font-family:var(--mono);font-size:10.5px;color:var(--muted);
+            font-variant-numeric:tabular-nums}
+a:focus-visible,.navlist a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* main */
+main{padding:34px 40px 100px;min-width:0}
+.doc{background:var(--surface);border:1px solid var(--rule);border-radius:4px;
+     padding:30px 34px;margin-bottom:26px}
+.dochead{display:flex;gap:16px;align-items:flex-start;padding-bottom:18px;
+         border-bottom:2px solid var(--ink);margin-bottom:22px}
+.docnum{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);
+        padding-top:8px;font-variant-numeric:tabular-nums}
+.doctitle{font-family:var(--serif);font-size:26px;font-weight:700;letter-spacing:-.012em;
+          margin:0 0 5px;line-height:1.15}
+.docblurb{margin:0;color:var(--ink-2);font-size:15px}
+.docfile{margin:7px 0 0}
+.docfile code{font-size:11px;color:var(--muted);background:none;padding:0;border:0}
+
+main h2{font-family:var(--serif);font-size:20px;font-weight:700;letter-spacing:-.008em;
+        margin:34px 0 12px;line-height:1.25;text-wrap:balance}
+main h3{font-size:15px;font-weight:650;margin:24px 0 9px;letter-spacing:-.003em}
+main p{margin:0 0 13px;max-width:70ch}
+main ul,main ol{margin:0 0 13px;padding-left:20px;max-width:70ch}
+main li{margin-bottom:5px}
+main li::marker{color:var(--muted)}
+li.task{list-style:none;margin-left:-20px;display:flex;gap:9px;align-items:baseline}
+.box{flex:none;width:11px;height:11px;border:1.5px solid var(--rule);border-radius:2px;
+     display:inline-block;position:relative;top:1px}
+.box.on{background:var(--ok);border-color:var(--ok)}
+hr{border:0;border-top:1px solid var(--rule);margin:26px 0}
+blockquote{margin:0 0 13px;padding:10px 16px;background:var(--surface-2);
+           border-left:3px solid var(--accent);color:var(--ink-2);font-size:15px}
+strong{font-weight:650;color:var(--ink)}
+
+/* findings register */
+h3.finding{display:flex;gap:12px;align-items:baseline;margin:30px 0 10px;padding-top:18px;
+           border-top:1px solid var(--rule);font-size:16px}
+.fnum{flex:none;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.05em;
+      color:var(--accent);background:var(--accent-soft);padding:3px 7px;border-radius:2px}
+
+/* data */
+code{font-family:var(--mono);font-size:.855em;background:var(--surface-2);
+     padding:1px 5px;border-radius:2px;border:1px solid var(--rule)}
+.scroll{overflow-x:auto;margin:0 0 16px;border:1px solid var(--rule);border-radius:3px;
+        background:var(--surface-2)}
+pre.code{margin:0;padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.55;
+         color:var(--ink-2)}
+pre.code code{background:none;border:0;padding:0;font-size:inherit}
+pre.mermaid{margin:0 0 16px;padding:14px 16px;font-family:var(--mono);font-size:12px;
+            line-height:1.5;background:var(--surface-2);border:1px solid var(--rule);
+            border-radius:3px;overflow-x:auto;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;
+   text-transform:uppercase;color:var(--muted);padding:9px 13px;
+   border-bottom:1px solid var(--rule);white-space:nowrap;background:var(--surface)}
+td{padding:9px 13px;border-bottom:1px solid var(--rule);vertical-align:top;line-height:1.5}
+tbody tr:last-child td{border-bottom:0}
+td code{font-size:12px}
+
+@media (max-width:940px){
+  .wrap{grid-template-columns:1fr}
+  nav{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--rule);
+      padding:24px 24px 30px}
+  main{padding:24px 24px 70px}
+  .mast{padding:40px 24px 24px}
+  .doc{padding:24px 20px}
+}
+</style>
+
+<div class="wrap">
+  <div class="mast">
+    <p class="eyebrow">Gate 0 &middot; discovery only &middot; commit 1dcfdd60</p>
+    <h1>What the platform actually looks like before we split it into five brands</h1>
+    <p class="standfirst">Twelve documents, read out of the running codebase rather than out of the plan.
+    Nothing here changes any code. This is the measurement taken before the work, so that if
+    something goes wrong later we can tell what we broke from what was already broken.</p>
+    <dl class="facts">
+      <div class="fact"><dt>Working copy was</dt><dd class="v-stop">2,586<small>commits out of date</small></dd></div>
+      <div class="fact"><dt>Plan vs reality</dt><dd class="v-warn">11<small>conflicts recorded</small></dd></div>
+      <div class="fact"><dt>Decisions taken</dt><dd>6<small>logged, one changes scope</small></dd></div>
+      <div class="fact"><dt>Tests</dt><dd class="v-ok">196 / 196<small>passing, 0 type errors</small></dd></div>
+      <div class="fact"><dt>Isolation checks</dt><dd class="v-ok">73 / 73<small>evidence generated</small></dd></div>
+      <div class="fact"><dt>Deployed</dt><dd>None<small>nothing is live</small></dd></div>
+    </dl>
+    <p class="alert"><strong>Scope change, 21 Aug, now closed:</strong> CPN data
+    isolation was confirmed as a formal grant and donor requirement, not just good
+    practice. That needed two things beyond enforcement: an audit trail that records
+    refusals, and evidence an auditor can read. Both are now built, and the evidence
+    document is generated by running the tests rather than written by hand.
+    See <a href="#s1">Decisions taken &middot; DEC-05</a>.</p>
+    <p class="alert alert-stop"><strong>Unrelated live issue found 21 Aug, now fixed
+    and deployed:</strong> a scheduled job had been firing three times a day at a file
+    that did not exist on the server, producing nothing since 8 July. The root cause was
+    an email check that counted a repeated name as a duplicated signature, which had
+    silently blocked three separate jobs. Fixed, merged, deployed, and the job ran
+    successfully in production. See <a href="#s4">The stale folder</a>.</p>
+  </div>
+
+  <nav><div class="navgroup"><span class="navlabel">Where it stands</span><ol class="navlist"><li><a href="#s1"><span class="n">01</span>Decisions taken</a></li><li><a href="#s2"><span class="n">02</span>Status and sequencing</a></li><li><a href="#s3"><span class="n">03</span>Current state</a></li></ol></div><div class="navgroup"><span class="navlabel">What the survey found</span><ol class="navlist"><li><a href="#s4"><span class="n">04</span>Findings register</a></li><li><a href="#s5"><span class="n">05</span>The stale folder</a></li></ol></div><div class="navgroup"><span class="navlabel">The maps</span><ol class="navlist"><li><a href="#s6"><span class="n">06</span>Data ownership</a></li><li><a href="#s7"><span class="n">07</span>Dependency map</a></li><li><a href="#s8"><span class="n">08</span>Tracking</a></li><li><a href="#s9"><span class="n">09</span>Campaigns and email</a></li><li><a href="#s10"><span class="n">10</span>Route impact</a></li></ol></div><div class="navgroup"><span class="navlabel">The plan</span><ol class="navlist"><li><a href="#s11"><span class="n">11</span>Migration and backfill</a></li><li><a href="#s12"><span class="n">12</span>Extraction boundaries</a></li><li><a href="#s13"><span class="n">13</span>Target architecture</a></li></ol></div><div class="navgroup"><span class="navlabel">Proof</span><ol class="navlist"><li><a href="#s14"><span class="n">14</span>Test matrix</a></li><li><a href="#s15"><span class="n">15</span>Baseline results</a></li><li><a href="#s16"><span class="n">16</span>Isolation evidence</a></li></ol></div></nav>
+  <main><section id="s1" class="doc">
+      <header class="dochead">
+        <span class="docnum">01</span>
+        <div>
+          <h2 class="doctitle">Decisions taken</h2>
+          <p class="docblurb">Six calls made after the survey. One of them changes scope.</p>
+          <p class="docfile"><code>DECISIONS_LOG.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Decided by:</strong> Ali Muwwakkil · <strong>Date:</strong> 2026-08-21</p>
+<p>Six decisions taken after the Gate 0 survey was produced, and what each one led to. Recorded here rather than left in a chat transcript, because three of them changed what "done" means and one of them raised the compliance bar on work that was already written.</p>
+<hr />
+<h3 id="s1-dec-01-the-parked-build-stays-parked-until-the-sur" class="finding"><span class="fnum">DEC-01</span><span>The parked build stays parked until the survey is read → RESOLVED 2026-08-22</span></h3>
+<p><strong>Decision:</strong> Hold. Nothing merges, nothing deploys, no further building.</p>
+<p><strong>Resolved:</strong> Ali read the survey and unparked the build on 2026-08-22 ("approved start working on multi-tenancy"). The hold did its job: it is the reason D-01 was caught before any schema work rather than after.</p>
+<p><strong>What followed the unpark:</strong> the scheduler send path and the Mandrill webhook are now done (Gate 4), DEC-05's audit trail and evidence are built, and DEC-06 is applied. Organization scoping is deliberately deferred and Playwright remains unexecuted — both stated in <a href="#">IMPLEMENTATION_STATUS.md</a> rather than quietly dropped.</p>
+<p><strong>Still true:</strong> nothing is merged to <code>main</code> and nothing is deployed.</p>
+<hr />
+<h3 id="s1-dec-02-the-stale-onedrive-working-copy-investigate" class="finding"><span class="fnum">DEC-02</span><span>The stale OneDrive working copy: investigate, do not touch</span></h3>
+<p><strong>Decision:</strong> Report on what the 76 unpushed commits and the uncommitted edits actually are. Change nothing.</p>
+<p><strong>Consequence:</strong> A separate read-only investigation. No stash, no pull, no rebase in that folder — another session may be mid-edit in it, and this repo has a documented history of blind stash operations stealing another session's work.</p>
+<hr />
+<h3 id="s1-dec-03-survey-audience-is-ali-only-for-now" class="finding"><span class="fnum">DEC-03</span><span>Survey audience is Ali only, for now</span></h3>
+<p><strong>Decision:</strong> No packaging for Ram, the advisor, or an engineer review yet.</p>
+<p><strong>Consequence:</strong> No PR opened for the documents, no summary email drafted. If that changes after reading, the packaging is a small job.</p>
+<hr />
+<h3 id="s1-dec-04-all-five-domains-are-owned-with-dns-under-o" class="finding"><span class="fnum">DEC-04</span><span>All five domains are owned, with DNS under our control</span></h3>
+<p><strong>Decision:</strong> <code>cpn.org</code>, <code>aiflotation.com</code>, <code>refactored.ai</code> and the Colaberry domains are ours today.</p>
+<p><strong>Consequence:</strong> This removes the longest-lead-time dependency in the whole plan. Sender domain verification (SPF, DKIM, DMARC) can begin as soon as the build resumes, and the DNS activation states in <code>brand_domains</code> describe real domains rather than aspirations. Aleem's per-brand email design work has real addresses to design against.</p>
+<p><strong>Still true:</strong> the code fail-closes a live send until each domain is actually verified. Owning a domain is not the same as having verified it, and nothing here fakes that.</p>
+<hr />
+<h3 id="s1-dec-05-cpn-data-isolation-is-a-formal-requirement-" class="finding"><span class="fnum">DEC-05</span><span>CPN data isolation is a FORMAL requirement, tied to grants and donor commitments</span></h3>
+<p><strong>Decision:</strong> Not merely good practice. A compliance boundary.</p>
+<p><strong>This is the decision that changes scope.</strong> The isolation already built — 404 on cross-tenant access, fail-closed authorization, per-brand consent, tenant-scoped queries — was designed to a strong engineering standard. A formal compliance requirement needs two things that engineering standard does not by itself produce:</p>
+<ol>
+<li><strong>An audit trail of every cross-entity access attempt</strong>, including the ones that were</li>
+</ol>
+<p>   correctly denied. A denial that leaves no record cannot be shown to a funder as    evidence that the control works. This does not exist yet and is now required.</p>
+<ol>
+<li><strong>Written evidence of the isolation</strong>, in a form an auditor or grant officer can read</li>
+</ol>
+<p>   without reading code: what the control is, how it is enforced, how it is tested, and    what the test results were.</p>
+<p><strong>Both additions are now built (2026-08-22):</strong></p>
+<ul>
+<li><code>tenant_access_audits</code> — append-only, carrying actor, target tenant, resource,</li>
+</ul>
+<p>  decision, reason and timestamp. Written by the audited guards in   <code>tenantAccessGuards.ts</code> <strong>before</strong> any error is raised, so a swallowed exception   cannot also lose the record. No foreign keys, so archiving a tenant cannot cascade   away the evidence of what was reached.</p>
+<ul>
+<li><code>ISOLATION_EVIDENCE.md</code> — generated by <code>generateIsolationEvidence.js</code>, which runs the</li>
+</ul>
+<p>  isolation tests and reports their real results. <strong>73 checks, 0 failures</strong> at the   commit named in the document. If a test is deleted its line disappears; if one fails   the document says so and the generator exits non-zero.</p>
+<p><strong>Consequence for governance:</strong> root <code>CLAUDE.md</code> lists "compliance or security boundary touched" as an escalation trigger. This decision is the escalation being resolved in the right direction — the requirement is now known before the code ships, rather than discovered during a grant audit.</p>
+<p><strong>Open, and worth answering before CPN goes live:</strong> whether any scholarship applicants are minors. That carries separate retention and consent obligations regardless of funding, and it is a different workstream from tenant isolation. Flagged, not assumed.</p>
+<hr />
+<h3 id="s1-dec-06-advisor-colaberry-ai-and-worldoftaxonomy-co" class="finding"><span class="fnum">DEC-06</span><span><code>advisor.colaberry.ai</code> and <code>worldoftaxonomy.com</code> belong to Colaberry Enterprise</span></h3>
+<p><strong>Decision:</strong> Both previously-unclassified lead sources are assigned to tenant <code>colaberry</code>, brand <code>colaberry-enterprise</code>.</p>
+<p><strong>Consequence:</strong> The backfill map's <code>legacy-unclassified</code> bucket is now empty. Every lead source in the database has a deterministic owner, which means the backfill can report zero unresolved rows rather than two known-unknowns.</p>
+<p><strong>Applied 2026-08-22</strong> in <code>backend/src/seeds/ecosystemSeedData.ts</code>: both slugs added to the <code>colaberry-enterprise</code> brand's <code>lead_source_slugs</code>, and <code>DELIBERATELY_UNCLASSIFIED_SOURCE_SLUGS</code> is now empty. The list is kept rather than deleted — the next microsite without an obvious owner belongs there, not in a guess.</p>
+<p><strong>Note for later:</strong> the survey observed that <code>advisor.colaberry.ai</code> is a separate FastAPI product in its own repository, which is why it was not assumed to be Colaberry Enterprise. That observation stands; the decision overrides it deliberately, and this line is here so nobody re-litigates it in six months.</p>
+    </section><section id="s2" class="doc">
+      <header class="dochead">
+        <span class="docnum">02</span>
+        <div>
+          <h2 class="doctitle">Status and sequencing</h2>
+          <p class="docblurb">What is done, what is parked, what was never attempted.</p>
+          <p class="docfile"><code>IMPLEMENTATION_STATUS.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code> · <strong>Branch:</strong> <code>workstream/multi-tenant-ecosystem</code></p>
+<p>Status vocabulary: <code>NOT STARTED</code> · <code>DISCOVERY</code> · <code>IMPLEMENTING</code> · <code>TESTING</code> · <code>BLOCKED</code> · <code>COMPLETE</code></p>
+<hr />
+<h2 id="s2-sequencing-note">Sequencing note</h2>
+<p>Gate 0 was produced and committed on its own so it could be reviewed as the safety check before the migration. It was, and the build was <strong>unparked on 2026-08-22</strong> on Ali's instruction. Work has continued since.</p>
+<p>The reason the hold was worth honouring is visible in D-01: the discovery pass caught that the working tree was 2,586 commits stale and missing three models the plan names as foundations. That is what Gate 0 is for.</p>
+<p><strong>Still true:</strong> nothing has been deployed, no DNS has been pointed, and no backfill has been executed against real data.</p>
+<h2 id="s2-schema-rehearsal-the-ddl-has-now-been-run-against-">Schema rehearsal — the DDL has now been run against a real database</h2>
+<p>The one genuine unknown in this work was that <code>ensureMultiTenantSchema()</code> had never executed anywhere. Merging arms it for the next production boot, so it was rehearsed first, on <strong>2026-08-22</strong>, against a throwaway Postgres 16 loaded with a <strong>structure-only dump of the live production schema</strong> (373 tables). No production data was copied and nothing on the production database was modified.</p>
+<div class="scroll"><table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody><tr><td>All 69 statements against the real prod schema</td><td><strong>applied cleanly, zero errors</strong></td></tr><tr><td>Second identical run (boot executes this every time)</td><td><strong>zero errors, idempotent</strong></td></tr><tr><td>10 new tables created</td><td>all present</td></tr><tr><td>20 additive columns on 9 existing tables</td><td>all present, all nullable</td></tr><tr><td>Foreign keys on new columns of <code>page_events</code> / <code>visitor_sessions</code></td><td><strong>none</strong> — the write-hot policy held</td></tr><tr><td>Pre-existing <code>page_events</code> FKs</td><td>untouched (<code>session_id</code>, <code>visitor_id</code>)</td></tr></tbody></table></div>
+<p>Two constraints were exercised functionally rather than merely inspected:</p>
+<ul>
+<li>inserting a second <code>lead_tenant_contexts</code> row for the same <code>(lead, tenant, brand)</code> is</li>
+</ul>
+<p>  <strong>rejected</strong> by <code>lead_tenant_contexts_lead_tenant_brand_unique</code> — this is the   idempotency backstop for the whole lead-context pipeline;</p>
+<ul>
+<li>inserting a second default sender profile for one brand is <strong>rejected</strong> by</li>
+</ul>
+<p>  <code>sender_profiles_one_default_per_brand</code> — two defaults is not a preference, it is a   coin flip at send time.</p>
+<p>The only errors during restore were the <code>vector</code> extension being unavailable in the stock Postgres image, which is unrelated to this work.</p>
+<hr />
+<h2 id="s2-gate-0-discovery">Gate 0 — Discovery</h2>
+<p><strong>Status: COMPLETE</strong> — this is the deliverable for review.</p>
+<div class="scroll"><table><thead><tr><th>Item</th><th>Evidence</th></tr></thead><tbody><tr><td>Repo rules read</td><td>root + backend/frontend/tests/directives/system <code>CLAUDE.md</code></td></tr><tr><td>Current state</td><td><code>CURRENT_STATE.md</code></td></tr><tr><td>Dependency maps</td><td><code>DEPENDENCY_MAP.md</code>, <code>TRACKING_DEPENDENCY_MAP.md</code>, <code>CAMPAIGN_DEPENDENCY_MAP.md</code></td></tr><tr><td>Data ownership matrix</td><td><code>DATA_OWNERSHIP_MATRIX.md</code></td></tr><tr><td>Route impact matrix</td><td><code>ROUTE_IMPACT_MATRIX.md</code></td></tr><tr><td>Extraction boundaries</td><td><code>EXTRACTION_BOUNDARIES.md</code></td></tr><tr><td>Backfill map</td><td><code>MIGRATION_BACKFILL_MAP.md</code></td></tr><tr><td>Test matrix</td><td><code>TEST_MATRIX.md</code></td></tr><tr><td>Baseline tests</td><td><code>BASELINE_TEST_RESULTS.md</code> — tsc clean, 77/77 targeted tests pass</td></tr><tr><td>Deviations</td><td><code>IMPLEMENTATION_DEVIATIONS.md</code> — 11 recorded (D-01 … D-11)</td></tr><tr><td>Target architecture</td><td><code>TARGET_ARCHITECTURE.md</code> — 10 Mermaid diagrams</td></tr></tbody></table></div>
+<p><strong>The four findings that should drive the review:</strong></p>
+<ol>
+<li><strong>D-01</strong> — the OneDrive checkout was 2,586 commits behind <code>origin/main</code> and did not</li>
+</ol>
+<p>   contain <code>Organization.ts</code> / <code>OrgMember.ts</code> / <code>OrgCohort.ts</code> at all. Work moved to a    clean worktree from <code>origin/main</code>.</p>
+<ol>
+<li><strong>D-02</strong> — there is no migration framework. 32 <code>ensure*Schema.ts</code> modules of idempotent</li>
+</ol>
+<p>   raw DDL, because <code>sync({alter:true})</code> once produced ~50k duplicate constraints and    OOM-ed Postgres.</p>
+<ol>
+<li><strong>D-03</strong> — <code>leads.id</code> is an INTEGER autoincrement while everything else is UUID. Mixed</li>
+</ol>
+<p>   key types in the new tables are unavoidable and deliberate.</p>
+<ol>
+<li><strong>D-05</strong> — 17 of the 18 campaign tables are strict children of <code>campaigns</code> and should</li>
+</ol>
+<p>   scope by join, not by their own <code>tenant_id</code>. The plan's literal reading would mean 17    backfills and 17 drift risks.</p>
+<hr />
+<h2 id="s2-gate-1-schema-foundation">Gate 1 — Schema Foundation</h2>
+<p><strong>Status: COMPLETE</strong></p>
+<p><strong>10</strong> models, 1 DDL module, <code>models/index.ts</code> wiring, <code>server.ts</code> boot call, declarative seed data, idempotent seeder. Additive only: <strong>10</strong> new tables, nullable columns on 9 existing tables, zero drops/renames/retypes, zero <code>NOT NULL</code> on existing columns.</p>
+<p>The tenth table is <code>tenant_access_audits</code>, added for DEC-05 (below).</p>
+<hr />
+<h3 id="s2-dec-05-cpn-isolation-as-a-formal-compliance-requir" class="finding"><span class="fnum">DEC-05</span><span>CPN isolation as a formal compliance requirement</span></h3>
+<p><strong>Status: COMPLETE</strong></p>
+<p>Ali confirmed on 2026-08-21 that CPN's data isolation is a grant and donor commitment, not merely good practice. That raised the bar past enforcement: a control that silently works produces no evidence it worked, and the <strong>refusals</strong> are the evidence.</p>
+<div class="scroll"><table><thead><tr><th>Requirement</th><th>Delivered</th></tr></thead><tbody><tr><td>Audit trail of every boundary decision, denials included</td><td><code>tenant_access_audits</code> (append-only, no FKs so it outlives what it describes, no <code>updated_at</code>), <code>tenantAccessAudit.ts</code>, audited guards in <code>tenantAccessGuards.ts</code></td></tr><tr><td>Written evidence an auditor can read</td><td><code>ISOLATION_EVIDENCE.md</code>, <strong>generated by running the tests</strong>, never hand-written</td></tr></tbody></table></div>
+<p>Three properties the tests lock in:</p>
+<ol>
+<li><strong>The row is written before the error is thrown.</strong> A denial that throws first loses</li>
+</ol>
+<p>   its record the moment anything upstream swallows the exception.</p>
+<ol>
+<li><strong>The audit can never change an outcome.</strong> An unreachable audit table degrades to</li>
+</ol>
+<p>   "enforced but unevidenced", loudly logged, and never to "allowed because bookkeeping    broke".</p>
+<ol>
+<li><strong>Cross-tenant superadmin access is recorded on the allowed path too.</strong> "Who looked</li>
+</ol>
+<p>   across tenants, and when" is the other half of what a funder asks.</p>
+<p><strong>Still open, and not ours to answer:</strong> whether any scholarship applicants are minors. That carries retention and consent obligations independent of tenant isolation.</p>
+<h2 id="s2-gate-2-context-services">Gate 2 — Context Services</h2>
+<p><strong>Status: COMPLETE</strong></p>
+<p><code>tenantRoles</code>, <code>tenantResolver</code> (bounded TTL cache), <code>tenantAuthorization</code>, <code>leadContextService</code>, <code>platformIdentityService</code>, <code>journeyLinkService</code>.</p>
+<h2 id="s2-gate-3-tracking-attribution">Gate 3 — Tracking + Attribution</h2>
+<p><strong>Status: COMPLETE</strong></p>
+<p>Server-side context resolution wired into <code>trackingController</code> (event + batch), <code>visitorTrackingService</code> (session + page event), and <code>leadIngestionService</code>. Fail-soft throughout; <code>tenant_context_unresolved</code> emitted on every miss.</p>
+<h2 id="s2-gate-4-campaign-tenancy">Gate 4 — Campaign Tenancy</h2>
+<p><strong>Status: COMPLETE</strong></p>
+<p><code>senderProfileService</code> (4-step resolution ramp, fail-closed preflight, cross-brand rejection, provider metadata), <code>schedulerService</code> switched onto the resolver, and the Mandrill webhook restoring tenant/brand/sender-profile from provider metadata.</p>
+<p>Two deliberate safety decisions in the send path:</p>
+<ul>
+<li><strong>Preflight gates ecosystem-brand sends only.</strong> Applying it to the existing Colaberry</li>
+</ul>
+<p>  pipeline would stop today's mail dead: those campaigns have no sender profile and no   verified domain row, so every one would fail a check describing a state they were   never migrated into. A campaign that has been given a profile has opted in.</p>
+<ul>
+<li><strong>Resolver faults degrade to today's behaviour</strong>, except a cross-brand sender profile,</li>
+</ul>
+<p>  which is re-thrown. Sending CPN mail over the AI Flotation envelope is a forgery, and   falling back silently would produce exactly that.</p>
+<p>The webhook reads the new metadata keys defensively and stores them alongside the existing fields. Messages sent before this change are still in flight and still generating opens weeks later; they carry only the old shape and must keep resolving.</p>
+<h2 id="s2-gate-5-organization-account-context">Gate 5 — Organization / Account Context</h2>
+<p><strong>Status: PARTIAL</strong> — schema columns exist and are backfilled by <code>backfillTenancy.ts</code>; <code>orgService</code>/<code>adminOrgService</code> are not yet tenant-scoped. Deferred deliberately: the platform is single-tenant for organizations today (every existing org is Colaberry Enterprise), so scoping them changes no behaviour until a second tenant actually owns one. It is listed here rather than quietly dropped.</p>
+<h2 id="s2-gate-6-skeleton-applications">Gate 6 — Skeleton Applications</h2>
+<p><strong>Status: COMPLETE</strong></p>
+<p>Three apps, three shared packages, boundary validator. All three build independently; validator verified to <strong>fail</strong> on a planted violation, not merely to pass.</p>
+<h2 id="s2-gate-7-full-e2e">Gate 7 — Full E2E</h2>
+<p><strong>Status: PARTIAL</strong></p>
+<p>Unit + integration: <strong>196/196 passing across 16 suites</strong>, backend <code>tsc --noEmit</code> clean. Tenant-isolation evidence generated from real test output: <strong>73 checks, 0 failures</strong> — see <a href="#">ISOLATION_EVIDENCE.md</a>.</p>
+<p>The Playwright ecosystem suite is <strong>not executed</strong> (D-10) — no running stack or staging credentials in this environment. Reported as not-executed, never as passing.</p>
+<h2 id="s2-gate-8-deployment">Gate 8 — Deployment</h2>
+<p><strong>Status: NOT STARTED and deliberately not attempted.</strong> No DNS pointed, nothing deployed, plan §61/§62 respected.</p>
+    </section><section id="s3" class="doc">
+      <header class="dochead">
+        <span class="docnum">03</span>
+        <div>
+          <h2 class="doctitle">Current state</h2>
+          <p class="docblurb">How the platform actually works today, read out of the code.</p>
+          <p class="docfile"><code>CURRENT_STATE.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 <strong>Base commit:</strong> <code>bb152ded</code> (origin/main, 2026-08-20) <strong>Branch:</strong> <code>workstream/multi-tenant-ecosystem</code> <strong>Date:</strong> 2026-08-21</p>
+<p>Everything below was read out of the codebase at <code>bb152ded</code>. Nothing here is inferred from the master plan; where the plan and the code disagree, the code wins and the disagreement is recorded in <a href="#">IMPLEMENTATION_DEVIATIONS.md</a>.</p>
+<hr />
+<h2 id="s3-1-repository-shape">1. Repository shape</h2>
+<div class="scroll"><pre class="code"><code>/
+├── frontend/        CRA + TypeScript (npm workspace)
+├── backend/         Express + TypeScript + Sequelize (npm workspace)
+├── directives/      SOPs
+├── docs/            in-repo docs
+├── scripts/         repo-root operational scripts
+├── system/          portal-owned generated maps (DO NOT EDIT)
+├── tests/           Playwright (systemV2)
+├── execution/       legacy Python (read-only reference)
+└── intelligence/    in-flight subsystem outside backend tree</code></pre></div>
+<p>Root <code>package.json</code> declares <code>workspaces: ["frontend", "backend"]</code>. There is <strong>no <code>apps/</code> and no <code>packages/</code></strong> directory yet. Node engine <code>&gt;=20</code>.</p>
+<p><code>backend/src/models/</code> holds <strong>229 model files</strong>. <code>backend/src/models/index.ts</code> is 1,110 lines: it imports every model, declares all associations inline, and re-exports them from a single <code>export { ... }</code> block starting at line 1161.</p>
+<h2 id="s3-2-how-schema-changes-actually-happen-here">2. How schema changes actually happen here</h2>
+<p>There is <strong>no migration framework</strong>. There is no <code>sequelize-cli</code>, no <code>umzug</code>, no <code>migrations/</code> directory. Schema evolves through two mechanisms:</p>
+<ol>
+<li><strong><code>backend/src/db/ensure*Schema.ts</code></strong> — 32 modules, each exporting one</li>
+</ol>
+<p>   <code>ensureXxxSchema(): Promise&lt;void&gt;</code> that runs an array of idempotent raw DDL statements    (<code>CREATE TABLE IF NOT EXISTS</code>, <code>ALTER TABLE ... ADD COLUMN IF NOT EXISTS</code>,    <code>CREATE INDEX IF NOT EXISTS</code>) inside a per-statement try/catch that logs a structured    error and never fails boot.</p>
+<ol>
+<li><strong>Inline <code>ensureXxx()</code> functions in <code>backend/src/server.ts</code></strong> — the older form of the same</li>
+</ol>
+<p>   pattern (<code>ensureIngestionSchema</code>, <code>ensureOrgSchema</code>, <code>ensureCampaignLinkColumns</code>, …).</p>
+<p><code>server.ts:193</code> documents <em>why</em>: <code>sequelize.sync({ alter: true })</code> on a 215+ model graph previously generated ~50k duplicate constraints and drove Postgres into OOM. <strong>Boot-time schema work is CREATE/ADD ... IF NOT EXISTS only.</strong></p>
+<p><code>ensureOrgAccountSchema.ts</code> is the best exemplar of the current house style and is what the tenancy DDL in this project imitates: additive only, per-statement error isolation, <code>DO $$ ... END $$</code> guards for constraints Postgres has no <code>IF NOT EXISTS</code> form for, and a comment explaining the business reason for every column.</p>
+<h2 id="s3-3-lead-crm-pipeline-as-built">3. Lead / CRM pipeline (as built)</h2>
+<div class="scroll"><pre class="code"><code>POST /api/ingest?source=&lt;slug&gt;&amp;entry=&lt;slug&gt;
+   → RawLeadPayload.create(status:'pending')      # raw kept before anything else
+   → LeadSource.findOne({slug, is_active})        # 400 if unknown
+   → EntryPoint.findOne({source_id, slug})        # 400 if unknown
+   → verifyHmacSignature (if source.hmac_secret)  # 403 if bad
+   → FormDefinition (latest active version)       # field_map + required_fields
+   → normalizeWithFieldMap → validateNormalized
+   → createLead()                                 # leadService, dedups by email
+   → lead.update({source_id, entry_point_id})
+   → findOrCreateVisitor + resolveIdentity        # attribution, non-fatal
+   → logActivity(type:'system', subtype:'form_submit')
+   → routingEngineService.evaluateAndDispatch     # optional
+   → raw.update({status:'accepted', resulting_lead_id})</code></pre></div>
+<p>Source: <code>backend/src/services/leadIngestionService.ts</code>.</p>
+<p>Notable facts that constrain the tenancy design:</p>
+<ul>
+<li><code>leads.id</code> is an <strong>INTEGER autoincrement</strong>, not a UUID. Every FK pointing at a lead must be</li>
+</ul>
+<p>  <code>INTEGER</code>, not <code>UUID</code>. The master plan's <code>lead_tenant_contexts.lead_id INTEGER FK</code> is right;   its sibling <code>first_visitor_id UUID</code> is also right because visitors <em>are</em> UUID.</p>
+<ul>
+<li><code>lead_sources.hmac_secret</code> may hold either a literal secret <strong>or the name of an env var</strong></li>
+</ul>
+<p>  (<code>resolveSecret()</code>); any new sender/domain secret handling should reuse that convention.</p>
+<ul>
+<li>Ingest already refuses phone-only leads (<code>email is required</code>).</li>
+<li>The visitor link step is wrapped in try/catch and only warns — attribution is <strong>fail-soft</strong>,</li>
+</ul>
+<p>  lead creation is <strong>fail-closed</strong>. The tenancy work must preserve that split.</p>
+<h2 id="s3-4-source-registry-as-built">4. Source registry (as built)</h2>
+<p><code>lead_sources</code> columns: <code>id UUID</code>, <code>slug UNIQUE</code>, <code>name</code>, <code>domain</code>, <code>api_key_hash</code>, <code>hmac_secret</code>, <code>hmac_secret_prev</code>, <code>rate_limit</code>, <code>is_active</code>, timestamps. <strong>No tenant, no brand, no source_type.</strong></p>
+<p><code>entry_points</code> columns: <code>id UUID</code>, <code>source_id UUID</code>, <code>slug</code>, <code>name</code>, <code>page</code>, <code>form_name</code>, <code>description</code>, <code>is_active</code>, timestamps, unique on <code>(source_id, slug)</code>. <strong>No entry_type.</strong></p>
+<p>Seeded sources today (<code>backend/src/seeds/seedLeadSources.ts</code>): <code>trustbeforeintelligence</code>, <code>colaberry</code>, and others. These are real external microsites already ingesting — the backfill must classify them, not assume they are all Enterprise.</p>
+<h2 id="s3-5-visitor-journey-tracking-as-built">5. Visitor / journey tracking (as built)</h2>
+<ul>
+<li><code>visitors</code> — global browser identity, UUID PK, carries first-touch UTM + <code>lead_id</code>.</li>
+<li><code>visitor_sessions</code> — UUID PK, <code>visitor_id</code>, nullable <code>lead_id</code>, timing/counters, entry/exit</li>
+</ul>
+<p>  page, referrer, <code>utm_source/campaign/medium</code>, <code>ip_address</code>, <code>device_type</code>, <code>is_bounce</code>,   <code>landing_page_category</code>, <strong><code>site_slug VARCHAR(64)</code></strong>, <code>metadata JSONB</code>.</p>
+<ul>
+<li><code>page_events</code> — UUID PK, <code>session_id</code>, <code>visitor_id</code>, nullable <code>lead_id</code>, <code>event_type</code>,</li>
+</ul>
+<p>  <code>page_url</code>, <code>page_path</code>, <code>page_title</code>, <code>page_category</code>, <code>event_data JSONB</code>, <code>timestamp</code>.</p>
+<p><code>site_slug</code> exists on the <strong>session</strong> but <strong>not</strong> on <code>page_events</code>. That asymmetry matters: page-event-level brand attribution today can only be reached by joining to the session.</p>
+<p><code>page_events.lead_id</code> deliberately has <strong>no foreign key</strong> — the DDL omits it so Postgres never validate-scans this high-write table. The model comment says so explicitly. Any tenancy column added to <code>page_events</code> must follow the same no-FK rule.</p>
+<p><code>backend/src/controllers/trackingController.ts</code> (487 lines) holds a hard-coded <code>HOST_TO_SITE_SLUG</code> map (8 hostnames) and <code>normalizeSiteSlug()</code> which prefers the tracker's <code>data-site</code> value and falls back to the host map, returning <code>'unknown'</code> on a miss. There are 27 accepted <code>event_type</code> values; the ingest <strong>rejects unknown types</strong>, which is why the skeleton apps' events must use existing type names or the list must be extended.</p>
+<p><code>frontend/public/v1/track.js</code> exists and is the live drop-in tracker. Per the plan's rule 4, it is not to be removed.</p>
+<p>Identity resolution in <code>handleTrackEvent</code> currently accepts a raw <strong><code>email</code> query/body param</strong> and an <strong><code>lid</code></strong> (lead id) param. Both are unauthenticated identity assertions. This is exactly what §10.1 of the plan says to deprecate for new cross-domain flows.</p>
+<h2 id="s3-6-campaign-engine-as-built">6. Campaign engine (as built)</h2>
+<p><code>campaigns</code> has 30+ columns but <strong>no tenant, brand, organization or sender-profile column</strong>. Sender identity lives in the untyped <code>settings JSONB</code> blob:</p>
+<div class="scroll"><pre class="code"><code>backend/src/services/schedulerService.ts:892
+  if (settings.sender_email) senderEmail = settings.sender_email;
+  if (settings.sender_name)  senderName  = settings.sender_name;</code></pre></div>
+<p>That is the <em>only</em> per-campaign sender override in the send path. Everything else falls back to a module-level default. There is no domain verification, no SPF/DKIM/DMARC check, and no concept of an approved sender.</p>
+<p>Campaign-derived tables confirmed present: <code>Campaign</code>, <code>CampaignLead</code>, <code>ScheduledEmail</code>, <code>CommunicationLog</code>, <code>InteractionOutcome</code>, <code>CampaignHealth</code>, <code>CampaignError</code>, <code>CampaignVariant</code>, <code>CampaignInsight</code>, <code>FollowUpSequence</code>, <code>CampaignTestRun</code>, <code>CampaignTestStep</code>, <code>CampaignSimulation</code>, <code>CampaignSimulationStep</code>, <code>CampaignExperiment</code>, <code>CampaignDeployment</code>, <code>CampaignGovernanceConfig</code>, <code>LeadRecommendation</code>. See <a href="#">CAMPAIGN_DEPENDENCY_MAP.md</a> for the ownership classification.</p>
+<p>There is <strong>no <code>EmailSuppression</code> model</strong>. Suppression today is <code>UnsubscribeEvent</code> plus <code>unsubscribeRoutes.ts</code> plus bounce handling in <code>mandrillWebhookController.ts</code>. The plan's §16 assumption of "one simplistic global marketing unsubscribe flag" is close enough to true that brand-scoped preferences are genuinely new.</p>
+<h2 id="s3-7-organization-account-foundation-as-built">7. Organization / account foundation (as built)</h2>
+<ul>
+<li><code>organizations</code> — <code>id UUID</code>, <code>name</code>, <code>owner_enrollment_id UUID UNIQUE → enrollments</code>,</li>
+</ul>
+<p>  <code>auto_staff_sync</code>, <code>status</code>, <code>status_changed_at/by</code>, <code>lead_id INTEGER</code> (unconstrained),   timestamps. <strong>No tenant, no brand, no organization_type.</strong></p>
+<ul>
+<li><code>org_members</code> — <code>id UUID</code>, <code>org_id</code>, <code>enrollment_id</code>, <code>email</code>, <code>team</code>, <code>role</code></li>
+</ul>
+<p>  (<code>manager|member</code>), <code>invite_status</code>, <code>invited_by</code>, <code>joined_at</code>. Unique <code>(org_id, email)</code>.</p>
+<ul>
+<li><code>org_cohorts</code> — many-to-many org↔cohort, added by <code>ensureOrgAccountSchema</code>.</li>
+</ul>
+<p>The organization identity anchor is <strong><code>owner_enrollment_id</code></strong>, i.e. an organization cannot exist without an <code>Enrollment</code>. That is a real constraint on the identity bridge: a CPN community partner has no enrollment, so <code>platform_identities</code> must be able to stand alone rather than being derived from enrollments.</p>
+<h2 id="s3-8-baseline-verification">8. Baseline verification</h2>
+<div class="scroll"><table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody><tr><td><code>backend: tsc --noEmit</code></td><td><strong>clean, 0 errors</strong></td></tr><tr><td>targeted jest (7 suites: org, adminOrg, visitorTrackingIdentity, externalLeadIngest, campaignTransport, ensurePageEventLeadId, ingestStatusCounts)</td><td><strong>77/77 passed</strong></td></tr></tbody></table></div>
+<p>Recorded in full in <a href="#">BASELINE_TEST_RESULTS.md</a>. Any failure appearing after this point is attributable to the tenancy work, not pre-existing.</p>
+<h2 id="s3-9-the-five-facts-that-most-shape-the-implementatio">9. The five facts that most shape the implementation</h2>
+<ol>
+<li><strong>No migration framework</strong> → tenancy DDL must be an <code>ensure*Schema</code> module wired into</li>
+</ol>
+<p>   <code>server.ts</code> boot, additive and idempotent, never <code>sync({alter:true})</code>.</p>
+<ol>
+<li><strong><code>leads.id</code> is INTEGER</strong> → <code>lead_tenant_contexts.lead_id</code> is INTEGER; mixed UUID/INTEGER</li>
+</ol>
+<p>   FKs across the new tables are unavoidable and must be deliberate.</p>
+<ol>
+<li><strong><code>page_events</code> intentionally has no lead FK</strong> → new tenancy columns on it get no FK either.</li>
+<li><strong>Organizations are anchored to enrollments</strong> → <code>platform_identities</code> must be independent</li>
+</ol>
+<p>   of <code>Enrollment</code>, bridged by a link table, exactly as §5.5/5.6 of the plan specifies.</p>
+<ol>
+<li><strong>Sender identity is an untyped JSONB blob read at send time</strong> → the sender-profile resolver</li>
+</ol>
+<p>   can be introduced as a preferred path with the JSONB read demoted to a logged fallback,    with no flag day.</p>
+    </section><section id="s4" class="doc">
+      <header class="dochead">
+        <span class="docnum">04</span>
+        <div>
+          <h2 class="doctitle">Findings register</h2>
+          <p class="docblurb">Eleven places the plan and the codebase disagree.</p>
+          <p class="docfile"><code>IMPLEMENTATION_DEVIATIONS.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<p>Plan §76.15 requires that every conflict between the master plan and repository reality be recorded here, with the lowest-risk compatible implementation chosen unless the conflict crosses a strategic governance boundary.</p>
+<hr />
+<h3 id="s4-d-01-work-was-moved-off-the-onedrive-tree-blocking" class="finding"><span class="fnum">D-01</span><span>Work was moved off the OneDrive tree (blocking, resolved)</span></h3>
+<p><strong>Plan assumption:</strong> work proceeds in the current checkout.</p>
+<p><strong>Reality:</strong> the OneDrive working tree was <strong>2,586 commits behind <code>origin/main</code></strong> and 76 commits ahead on an unrelated workstream branch, with several dozen uncommitted modifications. It does not contain <code>Organization.ts</code>, <code>OrgMember.ts</code>, or <code>OrgCohort.ts</code> at all — models the plan names as foundations to preserve (§3.4).</p>
+<p><strong>Impact if ignored:</strong> every discovery document would have described a codebase that no longer exists, and the schema work would have collided with 2,586 commits on merge.</p>
+<p><strong>Resolution:</strong> a dedicated worktree at <code>C:\Users\ali_m\multitenancy-wt</code> on branch <code>workstream/multi-tenant-ecosystem</code>, created from <code>origin/main</code> at <code>bb152ded</code>, outside OneDrive per repository convention. All discovery and implementation happen there.</p>
+<hr />
+<h3 id="s4-d-02-there-is-no-migration-framework" class="finding"><span class="fnum">D-02</span><span>There is no migration framework</span></h3>
+<p><strong>Plan assumption:</strong> §22 describes staged migrations; §64 Gate 1 says "migrations/ensure-schema strategy consistent with repo".</p>
+<p><strong>Reality:</strong> no <code>sequelize-cli</code>, no <code>umzug</code>, no <code>migrations/</code> directory. Schema evolves via 32 <code>backend/src/db/ensure*Schema.ts</code> modules plus inline <code>ensureXxx()</code> functions in <code>server.ts</code>, all idempotent raw DDL run at boot. <code>server.ts:193</code> records that <code>sync({alter:true})</code> once produced ~50k duplicate constraints and OOM-ed Postgres.</p>
+<p><strong>Resolution:</strong> one new module, <code>backend/src/db/ensureMultiTenantSchema.ts</code>, modelled on <code>ensureOrgAccountSchema.ts</code>. Additive DDL only, per-statement error isolation, never fatal to boot. Backfills are <strong>separate explicitly-invoked scripts</strong>, never boot-time work.</p>
+<hr />
+<h3 id="s4-d-03-leads-id-is-integer-not-uuid" class="finding"><span class="fnum">D-03</span><span><code>leads.id</code> is INTEGER, not UUID</span></h3>
+<p><strong>Plan assumption:</strong> §6 correctly types <code>lead_id INTEGER FK</code> but the surrounding tables are UUID-centric.</p>
+<p><strong>Reality:</strong> confirmed — <code>leads.id</code> is an INTEGER autoincrement; <code>visitors</code>, <code>visitor_sessions</code>, <code>page_events</code>, <code>campaigns</code>, <code>organizations</code> are all UUID.</p>
+<p><strong>Resolution:</strong> <code>lead_tenant_contexts.lead_id</code> and <code>communication_preferences.lead_id</code> are <code>INTEGER</code>. Every other FK in the new tables is <code>UUID</code>. The mixed-key situation is deliberate and documented rather than "fixed", because retyping <code>leads.id</code> would be the single most destructive change available in this codebase.</p>
+<hr />
+<h3 id="s4-d-04-page-events-gets-tenancy-columns-with-no-fore" class="finding"><span class="fnum">D-04</span><span><code>page_events</code> gets tenancy columns with no foreign keys</span></h3>
+<p><strong>Plan assumption:</strong> §9.3 lists seven columns to add to <code>PageEvent</code> without commenting on constraints.</p>
+<p><strong>Reality:</strong> <code>page_events.lead_id</code> deliberately has <strong>no FK</strong> — the model comment states the DDL omits it so Postgres never validate-scans this high-write table.</p>
+<p><strong>Resolution:</strong> the seven new tenancy columns on <code>page_events</code> also carry no FK constraints, matching the established policy. Referential integrity for these columns is enforced in the service layer, not the database. Declaring a constraint in the model that the DDL does not create would be a lie about the schema — the existing comment says exactly that.</p>
+<hr />
+<h3 id="s4-d-05-only-campaigns-receives-tenancy-columns-17-ch" class="finding"><span class="fnum">D-05</span><span>Only <code>campaigns</code> receives tenancy columns; 17 child tables scope by join</span></h3>
+<p><strong>Plan assumption:</strong> §14 says "every tenant-owned campaign query must be scoped" and lists ~18 tables to audit.</p>
+<p><strong>Reality:</strong> all 18 are present. All but <code>FollowUpSequence</code> are strict children of <code>campaigns</code>.</p>
+<p><strong>Resolution:</strong> tenancy columns go on <code>campaigns</code> and on <code>follow_up_sequences</code> only. The other 17 are scoped by joining to their parent campaign. Stamping <code>tenant_id</code> on all of them would mean 17 backfills and 17 chances for a child's tenant to drift from its parent's. This satisfies §14's requirement (every query scoped) without its literal column-per-table reading.</p>
+<hr />
+<h3 id="s4-d-06-unsubscribeevent-stays-global-no-emailsuppres" class="finding"><span class="fnum">D-06</span><span><code>UnsubscribeEvent</code> stays global; no <code>EmailSuppression</code> model exists</span></h3>
+<p><strong>Plan assumption:</strong> §16 assumes "one simplistic global marketing unsubscribe flag".</p>
+<p><strong>Reality:</strong> suppression is <code>UnsubscribeEvent</code> + <code>unsubscribeRoutes.ts</code> + bounce handling in <code>mandrillWebhookController.ts</code>. There is no <code>EmailSuppression</code> model.</p>
+<p><strong>Resolution:</strong> matches the plan's own §16 conclusion — infrastructure-level suppression (hard bounce, abuse complaint, provider suppression, invalid address) stays <strong>global</strong>, and brand-level preference is a new additive <code>communication_preferences</code> table. Global suppression always overrides a brand-level allow. Plan §76.10 forbids weakening existing unsubscribe / CAN-SPAM logic, and nothing here touches it.</p>
+<hr />
+<h3 id="s4-d-07-organizations-owner-enrollment-id-is-not-null" class="finding"><span class="fnum">D-07</span><span><code>organizations.owner_enrollment_id</code> is NOT NULL UNIQUE</span></h3>
+<p><strong>Plan assumption:</strong> §5.5 introduces <code>platform_identities</code> as "the eventual person-level authentication identity"; §52 says keep current organization logic working.</p>
+<p><strong>Reality:</strong> an organization <strong>cannot exist without an <code>Enrollment</code></strong>. A CPN community partner or an AI Flotation client contact has no enrollment.</p>
+<p><strong>Resolution:</strong> <code>platform_identities</code> is fully independent of <code>Enrollment</code> and is bridged by <code>platform_identity_links</code>. <code>owner_enrollment_id</code> is untouched. Making organizations creatable without an enrollment is real work with real blast radius on registration, and it belongs to the CPN product project (plan §80 Project A), not to this foundation.</p>
+<hr />
+<h3 id="s4-d-08-page-events-has-no-site-slug-today" class="finding"><span class="fnum">D-08</span><span><code>page_events</code> has no <code>site_slug</code> today</span></h3>
+<p><strong>Plan assumption:</strong> §49 says keep <code>site_slug</code> during migration and map it to <code>LeadSource</code>.</p>
+<p><strong>Reality:</strong> <code>site_slug</code> exists on <code>visitor_sessions</code> but <strong>not</strong> on <code>page_events</code>. Page-event brand attribution today is only reachable by joining to the session.</p>
+<p><strong>Resolution:</strong> <code>page_events</code> receives <code>tenant_id</code>/<code>brand_id</code> directly rather than gaining a <code>site_slug</code> it never had. Backfill derives them from the parent session. This gives page-level brand queries without a join and without inventing a new legacy column.</p>
+<hr />
+<h3 id="s4-d-09-tracker-email-and-lid-identity-params-are-kep" class="finding"><span class="fnum">D-09</span><span>Tracker <code>email</code> and <code>lid</code> identity params are kept</span></h3>
+<p><strong>Plan assumption:</strong> §10.1 says V2 "must deprecate" raw-email identification.</p>
+<p><strong>Reality:</strong> <code>handleTrackEvent</code> accepts unauthenticated <code>email</code> and <code>lid</code> params, and live external sites depend on them.</p>
+<p><strong>Resolution:</strong> the signed <code>journeyLinkService</code> token path is added and is the <strong>only</strong> supported identification mechanism for new ecosystem flows. <code>email</code> and <code>lid</code> keep working for existing sites, per plan §76.3 (no removing public APIs without a compatibility alias). Their use is logged so the removal project has usage data. Deprecating them for existing traffic is a separate change with its own blast radius.</p>
+<hr />
+<h3 id="s4-d-11-apps-and-packages-are-not-added-to-the-root-n" class="finding"><span class="fnum">D-11</span><span><code>apps/*</code> and <code>packages/*</code> are NOT added to the root npm workspaces</span></h3>
+<p><strong>Plan assumption:</strong> §1.1 says "Extend workspaces safely to include <code>apps/*</code> and <code>packages/*</code> when the skeleton applications are introduced."</p>
+<p><strong>Reality:</strong> <code>backend/Dockerfile</code> builds with</p>
+<div class="scroll"><pre class="code"><code>COPY package.json package-lock.json ./
+COPY backend/package.json ./backend/
+COPY frontend/package.json ./frontend/
+RUN npm ci</code></pre></div>
+<p><code>npm ci</code> requires <code>package-lock.json</code> to be exactly in sync with the workspace set, and it fails outright if a declared workspace's <code>package.json</code> is absent from the build context. Adding <code>apps/*</code> and <code>packages/*</code> to the root <code>workspaces</code> array would therefore break the <strong>production backend build</strong> on the next deploy, in two independent ways at once.</p>
+<p><strong>Resolution:</strong> the workspaces array is left alone. The skeleton apps declare <code>"dependencies": {}</code> and build with plain <code>node build.js</code>, so workspace registration would buy them nothing — there is nothing to hoist and nothing to link. Two root scripts were added instead (<code>validate:boundaries</code>, <code>build:apps</code>), which do not touch the lockfile and therefore cannot affect <code>npm ci</code>.</p>
+<p>The plan's word was "safely". The safe version of this step is not doing it: registering the workspaces becomes worthwhile only when an app takes its first real dependency, and that change should ship with a regenerated lockfile and an updated Dockerfile context in the same diff.</p>
+<hr />
+<h3 id="s4-d-10-playwright-ecosystem-suite-is-authored-not-ex" class="finding"><span class="fnum">D-10</span><span>Playwright ecosystem suite is authored, not executed</span></h3>
+<p><strong>Plan assumption:</strong> §54 and §66 require a passing Playwright ecosystem smoke suite.</p>
+<p><strong>Reality:</strong> <code>/tests/systemV2</code> needs a running stack and staging credentials unavailable in this environment.</p>
+<p><strong>Resolution:</strong> the specs are written and committed; they are <strong>reported as not executed</strong>, not as passing. This is a real gap in the Definition of Done and is stated as such in the validation report rather than papered over.</p>
+    </section><section id="s5" class="doc">
+      <header class="dochead">
+        <span class="docnum">05</span>
+        <div>
+          <h2 class="doctitle">The stale folder</h2>
+          <p class="docblurb">Read-only follow-up on DEC-02. One job has been silently dead for six weeks.</p>
+          <p class="docfile"><code>STALE_FOLDER_REPORT.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Decision:</strong> <a href="#">DEC-02</a> · <strong>Date:</strong> 2026-08-21</p>
+<p>Read-only investigation of the OneDrive working copy. Nothing was changed, stashed, pulled or rebased in that folder.</p>
+<hr />
+<h2 id="s5-first-a-correction-to-my-own-alarm">First, a correction to my own alarm</h2>
+<p>I reported "76 commits that were never pushed" as though 76 pieces of work were at risk. That overstated it, and the method was weak: I compared commit subjects, and this repo squash-merges pull requests, which rewrites the subject to the PR title. Matching on subject therefore reports work as missing when it merged perfectly well under a different name.</p>
+<p>The reliable check is at the file level, and it is much less alarming:</p>
+<div class="scroll"><table><thead><tr><th></th><th>Count</th></tr></thead><tbody><tr><td>Files touched by the 76 local commits</td><td>177</td></tr><tr><td><strong>Already present in the real codebase</strong></td><td><strong>104</strong></td></tr><tr><td>Exist only in the OneDrive folder</td><td>73</td></tr></tbody></table></div>
+<p>So most of that work did land. What follows is about the 73 that did not.</p>
+<hr />
+<h2 id="s5-the-one-thing-that-is-actually-broken-right-now">The one thing that is actually broken right now</h2>
+<p><strong>A scheduled job has been dead for roughly six weeks and nobody was told.</strong></p>
+<div class="scroll"><pre class="code"><code>crontab:  10 12,17,22 * * 1-6  /opt/colaberry-accelerator/scripts/task-prompt-worker.sh
+on disk:  the file does not exist</code></pre></div>
+<p>Production fires this three times a day, Monday to Saturday. The file is not there, because it was never merged into the real codebase, and production deploys by pulling the real codebase. Every one of those firings has been a no-op.</p>
+<p>Its log tells the rest of the story. The last time it actually ran was <strong>2026-07-08</strong>, and even that run failed:</p>
+<div class="scroll"><pre class="code"><code>[tpw] wrote .../TPW_TPW-202607082210.html
+[tpw] delivery failed: Mandrill preflight failed:
+  - HTML has "Ali Muwwakkil" 4 times - likely a duplicate signature.
+exit 4</code></pre></div>
+<p>So it did its work, produced its report, and then could not send it. Then it disappeared entirely. Two separate failures stacked on top of each other, neither of which surfaced anywhere a person would see.</p>
+<p>The only copy of its source code is the OneDrive folder: the shell script, its runner, and four library modules are all in the 73.</p>
+<p><strong>This is worth fixing or switching off regardless of anything to do with multi-tenancy.</strong> A cron line pointing at a missing file is not harmless — it is a job somebody believes is running.</p>
+<hr />
+<h2 id="s5-what-else-exists-only-in-that-folder">What else exists only in that folder</h2>
+<p>Grouped by whether losing it would matter.</p>
+<h3 id="s5-load-bearing-code-with-no-other-copy">Load-bearing code with no other copy</h3>
+<div class="scroll"><table><thead><tr><th>What</th><th>Files</th><th>Live?</th></tr></thead><tbody><tr><td><strong>Task Prompt Worker</strong></td><td>shell script, runner, 4 library modules</td><td>scheduled, currently dead (above)</td></tr><tr><td><strong>Student platform build-plan sync</strong></td><td><code>buildPlanIngestService</code>, <code>buildPlanSchema</code>, <code>buildPlanIngestHelpers</code>, <code>buildPlanWebhookController</code>, <code>StudentSprint</code> model, 2 test files</td><td>not referenced by the real codebase, so dormant</td></tr><tr><td><strong>Chapter quality scoring</strong></td><td><code>chapterQualityService</code>, <code>chapterOnTopicGuard</code>, 2 test files</td><td>dormant</td></tr><tr><td><strong>Commission pipeline</strong></td><td>9 files under <code>scripts/commission/</code></td><td>see the note below</td></tr><tr><td><strong>Basecamp reference kit</strong></td><td>7 files including a zero-access bootstrap</td><td>reference material, not scheduled</td></tr><tr><td><code>bcTokenRefresh.js</code></td><td>1</td><td>the equivalent <em>is</em> in the real codebase under another path</td></tr></tbody></table></div>
+<h3 id="s5-skills-that-do-not-exist-for-anyone-else">Skills that do not exist for anyone else</h3>
+<p>Three of the skills you use are absent from the real codebase entirely:</p>
+<ul>
+<li><strong>story-build</strong> (6 files)</li>
+<li><strong>short-form-video</strong> (5 files)</li>
+<li><strong>monthly-commission</strong> (1 file)</li>
+<li><strong>build-curriculum-type</strong> is partially there: 1 file merged, 4 reference documents did not</li>
+</ul>
+<p>These work for you because you are sitting in the folder that has them. Anyone who clones the repository fresh, and every worktree created from the real codebase, silently does not have them. That is why my own session could invoke <code>monthly-commission</code> from the OneDrive folder but the clean worktree I did the multi-tenancy work in has no such skill.</p>
+<h3 id="s5-not-worth-rescuing">Not worth rescuing</h3>
+<p>Session changelog HTML files, two marketing <code>.mp4</code> renders, and assorted walkthrough documents. These are outputs, not sources. They can be regenerated or simply let go.</p>
+<hr />
+<h2 id="s5-a-note-on-the-commission-pipeline">A note on the commission pipeline</h2>
+<p>The commission cron line is <strong>not</strong> broken:</p>
+<div class="scroll"><pre class="code"><code>0,30 8-22 * * 1-5  /opt/ai-pathway/run_comm_pipeline.sh   ← exists, different repository</code></pre></div>
+<p>That runs out of the AI Pathway project, which is its own repo. The nine <code>scripts/commission/</code> files in the OneDrive folder are a separate, later implementation that pairs with the <code>monthly-commission</code> skill. Before rescuing them, it is worth establishing which of the two is the one you actually want to keep — I did not assume.</p>
+<hr />
+<h2 id="s5-the-stash-pile">The stash pile</h2>
+<p>Twelve stashes, and the ages matter:</p>
+<div class="scroll"><table><thead><tr><th>Age</th><th>Count</th><th>Assessment</th></tr></thead><tbody><tr><td>10-11 days</td><td>2</td><td>Recent. One is from a <em>different worktree</em> (<code>worktree-agent-a63ad…</code>) and one from the Reese Phase 3 branch. Plausibly still wanted.</td></tr><tr><td>5 weeks</td><td>1</td><td>Community Rooms backend. That feature shipped, so this is probably superseded.</td></tr><tr><td>2 months</td><td>1</td><td><code>p2-staging-temp</code>. Name suggests it was always throwaway.</td></tr><tr><td><strong>5 months</strong></td><td><strong>8</strong></td><td>Booking funnel, Apollo webhook, Leads page, Auto-Advance curriculum engine and others. Almost certainly dead — the codebase has moved 2,600 commits since.</td></tr></tbody></table></div>
+<p>This pile is exactly the hazard behind the standing rule never to blindly stash-pop in this repo: <code>stash@{0}</code> does not belong to this branch at all, so a reflexive <code>git stash pop</code> here would apply another session's work into your tree.</p>
+<h2 id="s5-the-rest-of-the-working-tree">The rest of the working tree</h2>
+<ul>
+<li><strong>63 tracked files modified</strong> and uncommitted. A real mix: public-site pages</li>
+</ul>
+<p>  (<code>HomePage</code>, <code>PricingPage</code>, <code>EnrollPage</code>, <code>ProgramPage</code>), backend services   (<code>schedulerService</code>, <code>emailService</code>, <code>enrollmentService</code>), and   <code>docker-compose.production.yml</code>. Some of this may be genuinely unfinished work; some is   likely drift from experiments never cleaned up. I did not attempt to judge which,   because the diffs are large and several touch the live sending path.</p>
+<ul>
+<li><strong>795 untracked files</strong>, overwhelmingly <code>tmp/</code> scratch files, screenshots and session</li>
+</ul>
+<p>  HTML. Noise.</p>
+<ul>
+<li><strong>2 deleted files</strong>.</li>
+</ul>
+<hr />
+<h2 id="s5-what-i-would-do-in-priority-order">What I would do, in priority order</h2>
+<p>Your call on all of it — nothing here has been actioned.</p>
+<ol>
+<li><strong>Deal with the dead cron job this week.</strong> Either restore the Task Prompt Worker</li>
+</ol>
+<p>   properly (merge its six files, fix the duplicate-signature bug that broke its last    real run) or remove the cron line. Leaving a scheduled job pointing at a missing file    is the worst of the three options.</p>
+<ol>
+<li><strong>Get the three missing skills into the real codebase.</strong> Small, safe, and it stops your</li>
+</ol>
+<p>   tooling from depending on one folder on one machine.</p>
+<ol>
+<li><strong>Decide the commission question</strong> — the AI Pathway version or the newer local one.</li>
+<li><strong>Rescue or discard the dormant code</strong> (build-plan sync, chapter quality). It is</li>
+</ol>
+<p>   finished-looking work with tests that nothing currently calls.</p>
+<ol>
+<li><strong>Drop the eight five-month-old stashes</strong> once you have glanced at the list. Keep the</li>
+</ol>
+<p>   two recent ones until their branches are resolved.</p>
+<ol>
+<li><strong>Then, and only then</strong>, decide whether the folder gets brought up to date or retired</li>
+</ol>
+<p>   in favour of clean worktrees.</p>
+<p>The folder is not on fire. But one job is silently not running, and a handful of genuinely useful things exist in exactly one place, on one machine, inside a sync client.</p>
+    </section><section id="s6" class="doc">
+      <header class="dochead">
+        <span class="docnum">06</span>
+        <div>
+          <h2 class="doctitle">Data ownership</h2>
+          <p class="docblurb">Which table belongs to whom, and what has to change.</p>
+          <p class="docfile"><code>DATA_OWNERSHIP_MATRIX.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<p>Classification vocabulary (from master plan §14):</p>
+<ul>
+<li><strong>GLOBAL</strong> — platform-wide, deliberately shared across tenants. Never gets a <code>tenant_id</code>.</li>
+<li><strong>TENANT</strong> — owned by exactly one tenant. Must carry <code>tenant_id</code> and be scoped on read.</li>
+<li><strong>BRAND</strong> — owned by one brand within a tenant. Carries <code>tenant_id</code> + <code>brand_id</code>.</li>
+<li><strong>DERIVED</strong> — inherits scope from its parent row; scoped by joining, not by its own column.</li>
+<li><strong>NEW</strong> — does not exist yet; created by this project.</li>
+</ul>
+<hr />
+<h2 id="s6-core-identity-contact">Core identity &amp; contact</h2>
+<div class="scroll"><table><thead><tr><th>Table</th><th>Ownership</th><th>Scope key</th><th>Current state</th><th>Required change</th></tr></thead><tbody><tr><td><code>leads</code></td><td>GLOBAL (canonical person)</td><td><code>id</code> (INTEGER)</td><td>global, has <code>source_id</code>/<code>entry_point_id</code>/<code>visitor_id</code></td><td><strong>keep global</strong> — never partition</td></tr><tr><td><code>lead_tenant_contexts</code></td><td>BRAND</td><td><code>tenant_id</code>+<code>brand_id</code></td><td>NEW</td><td>create</td></tr><tr><td><code>platform_identities</code></td><td>GLOBAL (canonical human)</td><td><code>id</code></td><td>NEW</td><td>create</td></tr><tr><td><code>platform_identity_links</code></td><td>GLOBAL bridge</td><td><code>link_type</code>+<code>linked_entity_id</code></td><td>NEW</td><td>create</td></tr><tr><td><code>tenant_memberships</code></td><td>TENANT</td><td><code>tenant_id</code></td><td>NEW</td><td>create</td></tr><tr><td><code>enrollments</code></td><td>GLOBAL (learner identity)</td><td><code>id</code></td><td>global, no tenancy</td><td>leave alone; bridge via identity link</td></tr><tr><td><code>admin_users</code></td><td>GLOBAL (operator)</td><td><code>id</code></td><td>global</td><td>bridge via identity link; authorization moves to <code>tenant_memberships</code></td></tr></tbody></table></div>
+<p><code>leads</code> stays global on purpose. One human who is a CPN scholarship applicant, a Training learner, and an Enterprise participant is <strong>one</strong> <code>leads</code> row with three <code>lead_tenant_contexts</code> rows. Splitting <code>leads</code> per tenant would make cross-brand journey reconstruction impossible and would duplicate suppression state.</p>
+<h2 id="s6-tenancy-spine-all-new">Tenancy spine (all NEW)</h2>
+<div class="scroll"><table><thead><tr><th>Table</th><th>Ownership</th><th>Scope key</th><th>Notes</th></tr></thead><tbody><tr><td><code>tenants</code></td><td>GLOBAL registry</td><td><code>slug</code></td><td>the hard security boundary</td></tr><tr><td><code>brands</code></td><td>TENANT</td><td><code>tenant_id</code></td><td>unique <code>(tenant_id, slug)</code></td></tr><tr><td><code>brand_domains</code></td><td>BRAND</td><td><code>brand_id</code></td><td>unique <code>(hostname, purpose)</code></td></tr><tr><td><code>sender_profiles</code></td><td>BRAND</td><td><code>brand_id</code></td><td>fail-closed gate for live sends</td></tr><tr><td><code>communication_preferences</code></td><td>BRAND</td><td><code>tenant_id</code>+<code>brand_id</code></td><td>unique <code>(lead_id, tenant_id, brand_id, category)</code></td></tr></tbody></table></div>
+<h2 id="s6-acquisition-attribution">Acquisition &amp; attribution</h2>
+<div class="scroll"><table><thead><tr><th>Table</th><th>Ownership</th><th>Scope key</th><th>Current state</th><th>Required change</th></tr></thead><tbody><tr><td><code>lead_sources</code></td><td>BRAND</td><td><code>tenant_id</code>+<code>brand_id</code></td><td><strong>missing both</strong></td><td>add nullable, backfill, keep <code>slug</code> stable</td></tr><tr><td><code>entry_points</code></td><td>DERIVED (from source)</td><td>via <code>source_id</code></td><td>no <code>entry_type</code></td><td>add <code>entry_type</code>; scope by join</td></tr><tr><td><code>form_definitions</code></td><td>DERIVED (from entry point)</td><td>via <code>entry_point_id</code></td><td>fine as-is</td><td>none</td></tr><tr><td><code>raw_lead_payloads</code></td><td>DERIVED (from source slug)</td><td>via <code>source_slug</code></td><td>fine as-is</td><td>none</td></tr><tr><td><code>activities</code></td><td>DERIVED (from lead)</td><td>via <code>lead_id</code></td><td>fine as-is</td><td>none — scoped through lead context</td></tr><tr><td><code>event_ledger</code></td><td>GLOBAL audit</td><td><code>id</code></td><td>no tenancy</td><td>add nullable <code>tenant_id</code>/<code>brand_id</code> for filtering</td></tr></tbody></table></div>
+<h2 id="s6-tracking-high-write-see-57-performance-guardrails">Tracking (high-write — see §57 performance guardrails)</h2>
+<div class="scroll"><table><thead><tr><th>Table</th><th>Ownership</th><th>Scope key</th><th>Current state</th><th>Required change</th></tr></thead><tbody><tr><td><code>visitors</code></td><td>GLOBAL (browser identity)</td><td><code>id</code></td><td>global, has <code>site_slug</code> first-touch</td><td><strong>keep global</strong> — one browser legitimately crosses brands</td></tr><tr><td><code>visitor_sessions</code></td><td>BRAND</td><td><code>tenant_id</code>+<code>brand_id</code></td><td>has <code>site_slug</code> only</td><td>add tenant/brand/source/entry/campaign/org, all nullable</td></tr><tr><td><code>page_events</code></td><td>BRAND</td><td><code>tenant_id</code>+<code>brand_id</code></td><td><strong>no <code>site_slug</code> at all</strong></td><td>add same columns, <strong>no FKs</strong> (write-hot table)</td></tr><tr><td><code>behavioral_signals</code></td><td>DERIVED (from session)</td><td>via <code>session_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>intent_scores</code></td><td>DERIVED (from visitor)</td><td>via <code>visitor_id</code></td><td>—</td><td>scope by join</td></tr></tbody></table></div>
+<p><code>visitors</code> stays global for the same reason <code>leads</code> does: the entity is a browser, and the whole point of the ecosystem is that one browser moves between brands. Brand ownership attaches at the <strong>session</strong>, which is the natural "which site was this?" container.</p>
+<h2 id="s6-campaign-communications">Campaign &amp; communications</h2>
+<div class="scroll"><table><thead><tr><th>Table</th><th>Ownership</th><th>Scope key</th><th>Current state</th><th>Required change</th></tr></thead><tbody><tr><td><code>campaigns</code></td><td>BRAND</td><td><code>tenant_id</code>+<code>brand_id</code></td><td><strong>missing</strong></td><td>add tenant/brand/org/sender_profile</td></tr><tr><td><code>campaign_leads</code></td><td>DERIVED (from campaign)</td><td>via <code>campaign_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>scheduled_emails</code></td><td>DERIVED (from campaign)</td><td>via <code>campaign_id</code></td><td>—</td><td>scope by join; sender resolved at send</td></tr><tr><td><code>communication_logs</code></td><td>DERIVED (campaign+lead)</td><td>via <code>campaign_id</code>/<code>lead_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>interaction_outcomes</code></td><td>DERIVED</td><td>via <code>lead_id</code>+<code>campaign_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>campaign_health</code> / <code>_errors</code> / <code>_variants</code> / <code>_insights</code></td><td>DERIVED</td><td>via <code>campaign_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>campaign_test_runs</code> / <code>_steps</code></td><td>DERIVED</td><td>via <code>campaign_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>campaign_simulations</code> / <code>_steps</code></td><td>DERIVED</td><td>via <code>campaign_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>campaign_experiments</code> / <code>_deployments</code> / <code>_governance_config</code></td><td>DERIVED</td><td>via <code>campaign_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>follow_up_sequences</code></td><td>TENANT (reusable content)</td><td><code>tenant_id</code></td><td>—</td><td>add nullable <code>tenant_id</code>; null = shared library</td></tr><tr><td><code>lead_recommendations</code></td><td>DERIVED</td><td>via <code>campaign_id</code></td><td>—</td><td>scope by join</td></tr><tr><td><code>unsubscribe_events</code></td><td>GLOBAL safety</td><td><code>lead_id</code></td><td>global</td><td><strong>stays global</strong> — infrastructure suppression is not brand-scoped</td></tr></tbody></table></div>
+<p><strong>Deliberate design call:</strong> only <code>campaigns</code> gets its own tenancy columns. Every campaign-derived table is scoped by joining to <code>campaigns</code>. Stamping <code>tenant_id</code> on eighteen child tables would mean eighteen backfills, eighteen drift risks, and eighteen places for a mismatched pair to appear. The join is one hop and the parent is immutable in its ownership.</p>
+<p><code>unsubscribe_events</code> stays global on purpose. A hard bounce, an abuse complaint, or a provider-level suppression is a fact about the <strong>address</strong>, not about a brand relationship. Brand preference (§16) is a separate, additive concern in <code>communication_preferences</code>.</p>
+<h2 id="s6-organizations">Organizations</h2>
+<div class="scroll"><table><thead><tr><th>Table</th><th>Ownership</th><th>Scope key</th><th>Current state</th><th>Required change</th></tr></thead><tbody><tr><td><code>organizations</code></td><td>BRAND</td><td><code>tenant_id</code>+<code>brand_id</code></td><td><strong>missing</strong>; anchored on <code>owner_enrollment_id</code></td><td>add nullable tenant/brand/<code>organization_type</code></td></tr><tr><td><code>org_members</code></td><td>DERIVED (from org)</td><td>via <code>org_id</code></td><td>—</td><td>add nullable <code>platform_identity_id</code></td></tr><tr><td><code>org_cohorts</code></td><td>DERIVED (from org)</td><td>via <code>org_id</code></td><td>—</td><td>none</td></tr></tbody></table></div>
+<h2 id="s6-intelligence">Intelligence</h2>
+<div class="scroll"><table><thead><tr><th>Surface</th><th>Ownership</th><th>Required change</th></tr></thead><tbody><tr><td>graph nodes / edges / events</td><td>TENANT</td><td>must accept an allowed-tenant filter before returning rows</td></tr><tr><td>decision logs</td><td>TENANT</td><td>carry tenant context</td></tr><tr><td>cross-tenant reasoning</td><td>GLOBAL</td><td>requires explicit platform-superadmin privilege</td></tr></tbody></table></div>
+<h2 id="s6-summary-of-schema-deltas">Summary of schema deltas</h2>
+<p><strong>7 new tables:</strong> <code>tenants</code>, <code>brands</code>, <code>brand_domains</code>, <code>sender_profiles</code>, <code>platform_identities</code>, <code>platform_identity_links</code>, <code>tenant_memberships</code>, <code>lead_tenant_contexts</code>, <code>communication_preferences</code> (9 counting the two lead-scoped ones).</p>
+<p><strong>Tables extended with nullable columns:</strong> <code>lead_sources</code>, <code>entry_points</code>, <code>visitor_sessions</code>, <code>page_events</code>, <code>campaigns</code>, <code>organizations</code>, <code>org_members</code>, <code>event_ledger</code>, <code>follow_up_sequences</code>.</p>
+<p><strong>Zero destructive changes.</strong> No column is dropped, renamed, retyped, or made <code>NOT NULL</code> in this project. <code>NOT NULL</code> is deferred to a later project per plan Stage F.</p>
+    </section><section id="s7" class="doc">
+      <header class="dochead">
+        <span class="docnum">07</span>
+        <div>
+          <h2 class="doctitle">Dependency map</h2>
+          <p class="docblurb">What touches what, per system.</p>
+          <p class="docfile"><code>DEPENDENCY_MAP.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<p>Per-concept map of what touches what. Compiled from the code at <code>bb152ded</code>, not from the plan.</p>
+<hr />
+<h2 id="s7-lead-crm">Lead / CRM</h2>
+<div class="scroll"><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Models</strong></td><td><code>Lead</code> (419 ln), <code>LeadSource</code>, <code>EntryPoint</code>, <code>FormDefinition</code>, <code>RawLeadPayload</code>, <code>Activity</code>, <code>EventLedger</code>, <code>EnrollmentLead</code></td></tr><tr><td><strong>Services</strong></td><td><code>leadService.createLead()</code>, <code>leadIngestionService.handleIngest()</code>, <code>activityService.logActivity()</code>, <code>routingEngineService.evaluateAndDispatch()</code>, <code>externalLeadIngestService</code></td></tr><tr><td><strong>Controllers</strong></td><td><code>v1LeadController</code>, admin <code>leadRoutes</code>, <code>ingestLogRoutes</code>, <code>formDefinitionRoutes</code></td></tr><tr><td><strong>Routes</strong></td><td><code>POST /api/ingest</code>, <code>POST /api/v1/leads</code> (service-token gated), admin <code>/api/admin/leads/*</code>, <code>/api/admin/sources/*</code></td></tr><tr><td><strong>Frontend</strong></td><td><code>AdminSourcesPage.tsx</code>, <code>components/campaign/CRMTab.tsx</code></td></tr><tr><td><strong>Tests</strong></td><td><code>externalLeadIngestService.test.ts</code>, <code>ingestStatusCountsBySource.test.ts</code></td></tr><tr><td><strong>Seeds</strong></td><td><code>seedLeadSources.ts</code></td></tr><tr><td><strong>Known assumption</strong></td><td><code>leads.email</code> is the dedup key; <code>leads.id</code> is <strong>INTEGER</strong></td></tr><tr><td><strong>Migration risk</strong></td><td>Low. Additive <code>lead_tenant_contexts</code> sits beside the pipeline; ingest gains one call at step 8.</td></tr></tbody></table></div>
+<h2 id="s7-visitor-tracking">Visitor / tracking</h2>
+<div class="scroll"><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Models</strong></td><td><code>Visitor</code>, <code>VisitorSession</code>, <code>PageEvent</code>, <code>BehavioralSignal</code>, <code>IntentScore</code></td></tr><tr><td><strong>Services</strong></td><td><code>visitorTrackingService</code> (<code>findOrCreateVisitor</code>, <code>getOrCreateSession</code>, <code>recordPageEvent</code>, <code>categorizePagePath</code>, <code>updateHeartbeat</code>, <code>resolveIdentity</code>), <code>visitorAnalyticsService</code>, <code>behavioralSignalService</code>, <code>intentScoringService</code>, <code>behavioralTriggerService</code></td></tr><tr><td><strong>Controllers</strong></td><td><code>trackingController</code> — <code>handleTrackEvent</code>, <code>handleTrackBatch</code>, <code>handleHeartbeat</code>, <code>handleIdentify</code></td></tr><tr><td><strong>Routes</strong></td><td><code>POST /api/t/event</code>, <code>/api/t/batch</code>, <code>/api/t/heartbeat</code>, <code>/api/t/identify</code> — all rate-limited</td></tr><tr><td><strong>Frontend</strong></td><td><code>frontend/public/v1/track.js</code> (drop-in tracker), <code>AdminVisitorsPage.tsx</code></td></tr><tr><td><strong>Tests</strong></td><td><code>visitorTrackingIdentity.test.ts</code>, <code>ensurePageEventLeadId.test.ts</code>, <code>backfillPageEventLeadId.test.ts</code></td></tr><tr><td><strong>Known assumptions</strong></td><td><code>HOST_TO_SITE_SLUG</code> is hard-coded (8 hosts); unknown host ⇒ <code>'unknown'</code>; <code>VALID_EVENT_TYPES</code> is a closed list of 27 and unknown types are <strong>rejected</strong>; <code>page_events.lead_id</code> has <strong>no FK</strong> by design</td></tr><tr><td><strong>Migration risk</strong></td><td><strong>Highest write volume in the system.</strong> Resolution must be cached and fail-soft. A synchronous DB lookup per pageview to resolve tenant would be a performance regression.</td></tr></tbody></table></div>
+<h2 id="s7-campaign">Campaign</h2>
+<div class="scroll"><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Models</strong></td><td>18 campaign-derived (see <a href="#">CAMPAIGN_DEPENDENCY_MAP.md</a>)</td></tr><tr><td><strong>Services</strong></td><td><code>schedulerService</code> (send path, sender override at :892), <code>campaignTransport</code>, campaign agents</td></tr><tr><td><strong>Controllers</strong></td><td><code>mandrillWebhookController</code>, admin <code>campaignRoutes</code>, <code>campaignTestRoutes</code>, <code>campaignSimulationRoutes</code>, <code>campaignDiagnosticsRoutes</code>, <code>campaignIntelligenceRoutes</code></td></tr><tr><td><strong>Frontend</strong></td><td><code>AdminCampaignsPage.tsx</code>, <code>components/campaign/*</code></td></tr><tr><td><strong>Tests</strong></td><td><code>campaignTransport.test.ts</code>, <code>campaignSendWindow.test.ts</code>, <code>mandrillBounceSuppression.test.ts</code></td></tr><tr><td><strong>External</strong></td><td>Mandrill (send + webhooks)</td></tr><tr><td><strong>Known assumption</strong></td><td>Sender identity is <code>campaign.settings.sender_email/sender_name</code> — untyped JSONB read at send time, with a module default fallback</td></tr><tr><td><strong>Migration risk</strong></td><td>Medium. Adding <code>sender_profile_id</code> as the <em>preferred</em> path with the JSONB read demoted to a logged fallback is non-breaking; a flag-day switch would not be.</td></tr></tbody></table></div>
+<h2 id="s7-organization-account">Organization / account</h2>
+<div class="scroll"><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Models</strong></td><td><code>Organization</code>, <code>OrgMember</code>, <code>OrgCohort</code></td></tr><tr><td><strong>Services</strong></td><td><code>orgService</code>, <code>adminOrgService</code></td></tr><tr><td><strong>Middleware</strong></td><td><code>orgAuth</code></td></tr><tr><td><strong>Routes</strong></td><td>admin <code>organizationRoutes</code>, portal company routes</td></tr><tr><td><strong>Frontend</strong></td><td><code>services/orgApi.ts</code>, <code>services/adminOrgApi.ts</code>, <code>pages/portal/company/</code></td></tr><tr><td><strong>Tests</strong></td><td><code>orgService.test.ts</code>, <code>adminOrgService.test.ts</code>, <code>organizationRoutes.paths.test.ts</code></td></tr><tr><td><strong>Known assumption</strong></td><td><strong><code>owner_enrollment_id</code> is <code>NOT NULL</code> and <code>UNIQUE</code></strong> — an organization cannot exist without an <code>Enrollment</code></td></tr><tr><td><strong>Migration risk</strong></td><td>Low for additive columns. <strong>High if the identity bridge tried to replace <code>owner_enrollment_id</code></strong> — it must not.</td></tr></tbody></table></div>
+<h2 id="s7-identity-auth">Identity / auth</h2>
+<div class="scroll"><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Models</strong></td><td><code>Enrollment</code> (portal/student identity + payment state), <code>AdminUser</code> (operator), <code>Lead</code> (contact)</td></tr><tr><td><strong>Known assumption</strong></td><td>Three parallel identity notions with no unifying row</td></tr><tr><td><strong>Migration risk</strong></td><td><strong>Highest blast radius if done wrong.</strong> <code>platform_identities</code> must be introduced additively and must never become a required participant in an existing auth path during this project.</td></tr></tbody></table></div>
+<h2 id="s7-intelligence">Intelligence</h2>
+<div class="scroll"><table><thead><tr><th>Aspect</th><th>Detail</th></tr></thead><tbody><tr><td><strong>Location</strong></td><td><code>backend/src/services/intelligence/</code>, <code>backend/src/intelligence/</code>, <code>docs/architecture/enterprise-intelligence/</code></td></tr><tr><td><strong>Migration risk</strong></td><td>Cross-tenant leakage is the risk, not breakage. Every query that reaches lead/campaign/org memory needs an allowed-tenant filter.</td></tr></tbody></table></div>
+<hr />
+<h2 id="s7-cross-cutting-what-a-tenant-column-must-never-brea">Cross-cutting: what a tenant column must never break</h2>
+<ol>
+<li><strong>Ingest must keep working with no tenant context</strong> — an unregistered source still creates</li>
+</ol>
+<p>   a lead. Missing context is a logged metric, not a rejection.</p>
+<ol>
+<li><strong>Tracking must stay fail-soft</strong> — a tenancy resolution failure drops to <code>null</code> context and</li>
+</ol>
+<p>   still records the event.</p>
+<ol>
+<li><strong>Authorization must be fail-closed</strong> — an unresolved tenant on an admin read is a 403, not</li>
+</ol>
+<p>   an unscoped <code>findAll()</code>.</p>
+<p>That asymmetry (telemetry fails soft, authorization fails closed) is the single most important invariant in this project and is stated in plan §57.</p>
+    </section><section id="s8" class="doc">
+      <header class="dochead">
+        <span class="docnum">08</span>
+        <div>
+          <h2 class="doctitle">Tracking</h2>
+          <p class="docblurb">The visitor pipeline and its hard-coded assumptions.</p>
+          <p class="docfile"><code>TRACKING_DEPENDENCY_MAP.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<hr />
+<h2 id="s8-current-flow">Current flow</h2>
+<div class="scroll"><pre class="code"><code>frontend/public/v1/track.js   (data-site="&lt;slug&gt;")
+        │
+        ├── POST /api/t/event      eventLimiter
+        ├── POST /api/t/batch      batchLimiter
+        ├── POST /api/t/heartbeat  heartbeatLimiter
+        └── POST /api/t/identify   eventLimiter
+                │
+                ▼
+        trackingController.handleTrackEvent
+                │  validateTrackEvent()   ← rejects unknown event_type
+                │  normalizeSiteSlug()    ← data-site, else HOST_TO_SITE_SLUG, else 'unknown'
+                ▼
+        visitorTrackingService
+                findOrCreateVisitor(fingerprint, {...utm, site_slug})
+                getOrCreateSession(visitorId, {...})
+                recordPageEvent(sessionId, visitorId, {...})
+                resolveIdentity(visitorId, leadId)    ← backfills session + page_event lead_id
+                │
+                ▼
+        detectSessionSignals → computeIntentScore → evaluateVisitorForTriggers
+                (fire-and-forget, errors logged not thrown)</code></pre></div>
+<h2 id="s8-hard-coded-host-map-the-thing-plan-50-says-to-keep">Hard-coded host map (the thing plan §50 says to keep during migration)</h2>
+<p><code>backend/src/controllers/trackingController.ts:81</code></p>
+<div class="scroll"><pre class="code"><code>enterprise.colaberry.ai       → enterprise
+colaberry.ai / www            → colaberry
+advisor.colaberry.ai          → advisor
+trustbeforeintelligence.ai    → trustbeforeintelligence
+worldoftaxonomy.com / www     → worldoftaxonomy</code></pre></div>
+<p><strong>Not in the map:</strong> <code>training.colaberry.com</code>, <code>myfreeaiclass.com</code>, <code>cpn.org</code>, <code>aiflotation.com</code>, <code>refactored.ai</code>. Traffic from those hosts today resolves to <code>'unknown'</code> unless the tracker snippet carries <code>data-site</code>.</p>
+<p>Migration rule (plan §50): preserve the fallback, add DB-backed <code>brand_domains</code> resolution in front of it, <strong>log when the legacy map is used</strong>, remove only after parity is proven. No flag day.</p>
+<h2 id="s8-identity-assertion-surfaces-the-security-relevant-">Identity assertion surfaces (the security-relevant part)</h2>
+<p><code>handleTrackEvent</code> accepts two unauthenticated identity claims from the browser:</p>
+<div class="scroll"><table><thead><tr><th>Param</th><th>Behavior today</th><th>Risk</th></tr></thead><tbody><tr><td><code>email</code></td><td>looks up <code>Lead</code> by lowercased email, links visitor → lead</td><td>anyone who knows an email can bind their browser to that lead's journey</td></tr><tr><td><code>lid</code></td><td>links visitor → <code>Lead</code> by raw numeric id</td><td>enumerable; anyone can claim any lead id</td></tr></tbody></table></div>
+<p>Both only fire when <code>visitor.lead_id</code> is not already set, which limits but does not remove the exposure. Plan §10.1 requires new cross-domain flows to use <strong>signed opaque tokens</strong> (<code>journeyLinkService</code>) instead. This project adds the signed path; it does <strong>not</strong> remove <code>email</code>/<code>lid</code>, because live sites depend on them (plan §76 rule 3: no removing public APIs without a compatibility alias).</p>
+<h2 id="s8-where-tenant-brand-context-must-be-stamped">Where tenant/brand context must be stamped</h2>
+<div class="scroll"><table><thead><tr><th>Point</th><th>Column set</th><th>Failure mode</th></tr></thead><tbody><tr><td><code>getOrCreateSession</code></td><td><code>tenant_id</code>, <code>brand_id</code>, <code>source_id</code>, <code>entry_point_id</code>, <code>campaign_id</code>, <code>campaign_lead_id</code>, <code>organization_id</code></td><td>null context, event still recorded</td></tr><tr><td><code>recordPageEvent</code></td><td>same set</td><td>null context, event still recorded</td></tr><tr><td><code>resolveIdentity</code></td><td>ensure <code>LeadTenantContext</code>, update last-touch</td><td>logged, never throws</td></tr></tbody></table></div>
+<h2 id="s8-performance-constraint-plan-57">Performance constraint (plan §57)</h2>
+<p><code>page_events</code> is the highest-write table in the system. Resolving <code>site_slug → LeadSource → tenant_id + brand_id</code> on every event via a database round trip would add a synchronous query per pageview.</p>
+<p><strong>Required:</strong> a bounded in-process cache with a short TTL, keyed on <code>site_slug</code> and on <code>hostname</code>, holding the resolved <code>{tenantId, brandId, sourceId}</code> triple. Cache misses resolve from the database; resolution failure yields <code>null</code> context and the event is still written.</p>
+<h2 id="s8-downstream-consumers-that-must-not-regress">Downstream consumers that must not regress</h2>
+<ul>
+<li><code>behavioralSignalService.detectSessionSignals(sessionId)</code></li>
+<li><code>intentScoringService.computeIntentScore(visitorId)</code></li>
+<li><code>behavioralTriggerService.evaluateVisitorForTriggers(visitorId)</code></li>
+<li><code>visitorAnalyticsService</code> (admin dashboards)</li>
+<li><code>contextGraphService</code> — depends on <code>page_events.lead_id</code> existing (see the model comment)</li>
+</ul>
+<p>All of these query by <code>session_id</code> / <code>visitor_id</code> / <code>lead_id</code>, none by <code>site_slug</code>. Adding nullable columns does not change their result sets. That is why the tracking change is additive-safe.</p>
+    </section><section id="s9" class="doc">
+      <header class="dochead">
+        <span class="docnum">09</span>
+        <div>
+          <h2 class="doctitle">Campaigns and email</h2>
+          <p class="docblurb">Eighteen campaign tables, classified.</p>
+          <p class="docfile"><code>CAMPAIGN_DEPENDENCY_MAP.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<p>Plan §14 requires every campaign-owning or campaign-processing table to be inventoried and classified. This is that inventory, verified present in <code>backend/src/models/</code> at <code>bb152ded</code>.</p>
+<hr />
+<h2 id="s9-classification">Classification</h2>
+<div class="scroll"><table><thead><tr><th>Model / table</th><th>Class</th><th>Scope path</th><th>Change required</th></tr></thead><tbody><tr><td><code>Campaign</code></td><td><strong>BRAND-OWNED</strong></td><td><code>tenant_id</code> + <code>brand_id</code></td><td>add <code>tenant_id</code>, <code>brand_id</code>, <code>organization_id</code>, <code>sender_profile_id</code></td></tr><tr><td><code>CampaignLead</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>ScheduledEmail</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join; sender resolved at send time</td></tr><tr><td><code>CommunicationLog</code></td><td>CAMPAIGN-DERIVED + LEAD-DERIVED</td><td>→ <code>campaign_id</code>, <code>lead_id</code></td><td>scope by join</td></tr><tr><td><code>InteractionOutcome</code></td><td>LEAD-DERIVED</td><td>→ <code>lead_id</code>, <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignHealth</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignError</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignVariant</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignInsight</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignTestRun</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignTestStep</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>test_run_id</code> → <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignSimulation</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignSimulationStep</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>simulation_id</code> → <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignExperiment</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignDeployment</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>CampaignGovernanceConfig</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>LeadRecommendation</code></td><td>CAMPAIGN-DERIVED</td><td>→ <code>campaign_id</code></td><td>scope by join</td></tr><tr><td><code>FollowUpSequence</code></td><td><strong>TENANT-OWNED (reusable content)</strong></td><td><code>tenant_id</code></td><td>add nullable <code>tenant_id</code>; <code>NULL</code> = shared platform library</td></tr><tr><td><code>UnsubscribeEvent</code></td><td><strong>GLOBAL PLATFORM DATA</strong></td><td><code>lead_id</code></td><td><strong>no change</strong> — infrastructure suppression is address-level, not brand-level</td></tr><tr><td><code>communication_preferences</code></td><td><strong>BRAND-OWNED</strong></td><td><code>tenant_id</code> + <code>brand_id</code></td><td>NEW table</td></tr></tbody></table></div>
+<p><strong>No <code>EmailSuppression</code> model exists.</strong> Suppression is <code>UnsubscribeEvent</code> + <code>unsubscribeRoutes.ts</code> + bounce handling in <code>mandrillWebhookController.ts</code>.</p>
+<h2 id="s9-why-only-campaign-gets-tenancy-columns">Why only <code>Campaign</code> gets tenancy columns</h2>
+<p>Seventeen of the tables above are children of <code>campaigns</code>. Stamping <code>tenant_id</code> on each would mean seventeen backfills and seventeen opportunities for a child row's tenant to drift out of sync with its parent's. A campaign's tenant is immutable once assigned, so the join is both cheaper and safer than duplication. <code>FollowUpSequence</code> is the exception because a sequence is reusable content that can exist without a campaign.</p>
+<h2 id="s9-current-sender-resolution-the-thing-being-replaced">Current sender resolution (the thing being replaced)</h2>
+<div class="scroll"><pre class="code"><code>backend/src/services/schedulerService.ts:879-893
+
+  const campaign = await Campaign.findByPk(action.campaign_id,
+                     { attributes: ['channel','type','settings'] });
+  const settings = campaign.settings || {};
+  if (settings.sender_email) senderEmail = settings.sender_email;
+  if (settings.sender_name)  senderName  = settings.sender_name;</code></pre></div>
+<p>That is the whole per-campaign sender story. Untyped JSONB, read at send time, with a module-level default when absent. No verification of any kind.</p>
+<h2 id="s9-target-resolution-plan-15-1">Target resolution (plan §15.1)</h2>
+<div class="scroll"><pre class="code"><code>Campaign(tenant_id, brand_id, sender_profile_id)
+        │
+        ▼
+senderProfileService.resolveForCampaign(campaign)
+        │  1. sender_profile_id present?  → load
+        │  2. else default profile for (tenant, brand)?  → load + log deprecation
+        │  3. else legacy settings.sender_email?          → synthesize + log deprecation
+        │  4. else module default                          → log deprecation
+        ▼
+preflight(profile):  status==='active'
+                     sending domain verification_status==='verified'
+                     spf/dkim pass, dmarc configured
+                     unsubscribe_url present
+                     physical_mailing_address present
+        │
+        ├── live send + preflight fail  → BLOCK (fail closed)
+        └── test-mode send              → allowed, preflight recorded not enforced
+        ▼
+Mandrill adapter — attaches metadata tenant/brand/campaign/lead/campaignLead</code></pre></div>
+<p>Steps 2–4 are the compatibility ramp plan §51 mandates: prefer <code>sender_profile_id</code>, demote the legacy JSONB read to a logged fallback, remove the fallback in a later project once usage is zero. <strong>Not a flag day.</strong></p>
+<h2 id="s9-webhook-attribution-plan-15-3-27-5">Webhook attribution (plan §15.3, §27.5)</h2>
+<p><code>mandrillWebhookController</code> currently maps provider events back to <code>lead_id</code> / <code>scheduled_email_id</code> via Mandrill metadata. Adding <code>tenant</code>, <code>brand</code>, <code>campaign</code>, <code>campaignLead</code> and <code>senderProfile</code> tags at send time lets the webhook restore full ecosystem context before writing activity. Existing metadata keys must be preserved — the webhook must keep working for messages already in flight that carry only the old keys.</p>
+<h2 id="s9-cross-brand-negative-test-plan-39">Cross-brand negative test (plan §39)</h2>
+<p><code>CPN campaign + AI Flotation SenderProfile</code> must fail <strong>before</strong> the provider call, in the resolver, with a <code>ContractViolation</code> error class — not at Mandrill, and not silently.</p>
+    </section><section id="s10" class="doc">
+      <header class="dochead">
+        <span class="docnum">10</span>
+        <div>
+          <h2 class="doctitle">Route impact</h2>
+          <p class="docblurb">Every endpoint, and whether it changes.</p>
+          <p class="docfile"><code>ROUTE_IMPACT_MATRIX.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<p>Impact classes:</p>
+<ul>
+<li><strong>NONE</strong> — route unchanged.</li>
+<li><strong>ADDITIVE</strong> — route gains optional context; existing callers unaffected.</li>
+<li><strong>SCOPED</strong> — route must enforce tenant authorization on reads/writes.</li>
+<li><strong>NEW</strong> — created by this project.</li>
+</ul>
+<hr />
+<h2 id="s10-public-ingest-tracking-browser-facing-unauthentica">Public ingest &amp; tracking (browser-facing, unauthenticated)</h2>
+<div class="scroll"><table><thead><tr><th>Route</th><th>Impact</th><th>Change</th></tr></thead><tbody><tr><td><code>POST /api/t/event</code></td><td>ADDITIVE</td><td>resolve tenant/brand server-side from <code>site_slug</code>/host; stamp session + event; fail-soft</td></tr><tr><td><code>POST /api/t/batch</code></td><td>ADDITIVE</td><td>same</td></tr><tr><td><code>POST /api/t/heartbeat</code></td><td>ADDITIVE</td><td>none beyond session context already resolved</td></tr><tr><td><code>POST /api/t/identify</code></td><td>ADDITIVE</td><td>accept optional signed <code>jx</code> journey token in addition to <code>email</code>/<code>lid</code></td></tr><tr><td><code>POST /api/ingest?source=&amp;entry=</code></td><td>ADDITIVE</td><td>after lead upsert, ensure <code>LeadTenantContext</code> from the resolved source</td></tr><tr><td><code>POST /api/v1/leads</code></td><td>ADDITIVE</td><td>same, service-token gated already</td></tr></tbody></table></div>
+<p><strong>Invariant:</strong> none of these routes may accept <code>tenant_id</code> or <code>brand_id</code> from the request body. The server resolves them from <code>site_slug</code> → <code>LeadSource</code>, or hostname → <code>BrandDomain</code>. A browser that could name its own tenant could write into another tenant's data.</p>
+<h2 id="s10-admin-acquisition">Admin — acquisition</h2>
+<div class="scroll"><table><thead><tr><th>Route</th><th>Impact</th><th>Change</th></tr></thead><tbody><tr><td><code>GET /api/admin/sources/*</code></td><td>SCOPED</td><td>filter by caller's authorized tenants; platform superadmin sees all</td></tr><tr><td><code>POST/PUT /api/admin/sources/*</code></td><td>SCOPED</td><td>require tenant/brand on create; reject cross-tenant writes</td></tr><tr><td><code>GET /api/admin/ingest-log/*</code></td><td>SCOPED</td><td>scope through <code>source_slug</code> → tenant</td></tr><tr><td><code>GET /api/admin/form-definitions/*</code></td><td>SCOPED</td><td>scope through entry point → source → tenant</td></tr><tr><td><code>GET /api/admin/leads/*</code></td><td>SCOPED</td><td>a lead is global, but the <strong>context rows</strong> returned must be filtered to authorized tenants</td></tr></tbody></table></div>
+<p>The lead-detail route is the subtlest one in the system. The canonical <code>leads</code> row is global, so returning it is fine; returning <em>all</em> of its <code>lead_tenant_contexts</code> to a CPN admin would leak the existence of an AI Flotation relationship. The route returns the lead plus <strong>only the contexts the caller is authorized for</strong>.</p>
+<h2 id="s10-admin-tracking">Admin — tracking</h2>
+<div class="scroll"><table><thead><tr><th>Route</th><th>Impact</th><th>Change</th></tr></thead><tbody><tr><td><code>GET /api/admin/visitors/*</code></td><td>SCOPED</td><td>filter sessions/events by authorized tenant/brand</td></tr><tr><td><code>GET /api/admin/journey/:leadId</code></td><td>NEW</td><td>chronological cross-brand journey, tenant-filtered</td></tr></tbody></table></div>
+<h2 id="s10-admin-campaigns">Admin — campaigns</h2>
+<div class="scroll"><table><thead><tr><th>Route</th><th>Impact</th><th>Change</th></tr></thead><tbody><tr><td><code>GET /api/admin/campaigns</code></td><td>SCOPED</td><td>filter by tenant/brand</td></tr><tr><td><code>POST /api/admin/campaigns</code></td><td>SCOPED</td><td>require tenant/brand; validate sender profile belongs to same brand</td></tr><tr><td><code>PUT /api/admin/campaigns/:id</code></td><td>SCOPED</td><td>404 (not 403) on foreign tenant to avoid existence disclosure</td></tr><tr><td><code>campaignTestRoutes</code>, <code>campaignSimulationRoutes</code>, <code>campaignDiagnosticsRoutes</code>, <code>campaignIntelligenceRoutes</code></td><td>SCOPED</td><td>scope via parent campaign</td></tr><tr><td><code>POST /api/webhooks/mandrill</code></td><td>ADDITIVE</td><td>restore tenant/brand from metadata before writing activity</td></tr></tbody></table></div>
+<h2 id="s10-admin-organizations">Admin — organizations</h2>
+<div class="scroll"><table><thead><tr><th>Route</th><th>Impact</th><th>Change</th></tr></thead><tbody><tr><td><code>GET/POST /api/admin/organizations/*</code></td><td>SCOPED</td><td>filter by tenant; <code>organization_type</code> on create</td></tr><tr><td>portal <code>/api/portal/company/*</code></td><td>ADDITIVE</td><td>unchanged behavior; org's tenant carried through</td></tr></tbody></table></div>
+<h2 id="s10-admin-ecosystem-new">Admin — ecosystem (new)</h2>
+<div class="scroll"><table><thead><tr><th>Route</th><th>Impact</th></tr></thead><tbody><tr><td><code>GET /api/admin/ecosystem/tenants</code></td><td>NEW</td></tr><tr><td><code>GET /api/admin/ecosystem/brands</code></td><td>NEW</td></tr><tr><td><code>GET /api/admin/ecosystem/domains</code></td><td>NEW</td></tr><tr><td><code>GET /api/admin/ecosystem/sender-profiles</code></td><td>NEW</td></tr><tr><td><code>GET /api/admin/ecosystem/health</code></td><td>NEW — domain/sender readiness</td></tr></tbody></table></div>
+<p>All ecosystem routes require <strong>platform superadmin</strong>.</p>
+<h2 id="s10-unchanged-none">Unchanged (NONE)</h2>
+<p>Everything under <code>capePortalRoutes</code>, <code>sbpRoutes</code>, <code>communityRoomsRoutes</code>, <code>participantRoutes</code>, <code>enrollmentRoutes</code>, <code>projectRoutes</code>, <code>workspaceRoutes</code>, <code>healthRoutes</code>, <code>qrRedirectRoutes</code>, <code>unsubscribeRoutes</code>, <code>advisorRoutes</code>, <code>studentOpsRoutes</code> — the learning platform is single-tenant (Colaberry) for this project and gains nothing from tenancy columns until a second tenant actually delivers learning.</p>
+<h2 id="s10-status-code-policy-for-isolation-failures">Status-code policy for isolation failures</h2>
+<div class="scroll"><table><thead><tr><th>Case</th><th>Response</th></tr></thead><tbody><tr><td>authenticated, resource belongs to another tenant</td><td><strong>404</strong> — never confirm existence</td></tr><tr><td>authenticated, no membership for requested tenant</td><td><strong>403</strong></td></tr><tr><td>unauthenticated</td><td><strong>401</strong></td></tr></tbody></table></div>
+<p>Plan §19.1 permits "404/403"; this project standardises on <strong>404 for cross-tenant resource access</strong> so that ID enumeration cannot distinguish "exists elsewhere" from "does not exist", and 403 only for an explicit tenant-scope request the caller has no membership for.</p>
+    </section><section id="s11" class="doc">
+      <header class="dochead">
+        <span class="docnum">11</span>
+        <div>
+          <h2 class="doctitle">Migration and backfill</h2>
+          <p class="docblurb">Staged, additive, and deterministic about ownership.</p>
+          <p class="docfile"><code>MIGRATION_BACKFILL_MAP.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<hr />
+<h2 id="s11-mechanism">Mechanism</h2>
+<p>No migration framework exists (see <a href="#">CURRENT_STATE.md</a> §2). All schema work in this project goes through <strong>one</strong> new module:</p>
+<div class="scroll"><pre class="code"><code>backend/src/db/ensureMultiTenantSchema.ts   →  called from server.ts boot</code></pre></div>
+<p>Rules it inherits from <code>ensureOrgAccountSchema.ts</code>:</p>
+<ul>
+<li><code>CREATE TABLE IF NOT EXISTS</code> / <code>ALTER TABLE ... ADD COLUMN IF NOT EXISTS</code> /</li>
+</ul>
+<p>  <code>CREATE INDEX IF NOT EXISTS</code> only.</p>
+<ul>
+<li>Every statement in its own try/catch, logging a structured error, never fatal to boot.</li>
+<li><code>DO $$ ... END $$</code> guards for constraints with no <code>IF NOT EXISTS</code> form.</li>
+<li>Additive only: no drop, no rename, no retype, no <code>NOT NULL</code> on an existing column.</li>
+</ul>
+<h2 id="s11-stage-a-new-tables-nullable-columns">Stage A — new tables + nullable columns</h2>
+<p>New tables: <code>tenants</code>, <code>brands</code>, <code>brand_domains</code>, <code>sender_profiles</code>, <code>platform_identities</code>, <code>platform_identity_links</code>, <code>tenant_memberships</code>, <code>lead_tenant_contexts</code>, <code>communication_preferences</code>.</p>
+<p>Nullable columns added to existing tables:</p>
+<div class="scroll"><table><thead><tr><th>Table</th><th>Columns</th></tr></thead><tbody><tr><td><code>lead_sources</code></td><td><code>tenant_id</code>, <code>brand_id</code>, <code>source_type</code></td></tr><tr><td><code>entry_points</code></td><td><code>entry_type</code></td></tr><tr><td><code>visitor_sessions</code></td><td><code>tenant_id</code>, <code>brand_id</code>, <code>source_id</code>, <code>entry_point_id</code>, <code>campaign_id</code>, <code>campaign_lead_id</code>, <code>organization_id</code></td></tr><tr><td><code>page_events</code></td><td>same seven — <strong>no FK constraints</strong> (write-hot table, matches existing <code>lead_id</code> policy)</td></tr><tr><td><code>campaigns</code></td><td><code>tenant_id</code>, <code>brand_id</code>, <code>organization_id</code>, <code>sender_profile_id</code></td></tr><tr><td><code>organizations</code></td><td><code>tenant_id</code>, <code>brand_id</code>, <code>organization_type</code></td></tr><tr><td><code>org_members</code></td><td><code>platform_identity_id</code></td></tr><tr><td><code>event_ledger</code></td><td><code>tenant_id</code>, <code>brand_id</code></td></tr><tr><td><code>follow_up_sequences</code></td><td><code>tenant_id</code></td></tr></tbody></table></div>
+<h2 id="s11-stage-b-deterministic-seeds">Stage B — deterministic seeds</h2>
+<p>Seeded by stable slug, not by generated UUID, so re-running is a no-op and IDs are stable across environments.</p>
+<div class="scroll"><table><thead><tr><th>Tenant</th><th>Brands</th></tr></thead><tbody><tr><td><code>colaberry</code></td><td><code>colaberry-enterprise</code>, <code>colaberry-training</code></td></tr><tr><td><code>cpn</code></td><td><code>cpn</code></td></tr><tr><td><code>ai-flotation</code></td><td><code>ai-flotation</code></td></tr><tr><td><code>refactored</code></td><td><code>refactored</code></td></tr></tbody></table></div>
+<h2 id="s11-stage-c-backfill-policy">Stage C — backfill policy</h2>
+<p><strong>Deterministic map, no guessing.</strong></p>
+<div class="scroll"><table><thead><tr><th>Existing <code>lead_sources.slug</code> / hostname</th><th>→ tenant</th><th>→ brand</th></tr></thead><tbody><tr><td><code>enterprise</code> , <code>enterprise.colaberry.ai</code></td><td><code>colaberry</code></td><td><code>colaberry-enterprise</code></td></tr><tr><td><code>colaberry</code> , <code>colaberry.ai</code> , <code>www.colaberry.ai</code></td><td><code>colaberry</code></td><td><code>colaberry-enterprise</code></td></tr><tr><td><code>training.colaberry.com</code> , <code>myfreeaiclass.com</code></td><td><code>colaberry</code></td><td><code>colaberry-training</code></td></tr><tr><td><code>cpn.org</code></td><td><code>cpn</code></td><td><code>cpn</code></td></tr><tr><td><code>aiflotation.com</code></td><td><code>ai-flotation</code></td><td><code>ai-flotation</code></td></tr><tr><td><code>refactored.ai</code></td><td><code>refactored</code></td><td><code>refactored</code></td></tr><tr><td><code>trustbeforeintelligence</code></td><td><code>colaberry</code></td><td><code>colaberry-enterprise</code></td></tr><tr><td><code>worldoftaxonomy</code></td><td><strong><code>legacy-unclassified</code></strong></td><td>—</td></tr><tr><td><code>advisor</code></td><td><strong><code>legacy-unclassified</code></strong></td><td>—</td></tr><tr><td>anything else</td><td><strong><code>legacy-unclassified</code></strong></td><td>—</td></tr></tbody></table></div>
+<p><code>trustbeforeintelligence</code> is classified to Colaberry Enterprise because it is Ram's book microsite feeding enterprise demand — a business fact, recorded here so the assignment is auditable rather than assumed.</p>
+<p><code>worldoftaxonomy</code> and <code>advisor</code> are <strong>deliberately unclassified</strong>. <code>advisor.colaberry.ai</code> is a separate FastAPI product with its own repository; asserting it belongs to Colaberry Enterprise would be a guess. Plan Stage C says: <em>do not silently guess</em> — produce an unresolved report.</p>
+<h2 id="s11-backfill-order-dependency-driven">Backfill order (dependency-driven)</h2>
+<div class="scroll"><pre class="code"><code>1. tenants, brands, brand_domains, sender_profiles      (seed)
+2. lead_sources.tenant_id/brand_id                       (from slug map)
+3. lead_tenant_contexts                                  (from leads × source_id)
+4. visitor_sessions.tenant_id/brand_id                   (from site_slug → lead_sources)
+5. page_events.tenant_id/brand_id                        (from session_id → visitor_sessions)
+6. campaigns.tenant_id/brand_id                          (default: colaberry/enterprise)
+7. organizations.tenant_id/brand_id                      (default: colaberry/enterprise)</code></pre></div>
+<p>Steps 4 and 5 are the large ones. <code>page_events</code> is the highest-row-count table in the database, so its backfill runs <strong>batched with a bounded row limit per invocation</strong>, is resumable, and is <strong>not</strong> run at boot — it is an explicitly invoked script.</p>
+<p>Steps 6 and 7 default to Colaberry Enterprise because every existing campaign and organization in the database today <em>is</em> Colaberry Enterprise: there has never been another tenant. That is a defensible deterministic assignment rather than a guess, and it is logged as an assumption.</p>
+<h2 id="s11-stage-d-dual-write">Stage D — dual write</h2>
+<p>Ingest and tracking write both the legacy fields (<code>source</code>, <code>form_type</code>, <code>site_slug</code>, <code>pipeline_stage</code>, …) and the new context rows. Legacy <code>Lead</code> fields remain the compatibility surface until every consumer is migrated. <code>lead_tenant_contexts</code> is authoritative for <strong>tenant-specific</strong> lifecycle; legacy <code>Lead</code> fields stay authoritative for the Colaberry Enterprise view until a later project retires them.</p>
+<p>Metric emitted on every write with unresolved context: <code>event: "tenant_context_unresolved"</code>, with <code>site_slug</code> / <code>source_slug</code> in context.</p>
+<h2 id="s11-stage-e-f-out-of-scope-for-this-project">Stage E / F — out of scope for this project</h2>
+<p>Context-aware reads land in this project for the admin surfaces named in <a href="#">ROUTE_IMPACT_MATRIX.md</a>. <code>NOT NULL</code> enforcement (Stage F) is <strong>explicitly deferred</strong> — it requires zero unresolved rows across all environments and a clean metrics window, neither of which can be established inside this project.</p>
+<h2 id="s11-idempotency-plan-55">Idempotency (plan §55)</h2>
+<p>Every seed and backfill:</p>
+<ul>
+<li>keyed on stable slugs or on <code>(lead_id, tenant_id, brand_id)</code> uniques,</li>
+<li>uses <code>INSERT ... ON CONFLICT DO NOTHING</code> or find-or-create,</li>
+<li>second run changes zero rows,</li>
+<li>emits <code>{processed, updated, already_correct, unresolved, failed}</code> and writes a</li>
+</ul>
+<p>  machine-readable artifact to <code>tmp/</code>.</p>
+    </section><section id="s12" class="doc">
+      <header class="dochead">
+        <span class="docnum">12</span>
+        <div>
+          <h2 class="doctitle">Extraction boundaries</h2>
+          <p class="docblurb">Could one brand be lifted out later without a rewrite.</p>
+          <p class="docfile"><code>EXTRACTION_BOUNDARIES.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<p>The test this document exists to answer: <em>could a future team lift one application out of this repository without rewriting the platform?</em></p>
+<hr />
+<h2 id="s12-current-state">Current state</h2>
+<p>Root <code>package.json</code> declares <code>workspaces: ["frontend", "backend"]</code>. There is no <code>apps/</code> and no <code>packages/</code>. Every public experience today is either inside <code>frontend/</code> or is an external site that talks to the platform over <code>/api/ingest</code> and <code>/api/t/*</code>.</p>
+<p>That second category is important: <strong><code>trustbeforeintelligence.ai</code> and <code>worldoftaxonomy.com</code> already prove the extraction model works.</strong> They are separate builds that integrate purely through the tracker script and the lead-ingest API. The skeleton apps follow the same contract with a tighter workspace story.</p>
+<h2 id="s12-target-boundary">Target boundary</h2>
+<div class="scroll"><pre class="code"><code>apps/cpn-public/            ─┐
+apps/ai-flotation-public/    ├── independently buildable, independently deployable
+apps/refactored-public/     ─┘
+
+packages/platform-contracts/    shared types only — no runtime, no secrets
+packages/tracking-sdk/          the v2 tracker, bundled to a standalone asset
+packages/brand-system/          brand config contract
+packages/ui-core/               primitives, no brand identity
+packages/platform-api-client/   typed client for the public platform API</code></pre></div>
+<h2 id="s12-allowed-and-forbidden-edges">Allowed and forbidden edges</h2>
+<div class="scroll"><table><thead><tr><th>From</th><th>To</th><th>Verdict</th></tr></thead><tbody><tr><td><code>apps/*</code></td><td><code>packages/*</code></td><td><strong>allowed</strong></td></tr><tr><td><code>apps/*</code></td><td>public platform HTTP API</td><td><strong>allowed</strong></td></tr><tr><td><code>apps/*</code></td><td>another <code>apps/*</code></td><td><strong>forbidden</strong></td></tr><tr><td><code>apps/*</code></td><td><code>frontend/src/*</code></td><td><strong>forbidden</strong></td></tr><tr><td><code>apps/*</code></td><td><code>backend/src/*</code></td><td><strong>forbidden</strong></td></tr><tr><td><code>packages/*</code></td><td><code>apps/*</code></td><td><strong>forbidden</strong></td></tr><tr><td><code>packages/ui-core</code></td><td>one brand's theme</td><td><strong>forbidden</strong></td></tr></tbody></table></div>
+<p>Enforced by <code>scripts/validate-app-boundaries.js</code>, which walks every import/require in <code>apps/</code> and <code>packages/</code> and exits non-zero on a forbidden edge. It is a script, not a convention, because conventions do not survive contact with a deadline.</p>
+<h2 id="s12-what-must-move-with-an-application">What must move with an application</h2>
+<p>Each app maintains <code>apps/&lt;app&gt;/EXTRACTION.md</code> recording:</p>
+<ul>
+<li>app-owned source files,</li>
+<li>workspace dependencies (which <code>packages/*</code>),</li>
+<li>backend API contracts consumed (exact route paths),</li>
+<li>required environment variables,</li>
+<li><strong>brand seed records</strong> — tenant slug, brand slug,</li>
+<li><strong>lead source record</strong> — <code>lead_sources.slug</code> and its HMAC posture,</li>
+<li><strong>entry point records</strong> — slug + <code>entry_type</code> per form,</li>
+<li><strong>brand domain records</strong> — hostname + purpose,</li>
+<li><strong>sender profile</strong> — from address, sending domain, tracking domain,</li>
+<li>deployment assumptions,</li>
+<li>tests that must pass after extraction.</li>
+</ul>
+<p>The database rows are the part teams forget. An app's source code is portable; an app whose <code>lead_sources.slug</code> is undocumented becomes un-extractable the moment nobody remembers which row it was.</p>
+<h2 id="s12-backend-modularity">Backend modularity</h2>
+<p>New platform functionality lives in feature modules, never brand folders:</p>
+<div class="scroll"><pre class="code"><code>backend/src/modules/tenancy/
+backend/src/modules/identity/
+backend/src/modules/attribution/
+backend/src/modules/communications/</code></pre></div>
+<p>The rule from plan §69: core infrastructure is <strong>data-driven</strong>, never <code>if (tenant === 'cpn')</code>. Brand-specific <em>policy</em> may branch; brand-specific <em>plumbing</em> may not. A sixth tenant next year must require zero schema changes and zero core-code changes.</p>
+<h2 id="s12-page-taxonomy-plan-20">Page taxonomy (plan §20)</h2>
+<p><code>visitorTrackingService</code> currently holds Enterprise-centric path categorization in one function. Adding <code>if CPN path… else if Flotation path…</code> to it would make that function the single least extractable thing in the repo.</p>
+<p>Target: <code>backend/src/modules/tracking/siteTaxonomy/</code> with one module per brand exporting the same interface, selected by resolved brand slug, with the existing Enterprise logic moved verbatim into <code>enterprise.ts</code> as the default.</p>
+<h2 id="s12-deployment">Deployment</h2>
+<p>Path-filtered independent builds:</p>
+<div class="scroll"><pre class="code"><code>apps/cpn-public/**            → CPN app
+apps/ai-flotation-public/**   → AI Flotation app
+apps/refactored-public/**     → Refactored public app
+frontend/**                   → existing enterprise/platform deploy
+backend/**                    → shared platform backend (ONE deployment, not one per brand)</code></pre></div>
+<p>The backend is deployed once. Duplicating it per brand would recreate the exact silo problem this architecture exists to avoid.</p>
+    </section><section id="s13" class="doc">
+      <header class="dochead">
+        <span class="docnum">13</span>
+        <div>
+          <h2 class="doctitle">Target architecture</h2>
+          <p class="docblurb">Ten diagrams of the end state.</p>
+          <p class="docfile"><code>TARGET_ARCHITECTURE.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<hr />
+<h2 id="s13-1-ecosystem-tenant-brand-map">1. Ecosystem tenant / brand map</h2>
+<pre class="mermaid">graph TD
+  P[Refactored.ai platform]
+  P --&gt; T1[Tenant: colaberry]
+  P --&gt; T2[Tenant: cpn]
+  P --&gt; T3[Tenant: ai-flotation]
+  P --&gt; T4[Tenant: refactored]
+
+  T1 --&gt; B1[Brand: colaberry-enterprise]
+  T1 --&gt; B2[Brand: colaberry-training]
+  T2 --&gt; B3[Brand: cpn]
+  T3 --&gt; B4[Brand: ai-flotation]
+  T4 --&gt; B5[Brand: refactored]
+
+  B1 --&gt; D1["enterprise.colaberry.ai (web)&lt;br/&gt;colaberry.com (email)"]
+  B2 --&gt; D2["training.colaberry.com (web)&lt;br/&gt;myfreeaiclass.com (web)"]
+  B3 --&gt; D3["cpn.org (web + email)&lt;br/&gt;links.cpn.org (tracking)"]
+  B4 --&gt; D4["aiflotation.com (web + email)&lt;br/&gt;links.aiflotation.com (tracking)"]
+  B5 --&gt; D5["refactored.ai (web + email)&lt;br/&gt;track.refactored.ai (tracking)"]</pre>
+<p>One tenant may own several brands. Colaberry does; the other three do not, yet. That is exactly why tenant and brand are separate tables rather than one.</p>
+<h2 id="s13-2-identity-model">2. Identity model</h2>
+<pre class="mermaid">graph LR
+  PI[platform_identities&lt;br/&gt;one human]
+  PI --&gt; L1[link: lead]
+  PI --&gt; L2[link: enrollment]
+  PI --&gt; L3[link: admin_user]
+  L1 --&gt; LEAD[(leads)]
+  L2 --&gt; ENR[(enrollments)]
+  L3 --&gt; ADM[(admin_users)]
+  PI --&gt; TM[tenant_memberships&lt;br/&gt;tenant + brand + role]
+  TM --&gt; TEN[(tenants)]</pre>
+<p>The three existing identity tables are untouched. <code>platform_identity_links</code> bridges them, with <code>UNIQUE(link_type, linked_entity_id)</code> so one lead can belong to exactly one human.</p>
+<h2 id="s13-3-lead-tenant-context">3. Lead + tenant context</h2>
+<pre class="mermaid">graph TD
+  LEAD["leads #12482&lt;br/&gt;jasmine@example.com&lt;br/&gt;ONE canonical person"]
+  LEAD --&gt; C1["lead_tenant_contexts&lt;br/&gt;cpn / cpn&lt;br/&gt;scholarship_applicant"]
+  LEAD --&gt; C2["lead_tenant_contexts&lt;br/&gt;colaberry / training&lt;br/&gt;learner"]
+  LEAD --&gt; C3["lead_tenant_contexts&lt;br/&gt;colaberry / enterprise&lt;br/&gt;participant"]
+  C1 --&gt; P1["consent, pipeline stage,&lt;br/&gt;first + last touch"]
+  C2 --&gt; P2["consent, pipeline stage,&lt;br/&gt;first + last touch"]
+  C3 --&gt; P3["consent, pipeline stage,&lt;br/&gt;first + last touch"]</pre>
+<p>Consent lives on the context, not the lead. Consenting to CPN scholar updates grants AI Flotation nothing.</p>
+<h2 id="s13-4-anonymous-visitor-to-identified-lead">4. Anonymous visitor to identified lead</h2>
+<pre class="mermaid">sequenceDiagram
+  participant B as Browser
+  participant T as /api/t/event
+  participant R as tenantResolver
+  participant V as visitorTrackingService
+  participant I as /api/ingest
+  participant LC as leadContextService
+
+  B-&gt;&gt;T: pageview + data-site="cpn"
+  T-&gt;&gt;R: resolve(site_slug) [cached, 5min TTL]
+  R--&gt;&gt;T: {tenantId, brandId, sourceId}
+  T-&gt;&gt;V: getOrCreateSession(+context)
+  T-&gt;&gt;V: recordPageEvent(+context)
+  Note over T: unresolved =&gt; null context,&lt;br/&gt;event still recorded (fail-soft)
+  B-&gt;&gt;I: form submit ?source=cpn&amp;entry=scholarship_interest
+  I-&gt;&gt;I: RawLeadPayload, HMAC, normalize, createLead
+  I-&gt;&gt;LC: ensureLeadTenantContext(lead, tenant, brand)
+  LC--&gt;&gt;I: context created, first-touch stamped</pre>
+<h2 id="s13-5-cross-domain-journey">5. Cross-domain journey</h2>
+<pre class="mermaid">sequenceDiagram
+  participant O as cpn.org
+  participant J as journeyLinkService
+  participant D as training.colaberry.com
+  participant S as /api/t/identify
+
+  O-&gt;&gt;J: createJourneyToken({visitor, lead, campaign, originBrand})
+  J--&gt;&gt;O: base64url(payload).hmac  (NO email, 30 min TTL)
+  O-&gt;&gt;D: link ?jx=&lt;token&gt;
+  D-&gt;&gt;S: POST identify {jx}
+  S-&gt;&gt;J: verifyJourneyToken
+  alt valid
+    J--&gt;&gt;S: identifiers only
+    S-&gt;&gt;S: associate destination session, record transition
+  else tampered / expired
+    J--&gt;&gt;S: null
+    S-&gt;&gt;S: reject, no association
+  end</pre>
+<p>The v1 <code>?email=</code> path still works for existing sites and is logged. New ecosystem flows use <code>jx</code> only.</p>
+<h2 id="s13-6-campaign-to-mandrill">6. Campaign to Mandrill</h2>
+<pre class="mermaid">graph TD
+  C["campaigns&lt;br/&gt;tenant_id, brand_id, sender_profile_id"]
+  C --&gt; R{resolveCampaignSender}
+  R --&gt;|1| SP[sender_profile_id]
+  R --&gt;|2| BD["brand default&lt;br/&gt;(logged deprecated)"]
+  R --&gt;|3| LG["settings.sender_email&lt;br/&gt;(logged deprecated)"]
+  R --&gt;|4| PD["platform default&lt;br/&gt;(logged deprecated)"]
+  SP --&gt; X{cross-brand?}
+  X --&gt;|yes| ERR["SenderBrandMismatchError&lt;br/&gt;ContractViolation&lt;br/&gt;NO provider call"]
+  X --&gt;|no| PF{preflight}
+  BD --&gt; PF
+  LG --&gt; PF
+  PD --&gt; PF
+  PF --&gt;|live + fail| BLOCK["SenderPreflightError&lt;br/&gt;send blocked"]
+  PF --&gt;|test mode| OK
+  PF --&gt;|pass| OK[Mandrill adapter]
+  OK --&gt; MD["metadata:&lt;br/&gt;tenant, brand, campaign,&lt;br/&gt;lead, campaignLead, senderProfile"]</pre>
+<h2 id="s13-7-tenant-authorization-request-flow">7. Tenant authorization request flow</h2>
+<pre class="mermaid">graph TD
+  REQ[request] --&gt; ID{platform identity?}
+  ID --&gt;|no| DENY1["emptyContext&lt;br/&gt;tenantScopeWhere = tenant_id: null&lt;br/&gt;matches NOTHING"]
+  ID --&gt;|yes| M[load active tenant_memberships]
+  M --&gt;|db error| DENY2["fail closed&lt;br/&gt;no access"]
+  M --&gt; SEL{requested tenant}
+  SEL --&gt;|superadmin| ANY[any tenant]
+  SEL --&gt;|member| OK[that tenant]
+  SEL --&gt;|not a member| NULLT["tenantId = null"]
+  OK --&gt; ROLES["roles scoped to THAT tenant only&lt;br/&gt;(no cross-tenant role bleed)"]
+  ROLES --&gt; G{guard}
+  G --&gt;|foreign tenant row| E404["404 TenantIsolationViolation"]
+  G --&gt;|missing permission| E403["403 AuthorizationError"]
+  G --&gt;|ok| PROCEED</pre>
+<p>Resolution fails soft. Authorization fails closed. That asymmetry is the core invariant.</p>
+<h2 id="s13-8-extraction-boundaries">8. Extraction boundaries</h2>
+<pre class="mermaid">graph LR
+  subgraph apps
+    A1[cpn-public]
+    A2[ai-flotation-public]
+    A3[refactored-public]
+  end
+  subgraph packages
+    K1[app-build]
+    K2[brand-system]
+    K3[tracking-sdk]
+  end
+  BE[backend HTTP API]
+  A1 --&gt; K1 &amp; K2 &amp; K3
+  A2 --&gt; K1 &amp; K2 &amp; K3
+  A3 --&gt; K1 &amp; K2 &amp; K3
+  A1 -.HTTP.-&gt; BE
+  A2 -.HTTP.-&gt; BE
+  A3 -.HTTP.-&gt; BE
+  A1 -x A2
+  A1 -x BE</pre>
+<p>Enforced by <code>scripts/validate-app-boundaries.js</code>, which exits non-zero on a forbidden edge. Verified to fail on a deliberately planted violation, not merely to pass.</p>
+<h2 id="s13-9-organization-membership">9. Organization membership</h2>
+<pre class="mermaid">graph TD
+  T[(tenants)] --&gt; O["organizations&lt;br/&gt;+ tenant_id, brand_id, organization_type"]
+  O --&gt; OM["org_members&lt;br/&gt;+ platform_identity_id"]
+  O --&gt; OC[org_cohorts]
+  OM --&gt; ENR[(enrollments)]
+  OM --&gt; PI[(platform_identities)]
+  O -.unchanged.-&gt; OE["owner_enrollment_id&lt;br/&gt;NOT NULL UNIQUE"]</pre>
+<p><code>owner_enrollment_id</code> is deliberately untouched. Making organizations creatable without an enrollment is real work on the registration path and belongs to the CPN product project.</p>
+<h2 id="s13-10-intelligence-tenant-isolation">10. Intelligence tenant isolation</h2>
+<pre class="mermaid">graph TD
+  Q[intelligence query] --&gt; CTX{allowed tenant context}
+  CTX --&gt;|absent| DENY[deny]
+  CTX --&gt;|tenant operator| SCOPED["filter: tenant_id IN authorized"]
+  CTX --&gt;|platform.cross_tenant| ALL[ecosystem-wide]
+  SCOPED --&gt; G1[graph nodes]
+  SCOPED --&gt; G2[graph edges]
+  SCOPED --&gt; G3[decision logs]
+  ALL --&gt; G1 &amp; G2 &amp; G3</pre>
+<p>Cross-tenant reasoning requires the explicit <code>platform.cross_tenant</code> permission, which only <code>platform_super_admin</code> carries. Holding an admin token grants it nothing.</p>
+    </section><section id="s14" class="doc">
+      <header class="dochead">
+        <span class="docnum">14</span>
+        <div>
+          <h2 class="doctitle">Test matrix</h2>
+          <p class="docblurb">What gets tested, at what depth, and why.</p>
+          <p class="docfile"><code>TEST_MATRIX.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 · <strong>Base:</strong> <code>bb152ded</code></p>
+<p>Follows root <code>CLAUDE.md</code>: ~70% unit, ~20% integration, ~10% E2E, with test investment scaled to blast radius.</p>
+<hr />
+<h2 id="s14-risk-tiering">Risk tiering</h2>
+<div class="scroll"><table><thead><tr><th>Surface</th><th>Blast radius</th><th>Reversible?</th><th>Required coverage</th></tr></thead><tbody><tr><td>Tenant authorization / isolation</td><td><strong>High</strong></td><td>no (data leak is permanent)</td><td>unit + integration + negative IDOR</td></tr><tr><td>Sender profile resolution</td><td><strong>High</strong></td><td>no (a wrong-brand send cannot be unsent)</td><td>unit + integration + negative cross-brand</td></tr><tr><td>Lead context creation</td><td>High</td><td>yes</td><td>unit + integration + idempotency</td></tr><tr><td>Tracking context stamping</td><td>Medium</td><td>yes</td><td>unit + fail-soft</td></tr><tr><td>Domain/host resolution</td><td>Medium</td><td>yes</td><td>unit + cache behavior</td></tr><tr><td>Journey reporting</td><td>Low</td><td>yes</td><td>unit</td></tr><tr><td>Admin ecosystem UI</td><td>Low</td><td>yes</td><td>typecheck</td></tr></tbody></table></div>
+<h2 id="s14-unit-tests">Unit tests</h2>
+<div class="scroll"><table><thead><tr><th>Test</th><th>Asserts</th></tr></thead><tbody><tr><td><code>tenantResolver.test</code></td><td>slug → tenant; unknown slug → null, never throw</td></tr><tr><td><code>brandDomainResolver.test</code></td><td>hostname+purpose → brand/tenant; legacy host-map fallback fires and logs; cache hit does not re-query; TTL expiry re-queries</td></tr><tr><td><code>leadContextService.test</code></td><td>creates context when absent; reuses when present; <strong>never overwrites first-touch</strong>; updates last-touch; second identical call changes nothing</td></tr><tr><td><code>senderProfileResolver.test</code></td><td>prefers <code>sender_profile_id</code>; falls back to brand default with deprecation log; falls back to legacy JSONB with deprecation log; <strong>cross-brand profile rejected before send</strong></td></tr><tr><td><code>senderPreflight.test</code></td><td>blocks live send on unverified domain / inactive profile / missing unsubscribe / missing physical address; permits test-mode</td></tr><tr><td><code>communicationPreference.test</code></td><td>per-brand allow/deny; global suppression overrides brand allow</td></tr><tr><td><code>journeyLinkService.test</code></td><td>signs and verifies; rejects expired; rejects tampered payload; <strong>contains no email</strong></td></tr><tr><td><code>trackingContextResolver.test</code></td><td>resolves from <code>site_slug</code>; falls back to host; unknown → null context and event still recorded</td></tr><tr><td><code>tenantAuthorization.test</code></td><td>membership grants; absent membership denies; platform superadmin crosses; <strong>role string never compared inline</strong></td></tr></tbody></table></div>
+<h2 id="s14-integration-tests">Integration tests</h2>
+<div class="scroll"><table><thead><tr><th>Test</th><th>Asserts</th></tr></thead><tbody><tr><td>lead ingestion → lead context</td><td><code>/api/ingest</code> creates <code>Lead</code> + <code>LeadTenantContext</code> with correct tenant/brand from source</td></tr><tr><td>visitor → identity → backfill</td><td><code>resolveIdentity</code> links visitor, backfills session + page-event <code>lead_id</code>, preserves tenant/brand</td></tr><tr><td>same lead → two brands</td><td>second brand's form does <strong>not</strong> duplicate the canonical <code>Lead</code>; creates a second context; first context untouched</td></tr><tr><td>campaign → sender profile</td><td>live send resolves profile, passes preflight, attaches Mandrill metadata</td></tr><tr><td>campaign click → session → conversion</td><td><code>campaign_id</code> survives from click through session to <code>LeadTenantContext</code></td></tr><tr><td>organization → membership → tenant context</td><td>org creation stamps tenant; member links platform identity</td></tr><tr><td>Mandrill webhook → correct tenant</td><td>webhook metadata restores tenant/brand/campaign/lead before writing activity</td></tr></tbody></table></div>
+<h2 id="s14-negative-isolation-tests-plan-19-1-53">Negative / isolation tests (plan §19.1, §53)</h2>
+<p>Every one of these must return <strong>404</strong> (cross-tenant resource) or <strong>403</strong> (unauthorized tenant scope), with <strong>no foreign tenant data in the response body</strong>:</p>
+<div class="scroll"><table><thead><tr><th>Attempt</th><th>Expected</th></tr></thead><tbody><tr><td>CPN admin GET AI Flotation campaign by UUID</td><td>404</td></tr><tr><td>AI Flotation user GET CPN lead context</td><td>404</td></tr><tr><td>Enterprise manager GET another org's private member data</td><td>404</td></tr><tr><td>CPN admin lists campaigns</td><td>only CPN campaigns, count excludes others</td></tr><tr><td>CPN campaign + AI Flotation sender profile</td><td>rejected in resolver, <code>ContractViolation</code>, <strong>no provider call</strong></td></tr><tr><td>public track event with <code>tenant_id</code> in body</td><td>body value ignored; server-resolved value used</td></tr><tr><td>public ingest with <code>brand_id</code> in body</td><td>body value ignored</td></tr><tr><td>expired journey token</td><td>rejected, no context association</td></tr><tr><td>tampered journey token</td><td>rejected, signature failure logged</td></tr></tbody></table></div>
+<p>The "public body carries <code>tenant_id</code>" pair is the most important test in this matrix. It is the difference between a tenancy model and tenancy-shaped decoration.</p>
+<h2 id="s14-e2e-playwright-tests-systemv2">E2E (Playwright, <code>/tests/systemV2</code>)</h2>
+<div class="scroll"><table><thead><tr><th>Spec</th><th>Covers</th></tr></thead><tbody><tr><td>CPN skeleton journey</td><td>pageview → CTA → form start → submit → lead + context + journey visible</td></tr><tr><td>AI Flotation skeleton journey</td><td>workflow intake end to end</td></tr><tr><td>Refactored skeleton journey</td><td>platform interest intake</td></tr><tr><td>cross-brand journey</td><td>one person, two brands, one canonical lead</td></tr><tr><td>admin context switch</td><td>only authorized tenants appear in the switcher</td></tr><tr><td>tenant isolation</td><td>UI-level confirmation of the negative tests above</td></tr></tbody></table></div>
+<p><strong>Execution status:</strong> authored, not executed in this environment (no running stack / staging credentials). Recorded as a known gap in <a href="#">BASELINE_TEST_RESULTS.md</a> §5 and in the validation report rather than reported as passing.</p>
+<h2 id="s14-idempotency-assertions-plan-55-root-claude-md">Idempotency assertions (plan §55, root <code>CLAUDE.md</code>)</h2>
+<p>Every seed and backfill has a test that <strong>runs it twice</strong> and asserts the second run reports zero <code>updated</code> and zero new rows. A seed that is only tested once is not tested.</p>
+<h2 id="s14-gate-exit-criteria">Gate exit criteria</h2>
+<p>A gate is complete when: its unit tests pass, <code>tsc --noEmit</code> is clean, the seven baseline suites still pass, and its PROGRESS.md entry carries concrete verification evidence.</p>
+    </section><section id="s15" class="doc">
+      <header class="dochead">
+        <span class="docnum">15</span>
+        <div>
+          <h2 class="doctitle">Baseline results</h2>
+          <p class="docblurb">The measurement taken before anything changed.</p>
+          <p class="docfile"><code>BASELINE_TEST_RESULTS.md</code></p>
+        </div>
+      </header>
+      <p><strong>Session:</strong> CC-20260821-m6t4 <strong>Recorded:</strong> 2026-08-21 <strong>Commit:</strong> <code>bb152ded</code> — <code>origin/main</code>, clean worktree at <code>C:\Users\ali_m\multitenancy-wt</code> <strong>Branch:</strong> <code>workstream/multi-tenant-ecosystem</code> (created from <code>origin/main</code>)</p>
+<p>Plan §24 requires this snapshot <strong>before</strong> schema changes so that pre-existing failures are never attributed to the tenancy work.</p>
+<hr />
+<h2 id="s15-1-working-tree-state">1. Working tree state</h2>
+<div class="scroll"><pre class="code"><code>$ git rev-parse --abbrev-ref HEAD
+workstream/multi-tenant-ecosystem
+$ git log --oneline -1
+bb152ded PROGRESS.md: log org chart v4 (...) (#1679)</code></pre></div>
+<p>Clean at the time of capture. <code>node_modules</code> supplied by NTFS junction to an existing install of the same lockfile (workspace hoisting puts nearly everything at the repo root).</p>
+<h2 id="s15-2-type-check">2. Type check</h2>
+<div class="scroll"><pre class="code"><code>$ cd backend &amp;&amp; ./node_modules/.bin/tsc --noEmit
+$ echo $?
+0</code></pre></div>
+<p><strong>Result: CLEAN — 0 errors.</strong> TypeScript 5.9.3 resolved from the workspace install.</p>
+<blockquote>Note for future sessions: a bare <code>npx tsc</code> inside <code>/backend</code> can resolve a stale TypeScript and report a false clean. This run used the workspace binary explicitly and confirmed the version before trusting the result.</blockquote>
+<h2 id="s15-3-targeted-unit-integration-suites">3. Targeted unit / integration suites</h2>
+<p>Selected for direct relevance to the systems this project touches: leads, ingest, tracking, campaigns, organizations.</p>
+<div class="scroll"><pre class="code"><code>$ npx jest --testPathPattern "(orgService|adminOrgService|visitorTrackingIdentity|
+    externalLeadIngestService|campaignTransport|ensurePageEventLeadId|
+    ingestStatusCountsBySource)"</code></pre></div>
+<div class="scroll"><table><thead><tr><th>Suite</th><th>Result</th><th>Time</th></tr></thead><tbody><tr><td><code>src/services/email/__tests__/campaignTransport.test.ts</code></td><td>PASS</td><td>20.2 s</td></tr><tr><td><code>src/__tests__/services/externalLeadIngestService.test.ts</code></td><td>PASS</td><td>23.1 s</td></tr><tr><td><code>src/services/__tests__/ingestStatusCountsBySource.test.ts</code></td><td>PASS</td><td>37.9 s</td></tr><tr><td><code>src/services/__tests__/adminOrgService.test.ts</code></td><td>PASS</td><td>38.0 s</td></tr><tr><td><code>src/services/__tests__/orgService.test.ts</code></td><td>PASS</td><td>38.5 s</td></tr><tr><td><code>src/services/__tests__/visitorTrackingIdentity.test.ts</code></td><td>PASS</td><td>39.4 s</td></tr><tr><td><code>src/db/__tests__/ensurePageEventLeadId.test.ts</code></td><td>PASS</td><td>47.0 s</td></tr></tbody></table></div>
+<div class="scroll"><pre class="code"><code>Test Suites: 7 passed, 7 total
+Tests:       77 passed, 77 total
+Time:        62.1 s</code></pre></div>
+<p><strong>Result: 77/77 passing. Zero pre-existing failures in the affected surface area.</strong></p>
+<h2 id="s15-4-pre-existing-warnings-not-failures-not-caused-by">4. Pre-existing warnings (not failures, not caused by this project)</h2>
+<ul>
+<li><code>ts-jest[config] (WARN)</code> — <code>isolatedModules</code> is deprecated and moves to <code>tsconfig.json</code> in</li>
+</ul>
+<p>  ts-jest v30. Present on every suite run. Repo-wide, unrelated to tenancy.</p>
+<h2 id="s15-5-not-run-and-why">5. Not run, and why</h2>
+<div class="scroll"><table><thead><tr><th>Suite</th><th>Reason</th></tr></thead><tbody><tr><td>Full backend jest (783 test files)</td><td>Wall-clock cost far exceeds its value as a baseline; the targeted set covers every system this project modifies. Full-suite parity is a Gate 7 concern, not a Gate 0 one.</td></tr><tr><td>Playwright <code>/tests/systemV2</code></td><td>Requires a running stack and staging credentials not available in this environment. Recorded as a known coverage gap; the ecosystem E2E suite specified in plan §54 is authored but not executed here.</td></tr><tr><td>Frontend build</td><td>Known to require Docker in this repo rather than a local <code>react-scripts build</code>. Frontend typecheck is the CI-authoritative gate and is run at Gate 7.</td></tr></tbody></table></div>
+<h2 id="s15-6-attribution-rule">6. Attribution rule</h2>
+<p>Any failure observed after this point in either the type check or the seven suites above is <strong>caused by the tenancy work</strong> and must be fixed before the corresponding gate is marked complete. Failures outside this set are triaged against a fresh baseline before being attributed.</p>
+    </section><section id="s16" class="doc">
+      <header class="dochead">
+        <span class="docnum">16</span>
+        <div>
+          <h2 class="doctitle">Isolation evidence</h2>
+          <p class="docblurb">Generated by running the tests. 73 checks, 0 failures.</p>
+          <p class="docfile"><code>ISOLATION_EVIDENCE.md</code></p>
+        </div>
+      </header>
+      <p><strong>GENERATED FILE. Do not edit by hand.</strong></p>
+<p>Produced by <code>backend/src/scripts/generateIsolationEvidence.js</code>, which runs the isolation tests and reports their real results. Every line below reflects a test that actually ran at the commit named here. If a test is removed its line disappears; if a test fails the document says so. It cannot drift from the behaviour it certifies, because it is not written independently of it.</p>
+<ul>
+<li><strong>Commit:</strong> <code>bfbf66769aa142c13ab9fe83120e1d96979e7264</code></li>
+<li><strong>Generated:</strong> 2026-08-22T09:47:38.949Z</li>
+<li><strong>Checks passed:</strong> 73</li>
+<li><strong>Checks failed:</strong> 0</li>
+</ul>
+<p><strong>Result: every isolation check passed at this commit.</strong></p>
+<hr />
+<h2 id="s16-why-this-exists">Why this exists</h2>
+<p>Career Pathways Network is a separate legal entity, and its data isolation is a formal grant and donor commitment rather than an internal preference. A control that silently works produces no evidence that it worked. <strong>The refusals are the evidence</strong>: a record containing only successful reads would demonstrate nothing about a boundary.</p>
+<h2 id="s16-controls-and-what-each-one-asserts">Controls and what each one asserts</h2>
+<h3 id="s16-access-control">Access control</h3>
+<p>An operator can reach only the tenants they hold an active membership in. Roles do not carry from one tenant into another. Unclassified records are reachable only by a platform administrator. A request with no identity matches no records at all.</p>
+<p>_21 checks passed, 0 failed._</p>
+<ul>
+<li><code>PASS</code> buildRequestContext › gives an unauthenticated request no access at all</li>
+<li><code>PASS</code> buildRequestContext › auto-selects the tenant when the identity belongs to exactly one</li>
+<li><code>PASS</code> buildRequestContext › refuses to guess when the identity belongs to several tenants</li>
+<li><code>PASS</code> buildRequestContext › ignores a requested tenant the identity has no membership in</li>
+<li><code>PASS</code> buildRequestContext › does not carry roles from one tenant into another</li>
+<li><code>PASS</code> buildRequestContext › lets a platform superadmin operate in a tenant they hold no membership in</li>
+<li><code>PASS</code> buildRequestContext › fails closed when memberships cannot be read</li>
+<li><code>PASS</code> buildRequestContext › honours a brand-scoped membership and refuses a brand outside it</li>
+<li><code>PASS</code> buildRequestContext › treats a null brand_id membership as covering every brand in the tenant</li>
+<li><code>PASS</code> tenantScopeWhere › is unrestricted for a platform superadmin</li>
+<li><code>PASS</code> tenantScopeWhere › pins to the selected tenant</li>
+<li><code>PASS</code> tenantScopeWhere › matches NOTHING for a context with no memberships</li>
+<li><code>PASS</code> canAccessTenant › denies a row owned by another tenant</li>
+<li><code>PASS</code> canAccessTenant › denies an unclassified (null-tenant) row to a normal operator</li>
+<li><code>PASS</code> canAccessTenant › allows the platform superadmin to reach unclassified rows</li>
+<li><code>PASS</code> guards › raises 404, not 403, for a foreign tenant’s row</li>
+<li><code>PASS</code> guards › raises 403 for a missing permission inside an authorized tenant</li>
+<li><code>PASS</code> guards › blocks a non-superadmin from ecosystem operations</li>
+<li><code>PASS</code> guards › requireBrandAccess: foreign tenant is 404, wrong brand in own tenant is 403</li>
+<li><code>PASS</code> role registry wiring › grants a marketer campaign.send but not sender.write</li>
+<li><code>PASS</code> role registry wiring › grants an unknown role nothing</li>
+</ul>
+<h3 id="s16-audit-trail">Audit trail</h3>
+<p>Every boundary decision is recorded, refusals included, before any error is raised. Cross-tenant administrator access is recorded on the permitted path as well. The audit never changes an access outcome: if the audit store is unreachable the boundary still holds and the lost record is reported.</p>
+<p>_13 checks passed, 0 failed._</p>
+<ul>
+<li><code>PASS</code> the denials are the evidence › records a cross-tenant denial and still throws 404</li>
+<li><code>PASS</code> the denials are the evidence › writes the audit row BEFORE throwing, so a swallowed error still leaves evidence</li>
+<li><code>PASS</code> the denials are the evidence › records an unauthenticated attempt rather than ignoring it</li>
+<li><code>PASS</code> the denials are the evidence › records a permission denial with the permission under test</li>
+<li><code>PASS</code> allowed access is recorded too › records a permitted read</li>
+<li><code>PASS</code> allowed access is recorded too › records a superadmin crossing tenants, which is the most sensitive allowed action</li>
+<li><code>PASS</code> brand scope keeps isolation and permissions distinguishable › a foreign tenant is recorded as an isolation event</li>
+<li><code>PASS</code> brand scope keeps isolation and permissions distinguishable › a wrong brand inside your own tenant is recorded as a permissions gap, not isolation</li>
+<li><code>PASS</code> the audit can never change the outcome › still DENIES when the audit table is unreachable</li>
+<li><code>PASS</code> the audit can never change the outcome › still ALLOWS legitimate work when the audit table is unreachable</li>
+<li><code>PASS</code> the audit can never change the outcome › shouts when a row is dropped, carrying the record it could not persist</li>
+<li><code>PASS</code> correlation and provenance › carries the correlation id, actor email and ip through to the row</li>
+<li><code>PASS</code> correlation and provenance › stamps occurred_at on every row</li>
+</ul>
+<h3 id="s16-contact-confidentiality">Contact confidentiality</h3>
+<p>One person may hold relationships with several brands without those relationships being visible to each other. Consent is recorded per brand and is never inherited across brands or silently withdrawn.</p>
+<p>_14 checks passed, 0 failed._</p>
+<ul>
+<li><code>PASS</code> ensureLeadTenantContext — creation › creates a context stamped with first AND last touch when none exists</li>
+<li><code>PASS</code> ensureLeadTenantContext — creation › defaults consent to false — a new brand relationship never inherits consent</li>
+<li><code>PASS</code> ensureLeadTenantContext — creation › records consent with its source when the form actually granted it</li>
+<li><code>PASS</code> ensureLeadTenantContext — first touch is write-once › never overwrites a first-touch field that is already set</li>
+<li><code>PASS</code> ensureLeadTenantContext — first touch is write-once › fills a first-touch field that is still null — completion is not overwriting</li>
+<li><code>PASS</code> ensureLeadTenantContext — first touch is write-once › always advances last touch</li>
+<li><code>PASS</code> ensureLeadTenantContext — idempotency › reuses the existing row rather than creating a second relationship</li>
+<li><code>PASS</code> ensureLeadTenantContext — idempotency › reports a replayed identical call as not-updated</li>
+<li><code>PASS</code> ensureLeadTenantContext — idempotency › never silently revokes consent when a later form omits the checkbox</li>
+<li><code>PASS</code> getAuthorizedLeadContexts — cross-tenant confidentiality › hides another tenant’s relationship from a tenant-scoped operator</li>
+<li><code>PASS</code> getAuthorizedLeadContexts — cross-tenant confidentiality › returns nothing for an operator with no memberships</li>
+<li><code>PASS</code> getAuthorizedLeadContexts — cross-tenant confidentiality › returns every relationship to the platform superadmin</li>
+<li><code>PASS</code> hasBrandRelationship › is true when a context row exists</li>
+<li><code>PASS</code> hasBrandRelationship › is false when it does not</li>
+</ul>
+<h3 id="s16-outbound-identity">Outbound identity</h3>
+<p>A campaign cannot send using another brand’s sending identity; the attempt is refused before any message reaches the provider. Live sending is refused until the sending domain is verified and the required legal footer details are present.</p>
+<p>_15 checks passed, 0 failed._</p>
+<ul>
+<li><code>PASS</code> resolveCampaignSender — resolution order › prefers the campaign’s explicit sender profile</li>
+<li><code>PASS</code> resolveCampaignSender — resolution order › falls back to the brand default and logs the deprecation</li>
+<li><code>PASS</code> resolveCampaignSender — resolution order › falls back to legacy JSONB settings — today’s campaigns keep working</li>
+<li><code>PASS</code> resolveCampaignSender — resolution order › falls back to the platform default when nothing is configured</li>
+<li><code>PASS</code> resolveCampaignSender — cross-brand rejection › refuses a sender profile belonging to another brand, before any provider call</li>
+<li><code>PASS</code> resolveCampaignSender — cross-brand rejection › classifies the mismatch as a ContractViolation</li>
+<li><code>PASS</code> preflightSender › passes for an active profile on a fully healthy domain</li>
+<li><code>PASS</code> preflightSender › accepts a configured-but-not-passing DMARC (p=none is a valid rollout posture)</li>
+<li><code>PASS</code> preflightSender › reports every failure at once, not just the first</li>
+<li><code>PASS</code> preflightSender › fails a legacy-fallback sender — nothing about it has been verified</li>
+<li><code>PASS</code> assertCanSendLive › blocks a live send when preflight fails</li>
+<li><code>PASS</code> assertCanSendLive › permits a test-mode send and still reports the failures</li>
+<li><code>PASS</code> assertCanSendLive › permits a live send when everything is healthy</li>
+<li><code>PASS</code> buildProviderMetadata › carries every identifier the webhook needs to restore context</li>
+<li><code>PASS</code> buildProviderMetadata › omits identifiers that are genuinely absent rather than emitting nulls</li>
+</ul>
+<h3 id="s16-cross-site-identification">Cross-site identification</h3>
+<p>Context passed between sites carries identifiers only and never an email address. Links expire, and altered or expired links are refused.</p>
+<p>_10 checks passed, 0 failed._</p>
+<ul>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › round-trips every identifier</li>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › carries no email or other PII in the encoded payload</li>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › rejects a tampered payload</li>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › rejects a tampered signature</li>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › rejects an expired token</li>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › rejects malformed input without throwing</li>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › rejects a token whose payload is not valid JSON</li>
+<li><code>PASS</code> createJourneyToken / verifyJourneyToken › defaults every identifier to null when nothing is supplied</li>
+<li><code>PASS</code> buildJourneyUrl › appends the token as ?jx= and preserves existing query params</li>
+<li><code>PASS</code> buildJourneyUrl › never puts an email in the URL</li>
+</ul>
+<h2 id="s16-scope-and-limits-stated-plainly">Scope and limits, stated plainly</h2>
+<ul>
+<li>These are automated checks of the enforcement logic. They are not a penetration test and they are not an independent audit.</li>
+<li>They cover the tenancy layer. They do not cover physical security, database administrator access, backup handling, or any control outside this application.</li>
+<li>The audit trail records decisions made through the audited guards. A code path that bypasses those guards would not appear here, which is why the guards are the single place a boundary decision is made.</li>
+<li>Whether any scholarship applicants are minors remains unanswered, and it carries retention and consent obligations that are separate from tenant isolation.</li>
+</ul>
+    </section></main>
+</div>

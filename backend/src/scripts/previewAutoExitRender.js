@@ -325,7 +325,7 @@ To go live: tag @CB System set intern nudge mode live in any Basecamp thread.`);
   const r = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     subject: '[PREVIEW] Auto-exit flow renders - exit email + Ali digest + BC notify todo',
     text,
     html: previewHtml,

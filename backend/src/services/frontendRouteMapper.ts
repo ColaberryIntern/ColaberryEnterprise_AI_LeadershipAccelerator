@@ -6,11 +6,12 @@
  * User can override via UI dropdown.
  */
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import Capability from '../models/Capability';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'route_mapper' });
   return _openai;
 }
 

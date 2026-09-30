@@ -1,0 +1,443 @@
+import { Op } from 'sequelize';
+import CertQuestion from '../../models/CertQuestion';
+import CertQuestionRevision, {
+  CertQuestionOption,
+  CertQuestionRevisionAttributes,
+  CertReviewStatus,
+  CertDifficulty,
+} from '../../models/CertQuestionRevision';
+
+/**
+ * certQuestionBankService — the governed path between the question bank and a
+ * student. Two guarantees live here, and both are acceptance criteria:
+ *
+ *   1. ONLY AN APPROVED REVISION IS EVER SERVED. A draft has not been read by a
+ *      human. AI may draft an item, but a wrong answer key is worse than no
+ *      practice at all, so nothing reaches a student without a reviewer.
+ *
+ *   2. ANSWER DATA NEVER LEAVES BEFORE SUBMISSION. `toSafeItem` is the only
+ *      sanctioned way to shape an item for a client, and it builds its result by
+ *      NAMING the safe fields rather than deleting the unsafe ones. That direction
+ *      matters: a delete-list silently starts leaking the day someone adds a new
+ *      answer-bearing column, an allow-list simply omits it.
+ *
+ * The scoring and selection logic is written as pure functions taking plain rows,
+ * so the boundary cases are unit-tested without a database — same convention as
+ * timelineGatingService's pure evaluator.
+ *
+ * NOTE ON PROVENANCE: this bank contains Colaberry-authored items only. Questions
+ * are written against the publicly published exam blueprint; no third-party or
+ * purchased practice content is imported, reworded or derived. `serveGuard` treats
+ * a non-authored provenance as unservable rather than trusting the flag was set by
+ * mistake.
+ */
+
+// ── shapes ───────────────────────────────────────────────────────────────────
+
+/** Exactly what a client may see before it submits an answer. */
+export interface SafeQuestionItem {
+  question_key: string;
+  revision: number;
+  domain_id: string;
+  objective_id: string | null;
+  stem: string;
+  options: CertQuestionOption[];
+  /** How many options to select — the real exam always states this. */
+  select_count: number;
+  difficulty: CertDifficulty;
+}
+
+/** What a client may see AFTER it has submitted that item. */
+export interface RevealedQuestionItem extends SafeQuestionItem {
+  correct_keys: string[];
+  rationale: string;
+  distractor_rationales: Record<string, string>;
+  your_selection: string[];
+  is_correct: boolean;
+}
+
+/** The minimal revision shape the pure functions need. */
+export type RevisionLike = Pick<
+  CertQuestionRevisionAttributes,
+  | 'question_key' | 'revision' | 'domain_id' | 'objective_id' | 'stem' | 'options'
+  | 'select_count' | 'difficulty' | 'correct_keys' | 'rationale'
+  | 'distractor_rationales' | 'review_status' | 'active_from' | 'active_to'
+>;
+
+// ── pure core ────────────────────────────────────────────────────────────────
+
+/**
+ * Shape an approved revision for delivery to a student.
+ *
+ * Built as an allow-list. Do not refactor this into `{ ...revision, correct_keys:
+ * undefined }` — a spread of a Sequelize instance also behaves differently from a
+ * spread of a plain row, which has bitten this repo before.
+ */
+export function toSafeItem(revision: RevisionLike): SafeQuestionItem {
+  return {
+    question_key: revision.question_key,
+    revision: revision.revision,
+    domain_id: revision.domain_id,
+    objective_id: revision.objective_id ?? null,
+    stem: revision.stem,
+    options: (revision.options ?? []).map((o) => ({ key: o.key, text: o.text })),
+    select_count: revision.select_count ?? 1,
+    difficulty: (revision.difficulty ?? 'medium') as CertDifficulty,
+  };
+}
+
+/**
+ * Score one selection against the stored key.
+ *
+ * Set equality, not overlap: a multi-response item asking for two answers is
+ * correct only when the student picked exactly the right two. Partial credit would
+ * quietly inflate readiness, and the real exam does not award it. Duplicate and
+ * out-of-order selections are normalised so a client quirk cannot change a result.
+ */
+export function scoreSelection(correctKeys: string[] | undefined, selectedKeys: string[] | undefined): boolean {
+  const correct = new Set((correctKeys ?? []).map(String));
+  const selected = new Set((selectedKeys ?? []).map(String));
+  if (correct.size === 0) return false; // an item with no key is never "correct"
+  if (correct.size !== selected.size) return false;
+  for (const key of correct) if (!selected.has(key)) return false;
+  return true;
+}
+
+/** True when a revision is approved and inside its active window. */
+/**
+ * The three fields servability actually depends on.
+ *
+ * Narrower than `RevisionLike` on purpose. This predicate reads only the review
+ * status and the active window, and demanding a full revision to ask a question
+ * about three fields forced callers holding a partial row -- a drift check
+ * selecting a handful of columns, say -- to invent a stem and a difficulty to
+ * satisfy the compiler. Every existing caller passes a superset, so narrowing
+ * the requirement breaks nothing.
+ */
+export type ServabilityFields = Pick<RevisionLike, 'review_status' | 'active_from' | 'active_to'>;
+
+export function isRevisionServable(revision: ServabilityFields, now: Date = new Date()): boolean {
+  if (revision.review_status !== 'approved') return false;
+  if (revision.active_from && new Date(revision.active_from) > now) return false;
+  if (revision.active_to && new Date(revision.active_to) <= now) return false;
+  return true;
+}
+
+/**
+ * Choose which revision of a question to serve: the highest-numbered servable one.
+ * Returns null when every revision is draft, in review, retired or out of window —
+ * the caller must then omit the question, never fall back to an unapproved row.
+ *
+ * Constrained to the servability fields plus `revision`, which is all it reads.
+ * A caller holding a partial row — a drift check selecting a handful of columns —
+ * must be able to ask "which revision would a student get?" without inventing a
+ * stem and a difficulty to satisfy the compiler. Every full-row caller still fits.
+ */
+export function pickServableRevision<T extends ServabilityFields & { revision: number }>(
+  revisions: T[],
+  now: Date = new Date(),
+): T | null {
+  const servable = revisions.filter((r) => isRevisionServable(r, now));
+  if (servable.length === 0) return null;
+  return servable.reduce((best, r) => (r.revision > best.revision ? r : best));
+}
+
+/**
+ * Reveal an item after submission — the only place answer data is attached, and
+ * only ever for an item this student has actually answered.
+ */
+export function toRevealedItem(revision: RevisionLike, selectedKeys: string[]): RevealedQuestionItem {
+  return {
+    ...toSafeItem(revision),
+    correct_keys: (revision.correct_keys ?? []).map(String),
+    rationale: revision.rationale,
+    distractor_rationales: revision.distractor_rationales ?? {},
+    your_selection: (selectedKeys ?? []).map(String),
+    is_correct: scoreSelection(revision.correct_keys, selectedKeys),
+  };
+}
+
+// ── database-backed ──────────────────────────────────────────────────────────
+
+/**
+ * Load the servable revision for each requested question key.
+ *
+ * Retired questions are excluded at the identity level, and anything whose
+ * provenance is not Colaberry-authored is excluded too. Keys with no servable
+ * revision are simply absent from the returned map — callers must handle a short
+ * form rather than substituting an unapproved item.
+ */
+export async function loadServableRevisions(
+  questionKeys: string[],
+  now: Date = new Date(),
+): Promise<Map<string, CertQuestionRevision>> {
+  const out = new Map<string, CertQuestionRevision>();
+  if (questionKeys.length === 0) return out;
+
+  const identities = await CertQuestion.findAll({
+    where: { question_key: { [Op.in]: questionKeys }, is_retired: false },
+    attributes: ['question_key', 'provenance'],
+  });
+  const allowedKeys = identities
+    .filter((q) => q.provenance === 'colaberry_authored')
+    .map((q) => q.question_key);
+  if (allowedKeys.length === 0) return out;
+
+  const revisions = await CertQuestionRevision.findAll({
+    where: { question_key: { [Op.in]: allowedKeys }, review_status: 'approved' },
+  });
+
+  const byKey = new Map<string, CertQuestionRevision[]>();
+  for (const rev of revisions) {
+    const list = byKey.get(rev.question_key) ?? [];
+    list.push(rev);
+    byKey.set(rev.question_key, list);
+  }
+  for (const [key, list] of byKey) {
+    const picked = pickServableRevision(list, now);
+    if (picked) out.set(key, picked);
+  }
+  return out;
+}
+
+/**
+ * Build the safe, ordered payload for a set of served items.
+ *
+ * Takes the session's stored form ([{question_key, revision}]) and returns the
+ * items as the student saw them — pinned to the recorded revision, so a question
+ * approved-then-revised mid-session does not change underneath them.
+ *
+ * THE PIN DELIBERATELY OUTLIVES APPROVAL, AND DELIBERATELY DOES NOT OUTLIVE
+ * RETIREMENT. This function does not require the pinned revision to still be
+ * `approved`, and that is the point: approval moves on. A question is revised,
+ * the new draft waits for a reviewer, and the old revision stops being the
+ * servable one — none of which is a reason to change the paper in front of a
+ * student who is halfway through it.
+ *
+ * Retirement is the opposite kind of signal. `is_retired` on the identity and
+ * `review_status = 'retired'` on the revision both mean "this must not be served
+ * again", which is what you set when an item turns out to be WRONG. Continuing
+ * to serve it because a sitting started before somebody noticed is not integrity,
+ * it is scoring a student against a question already known to be bad. So both
+ * retirement signals are honoured here and approval is not.
+ *
+ * A dropped item simply does not appear in the returned payload. The caller
+ * already handles a form shorter than requested — `cert_sessions.total_count` is
+ * computed from what was actually served — so a sitting shortened by a
+ * retirement scores against the questions that remain rather than counting the
+ * removed one wrong.
+ *
+ * Before 2026-09-09 this function applied neither filter, and nothing recorded
+ * which behaviour was intended. It was found by reviewing the E2E suite against
+ * the item rubric: the E2E resume check (F4) asserts that a resumed sitting
+ * returns what was already answered, and passes whether or not the pinned
+ * revisions are still fit to serve.
+ */
+export async function loadServedItems(
+  served: { question_key: string; revision: number }[],
+): Promise<SafeQuestionItem[]> {
+  if (served.length === 0) return [];
+  const rows = await CertQuestionRevision.findAll({
+    where: {
+      [Op.and]: [
+        { [Op.or]: served.map((s) => ({ question_key: s.question_key, revision: s.revision })) },
+        { review_status: { [Op.ne]: 'retired' } },
+      ],
+    },
+  });
+  // The identity can be retired independently of any single revision, so it is
+  // fetched separately rather than inferred from the revision's status.
+  //
+  // NOTE THE SHAPE: this asks for the rows and READS `is_retired` off them. It
+  // does not ask the database for `is_retired: true` and then treat everything
+  // returned as retired. The first version did exactly that, and it dropped every
+  // question in `certPrepRoutes.fence.test.ts` — whose mock returns its one row
+  // regardless of the WHERE, so a filter that lives only in the query means the
+  // code cannot tell a retired item from a live one. A predicate whose whole
+  // meaning sits in a WHERE clause is a predicate you cannot test and cannot see.
+  const identities = await CertQuestion.findAll({
+    where: { question_key: { [Op.in]: served.map((s) => s.question_key) } },
+    attributes: ['question_key', 'is_retired'],
+  });
+  const retired = new Set(identities.filter((q) => q.is_retired).map((q) => q.question_key));
+
+  const index = new Map(rows.map((r) => [`${r.question_key}#${r.revision}`, r]));
+  const items: SafeQuestionItem[] = [];
+  for (const s of served) {
+    if (retired.has(s.question_key)) continue;
+    const row = index.get(`${s.question_key}#${s.revision}`);
+    // Re-checked in memory for the same reason as above: the WHERE narrows the
+    // result set for efficiency, this decides. If the two ever disagree, the one
+    // that reads the actual value wins.
+    if (row && row.review_status !== 'retired') items.push(toSafeItem(row));
+  }
+  return items;
+}
+
+/**
+ * Candidate question keys per domain, for form building.
+ *
+ * Returns only keys whose latest revision is approved and in window, whose
+ * identity is not retired, and whose provenance is Colaberry-authored — the same
+ * three filters the serving path applies, so a form can never be planned around an
+ * item that would then be refused at serve time.
+ */
+export async function listApprovedKeysByDomain(
+  blueprintVersion: string,
+  domainIds: string[],
+  now: Date = new Date(),
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (domainIds.length === 0) return out;
+
+  const revisions = await CertQuestionRevision.findAll({
+    where: {
+      blueprint_version: blueprintVersion,
+      domain_id: { [Op.in]: domainIds },
+      review_status: 'approved',
+    },
+  });
+  if (revisions.length === 0) return out;
+
+  const identities = await CertQuestion.findAll({
+    where: { question_key: { [Op.in]: Array.from(new Set(revisions.map((r) => r.question_key))) } },
+    attributes: ['question_key', 'provenance', 'is_retired'],
+  });
+  const servableIdentity = new Set(
+    identities.filter((q) => !q.is_retired && q.provenance === 'colaberry_authored').map((q) => q.question_key),
+  );
+
+  // Group by key so pickServableRevision decides which revision counts, then bucket
+  // the surviving keys by the domain that revision belongs to.
+  const byKey = new Map<string, CertQuestionRevision[]>();
+  for (const rev of revisions) {
+    if (!servableIdentity.has(rev.question_key)) continue;
+    const list = byKey.get(rev.question_key) ?? [];
+    list.push(rev);
+    byKey.set(rev.question_key, list);
+  }
+
+  for (const [key, list] of byKey) {
+    const picked = pickServableRevision(list, now);
+    if (!picked) continue;
+    const bucket = out.get(picked.domain_id) ?? [];
+    bucket.push(key);
+    out.set(picked.domain_id, bucket);
+  }
+  for (const [, keys] of out) keys.sort(); // deterministic before any shuffle
+  return out;
+}
+
+// ── authoring lifecycle ──────────────────────────────────────────────────────
+
+export interface DraftRevisionInput {
+  question_key: string;
+  track_id: string;
+  blueprint_version: string;
+  domain_id: string;
+  objective_id?: string | null;
+  scenario_family?: string | null;
+  stem: string;
+  options: CertQuestionOption[];
+  correct_keys: string[];
+  select_count?: number;
+  rationale: string;
+  distractor_rationales?: Record<string, string>;
+  difficulty?: CertDifficulty;
+  author?: string | null;
+}
+
+/**
+ * Create the next draft revision of a question, creating the stable identity row
+ * if this is the first one. Always lands as 'draft' — there is no code path that
+ * writes an approved revision directly, including for AI-drafted items.
+ */
+export async function createDraftRevision(input: DraftRevisionInput): Promise<CertQuestionRevision> {
+  await CertQuestion.findOrCreate({
+    where: { question_key: input.question_key },
+    defaults: {
+      question_key: input.question_key,
+      track_id: input.track_id,
+      scenario_family: input.scenario_family ?? null,
+      provenance: 'colaberry_authored',
+      created_by: input.author ?? null,
+    },
+  });
+
+  const latest = await CertQuestionRevision.findOne({
+    where: { question_key: input.question_key },
+    order: [['revision', 'DESC']],
+  });
+  const nextRevision = (latest?.revision ?? 0) + 1;
+
+  return CertQuestionRevision.create({
+    question_key: input.question_key,
+    revision: nextRevision,
+    blueprint_version: input.blueprint_version,
+    domain_id: input.domain_id,
+    objective_id: input.objective_id ?? null,
+    stem: input.stem,
+    options: input.options,
+    correct_keys: input.correct_keys,
+    select_count: input.select_count ?? 1,
+    rationale: input.rationale,
+    distractor_rationales: input.distractor_rationales ?? {},
+    difficulty: input.difficulty ?? 'medium',
+    author: input.author ?? null,
+    review_status: 'draft',
+  });
+}
+
+/** Validation a revision must pass before a human is asked to review it. */
+export function validateRevision(input: DraftRevisionInput): string[] {
+  const problems: string[] = [];
+  if (!input.stem?.trim()) problems.push('stem is required');
+  if (!input.rationale?.trim()) problems.push('rationale is required');
+  if (!Array.isArray(input.options) || input.options.length < 2) {
+    problems.push('at least 2 options are required');
+  }
+  const optionKeys = new Set((input.options ?? []).map((o) => o.key));
+  if (optionKeys.size !== (input.options ?? []).length) problems.push('option keys must be unique');
+  if (!Array.isArray(input.correct_keys) || input.correct_keys.length === 0) {
+    problems.push('at least one correct key is required');
+  }
+  for (const key of input.correct_keys ?? []) {
+    if (!optionKeys.has(key)) problems.push(`correct key ${key} is not one of the options`);
+  }
+  const declared = input.select_count ?? 1;
+  if (declared !== (input.correct_keys ?? []).length) {
+    // The stem tells the student how many to pick; if that disagrees with the key,
+    // the item is unanswerable and would score everyone wrong.
+    problems.push('select_count must equal the number of correct keys');
+  }
+  return problems;
+}
+
+/**
+ * Move a revision through the review lifecycle. Approval requires a named
+ * reviewer — an item cannot approve itself, and an unattributed approval is not an
+ * audit trail.
+ */
+export async function setReviewStatus(
+  questionKey: string,
+  revision: number,
+  status: CertReviewStatus,
+  reviewer?: string | null,
+): Promise<CertQuestionRevision | null> {
+  const row = await CertQuestionRevision.findOne({ where: { question_key: questionKey, revision } });
+  if (!row) return null;
+
+  if (status === 'approved') {
+    if (!reviewer) {
+      const err: any = new Error('approval requires a reviewer');
+      err.status = 400;
+      err.code = 'CERT_APPROVAL_NEEDS_REVIEWER';
+      throw err;
+    }
+    row.reviewer = reviewer;
+    row.reviewed_at = new Date();
+  }
+  row.review_status = status;
+  await row.save();
+  return row;
+}

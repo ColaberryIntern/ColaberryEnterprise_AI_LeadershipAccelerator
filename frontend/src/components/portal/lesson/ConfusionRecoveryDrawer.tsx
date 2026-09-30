@@ -50,7 +50,7 @@ function buildGenericSections(isLessonMode: boolean, props: ConfusionRecoveryDra
       misconceptions: [
         'Feeling confused doesn\'t mean you\'re falling behind — it means you\'re engaging with challenging material.',
         'You don\'t need to understand everything perfectly before moving forward. Revisiting concepts later often deepens understanding.',
-        'The AI Mentor is available to explain any specific part that\'s unclear — don\'t hesitate to ask.',
+        'Cory, your mentor, is available to explain any specific part that\'s unclear — don\'t hesitate to ask.',
       ],
     };
   }
@@ -71,7 +71,7 @@ function buildGenericSections(isLessonMode: boolean, props: ConfusionRecoveryDra
     misconceptions: [
       'Getting a question wrong doesn\'t mean you don\'t understand the topic — it often means you understood part of it but missed a nuance.',
       'Multiple options may seem correct, but the question asks for the most accurate or complete answer.',
-      'Use the AI Mentor to explore the specific concept behind this question for a deeper explanation.',
+      'Ask Cory to explore the specific concept behind this question for a deeper explanation.',
     ],
   };
 }
@@ -196,8 +196,8 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
                           style={{
                             width: 22,
                             height: 22,
-                            background: '#eef2ff',
-                            color: '#6366f1',
+                            background: 'rgba(251,40,50,0.08)',
+                            color: '#FB2832',
                             fontSize: 11,
                             fontWeight: 700,
                             marginTop: 1,
@@ -249,7 +249,7 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
           <button
             className="btn d-flex align-items-center gap-2 px-4 py-2 w-100 justify-content-center"
             style={{
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              background: 'linear-gradient(135deg, #FB2832 0%, #367895 100%)',
               color: '#fff',
               borderRadius: 8,
               fontSize: 13,
@@ -259,7 +259,7 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
             onClick={handleAskMentor}
           >
             <i className="bi bi-robot"></i>
-            Ask AI Mentor
+            Ask Cory
           </button>
 
           {sections && helpfulFeedback === null && (
@@ -285,7 +285,7 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
           {helpfulFeedback !== null && (
             <div className="text-center mt-2">
               <span className="small" style={{ color: '#64748b' }}>
-                {helpfulFeedback ? '✅ Glad it helped!' : '💬 Try asking the AI Mentor for a personalized explanation'}
+                {helpfulFeedback ? '✅ Glad it helped!' : '💬 Try asking Cory for a personalized explanation'}
               </span>
             </div>
           )}

@@ -1,0 +1,147 @@
+{
+  "_README": [
+    "A WORKED EXAMPLE. Every claim below traces to a commit, a file, or a production read, and each is named in the `verification` field beside it so a reader can check rather than trust.",
+    "Subject: commit 0b389be5 (PR #1537), 'CoryBrain initiative-ticket sync', merged 2026-08-16. Verified live on production 2026-09-02.",
+    "Use this as the shape for the next one. The discipline worth copying is not the prose — it is that no sentence here asserts a number the record cannot produce."
+  ],
+
+  "identity": {
+    "title": "The tickets nobody was closing",
+    "standfirst": "Work was finishing and its tickets were not. A reconciler now checks every open ticket against the initiative it belongs to, on a six-hour cycle, and it shipped switched off so a person had to turn it on.",
+    "organizationDisplayName": "Colaberry",
+    "organizationIdentityMode": "named",
+    "organizationNamingConsent": true,
+    "builderIdentityMode": "anonymous",
+    "builderNamingConsent": false,
+    "productionStatus": "live"
+  },
+
+  "taxonomy": {
+    "industry": "Professional services",
+    "primaryCapability": "Operational reconciliation",
+    "capabilities": [
+      "Autonomous reconciliation",
+      "Scheduled agents",
+      "Reversible bulk operations"
+    ],
+    "stack": ["TypeScript", "Node.js", "PostgreSQL", "Sequelize", "node-cron"],
+    "deliverables": [
+      "A pure classifier with no I/O",
+      "A batched resolver",
+      "A plan / apply / revert command-line tool with an undo log",
+      "A scheduled agent, seeded disabled"
+    ],
+    "builtByType": "colaberry_team"
+  },
+
+  "situation": {
+    "narrative": "Tickets in this system are created from strategic initiatives, and they are meant to follow them. An initiative closes; its tickets should close with it. Nothing did that. The link existed in both directions — a parent ticket carried the initiative's id, a subtask carried it in metadata — and no process ever walked it.\n\nSo the backlog filled with work that had already finished. That is worse than an untidy board. A backlog nobody trusts stops being read, and once it stops being read, the items in it that are genuinely open become invisible too. The cost is not the stale rows; it is that the real ones hide among them.\n\nThe count at the time was 1,323 open CoryBrain tickets that a reconciler could resolve against their initiatives.",
+    "constraints": [
+      "The ticket state machine forbids a direct move from backlog to done, so the fix could not simply write the status.",
+      "A wrong bulk close is expensive and hard to notice: nobody re-reads 1,323 rows to check.",
+      "Three neighbouring services already owned parts of the initiative flow and none could be disturbed."
+    ],
+    "goals": [
+      "Close a ticket only because its initiative closed, never because the ticket is old.",
+      "Make the operation reversible before making it possible.",
+      "Leave the running system able to keep the backlog reconciled without anyone remembering to."
+    ],
+    "verification": {
+      "class": "verified",
+      "method": "repo",
+      "evidenceNote": "Commit 0b389be5, message body, and the reverse-lookup logic in corybrainInitiativeTicketAutoResolver.ts."
+    }
+  },
+
+  "architecture": {
+    "narrative": "The decision and the database were separated first. `corybrainInitiativeTicketResolutionRules.ts` is a pure classifier: given a ticket and the freshly re-queried status of the initiative it belongs to, it decides whether that ticket should close. No I/O, no clock, and deliberately no time-based fallback — an old ticket is not a finished one, and a rule that closes on age would have quietly manufactured the exact wrong answer at scale.\n\n`corybrainInitiativeTicketAutoResolver.ts` does the reading. It resolves every open ticket to its initiative by two different paths — a parent through a reverse lookup on the ticket id, a subtask through the initiative id in its metadata — and batches both rather than issuing a query per row. Closing goes through the orchestrator rather than the ticket service, because the service's state machine refuses backlog to done; the orchestrator is the path that legitimately bypasses it.\n\nThe command-line tool is where the caution lives. It has three modes and they are not interchangeable. `--plan` is read-only: it writes an undo log and a report and changes nothing. `--apply` takes that undo log and, for every row in it, re-derives the classification live before writing — so a plan that has gone stale between generation and execution cannot act on what was true an hour ago. `--revert` restores each row's previous status from the same log.\n\nThe scheduled agent was registered disabled. The cron entry exists, staggered fifteen minutes after its sibling resolver so two bulk jobs never contend, and the registry seed set `enabled: false`. Turning it on was a person's decision, taken after reading a plan.",
+    "stack": ["TypeScript", "Node.js", "PostgreSQL", "Sequelize", "node-cron"],
+    "capabilities": [
+      "Pure decision logic, testable without a database",
+      "Batched two-path resolution",
+      "Reversible bulk write with a re-derivation step",
+      "Scheduled execution behind a human gate"
+    ],
+    "integrations": ["Internal ticket orchestrator", "Strategic initiatives store"],
+    "dataStores": ["PostgreSQL"],
+    "diagramSource": "flowchart TD\n  I[Strategic initiative] -->|closes| R{Reconciler}\n  T1[Parent ticket<br/>reverse lookup on ticket_id] --> R\n  T2[Subtask<br/>initiative_id in metadata] --> R\n  R -->|pure classifier<br/>no clock, no age rule| D{Should close?}\n  D -->|no| K[Left open]\n  D -->|yes| P[--plan writes undo log<br/>changes nothing]\n  P --> H[A person reads the plan]\n  H --> A[--apply re-derives live<br/>then writes]\n  A --> V[--revert restores<br/>previous status]"
+  },
+
+  "measurement": {
+    "narrative": "Two figures are worth stating and a third is worth refusing.\n\nThe build is 1,901 lines across twelve files, and five of the nine new files are tests — roughly 945 lines of test against 897 of implementation. Only three existing files were touched, each additively. That ratio is the claim: a bulk operation over live rows earns its caution in tests before it earns it in prose.\n\nThe reconciler is live and on schedule. It runs every six hours and last ran at 23:40 UTC on 1 September 2026, sixteen days after it merged.\n\nWhat is deliberately not claimed: that this agent closed 1,323 tickets. The backlog today stands at 30, which is the number the database returns — but at least two other reconcilers were built in the same period, and nothing here separates their contributions. The honest statement is that the backlog is 30 and this reconciler has been running against it since August, not that this reconciler is why.",
+    "metrics": [
+      {
+        "key": "reconciler_schedule_interval_hours",
+        "label": "Reconciliation cycle",
+        "valueDisplay": "every 6 hours",
+        "numericValue": 6,
+        "unit": "hours",
+        "metricType": "delivery",
+        "isHeadline": true,
+        "publishable": true,
+        "verification": {
+          "class": "verified",
+          "method": "internal",
+          "evidenceNote": "ai_agents row CoryBrainInitiativeTicketAutoResolver, schedule '40 */6 * * *', read from production 2026-09-02."
+        }
+      },
+      {
+        "key": "open_ticket_backlog",
+        "label": "Ticket backlog today",
+        "valueDisplay": "30",
+        "numericValue": 30,
+        "unit": "tickets",
+        "metricType": "business_outcome",
+        "isHeadline": true,
+        "publishable": true,
+        "verification": {
+          "class": "verified",
+          "method": "internal",
+          "evidenceNote": "SELECT status, count(*) FROM tickets, read from production 2026-09-02. NOT attributed solely to this build: other reconcilers ran in the same period."
+        }
+      },
+      {
+        "key": "test_lines_shipped",
+        "label": "Test code in the change",
+        "valueDisplay": "945 of 1,901 lines",
+        "numericValue": 945,
+        "unit": "lines",
+        "metricType": "quality",
+        "isHeadline": false,
+        "publishable": true,
+        "verification": {
+          "class": "verified",
+          "method": "repo",
+          "evidenceNote": "git show --stat 0b389be5: five test files totalling 945 lines against four implementation files totalling 897."
+        }
+      }
+    ]
+  },
+
+  "heroMetrics": ["reconciler_schedule_interval_hours", "open_ticket_backlog"],
+
+  "roadmap": [
+    {
+      "label": "Reconciler live on a six-hour cycle",
+      "status": "shipped",
+      "detail": "Enabled after a human read a dry-run plan. Last observed run 2026-09-01 23:40 UTC.",
+      "verification": { "class": "verified", "method": "internal" }
+    },
+    {
+      "label": "Attribute backlog reduction to a specific reconciler",
+      "status": "not_pursued",
+      "detail": "Several reconcilers ran in the same window and nothing records which closed which ticket. Claiming a number for one of them would be inventing an attribution the data cannot support.",
+      "verification": { "class": "illustrative", "method": "internal" }
+    }
+  ],
+
+  "artifacts": [
+    {
+      "title": "Reconciliation flow",
+      "artifactType": "architecture",
+      "visibility": "public",
+      "status": "approved",
+      "note": "Rendered from the diagramSource above."
+    }
+  ]
+}

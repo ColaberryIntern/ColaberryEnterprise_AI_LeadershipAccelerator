@@ -225,7 +225,7 @@ ${SIG_TEXT}`;
     ticketId: TICKET_ID,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: `Inbox COS plan v3 - scoped to Inbox COS only (${TOTAL_CUR}/wk -> ${TOTAL_PROP}/wk, ${CUT}% cut)`,
     html: HTML,

@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import Lead from '../../../models/Lead';
 import OpenclawResponse from '../../../models/OpenclawResponse';
 import EngagementEvent from '../../../models/EngagementEvent';
+import { redactForLogs } from '../../../utils/piiRedaction';
 
 /**
  * OpenClaw Lead Capture Service
@@ -87,7 +88,7 @@ export async function captureLeadFromSignal(
 
     return lead;
   } catch (err: any) {
-    console.warn(`[OpenClaw LeadCapture] Failed to capture lead for ${name} on ${signal.platform}: ${err.message}`);
+    console.warn(`[OpenClaw LeadCapture] Failed to capture lead for ${redactForLogs(name)} on ${signal.platform}: ${err.message}`);
     return null;
   }
 }
@@ -163,7 +164,7 @@ export async function updateLeadFromEngagement(
 
     return lead;
   } catch (err: any) {
-    console.warn(`[OpenClaw LeadCapture] Failed to update lead for ${name}: ${err.message}`);
+    console.warn(`[OpenClaw LeadCapture] Failed to update lead for ${redactForLogs(name)}: ${err.message}`);
     return null;
   }
 }

@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-08-27T11:13:29.356Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "01-client-signin.png",
+      "label": "Client sign-in (public door)",
+      "url": "/client"
+    },
+    {
+      "file": "02-client-overview.png",
+      "label": "Client portal - Overview",
+      "url": "/client/projects"
+    },
+    {
+      "file": "03-client-decisions.png",
+      "label": "Client portal - Decisions",
+      "url": "/client/projects"
+    },
+    {
+      "file": "04-client-releases.png",
+      "label": "Client portal - Releases (empty state)",
+      "url": "/client/projects"
+    }
+  ]
+}

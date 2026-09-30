@@ -4,6 +4,8 @@
  * Returns a deterministic intent type that maps to system changes.
  */
 
+import { getInstrumentedOpenAI } from '../../services/openaiInstrumented';
+
 export type SteeringIntent =
   | { type: 'add_process'; description: string }
   | { type: 'mode_change'; target: string; scope: 'project' | 'process'; processName?: string }
@@ -27,8 +29,7 @@ export async function classifyIntent(
   existingProcesses: string[]
 ): Promise<SteeringIntent> {
   try {
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'intent_classify' });
 
     const processList = existingProcesses.slice(0, 50).join('\n- ');
 

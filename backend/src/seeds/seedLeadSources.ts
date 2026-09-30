@@ -25,7 +25,8 @@ const SEEDS: SeedSource[] = [
     slug: 'trustbeforeintelligence',
     name: 'Trust Before Intelligence',
     domain: 'trustbeforeintelligence.ai',
-    hmac_secret: 'TRUST_WEBHOOK_SECRET',
+    // HMAC disabled — TBI book modal is a public Vite bundle that can't safely hold a shared secret.
+    // Source is open ingestion; bot/abuse protection lives at the rate-limit and validation layer instead.
     entry_points: [
       {
         slug: 'get_book_modal',
@@ -101,6 +102,276 @@ const SEEDS: SeedSource[] = [
           email: 'email',
           idea_input: 'idea_input',
           maturity_score: 'metadata.maturity_score',
+        },
+        required_fields: ['email'],
+      },
+    ],
+  },
+  {
+    slug: 'worldoftaxonomy',
+    name: 'World of Taxonomy',
+    domain: 'worldoftaxonomy.com',
+    entry_points: [
+      {
+        slug: 'classify_lead',
+        name: 'Classify Lead',
+        page: '/classify',
+        form_name: 'classify-demo',
+        description: 'Lead capture from /classify taxonomy demo page',
+        field_map: {
+          email: 'email',
+          name: 'name',
+          company: 'company',
+          page_url: 'metadata.page_url',
+          countries: 'metadata.countries',
+          description: 'metadata.description',
+        },
+        required_fields: ['email'],
+      },
+      {
+        slug: 'developer_contact',
+        name: 'Developer Contact',
+        page: '/developers',
+        form_name: 'developer-contact',
+        description: 'Contact form on /developers page',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          message: 'metadata.message',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+    ],
+  },
+
+  // ---------------------------------------------------------------------------
+  // Ecosystem brands (CPN, AI Flotation)
+  // ---------------------------------------------------------------------------
+  // These two were MISSING, and the gap was invisible until the ecosystem E2E
+  // was actually executed for the first time.
+  //
+  // `ecosystemSeedData.ts` lists `lead_source_slugs: ['cpn']` and
+  // `['ai-flotation']`, but that field only says "this slug BELONGS to this
+  // brand" and drives the backfill — it never creates the source row. Nothing
+  // did. So `/api/ingest?source=cpn` answered "Unknown or inactive source" and
+  // neither brand could capture a lead at all.
+  //
+  // Domains match `ecosystemSeedData.ts` exactly (opportunitylift.org,
+  // aiflotation.com); if they drift apart, a submission resolves to a brand that
+  // does not own it.
+  //
+  // No HMAC, for the same reason as `trustbeforeintelligence` above: these are
+  // public marketing pages that cannot hold a shared secret. Abuse protection
+  // lives at the rate-limit and validation layer.
+  {
+    slug: 'cpn',
+    name: 'Career Pathways Network',
+    // NOT cpn.org. The nonprofit does not own that domain - it resolves to a
+    // different Cloudflare account - and `ecosystemSeedData.ts` was corrected to
+    // opportunitylift.org when the domain was registered on 2026-08-31. This row
+    // was left behind, which is exactly the drift the comment above warns about.
+    domain: 'opportunitylift.org',
+    entry_points: [
+      {
+        slug: 'scholarship_interest',
+        name: 'Scholarship Interest',
+        page: '/scholarships',
+        form_name: 'scholarship-interest',
+        description: 'Scholarship interest form on the OpportunityLift site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          // The skeleton form posted `phone` and `city_state` and this map never
+          // carried them, so both were accepted and then dropped before the lead
+          // row - the same silent loss the `call_me_now` entry below was written
+          // to prevent. A phone number nobody can dial is worse than not asking.
+          phone: 'phone',
+          city_state: 'metadata.city_state',
+          // The opening line of the interview, in their words. Mapped so it
+          // reaches the lead row rather than living only in the conversation -
+          // somebody who submits the form and closes the tab before the
+          // interview starts has still told us the most useful thing.
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
+        // /partners/. An entry point is DATA: ingest refuses any slug it does not
+        // know, so shipping the page without this row produces a form that
+        // validates client-side, posts, and is rejected with "Unknown or inactive
+        // entry point". EXTRACTION.md has listed this slug since the app was
+        // written; nothing ever created it.
+        slug: 'community_partner_interest',
+        name: 'Community Partner Interest',
+        page: '/partners',
+        form_name: 'community-partner-interest',
+        description: 'Church, employer and community organisation partner enquiry',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          role: 'role',
+          phone: 'phone',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
+        // /learn-free/. NOT an application and NOT an account: the free training is
+        // delivered by refactored.ai on its own Auth0 sign-in, so this captures only
+        // "tell me when scholarships open" from somebody who is starting today.
+        //
+        // Deliberately separate from `scholarship_interest`. Someone who has begun the
+        // free training is a materially different person from someone who has only
+        // registered interest, and collapsing the two would lose exactly the signal that
+        // makes an application worth reading.
+        slug: 'free_training_interest',
+        name: 'Free Training Interest',
+        page: '/learn-free',
+        form_name: 'free-training-interest',
+        description: 'Keep-me-posted capture on the free training page',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          city_state: 'metadata.city_state',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
+        // /scholarships/, the voice door beside the written interview.
+        //
+        // Phone AND email are both required because `request_callback` refuses
+        // without either: the phone is what it dials, the email is how the lead
+        // resolves idempotently. Making them optional here would produce a form
+        // that submits happily and never rings.
+        //
+        // A row here is only half of it - the call fires from a RoutingRule, seeded
+        // in seedRoutingRules.ts, and speaks with the prompt in
+        // services/cpn/scholarshipCallPrompt.ts. All three, or nothing happens.
+        slug: 'scholarship_interview_call',
+        name: 'Scholarship Interview Call',
+        page: '/scholarships',
+        form_name: 'scholarship-interview-call',
+        description: 'Request an AI voice interview about a scholarship',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          phone: 'phone',
+          city_state: 'metadata.city_state',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email', 'phone'],
+      },
+      {
+        // /support/. Named `champion_interest` rather than `donor_interest`
+        // because that is the slug EXTRACTION.md already declared, and renaming a
+        // published identifier to read better is how attribution breaks.
+        //
+        // This captures INTEREST ONLY. There is no checkout on that page and no
+        // payment is taken: Career Pathways Network has no federal tax exempt
+        // determination, and payment processing is gated behind it.
+        slug: 'champion_interest',
+        name: 'Supporter Interest',
+        page: '/support',
+        form_name: 'supporter-interest',
+        description: 'Supporter and sponsor enquiry on the OpportunityLift site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          phone: 'phone',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+    ],
+  },
+  {
+    slug: 'ai-flotation',
+    name: 'AI Flotation',
+    domain: 'aiflotation.com',
+    entry_points: [
+      {
+        slug: 'workflow_intake',
+        name: 'Workflow Intake',
+        page: '/workflow',
+        form_name: 'workflow-intake',
+        description: 'Workflow automation intake form on the AI Flotation site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          role: 'role',
+          message: 'metadata.message',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        required_fields: ['email'],
+      },
+      {
+        // "Call me now" on /start/. Registered here because an entry point is DATA: the
+        // ingest service refuses any slug it does not know, so shipping the button without
+        // this row produced a form that validated client-side, posted, and was rejected
+        // with "Unknown or inactive entry point" - which is exactly what happened when the
+        // live page was first pressed.
+        slug: 'call_me_now',
+        name: 'Call Me Now',
+        page: '/start',
+        form_name: 'call-me-now',
+        description: 'Instant AI callback request on the AI Flotation start page',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          // The whole point of this entry. Without the mapping the number never reaches
+          // the lead row and the callback action has nothing to dial.
+          phone: 'phone',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
+        },
+        // Phone is required HERE rather than only in the routing action, so somebody who
+        // omits it is told on the form instead of getting a cheerful "we'll ring you"
+        // followed by silence.
+        required_fields: ['email', 'phone'],
+      },
+    ],
+  },
+  {
+    // Refactored.ai's own public site. Missing for the same reason `cpn` and
+    // `ai-flotation` were: `ecosystemSeedData.ts` names the slug for the backfill, which
+    // classifies a source but never creates one. The refactored-public app has been
+    // shipping a form posting to `source=refactored` that could not have worked —
+    // `/api/leads/ingest` answers "Unknown or inactive source" when no row exists.
+    //
+    // `field_map` matches what that form actually sends, verified against the built
+    // page rather than assumed: name, email, company, consent_contact, page_url.
+    slug: 'refactored',
+    name: 'Refactored.ai',
+    domain: 'refactored.ai',
+    entry_points: [
+      {
+        slug: 'platform_interest',
+        name: 'Platform Interest',
+        page: '/platform-interest',
+        form_name: 'platform-interest',
+        description: 'Platform interest form on the Refactored.ai public site',
+        field_map: {
+          name: 'name',
+          email: 'email',
+          company: 'company',
+          consent_contact: 'consent_contact',
+          page_url: 'metadata.page_url',
         },
         required_fields: ['email'],
       },

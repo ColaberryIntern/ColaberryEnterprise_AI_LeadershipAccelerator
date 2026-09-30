@@ -7,6 +7,7 @@
  * Runs every 30 minutes.
  */
 import { Op } from 'sequelize';
+import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 
 const LOG_PREFIX = '[Skool][NotifResponse]';
 
@@ -89,8 +90,7 @@ function containsQuestion(text: string): boolean {
 
 function getOpenAIClient(): any {
   try {
-    const OpenAI = require('openai');
-    return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    return getInstrumentedOpenAI({ workflow_id: 'skool_notification' });
   } catch {
     return null;
   }

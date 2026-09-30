@@ -23,11 +23,70 @@ Claude's role: reason, plan, orchestrate, validate, and modify instructions/code
 
 ---
 
+# Response Format: every reply ends with a brief (MANDATORY)
+
+**Every response Claude sends to Ali MUST end with a `brief-me` block.** Answer the message normally first, then append the brief as the final thing in the reply.
+
+**Why:** Ali runs several Claude Code tabs at once. The bottom of the terminal is what he actually sees, so the last block in a reply is the first thing he reads. Without it he has to reconstruct which tab is doing what, how far along it is, and whether it is waiting on him — from scrollback, five times over. This rule exists to make that unnecessary.
+
+## The format
+
+Use the `short` mode from the `brief-me` skill. Full detail lives in `.claude/skills/brief-me/SKILL.md`; this is the shape:
+
+```markdown
+---
+
+# 🧭 <Task Name>
+
+**Status:** <one sentence>
+**Done:** <one sentence>
+**Problem:** <one sentence, or "None">
+**Need from you:** <one sentence, or "Nothing">
+**Next:** <one sentence>
+**PR:** <full clickable URL, or omit the line entirely>
+```
+
+`short` is the default rather than the full briefing because a 300-word report appended to every reply would bury the answer it is attached to. Ali can ask for a fuller one at any time with `/brief-me`, `/brief-me technical` or `/brief-me story`.
+
+## Rules that carry over from the skill
+
+- **Never fabricate a percentage or a status.** If a check has not run, say so.
+- **Always paste full PR URLs**, never a bare `#1234`.
+- **"Nothing"** is the correct answer under *Need from you* whenever it is true, and it should be said plainly rather than manufactured into a question.
+- **Never collapse the shipping ladder into "done".** Built, tested, merged, deployed and production-verified are five different states.
+- The brief is a **translation of what already happened in the reply**, not new work. It never triggers a command, a build, or a tool call.
+
+## When to skip it
+
+Only when a reply is a single clarifying question and there is genuinely no state to report. When in doubt, include it.
+
+## Times are Central, never UTC
+
+Every time Claude states, in a reply, a brief, a session log, a commit message, an email, a Basecamp post, or any content that ships to a page, is **Central time (CST/CDT), with the zone written out** (`8:14 PM CDT on 2026-09-15`). Never UTC, never a bare `Z` suffix, never a raw ISO timestamp in prose. Convert before writing; a timestamp read from a log or a database is input, not output.
+
+**Why:** Ali and every reader of this platform's pages work in Central, and a UTC time in a sentence is a small arithmetic problem handed to the reader every time it appears. It also produced a published case-study metric whose window read "2026-04-30 00:00 UTC" for what was the evening of April 29 in Dallas.
+
+The exception is machine-facing fields that the code defines as UTC (ISO-8601 columns, API payloads, cron expressions): those stay as the code requires, and are converted the moment they are written for a person.
+
+## Emails sent as Ali: a little less formal
+
+Every email that goes out under Ali's name reads like Ali typing to a colleague, not like a memo. Ram's feedback on 2026-09-17: the tone had drifted formal. So:
+
+- Short sentences, contractions where a person would use them ("I'll", "that's", "we're"), first names, one idea per paragraph.
+- Say the thing, then stop. No throat-clearing openers ("I hope this finds you well"), no "please be advised", no "kindly", no "per my earlier".
+- Warm where warmth is real: a thank-you is one plain sentence, not a paragraph.
+- Numbered lists only when the reader has to act on each item; otherwise prose.
+- Internal notes to the team can be looser than notes to a client or a vendor, but neither should read as drafted by a lawyer.
+
+The hard rules do not change: no em dashes anywhere, the real signature exactly once, no trailing sign-off or name before it, and every send goes through the guarded sender (`sendAsAli.js`). The memory file `feedback_email_style.md` carries the mechanics; this section carries the voice.
+
+---
+
 # Telemetry Synchronization Contract
 
 After every non-trivial build, emit a `BuildManifest` to `/api/portal/project/telemetry` so the portal can rebuild its state maps. **Full rules, schema, and reading-state endpoints live in the `telemetry-emission` skill.** Invoke via `/telemetry-emission` when you've completed a feature/fix/refactor.
 
-Key invariant: Claude Code owns `BuildManifest` emission, `PROGRESS.md`, `/directives`, and `CLAUDE.md`. The portal owns `/system/intelligence/state_graph.json`, `/system/database/database_map.json`, `/system/ui/ui_map.json`. Don't cross those streams.
+Key invariant: Claude Code owns `BuildManifest` emission, the session logs in `docs/sessions/`, `/directives`, and `CLAUDE.md`. The portal owns `/system/intelligence/state_graph.json`, `/system/database/database_map.json`, `/system/ui/ui_map.json`. Don't cross those streams.
 
 ---
 
@@ -319,7 +378,7 @@ A script that "works once but breaks on the second run" is broken, not "fragile.
 
 # Failure-First Design
 
-Design the failure path before the happy path. Every shipped system must answer four questions in writing (in code comments, directive doc, or PROGRESS.md note):
+Design the failure path before the happy path. Every shipped system must answer four questions in writing (in code comments, directive doc, or session-log note):
 
 1. **What happens if this fails?**
 2. **Will it retry? With what strategy (exponential backoff, fixed delay, capped attempts)?**
@@ -459,17 +518,27 @@ When the autonomy log writer lands in `/backend`, every change appends one entry
 }
 ```
 
-Until that writer exists, Claude must include the same information in the commit message body and the corresponding PROGRESS.md note. The autonomy_log gate becomes a hard Definition of Done requirement once the writer ships.
+Until that writer exists, Claude must include the same information in the commit message body and the corresponding session-log note. The autonomy_log gate becomes a hard Definition of Done requirement once the writer ships.
 
-## PROGRESS.md update rule (HARD GATE, ENFORCED NOW)
+## Progress log update rule (HARD GATE, ENFORCED NOW)
 
-After every completed implementation change, before marking the change "done" in any sense, Claude MUST update `PROGRESS.md`. Non-compliance is a violation, not a forgetting.
+After every completed implementation change, before marking the change "done" in any sense, Claude MUST update **this session's progress log**. Non-compliance is a violation, not a forgetting.
 
-**What goes in `PROGRESS.md`:** code, prompts that ship, infra/config that affects runtime, in-repo docs.
+**Where the log lives (changed 2026-08-23):** one markdown file per session at
 
-**What does NOT go in `PROGRESS.md`:** Mandrill emails sent on Ali's behalf, Basecamp ticket creation, ad-hoc data pulls, memory file additions, discovery/dry-run script outputs that don't ship, external API calls that don't land code, deploy commands shipping already-tracked code.
+```
+docs/sessions/CC-<YYYYMMDD>-<id>.md
+```
 
-**Required entry format** (append under the relevant task):
+named for your Session ID. Create it on your first logged change. `PROGRESS.md` at the repo root is a **sealed archive** of everything written before the cutover: read it for history, never append to it.
+
+**Why it changed:** every session used to append to one shared `PROGRESS.md`, so nearly every PR touched the same region of the same file. `.gitattributes` sets `merge=union`, but git honours merge drivers **locally only** — GitHub recomputes mergeability with a plain three-way merge and reports `CONFLICTING`. Clearing that needs a push, and branch protection sets both `dismiss_stale_reviews` and `require_last_push_approval`, so the push **permanently destroys the approval**. That cost four approvals in one week and once stranded thirteen at a time. Per-session files remove the shared write target entirely.
+
+**What goes in the log:** code, prompts that ship, infra/config that affects runtime, in-repo docs.
+
+**What does NOT go in the log:** Mandrill emails sent on Ali's behalf, Basecamp ticket creation, ad-hoc data pulls, memory file additions, discovery/dry-run script outputs that don't ship, external API calls that don't land code, deploy commands shipping already-tracked code.
+
+**Required entry format** (append under the relevant task within your own session file):
 
 ```markdown
 - [x] <task name>
@@ -481,51 +550,72 @@ After every completed implementation change, before marking the change "done" in
 ```
 
 **Hard gates:**
-1. **No code change is "done" without a PROGRESS.md entry.** Definition of Done explicitly blocks on this.
+1. **No code change is "done" without an entry in this session's log.** Definition of Done explicitly blocks on this.
 2. **No `[x]` mark without verification evidence on the same line.** Forbidden: marking complete based on intent. Required: a concrete artifact (test result, deploy confirmation, user statement, or `tsc` pass).
-3. **Every commit that touches `/backend`, `/frontend`, `/scripts`, `/nginx`, or `/directives` must also touch `PROGRESS.md`.** If it doesn't, the change is incomplete.
+3. **Every commit that touches `/backend`, `/frontend`, `/scripts`, `/nginx`, `/directives`, or `/docs` must also touch `docs/sessions/CC-<id>.md`.** If it doesn't, the change is incomplete. (`docs/sessions/` itself is exempt — the log is not work needing its own log.)
 4. **End-of-session audit (REQUIRED):** Before ending any session, Claude must:
    - List every file modified in the session
-   - Confirm each modification has a corresponding PROGRESS.md entry **tagged with this session's ID**
-   - Audit only entries carrying your own Session ID; never touch another instance's entries
+   - Confirm each modification has a corresponding entry in `docs/sessions/CC-<id>.md`
    - If any entry is missing, write it before ending
-   - State explicitly in the session-end summary: "Session CC-<id>: PROGRESS.md audit: N changes, N entries, audit clean."
+   - State explicitly in the session-end summary: "Session CC-<id>: progress audit: N changes, N entries, audit clean."
 
-If PROGRESS.md does not exist, create it before doing any work.
+Gate 2 is file-agnostic and unchanged by the migration: evidence, not intent, is what makes a box tick.
+
+If `docs/sessions/CC-<id>.md` does not exist, create it before marking any work done. Do not recreate or append to `PROGRESS.md`.
 
 ## Catch-up rule
 
-If a session has done implementation work without updating PROGRESS.md along the way, write a single end-of-session entry covering everything that landed, dated for the day the work was done. Better to log late than not at all.
+If a session has done implementation work without updating its log along the way, write a single end-of-session entry covering everything that landed, dated for the day the work was done. Better to log late than not at all.
 
 ## Session start protocol
 
 At the start of every session:
-1. **Mint a unique Session ID before any PROGRESS.md work.** Format: `CC-<YYYYMMDD>-<4 random alphanumerics>` (e.g. `CC-20260522-7f3a`). Generate the random suffix fresh each session — never reuse one already present in `PROGRESS.md`. State the ID in your opening summary, stamp it on every PROGRESS.md entry you write (see the `Session:` line in the entry format), and reference it in commit bodies. **Why:** multiple Claude instances run against this repo at the same time; without a per-session tag they collide on `PROGRESS.md` and mis-attribute each other's entries during the end-of-session audit.
+1. **Mint a unique Session ID before any logged work.** Format: `CC-<YYYYMMDD>-<4 random alphanumerics>` (e.g. `CC-20260522-7f3a`). Generate the random suffix fresh each session — never reuse one; `ls docs/sessions/` shows what is taken. Your log file is `docs/sessions/<SessionID>.md`, and the ID goes in commit bodies too.
 2. Read `CLAUDE.md` (this file) fully
-3. Read `PROGRESS.md` fully
+3. **Orient on recent progress — do NOT read the whole archive.** `PROGRESS.md` is ~5 MB / roughly 1.28M tokens; the old instruction to "read it fully" has been physically impossible for months, and pretending otherwise taught sessions to skip the step entirely. Instead:
+   - `ls -t docs/sessions/CC-*.md | head -5` — the last few sessions' logs, which are small enough to actually read
+   - `grep -n "<feature you're touching>" PROGRESS.md` — targeted search of the archive for history on your specific area
 4. Summarize current state and the first unchecked task (lead with your Session ID)
 5. **Make no code changes during this step**
 
 ## Concurrent-instance safety
 
-Because other instances may be writing `PROGRESS.md` while you work:
-- **Re-read the tail of `PROGRESS.md` immediately before appending.** It may have changed under you since you last read it. Append after the current last line; never anchor an edit on stale content.
-- **Only ever edit or audit entries carrying your own Session ID.** Never rewrite, "clean up," or re-check another instance's entries.
-- **Commit only the files you changed** (`git add <explicit paths>`, not `git add -A`). Another instance's uncommitted work may be sitting in the same working tree.
+**This is now structural, not honour-system.** Multiple Claude instances run against this repo at once. The old rules asked every session to behave politely around a file they were all writing to simultaneously — re-read the tail before appending, only touch your own entries, never tidy someone else's. Politeness enforced by instruction fails eventually, and it did.
+
+Under per-session files a session **physically cannot** write to another session's log, because it writes only the file bearing its own Session ID. Two sessions cannot collide on a file only one of them ever opens. The guarantee no longer depends on anyone remembering it.
+
+Two rules that were retired rather than carried over, because they described behaviour that was never actually happening:
+- *"Append after the current last line."* Sessions inserted near the top as often as the bottom, so the archive is not chronological in either direction. With one file per session, position within your own file is yours to choose.
+- *"Only ever edit or audit entries carrying your own Session ID."* Now enforced by file ownership instead of by instruction.
+
+What still requires care:
+- **Commit only the files you changed** (`git add <explicit paths>`, never `git add -A`). Another instance's uncommitted work may be sitting in the same working tree — on a shared checkout there are routinely hundreds of dirty files that are not yours.
+- **Never `git stash`** in a shared tree. It captures other sessions' work, and popping it elsewhere silently steals their changes.
 
 ## Per-session change report (HTML)
 
-After every completed change (same cadence as the PROGRESS.md gate), regenerate a detailed, styled HTML changelog for your session and open it in the user's browser:
+After every completed change (same cadence as the progress gate), regenerate a detailed, styled HTML changelog for your session and open it in the user's browser:
 
 ```
 node scripts/generateSessionChangelog.js <SessionID>
 ```
 
-The script reads `PROGRESS.md`, selects the entries tagged with your Session ID, renders `docs/sessions/SESSION_<SessionID>.html` (one card per change: title, date, what changed, verification, files touched, notes), and auto-opens it. **One HTML per session, keyed on the Session ID**, so concurrent instances never overwrite each other's report. Pass `--no-open` to regenerate without launching the browser. This means: every PROGRESS.md entry you write must carry your `Session:` tag (see the entry format) so the report can find it.
+The script reads `docs/sessions/<SessionID>.md`, renders `docs/sessions/SESSION_<SessionID>.html` (one card per change: title, date, what changed, verification, files touched, notes), and auto-opens it. Pass `--no-open` to regenerate without launching the browser.
+
+**Both files live in `docs/sessions/` and are told apart by prefix:**
+
+| Path | Role |
+|---|---|
+| `docs/sessions/CC-<id>.md` | Source log. You write this by hand. |
+| `docs/sessions/SESSION_CC-<id>.html` | Generated report. Never hand-edit. |
+
+The distinct prefixes are deliberate: the generator's input glob `CC-*.md` cannot match its own `SESSION_*.html` output, nor a `README.md`.
+
+The script **exits 1** if your session log is missing or has no entries, rather than rendering an empty report. It used to exit 0 on empty — which, given this command runs after every change, quietly committed blank HTML into the same directory. A missing log means the work was not recorded, which is precisely what the gate exists to catch.
 
 ## Verification rule
 
-Before any coding work begins: confirm both files exist, read both fully, summarize the rules and progress. No code changes during verification.
+Before any coding work begins: confirm `CLAUDE.md` and your session log path, orient on recent progress per the Session start protocol, and summarize the rules and current state. No code changes during verification.
 
 ## Daily executive report
 
@@ -611,6 +701,31 @@ Code locations: `backend/src/services/agents/openclaw/openclawPlatformStrategy.t
 
 ---
 
+# Case Studies
+
+Public case studies are records in the **Case Study OS**, never hardcoded React or a
+static page. Authoring one has a specific order and a set of mechanics that refuse you
+silently if you get them wrong — a diagram containing `<` is dropped to `null`, a
+section override on a nested path fails, a `verified` claim without an `evidenceId` is
+refused at the gate, and the claim scanner blocks banned phrases *even inside a
+negation*.
+
+**Full protocol lives in the `build-case-study` skill.** Invoke via `/build-case-study`
+before creating or rewriting any case study.
+
+Two rules worth stating here because they are about honesty rather than mechanics:
+
+- **Every count states its denominator.** "243 registered agents" and "116 that ran this
+  week" are different facts. Reporting the registry number as the operational one is the
+  failure the whole system exists to prevent.
+- **Never invent a figure to fill a card.** An honest `0`, or a capability marked
+  `not_pursued` with its reason, is stronger than a manufactured number.
+
+Records live in `docs/case-study/`; the field map is generated into
+`docs/case-study/FIELD_COVERAGE.json` and guarded by a drift test.
+
+---
+
 # Screenshot Capture + Review HTML
 
 Sprints that ship user-facing portal changes end with an HTML review doc embedding real production screenshots (not CSS mockups). All capture scripts route through `scripts/captureHelpers.js` for safe-width downscaling (1800px ceiling).
@@ -628,7 +743,12 @@ Claude may assume:
 - VS Code / VSCodium / Cursor may be used
 - Git is present
 - CI runs automated tests where they exist (manual testing is the current default for most surfaces)
-- Production VPS access is via `ssh root@95.216.199.47` to the stack at `/opt/colaberry-accelerator`. Deploys are `git pull origin main && docker compose -f docker-compose.production.yml up -d --build [service]`.
+- Production VPS access over SSH is available to the operator. **This repository is public: the host address, SSH account, and stack directory are deliberately NOT recorded here.** Read them from the operator's private ops notes or the deployment vault, never from a tracked file.
+- **Deploy procedure: use `scripts/deploy-prod.sh` from the stack directory on the production host.** It takes an exclusive lock, refuses a dirty tree, confirms `HEAD` matches `origin/main`, runs the build unpiped so the real exit code survives, and then **verifies the containers are actually running**. Since 2026-09-16 it also waits for any raw `compose up` started outside it, waits for the backend to answer on 3001, and, given `EXPECT_MARKER=<string> EXPECT_IN=<svc:path>`, fails unless that marker is in the running container; `DEPLOY_MODE=registry` pulls the CI-built image once it exists, and `DRY_RUN=1` rehearses every guard without touching Docker.
+
+  Do not run `docker compose ... up -d --build` directly. Multiple Claude sessions deploy to this box concurrently: on 2026-08-28 two deploys raced, one exited 1 on a container-naming collision, and `accelerator-backend` sat in `created` state for about four minutes while the site kept returning 200 - nginx serves the static frontend without the backend, so the outage was invisible from outside. Checking for a running deploy first does not help; a check is a snapshot and the other deploy can start immediately after it. That was the sixth collision in a single session.
+
+  After any deploy, verify through the **real hostname**. `localhost` does not match `server_name` and falls through to a default block that 404s `/api`, which reads as a broken proxy when nothing is wrong.
 
 Claude must NOT assume:
 - Moltbot exists
@@ -662,8 +782,8 @@ A change is complete only if ALL of the following are true:
 - A junior developer can understand the change
 - Assumptions logged (if any)
 - No unresolved governance boundary crossed
-- **PROGRESS.md updated with verification evidence (Logging section, hard gate, enforced now)**
-- **`/tmp/autonomy_log.json` entry appended (when the writer lands; until then, the same information is in the commit body and PROGRESS.md note)**
+- **This session's log (`docs/sessions/CC-<id>.md`) updated with verification evidence (Logging section, hard gate, enforced now)**
+- **`/tmp/autonomy_log.json` entry appended (when the writer lands; until then, the same information is in the commit body and the session-log note)**
 
 ## Self-strengthening requirement
 
@@ -679,7 +799,7 @@ Claude is the planner, validator, and system hardener, not the worker.
 - Scripts and services execute deterministically
 - Tests prove correctness
 - Long-running services run the system
-- PROGRESS.md and autonomy logs prove what happened
+- Session logs and autonomy logs prove what happened
 - Implementation ambiguity does not trigger escalation
 - Strategic ambiguity does
 - Escalation replaces paralysis

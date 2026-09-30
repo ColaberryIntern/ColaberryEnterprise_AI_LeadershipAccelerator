@@ -1,8 +1,23 @@
 import { LeadSource, EntryPoint, FormDefinition, RawLeadPayload, Lead } from '../models';
 import { createLead } from './leadService';
+import { ensureProspectAccount } from './leads/prospectAccount';
 import { logActivity } from './activityService';
 import { verifyHmacSignature } from '../utils/hmac';
 import { normalizeWithFieldMap, validateNormalized, NormalizedLead } from '../utils/normalizeFields';
+import { resolveContextBySourceSlug } from '../modules/tenancy/tenantResolver';
+
+/**
+ * The source's brand slug for routing facts (T226), through the cached tenant
+ * resolver. Fail-soft: an unresolved or failing lookup is null, and a rule that
+ * names a brand then simply does not match.
+ */
+async function sourceBrandSlug(sourceSlug: string): Promise<string | null> {
+  try {
+    return (await resolveContextBySourceSlug(sourceSlug))?.brandSlug ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface IngestRequest {
   sourceSlug?: string;
@@ -136,12 +151,67 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
       timeline: '',
     } as any);
 
+    // 7b. An enquiry that asked for something gets a way back in.
+    //
+    // Until this, an AI Flotation submission wrote a Lead and nothing else, so the person
+    // appeared nowhere in the Accelerator - which reads `Enrollment` - and had no account to
+    // return to. Best-effort by design: the submission must never be lost to a failure on
+    // the programme side of the house.
+    await ensureProspectAccount({
+      sourceSlug: source.slug,
+      email: normalized.email,
+      name: normalized.name,
+    });
+
     // 8. Stamp the new ingest-specific fields on the lead.
     const leadUpdates: Record<string, any> = { source_id: source.id, entry_point_id: entry.id };
     if (normalized.metadata?.visitor_fingerprint && !(lead as any).visitor_id) {
       leadUpdates.visitor_id = null; // resolved below
     }
     await lead.update(leadUpdates as any);
+
+    // 8b. Ecosystem context: record this person's relationship with the brand that owns
+    //     the source. The canonical Lead is NOT duplicated — a person who already exists
+    //     from another brand gets a second context row here, never a second lead.
+    //
+    //     Non-fatal by design, and deliberately AFTER the lead is committed: a tenancy
+    //     failure must never lose a lead. An unclassified source (no brand_id yet during
+    //     migration) simply skips this, which is the normal state until the backfill runs.
+    const sourceTenantId = (source as any).tenant_id as string | null;
+    const sourceBrandId = (source as any).brand_id as string | null;
+    if (sourceTenantId && sourceBrandId) {
+      try {
+        const { ensureLeadTenantContext } = require('../modules/tenancy/leadContextService');
+        await ensureLeadTenantContext({
+          leadId: lead.id,
+          tenantId: sourceTenantId,
+          brandId: sourceBrandId,
+          // The entry point names the experience the person came through, which is a
+          // better relationship label than the generic form type.
+          relationshipType: (entry as any).entry_type || entry.slug,
+          consentContact: Boolean(normalized.consent_contact),
+          consentSource: `${source.slug}/${entry.slug}`,
+          attribution: {
+            sourceId: source.id,
+            entryPointId: entry.id,
+            visitorId: (lead as any).visitor_id || null,
+          },
+        });
+      } catch (err: any) {
+        console.warn(`[LeadIngest] Tenant context failed (non-blocking): ${err?.message}`);
+      }
+    } else {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'lead-ingest',
+          event: 'tenant_context_unresolved',
+          outcome: 'partial',
+          context: { source_slug: source.slug, entry_slug: entry.slug, lead_id: lead.id },
+        }),
+      );
+    }
 
     // 9. Attribution: if visitor fingerprint or session id present, link to visitor.
     const fingerprint: string | undefined = normalized.metadata?.visitor_fingerprint || req.sessionId;
@@ -176,8 +246,10 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
       },
     });
 
-    // 11. Evaluate routing rules (async; does not block response).
-    //     Dispatched here; engine + action runner arrive in Gate 4.
+    // 11. Evaluate routing rules. SYNCHRONOUS and awaited inside this request —
+    //     an earlier comment here said "async; does not block response", which
+    //     was never true. Each action is claimed in `routing_rule_executions`
+    //     before it runs (T226), so a replay of this payload cannot fire it twice.
     let routingActions: Array<{ type: string; status: string }> = [];
     try {
       const { evaluateAndDispatch } = require('./routingEngineService');
@@ -186,9 +258,25 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
         entry_slug: entry.slug,
         raw_payload_id: raw.id,
         normalized,
+        tenant_id: sourceTenantId,
+        brand_id: sourceBrandId,
+        brand_slug: await sourceBrandSlug(source.slug),
       });
-    } catch {
-      // Routing engine may not be loaded yet (Gate 4). Safe to skip.
+    } catch (err: unknown) {
+      // Non-fatal by design: the lead row and the raw payload already exist and
+      // the raw row still becomes `accepted` below. But an engine-level failure
+      // used to be swallowed by an empty catch, dropping every remaining rule
+      // for this lead with no line anywhere. Now it is logged with its class —
+      // and no person identifier, only the payload id.
+      const { classifyError } = require('../utils/errorClassifier');
+      console.error(
+        JSON.stringify({
+          event: 'routing_dispatch_failed',
+          raw_payload_id: raw.id,
+          source_slug: source.slug,
+          error_class: classifyError(err),
+        }),
+      );
     }
 
     await raw.update({ status: 'accepted', resulting_lead_id: lead.id } as any);

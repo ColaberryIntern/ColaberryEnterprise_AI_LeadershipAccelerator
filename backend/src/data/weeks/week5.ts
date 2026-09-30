@@ -1,0 +1,1408 @@
+/**
+ * week5.ts — the complete authored content pack for WEEK 5,
+ * "MCP Foundations + First MCP Server" (Intensive 2 · Create Your AI Team).
+ *
+ * Arc beat: "Your AI gets hands — it can finally reach the systems your
+ * business runs on." Act II (Reach), trust-ladder position: the system now
+ * touches real systems, read-mostly.
+ *
+ * Week 3 taught the tool_use round trip by hand: the schema lived in the
+ * student's Python file, they checked stop_reason, they ran the function, they
+ * posted a tool_result back. Week 5 is that exact idea, standardised — the
+ * schema and the execution move OFF the app and onto a server any MCP client
+ * can consume. That relocation is the whole week, and it is organisational as
+ * much as technical: the integration stops being a feature of one app and
+ * becomes an asset of the company.
+ *
+ * Authoring rules honoured here (see docs/training-program-2026-q3/
+ * TWELVE_WEEK_STORY_ARC.md):
+ *   • every teach slide carries its own mermaid diagram, ≤7 short-labelled
+ *     nodes, because it gets click-zoomed and read from the back of the room
+ *   • code blocks are Claude Code PROMPTS or read-together code, never
+ *     "type this in" — shell commands are explicitly marked for the terminal
+ *   • current API surface only (claude-opus-5 / claude-sonnet-5 /
+ *     claude-haiku-4-5; structured output via output_config, never the
+ *     deprecated top-level output_format)
+ *   • everything points back at the student's OWN build plan
+ *
+ * Pure data, one type-only import, so it type-checks and renders in isolation.
+ */
+import type { WeekPack } from '../weekPack';
+
+export const WEEK5_PACK: WeekPack = {
+  week: 5,
+  arcBeat: 'Your AI gets hands — it can finally reach the systems your business runs on.',
+
+  /* ====================================================================== */
+  /*  MONDAY — Architecture Day                                             */
+  /* ====================================================================== */
+  monday: {
+    hook: {
+      headline: 'Everything you have built so far can only see what you paste into it.',
+      caption: 'Tonight that ends. MCP is the standard way your AI reaches the systems your business actually runs on.',
+    },
+
+    teach: [
+      /* ======================= check-in · where you are ==================== */
+      {
+        segment: 'checkin', eyebrow: '🪜 Where you are', title: 'Four weeks in, and your AI still cannot open a single door by itself',
+        body: 'Look honestly at what you have built. Week 1 you stopped typing code and started directing an engineer. Week 2 you taught it once instead of every time. Week 3 it ran without you in the room and started costing money per run. Week 4 your private judgment became a tested, versioned asset your team can use. All of that is real — and all of it still ends with you as the integration. You export the CSV. You paste the ticket. You look up the order and hand it over. Tonight the AI stops waiting on your clipboard.',
+        bullets: [
+          'W1 you direct it · W2 you teach it once · W3 it runs unattended · W4 your judgment is reusable',
+          'Every one of those still ends with a human moving the data by hand',
+          'Tonight: the standard way to give it reach into real systems',
+          'On the trust ladder this is a real step — it reaches your systems, read-mostly',
+        ],
+        diagram: `flowchart LR
+  W1["1️⃣ You direct it"] --> W2["2️⃣ You teach it once"]
+  W2 --> W3["3️⃣ It runs<br/>without you"]
+  W3 --> W4["4️⃣ Your judgment<br/>is reusable"]
+  W4 --> W5["5️⃣ It reaches<br/>real systems"]`,
+        script: 'Walk the ladder left to right and name each week out loud — the room has lived all four, so this takes twenty seconds and buys you the whole night. Then land the turn: "every single one of those still has you in the middle, moving data with your hands." Pause there. That pause is the setup for the entire class.',
+      },
+      {
+        segment: 'checkin', eyebrow: '🗺️ Tonight', title: 'Three things you leave with, and one decision you have to make',
+        body: 'Here is the shape of the next two hours. First, what MCP actually is and the specific pain it was invented to kill — this part is architecture, not vocabulary. Second, the three primitives a server can expose, taught honestly and distinctly, because confusing them is the number-one beginner mistake and it has real consequences. Third, your own scaffolded server answering a real call in the inspector. And one decision: which capability from your own build plan your server will expose on Thursday.',
+        bullets: [
+          '1️⃣ What MCP is, and the M×N problem it exists to kill',
+          '2️⃣ Tools, resources, prompts — and who controls each',
+          '3️⃣ Your own server, running, answering in the inspector',
+          '🎯 The decision: which capability YOUR project needs exposed',
+        ],
+        diagram: `flowchart TD
+  T["📚 Tonight"] --> A["1️⃣ Why MCP<br/>exists at all"]
+  T --> B["2️⃣ The three<br/>primitives"]
+  T --> C["3️⃣ Your server,<br/>live in the inspector"]
+  T --> D["🎯 Pick YOUR<br/>capability"]`,
+        script: 'Hold up three fingers, then a fourth for the decision. Say plainly that the decision is homework they do DURING class, not after — by the trailer segment you will ask several students to name their capability out loud, and they should know that now.',
+      },
+
+      /* ================== business problem · the reach ceiling ============= */
+      {
+        segment: 'business-problem', eyebrow: '🔌 The reach problem', title: 'A brilliant consultant, locked in a room, with no phone',
+        body: 'Imagine hiring the sharpest analyst you have ever met and then putting them in a room with no phone, no network, and no access to any of your systems. They can reason beautifully about anything you slide under the door. They cannot look up today’s order status, read your runbook, or file a ticket. That is exactly the state of a model with no reach. The ceiling on enterprise AI is almost never how smart the model is — it is what the model is allowed to see and permitted to do.',
+        bullets: [
+          'A model knows the world up to its training cutoff and nothing about your company today',
+          'Useful = reasoning + live context + the ability to act',
+          'Every AI feature you have shipped so far worked because a human fed it context',
+          'The ceiling is reach, not intelligence',
+        ],
+        diagram: `flowchart LR
+  M["🧠 The model<br/>reasons brilliantly"] --> W["🧱 No reach"]
+  W -.->|"blocked"| S1[("🗄️ Your CRM")]
+  W -.->|"blocked"| S2[("🎫 Your tickets")]
+  W -.->|"blocked"| S3[("📄 Your runbooks")]`,
+        script: 'Ask the room: "what is the single most useful thing AI has done for you at work, and what made it useful?" Steer every answer to the same truth — it was useful because it could reach something real, and usually because a human carried the data in by hand. Do not name MCP yet.',
+      },
+      {
+        segment: 'business-problem', eyebrow: '🧨 The M×N explosion', title: 'Why four teams at the same company each wrote the same connector',
+        body: 'Before MCP, if you had M AI applications and N systems to connect, you wrote M×N integrations. Each application re-implemented the tool schema, the authentication, the execution, the retries, and the error handling for every system, in its own way, inside its own codebase. Six apps and five systems is thirty bespoke connectors, each drifting independently. Because the tool definitions lived inside each app, nothing was reusable: a bug fixed in one connector stayed broken in the other three, and nobody could tell you how many copies existed.',
+        bullets: [
+          'Schema + auth + execution + error handling, copied once per app per system',
+          'No reuse: your CRM connector cannot be lifted into a teammate’s app',
+          'Drift: four copies, four behaviours, one fix that lands in one place',
+          'Governance nightmare: nobody can list who is talking to what',
+        ],
+        diagram: `flowchart LR
+  A1["🤖 App A"] --> S1[("🗄️ CRM")]
+  A1 --> S2[("🎫 Tickets")]
+  A2["🤖 App B"] --> S1
+  A2 --> S2
+  A3["🤖 App C"] --> S1
+  A3 --> S2`,
+        script: 'Draw the extra lines on the board live — three apps, two systems, six lines, and it already looks like a mess. Then ask: "now make it six apps and five systems." Let someone say thirty. Then ask the reframing question: "what number do we actually want?" Land on eleven. That reframe is the whole reason MCP exists.',
+      },
+      {
+        segment: 'business-problem', eyebrow: '🔋 One standard', title: 'MCP turns M×N into M+N — write the connector once, every client uses it',
+        body: 'Model Context Protocol is an open standard that defines one common way for AI applications to talk to external capabilities. Each system gets exposed once, behind an MCP server. Any MCP-capable application then speaks that one protocol to consume it. Write the CRM server once and Claude Code, Claude Desktop, your internal app, and a tool that does not exist yet all use it unchanged. The old analogy is USB-C: one connector standard replacing a drawer full of proprietary cables that each only fitted one device.',
+        bullets: [
+          'Server author integrates a system once — for every client that will ever exist',
+          'Client author speaks one protocol — for every server that will ever exist',
+          'M+N connectors instead of M×N, and the ecosystem compounds',
+          'Integrations stop being a per-app tax and become shareable assets',
+        ],
+        evidence: [
+          {
+            claim: 'MCP is an open protocol, originated by Anthropic and now broadly adopted, for connecting AI applications to external tools and data',
+            publisher: 'Anthropic',
+            sourceTitle: 'Model Context Protocol documentation (modelcontextprotocol.io)',
+            publicationDate: '2024',
+            sourceType: 'official-doc',
+            note: 'Adoption and the client/server ecosystem move quickly — open the spec site live in class rather than quoting a vendor list off this slide.',
+          },
+        ],
+        diagram: `flowchart LR
+  A1["🤖 App A"] --> P["🔌 MCP<br/>one protocol"]
+  A2["🤖 App B"] --> P
+  A3["🤖 App C"] --> P
+  P --> S1["🗄️ CRM server"]
+  P --> S2["🎫 Ticket server"]`,
+        script: 'Put this diagram next to the previous one and let the visual do the arguing — six tangled lines becomes five clean ones. Say the payoff plainly: the moment a standard exists, an integration becomes something you can hand to somebody else. Then promise Thursday: every person in this room authors one of these.',
+      },
+      {
+        segment: 'business-problem', eyebrow: '🏢 Why your org cares', title: 'The integration stops belonging to your app and starts belonging to the company',
+        body: 'This is the part that is easy to miss and matters most in a large organisation. When the tool definition and the execution move onto a server, ownership moves with them. The team that owns the CRM owns the CRM server — its auth, its rate limits, its audit log, its version. Your application team stops being asked to understand Salesforce authentication. Security reviews the connector once instead of once per app. And when the API changes, one team ships one fix and every client gets it. That is not a technical convenience; that is an operating-model change.',
+        bullets: [
+          'The system owner owns the server — auth, limits, audit, versioning',
+          'App teams stop re-learning somebody else’s API',
+          'Security reviews one connector, not one per application',
+          'An upstream change is one fix, not a company-wide search-and-replace',
+        ],
+        diagram: `flowchart TD
+  OWN["👥 The team that<br/>owns the system"] --> SRV["🗄️ One MCP server<br/>auth · limits · audit"]
+  SRV --> C1["🤖 Your app"]
+  SRV --> C2["💻 Claude Code"]
+  SRV --> C3["🖥️ Claude Desktop"]
+  SEC["🛡️ Security reviews<br/>it once"] -.-> SRV`,
+        script: 'This is the slide the executives in the room came for. Ask: "who at your company would own the connector to your biggest system?" Let two people answer. Most rooms discover the honest answer is "nobody, and four teams have each half-built it" — which is exactly the problem MCP is shaped to solve.',
+      },
+
+      /* ================== architecture · how MCP is put together =========== */
+      {
+        segment: 'architecture', eyebrow: '🏛️ The four roles', title: 'Host, client, server, transport — and the one-to-one rule',
+        body: 'MCP has four moving parts and they are worth naming precisely, because every error message you will read this week uses these words. The host is the AI application a human runs — Claude Code, Claude Desktop, your own app. Inside the host lives one MCP client per server, each holding a dedicated connection. The server is a separate program that exposes capabilities. The transport is the pipe between them: STDIO when the server is a local subprocess, Streamable HTTP when it is a remote service. The design fact worth memorising is that one-to-one relationship — a host runs many clients, and each client talks to exactly one server, which keeps namespaces and lifecycles cleanly isolated.',
+        bullets: [
+          'Host = the app the human uses; it can run many clients at once',
+          'Client = one per server, owns a single connection and its lifecycle',
+          'Server = its own process, exposing tools / resources / prompts',
+          'Transport = STDIO (local subprocess, this week) or Streamable HTTP (Week 6)',
+        ],
+        definitions: [
+          { term: 'Host', meaning: 'The AI application a human actually opens — Claude Code, Claude Desktop, or an app you write.' },
+          { term: 'Client', meaning: 'The piece inside the host that owns one connection. One client per server, always.' },
+          { term: 'Server', meaning: 'A separate program exposing capabilities. It runs on its own, whether or not anyone is connected.' },
+          { term: 'Transport', meaning: 'The pipe the messages travel down. STDIO is a local program; Streamable HTTP is a remote service.' },
+          { term: 'STDIO', meaning: 'Standard in / standard out — the server runs as a subprocess on your machine and talks over a pipe.' },
+        ],
+        diagram: `flowchart LR
+  H["🖥️ Host<br/>the app you run"] --> C1["🔗 Client 1"]
+  H --> C2["🔗 Client 2"]
+  C1 -->|"STDIO"| S1["🗄️ Server A"]
+  C2 -->|"STDIO"| S2["🎫 Server B"]`,
+        script: 'Draw the host as one big box with two circles inside it and two boxes outside, one line each. Say the one-to-one rule twice — it is why a misbehaving server cannot corrupt another server’s namespace, and it is the mental model for the entire intensive.',
+      },
+      {
+        segment: 'architecture', eyebrow: '🧠 Start from zero', title: 'Claude cannot run your code. It can only ask you to run it.',
+        body: 'We are going to build this idea from nothing, because it is the one thing the rest of the week stands on. A model has no hands. When you give Claude a tool you are not granting it permission to execute anything — you are handing it a menu it is allowed to point at. The turn happens in four steps, and step three is always yours. You send your question along with a list of tool descriptions. Claude reads them and, instead of answering, stops and says “call lookup_order with this order id” — that is stop_reason coming back as tool_use instead of end_turn. Your program runs the real function. You send what it returned back as a tool_result, and only then does Claude write the final answer. That loop is not replaced tonight. What changes is where two of those four pieces live.',
+        bullets: [
+          'Step 1 — you send the question PLUS a list of tool descriptions',
+          'Step 2 — Claude stops and names one: stop_reason comes back tool_use, not end_turn',
+          'Step 3 — YOUR code runs the real function. Claude never touches it.',
+          'Step 4 — you hand the result back as a tool_result and Claude finishes the answer',
+          'The model chooses, your program executes — and that never inverts, tonight or ever',
+        ],
+        definitions: [
+          { term: 'Tool', meaning: 'A function you allow the model to ask for by name. You are always the one who runs it.' },
+          { term: 'Tool schema', meaning: 'Name + description + the shape of the arguments. The menu entry the model reads before choosing.' },
+          { term: 'stop_reason', meaning: 'Why the model stopped talking. “end_turn” means it finished; “tool_use” means it is waiting on you.' },
+          { term: 'tool_use block', meaning: 'The model’s request: which tool it wants, and the arguments it filled in for you.' },
+          { term: 'tool_result block', meaning: 'Your reply carrying what the function returned, tagged with the same id so the two line up.' },
+          { term: 'Round trip', meaning: 'One full pass of those four steps — ask, request, execute, return.' },
+        ],
+        diagram: `flowchart LR
+  Q["1️⃣ You send<br/>question + tool list"] --> M["2️⃣ Claude stops:<br/>stop_reason = tool_use"]
+  M --> R["3️⃣ YOUR code runs<br/>the real function"]
+  R --> T["4️⃣ You return a<br/>tool_result"]
+  T --> A["✅ Claude writes<br/>the final answer"]`,
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — teach me the round trip using MY project',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant \u2014 answers customer questions about order status for a small online retailer.\" >>>\n\nI am learning how tool use actually works, from scratch. Do not assume I have seen it before.\n\nUsing MY PROJECT above as the running example, walk me through ONE complete tool-use round trip with the Claude API:\n\n1. Invent one tool my project would realistically need and show me its schema \u2014 name, description, input schema \u2014 then tell me which single field the model actually uses to decide WHEN to call it.\n2. Show me the exact request my program sends, with that schema attached.\n3. Show me what comes back when the model wants the tool: point at stop_reason and at the tool_use block, and say plainly what my program is expected to do at that moment.\n4. Show me the tool_result I send back, and point at the id that ties it to the request.\n5. Show me the final answer.\n\nThen answer these three questions in one sentence each:\n- Who executed my function, me or the model?\n- What happens if I never send the tool_result back?\n- Which of these five things would still be MY job if the schema and the function lived somewhere else entirely?\n\nUse the current API surface (claude-opus-5 / claude-sonnet-5 / claude-haiku-4-5). Explain in plain English as you go. Do not create any files.',
+          expectedResult: 'A four-step trace using YOUR project’s tool, and a plain answer to “who ran the function?” that is always “you did”.',
+          stopCondition: 'You can say out loud, without looking, what stop_reason = tool_use means and what your program owes the model next.',
+          rescue: 'If it dives straight into code, say: “slow down — name the four steps first, then show me one message at a time.”',
+        },
+        script: 'Do NOT lean on Week 3 here — the room never got to it. Teach this cold. Draw the four steps on the board and number them as you say them, then put your hand over step 3 and ask “who runs this one?” until somebody says “we do”. Everything after this slide depends on that answer being reflexive.',
+      },
+      {
+        segment: 'architecture', eyebrow: '🔬 Watch it happen', title: 'Run one round trip yourself, and read the four messages as they go by',
+        body: 'A diagram of the round trip is a claim. Watching stop_reason come back as tool_use in your own terminal is proof, and that difference matters tonight because everything MCP does is a rearrangement of these four messages. Run the prompt below. It writes one small script against your own project idea, runs it if you have an API key configured, and prints each step with a label so you can see exactly where your code takes over from the model. No key yet? It will tell you precisely what to add and still show you the annotated transcript.',
+        bullets: [
+          'One file, one tool, one round trip — nothing else in the way',
+          'Every step prints with a label, so you can see where the model stops and you start',
+          'No API key yet? The prompt tells you exactly what to add and shows the trace anyway',
+          'What you are looking for: the moment YOUR function runs, in between two model turns',
+        ],
+        definitions: [
+          { term: 'API key', meaning: 'The credential your program sends to prove it may call the model. It lives in a .env file, never in your code.' },
+          { term: '.env file', meaning: 'A plain text file of secrets sitting beside your code that never gets committed to git.' },
+          { term: 'Transcript', meaning: 'The full ordered list of messages in one conversation, including the tool_use and tool_result blocks.' },
+        ],
+        diagram: `flowchart LR
+  P["⌨️ One prompt"] --> F["📄 One script,<br/>one tool"]
+  F --> RUN["▶️ Run it"]
+  RUN --> SEE["👁️ Labelled steps<br/>print in order"]
+  SEE --> PROOF["✅ You saw your own<br/>code run mid-turn"]`,
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — build and run one real round trip',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant \u2014 answers customer questions about order status for a small online retailer.\" >>>\n\nFIRST, CHECK MY SETUP\n1. Check whether ANTHROPIC_API_KEY is available in this project (a .env file or the environment).\n2. If it is missing, tell me exactly what file to create, exactly what line to put in it, and remind me that this file must never be committed. Then continue anyway using a printed sample transcript instead of a live call.\n3. Tell me which of the two paths you are taking before you write anything.\n\nTHEN BUILD ONE ROUND TRIP\nCreate a single file called round_trip.py in this project that does exactly one thing: one question, one tool, one complete tool-use round trip, for MY PROJECT above.\n\nIt must:\n- Define ONE tool with a real schema, for a lookup my project would actually need.\n- Print, with a clear labelled header before each one: (1) the request I sent, (2) the value of stop_reason that came back, (3) the tool_use block including the arguments the model filled in, (4) the line where MY function executes, (5) the tool_result I send back, (6) the final answer.\n- Use a small hardcoded dictionary as the data source. No database, no network beyond the model call.\n- Use the current API surface (claude-opus-5 / claude-sonnet-5 / claude-haiku-4-5).\n\nTHEN RUN IT and show me the output.\n\nFINALLY, tell me in one sentence which two parts of this file would have to move somewhere else for another program to use this same tool without copying my code.',
+          expectedResult: 'Six labelled sections printed in order, with “stop_reason: tool_use” visible and your own function running between two model turns.',
+          stopCondition: 'You have pointed at the printed line where YOUR code ran and said “that one is mine”.',
+          rescue: 'Errors about the key? You are on the no-key path — that is fine tonight. Read the printed transcript, keep moving, and get a mentor to set your key before Thursday.',
+        },
+        script: 'Run it live on screen first and read the six headers out loud as they scroll. Then stop on the last question the prompt asks — “which two parts would have to move?” — and take answers from the room. The answer is the schema and the function, and the room saying it out loud IS the setup for the next slide. Do not answer it for them.',
+      },
+      {
+        segment: 'architecture', eyebrow: '📦 The big shift', title: 'Tool definition AND execution both move off your application — that is MCP',
+        body: 'You just named the two pieces yourself: the schema and the function. In everything you have built so far, both of them live inside your application. Under MCP, both leave. Your app no longer knows how to query the CRM; it only knows how to speak MCP. It asks the server what exists, the server returns the schemas, the model picks one, the app forwards the call, and the server executes it. The four-step round trip you just watched still happens, turn for turn — the host still runs it. Your application simply shrinks toward being a protocol client, and every piece of integration-specific knowledge — schema, credentials, retries, rate limits — becomes the server’s concern, versioned in exactly one place.',
+        bullets: [
+          'Before: schema + execution hardcoded into every app that needs it',
+          'After: the app holds neither — it discovers schemas and forwards calls',
+          'The round trip is unchanged: the model still asks, something still executes, the result still returns',
+          'The server owns the integration logic, the credentials, and the version',
+          'Consequence: upgrade or swap a server without touching a single client',
+        ],
+        definitions: [
+          { term: 'MCP', meaning: 'Model Context Protocol — the open standard for exposing tools, data and workflows to any AI application.' },
+          { term: 'MCP server', meaning: 'A separate program that holds the schemas and the code, and answers in the MCP protocol.' },
+          { term: 'Protocol client', meaning: 'An app that only knows how to speak MCP — it carries no integration code of its own.' },
+        ],
+        diagram: `flowchart LR
+  B["📦 BEFORE<br/>app holds schema<br/>+ execution"] --> X["✂️ Both move out"]
+  X --> A["🪶 AFTER<br/>app speaks MCP<br/>and nothing else"]
+  X --> S["🗄️ Server holds schema,<br/>credentials, execution"]`,
+        script: 'Two boxes on the board: “app before,” bulging with integration code, and “app after,” nearly empty, with all that mass moved into the server box. Point back at the terminal output still on screen and say “those two — out”. Then tie it to M+N: this relocation is precisely what makes a connector reusable instead of a private copy.',
+      },
+      {
+        segment: 'architecture', eyebrow: '🧩 Three primitives', title: 'Tools, resources, prompts — and the axis that actually separates them',
+        body: 'An MCP server exposes exactly three kinds of capability, and the distinction that matters is not what they do but who decides to invoke them. Tools are model-controlled: the model chooses to call one mid-turn to take an action. Resources are application-controlled: the host decides what read-only context to load into the window. Prompts are user-controlled: a human explicitly triggers them, usually as a slash command or a menu pick. Get that control axis right and the rest of MCP design falls out of it. Get it wrong and your server quietly fights every client that tries to use it correctly.',
+        bullets: [
+          '🔧 Tools = model-controlled ACTIONS — the model picks them, like a function call',
+          '📚 Resources = app-controlled read-only CONTEXT — the app loads them, like GET',
+          '💬 Prompts = user-controlled TEMPLATES — the human invokes them, like a slash command',
+          'The axis that matters: who initiates — the model, the app, or the person',
+        ],
+        definitions: [
+          { term: 'Primitive', meaning: 'One of the three kinds of capability an MCP server is allowed to expose. There are only three.' },
+          { term: 'Model-controlled', meaning: 'The model decides when it happens, mid-turn, without asking you.' },
+          { term: 'Application-controlled', meaning: 'The host app decides, usually before the model is even called.' },
+          { term: 'User-controlled', meaning: 'A human deliberately triggers it, normally by name.' },
+        ],
+        diagram: `flowchart TD
+  S["🗄️ Your MCP server"] --> T["🔧 Tools<br/>model decides"]
+  S --> R["📚 Resources<br/>the app decides"]
+  S --> P["💬 Prompts<br/>the human decides"]`,
+        script: 'Put a three-column table on the board — primitive, everyday analogy, who controls — and fill the "who controls" column last and loudest. That column is the exam-worthy insight and the answer to tonight’s poll. Tell them most beginner MCP bugs are a control-model mismatch, which sets up the deconstruct segment cleanly.',
+      },
+      {
+        segment: 'architecture', eyebrow: '🔧 Tools, precisely', title: 'A tool is an action the model chooses to take — and the description is the routing logic',
+        body: 'A tool is a function the model can invoke, published with a name, a description, and a JSON Schema for its inputs. It is model-controlled and it generally does work or has effects: search a database, create a ticket, send a message. Think POST, not GET. The critical thing beginners miss is that the description and the schema are not documentation for humans — they are the model’s only guide to when and how to call this tool. A vague description produces a tool that fires at the wrong moment or never fires at all. And because the model decides when to invoke it, the tool boundary is exactly where input validation and authorisation belong.',
+        bullets: [
+          'Shape: name + description + input schema + the function that executes',
+          'Model-controlled: it decides when to call, mid-turn, without asking you',
+          'Does work / has effects — treat it like POST and guard it accordingly',
+          'The description is a prompt written for the model, not a code comment',
+          'Validation lives here, at the boundary, because the caller is not trusted',
+        ],
+        definitions: [
+          { term: 'JSON Schema', meaning: 'A machine-readable description of what arguments a tool accepts and which are required.' },
+          { term: 'Boundary', meaning: 'The line where untrusted input enters your code. Checking happens here, not deeper in.' },
+          { term: 'Input validation', meaning: 'Refusing bad arguments at the door instead of letting them reach the real work.' },
+          { term: 'Docstring', meaning: 'The text under a function name. On an MCP tool it is not a comment — it is what the model reads.' },
+        ],
+        diagram: `flowchart LR
+  D["📝 Description<br/>= when to use it"] --> T["🔧 Tool"]
+  SC["📐 Input schema<br/>= what it accepts"] --> T
+  T --> EX["🐍 Your function<br/>runs on the server"]
+  EX --> RES["📦 Structured result<br/>back to the model"]`,
+        script: 'Say the load-bearing line and then repeat it: "the description is a prompt." Show a vague description and a precise one on screen — this is the same lesson as Week 2’s Skill descriptions, so it lands fast. Foreshadow Thursday: this is where the failure injection happens, because it is where the boundary is.',
+      },
+      {
+        segment: 'architecture', eyebrow: '📚 The other two', title: 'Read-only context has a URI and a MIME type. A workflow a human triggers is a prompt.',
+        body: 'A resource is identified by a URI — docs://catalog, file:///runbook.md — and carries a MIME type so the client knows what to do with the bytes: text/markdown, application/json, image/png. Resources are read-only and side-effect free, like GET, and the application decides which to pull into context. A resource template parameterises the URI so one handler serves many items addressable by id. A prompt is a named, argument-taking message template a human invokes deliberately, typically surfaced as a slash command. The rule of thumb fits on one line: data the model reads is a resource, an action the model performs is a tool, a workflow a person triggers is a prompt.',
+        bullets: [
+          'Resource: URI + MIME type, read-only, app-controlled — behaves like GET',
+          'Resource template: one handler serving many items, addressed by id in the URI',
+          'Prompt: a named template with arguments, invoked by the human, like a slash command',
+          'The rule: reads = resource · does = tool · a person triggers it = prompt',
+        ],
+        definitions: [
+          { term: 'URI', meaning: 'The stable address of a resource, e.g. docs://catalog. It is how a client asks for that exact thing.' },
+          { term: 'MIME type', meaning: 'What the bytes ARE — text/markdown, application/json, image/png — so the client knows how to handle them.' },
+          { term: 'Resource template', meaning: 'A URI with a slot in it, so one handler can serve many items addressed by id.' },
+          { term: 'Slash command', meaning: 'How a prompt usually reaches a human in the host — you type /name and it fires.' },
+        ],
+        diagram: `flowchart TD
+  R["📚 Resource"] --> RU["🔗 URI<br/>docs://catalog"]
+  R --> RM["🏷️ MIME type<br/>the handling contract"]
+  P["💬 Prompt"] --> PA["🎛️ Named + arguments"]
+  P --> PS["⌨️ Shows up as a<br/>slash command"]`,
+        script: 'Hammer the MIME type — it is the contract that tells the client whether to render markdown, parse JSON, or show an image, and leaving it off is a real bug, not a style nit. Then read the one-line rule aloud twice. It is the answer to tonight’s design-choice poll and the fix in the deconstruct segment.',
+      },
+      {
+        segment: 'architecture', eyebrow: '📨 Under the hood', title: 'It is JSON-RPC 2.0 over a pipe, and you can watch every single message',
+        body: 'MCP is not magic, and seeing the wire format is what makes it stop feeling abstract. It is JSON-RPC 2.0 messages flowing over a transport. The connection opens with an initialize handshake where the client and server negotiate protocol version and capabilities. After that the client sends requests — tools/list, tools/call, resources/list, resources/read, prompts/list, prompts/get — and the server answers, matching each response to the request id. STDIO runs the server as a local subprocess and pipes JSON over stdin and stdout, which is exactly what we do this week. This is also why the inspector is so valuable: it is a window onto these messages.',
+        bullets: [
+          'Opens with initialize — protocol version and capability negotiation',
+          'Methods you will actually see: tools/list, tools/call, resources/read, prompts/get',
+          'Every response carries the id of the request it answers',
+          'STDIO = local subprocess over stdin/stdout (this week) · Streamable HTTP = Week 6',
+        ],
+        definitions: [
+          { term: 'JSON-RPC 2.0', meaning: 'A small, boring standard for “call this method with these params, here is the answer”. MCP rides on it.' },
+          { term: 'initialize', meaning: 'The opening handshake where client and server agree on protocol version and what each supports.' },
+          { term: 'Capability negotiation', meaning: 'Both sides stating what they can do up front, so neither has to guess later.' },
+          { term: 'Request id', meaning: 'A number on every request. The answer carries the same one, so replies can arrive out of order safely.' },
+          { term: 'tools/list', meaning: 'The method that asks a server what tools it has. tools/call is the one that actually runs one.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — show me the real messages, then quiz me on them',
+          code: 'I am learning the MCP wire format tonight and I have never seen JSON-RPC before.\n\n1. Show me the real sequence of JSON-RPC 2.0 messages for one complete MCP session, in order: the initialize handshake, tools/list, and one tools/call with arguments, plus the server response to each. Use a support knowledge-base server with a search_docs tool as the example.\n2. Beside each message, in one short line, tell me who sent it and why it exists.\n3. Point explicitly at three things and name them: the method, the params.arguments object, and the id that ties a response back to its request.\n4. Explain what would break if the id were missing.\n5. Then ask me three short questions to check I actually followed it, wait for my answers, and correct me where I am wrong.\n\nPlain English throughout. Do not create any files.',
+          expectedResult: 'The handshake, tools/list and tools/call in order, with method, arguments and id called out by name — then three questions back at you.',
+          stopCondition: 'You have answered its three questions and can say what the id is for without scrolling up.',
+          rescue: 'If it gives you a wall of JSON with no commentary, say: “one message at a time, and tell me who sent each one.”',
+        },
+        diagram: `flowchart LR
+  C["🔗 Client"] -->|"initialize"| S["🗄️ Server"]
+  C -->|"tools/list"| S
+  C -->|"tools/call"| S
+  S -->|"result + same id"| C`,
+        script: 'Show the raw messages and point at the id. Then say the sentence that pays off in ten minutes: "the inspector you are about to open is nothing more than a friendly window onto exactly these lines." That reframes the inspector from a mystery tool into a message log they already understand.',
+      },
+
+      /* ============= deconstruct · the server that is modelled wrong ======= */
+      {
+        segment: 'deconstruct', eyebrow: '🔎 Broken by design', title: 'A server that exposes the refund policy as a tool',
+        body: 'Here is a real anti-pattern, and it is the most common one in the wild. The author has a read-only company refund policy the assistant keeps needing, so they expose it as a tool called get_policy that returns the whole document. It works in the demo. It is also modelled wrong: read-only context has been dressed up as an action. Read the code and notice what is missing — there is no verb, nothing changes, no work is done, and calling it twice produces exactly the same result. Now watch what that miscategorisation costs the moment a real client tries to use it correctly.',
+        bullets: [
+          'Nothing changes as a result of the call — it is pure data',
+          'Yet it is a tool, so only the MODEL can decide to fetch it',
+          'The host cannot preload it the way it would preload a resource',
+          'It passes the demo, which is exactly why it survives to production',
+        ],
+        definitions: [
+          { term: 'Anti-pattern', meaning: 'A solution that looks reasonable, passes the demo, and causes the bug later.' },
+          { term: 'Control-model mismatch', meaning: 'Choosing a primitive that hands the decision to the wrong party. The classic beginner MCP bug.' },
+          { term: 'Side effect', meaning: 'Anything a call changes in the world. A read has none — that is what makes it a read.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — write the wrong version on purpose, then make me find the smell',
+          code: 'We are doing a deliberate anti-pattern exercise. Follow it exactly and do not skip ahead to the answer.\n\n1. Write a short MCP server in Python that exposes a company refund policy document through a tool called get_policy, which simply returns the whole document. Show me the code.\n2. Do NOT tell me what is wrong with it yet.\n3. Instead, ask me one question — “What does this call actually change?” — and wait for my answer.\n4. After I answer, tell me whether I found it, then name the smell precisely: read-only data modelled as an action.\n5. Then list, in plain English, the four things that go wrong in production because of that choice, specifically about WHO is allowed to decide when the document loads.\n\nDo not create any files. Keep the code short enough to read from the back of a room.',
+          expectedResult: 'A short server, then a question back at you — not an answer. Somebody in the room says “that is just data”.',
+          stopCondition: 'The room has said out loud that nothing changes when get_policy runs.',
+          rescue: 'If it explains the flaw before asking you, say: “you skipped step 3 — ask me the question and wait.”',
+        },
+        diagram: `flowchart LR
+  P[("📄 Refund policy<br/>read-only")] --> T["🔧 Exposed as<br/>a TOOL"]
+  T --> M["🧠 Only the model<br/>can decide to fetch it"]
+  M -.->|"or not"| SKIP["🤷 It may simply<br/>never be loaded"]`,
+        script: 'Read the code aloud and ask the room to spot the smell before you name it. Wait. Somebody always says "there is no action in there." Confirm it and hold — do not explain the consequences yet, because the next slide is far more persuasive if they arrive at it slightly frustrated.',
+      },
+      {
+        segment: 'deconstruct', eyebrow: '💥 What it costs', title: 'A control-model mismatch is not a style opinion — it changes who is allowed to load the data',
+        body: 'Because get_policy is a tool, it is model-controlled, so the policy only enters context if the model happens to decide to call it. That is unreliable, and every fetch burns a tool round trip for data that could have simply been attached. The application — the one component that actually knows this policy is always relevant — has been stripped of the ability to load it. So the assistant sometimes cites the policy, sometimes answers from memory, and sometimes calls it three times in one turn. The symptom looks like model flakiness. The cause is that the primitive choice took control away from the wrong component.',
+        bullets: [
+          'Model-controlled means it loads only if the model elects to — unreliable by construction',
+          'Every fetch is a wasted round trip for data that could have been preloaded',
+          'The app cannot attach it as context; the user cannot pin it',
+          'Symptom: inconsistent answers that sometimes ignore the policy entirely',
+          'Diagnosis: ask "who SHOULD control this load?" and the bug becomes obvious',
+        ],
+        definitions: [
+          { term: 'Context', meaning: 'Everything the model can see this turn. If it is not in context, it does not exist to the model.' },
+          { term: 'Preload', meaning: 'The app attaching something to the turn before the model runs, so it is guaranteed to be there.' },
+          { term: 'Wasted round trip', meaning: 'An extra there-and-back for data that could simply have been attached. Latency and money for nothing.' },
+        ],
+        diagram: `flowchart TD
+  W["❌ Modelled as a tool"] --> S1["🎲 Loads only when<br/>the model chooses"]
+  W --> S2["🔁 A round trip<br/>for static data"]
+  W --> S3["🚫 The app cannot<br/>attach it"]
+  S1 --> OUT["😖 Answers that<br/>ignore the policy"]
+  S3 --> OUT`,
+        script: 'Tie each symptom back to the control axis from the architecture segment — this is the payoff of that table. Say the diagnostic question out loud and write it on the board: "who should control this load?" That single question resolves most primitive-choice arguments in about four seconds.',
+      },
+      {
+        segment: 'deconstruct', eyebrow: '✅ The fix', title: 'Same file, same data, correct primitive — a resource with a URI and a MIME type',
+        body: 'The document is read-only context, so it is a resource. Expose it at a stable URI with the right MIME type and the situation inverts: the application can load it deterministically every time, the user can reference it, and not a single tool round trip is spent. The code barely changes. What changes is who is allowed to initiate the load, and that is the difference between an assistant that reliably follows policy and one that occasionally does. One line of judgment prevents this entire class of bug.',
+        bullets: [
+          'Read-only ⇒ a resource at a stable URI, with a declared MIME type',
+          'The app loads it deterministically; zero wasted tool calls',
+          'The decorator changed. The judgment behind it is the actual skill.',
+          'Say it once more: reads = resource · does = tool · a person triggers it = prompt',
+        ],
+        definitions: [
+          { term: 'Decorator', meaning: 'The @ line above a Python function that registers it — as a tool, a resource, or a prompt.' },
+          { term: 'Deterministic', meaning: 'Same inputs, same result, every time. The opposite of “it loads when the model feels like it”.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — fix it, then prove the fix in one sentence',
+          code: 'Take the mismodelled get_policy tool from the previous exercise.\n\n1. Rewrite it as the correct primitive. Show me the corrected code.\n2. Show me the two versions side by side and point at exactly what changed — there should be very little.\n3. Name the URI you chose and the MIME type you chose, and say in one sentence why each one matters to the client.\n4. Then answer the only question that counts, in one sentence: after this change, WHO decides when the policy gets loaded, and why is that better?\n5. Finally, give me a one-line rule I can apply to any capability to decide tool vs resource vs prompt, phrased so I could say it from memory tomorrow.\n\nDo not create any files.',
+          expectedResult: 'A near-identical file with a different decorator, plus a URI and a MIME type — and a one-line rule you can repeat.',
+          stopCondition: 'Somebody in the room can say the rule without reading it: reads = resource, does = tool, a person triggers it = prompt.',
+          rescue: 'If the diff looks big, it rewrote too much. Say: “change the minimum — I want to see how small the fix is.”',
+        },
+        diagram: `flowchart LR
+  P[("📄 Refund policy")] --> R["📚 Resource<br/>docs://refund-policy"]
+  R --> MT["🏷️ text/markdown"]
+  R --> APP["🖥️ The app loads it<br/>every time, on purpose"]`,
+        script: 'Put the anti-pattern and the fix side by side and note how small the diff is — that is the point. The skill is not typing the decorator, it is knowing which decorator. Then transition: "now let us build a correct one from nothing."',
+      },
+
+      /* ================== micro-build · your first server ================== */
+      {
+        segment: 'micro-build', eyebrow: '🧰 Toolchain first', title: 'One prompt gets your machine ready — you do not have to know the commands',
+        body: 'Two minutes here saves twenty later, so we do it as a room. You need three things on your machine tonight: Python 3.10 or newer, Node — because the MCP inspector runs on it — and uv, the package manager that gives this project its own clean environment. You do not need to memorise the commands for any of that. Paste the prompt below and Claude Code detects your operating system, checks all three, reports a PASS/FAIL table, and hands you the exact one-line install for whatever is missing. If anything still comes back FAIL, fix it now with a mentor rather than discovering it mid-build on Thursday.',
+        bullets: [
+          'Python 3.10+ — the MCP Python SDK needs it',
+          'uv — an isolated, reproducible project environment in one command',
+          'Node — the inspector is a Node application, so no Node means no inspector',
+          'You run one prompt — Claude Code runs the checks and fixes what is missing',
+          'Still FAIL on any of the three? A mentor, now, not at the break',
+        ],
+        definitions: [
+          { term: 'Toolchain', meaning: 'The set of programs that must exist on your machine before your code can run at all.' },
+          { term: 'uv', meaning: 'A fast Python package manager that gives each project its own isolated, reproducible environment.' },
+          { term: 'Virtual environment', meaning: 'A private copy of Python packages for one project, so two projects cannot break each other.' },
+          { term: 'PATH', meaning: 'The list of folders your shell searches for a command. A freshly installed tool is invisible until PATH reloads.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — check my machine and fix whatever is missing',
+          code: 'Get my machine ready to build an MCP server tonight. Do the checking yourself — do not hand me a list of commands to run.\n\n1. Detect my operating system and shell, and tell me what they are.\n2. Check all three of these and report the version you actually found: Python (I need 3.10 or newer), Node (the MCP inspector is a Node app), and uv (the Python package manager we will use tonight).\n3. Show me the result as a small table: tool, version found, PASS or FAIL.\n4. For anything that FAILED, give me the exact install command for MY operating system — one command, ready to run. If you can install it safely yourself, ask me first, then do it.\n5. After any install, re-run the check in a fresh shell and show me the new table. A newly installed tool is often invisible to the shell that installed it.\n6. If everything passes, say so in one line and tell me I am clear to start.',
+          expectedResult: 'A three-row table reading PASS / PASS / PASS, with your real version numbers in it.',
+          stopCondition: 'Every person in the room has three PASS rows. This blocks everything after it.',
+          rescue: 'Prefer to do it by hand? In a terminal run python --version, node --version, uv --version. Install uv with curl -LsSf https://astral.sh/uv/install.sh | sh on macOS or Linux, or powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\" on Windows. Then open a NEW terminal — PATH changes only apply to new sessions.',
+        },
+        diagram: `flowchart LR
+  PY["🐍 Python 3.10+"] --> GO["✅ Ready to scaffold"]
+  UV["📦 uv"] --> GO
+  ND["🟢 Node<br/>for the inspector"] --> GO`,
+        script: 'Run the prompt on screen yourself first and let them watch Claude Code do the OS detection live — that is the lesson as much as the versions are. Then stop talking and let the room work. Watch the pulse rail and read the FAIL count out loud. Do not start the scaffold with anyone still red; that is how a micro-build turns into a support queue. Anyone who prefers the raw commands has them in the rescue row.',
+      },
+      {
+        segment: 'micro-build', eyebrow: '🛠️ Direct it', title: 'You do not type the server. You tell Claude Code what must exist — for YOUR project.',
+        body: 'Same job as every week since Week 1, pointed at a new target, and pointed at your own work rather than a demo. Fill in the MY PROJECT line at the top of the prompt and Claude Code scaffolds a server for that, not for a knowledge base somebody else invented. If you do not have a project yet, the prompt carries a named fallback — use it as written and you will still finish the night with a working server. Notice what the prompt insists on: a server named for what it does, one tool with real input constraints, a docstring written for the model rather than for a human, and STDIO transport. Those four requirements are the entire quality bar for a first server.',
+        bullets: [
+          'Fill in MY PROJECT first — everything downstream is built from that one line',
+          'No project yet? Use the fallback in the prompt exactly as written and keep moving',
+          'Plan Mode first — read the proposal before any file exists',
+          'Ask for input constraints explicitly — that is the boundary you will break on Thursday',
+          'Then READ the file. Reading it is the skill; typing it never was.',
+        ],
+        definitions: [
+          { term: 'Scaffold', meaning: 'The first working skeleton of a program — it runs, and it does one small real thing.' },
+          { term: 'FastMCP', meaning: 'The helper in the MCP Python SDK that turns a decorated function into a published capability.' },
+          { term: 'Plan Mode', meaning: 'Claude Code proposing what it intends to do, and waiting, before a single file is written.' },
+          { term: 'SDK', meaning: 'Software Development Kit — the official library that saves you writing the protocol by hand.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          ccMode: 'Plan Mode',
+          label: 'Claude Code prompt — scaffold MY first MCP server',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant — answers customer questions about order status for a small online retailer.\" >>>\n\nI am building my first MCP server for MY PROJECT above, using the official MCP Python SDK.\n\nIn Plan Mode, propose the following, then wait for my approval before creating anything:\n\n1. A uv-managed project folder with the SDK added as a dependency (the \"mcp\" package with its CLI extra, so the inspector helper is available).\n2. A server.py containing a FastMCP server instance named after MY PROJECT — short, lowercase, hyphenated, and descriptive of what it does rather than who wrote it. Tell me the name you chose and why.\n3. ONE tool for the single most useful lookup MY PROJECT needs — something it genuinely cannot see today. Read my project files first if there are any; otherwise infer it from the MY PROJECT line and say out loud what you inferred. The tool takes a query and an optional result limit, searches a small in-memory sample of MY PROJECT’s data that you generate, and returns structured rows rather than prose.\n4. Input constraints on both arguments: the query must be non-empty and bounded in length, the limit must be a small positive integer. Tell me exactly where in the file those constraints live.\n5. A docstring on the tool written as an instruction to the model about WHEN to call it, not as a note to a human developer.\n6. STDIO transport when the file is run directly.\n\nShow me the plan and the proposed file contents. Do not create anything yet.',
+          expectedResult: 'A plan naming YOUR server, one constrained tool for YOUR lookup, and a docstring that reads like an instruction to a model.',
+          stopCondition: 'You have read the proposed tool docstring out loud and it says WHEN to use the tool, not just what it does.',
+          rescue: 'If the plan skips the input constraints, say so specifically: “add the input constraints and show me the line they live on.” Never approve a boundary-free tool.',
+        },
+        diagram: `flowchart LR
+  P["⌨️ Your prompt —<br/>what must exist"] --> CC["💻 Claude Code<br/>Plan Mode"]
+  CC --> PL["📋 A plan you read"]
+  PL --> A["✅ You approve"]
+  A --> F["📄 server.py"]`,
+        script: 'Fill in your own MY PROJECT line on screen first so the room sees the parameter being used, and say the fallback out loud for anyone without a project — nobody sits out tonight. Narrate the requirements while Claude Code works, especially requirement 5. Then do the thing the whole program is about: read the proposal out loud and reject something in it. Rejecting one small thing in front of the room teaches more than approving perfectly.',
+      },
+      {
+        segment: 'micro-build', eyebrow: '🔬 The inspector', title: 'Your debugging surface for the entire week — open it before you write a client',
+        body: 'The MCP inspector is a browser tool that connects directly to your server and lets you list and invoke tools, read resources, and render prompts by hand, with no client code in the picture at all. The SDK launches it for you. What you get is the left panel showing everything your server actually advertises, a form for arguments, and — this is the part people undervalue — the raw JSON-RPC request and response for every call. When something does not work this week, the inspector will tell you within seconds whether the problem is your server or your client. Prove it works here first. Always.',
+        bullets: [
+          'Launches your server AND opens the inspector wired to it',
+          'Left panel: exactly what your server advertises — tools, resources, prompts',
+          'Fill in arguments and call a tool with zero client code written',
+          'You see the actual request and response, not a summary of them',
+          'The rule for this week: inspector-green before any client code exists',
+        ],
+        definitions: [
+          { term: 'MCP Inspector', meaning: 'A browser tool that connects straight to your server so you can list and call things with no client code.' },
+          { term: 'Advertise', meaning: 'What a server says it has when asked. An empty Tools panel means your server really is exposing nothing.' },
+          { term: 'Localhost', meaning: 'Your own machine, addressed as if it were a website. Nothing here leaves your laptop.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — launch the inspector for me and tell me what to look at',
+          code: 'Launch the MCP inspector against the server we just built in this project, and stay with me while I use it.\n\n1. Work out the right command for this project and run it — uv run mcp dev server.py, or the standalone npx @modelcontextprotocol/inspector runner if the SDK CLI is not available. Tell me which one you used and why.\n2. Print the local URL it opened on its own line so I can click it.\n3. Tell me the three things I should see in the left panel and what each one means.\n4. Tell me exactly what to click to call my tool, and what a healthy response looks like versus a failure.\n5. If it fails to start, read the error, tell me in one sentence what it means, fix it, and try once more.\n\nDo not modify server.py unless something is genuinely broken — and if you do, tell me what you changed and why.',
+          expectedResult: 'A browser tab opens, the connection status reads connected, and your own tool is listed under Tools.',
+          stopCondition: 'You can see your own tool name in the inspector. Nothing else tonight matters more than this.',
+          rescue: 'Connected but the Tools tab is empty? Nine times out of ten the file changed after the server started. Say “restart the inspector” and look again.',
+        },
+        diagram: `flowchart LR
+  T["⌨️ uv run mcp dev<br/>server.py"] --> S["🗄️ Your server<br/>starts on STDIO"]
+  T --> I["🔬 Inspector opens<br/>in the browser"]
+  I --> L["📋 Tools · Resources<br/>· Prompts"]
+  I --> W["📨 Raw JSON-RPC<br/>request + response"]`,
+        script: 'Run it live and walk every panel deliberately. This slide removes fear more than any other in the week: they can always see exactly what their server is exposing. State the rule for Thursday explicitly — inspector-green between every checkpoint, no exceptions.',
+      },
+      {
+        segment: 'micro-build', eyebrow: '▶️ Call it', title: 'Invoke your own tool and watch a complete MCP round trip',
+        body: 'Open the Tools tab, select your tool, fill in the arguments, and run it. You get back the structured result your function returned, wrapped in the protocol’s content envelope, alongside the exact JSON-RPC that crossed the wire in both directions. That round trip — the client calls tools/call, the server executes, structured content returns — is the same four-step loop you traced by hand earlier tonight, and it is the atom of everything we build for the rest of this intensive. You have now seen a complete MCP interaction end to end, against your own project, without writing a single line of client code.',
+        bullets: [
+          'Tools tab → your tool → fill in the arguments → Run',
+          'The response is your own return value inside the MCP content envelope',
+          'Now try a query that matches nothing and read what comes back',
+          'Then try an empty query and watch the boundary refuse it — that is the schema working',
+          'Same four steps as the round trip you ran by hand, with the middle two on a server',
+        ],
+        definitions: [
+          { term: 'Content envelope', meaning: 'The standard wrapper MCP puts around whatever your function returned.' },
+          { term: 'Structured result', meaning: 'Rows and fields the model can use, rather than a paragraph it has to re-read.' },
+          { term: 'Schema refusal', meaning: 'The boundary rejecting bad arguments before your function ever runs. That is the schema working.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — walk me through calling my own tool, including the two failures',
+          code: 'I have the MCP inspector open against my own server. Walk me through calling my tool and reading what comes back. Do not do it for me — tell me what to do and then interpret what I report.\n\n1. Tell me exactly which tab to open, which tool to select, and give me one realistic argument value for MY server’s tool. Do not use a generic placeholder — read my server.py and use something that will actually match.\n2. Tell me what a healthy response looks like, and point out where MY function’s return value sits inside the MCP content envelope.\n3. Now have me break it twice, on purpose. Give me: (a) a query that will match nothing, and (b) an empty query. For each one, tell me what SHOULD happen before I run it, so I can check the prediction against reality.\n4. I will paste back what I actually saw. Tell me whether the boundary held, and which line of my server.py decided that.\n5. Finish with one sentence: which of the four round-trip steps from earlier tonight just happened on the server instead of in my file?',
+          expectedResult: 'A real argument value taken from your own server, a prediction for both failures, and a verdict on whether your boundary held.',
+          stopCondition: 'You have run all three calls — the good one, the empty match, and the empty query — and the refusal was the one you were told to expect.',
+          rescue: 'If the inspector shows nothing at all under Tools, your server is advertising nothing. Restart it and look again before debugging anything else.',
+        },
+        diagram: `flowchart LR
+  U["🙋 You, in the<br/>inspector"] --> R["📨 tools/call<br/>search_docs"]
+  R --> S["🗄️ Your server<br/>runs the function"]
+  S --> C["📦 Structured content<br/>back, same id"]
+  C --> U`,
+        script: 'Do the call live against your own server and let them read real structured JSON coming back from code they directed into existence ten minutes ago. Then deliberately send the empty query so the room sees the schema refuse it — that thirty seconds sells Thursday’s hardening segment before you have to argue for it. Close by pointing back at the four-step diagram: steps 2 and 3 now live on a server.',
+      },
+      {
+        segment: 'micro-build', eyebrow: '🎯 Your own project', title: 'Now point it at your build plan — what does YOUR capstone actually need to reach?',
+        body: 'Your server exists. Now decide what it should really expose. Open your build plan and find the place where your project needs something it cannot currently see: a lookup into your own data, a record it has to fetch, a document it keeps needing, an action it has to take in another system. That is what your server exposes on Thursday. Use the prompt below to have Claude Code draft the primitive map for it — and then argue with the draft, because deciding tool versus resource versus prompt is the judgment this whole week is teaching. No build plan in the repo yet? Fill in the MY PROJECT line and the prompt works from that instead.',
+        bullets: [
+          'Open your build plan and find the reach it is missing',
+          'No build plan yet? The MY PROJECT line at the top of the prompt is enough to work from',
+          'One capability is enough — a second one is a Week 6 problem',
+          'Draft the primitive map now, argue with it, and bring it Thursday',
+          'Thursday you build exactly this, not a demo somebody else designed',
+        ],
+        definitions: [
+          { term: 'Primitive map', meaning: 'A table of your capabilities with the primitive and the controller named for each one.' },
+          { term: 'Capability', meaning: 'One thing your system can do or reach that it cannot do today.' },
+          { term: 'Build plan', meaning: 'Your own project plan in this repo — the thing Thursday’s server gets built against.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — map MY capability to the three primitives',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: \"Order Support Assistant — answers customer questions about order status for a small online retailer.\" >>>\n\nRead my project build plan in this repository if one exists. If it does not, work from the MY PROJECT line above and say explicitly that you are doing so.\n\nIdentify the places where my project needs information or actions it cannot currently reach on its own. For the single most valuable one, propose an MCP surface as a table with one row per capability and these columns: name, primitive (tool / resource / prompt), who controls the invocation (model / application / user), and a one-sentence justification tied to that control model.\n\nRules for your proposal:\n- Anything read-only must be a resource with a URI and a MIME type, never a tool.\n- Anything that changes state or does work must be a tool, with its input constraints named explicitly.\n- Any repeatable workflow a human would trigger by name must be a prompt.\n- If you are unsure which primitive something is, say so and ask me rather than guessing.\n\nThen ask me one question: which row do I disagree with, and why? Wait for my answer and revise the table with me.\n\nDo not write any code yet. I want to argue with the table first.',
+          expectedResult: 'A short table naming YOUR capability, its primitive, and who controls it — with at least one row you disagree with.',
+          stopCondition: 'You can say out loud, in one sentence, what your Thursday server will expose and why it is that primitive.',
+          rescue: 'If it proposes five capabilities, cut it down: “one row — the single most valuable one — and defend it.”',
+        },
+        diagram: `flowchart LR
+  BP["📋 Your build plan"] --> GAP["🕳️ The reach<br/>it is missing"]
+  GAP --> MAP["🗺️ Primitive map<br/>tool · resource · prompt"]
+  MAP --> TH["🔨 Thursday:<br/>you build it"]`,
+        script: 'Have every student produce the table before the class ends and call on three of them to read their one-sentence answer out loud. Close the open loop for Thursday: "you already know what you are building — Thursday is just the doing." Then trailer Week 6 in one line: this same server, on call, wired to a real system.',
+      },
+    ],
+
+    storyBeats: {
+      checkin: [
+        {
+          icon: '🖇️', tone: 'amber', eyebrow: 'Change of pace — a true story from Week 3',
+          title: 'Marcus built a brilliant assistant, and then hired himself to feed it',
+          body: 'Marcus finished Week 3 with a genuinely good triage assistant. It classified beautifully, drafted replies that sounded like him, and cost about four dollars a month to run. And every single morning at 7:40 he opened the ticketing system, exported a CSV, opened his terminal, and pasted it in. He did that for eleven working days before he said the quiet part out loud in office hours: the assistant was not automating his job. It was giving him a new one.',
+          punch: 'He did not build an assistant. He built a job for himself, and then showed up to it every morning.',
+        },
+      ],
+      'business-problem': [
+        {
+          icon: '🧵', tone: 'berry', eyebrow: 'Change of pace — the same work, four times',
+          title: 'Four teams at one insurer each wrote a connector to the same claims system',
+          body: 'The fraud team built one. The underwriting team built one, because the fraud team’s lived inside an application they could not import. Customer care built a third with slightly different retry logic. When the claims API changed a date format, three of the four broke and one did not, and it took nine days to find out why — because nobody had a list of who was calling the system. The fifth team, when they asked, were told to write their own.',
+          punch: 'Nobody chose to do the work four times. They just had no way to do it once.',
+        },
+      ],
+      architecture: [
+        {
+          icon: '🏗️', tone: 'violet', eyebrow: 'Change of pace — the day ownership moved',
+          title: 'The security review that used to happen four times a year now happens once',
+          body: 'A platform lead at a mid-size bank had spent two years saying no to AI projects, and she was right to. Every proposal came with a fresh copy of the credentials, a fresh error-handling story, and a fresh audit gap. Then her team shipped one MCP server in front of the core system — their auth, their rate limits, their audit log, their version. The next four AI projects did not ask her for credentials at all. They asked for a client connection.',
+          punch: 'She did not become more permissive. She got a place to put the permission.',
+        },
+      ],
+      deconstruct: [
+        {
+          icon: '💸', tone: 'cherry', eyebrow: 'The Tuesday nobody could explain',
+          title: 'The assistant quoted the refund policy on Wednesday and ignored it on Tuesday',
+          body: 'A support team shipped an assistant that knew the refund rules — usually. On Wednesday it cited the ninety-day window correctly. On Tuesday it had approved a refund on a fourteen-month-old order and nobody could say why. The engineer spent a day and a half suspecting the model, the prompt, and the temperature. The actual cause was that the policy was a tool, so it loaded only when the model happened to decide it was relevant, and on Tuesday it did not.',
+          punch: 'It was never a model problem. It was a question about who is allowed to load the document, answered wrong.',
+        },
+      ],
+      'micro-build': [
+        {
+          icon: '🔬', tone: 'leaf', eyebrow: 'Before you build — two hours you can skip',
+          title: 'The tool that never fired, and the tab that would have said so in nine seconds',
+          body: 'A developer spent two hours convinced their server was broken. They rewrote the function twice, restarted everything four times, and started questioning whether they were suited to this. When a colleague finally sat down with them, the first thing she did was open the inspector, look at the Tools panel, and see that the server was advertising nothing at all — the file had changed after the server started. Nine seconds, one panel.',
+          punch: 'You will not out-think a bug you cannot see. Open the window before you start guessing.',
+        },
+      ],
+    },
+
+    extraInteractions: [
+      {
+        segment: 'cold-open', kind: 'poll',
+        q: 'Right now, how does your AI actually get the data it needs?',
+        options: [
+          'I paste it in by hand',
+          'A script I wrote feeds it',
+          'It calls a tool I built in Week 3',
+          'It genuinely cannot get it at all',
+        ],
+        eyebrow: '🚪 Cold open', title: 'Before we start — who is the integration?',
+        presenterTip: 'Read the counts out loud without judgement. Most rooms are heavily "by hand," which is exactly the opening you want. Say: "so the answer, for most of us, is that YOU are the integration." Do not reveal anything — the whole class is the reveal.',
+      },
+      {
+        segment: 'checkin', kind: 'poll',
+        q: 'Toolchain check on the machine you are actually sitting at tonight.',
+        options: [
+          '✅ Python 3.10+, uv and Node all present',
+          '🐍 Python is missing or too old',
+          '📦 No uv yet',
+          '❓ I do not know how to check',
+        ],
+        eyebrow: '🚦 Roll call', title: 'Can you build a server tonight, or not yet?',
+        presenterTip: 'Purely operational. Read the non-green count out loud and send mentors to those students immediately, while the business-problem segment runs. Do not hold the room — the fix and the teaching can happen in parallel here.',
+      },
+      {
+        segment: 'business-problem', kind: 'trivia',
+        q: 'Six AI applications, five systems to connect, no shared protocol. How many bespoke connectors does that organisation end up maintaining?',
+        options: ['11', '30', '6', '5'],
+        answer: 1,
+        reveal: 'M×N = 30, each drifting on its own schedule. With a shared protocol it is M+N = 11 — and each one is written, reviewed, and fixed exactly once.',
+        eyebrow: '🧮 The arithmetic', title: 'Count it before we name the fix',
+        presenterTip: 'Let them do the multiplication in their heads and take answers before revealing. The gap between 30 and 11 is the entire commercial argument for MCP, and it lands far harder as their own arithmetic than as your assertion.',
+      },
+      {
+        segment: 'architecture', kind: 'poll',
+        theater: true,
+        q: 'You are exposing your CRM to Claude. Exactly ONE of these should be a tool. Which one?',
+        options: [
+          'The list of account records, read-only',
+          'Create a follow-up task on an account',
+          'The standard renewal-email template',
+          'The written escalation policy document',
+        ],
+        answer: 1,
+        reveal: 'Only "create a follow-up task" does work and changes something — that is a tool. The account list and the escalation policy are read-only context, so they are resources. The renewal-email template is a workflow a human triggers by name, so it is a prompt. One question, all three primitives.',
+        eyebrow: '🏛️ Design decision', title: 'Three primitives, one question',
+        presenterTip: 'This is the one full-theater moment of the night — stop the class, lock the votes, show the live count before revealing. Then walk all four options and name the primitive for each; the three wrong answers teach more than the right one does.',
+      },
+      {
+        segment: 'architecture', kind: 'trivia',
+        q: 'Your server advertises a tool correctly, the inspector lists it, but the model never chooses to call it. What do you fix FIRST?',
+        options: [
+          'The transport',
+          'The tool description',
+          'The model you are using',
+          'The return type of the function',
+        ],
+        answer: 1,
+        reveal: 'The description is the routing logic — it is the model’s only guide to when this tool applies. A tool that never fires almost always has a description that says what it does instead of when to use it.',
+        eyebrow: '🩺 Diagnostic', title: 'The tool that never fires',
+        presenterTip: 'Take answers before the reveal; "the model" is a popular wrong answer and it is worth naming why. Same lesson as Week 2 Skill descriptions, so call that callback out loud — repeated principles are what make the weeks feel like one story.',
+      },
+      {
+        segment: 'deconstruct', kind: 'poll',
+        q: 'Be honest — before tonight, how would you have exposed a read-only policy document to an assistant?',
+        options: [
+          'As a tool that returns it',
+          'As a resource',
+          'Pasted into the system prompt',
+          'I had never thought about it',
+        ],
+        eyebrow: '🪞 Honest self-check', title: 'No right answer — where were you an hour ago?',
+        presenterTip: 'No reveal. The point is for the room to see that most of them would have picked option 1 or 3, which normalises the anti-pattern as a reasonable mistake rather than a stupid one. Say out loud that this is the single most common MCP bug in production, made by competent engineers.',
+      },
+      {
+        segment: 'micro-build', kind: 'trivia',
+        q: 'The inspector says connected, but the Tools tab is completely empty. Most likely cause?',
+        options: [
+          'You edited server.py after the server started',
+          'Node is out of date',
+          'The transport is wrong',
+          'Your API key is not set',
+        ],
+        answer: 0,
+        reveal: 'A running server advertises the file as it was when it booted. Edit, stop, relaunch, look again — that loop will resolve most of what goes wrong this week.',
+        eyebrow: '🩺 Diagnostic', title: 'Connected, but empty',
+        presenterTip: 'This is the single most common inspector complaint you will hear on Thursday, so plant it here. Note that option 4 is a deliberate trap — an MCP server does not need an Anthropic API key at all, and if that confusion is in the room it is better surfaced now than mid-build.',
+      },
+      {
+        segment: 'trailer', kind: 'poll',
+        q: 'Which capability from YOUR build plan will your server expose on Thursday?',
+        options: [
+          'A lookup into my own data',
+          'An action that writes or changes something',
+          'A document my assistant keeps needing',
+          'I still need help choosing',
+        ],
+        eyebrow: '🎯 Commit to it', title: 'Name it now, build it Thursday',
+        presenterTip: 'Read the "need help choosing" count and get those students a mentor before they leave the room tonight — arriving Thursday without a chosen capability costs them the first thirty minutes. Ask two students who picked options 1 or 2 to say theirs out loud; specific answers give the undecided ones a template.',
+      },
+    ],
+  },
+
+  /* ====================================================================== */
+  /*  THURSDAY — Build Day                                                  */
+  /* ====================================================================== */
+  thursday: {
+    beforeAfter: {
+      label: 'Monday → Thursday',
+      before: [
+        'Claude only sees what you paste in',
+        'A tool schema buried inside one application',
+        'Read-only data faked as an action',
+        'Debugging by print statement and hope',
+        'A capability only you can run',
+      ],
+      after: [
+        'Claude reaches a real system on its own',
+        'Tools, resources and prompts on a server',
+        'The right primitive, with a declared MIME type',
+        'Every JSON-RPC message visible in the inspector',
+        'A capability any MCP client can use, unchanged',
+      ],
+    },
+
+    teach: [
+      /* ============================ build map ============================= */
+      {
+        segment: 'build-map', eyebrow: '🗺️ Tonight', title: 'Everyone starts from the same line tonight — and everyone leaves with a working server',
+        body: 'Monday ran long and we stopped at the scaffold. Some of you have a server.py you have never run, some of you do not have a folder at all, and neither of those is being behind — because tonight does not build on Monday. It rebuilds from the first command, together, and the first checkpoint is the one Monday never reached: your server running and visible in the inspector. Three checkpoints after that, each proven on screen before we advance, and the capability it exposes is yours rather than a demo somebody else designed.',
+        bullets: [
+          'CP0 it runs AND you can see it → CP1 a validated tool → CP2 a resource + a prompt → CP3 a real host calls it',
+          'No folder from Monday? One prompt rebuilds it in two minutes. You are not behind.',
+          'Inspector-green between every checkpoint — that is the gate, not a suggestion',
+          'Then we break it on purpose and harden it, exactly like Week 3',
+        ],
+        definitions: [
+          { term: 'MCP server', meaning: 'A small program that publishes one capability so any AI client can use it, instead of being rewritten for each one.' },
+          { term: 'Checkpoint', meaning: 'A place the whole room stops and proves the same thing works before anybody moves on.' },
+          { term: 'MCP Inspector', meaning: 'A browser tool that talks straight to your server, so you can see and call everything it publishes with no client code.' },
+        ],
+        diagram: `flowchart LR
+  CP0["0️⃣ It runs, and<br/>you can see it"] --> CP1["1️⃣ A validated tool"]
+  CP1 --> CP2["2️⃣ Resource<br/>+ prompt"]
+  CP2 --> CP3["3️⃣ A real host<br/>calls it"]
+  CP3 --> BH["💥 Break,<br/>then harden"]`,
+        script: [
+          'SAY: Monday we ran out of time at the scaffold. So tonight we start at the beginning, together, and nobody in this room is behind.',
+          'DO: Put a finished server in the inspector on screen, with all three tabs populated.',
+          'SAY: The difference between tonight and a tutorial is that this one connects to something you actually care about.',
+          'NOTE: The honesty line costs ten seconds and removes the quiet embarrassment that otherwise stops three people asking for help all night. Do not skip it.',
+        ].join('\n'),
+      },
+      {
+        segment: 'build-map', eyebrow: '🧰 Readiness', title: 'One prompt gets everybody to the same place — whether or not Monday finished',
+        body: 'Three programs have to exist on your machine tonight: Python 3.10 or newer, Node because the inspector is a Node app, and uv, which gives this project its own clean environment. You do not have to know any of those commands. The prompt below detects your operating system, checks all three, installs whatever is missing, and then does the part that matters tonight — it looks for Monday’s folder and, if it is not there or never finished, rebuilds it from your one-line project description. Same green state for the whole room in about three minutes, from whichever state you walked in with.',
+        bullets: [
+          '1️⃣ python, uv and node all report a version — Claude Code checks and installs',
+          '2️⃣ A project folder with server.py in it — found, or rebuilt on the spot',
+          '3️⃣ Claude Code open in that folder',
+          '4️⃣ Your capability, written down as one sentence — not just in your head',
+          'Still red on anything after this prompt? A mentor now, not at the break.',
+        ],
+        definitions: [
+          { term: 'Toolchain', meaning: 'The set of programs that must exist on your machine before your code can run at all.' },
+          { term: 'uv', meaning: 'A fast Python package manager that gives each project its own isolated, reproducible environment.' },
+          { term: 'PATH', meaning: 'The list of folders your shell searches for a command. A freshly installed tool stays invisible until PATH reloads.' },
+          { term: 'Scaffold', meaning: 'The first working skeleton of a program — it runs, and it does one small real thing.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — get my machine and my folder ready, whatever state they are in',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: "Order Support Assistant — answers customer questions about order status for a small online retailer." >>>\n\nGet me ready to build an MCP server tonight. Do the checking and the fixing yourself — do not hand me a list of commands to run.\n\n1. Detect my operating system and shell and tell me what they are.\n2. Check all three of these and report the version you actually found: Python (I need 3.10 or newer), Node (the MCP inspector is a Node app), and uv. Show it as a small table: tool, version found, PASS or FAIL.\n3. For anything that FAILED, install it for my operating system — ask me once, then do it. Afterwards re-run the check in a fresh shell and show me the new table, because a newly installed tool is invisible to the shell that installed it.\n4. Now look for an existing MCP server project in this folder — a server.py with a FastMCP instance in it. Tell me plainly which of these is true: (a) it exists and looks complete, (b) it exists but is incomplete or will not import, or (c) there is nothing here.\n5. If (b) or (c), scaffold it now from MY PROJECT above: a uv-managed project with the "mcp" package and its CLI extra, and a server.py holding a FastMCP instance named after MY PROJECT — short, lowercase, hyphenated, descriptive of what it does. No tools, resources or prompts yet. Tell me the name you chose.\n6. Finish with one line: am I clear to start, yes or no.',
+          expectedResult: 'A PASS/PASS/PASS table, and a project folder containing a server.py named for YOUR project — whether it existed before tonight or not.',
+          stopCondition: 'Claude Code has said "clear to start" and you can see server.py in your folder.',
+          rescue: 'Prefer the raw commands? python --version, node --version, uv --version. Install uv with curl -LsSf https://astral.sh/uv/install.sh | sh on macOS or Linux, or powershell -c "irm https://astral.sh/uv/install.ps1 | iex" on Windows — then open a NEW terminal, because PATH changes only apply to new sessions.',
+        },
+        diagram: `flowchart LR
+  P["⌨️ One prompt"] --> TC["🧰 Toolchain<br/>checked + installed"]
+  P --> FD["📁 Folder found<br/>or rebuilt"]
+  TC --> GO["✅ Same green state,<br/>whole room"]
+  FD --> GO
+  CAP["✍️ Your capability,<br/>one sentence"] --> GO`,
+        script: [
+          'DO: Run the prompt on your own screen first. Let them watch Claude Code detect the OS and triage the folder live.',
+          'SAY: You do not need to know any of these commands. Paste this, and it checks your machine, installs whatever is missing, and rebuilds Monday’s folder if you do not have one.',
+          'DO: Stop talking and let the room work. Read the FAIL count off the pulse rail out loud and send mentors at it.',
+          'SAY: Point four is the one people skip. Your capability, written down as one sentence — not just in your head.',
+          'DO: Ask someone who says they are green to read their sentence out loud. If it is vague, fix it in front of the room.',
+          'NOTE: That thirty-second intervention saves their whole build. Watching Claude Code do the OS detection is as much the lesson as the version numbers are.',
+        ].join('\n'),
+      },
+      {
+        segment: 'build-map', eyebrow: '📐 Decide before you type', title: 'Point the three primitives at YOUR project — this is the five minutes Monday ran out of',
+        body: 'Monday you learned what the three primitives are and watched a refund policy get modelled as the wrong one. What we never got to was doing it for your project, and that is the single biggest predictor of whether tonight goes well — because once a thing has been built as a tool, rebuilding it as a resource feels like wasted work and people ship the wrong shape rather than redo it. So we do it now, on paper, in five minutes. There is exactly one question, and you ask it of every row: who should decide to invoke this — the model, the application, or the person? The answer picks the primitive for you.',
+        bullets: [
+          'One question per row: model, app, or human decides?',
+          'Model decides → tool. App decides → resource. Human decides → prompt.',
+          'Aim for one tool, one resource, one prompt — enough to prove all three tonight',
+          'Argue with the table Claude Code gives you. A map you argued with beats a map you accepted.',
+        ],
+        definitions: [
+          { term: 'Primitive', meaning: 'One of the three kinds of thing an MCP server can publish: a tool, a resource, or a prompt.' },
+          { term: 'Control model', meaning: 'Who gets to decide that a thing runs — the model, the application, or the person. It is what separates the three primitives.' },
+          { term: 'Primitive map', meaning: 'A short table of what your server will publish, with the primitive and the decider named for each row.' },
+          { term: 'Capability', meaning: 'One thing your system could do or reach that it cannot do today.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          ccMode: 'Plan Mode',
+          label: 'Claude Code prompt — map MY capability to the three primitives',
+          code: 'MY PROJECT: <<< replace this whole line with one sentence naming your project and who it serves. No project yet? Use exactly this and keep moving: "Order Support Assistant — answers customer questions about order status for a small online retailer." >>>\n\nRead my project build plan in this repository if one exists. If it does not, work from the MY PROJECT line above and say explicitly that you are doing so.\n\nFind the places where MY PROJECT needs information or actions it cannot reach on its own today. Take the single most valuable one and propose the MCP surface for it, in Plan Mode, as a table with one row per thing my server will publish and these columns: name, primitive (tool / resource / prompt), who initiates the invocation (model / application / user), and a one-sentence justification tied to that control model.\n\nRules:\n- Exactly one tool, one resource, and one prompt. If my capability genuinely needs a different shape, say so and explain why rather than padding the table.\n- Anything read-only must be a resource with a URI and a MIME type, never a tool.\n- Anything that changes state or does work must be a tool, and the table must name its input constraints.\n- Any repeatable workflow a human would trigger by name must be a prompt.\n- Flag anything you had to guess about my project and ask me rather than inventing it.\n\nThen ask me one question: which row do I disagree with, and why? Wait for my answer and revise the table with me.\n\nDo not write any code yet. I want to argue with the table first.',
+          expectedResult: 'A three-row table naming YOUR capability, with the control model stated for each row — and at least one row you pushed back on.',
+          stopCondition: 'You can point at any row and say who initiates it without looking at the table.',
+          rescue: 'If Claude Code proposes four tools and no resource, that is Monday’s refund-policy anti-pattern happening to you. Say so directly: "which of these is read-only? Make it a resource."',
+        },
+        diagram: `flowchart TD
+  Q{"🤔 Who decides<br/>to invoke it?"} -->|"the model"| T["🔧 Tool"]
+  Q -->|"the app"| R["📚 Resource"]
+  Q -->|"the person"| P["💬 Prompt"]`,
+        script: [
+          'DO: Put the decision diamond on screen. Take one student’s capability and work it in front of the room before anybody touches Claude Code.',
+          'SAY: There is one question, and you ask it of every row. Who decides to invoke this — the model, the application, or the person?',
+          'SAY: Model decides, it is a tool. App decides, it is a resource. Person decides, it is a prompt.',
+          'NOTE: Monday never reached this slide, so teach it rather than revise it. Ask the question, take a wrong answer from the room, correct it warmly.',
+          'NOTE: Five minutes here prevents the most expensive rework of the night — finding out at CP2 that your tool should have been a resource.',
+        ].join('\n'),
+      },
+
+      /* ============================ guided build ========================== */
+      {
+        segment: 'guided-build', eyebrow: '0️⃣ CP0 · It runs, and you can see it', title: 'The checkpoint Monday never reached — your own server, open in the inspector',
+        body: 'Checkpoint zero is a server that boots cleanly and a browser window that proves it. Monday stopped one step short of this, which is why half the room has a file they have never watched run. Both halves of CP0 matter. A server that will not start hides every later bug behind an import error. And a server you cannot see is a server you will debug by guessing — the inspector connects straight to it and shows you exactly what it publishes, which is the difference between nine seconds and two hours when something is wrong.',
+        bullets: [
+          'The server starts and then goes silent. Silence is success — it is waiting on stdin.',
+          'The inspector opens in your browser and says connected',
+          'The left panel shows what your server actually publishes — right now, nothing, and that is correct',
+          'Inspector-green before any capability gets added. That rule holds all night.',
+        ],
+        definitions: [
+          { term: 'STDIO transport', meaning: 'The host runs your server as a subprocess and they talk over the same pipes you type into. Local, one machine.' },
+          { term: 'FastMCP', meaning: 'The helper in the MCP Python SDK that turns a decorated Python function into a published capability.' },
+          { term: 'Advertise', meaning: 'What a server says it has when a client asks. An empty Tools panel means it really is publishing nothing.' },
+          { term: 'Localhost', meaning: 'Your own machine, addressed as if it were a website. Nothing here leaves your laptop.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — CP0, start it and open the inspector on it',
+          code: 'Confirm my MCP server starts, then open the MCP inspector against it and stay with me while I look at it.\n\n1. First read server.py and tell me two things in one line each: the name this server publishes to clients, and which transport it runs on.\n2. Start it once on its own to confirm it boots with no traceback. It should produce no output at all — tell me before you run it that silence is the success case here, so I do not think it hung.\n3. Now launch the inspector against it. Work out the right command for this project and run it yourself — "uv run mcp dev server.py", or the standalone "npx @modelcontextprotocol/inspector" runner if the SDK CLI is not available. Tell me which one you used and why.\n4. Print the local URL on its own line so I can click it.\n5. Tell me the three things I should see in the left panel and what each one means. My server has no capabilities yet, so tell me what an empty panel should look like, so I can tell "empty because correct" from "empty because broken".\n6. If it fails to start, read the error, tell me in one sentence what it means, fix it, and try once more.\n\nDo not add any tools, resources or prompts yet. I want a bare server I can see.',
+          expectedResult: 'A browser tab open, the connection status reading connected, your server’s name on screen, and the capability panels empty.',
+          stopCondition: 'You can see YOUR server name in the inspector and it says connected. That is CP0, and nothing advances until you have it.',
+          rescue: 'ModuleNotFoundError on the mcp import? You are almost certainly running system Python instead of the uv environment — prefix the command with "uv run". Raw commands if you would rather drive it yourself: "uv run mcp dev server.py".',
+        },
+        diagram: `flowchart LR
+  SRV["📄 server.py"] --> BOOT["✅ Starts,<br/>quietly"]
+  BOOT --> I["🔬 Inspector<br/>opens"]
+  I --> CN["🔗 connected"]
+  I --> L["📋 Panels empty —<br/>correct, for now"]`,
+        script: [
+          'DO: Run it live. Let the room watch a server start and produce absolutely nothing.',
+          'SAY: Silence is success here. It has not hung — it is sitting there waiting on you.',
+          'DO: Open the inspector and walk every panel deliberately. Point at the empty Tools panel.',
+          'SAY: Empty is correct right now. Your server genuinely publishes nothing yet. From here on, you can always see exactly what it is offering.',
+          'SAY: Here is the rule for the rest of tonight: inspector-green between every checkpoint. No exceptions.',
+          'NOTE: This slide removes more fear than any other in the week. Naming the silence in advance saves five hands going up.',
+        ].join('\n'),
+      },
+      {
+        segment: 'guided-build', eyebrow: '1️⃣ CP1 · The tool', title: 'One tool that reaches something real — with the boundary built in from the first line',
+        body: 'Now the server stops being empty. Add the one tool from the primitive map you built twenty minutes ago, and implement it for real — reading your data file, querying your list, calling the function you already have. A stub teaches you nothing tonight. Two things carry all the weight: the docstring, which is the model’s entire guide to when this tool applies, and the input constraints, which reject malformed calls at the protocol boundary before your code ever runs. We put the constraints in now, not after the incident, for exactly the reason we capped the loop in Week 3.',
+        bullets: [
+          'Implement it against real data — a stub proves nothing',
+          'The docstring says WHEN to use it, not just what it does',
+          'Constrain the inputs: non-empty, bounded, typed — that is the boundary',
+          'Return structured rows the model can cite, never a wall of prose',
+        ],
+        definitions: [
+          { term: 'Tool', meaning: 'An action the model itself decides to take. Your server publishes it; the model chooses when to call it.' },
+          { term: 'Docstring', meaning: 'The description attached to your function. For a tool it is not documentation — it is the model’s instructions on when to reach for it.' },
+          { term: 'Input schema', meaning: 'The machine-readable shape of the arguments your tool accepts, generated from your type annotations.' },
+          { term: 'Boundary', meaning: 'The place bad input gets refused — before your code runs, not inside it.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — CP1, the tool',
+          code: 'Add ONE tool to server.py, implementing the tool row from the primitive map we agreed earlier in this session.\n\nRequirements:\n1. Implement it for real against my actual data or an existing function in this project. If neither exists yet, generate a small realistic sample data file alongside the server and read from that — but tell me you did so, and make the sample data actually resemble MY project rather than a generic example.\n2. Constrain every input: strings must have a minimum and maximum length, numbers must have a sensible range, and every argument must be typed so the SDK can generate a proper input schema.\n3. Write the docstring as an instruction to the model about WHEN this tool should be used, in the words a person would actually use. Show me the docstring on its own and wait for me to approve it before you write the body.\n4. Return structured data the model can cite — a list or dict with named fields, never a formatted paragraph.\n5. If the tool finds nothing, return a structured empty result with a message. Do not raise an exception for a normal miss.\n6. When you are done, tell me the exact line numbers where the input constraints live, and give me one realistic argument value that will actually match my sample data.',
+          expectedResult: 'A tool whose docstring names a trigger, whose arguments are constrained, and whose return value has named fields — plus a real argument value to test it with.',
+          stopCondition: 'You can read the docstring aloud and it tells a model when to reach for this tool.',
+          rescue: 'Claude Code wrote a tool with bare untyped arguments? Say exactly that: "add type annotations and length or range constraints to every argument, and show me the generated input schema."',
+        },
+        diagram: `flowchart LR
+  MAP["🗺️ Your tool row"] --> TL["🔧 The tool"]
+  DS["📝 Docstring<br/>= when to use it"] --> TL
+  IC["📐 Input constraints<br/>= the boundary"] --> TL
+  TL --> DATA[("🗄️ Your real data")]`,
+        script: [
+          'DO: Stop on the docstring. Put a vague one and a precise one side by side on screen.',
+          'SAY: The docstring is not documentation. It is the model’s entire guide to when this tool applies.',
+          'DO: Point at the input constraints in the file.',
+          'SAY: This is the line we delete on purpose in forty minutes. Look at it now, so you recognise what is missing when it is gone.',
+          'NOTE: Same lesson as Week 2 Skills, and it lands faster because they have now met it twice.',
+        ].join('\n'),
+      },
+      {
+        segment: 'guided-build', eyebrow: '🔬 CP1 gate', title: 'Prove it in the inspector before you build anything on top of it',
+        body: 'This is the gate, and we hold it. Relaunch the inspector, open the Tools tab, and confirm three things: your tool is listed, its input schema shows the constraints you asked for, and calling it with a real argument returns your structured rows. Then deliberately call it with an empty string and watch the boundary refuse it. That refusal is not an error — it is the schema doing exactly what you built it to do, and seeing it now means you will recognise it later.',
+        bullets: [
+          'Tools tab: your tool is listed with the right name',
+          'Its schema shows the constraints — not just a bare string type',
+          'A real call returns structured rows you can read',
+          'An empty call is REFUSED at the boundary. That is a pass, not a failure.',
+        ],
+        definitions: [
+          { term: 'Schema validation error', meaning: 'The protocol refusing bad arguments before your function ever runs. In this exercise it is the pass, not the failure.' },
+          { term: 'Structured result', meaning: 'Rows and named fields the model can quote, rather than a paragraph it has to re-read.' },
+          { term: 'Relaunch', meaning: 'Stopping and restarting the server. It runs the file as it was at boot, so an edit is invisible until you do.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — CP1 gate, walk me through proving it (including the failure)',
+          code: 'Relaunch the MCP inspector against my server and walk me through the CP1 gate. Do not click through it for me — tell me what to do, then interpret what I report back.\n\n1. Stop whatever is running and relaunch the inspector yourself, then print the URL on its own line.\n2. Tell me exactly which tab to open and what my tool should be listed as.\n3. Tell me where on screen to find the input schema, and name the specific constraints I should expect to see there — the ones you added at CP1. If what I describe does not match, say so plainly rather than agreeing with me.\n4. Give me one realistic argument value from MY sample data and tell me what a healthy response looks like before I run it, so I can check the prediction against reality.\n5. Now have me break it on purpose: tell me to call it with an empty argument, and tell me BEFORE I run it what should happen and why that is a pass rather than a bug.\n6. I will paste back what I actually saw for both calls. Tell me whether the boundary held, and which line of my server.py decided that.',
+          expectedResult: 'Structured rows for the good call, and a schema validation error for the empty one — both predicted before you ran them.',
+          stopCondition: 'Both outcomes seen with your own eyes. Then tap "I finished" so we know who is through the gate.',
+          rescue: 'Tool missing from the list? The server is running the file as it was when it booted — stop it, relaunch, look again. Raw command if you prefer to drive: "uv run mcp dev server.py".',
+        },
+        diagram: `flowchart LR
+  I["🔬 Inspector"] --> L["📋 Tool is listed"]
+  L --> SC["📐 Schema shows<br/>your constraints"]
+  SC --> OK["✅ Good call →<br/>structured rows"]
+  SC --> NO["🛑 Empty call →<br/>refused at the boundary"]`,
+        script: [
+          'DO: Read the pulse-rail count out loud, then wait. Hold the gate honestly.',
+          'DO: Make the deliberate empty call yourself on screen so the room sees the refusal.',
+          'SAY: That red error is a pass, not a bug. The boundary refused it before your code ever ran.',
+          'NOTE: The temptation is to keep moving for the people who are ahead. Resist it — a student behind at CP1 is lost for the rest of the night.',
+        ].join('\n'),
+      },
+      {
+        segment: 'guided-build', eyebrow: '2️⃣ CP2a · The resource', title: 'Read-only context, at a URI, with a MIME type — the corrected pattern, in your own server',
+        body: 'Now build the thing Monday’s deconstruct was about. Take the read-only row from your primitive map and expose it as a resource: a stable URI, a declared MIME type, and a handler that returns the bytes. If your data has many addressable items, use a resource template so one handler serves all of them by id in the URI. The MIME type is not decoration — it is the contract that tells the client whether to parse JSON, render markdown, or show an image, and a client that guesses wrong renders garbage.',
+        bullets: [
+          'A stable URI, chosen deliberately — clients and humans both read it',
+          'A declared MIME type on every resource, no exceptions',
+          'A resource template parameterises the URI so one handler serves many items',
+          'Zero tool round trips spent: the application loads this deterministically',
+        ],
+        definitions: [
+          { term: 'Resource', meaning: 'Read-only context the application loads on purpose, rather than something the model decides to fetch.' },
+          { term: 'URI', meaning: 'The stable address a resource lives at, like docs://catalog. Both clients and humans read it.' },
+          { term: 'MIME type', meaning: 'The label saying what kind of content this is, so the client knows whether to parse JSON, render markdown, or show an image.' },
+          { term: 'Resource template', meaning: 'A URI with a slot in it, so one handler can serve every item by id instead of you writing hundreds.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — CP2a, the resource',
+          code: 'Add the resource row from my primitive map to server.py.\n\n1. Expose it at a stable, readable URI using a scheme that describes the domain (for example docs://catalog or crm://accounts). Explain your URI choice in one line.\n2. Declare an explicit MIME type that matches what the handler actually returns — application/json for structured data, text/markdown for prose, and so on. Never leave it unset.\n3. If my data has many individually addressable items, ALSO add a resource template whose URI contains the item id, so one handler serves every item.\n4. The handlers must be read-only. If any of them mutates state, stop and tell me — that means it should have been a tool.\n5. Show me the URI and the MIME type for each resource before you write the bodies.\n\nThen tell me exactly what to click in the inspector to verify both.',
+          expectedResult: 'One static resource and, where the data supports it, one templated resource — both with explicit MIME types.',
+          stopCondition: 'You can read both resources in the inspector and the MIME types match what you declared.',
+          rescue: 'If the resource handler ends up doing work or changing something, it is a tool wearing a resource costume. Tell Claude Code to move it and say why.',
+        },
+        diagram: `flowchart LR
+  D[("📄 Your read-only<br/>data")] --> R["📚 Resource<br/>at a URI"]
+  R --> MT["🏷️ MIME type<br/>= the contract"]
+  D --> RT["🧩 Template URI<br/>one handler, many items"]
+  RT --> MT`,
+        script: [
+          'SAY: This is Monday’s refund-policy fix, except it is your data and you are the one deciding.',
+          'DO: Open the Resources tab live, read one resource, and point at the MIME type in the response.',
+          'SAY: That field right there is the contract. It is what tells the client whether to parse JSON, render markdown, or show an image.',
+          'NOTE: Pointing at the MIME type is the moment an abstract contract becomes a visible field. Do it on screen, not in words.',
+        ].join('\n'),
+      },
+      {
+        segment: 'guided-build', eyebrow: '3️⃣ CP2b · The prompt', title: 'Ship a workflow, not just a capability — and this is where Week 4 comes back',
+        body: 'The third primitive is the one most tutorials skip and the one your organisation will value most. A prompt is a named, argument-taking template that a human invokes deliberately — it appears in the client as a slash command or a menu pick. That means a prompt is how you ship a repeatable workflow to people who will never read your code. And here is the payoff from last week: the tested, versioned prompts in the library you built in Week 4 do not have to live in a document anymore. The good ones can ship as server prompts that every client can invoke by name.',
+        bullets: [
+          'User-controlled: it surfaces as a slash command or menu action',
+          'It takes arguments, so one template serves many situations',
+          'It encapsulates a workflow — the same sequence, the same way, every time',
+          'Week 4 callback: your best library prompt can ship here instead of in a doc',
+        ],
+        definitions: [
+          { term: 'Prompt primitive', meaning: 'A named, reusable template a person triggers on purpose — it shows up in the client as a slash command or a menu pick.' },
+          { term: 'Argument', meaning: 'A slot in the template, so one prompt serves many situations instead of being copied and edited.' },
+          { term: 'Workflow', meaning: 'A sequence somebody repeats — which tool to call, which resource to read, what to produce. That is what a prompt ships.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — CP2b, the prompt primitive',
+          code: 'Add the prompt row from my primitive map to server.py.\n\n1. It must take at least one argument so the same template serves multiple situations, and give every argument a clear name and a sensible default where one exists.\n2. The body should encode the workflow a person actually wants: which tool to call, which resource to read, what to produce, and what to do when nothing matches.\n3. If I have a tested prompt from my Week 4 prompt library that fits this workflow, use that wording as the basis rather than inventing new wording, and tell me which one you used.\n4. Return the expanded template as text. Add a comment noting that multi-turn workflows can return a list of typed messages instead, so I know the option exists.\n\nThen tell me how to render it in the inspector with arguments filled in.',
+          expectedResult: 'A named prompt with arguments that expands into a workflow instruction referencing your own tool and resource.',
+          stopCondition: 'You have rendered it in the inspector and read the expanded text — and it sounds like something you would actually want a colleague to run.',
+        },
+        diagram: `flowchart LR
+  L["📚 Week 4<br/>prompt library"] --> PR["💬 Server prompt<br/>named + arguments"]
+  PR --> SL["⌨️ Slash command<br/>in the client"]
+  SL --> WF["🔁 Same workflow,<br/>every time, by anyone"]`,
+        script: [
+          'SAY: A prompt is not a capability. It is a workflow you can hand to somebody who will never read your code.',
+          'SAY: And here is what that does to Week 4. Your prompt library stops being a document people are supposed to consult, and becomes something the tool offers them by name.',
+          'NOTE: The workflow framing is what makes the executives in the room sit up. Land the Week 4 connection out loud — it pays off last week in one sentence.',
+        ].join('\n'),
+      },
+      {
+        segment: 'guided-build', eyebrow: '🔬 CP2 gate', title: 'All three primitives lit, in three tabs — this is the screenshot you submit',
+        body: 'This is the confidence moment of the night. Relaunch and walk all three tabs deliberately. Tools: call it, get structured rows. Resources: read both URIs, confirm the MIME types match what you declared. Prompts: render it with arguments and read the expanded text. Green across all three is the CP2 gate, and it is also your assignment proof — the whole server, all three primitives, provable without one line of client code. If a MIME type is wrong or a prompt will not expand, fix it here, while the surface area is small, while nothing depends on it, and while an instructor is standing in the room.',
+        bullets: [
+          'Tools tab: a real call returns structured rows',
+          'Resources tab: both URIs read, MIME types match your declarations',
+          'Prompts tab: it expands with the arguments you pass',
+          'Three green tabs is the gate — and that screenshot is your assignment proof.',
+        ],
+        definitions: [
+          { term: 'Gate', meaning: 'A checkpoint the whole room clears before anyone moves on, so nobody builds on something broken.' },
+          { term: 'Render (a prompt)', meaning: 'Filling in a prompt’s arguments and seeing the finished text it produces.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — CP2 gate, the three-tab walk',
+          code: 'Relaunch the inspector and walk me through the CP2 gate — all three primitives, in order. Tell me what to click; I will tell you what I see.\n\n1. Relaunch the inspector yourself and print the URL on its own line.\n2. TOOLS: give me a realistic argument from my own data and tell me what a healthy result looks like.\n3. RESOURCES: list the exact URIs I should see and the MIME type you declared for each one. I will read them back to you — if a MIME type I report does not match what you declared, say so plainly and fix it.\n4. PROMPTS: tell me which arguments to fill in and what the expanded text should say. If it will not render, the cause is almost always an argument in the template that the function does not declare — check that first.\n5. When all three are green, tell me to screenshot the inspector, because that screenshot is my assignment proof for this week.\n6. Then give me a one-line summary of what my server now publishes, in the words I would use to describe it to a colleague.',
+          expectedResult: 'Three tabs, three working primitives, one screenshot worth keeping.',
+          stopCondition: 'All three verified with your own eyes, and the screenshot saved for your submission.',
+          rescue: 'Driving it yourself? "uv run mcp dev server.py", then Tools, Resources, Prompts in that order.',
+        },
+        diagram: `flowchart TD
+  I["🔬 Inspector"] --> T["🔧 Tools<br/>structured rows"]
+  I --> R["📚 Resources<br/>MIME types match"]
+  I --> P["💬 Prompts<br/>expands correctly"]
+  T --> G["✅ CP2 gate"]
+  R --> G
+  P --> G`,
+        script: [
+          'DO: Do the full three-tab walk live — Tools, Resources, Prompts, in that order.',
+          'SAY: Screenshot this. That screenshot is your assignment proof for the week.',
+          'SAY: Look at what you have. A whole server, all three primitives, and you proved it without writing one line of client code.',
+          'NOTE: This is the peak-competence moment of the week. Pause and let the room feel it before you move on.',
+        ].join('\n'),
+      },
+      {
+        segment: 'guided-build', eyebrow: '3️⃣ CP3 · A real host calls it', title: 'Register it with Claude Code — and watch your prompt become a slash command',
+        body: 'The last required checkpoint is the one that makes it real for other people. Register your server with a host a human actually uses. In Claude Code that is one command. In Claude Desktop it is one entry in the configuration file plus a restart. Either way, the moment it registers, your tool becomes callable in ordinary conversation and your prompt appears as a slash command. Zero changes to your server. That is the M+N payoff from Monday, arriving on your own laptop about ninety minutes after you first heard the argument — and it costs three minutes, which is exactly the point.',
+        bullets: [
+          'Claude Code: one command registers it, then /mcp shows it in-session',
+          'Claude Desktop: add an entry under mcpServers in the config file, then restart',
+          'Your tool is now callable in normal conversation — no code, no client script',
+          'Your prompt shows up as a slash command. Same server, unchanged.',
+        ],
+        definitions: [
+          { term: 'Host', meaning: 'The application a person actually uses — Claude Code, Claude Desktop. It runs the client that talks to your server.' },
+          { term: 'Register', meaning: 'Telling a host how to start your server, so it appears alongside every other capability that host already has.' },
+          { term: 'M+N', meaning: 'Monday’s argument: with a standard you write one connector per system, not one per system per application.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — CP3, register my server with a real host',
+          code: 'Register the MCP server in this project with Claude Code so I can use it in ordinary conversation.\n\n1. Work out the ABSOLUTE path to this project folder and the exact command that starts my server, and show me both before you run anything. A relative path is the single most common reason registration succeeds and then will not connect.\n2. Register it under a short name that matches what the server actually does.\n3. Confirm it registered, and tell me what I should see when I run /mcp in a new Claude Code session.\n4. Then give me one plain-English question — no MCP jargon, the way a colleague would actually ask it — that can only be answered by calling MY tool. I am going to ask it in a fresh session and watch what happens.\n5. Tell me what my prompt primitive will be called when it shows up as a slash command.\n6. If I am on Claude Desktop instead, give me the exact JSON entry to add under "mcpServers" and remind me to restart the app.',
+          expectedResult: 'Your server registered and listed, plus a plain-English question ready to ask it.',
+          stopCondition: 'You asked Claude something in ordinary conversation and watched it call YOUR tool to answer.',
+          rescue: 'Registered but not connecting? It is nearly always a relative path. Raw commands if you would rather drive: claude mcp add my-server -- uv run --directory /abs/path/to/my-server server.py, then claude mcp list.',
+        },
+        diagram: `flowchart LR
+  S["🗄️ Your server"] --> REG["📝 Register it"]
+  REG --> H["💻 Claude Code<br/>host"]
+  H --> TC["🔧 Tool callable<br/>in conversation"]
+  H --> SL["⌨️ Prompt is now<br/>a slash command"]`,
+        script: [
+          'DO: Demo this live if you do nothing else tonight. Ask Claude a plain-English question that can only be answered by calling the tool.',
+          'SAY: Watch what just happened. Claude reached into a server you wrote ninety minutes ago, and I did not write a line of code to make that work.',
+          'DO: Show /mcp, then show their prompt appearing as a slash command. Pause and let them screenshot it.',
+          'SAY: Zero changes to your server. That is the M plus N argument from Monday, arriving on your own laptop.',
+          'NOTE: Protect this slide. If you are behind, cut the stretch slide that follows — never this one.',
+        ].join('\n'),
+      },
+      {
+        segment: 'guided-build', eyebrow: '🎁 Stretch · Only if the room is ahead', title: 'Optional: write the other half of the conversation yourself',
+        body: 'This one is a bonus and it is the first thing that gets cut, because your assignment does not depend on it. A minimal client launches your server as a subprocess, runs the initialize handshake, lists what is available, calls your tool, and reads your resource. Watch the shape, because it never changes: open the transport, open the session, initialize, then list and call and read. That is every MCP client that exists, from this small script all the way up to Claude Desktop. If we run out of room tonight, run this prompt at home — it is about ten minutes and it is worth it.',
+        bullets: [
+          'Optional tonight, take-home if we are behind — nothing later in the course depends on it',
+          'The lifecycle: open transport → open session → initialize → list / call / read',
+          'initialize comes first, always — it negotiates capabilities and version',
+          'Once you have written one client, no MCP client is a mystery to you again',
+        ],
+        definitions: [
+          { term: 'Client', meaning: 'The half of the conversation that asks. The inspector is one, Claude Desktop is one, and so is this script.' },
+          { term: 'initialize', meaning: 'The opening handshake where client and server agree on version and capabilities. Nothing else may happen before it.' },
+          { term: 'Session', meaning: 'One open conversation between a client and a server, running over a transport.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — stretch, a client of your own',
+          code: 'Create client.py in this project: a minimal MCP client that talks to my server over STDIO.\n\nIt should:\n1. Launch my server as a subprocess using the SDK stdio client and open a session over it.\n2. Run the initialize handshake FIRST, and print the server name and protocol version it negotiated.\n3. List the tools, resources and prompts the server advertises, and print the names of each.\n4. Call my tool with a realistic argument and print the structured result.\n5. Read my resource and print the first line of its content plus its MIME type.\n6. Wrap the whole run in a clear error handler that prints which step failed if something goes wrong, rather than a bare traceback.\n\nAdd one comment above the initialize call explaining why it must happen before anything else. Then run it, and tell me which line of the output could only have come from MY server rather than from any server.',
+          expectedResult: 'Printed output showing the negotiated server name, the advertised primitives, your tool result, and your resource content.',
+          stopCondition: 'Your client prints data that could only have come from your own server.',
+          rescue: 'Client hangs with no output? It is usually the server path — the client has to be able to launch your server file from the directory it is running in.',
+        },
+        diagram: `flowchart LR
+  CL["🐍 client.py"] --> TR["🔌 Open transport"]
+  TR --> SE["🤝 initialize"]
+  SE --> LS["📋 list tools /<br/>resources / prompts"]
+  LS --> CA["▶️ call + read"]
+  CA --> OUT["📦 Your own data,<br/>printed"]`,
+        script: [
+          'NOTE: Check the clock BEFORE you open this one. If the room is not at CP3 and comfortably inside the break, this is a take-home and you move on.',
+          'SAY: This one is a bonus, and your assignment does not depend on it. Take the prompt home — it is about ten minutes and it is worth it.',
+          'DO: Only if you have the time: run it live against the inspector on the other screen — same data, two clients, one server.',
+          'SAY: You have now authored both halves of an MCP conversation.',
+          'NOTE: The failure segment after this is where the retention is, and the last two Build Days lost it by running long right here. Cutting this slide is the right call, not a failure.',
+        ].join('\n'),
+      },
+
+      /* ============================== failure ============================= */
+      {
+        segment: 'failure', eyebrow: '💥 Break it on purpose', title: 'Delete the boundary and feed it garbage — nothing here will crash politely',
+        body: 'Your server works, which is precisely why this is the right moment to break it, while it is small and you are watching. We remove the input constraints and the type annotations from your tool, so the SDK can no longer generate a meaningful schema, and then we call it with the three inputs a real client will eventually send: nothing, far too much, and the wrong type entirely. Watch where the error surfaces. It will not be at the boundary — it will be somewhere deep inside your function, wrapped in a message no model can act on.',
+        bullets: [
+          '🕳️ No type annotations ⇒ no useful schema ⇒ anything gets through',
+          '💣 Three inputs: an empty string, a 5,000-character string, and a number',
+          '🌀 The error surfaces deep in your code, not at the door',
+          'What the model receives is an internal failure, not guidance it can use',
+        ],
+        definitions: [
+          { term: 'Type annotation', meaning: 'Declaring what kind of value an argument holds. Remove it and the protocol has nothing to check against.' },
+          { term: 'Traceback', meaning: 'The crash report Python prints. Useful to you; useless to a model trying to decide what to do next.' },
+          { term: 'Failure injection', meaning: 'Breaking something on purpose, while it is small and you are watching, so it cannot break later while nobody is.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — break it, deliberately, on a copy',
+          code: 'We are doing a deliberate failure exercise. Do NOT change my working server.\n\n1. Copy server.py to server_broken.py.\n2. In the copy ONLY, remove the type annotations and all input constraints from my tool, and remove the guard that returns a structured empty result when nothing is found — let it index or access directly instead, so a miss raises.\n3. Tell me the exact command to run the inspector against the broken copy.\n\nThen wait. I am going to call it by hand with three bad inputs before you fix anything:\n- an empty string\n- a string of about 5,000 characters\n- a number where a string belongs\n\nDo not fix anything yet, and do not touch my working server.',
+          expectedResult: 'A broken copy whose input schema is now essentially "anything," and three calls that fail deep inside the function.',
+          stopCondition: 'You have seen an ugly internal error come back from at least one bad input, and you have read what a model would receive.',
+          rescue: 'If Claude Code starts fixing the copy on its own initiative, stop it: "leave it broken — I am demonstrating the failure first."',
+        },
+        diagram: `flowchart TD
+  IN["💣 Bad input"] --> B["🚪 No boundary<br/>(constraints deleted)"]
+  B --> F["🐍 Deep inside<br/>your function"]
+  F --> E["💥 Internal error"]
+  E --> M["🧠 The model gets<br/>noise, not guidance"]`,
+        script: [
+          'DO: Run all three bad inputs live in the inspector — the empty string, the 5,000-character string, the number.',
+          'DO: Read the ugly traceback out loud, in the voice of the model receiving it.',
+          'SAY: That is what your model just got back. Not guidance. Not an instruction. An internal crash it can do nothing with.',
+          'SAY: So whose job was it to stop this?',
+          'NOTE: Wait for the room. The answer is the boundary you deleted two minutes ago. Sit in that for a beat before you move.',
+        ].join('\n'),
+      },
+      {
+        segment: 'failure', eyebrow: '🛡️ Harden it', title: 'Validate at the door, return structure on a miss, and save exceptions for the truly exceptional',
+        body: 'Now repair it, and notice how unglamorous each fix is. The constraints come back, so malformed calls are refused at the protocol boundary with a schema error a client can actually read — before your code runs at all. The not-found case stops raising and starts returning a structured empty result with a message, because "no matches" is a valid answer, not a crash. Re-run the same three inputs: the malformed ones get refused legibly, and the valid-but-empty one returns clean data. The error moved from deep and opaque to shallow and legible, and that is the whole discipline.',
+        bullets: [
+          '🚪 Constraints at the boundary refuse bad input before your code runs',
+          '📦 A miss returns a structured empty result — it never throws',
+          '🗣️ Errors that do escape are named and say what to do differently',
+          'Rule: validate at the edge, return structure, reserve exceptions for the exceptional',
+        ],
+        definitions: [
+          { term: 'Validate at the edge', meaning: 'Check the input at the door, before your logic runs, so a bad call never gets inside.' },
+          { term: 'Structured empty result', meaning: 'Returning "nothing matched", with a message, instead of raising. A miss is an answer, not a crash.' },
+          { term: 'Exception', meaning: 'A crash your code raises on purpose. Reserve it for the genuinely exceptional, never for a normal empty result.' },
+        ],
+        code: {
+          kind: 'paste',
+          pasteWhere: 'Claude Code',
+          label: 'Claude Code prompt — harden the broken copy, and tell me what each fix bought',
+          code: 'Now repair server_broken.py, and teach me while you do it. Still do not touch my working server.\n\n1. Put the type annotations and input constraints back on the tool — bounded string length, a sensible numeric range, every argument typed — so the SDK generates a real input schema again.\n2. Put back the structured empty result, so a miss returns named fields and a message rather than raising.\n3. For EACH of the two fixes, tell me in one sentence which of my three bad inputs it stops, and WHERE the failure now happens instead — at the boundary, or inside my function.\n4. Show me the repaired tool signature on its own, so I can hold it next to my working server and check my working server has the same three protections: the length bounds, the range bound, and the structured empty return.\n5. Tell me to re-run the exact same three bad inputs in the inspector, and predict what each one will do before I run it.\n6. Finally, name anything still unprotected in this tool that we have NOT fixed tonight, so I know what I am carrying into Week 6.',
+          expectedResult: 'Two unglamorous fixes, each tied to a specific bad input — and a verdict on whether your working server already has all three protections.',
+          stopCondition: 'You re-ran all three bad inputs and the malformed ones were refused at the boundary while the valid-but-empty one returned clean structured data.',
+          rescue: 'If it starts refactoring the whole file, pull it back: "only the two fixes — the input constraints and the structured empty return. Nothing else."',
+        },
+        diagram: `flowchart LR
+  IN["💣 Bad input"] --> B["🚪 Boundary<br/>refuses it"]
+  B --> CLR["🗣️ Clear schema error<br/>the client can read"]
+  OK["🙂 Valid but empty"] --> ST["📦 Structured<br/>empty result"]`,
+        script: [
+          'DO: Re-run the exact same three inputs from the previous slide. Let the room see the difference themselves.',
+          'SAY: Same three inputs. The malformed ones are refused legibly now, and the valid-but-empty one comes back as clean data.',
+          'SAY: Which of those two fixes would you have thought of on your own?',
+          'NOTE: Almost everyone says the constraints; almost nobody says the structured miss. Name that gap out loud — it is exactly what Build-Break-Harden exists to close.',
+        ].join('\n'),
+      },
+      {
+        segment: 'failure', eyebrow: '🧯 The one you cannot see', title: 'Hidden state: the server that works for you and shatters for the second person',
+        body: 'One last trap, and it is invisible tonight by construction. If your tool caches results in a module-level variable, or remembers something between calls, it works perfectly in your single inspector session and breaks the moment a second client connects or the server restarts mid-conversation. Keep tools stateless: same inputs, same outputs, no dependence on what happened before. That property is not a nicety — it is the precondition for Week 6, when this exact server goes behind HTTP and runs as more than one instance. Where you are on the trust ladder tonight: your AI reaches real systems, read-mostly, and it earned that by being predictable.',
+        bullets: [
+          'Module-level mutable state looks fine in one session and corrupts under two',
+          'Stateless: same input ⇒ same output, no memory of previous calls',
+          'This is exactly what makes the Week 6 scale-out safe rather than exciting',
+          'Assignment: the server repo with a tool, a resource and a prompt — proof is the inspector screenshot',
+        ],
+        definitions: [
+          { term: 'Stateless', meaning: 'Same inputs, same outputs, no memory of previous calls. The precondition for more than one person using it.' },
+          { term: 'Module-level state', meaning: 'A variable that lives for as long as the server does, so every caller shares it — usually by accident.' },
+          { term: 'Trust ladder', meaning: 'How far the system is allowed to act on its own. Tonight you moved a rung: it reaches real systems, read-mostly.' },
+        ],
+        diagram: `flowchart TD
+  S["🗄️ Server with<br/>module-level state"] --> C1["🙂 Client 1<br/>works fine"]
+  S --> C2["😱 Client 2<br/>sees client 1's data"]
+  ST["✅ Stateless tool"] --> SAFE["🚀 Week 6:<br/>safe to scale"]`,
+        script: [
+          'SAY: Three things carried the whole week. Primitives chosen by who controls them. Boundaries validated at the door. Tools kept stateless.',
+          'SAY: Your assignment is the server repo with a tool, a resource and a prompt, and the proof is that inspector screenshot.',
+          'SAY: Monday, this same server goes on call — sampling, notifications, file roots, a real transport, and a real business system behind it.',
+          'NOTE: Say the Week 6 line as a promise, not a topic list. That is the open loop that brings them back.',
+        ].join('\n'),
+      },
+    ],
+
+    storyBeats: {
+      'result-preview': [
+        {
+          icon: '🤝', tone: 'violet', eyebrow: 'Before you build — what actually changes tonight',
+          title: 'The first time somebody else uses something you built, it stops being homework',
+          body: 'A logistics coordinator built a small server one evening that exposed her team’s shipment-status lookup. She registered it, showed a colleague the next morning, and by the following week two other people on her team had it installed and were asking Claude about shipments in plain English. She did not write documentation, run a training session, or ship an application. She wrote one connector and it spread by itself.',
+          punch: 'Everything before tonight, you built for yourself. This one, other people can pick up and use.',
+        },
+      ],
+      'build-map': [
+        {
+          icon: '🚧', tone: 'amber', eyebrow: 'Why we hold the gate',
+          title: 'The build that skipped the inspector and lost ninety minutes to a client bug that was not a client bug',
+          body: 'Two engineers on the same team raced ahead and wrote their client before verifying the server. The client threw a strange error, so they rewrote the client. Then they rewrote the connection handling. Then they started questioning their Python. When somebody finally opened the inspector, the server was advertising no tools at all — it had never registered one. They had spent ninety minutes debugging a perfectly correct client against a server that had nothing to say.',
+          punch: 'Every checkpoint tonight is green in the inspector before we move. That rule costs you two minutes and saves you ninety.',
+        },
+      ],
+      failure: [
+        {
+          icon: '🧨', tone: 'cherry', eyebrow: 'A true story about a missing boundary',
+          title: 'The tool that accepted a 200,000-character query and took the server down with it',
+          body: 'An internal search tool went live on a Monday with no length constraint on its query argument, because in testing nobody had ever typed more than a sentence. On Thursday an automated client passed in the full text of a document by mistake. The tool did not reject it, did not truncate it, and did not fail fast — it tried, held the process, and every other client connected to that server waited behind it. The fix, afterwards, was eleven characters long.',
+          punch: 'The boundary you did not add is never missing quietly. It is missing until the day it is expensive.',
+        },
+        {
+          icon: '👥', tone: 'leaf', eyebrow: 'The bug that only appears when it succeeds',
+          title: 'It worked perfectly until the second person tried it',
+          body: 'A team shipped a server with a small cache in a module-level dictionary — an obvious optimisation, and it made the demo noticeably snappier. It ran flawlessly for the one engineer who built it. The week it was rolled out to six people, two of them started seeing results from each other’s queries, intermittently, in a way nobody could reproduce on demand. The server was not broken. It was remembering, which is the same thing when more than one person is talking to it.',
+          punch: 'A system that only works when one person uses it has not been tested. It has been used once.',
+        },
+      ],
+    },
+
+    extraInteractions: [
+      {
+        segment: 'readiness', kind: 'poll',
+        q: 'Four-point check — where are you right now? (No wrong answer. Monday ran out of time on purpose-built work, not on you.)',
+        options: [
+          '✅ All four green',
+          '🧰 Toolchain is red',
+          '📁 No folder from Monday — starting fresh tonight',
+          '✍️ No capability chosen yet',
+        ],
+        eyebrow: '🚦 Roll call', title: 'Before anybody writes a line',
+        presenterTip: 'Operational, and the framing matters more than the counts. Say out loud that the third option is expected — Monday stopped at the scaffold, so a chunk of the room legitimately has nothing, and the readiness prompt rebuilds it in two minutes. Read the counts, send mentors at the red toolchains first. Pay closest attention to the last option: a student with no chosen capability will drift all night, and a two-minute conversation now fixes it.',
+      },
+      {
+        segment: 'result-preview', kind: 'poll',
+        q: 'Honestly, how confident do you feel that you can ship a working MCP server in the next two hours?',
+        options: [
+          '😬 Not at all',
+          '🙂 If I follow along carefully',
+          '😎 I have a clear picture',
+          '🔥 I already started on Tuesday',
+        ],
+        eyebrow: '🌡️ Room check', title: 'Where the room actually is',
+        presenterTip: 'Temperature check, no reveal. If the first two options dominate, slow the CP0 pacing and say out loud that you are doing it. If the last two dominate, tell the confident ones they are on demo duty at the end — it gives them something to aim at.',
+      },
+      {
+        segment: 'build-map', kind: 'poll',
+        theater: true,
+        q: 'The one thing your server exposes tonight — which primitive is it, and who decides to invoke it?',
+        options: [
+          '🔧 A tool — the model decides',
+          '📚 A resource — the app decides',
+          '💬 A prompt — the person decides',
+          '🤔 I genuinely cannot tell yet',
+        ],
+        eyebrow: '📐 Design decision', title: 'Commit before you type',
+        presenterTip: 'The one full-theater moment of the night. Lock the votes, show the count, then call on two people from different options to justify theirs in one sentence. Anyone who picked the last option gets a mentor immediately — this is the decision the whole build hangs on.',
+      },
+      {
+        segment: 'guided-build', kind: 'trivia',
+        q: 'You call your tool in the inspector with an empty query and get back a schema validation error. Is that good or bad?',
+        options: [
+          'Bad — the tool should handle any input',
+          'Good — the boundary refused it before your code ran',
+          'Bad — it means the schema is broken',
+          'Neutral — it does not matter either way',
+        ],
+        answer: 1,
+        reveal: 'That refusal is the boundary doing its job. Rejecting malformed input at the protocol edge, with a message the client can read, is exactly the behaviour we deliberately delete and restore later tonight.',
+        eyebrow: '🩺 Diagnostic', title: 'A refusal is not a failure',
+        presenterTip: 'Fire this right after the CP1 gate while the error message is still on their screens. Roughly a third of the room reads any red text as a bug — reframing it now is what makes the hardening segment land as a principle rather than a chore.',
+      },
+      {
+        segment: 'guided-build', kind: 'poll',
+        q: 'Checkpoint roll call — how far have you got?',
+        options: [
+          '0️⃣ Server runs and I can see it in the inspector',
+          '1️⃣ Tool works in the inspector',
+          '2️⃣ Resource and prompt both live',
+          '3️⃣ Registered — Claude Code is calling it',
+        ],
+        eyebrow: '🚦 Progress', title: 'Where the room is, before we go further',
+        presenterTip: 'Operational, fired between CP2 and CP3, and it is also your cut decision. Read the spread out loud and pair the CP2 students with the CP0 students for five minutes — peer rescue is faster than mentor rescue at this point in the night and better for both of them. If most of the room is still on 0 or 1, drop the stretch client slide entirely and protect the failure segment: it is the highest-retention part of the night and the last two Build Days lost it to overrun.',
+      },
+      {
+        segment: 'failure', kind: 'trivia',
+        q: 'Your tool caches its results in a dictionary at module level. It runs perfectly for you. What breaks first in production?',
+        options: [
+          'Nothing — caching is always safe',
+          'A second client sees results cached for someone else',
+          'The transport stops working',
+          'The inspector will not connect',
+        ],
+        answer: 1,
+        reveal: 'Module-level state is invisible in a single session and corrupting the moment two people connect. Stateless tools — same input, same output, no memory — are the precondition for the Week 6 scale-out.',
+        eyebrow: '🩺 Diagnostic', title: 'The bug that only shows up when it succeeds',
+        presenterTip: 'Ask for a show of hands on who has added exactly this kind of cache before, in any language. Most experienced hands go up, which is the point: this is not a beginner mistake, it is a single-user assumption that survives until the day it does not.',
+      },
+      {
+        segment: 'demos', kind: 'poll',
+        q: 'Who is willing to screen-share their inspector session for ninety seconds?',
+        options: [
+          '🙋 Yes, mine works',
+          '🙋 Yes, and mine is half broken (that is useful too)',
+          '👀 I would rather watch tonight',
+          '📸 I will submit the screenshot instead',
+        ],
+        eyebrow: '📣 Demos', title: 'Show it while it is still warm',
+        presenterTip: 'Take one from the first option and one from the second, in that order. A half-broken server demoed honestly teaches the room more than a perfect one, and going second means the volunteer is not the cautionary tale — they are the debugging clinic.',
+      },
+      {
+        segment: 'cta', kind: 'poll',
+        q: 'Week 6 takes this exact server to production. What real system do you want it wired to?',
+        options: [
+          'A database we already run',
+          'An internal API or service',
+          'A SaaS tool my team lives in',
+          'I need help identifying one',
+        ],
+        eyebrow: '🔮 Next week', title: 'Name the system you actually want to reach',
+        presenterTip: 'This is the open loop that brings them back Monday. Read three answers out loud by name and say plainly that Week 6 is sampling, notifications, file roots, transports, and wiring this server to that system. Anyone who picks the last option needs a five-minute conversation before they leave.',
+      },
+    ],
+  },
+};

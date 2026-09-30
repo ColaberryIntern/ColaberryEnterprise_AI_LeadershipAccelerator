@@ -1,0 +1,392 @@
+{
+ "surface": {
+  "key": "ai-flotation",
+  "brandLabel": "AI Flotation",
+  "hero": {
+   "eyebrow": "AI Flotation · delivery",
+   "title": "What we put into production.",
+   "description": "Delivery records assembled from repository evidence and production proof."
+  },
+  "cta": {
+   "eyebrow": "Same workflow, your systems",
+   "heading": "Talk to the team that shipped it.",
+   "buttonLabel": "Start a conversation",
+   "href": "/contact"
+  },
+  "sectionOrder": [
+   "hero",
+   "architecture",
+   "decisions",
+   "build",
+   "repositories",
+   "measurement",
+   "situation",
+   "roadmap",
+   "artifacts",
+   "builder",
+   "contributors",
+   "closing",
+   "cta"
+  ],
+  "hiddenSections": [],
+  "requiredSections": [
+   "contributors",
+   "repositories",
+   "cta"
+  ],
+  "emphasis": [
+   "workflow",
+   "what shipped",
+   "architecture",
+   "delivery",
+   "production",
+   "technical proof"
+  ],
+  "defaultSort": "featured"
+ },
+ "caseStudy": {
+  "surfaceKey": "ai-flotation",
+  "slug": "lower-half-fixture",
+  "title": "The Call Ended. The Next Step Didn't Have To.",
+  "standfirst": "An admissions operation's AI voice agent could finish a call, but the next step waited for a person. Kes, AI Systems Architect at Colaberry, built rule-based routing that schedules, changes or stops the follow-up from what the caller said, with caps that hold.",
+  "organizationLabel": null,
+  "industry": "education",
+  "primaryCapability": "operational-ai-call-intent-routing",
+  "capabilities": [
+   "operational-ai-call-intent-routing",
+   "intent-detection",
+   "rule-based-routing",
+   "follow-up-scheduling",
+   "retry-caps",
+   "audit-trail",
+   "operator-dashboard"
+  ],
+  "stack": [
+   "python",
+   "fastapi",
+   "postgresql",
+   "next.js",
+   "typescript"
+  ],
+  "programLabel": null,
+  "builtBy": "colaberry_team",
+  "verificationClass": "verified",
+  "verificationMethod": "internal",
+  "publishedAt": "2026-09-17T21:53:32.383Z",
+  "updatedAt": "2026-09-17T21:53:32.383Z",
+  "heroImageUrl": null,
+  "engagementDuration": "a release, then a correction five months later",
+  "productionStatus": "shipped",
+  "heroMetrics": [
+   {
+    "label": "Retry calls scheduled after inconclusive conversations, before and after the cap",
+    "valueDisplay": "0 retries after inconclusive calls since the cap, from 551 before",
+    "unit": "retry jobs",
+    "verificationClass": "verified",
+    "verificationMethod": "internal",
+    "baseline": "551 retry jobs for 413 contacts across 965 partial-engagement calls between 2026-04-13 and 2026-08-24, up to 2 per contact by the cap then in force; the correction on 2026-08-24 replaced the retry with a terminal no-retry action.",
+    "sample": "1,452 answered calls classed as partial engagement from 2026-04-13 to 2026-09-17: 965 before 2026-08-25 and 487 from that date.",
+    "methodology": "Two read-only queries: calls with status completed and detected_intent partial_engagement grouped by whether they were created before 2026-08-25; launch_outbound_call jobs whose payload intent_reason is partial_engagement, grouped the same way, with the count of distinct contacts. The last such job was created on 2026-08-24, the day the correction shipped.",
+    "limitations": [
+     "This counts the retry that the routing itself schedules. A lead can still be called again through a campaign tier, which is a different mechanism and is not in this figure.",
+     "The windows differ in length: four and a half months before the change and three and a half weeks after it, so the two numbers describe policies, not comparable periods.",
+     "The change stopped the retry; it did not make the earlier retries wrong. 394 of the 551 completed, and the record has no way to say which of them reached a person."
+    ],
+    "shape": "ratio",
+    "payload": {
+     "shape": "ratio",
+     "numerator": 0,
+     "denominator": 487
+    },
+    "plain": {
+     "from": "The job table and the call table of the recap engine, read on 2026-09-17 in a read-only session; a retry is a launch job whose payload names partial_engagement as its reason.",
+     "counts": "Answered calls the rules classed as partial engagement (a transcript, no recognisable ask, and under two minutes) that went on to schedule a retry call: 0 of 487 from 2026-08-25, when the retry for that class was removed. Before that date, 551 retries were scheduled for 413 contacts across 965 such calls.",
+     "cannotShow": "Whether the 487 later conversations deserved a second attempt. The rule now marks them cold without calling again, so a lead who hung up on a bad line is treated the same as one who was not interested. The two windows are also different lengths: four and a half months before, three and a half weeks after."
+    },
+    "reproduceCommand": null
+   }
+  ],
+  "walkthroughVideo": null,
+  "visualStory": null,
+  "builder": {
+   "name": "Kes",
+   "roleTitle": "AI Systems Architect",
+   "organization": "Colaberry",
+   "initials": "K",
+   "intro": [
+    "Kes joined Colaberry as an intern and, after being hired, became an AI Systems Architect. He built the intent routing so that what a caller asked for on an answered call became the next scheduled step, rather than a summary waiting in a queue."
+   ],
+   "progression": [
+    "Intern",
+    "Hired by Colaberry",
+    "AI Systems Architect"
+   ],
+   "contribution": "Wrote the requirement and built the detection, the priority order and one handler per intent on 29 Mar 2026, wired them into the analysis job, and stored the detected intent on the call record for the dashboard. Five months later, after an audit found one contact with 83 retries, capped or removed every remaining retry loop and documented each handler's terminal behaviour. The release commits carry no co-author; the later fixes name an AI coding assistant as co-author, which the record states rather than hides.",
+   "skills": [
+    {
+     "label": "Deterministic routing",
+     "evidence": "A rule reads three inputs and returns one intent; the same call always routes the same way, and the file that decides has no language model in it (architecture)."
+    },
+    {
+     "label": "Control over cadence",
+     "evidence": "Caps of two for the retry routes, no retry for inconclusive calls, and explicit requests left uncapped on purpose (build timeline, 24 Aug 2026)."
+    },
+    {
+     "label": "Operator visibility",
+     "evidence": "Last intent and next action on the lifecycle monitor; the cancelled job beside the scheduled one on the drill-down (the images on this record)."
+    },
+    {
+     "label": "Measured in the system's own tables",
+     "evidence": "2,227 of 2,326 answered calls routed, 476 of 529 due follow-ups completed, read from the production database with the limits stated (measurement)."
+    }
+   ],
+   "profileUrl": null,
+   "photoUrl": null,
+   "provenance": {
+    "source": "user_confirmed",
+    "confirmedAt": "2026-09-16"
+   }
+  },
+  "decisions": [
+   {
+    "key": "separate",
+    "title": "Separate interpretation from action",
+    "problem": "The analysis already produced a summary, and the platform already reported what it had tried during the call. Neither was a decision, and letting the summarising model also choose the next step would have made every routing choice unreadable after the fact.",
+    "decision": "The model keeps the summary. The decision is a separate module that reads three inputs, the transcript, the platform's executed actions and the duration, through patterns and thresholds, and returns one intent or nothing. The handlers act only on that result.",
+    "evidence": "Architecture narrative and the release of 29 Mar 2026: detect_intent with its three inputs, the module header stating no language model is used.",
+    "consequence": "of answered calls since 13 Apr 2026 received a next step by rule, 2,227 of 2,326, and for each one the reason can be read from a pattern table rather than inferred from a model.",
+    "stage": "Intent detection",
+    "figure": "96%"
+   },
+   {
+    "key": "priority",
+    "title": "Let priority rules govern the next step",
+    "problem": "One call can carry two signals: a callback request and a request not to be called again, or a booking the platform reports as failed and a transcript that reads as uncertain. Something has to win, and a stop has to beat an ask.",
+    "decision": "A fixed order, first match wins. The platform's reported transfer or booking comes first; an inaudible transcript next; then the pattern table in its published order: the stop signals (do not call, wrong number, not interested), then enrolled, a request for a person and a lead re-engaging, then the callbacks and a failed booking, then the softer answers, and last the requests to be texted or emailed; partial engagement only when nothing matched and the call was short.",
+    "evidence": "The requirement of 29 Mar 2026 lists the order; the detection file at the measured head runs it; the measurement notes count what each route did.",
+    "consequence": "callers who said not to call again were never scheduled again by any route; the three exceptions were campaign calls a day or more later, not intent follow-ups. Whether the rules chose the right intent is not measured: no labelled sample exists, and the record says so.",
+    "stage": "Priority order",
+    "figure": "31 of 34"
+   },
+   {
+    "key": "bound",
+    "title": "Bound follow-up and leave a trace",
+    "problem": "A handler that schedules another attempt after every inconclusive call has no end, and a mismapped number can absorb attempts for months. By August one contact had accumulated 83 intent retries across five reasons.",
+    "decision": "Every scheduled call carries its reason in the payload, every call record its intent, every campaign change an audit row. Partial engagement and inaudible calls mark the lead cold and stop. A failed booking and an unconfirmed transfer retry at most twice. A callback the caller asked for stays uncapped, because a cap would break the legitimate case.",
+    "evidence": "Build timeline, 24 Aug 2026; the incident record in the repository; the retry counts in the measurement notes.",
+    "consequence": "retry calls after inconclusive conversations, 551 for 413 contacts before the correction and none since. The trace is what made the audit possible: the 83 retries were found by grouping jobs by their reason.",
+    "stage": "Follow-up job",
+    "figure": "551 to 0"
+   }
+  ],
+  "closing": "This is what a bounded automation looks like from the outside: the same call routes the same way, every scheduled action names its reason, and the caps are numbers in a file rather than a promise. 2,227 of 2,326 answered calls were routed by rule and 476 of the 529 follow-ups that came due were made. What it does not yet show is whether the rules read the caller correctly; that needs a reviewed sample, and the record says so.",
+  "situation": {
+   "heading": "The situation",
+   "body": [
+    "An admissions operation places outbound voice calls through an AI voice agent and analyses each answered call afterwards. Until 29 Mar 2026 the automation ended there: a summary, a task and a lead-state update, with the next step waiting for a person to read the summary.",
+    "The decisions were not alike. A caller who asked to speak to a real person needed a person within hours. A caller whose booking link had failed needed another attempt. A caller who said not to call again needed every scheduled call cancelled and the number flagged. A conversation that ended well under two minutes with no conclusion needed someone to judge whether to try once more or let it go. On the console each of these looked the same: a completed call with a summary attached, waiting.",
+    "The delivery question was control. A follow-up scheduled by rule is predictable and can be capped; a follow-up chosen by a model is neither. The requirement kept the model to the summary and put the decision in patterns, thresholds and a fixed order, with the platform's own reported actions and the call's duration as inputs alongside the transcript, and one traceable action per intent."
+   ],
+   "constraints": [
+    "Detection is rule-based by design; the module header records that no language model is used.",
+    "Explicit requests from a caller, such as a callback at a stated time, must keep working and are not capped.",
+    "A conversation the rules cannot interpret must not be treated as a request.",
+    "The routing runs after an analysis step that depends on an external AI service and a voice platform the team does not control."
+   ],
+   "goals": [
+    "After the analysis of every answered call, detect the caller's intent from the transcript, the platform's reported actions and the call's duration, by rule.",
+    "Give each intent one explicit follow-up action: schedule a call or a message, change the lead's state, or stop the sequence.",
+    "Decide between competing signals in a fixed priority order, with stop signals ahead of requests.",
+    "Leave the reason on every scheduled job and the detected intent on every call record, so the dashboard can show both."
+   ]
+  },
+  "timeline": [
+   {
+    "date": "2026-03-08",
+    "endDate": null,
+    "label": "Repository created",
+    "detail": null,
+    "sourceKind": "milestone"
+   },
+   {
+    "date": "2026-03-29",
+    "endDate": null,
+    "label": "Live-call intent detection and routing shipped",
+    "detail": "Detection gains the executed actions reported by the platform and the duration of the call; one handler per intent; wired into the analysis job after the summary, where until this commit the job ended in a task for a person, a summary and a lead-state update; the requirement, the architecture note and the runbook; 24 unit tests.",
+    "sourceKind": "repository"
+   },
+   {
+    "date": "2026-03-29",
+    "endDate": null,
+    "label": "The detected intent stored on every call record",
+    "detail": "A column on the call table and a backfill for earlier calls, so the dashboard can show what the rules decided.",
+    "sourceKind": "repository"
+   },
+   {
+    "date": "2026-04-13",
+    "endDate": null,
+    "label": "First answered call routed by rule on the live system",
+    "detail": "The earliest call record carrying a detected intent, which is where every production figure on this record starts.",
+    "sourceKind": "milestone"
+   },
+   {
+    "date": "2026-05-01",
+    "endDate": null,
+    "label": "Provider actions in dictionary form parsed for booking intent",
+    "detail": "The platform began reporting executed actions as a dictionary; the parser accepts both forms.",
+    "sourceKind": "repository"
+   },
+   {
+    "date": "2026-08-24",
+    "endDate": null,
+    "label": "Low-confidence audio stops retrying",
+    "detail": "The first of two fixes from the retry audit: an inaudible call marks the lead cold instead of scheduling another attempt.",
+    "sourceKind": "repository"
+   },
+   {
+    "date": "2026-08-24",
+    "endDate": null,
+    "label": "Every remaining uncapped retry loop capped or removed",
+    "detail": "Partial engagement no longer retries; failed booking and unconfirmed transfer capped at two; explicit callback requests left uncapped on purpose; 65 tests across the two files; the behaviour of every handler documented in one place.",
+    "sourceKind": "repository"
+   },
+   {
+    "date": "2026-09-17",
+    "endDate": null,
+    "label": "Measured from the production database, read-only",
+    "detail": "The head of the branch the system runs was cf233ae; the figures on this record were read at 2:26 PM Central that day.",
+    "sourceKind": "milestone"
+   }
+  ],
+  "architecture": {
+   "narrative": [
+    "Interpretation and action are two modules. The analysis job runs first and produces the classification, the summary and the consent check; only then does it hand the transcript, the platform's list of executed actions and the duration to detect_intent. Detection returns one intent and a confidence, or nothing. It is patterns and thresholds in one file, and the file says at the top that no language model is used.",
+    "Detection reads its inputs in a fixed order and the first match wins. A transfer or booking the platform reports as executed is trusted before the transcript is read. A transcript under five characters, or only noise, is low-confidence audio. Then the pattern table runs in its published order: the stop signals (do not call, wrong number, not interested), then enrolled, a request for a person and a lead re-engaging, then the callbacks and a failed booking, then the softer answers (interested but not now, call later, uncertain), and last the requests to be texted or emailed. When nothing matched and the call was under two minutes, the result is partial engagement: the rules found no ask in a short conversation.",
+    "handle_intent takes the result, cancels the contact's pending jobs, and dispatches to one handler per intent. A handler does one of three things: schedules a launch job for a call, or a job for a text or an email, at a time the rule sets or the caller named; changes the lead's state, to nurture with a date, to cold, to closed, to human transfer, or flags the number; or stops. Every job it schedules carries the intent as its reason in the payload, the call record carries the detected intent, and a campaign change writes an audit row.",
+    "The bounds were added on 24 Aug 2026 after an audit found one contact with 83 intent retries across five reasons. Partial engagement and low-confidence audio now mark the lead cold and do not call again. A failed booking and an unconfirmed transfer retry at most twice, then mark the lead cold. A callback the caller asked for is left uncapped on purpose, because a cap would break the legitimate case. The dashboard reads the same tables: the Lead Lifecycle Monitor shows each lead's last intent and next action, and the drill-down shows the jobs, including the one the handler cancelled beside the one it scheduled."
+   ],
+   "stack": [
+    "python",
+    "fastapi",
+    "postgresql",
+    "next.js",
+    "typescript"
+   ],
+   "capabilities": [
+    "intent-detection",
+    "rule-based-routing",
+    "follow-up-scheduling",
+    "retry-caps",
+    "audit-trail",
+    "operator-dashboard"
+   ],
+   "integrations": [
+    "voice-platform-transcript-executed-actions-duration",
+    "crm",
+    "ai-analysis-service"
+   ],
+   "dataStores": [
+    "postgresql"
+   ],
+   "diagram": null,
+   "diagramSource": "flowchart TD\n  C[Answered call: transcript, actions, duration] --> A[Analysis job: classification, summary, consent]\n  A --> D[Intent detection: rules, no language model]\n  D --> P[Priority order: first match wins]\n  P -->|stop signals| S[Stop: cancel jobs, flag the number]\n  P -->|requests| H[Handler per intent]\n  P -->|inconclusive| N[Mark cold, no retry]\n  H --> J[Follow-up job with its reason]\n  H --> L[Lead state: nurture, transfer, closed]\n  H --> K[Retry caps: 2 for booking and transfer]\n  J --> W[Worker runs the job when due]\n  D --> R[(Detected intent on the call record)]\n  J --> R2[(Reason in the job payload)]\n  L --> R3[(Campaign switch audit row)]\n  R --> M[Dashboard: last intent, next action]\n  R2 --> M",
+   "diagramImageUrl": null
+  },
+  "measurement": {
+   "narrative": [
+    "Evidence maturity: measured outcome, from the system's own tables on 17 Sep 2026 in a read-only session, from 13 Apr 2026. 2,227 of 2,326 answered calls were routed by rule; 476 of the 529 follow-ups that came due were made, 467 of them within fifteen minutes of the time the rule set; 31 of 34 stop requests were honoured by every route; and after the caps of 24 Aug 2026 the retries for inconclusive calls went from 551 to none. Two things are not measured and are named as such: whether the rules read the caller correctly, and whether an attempted transfer connected."
+   ],
+   "metrics": [
+    {
+     "label": "Answered calls that received a next step from the rules",
+     "valueDisplay": "96% of answered calls routed to a next step, 2,227 of 2,326",
+     "unit": "share of answered calls",
+     "verificationClass": "verified",
+     "verificationMethod": "internal",
+     "baseline": "Before the release of 2026-03-29 the analysis job ended in a task for a person, a summary and a lead-state update; no call was routed by rule. The comparison is with a way of working, not with a number.",
+     "sample": "2,326 completed call records from 2026-04-13 to 2026-09-17.",
+     "methodology": "One read-only query counting completed calls, those with a transcript and those with a detected intent since 2026-04-13, and a second grouping the remainder by whether a transcript exists.",
+     "limitations": [
+      "A routed call is one where a rule matched; it says nothing about whether the follow-up it chose was appropriate.",
+      "Calls before 2026-04-13 are excluded because an earlier backfill wrote intents onto old records, which would mix routed calls with relabelled ones."
+     ],
+     "shape": "share",
+     "payload": {
+      "shape": "share",
+      "numerator": 2227,
+      "denominator": 2326,
+      "denominatorNote": "Call records with status completed created from 2026-04-13, the first day a routed intent appears, to 2026-09-17."
+     },
+     "plain": {
+      "from": "The call table of the recap engine, read on 2026-09-17; the intent column was added by the release so the dashboard could show it.",
+      "counts": "Answered calls whose record carries a detected intent, which is what the routing writes when one of its rules matched: 2,227 of 2,326 since 2026-04-13. Of the 99 without one, 81 matched no pattern and 18 had no transcript to read.",
+      "cannotShow": "Whether the intent chosen was the right one. A matched pattern is not a reviewed label, and no labelled sample exists yet to check the rules against."
+     },
+     "reproduceCommand": null
+    }
+   ]
+  },
+  "roadmap": [
+   {
+    "label": "Rule-based intent detection with provider actions and duration",
+    "status": "shipped",
+    "detail": null
+   },
+   {
+    "label": "One handler per intent: schedule, change state or stop",
+    "status": "shipped",
+    "detail": null
+   },
+   {
+    "label": "Detected intent stored on every call record",
+    "status": "shipped",
+    "detail": null
+   },
+   {
+    "label": "Last intent and next action on the operator dashboard",
+    "status": "shipped",
+    "detail": "The Lead Lifecycle Monitor, the contact drill-down and Scheduled Actions read the intent and the job reason; the images on this record are those pages."
+   },
+   {
+    "label": "Retry caps and terminal actions after the incident audit",
+    "status": "shipped",
+    "detail": "Correction of 24 Aug 2026, five months after the release: partial engagement and low-confidence audio no longer retry; failed booking and unconfirmed transfer capped at two. The audit that prompted it found one contact holding 83 intent retries across five reasons."
+   },
+   {
+    "label": "A reviewed, labelled sample to measure routing correctness",
+    "status": "not_pursued",
+    "detail": "No labelled sample exists. Route counts and the 65 unit tests say how often a rule fired and that the expected phrases map to the expected intents; neither says how often the rule was right. This record does not claim a correctness figure for that reason."
+   },
+   {
+    "label": "A confirmed-transfer state from the voice platform",
+    "status": "not_pursued",
+    "detail": "The platform reports that a transfer was attempted, not that it connected. Until it does, follow-through for a request for a person can only be measured to the attempt."
+   }
+  ],
+  "contributors": [
+   {
+    "displayMode": "named",
+    "displayName": "Kes",
+    "role": "AI Systems Architect at Colaberry: designed and built the intent detection, the routing rules and the follow-up handlers",
+    "kind": "colaberry_team"
+   }
+  ],
+  "artifacts": [],
+  "repositories": [],
+  "privateRepositoryCount": 1,
+  "anonymousContributorCount": 0,
+  "cta": {
+   "eyebrow": "Same workflow, your systems",
+   "heading": "Talk to the team that shipped it.",
+   "buttonLabel": "Start a conversation",
+   "href": "/contact"
+  },
+  "seo": {
+   "title": "The Call Ended. The Next Step Didn't Have To.",
+   "description": "An admissions operation's AI voice agent could finish a call, but the next step waited for a person. Kes, AI Systems Architect at Colaberry, built rule-based routing that schedules, changes or stops the follow-up from what the caller said, with caps that hold.",
+   "canonicalUrl": "https://aiflotation.com/results/turning-call-intent-into-the-next-action",
+   "ogImageUrl": "https://enterprise.colaberry.ai/site-v2/shot-cora-intent-lead-lifecycle.png",
+   "ogType": "article"
+  }
+ }
+}

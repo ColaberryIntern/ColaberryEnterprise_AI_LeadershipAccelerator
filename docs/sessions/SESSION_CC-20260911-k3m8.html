@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260911-k3m8 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, September 15, 2026 at 3:10 PM</div>
+    <div><span class="sid">CC-20260911-k3m8</span><span class="count">18 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Generator gets a second gate after the first live batch scored 6/6 and read as mediocre**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deployed the generator (#2419) and ran it for real: `--scenario S5 --count 8 --write` produced **6 written, 2 discarded, 0 failed**. Reading one of the six: 6/6 on the rubric, and mediocre — an unmeasured observation, options at the seven-word floor, a &quot;disable the feature&quot; distractor, and a key addressing a *failed* call when the stem described an *inaccurate* one. Three fixes: the prompt aims at the reference **median** (17-word options, 46-word stems) and requires a **measurement** in the stem; `triageQuestion` — the adversarial reviewer that argues against the marked answer — now runs as a **second gate**, discarding on high severity and logging lower ones beside the draft; and a rubric discard names the dimension it missed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` exit 0 sentinel-confirmed; 93 suites / 1455 tests pass. The generator itself was verified live against production before the change (plan matched the corrected arithmetic exactly; six drafts confirmed in the database).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The rubric measures shape, and a model asked to satisfy a shape will find the cheapest shape that passes.** This is the caveat stated on every card and in every PR since the rubric was built, now with a concrete instance rather than a warning. The floor-vs-target distinction in the prompt matters: &quot;7-35 words&quot; was read as &quot;seven is fine&quot;. **A triage error is treated as a discard, not a pass** — &quot;unreviewed&quot; and &quot;reviewed clean&quot; must never look the same downstream. The six drafts from the first batch remain in the queue, unapproved, for Ali to judge or retire. **CRLF trap, again:** multi-line string anchors failed silently against a CRLF file until line endings were normalised first.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Generator opens the way the published items open; scaled run chunked**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deployed the quality gate (#2429) and regenerated the same eight S5 questions for a direct comparison. **5 written, 3 discarded, 0 failed** — every written item carried a `triage medium` note (the adversarial reviewer found a defensible alternative in each, which is what a real distractor looks like), no `triage high`, and the D3.6 question went from &quot;occasionally fails&quot; to &quot;25% of pull requests in the last month&quot; with a key that follows from its stem. All three discards were `scenario_framing` alone — observations phrased outside the detector&#39;s vocabulary. Prompt v3 tells the generator to open the way the reference items do (&quot;Monitoring shows…&quot;, &quot;Engineers report…&quot;, then the number).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` exit 0 sentinel-confirmed; 46 suites / 601 tests pass. Second batch verified in the production database and one item read in full against its first-batch counterpart.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**For generated text, matching the reference phrasing is writing to the target, not gaming a proxy** — the opposite call from 2026-09-08, where 18 already-correct stems were deliberately left alone rather than edited to suit a word list. Same rubric, different situation, and the difference is whether the text existed before the ruler did. **The full run must be chunked**: batch generation via `docker exec` on the prod backend has OOM&#39;d near 34 items. `--to 300 --count 25` repeatedly; the script recomputes from the database each run so each chunk resumes where the plan says. The five drafts from the first (mediocre) batch and the five from the second remain in the queue unapproved.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Scaled generation: first chunk clean, scenario balance and un-retire hole fixed**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deployed #2414 and #2431 (backend + nginx, all three halves verified in the running containers) and ran the first scaled chunk: `--to 300 --count 25 --write` → **25 written, 0 discarded, 0 failed**, the attribution tune having taken the discard rate from 37% to zero. Reading the output showed **all 25 were S1** — the plan filled the thinnest domain but took the first fitting scenario, so S1 went 34→59 in one chunk while S4/S5 sat at 19. `pickScenario` now takes the thinnest fitting scenario and keeps the count current within a chunk. Also retired the six untriaged first-batch drafts — revision **and** identity — which exposed that the sweep&#39;s approve step selected on score alone and would have approved a retired latest revision straight back; it now skips those and says how many.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` exit 0 sentinel-confirmed; 30 tests pass across the sweep and growth suites. Chunk and retirements confirmed in the production database: bank 175 live, S1=59, 30 drafts awaiting review, six identities withdrawn.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**A count that says 25/25 hides a distribution that says 25/0/0/0/0.** Both defects this turn were found by reading what the run wrote, not by anything the summary reported — the summary was accurate and insufficient. **Retirement has two halves** (`cert_question_revisions.review_status` and `cert_questions.is_retired`) and the serving path, the generator and the sweep each check a different one; retiring only the revision left a question that looked withdrawn in the queue and approvable to the sweep. The 30 remaining drafts all passed both gates and await approval under Ali&#39;s name.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Chunks 2 and 3 of the scaled run; key reuse and script-on-import fixed**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deployed #2459 and ran chunks 2 and 3 (`--to 300 --count 25 --write` each): **50 written, 0 discarded, 0 failed**, with real scenario spread — S4 and S3 in chunk 2, S5 finally filling in chunk 3. Bank at **230 live**. Reading chunk 3&#39;s keys showed `CCARF-D3-24/26/27/28` — the drafts retired that morning — **reused**. Four good questions had landed as revision 2 under identities marked `is_retired`, excluded from serving, the sweep and the generator&#39;s own count: dead on arrival while the summary said 25 written. `nextKey` now builds its taken set from **every** identity. The four were revived (identity live, old revision still retired). Separately, &quot;11 passed / jest exit 1&quot; in one run exposed that all three scripts fired `main()` on import; guarded on `require.main === module`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` exit 0 sentinel-confirmed; **45 suites / 588 tests, jest exit 0**; the drift-checker suite no longer logs a spurious failure on import. Chunks and the four revivals confirmed in the production database.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**A question key is permanent — retiring it withdraws the content, not the name.** That rule was never written down, and the taken-set query silently assumed the opposite. It would have taken two more casualties (`D5-22`, `D5-23`) on the next chunk. **&quot;All tests pass&quot; and &quot;the suite failed&quot; can both be true** when a script runs on import: the tests&#39; assertions pass, the script&#39;s own catch handler sets `process.exitCode = 1`, and CI reports red with nothing to point at. Both findings came from reading output that a count had already declared fine.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**The certification bank is at 300, all approved, five non-overlapping mocks**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ran the final three generation chunks (`--to 300 --count 25 --write`): 25, 25, 19 + 1 written, one candidate refused by the invariant check for a missing distractor rationale, zero discards on shape. Approved the 150 new drafts under `ali@colaberry.com`, targeting drafts only so the 150 already approved were not re-stamped. **Final state: 300 live questions, every domain exactly at its five-mock target (D1 80 · D2 55 · D3 60 · D4 60 · D5 45), 300 approved by Ali, thinnest objective 7 (was 3).** Scenario spread S1 59 · S2 44 · S3 47 · S4 46 · **S5 44 (was 8)** · S6 60.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Independent of the scripts that wrote it — drift checker **MISSING 0 · DRIFTED 0 · UNSERVABLE 0 · STALE 0**; read-only sweep **300/300 at their ceiling, 279 at 6/6, 21 capped**; the `--plan` reports `add 0` for every domain and **5 non-overlapping mocks**; approver counts confirmed directly in the database.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The 150 generated questions exist only in the database.** The drift checker reports them as `EXTRA: 152` (150 live + 2 withdrawn) because its source of truth is the authored TypeScript bank, and the rubric floor test in CI covers only those 150. If the database were lost, the generated half would be gone; if the rubric changes, nothing in CI re-checks them. Worth a follow-up that exports approved generated items into a versioned data file — flagged, not done. **The sweep&#39;s approve step would re-stamp already-approved rows** (it selects on score, not on status), which is why this approval was done by a targeted script on drafts only; a small idempotency fix for the sweep is a follow-up. Across the whole growth run the discard rate went 25% → 37% → 0% as the prompt was retargeted, and every defect that mattered was found by reading what a clean count had already blessed.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Whole-bank rubric for the certification bank, run after every change; option-length balancer**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**`certBankRubric.ts`** — eleven bank-level checks (hard: no position over 35%, every position over 15%, always-one-letter under 50% of a mock, no domain over 45% on one letter, correct-is-longest under 60%, ceiling rate over 95%, no duplicate stems; advisory: five mocks, scenario spread, objective floor, all approved), thresholds as named constants with their reasoning, every check reporting the number it measured. Runs from ONE definition in three places: CI (`certBankRubric.test.ts`, biased-bank fixture must fail, authored bank must pass), the admin Question Bank panel (`BankHealth.audit`, red/amber/green scorecard in `CertBankPanel.tsx`), and automatically at the end of `growCertQuestionBank`, `sweepCertQuestionRubric`, `rebalanceCertAnswerPositions` and the new balancer (`scripts/lib/certBankAudit.ts`); `auditCertBank.ts` runs it standalone, exit 1 on a hard failure. **Length cue:** `certOptionLength.ts` (pure plan: key longest → lengthen the longest distractor, one item in three keeps the key longest by a salted hash so the bank lands at chance), `certDistractorLengthener.ts` (model rewrite of ONE wrong option, refused outside bounds / on any invariant / on a rubric drop), `balanceCertOptionLengths.ts` (backfill: generated items only, re-triaged, minted as new revisions, `--approve-as`), and the same step in the generator before triage plus a prompt rule. `exportGeneratedCertItems.ts` writes the generated half back to the repo (round-trip tested); `HAND_AUTHORED_ITEMS` split from `CCAR_F_ALL_ITEMS` so both tools can tell the halves apart. Ceiling functions moved from the improver into the rubric so the audit and the admin service no longer drag in the OpenAI client.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` backend (5.9.3) and frontend clean; `jest -c jest.ci.config.ts` over certPrep, scripts and data: **72 suites, 1170 tests pass**, including the 144-at-A fixture failing the audit with &quot;A holds 96%&quot; and &quot;Always-A scores 96%&quot;, the all-key-longest fixture failing the length check and naming `balanceCertOptionLengths`, and the lengthener leaving every non-target field byte-identical.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The generated 150 are NOT in this PR.** They measure 75% correct-is-longest (median +6 chars); with them the combined bank is 66% against a 60% ceiling and the CI guard would fail — correctly. Sequence: merge and deploy this, run `balanceCertOptionLengths --write --approve-as ali@colaberry.com` on production, export with `exportGeneratedCertItems`, then a follow-up PR lands `generated.ts` with all 300 under the audit. `certAdminService.getBankAudit` tolerates a row with no stem or options rather than taking the dashboard down with it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Whole-bank rubric live; length balancer run on production (chunk 1 of 3); letter-label defect found and closed**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">PR #2476 merged and deployed (`fbcab236`, backend + nginx). **First live run of `auditCertBank`: 10 checks ok, 1 hard FAIL: &quot;Correct is longest in 66% of items (ceiling 60%)&quot;, exit 1, fix named.** `balanceCertOptionLengths --write --approve-as ali@colaberry.com --limit 25`: 23 lengthened, 2 refused out of bounds, 0 discarded by triage, 23 approved; **audit after: PASS.** Reading the minted text found 4 of 23 options beginning with their own letter (&quot;D. Allocate ...&quot;), a model habit that passed bounds, invariants, rubric and triage. Closed at four layers: `OPTION_LABEL_PREFIX` + `stripOptionLabels` in `certOptionLength.ts`; the lengthener strips before measuring and the prompt forbids it; `checkInvariants` refuses a labelled option (covers improver and generator); the bank audit gains a hard `option_labels` check naming the items; the balancer strips and re-mints labelled options without a model call.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; the four touched suites **49 tests pass** (label recognised in five spellings, not in &quot;A retry&quot;, &quot;E.g.&quot;, &quot;B2B&quot;, &quot;C++&quot;; lengthener accepts &quot;B. &lt;words&gt;&quot; as the words; invariants refuse &quot;D. Latency&quot;; audit fails with the key named). Triage-medium rate on lengthened items re-checked against the pre-change revisions: same concern, same untouched option, before and after; the lengthening did not create it.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Chunks 2 and 3 (47 items) and the 4 relabels run after this deploys. Then `exportGeneratedCertItems` and the follow-up PR that lands `generated.ts`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Length balance finished on production; all 300 certification items now in the repo under the whole-bank audit**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`balanceCertOptionLengths --write --approve-as ali@colaberry.com` in four passes: **70 distractors lengthened, 4 labelled options repaired, 9 refusals (model overshot the +40-char ceiling; 2 remain key-longest, which the plan tolerates), 0 discarded by triage, 74 revisions approved.** Live bank audit: **12 of 12 checks pass**; correct-is-longest **66% -&gt; 43%** (generated half 75% -&gt; 28% by characters, 23% by words). `exportGeneratedCertItems` run on production and its output committed as `data/certBlueprints/items/generated.ts` (150 items, as stored); `GENERATED_ITEMS` wired into `CCAR_F_ALL_ITEMS`, so the shape test, the rubric floor, the length and position guards, and the whole-bank audit in CI now cover all 300 rather than the authored 150.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over certPrep, scripts and data: **72 suites, 1176 tests pass** on the 300-item bank, including the two that failed on the pre-balance export (length cue, authored-bank audit). Production scorecard pasted in the PR.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The authored half measures 58% correct-is-longest by characters** (37% by words, which is the figure the rubric comment quoted). Under the 60% ceiling, but a real cue; the balancer skips authored items by design because their text is in the per-domain files. A repo-side length pass over the authored items is the next hardening step. Drift checker after deploy expected to report `EXTRA: 2` (the two withdrawn identities, retired in the database and absent from the repo).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**Option-length pass for the authored half (tooling), and the seed&#39;s approval scoped to what it minted**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`scripts/lib/certLengthPass.ts` — the one definition of the pass (strip labels, plan, lengthen, triage) now shared by `balanceCertOptionLengths` (database, generated items; refactored onto it, same behaviour) and the new `planAuthoredOptionLengths.ts`, which runs the pass over `HAND_AUTHORED_ITEMS` with no database and emits JSON patches addressed by option text. `applyCertOptionPatches.ts` writes them into the per-domain files, matching the quoted TypeScript literal (not bare text, which could hit a stem), refusing anything absent or repeated, and writing nothing unless every patch places exactly once. **`seedCertPrepContent --approve-as` now approves only the revisions it minted this run**: it approved every draft in the table, and production holds 149 superseded drafts that the coming re-seed would have stamped with Ali&#39;s name.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over scripts and certPrep: **67 suites, 945 tests pass**, including the pass&#39;s five branches under mocked lengthener/triage, and the applier&#39;s literal matching with apostrophes, backslashes and a `$&amp;` that a string replacement would have expanded.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Sequence from here: deploy → run the planner on production (model key lives there) → apply the patches locally → PR with the content change → deploy → `seedCertPrepContent --items --revise --approve-as ali@colaberry.com` → drift and audit. Authored half currently 58% by characters.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**Authored option-length planner streams its patches and can resume**</h2>
+          <span class="badge">2026-09-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2486 deployed (`7cbca0ce`). The authored planner&#39;s first production run (55 items planned: 62 already fine, 30 hash-kept, 3 multi-select) was killed fifty seconds in when another session&#39;s `docker compose up -d backend` recreated the container; it had buffered every patch for a single print at the end, into the container&#39;s own `/tmp`, so nothing survived. `planAuthoredOptionLengths` now writes one JSON patch per line to stdout as each is made, takes `--skip N` to resume past the first N planned items (the plan is pure, so N names the same items on every run), and prints the `--skip` to resume with on exit. `applyCertOptionPatches` reads the stream (or the old array form), collapses exact repeats from a resumed run, and takes the certBlueprints directory as an argument so a build compiled anywhere edits the intended checkout. A NUL byte the Edit tool decoded from `\u0000` in a dedupe key was caught and replaced before commit.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `applyCertOptionPatches.test.ts` **7 tests pass** (stream and array forms, exact-repeat collapse keeps a different rewrite).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Rerun of the planner is next, output redirected on the host. Bank audit on production still PASS; nothing about the bank changed.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**The option lengthener must EXTEND, not rewrite: contract, checks and a bank rule**</h2>
+          <span class="badge">2026-09-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The authored length pass ran on production (55 planned, 45 patched, 10 refused, 0 discarded) and its patches were **thrown away after review**: they passed bounds, invariants, rubric and triage while keeping a median of **40% of the author&#39;s content words**, changing the opening word on 11 of 45 (which breaks agreement with the stem the options answer as a set), and adding a full stop on 15 of 45 whose siblings had none. `certOptionLength.extensionProblem` now refuses any candidate that is not an extension: same opening word, same trailing punctuation, and at least **70% of the original&#39;s content words** (`CONTENT_RETENTION_MIN`). The lengthener&#39;s prompt is `v2-extend-do-not-rewrite` - it names the word to start with, how to end, and that the original&#39;s nouns and verbs must survive - and it retries once before returning the new `not_an_extension` outcome. `certBankRubric` gains a hard `option_punctuation` check: options within one item must all end alike (the two halves of the bank differ from each other, which is house style, but an odd one out inside an item points at the edited option).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over certPrep, scripts and data: **75 suites, 1209 tests pass**, including six cases drawn from the discarded run (a fluent replacement that fits the bounds exactly is refused; &quot;That ...&quot; to &quot;Ensure ...&quot; is refused; an added or dropped full stop is refused) and the lengthener refusing a bounds-perfect rewrite after two attempts.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Production&#39;s generated half was measured for the same defect and deliberately left alone** - median 50% retention over the 70 balancer edits, 44 with a changed opening word - because those options were model-written to begin with, each was re-triaged, the bank audit passes, and no author&#39;s voice was at stake. Re-running the authored pass under the new contract is next; a much higher refusal rate is the expected and correct outcome.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>**Extension contract proven on the re-run; additions may no longer disparage their own option**</h2>
+          <span class="badge">2026-09-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2504 deployed (`0da42246`) and the authored pass re-run on production under the extension contract. **Measured on the output rather than taken from the summary: 47 patches, 100% content retention (was a median of 40%), 0 changed opening words (was 11 of 45), 0 changed punctuation (was 15 of 45), 8 refused on bounds, 0 discarded by triage.** Reading them anyway found three additions that told the reader not to pick the option - &quot;even if it risks errors&quot;, &quot;even if the plans add little value&quot;, &quot;regardless of its current state or quality&quot; - wording the prompt already forbade. `selfDefeatingPhrase` now rejects eleven concessive constructions the original did not already use, and the lengthener&#39;s prompt (`v3-extend-without-disparaging`) lists them as rejected outright. Concessive constructions only, never negative words: half the bank&#39;s distractors diagnose a failure, so &quot;causing delays&quot; is content and &quot;even if it causes delays&quot; is a hint.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over certPrep, scripts and data: **75 suites, 1212 tests pass**, the three new cases taken verbatim from the re-run, plus one proving a plain description of a bad outcome is still allowed and one proving a concession the author wrote themselves is not punished.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The 47 patches from the re-run are held in the session scratchpad, not applied - three of them carry the disparaging additions and the whole set will be regenerated under the new check. Additions were checked for formulaic phrasing as well: 36 distinct two-word openings across 46, the most common (&quot;aiming to&quot;) at 5, so the appended clause is not itself a tell.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>**Authored half of the certification bank: 46 distractors extended, length cue 58% -&gt; 27%**</h2>
+          <span class="badge">2026-09-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2543 deployed (`7f99d560`); third and final run of `planAuthoredOptionLengths` on production under the full contract: 55 planned, **46 patched, 8 refused on bounds, 1 discarded (transient triage error), 0 disparaging, 0 rewrites.** Verified on the output, not the summary: 46 of 46 keep the opening word, the trailing punctuation and 100% of the author&#39;s content words; no letter labels; no concessive phrasing the original lacked; 38 distinct two-word openings across 45 pure appends. Applied with `applyCertOptionPatches` - 46 lines changed across six files, nothing else. **Authored half correct-is-longest by characters 58% -&gt; 27%; whole bank 43% -&gt; 27%** (chance 25%). Repo-side bank audit: 12 of 12 pass, including the new `option_punctuation` check.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over data, certPrep and scripts: **77 suites, 1228 tests pass** - the shape test, the rubric floor, the position and length guards and the whole-bank audit, all over the changed items.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The changes are to option TEXT in the repo. They reach students only after this deploys and `seedCertPrepContent --items --revise --approve-as ali@colaberry.com` mints and approves the 46 new revisions (approval now scoped to what the run mints, per #2486); until then the previously approved revision is served. Drift check expected to report `DRIFTED: 46` between deploy and re-seed, then clean.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>**Authored length fix live in production; the whole 300-item bank passes every whole-bank check**</h2>
+          <span class="badge">2026-09-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2545 merged and deployed (`1dd4b685`). Drift check before the re-seed read exactly the predicted `DRIFTED: 46`. `seedCertPrepContent --items --revise --approve-as ali@colaberry.com`: **0 created, 46 revised as new drafts, 254 unchanged, 46 approved - and the draft count stayed at 149**, which is the #2486 fix proving itself: the old approve-every-draft behaviour would have stamped 195. Drift after: `MISSING 0 · DRIFTED 0 · UNSERVABLE 0 · STALE 0 · EXTRA 2` (the two withdrawn identities). Live bank audit: **13 of 13 pass**, correct-is-longest **27%** across all 300 (was 66% when the audit first ran on 2026-09-11; chance is 25%), positions 25% each way, always-one-letter 25% on a mock, 5 non-overlapping mocks, 300/300 at their rubric ceiling.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Production, independent of the scripts that wrote it - `verifyCertBankDrift` OK, `auditCertBank` exit 0 with every measurement pasted above, bank counts approved 534 · draft 149 · retired 99 read from the database.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Not visually verified in the admin panel (the scorecard&#39;s API contract is unit-tested and the panel type-checks). The lengthener&#39;s three contract rounds this session - letter labels, extend-not-rewrite, no disparaging additions - each came from reading the output after every gate had passed; the hardening log in the sweep skill carries all three.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>**Triage v3: a blind read before the argument, so the reading list is what a person would get wrong**</h2>
+          <span class="badge">2026-09-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Re-running the stored triage over the current 300 (the table held verdicts from before the rewrite) flagged **53 of the first 100 - every one medium, every one `defensible_distractor`, every one phrased &quot;could be seen as&quot; or &quot;a valid alternative&quot;**, the hedged form the v2 prompt says loses. A reviewer judging its own argument is not independent of it. `reviewQuestion` now runs a **blind read first** (`blindAnswer`, gpt-4o, sees the stem and options only, never the key or rationales): a reader who chooses a different option is `needs_human`/**high**/`answer_disputed` and no argue call is spent; only when the blind read agrees does the argue-against step run, and an argument the blind read did not share is recorded at **low** - on the record, off the reading list. `triageQuestion` is unchanged as the pure argue step, so its 25 tests stand. Prompt version `v3-blind-then-argue`, so the run is a new opinion and the report (which filters by model and version) shows v3 only. The runner, the length pass and the generator all use `reviewQuestion`; the runner&#39;s summary breaks the count down by severity and says how many were blind disputes. The v2 partial run (100 rows, `triage-20260914T210222`) is left as history.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over certPrep and scripts: **71 suites, 997 tests pass** - the blind prompt is asserted never to contain the key, the marking or a rationale; disagreement is high with one call; agreement plus a medium argument is low with the reason prefixed; agreement plus a high argument stays high; a failed blind read leaves the argue verdict unchanged and says so; an argue error is still an error.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The stored `reviewer_model` column records the argue model; the process is identified by the prompt version. Docs PR #2549 had its PROGRESS.md hunk dropped after a conflict - this tree treats that file as sealed - and carries `docs/sessions/` only.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>**Triage v3 run over all 300 on production; the report leads with the reading list and files the rest as noted**</h2>
+          <span class="badge">2026-09-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2554 deployed (`f0a6d605`); `triageCertQuestions --write` in three resumable chunks of 100 under `v3-blind-then-argue`. **Across 300: 25 high (every one a blind read choosing a different answer, with its reason), 1 medium (a failed blind call, argue verdict stood), 137 low, 137 no objection.** Under v2 the first 100 alone had produced 53 mediums. The report email would then have listed all 163 flagged rows in key order under a subject saying &quot;163 of 300 need your judgement&quot; - the highs not even first. `buildTriageReportHtml` now sorts by severity, counts only high/medium/error as &quot;need your judgement&quot;, files the lows under &quot;Noted, not required reading&quot; as one-line rows, explains the blind read in the header, and the subject reads &quot;25 of 300 need your judgement, 137 noted&quot;.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` clean; `jest -c jest.ci.config.ts` over certPrep and scripts: **71 suites, 1001 tests pass** - highs before lows whatever the arrival order, the counts split correctly with the quiet count still computed from the full flagged set, the noted section absent when empty. Production counts read from `cert_question_triage` by prompt version.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Report to be sent to ali@colaberry.com with `--report-only --send` once this deploys. The 25 are 8% of the bank; each carries what a strong reader chose instead and why - the list a person can actually work through.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>**Triage report sent; the certification workstream closed out**</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">#2557 merged and deployed (`e01e463c`). `triageCertQuestions --report-only --send --to ali@colaberry.com` read the 300 stored v3 verdicts and sent **&quot;CCAR-F triage: 26 of 300 need your judgement, 137 noted&quot;** - the 25 blind disputes plus the one item whose blind read failed, with the 137 low-severity arguments filed below as noted. Nothing was approved and nothing became servable by the send.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Runner output on production: `already: 300 triaged at this revision by this model and prompt`, `report: sent to ali@colaberry.com` with the subject above.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Where the bank stands at close:** 300 items approved, 5 non-overlapping mocks, 13 of 13 whole-bank checks passing live (positions 25% each way, correct-is-longest 27% against 66% at the start of the week, no letter labels, no mixed punctuation, 300/300 at their rubric ceiling), drift clean, every item carrying a v3 triage verdict, and a 26-item reading list in Ali&#39;s inbox. **Left open, deliberately:** the sweep&#39;s approve step re-stamps already-approved rows (harmless); the drift checker counts the two withdrawn identities as `EXTRA: 2`; 149 superseded drafts sit hidden in the table; the generated half&#39;s 70 balancer edits were rewrites rather than extensions (model text, re-triaged, no author&#39;s voice at stake). Item statistics need ~20 exposures per item before real difficulty can be read - 22 sittings so far. This session&#39;s `PROGRESS.md` entries predate the discovery that this tree treats the file as sealed; this file is the record.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>**Skill brought up to date with the whole workstream; closed out**</h2>
+          <span class="badge">2026-09-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`.claude/skills/certprep-rubric-sweep/SKILL.md` now describes the bank, not just the sweep: a toolset table mapping all ten scripts to their jobs and shared conventions; the two things the item rubric cannot see (bank-level properties, key correctness) and what covers each; &quot;After a run&quot; gains the audit, &quot;read the output, not the summary&quot;, and where this tree keeps its session log; a 26th hardening entry for the blind-read triage. A project memory records the bank&#39;s state at close, the toolset, what was left open and the three model-text lessons.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`grep` on the skill for every script name and for &quot;blind&quot; - all present; 26 dated hardening entries; docs-only change, no code.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Nothing left running. #2563 (close-out log) merged by Ali. Session CC-20260911-k3m8: 18 entries in this file, one per change, audit clean.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260911-k3m8.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

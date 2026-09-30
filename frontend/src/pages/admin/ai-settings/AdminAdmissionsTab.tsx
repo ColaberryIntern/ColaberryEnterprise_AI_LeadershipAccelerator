@@ -160,7 +160,7 @@ export default function AdminAdmissionsTab() {
               <div className="card-body text-center py-3">
                 <div
                   className="fw-bold mb-1"
-                  style={{ fontSize: '1.75rem', color: `var(--color-primary, #1a365d)` }}
+                  style={{ fontSize: '1.75rem', color: 'var(--text-strong)' }}
                 >
                   {card.value}
                 </div>
@@ -169,7 +169,7 @@ export default function AdminAdmissionsTab() {
               <div
                 style={{
                   height: '3px',
-                  backgroundColor: `var(--bs-${card.color}, #6c757d)`,
+                  backgroundColor: `var(--bs-${card.color}, var(--border-subtle))`,
                   borderRadius: '0 0 4px 4px',
                 }}
               />

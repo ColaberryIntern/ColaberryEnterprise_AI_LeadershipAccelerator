@@ -1,0 +1,76 @@
+# Session CC-20260920-af3p — AI Project Factory, Phase 1 (contracts + one sample)
+
+Per-PR session log (separate from PROGRESS.md to avoid union-merge conflicts). Branch
+`workstream/ai-project-factory-phase1`. Run via loop-architect (plan audited 19/20; foundation
+independently verified 12/12). Phase 1 = typed contracts + one worked sample, no UI, no LLM,
+additive schema only. Product spec: AI_PROJECT_FACTORY_AND_INTERNSHIP_COMMAND_CENTER_PLAN.md;
+execution plan: docs/AI_PROJECT_FACTORY_EXECUTION_PLAN.md. Decomposition model from the NuOrg
+teardown Ali emailed.
+
+- [x] Phase 1: two-track contract model + decomposition schema + machine gate + transactional
+      approval + identity map + one validated sample, all additive
+  - Date: 2026-09-20
+  - Session: CC-20260920-af3p
+  - What changed:
+    - `services/factory/contracts/factoryContract.ts` (+ `factoryContractSchema.ts` mirror):
+      the typed contracts — ContractTrack, ContractRequirement (compliance matrix, evidence_state),
+      ProcessRecord, FactoryTask (source-evidence cites + required_skills/judgment/decision_authority/
+      data_sensitivity/interaction_pattern/frequency/confidence/method), Assignment (role +
+      responsibility + executor person|team|agent), Role, TransitionEdge, ApprovalRecord, FactoryProject.
+    - `services/factory/factoryIds.ts`: idempotent uuid5 from source identity.
+    - `services/factory/factoryValidate.ts`: the pure machine gate with NuOrg rule codes —
+      SOURCE_COVERAGE, SOURCE_CLASSIFICATION, PERFORMER, OVERSIGHT (agent needs a human
+      ACCOUNTABLE/APPROVER; a system may never BE one), LOOP, BRANCH_KIND/DECISION,
+      START/END/REACHABILITY, DUPLICATE_ASSIGNMENT, EFFORT_EVIDENCE, STAGE_LIMIT.
+    - `services/factory/factoryApproval.ts`: content hash + expected_version compare-and-swap +
+      fork-on-edit + two-level (documented/full) with decoupled enrichment_status.
+    - `services/factory/projectIdentityMap.ts`: branded id types (delivery vs student build) so
+      the two UUID spaces cannot be crossed at compile time; bridge resolution via DeliveryProjectSourceLink.
+    - `db/ensureContractTrackSchema.ts` (+ models ContractTrack/ContractRequirement/ContractProcessDocument,
+      exported in models/index.ts): new tables FK'd to delivery_projects/projects — additive only.
+    - `db/ensureFactoryTaskSchema.ts` (+ StudentTask model additive field declarations): 11 new
+      nullable, default-free columns on student_tasks (the archived_at/approval_state pattern).
+    - Both ensure*Schemas wired at boot in server.ts after the approval block.
+    - `services/factory/sample/sampleContractProject.ts`: one worked sample government contract
+      (both tracks, an agent-performed task with a human accountable, evidence-cited process).
+    - `scripts/seedSampleContractProject.ts`: idempotent persistence of the contract layer for a
+      given delivery project (run at deploy). `scripts/renderSampleContractReview.ts` +
+      `docs/samples/sample-contract-review.html`: the rendered manager review, generated from the data.
+  - Verification: 47 factory tests pass under `jest -c jest.ci.config.ts` (contract 4, ids 5,
+    validate 11, approval, identityMap, sample 5, render 5, two additive-only schema suites 7);
+    foundation T1–T5 independently graded 12/12 by loop-task-verifier; backend `tsc --noEmit` clean.
+  - Notes: sample is NOT seeded to a live DB in Phase 1 (needs a delivery_projects parent =
+    engagement + tenant, a later delivery-domain integration); the seed script is the persistence
+    path. No existing table column changed. Phases 2–6 (LLM decomposition, generation pipeline,
+    command-center UIs, evidence/approvals, builder integration, migration) follow. Phase 5 is
+    gated on the AI-builder tab design.
+
+- [x] Fix a false-negative in assertContractTrackSchema (post-deploy)
+  - Date: 2026-09-21
+  - Session: CC-20260920-af3p
+  - What changed: after deploying Phase 1, prod verification showed the five contract tables
+    present and correct (positional `SELECT ... WHERE table_name = ANY($1)` found all five,
+    existing student_tasks columns intact, 899 rows unchanged) — but `assertContractTrackSchema()`
+    returned false and logged a bogus `SchemaInvariantViolation` ("contract reads will fail") on
+    every boot. Root cause: the assert's Sequelize NAMED-ARRAY bind `table_name = ANY($names)`
+    returned a false negative for this query (the identical pattern in assertFactoryTaskSchema
+    works, confirmed on prod — so it is bind-serialization-specific, not universal). Fix:
+    `ensureContractTrackSchema.ts` now fetches all public table names and checks membership in
+    JS, removing the array bind. The schema/feature were always correct; only the assert lied.
+  - Verification: the tables provably exist (positional query on prod); the fixed assert has no
+    bind to fail. Confirmed clean on the next deploy's boot log.
+
+- [x] Fix the assert PROPERLY: this app's sequelize returns single-column selects as raw arrays
+  - Date: 2026-09-21
+  - Session: CC-20260920-af3p
+  - What changed: the first fix (fetch-all + JS filter) STILL returned false in production. Root
+    cause, MEASURED: `sequelize.query('SELECT table_name ...')` in this app returns each row as a
+    RAW ARRAY (`["some_table"]`, keys `["0"]`), NOT a `{ table_name }` object — so `r.table_name`
+    was undefined for every row and the membership check always failed (the original `= ANY($names)`
+    bind failed for the same underlying reason). assertFactoryTaskSchema works only because it
+    passes `{ bind }`, which changes the return to objects. Final fix: aggregate existence in SQL
+    with one `bool_or(table_name = '<t>') AS t<i>` per required table and read a single keyed row
+    back — validated on prod (all five true, missing=[]). REQUIRED_TABLES are constants, so the
+    interpolation is not injectable.
+  - Verification: ran the exact bool_or query against prod sequelize — `{t0..t4: true}`, missing=[];
+    confirmed clean "contract track schema ensured" on the redeploy boot.

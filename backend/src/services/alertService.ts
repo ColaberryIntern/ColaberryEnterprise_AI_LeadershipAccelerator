@@ -38,21 +38,65 @@ export interface ResolutionInput {
 
 // ─── Emit Alert ─────────────────────────────────────────────────────────────
 
+/**
+ * How long an already-open alert suppresses re-notification for the same
+ * condition. A persistent failure (a cron job broken for days) is ONE problem,
+ * not one problem per evaluation cycle — the previous 1-hour window re-created
+ * and re-emailed every open alert every hour, which is what buried the real
+ * signal under ~250 alert emails/day.
+ */
+const RENOTIFY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 export async function emitAlert(data: AlertInput): Promise<Alert> {
-  // Dedup: skip if same title + type exists in last hour (cross-pipeline)
-  // Intentionally omits source_agent_id so that multiple pipelines detecting
-  // the same problem don't create duplicate alerts for the CEO.
-  const recentDuplicate = await Alert.findOne({
+  // Dedup on the CONDITION, not on a time window: while an unresolved alert for
+  // the same title + type is open, fold new occurrences into it instead of
+  // creating a fresh row. Intentionally omits source_agent_id so that multiple
+  // pipelines detecting the same problem don't duplicate alerts for the CEO.
+  //
+  // Escalation still gets through: a severity increase, or an occurrence that
+  // is still firing RENOTIFY_INTERVAL_MS after the last notification, re-notifies.
+  const openDuplicate = await Alert.findOne({
     where: {
       title: data.title,
       type: data.type,
-      created_at: { [Op.gte]: new Date(Date.now() - 60 * 60 * 1000) },
       status: { [Op.notIn]: ['resolved', 'dismissed'] },
     },
+    order: [['created_at', 'DESC']],
   });
 
-  if (recentDuplicate) {
-    return recentDuplicate;
+  if (openDuplicate) {
+    const meta = openDuplicate.metadata || {};
+    const occurrences = (meta.occurrence_count || 1) + 1;
+    const lastNotifiedAt = meta.last_notified_at ? new Date(meta.last_notified_at) : openDuplicate.created_at;
+    const escalated = data.severity > openDuplicate.severity;
+    const stale = Date.now() - lastNotifiedAt.getTime() >= RENOTIFY_INTERVAL_MS;
+    const shouldRenotify = escalated || stale;
+
+    await openDuplicate.update({
+      severity: Math.max(openDuplicate.severity, data.severity),
+      description: data.description,
+      metadata: {
+        ...meta,
+        ...(data.metadata || {}),
+        occurrence_count: occurrences,
+        last_seen_at: new Date().toISOString(),
+        ...(shouldRenotify ? { last_notified_at: new Date().toISOString() } : {}),
+      },
+    });
+
+    await AlertEvent.create({
+      alert_id: openDuplicate.id,
+      event_type: 'recurred',
+      actor_type: data.sourceType,
+      actor_id: data.sourceAgentId || 'system',
+      details: { occurrence_count: occurrences, renotified: shouldRenotify, escalated },
+    }).catch(() => {});
+
+    if (shouldRenotify) {
+      await notifySubscribers(openDuplicate);
+    }
+
+    return openDuplicate;
   }
 
   const alert = await Alert.create({
@@ -80,7 +124,18 @@ export async function emitAlert(data: AlertInput): Promise<Alert> {
     details: { title: data.title, type: data.type, severity: data.severity },
   });
 
-  // Match subscriptions and deliver
+  await Alert.update(
+    { metadata: { ...(data.metadata || {}), occurrence_count: 1, last_notified_at: new Date().toISOString() } },
+    { where: { id: alert.id } },
+  ).catch(() => {});
+
+  await notifySubscribers(alert);
+
+  return alert;
+}
+
+/** Fan an alert out to its matching subscriptions. Delivery is non-critical: it must never fail the caller. */
+async function notifySubscribers(alert: Alert): Promise<void> {
   try {
     const subscriptions = await matchSubscriptions(alert);
     for (const sub of subscriptions) {
@@ -89,8 +144,6 @@ export async function emitAlert(data: AlertInput): Promise<Alert> {
   } catch {
     // Delivery is non-critical
   }
-
-  return alert;
 }
 
 // ─── Status Transitions ─────────────────────────────────────────────────────

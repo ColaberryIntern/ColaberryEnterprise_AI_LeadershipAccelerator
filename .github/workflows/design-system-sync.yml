@@ -1,0 +1,125 @@
+# Keep the vendored brand design systems in step with their source repositories.
+#
+# The five design systems are authored at github.com/aleemcolaberry, one repository per
+# brand. Their token CSS and self-hosted fonts are vendored into this repository so the
+# build stays hermetic: the alternative, linking the published GitHub Pages CSS at runtime,
+# would make five live sites depend on a third-party host on every page load.
+#
+# WHY THIS OPENS A PULL REQUEST RATHER THAN COMMITTING. A token change is a visual change
+# to live sites. Committing straight to main would let an accent colour edited in a
+# separate repository restyle production with nobody having seen the diff, and with no
+# obvious point to roll back to. The pull request is the review, and it is usually two
+# files and thirty seconds.
+#
+# The job is a no-op when nothing upstream has changed, so a quiet week produces no noise.
+
+name: Design system sync
+
+on:
+  schedule:
+    # 06:20 UTC daily. Off the hour because the hour is crowded with other cron work on
+    # the same runners, and after the US working day so a designer's afternoon change is
+    # waiting as a pull request the next morning.
+    - cron: '20 6 * * *'
+  workflow_dispatch:
+    inputs:
+      brand:
+        description: 'Sync a single brand slug (blank syncs all)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Two overlapping runs would race on the same branch and the loser would force-push over
+  # the winner's commit.
+  group: design-system-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Pull design systems and open a PR on drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync design systems
+        id: sync
+        env:
+          # Passed as an environment variable, never interpolated into the script body.
+          # A workflow_dispatch input is attacker-controlled text; `${{ }}` splices it into
+          # the shell before bash ever sees it, so a crafted brand name would run as code.
+          BRAND: ${{ inputs.brand }}
+        run: |
+          set -o pipefail
+          ARGS=""
+          if [ -n "$BRAND" ]; then ARGS="--brand $BRAND"; fi
+          # Tee rather than pipe to tail: a pipeline's exit status is the LAST command's,
+          # so piping here would mask a sync failure as success.
+          node backend/src/scripts/syncDesignSystems.js $ARGS 2>&1 | tee /tmp/sync.log
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Did anything actually change
+        id: drift
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No drift. Every vendored design system already matches its source."
+          fi
+
+      - name: Verify the apps still build with the new tokens
+        if: steps.drift.outputs.changed == 'true'
+        run: |
+          # A design system can publish a stylesheet that fails to resolve, and a sync that
+          # only checked bytes would ship it. Building proves the import graph still closes
+          # before anyone is asked to review a colour change.
+          for app in cpn-public ai-flotation-public refactored-public; do
+            (cd "apps/$app" && node build.js) || exit 1
+          done
+          node scripts/validate-app-boundaries.js
+
+      - name: Write the PR body
+        if: steps.drift.outputs.changed == 'true'
+        run: |
+          {
+            echo "Upstream design systems changed. This is what moved:"
+            echo
+            echo '```'
+            cat /tmp/sync.log
+            echo '```'
+            echo
+            echo "**These are live brand styles.** Read the colour and spacing changes"
+            echo "before merging: this branch restyles the brand sites on deploy."
+            echo
+            echo "Sources: [AI Flotation](https://github.com/aleemcolaberry/AI-Flotation-Design-System)"
+            echo "· [CPN](https://github.com/aleemcolaberry/Career-Pathways-Network-Design-System)"
+            echo "· [Refactored.ai](https://github.com/aleemcolaberry/Refactored.ai-Design-System)"
+          } > /tmp/pr-body.md
+
+      - name: Open or update the pull request
+        if: steps.drift.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/design-system-sync
+          # Reuse one branch. A branch per run would leave a trail of stale pull requests
+          # each carrying a slightly older version of the same design change.
+          title: 'Design systems: pull upstream changes'
+          commit-message: |
+            Design systems: pull upstream changes
+
+            Vendored from github.com/aleemcolaberry by
+            backend/src/scripts/syncDesignSystems.js. Token and font files only;
+            hand-authored files in the same directories are left untouched via the
+            ownership manifest.
+          body-path: /tmp/pr-body.md
+          delete-branch: true
+          add-paths: |
+            apps/*/src/assets/design/**

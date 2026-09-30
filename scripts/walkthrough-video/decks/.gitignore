@@ -1,0 +1,15 @@
+# Build artifacts. The deck and the three scripts are the source; everything a run
+# produces is derived and belongs nowhere near the repository.
+#
+# The finished mp4 and .vtt DO get committed - but to frontend/public/site-v2/, which is
+# what nginx bakes into its image. A second copy here would be a second thing to keep in
+# sync, and the one under site-v2 is the one that ships.
+audio/
+segments/
+check/
+*-bg.png
+bg.png
+*-concat.txt
+concat.txt
+*-walkthrough.mp4
+*-walkthrough.vtt

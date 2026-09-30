@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-label="Overview — an aerial vista overlooking a coastline of land and water">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#062b33"/>
+      <stop offset="55%" stop-color="#0d5967"/>
+      <stop offset="100%" stop-color="#2fa7b3"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#37b4c0"/>
+      <stop offset="100%" stop-color="#0a4551"/>
+    </linearGradient>
+    <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a3b44"/>
+      <stop offset="100%" stop-color="#052228"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="68%" cy="46%" r="34%">
+      <stop offset="0%" stop-color="#dff6f5" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#dff6f5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="scrim" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#04191d" stop-opacity="0.78"/>
+      <stop offset="45%" stop-color="#04191d" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#04191d" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="50%" cy="42%" r="72%">
+      <stop offset="70%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#02171b" stop-opacity="0.42"/>
+    </radialGradient>
+  </defs>
+
+  <!-- sky -->
+  <rect x="0" y="0" width="1200" height="312" fill="url(#sky)"/>
+  <ellipse cx="816" cy="300" rx="440" ry="180" fill="url(#sun)"/>
+
+  <!-- sea -->
+  <rect x="0" y="300" width="1200" height="375" fill="url(#sea)"/>
+  <!-- water shimmer bands -->
+  <g stroke="#bfeef0" stroke-opacity="0.16" stroke-width="2">
+    <line x1="120" y1="352" x2="1080" y2="352"/>
+    <line x1="220" y1="388" x2="1000" y2="388"/>
+    <line x1="300" y1="420" x2="900" y2="420"/>
+    <line x1="380" y1="452" x2="820" y2="452"/>
+  </g>
+
+  <!-- distant far headland -->
+  <path d="M0 300 Q 210 268 420 288 Q 560 302 700 300 L 700 320 Q 480 330 0 322 Z" fill="#0b4e5a" fill-opacity="0.7"/>
+
+  <!-- foreground promontory (the land you overlook) rising from bottom-left -->
+  <path d="M0 675 L0 372 Q 180 344 340 400 Q 470 446 560 542 Q 610 596 640 675 Z" fill="url(#land)"/>
+  <!-- aerial contour lines on the promontory -->
+  <g stroke="#3fd0d8" stroke-opacity="0.18" stroke-width="2" fill="none">
+    <path d="M40 640 Q 210 520 380 560"/>
+    <path d="M40 588 Q 220 470 360 512"/>
+    <path d="M60 536 Q 210 434 330 470"/>
+    <path d="M90 486 Q 200 410 300 436"/>
+  </g>
+  <!-- shoreline foam where land meets water -->
+  <path d="M0 372 Q 180 344 340 400 Q 470 446 560 542" stroke="#dff6f5" stroke-opacity="0.35" stroke-width="3" fill="none"/>
+
+  <!-- title-legibility scrim (titles overlay bottom-left) -->
+  <rect x="0" y="337" width="1200" height="338" fill="url(#scrim)"/>
+  <rect x="0" y="0" width="1200" height="675" fill="url(#vignette)"/>
+
+  <!-- faint 'OVERVIEW' watermark motif, low opacity so real titles sit on top -->
+  <text x="60" y="612" font-family="Georgia, 'Times New Roman', serif" font-size="34"
+        letter-spacing="10" fill="#dff6f5" fill-opacity="0.14">OVERVIEW</text>
+</svg>

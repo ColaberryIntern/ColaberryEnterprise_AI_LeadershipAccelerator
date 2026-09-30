@@ -1,0 +1,183 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
+/**
+ * Every (source, entry) a public app posts to must exist in seedLeadSources.
+ *
+ * This bug has now happened three times. `ecosystemSeedData.ts` declares
+ * `lead_source_slugs: ['cpn']`, which reads like it creates the source — it does not, it
+ * only tells the backfill which brand an existing source belongs to. So `cpn`,
+ * `ai-flotation` and `refactored` all shipped with public forms posting to sources that
+ * were never created, and `/api/leads/ingest` answers "Unknown or inactive source".
+ *
+ * Nothing caught it because nothing connected the two sides: the apps are static HTML the
+ * backend never imports, and the seeder is a data file no app references. This test is
+ * that connection. It reads the built app markup with `fs` rather than importing anything
+ * from `apps/`, so it introduces no module coupling and cannot trip the extraction
+ * boundary validator.
+ *
+ * It fails loudly the next time someone adds a form to a brand site and forgets the
+ * source — which is exactly the failure mode that took a live E2E run to notice.
+ */
+
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+const APPS_DIR = path.join(REPO_ROOT, 'apps');
+const SEEDER = path.join(REPO_ROOT, 'backend', 'src', 'seeds', 'seedLeadSources.ts');
+
+/**
+ * (source, entry) pairs the seeder defines, parsed from the source file.
+ *
+ * Parsed as TEXT rather than imported, because `seedLeadSources.ts` calls `run()` at the
+ * bottom of the module — importing it would connect to a database and start seeding.
+ *
+ * The structure it relies on: every `slug:` is indented, and indentation says what kind
+ * it is. A source sits at 4 spaces inside the SEEDS array; an entry point sits deeper
+ * inside that source's `entry_points`. So the first slug at source depth opens a source,
+ * and every deeper slug until the next one is an entry of it.
+ */
+function seededPairs(): Set<string> {
+  const pairs = new Set<string>();
+  let source: string | null = null;
+
+  for (const line of fs.readFileSync(SEEDER, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^(\s*)slug: '([a-z0-9_-]+)'/);
+    if (!m) continue;
+    const [, indent, slug] = m;
+    if (indent.length <= 4) source = slug;      // source level
+    else if (source) pairs.add(`${source}|${slug}`); // entry point of the current source
+  }
+  return pairs;
+}
+
+/** Every file with one of these extensions under a directory, at any depth. */
+function filesUnder(dir: string, extensions: string[]): string[] {
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...filesUnder(full, extensions));
+    else if (extensions.some((ext) => entry.name.endsWith(ext))) out.push(full);
+  }
+  return out;
+}
+
+/** An app's own source slug, from its brand config. */
+function sourceSlugOf(app: string): string {
+  const cfg = fs.readFileSync(path.join(APPS_DIR, app, 'brand.config.js'), 'utf8');
+  return (cfg.match(/sourceSlug:\s*'([a-z0-9-]+)'/) || [, ''])[1];
+}
+
+/**
+ * (source, entry) pairs the apps actually post to.
+ *
+ * TWO SHAPES, BECAUSE THERE ARE NOW TWO WAYS AN APP DECLARES AN ENTRY POINT.
+ *
+ *   1. The URL is written into the page:  `ingest?source=cpn&entry=scholarship_interest`
+ *   2. The slug is an attribute and a shared script builds the URL: `data-form="..."`
+ *
+ * Shape 2 arrived with the OpportunityLift site, which has three forms and one
+ * `assets/forms.js` that reads `data-form` off each `<form>`. Matching only shape 1 would
+ * have meant this guard silently stopped covering the brand it was written for: three new
+ * forms, none of them visible to it, and the "Unknown or inactive entry point" failure
+ * back on the table for a fourth time.
+ *
+ * Both shapes are collected. A page using shape 1 whose `data-form` repeats the same slug
+ * simply yields the same pair twice, which is harmless because the assertion is a set
+ * membership test rather than a count.
+ */
+function appPairs(): Array<{ app: string; file: string; source: string; entry: string }> {
+  const found: Array<{ app: string; file: string; source: string; entry: string }> = [];
+  if (!fs.existsSync(APPS_DIR)) return found;
+
+  for (const app of fs.readdirSync(APPS_DIR)) {
+    const srcDir = path.join(APPS_DIR, app, 'src');
+    if (!fs.existsSync(srcDir)) continue;
+
+    // RECURSIVE, and that is the whole point of this walk.
+    //
+    // It used to read only the files directly inside `src/`. Every page of these sites
+    // except the homepage lives in its own directory - `src/start/index.html` - so the
+    // one file it looked at was the one least likely to carry a form. A "call me now"
+    // form shipped in `start/` posting to an unseeded entry point, this test passed, and
+    // the failure surfaced only when the live button was pressed and the server answered
+    // "Unknown or inactive entry point".
+    //
+    // The test that exists to stop this bug happening a fourth time could not see three
+    // quarters of the pages it was guarding.
+    for (const file of filesUnder(srcDir, ['.html'])) {
+      const html = fs.readFileSync(file, 'utf8');
+      const relative = path.relative(srcDir, file);
+
+      // Shape 1: the ingest URL, written out in the page.
+      for (const m of html.matchAll(/ingest\?source=([a-z0-9{}.\-]+)&entry=([a-z0-9_]+)/gi)) {
+        // `{{brand.sourceSlug}}` is substituted at build time; resolve it from the app's
+        // brand config so the assertion is about the real slug, not the token.
+        let source = m[1];
+        if (source.includes('{{')) source = sourceSlugOf(app);
+        found.push({ app, file: relative, source, entry: m[2] });
+      }
+
+      // Shape 2: `data-form` on a form, resolved by a shared script. The source is always
+      // the app's own slug - a page cannot post someone else's brand.
+      for (const m of html.matchAll(/<form\b[^>]*\bdata-form="([a-z0-9_]+)"/gi)) {
+        found.push({ app, file: relative, source: sourceSlugOf(app), entry: m[1] });
+      }
+    }
+  }
+  return found;
+}
+
+describe('public app forms post to sources that actually exist', () => {
+  const apps = appPairs();
+  const seeded = seededPairs();
+
+  it('finds the forms at all — a passing test over zero forms would prove nothing', () => {
+    expect(apps.length).toBeGreaterThan(0);
+    expect(seeded.size).toBeGreaterThan(0);
+  });
+
+  it('every (source, entry) an app posts to is defined in seedLeadSources', () => {
+    const missing = apps
+      .filter((a) => !seeded.has(`${a.source}|${a.entry}`))
+      .map((a) => `${a.app}/${a.file} posts to source=${a.source}&entry=${a.entry}`);
+
+    expect(missing).toEqual([]);
+  });
+
+  it('no app posts to the non-existent /api/ingest path', () => {
+    // The other half of the same defect: `/api/ingest` is not a route. The real endpoint
+    // is `/api/leads/ingest`, and the catch-all /api/* guard answers 401, which reads
+    // exactly like an auth bug rather than a wrong path.
+    //
+    // Walks every page at any depth, and `.js` as well as `.html`, for the same two
+    // reasons the pair scan above does: pages live in subdirectories, and the request URL
+    // is now built inside a shared script rather than written into the markup. A
+    // non-recursive HTML-only scan would have declared this clean while looking at one
+    // file per app and none of the code that actually calls ingest.
+    const wrong: string[] = [];
+    for (const app of fs.existsSync(APPS_DIR) ? fs.readdirSync(APPS_DIR) : []) {
+      const srcDir = path.join(APPS_DIR, app, 'src');
+      if (!fs.existsSync(srcDir)) continue;
+      for (const file of filesUnder(srcDir, ['.html', '.js'])) {
+        const contents = fs.readFileSync(file, 'utf8');
+        if (/(?<!leads)\/api\/ingest\?/.test(contents)) {
+          wrong.push(`${app}/${path.relative(srcDir, file)}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('sees the OpportunityLift forms, which is the case that broke the old scan', () => {
+    // Named explicitly rather than left to the aggregate. The regression this guards
+    // against is silent by nature: were the `data-form` shape dropped, `appPairs()` would
+    // simply return fewer rows and every assertion above would still pass.
+    const cpn = apps.filter((a) => a.source === 'cpn').map((a) => a.entry).sort();
+    expect([...new Set(cpn)]).toEqual([
+      'champion_interest',
+      'community_partner_interest',
+      'free_training_interest',
+      'scholarship_interest',
+      'scholarship_interview_call',
+    ]);
+  });
+});

@@ -1,0 +1,266 @@
+/* PointsPage — the points drill-down. Self-contained styles scoped under
+   .points-root so it doesn't depend on the ported Design-E token set. Light
+   surface to match the portal shell. */
+
+.points-root {
+  --pr-ink: #1A1A1A;
+  --pr-mut: #6B6B6B;
+  --pr-line: #E7E6E3;
+  --pr-card: #FFFFFF;
+  --pr-sunken: #F1F1F0;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 4px 0 40px;
+}
+
+.points-root .pts-empty,
+.points-root .pts-mut { color: var(--pr-mut); font-size: 13px; }
+.points-root .pts-empty { padding: 40px 0; text-align: center; }
+
+/* Locked-door upgrade card — free AI Enabled ceiling → "Become an AI Builder".
+   Calm and executive: a quiet surface with one authority-toned accent edge and a
+   single CTA. Deliberately not gamey (no glow, no burst). */
+.points-root .pts-upgrade {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(180deg, #FFFFFF, #FBFAF8);
+  border: 1px solid var(--pr-line);
+  border-left: 3px solid #367895;   /* berry — authority, not alarm */
+  border-radius: 14px; padding: 16px 20px; margin-bottom: 16px;
+}
+.points-root .pts-upgrade-lock { width: 34px; height: 34px; flex: none; color: #367895; display: inline-flex; }
+.points-root .pts-upgrade-lock svg { width: 34px; height: 34px; }
+.points-root .pts-upgrade-body { flex: 1; min-width: 0; }
+.points-root .pts-upgrade-k {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--pr-mut); margin-bottom: 2px;
+}
+.points-root .pts-upgrade-h { font-size: 17px; font-weight: 800; color: var(--pr-ink); margin: 0 0 3px; }
+.points-root .pts-upgrade-p { font-size: 13px; color: var(--pr-mut); margin: 0; line-height: 1.5; }
+.points-root .pts-upgrade .te-btn { flex: none; text-decoration: none; }
+@media (max-width: 640px) {
+  .points-root .pts-upgrade { flex-direction: column; align-items: flex-start; }
+}
+
+/* Hero: where you are → where you're headed */
+.points-root .pts-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: linear-gradient(180deg, #FFFFFF, #FBFAF8);
+  border: 1px solid var(--pr-line);
+  border-radius: 16px;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+}
+.points-root .pts-hero-now,
+.points-root .pts-hero-next { flex: 1; min-width: 0; }
+.points-root .pts-hero .k {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--pr-mut); margin-bottom: 3px;
+}
+.points-root .pts-hero .v { font-size: 18px; color: var(--pr-ink); }
+.points-root .pts-hero .v b { font-weight: 800; }
+.points-root .pts-hero-arrow { width: 30px; height: 30px; color: #C7C6C2; flex: none; }
+
+/* Lens grid */
+.points-root .pts-lenses {
+  display: grid;
+  /* Always 3 lenses across (minmax(0,1fr) lets them shrink to fit any width,
+     e.g. the narrower Settings > Points tab). Collapses to 1 column on phones. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+@media (max-width: 680px) {
+  .points-root .pts-lenses { grid-template-columns: 1fr; }
+}
+/* Tighter internals so the 3 lenses stay clean at narrow column widths. */
+.points-root .pts-lens { padding: 15px 15px; }
+.points-root .pts-big { font-size: 32px; }
+.points-root .pts-ring { width: 74px; height: 74px; }
+.points-root .pts-readi { gap: 12px; }
+.points-root .pts-lens-h h3 { font-size: 15px; }
+.points-root .pts-lens {
+  background: var(--pr-card);
+  border: 1px solid var(--pr-line);
+  border-top: 3px solid #C7C6C2;
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.points-root .pts-lens.accent-berry { border-top-color: #FB2832; }
+.points-root .pts-lens.accent-blue { border-top-color: #367895; }
+.points-root .pts-lens.accent-leaf { border-top-color: #5BA63C; }
+
+.points-root .pts-lens-h { margin-bottom: 10px; }
+.points-root .pts-lens-h .tag {
+  display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--pr-mut); margin-bottom: 4px;
+}
+.points-root .pts-lens-h h3 { font-size: 16px; font-weight: 800; color: var(--pr-ink); margin: 0; }
+
+.points-root .pts-big { font-size: 40px; font-weight: 800; color: var(--pr-ink); line-height: 1; font-family: 'Roboto Mono', monospace; }
+.points-root .pts-big span { font-size: 15px; font-weight: 700; color: var(--pr-mut); margin-left: 4px; }
+.points-root .pts-big.pts-dim { color: #C7C6C2; }
+
+.points-root .pts-levelrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 6px; }
+.points-root .pts-chip {
+  font-size: 12px; font-weight: 800; color: #C20E1E; background: rgba(251,40,50,.1);
+  border-radius: 999px; padding: 3px 10px;
+}
+/* A chip that names a rung wears that rung's colour (rungTones.css .rung-pill). */
+.points-root .pts-chip.rung-pill { color: var(--rung-fg); background: var(--rung-bg); border: 1px solid var(--rung-line); }
+.points-root .pts-mut { color: var(--pr-mut); font-size: 12px; }
+
+.points-root .pts-track { height: 8px; background: var(--pr-sunken); border-radius: 999px; overflow: hidden; }
+.points-root .pts-track i { display: block; height: 100%; border-radius: 999px; }
+
+.points-root .pts-streak {
+  display: flex; align-items: center; gap: 6px; margin-top: 14px;
+  font-size: 13px; color: var(--pr-ink);
+}
+.points-root .pts-streak svg { width: 18px; height: 18px; flex: none; }
+.points-root .pts-streak b { font-weight: 800; font-size: 15px; }
+
+/* Skill XP bars */
+.points-root .pts-xps { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 10px; }
+.points-root .pts-xprow { display: flex; flex-direction: column; gap: 4px; }
+.points-root .pts-xplab { display: flex; align-items: baseline; justify-content: space-between; font-size: 12.5px; color: var(--pr-ink); }
+.points-root .pts-xplab b { font-weight: 800; font-family: 'Roboto Mono', monospace; }
+.points-root .pts-lens-empty { display: flex; flex-direction: column; gap: 10px; }
+.points-root .pts-lens-empty p { font-size: 13px; color: var(--pr-mut); margin: 0; line-height: 1.5; }
+
+/* Readiness */
+.points-root .pts-readi { display: flex; align-items: center; gap: 16px; margin: 6px 0 12px; }
+.points-root .pts-readi-meta .lvl { font-size: 16px; font-weight: 800; color: var(--pr-ink); }
+.points-root .pts-gaps { border-top: 1px solid var(--pr-line); padding-top: 12px; margin-top: auto; }
+.points-root .pts-gaps-h { display: block; font-size: 12px; font-weight: 800; color: var(--pr-ink); margin-bottom: 8px; }
+.points-root .pts-gaps ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.points-root .pts-gaps li {
+  font-size: 12.5px; color: #3C7A26; background: rgba(91,166,60,.1);
+  border-radius: 8px; padding: 6px 10px;
+}
+
+/* Recent activity */
+.points-root .pts-recent {
+  background: var(--pr-card); border: 1px solid var(--pr-line); border-radius: 14px; padding: 18px;
+}
+.points-root .pts-recent-h { font-size: 14px; font-weight: 800; color: var(--pr-ink); margin-bottom: 12px; }
+.points-root .pts-recent-list { display: flex; flex-direction: column; }
+.points-root .pts-recent-row {
+  display: flex; align-items: center; gap: 12px; padding: 9px 0;
+  border-bottom: 1px solid var(--pr-line); font-size: 13px;
+}
+.points-root .pts-recent-row:last-child { border-bottom: none; }
+.points-root .pts-recent-pts {
+  font-weight: 800; color: #3C7A26; font-family: 'Roboto Mono', monospace;
+  min-width: 42px;
+}
+.points-root .pts-recent-lab { flex: 1; color: var(--pr-ink); }
+.points-root .pts-recent-date { color: var(--pr-mut); font-size: 12px; }
+
+@media (max-width: 640px) {
+  .points-root .pts-hero { flex-direction: column; align-items: stretch; gap: 10px; }
+  .points-root .pts-hero-arrow { transform: rotate(90deg); align-self: center; }
+}
+
+/* Level Journey — the whole ladder at a glance (AI Aware I → AI Architect).
+   A horizontal, scroll-on-mobile stepped track: passed rungs are checked/green,
+   the current rung is highlighted, build bands show a lock. */
+.points-root .pts-journey {
+  background: var(--pr-card);
+  border: 1px solid var(--pr-line);
+  border-radius: 14px;
+  padding: 18px 20px 20px;
+  margin-bottom: 16px;
+}
+.points-root .pts-journey-h { display: flex; flex-direction: column; gap: 3px; margin-bottom: 18px; }
+.points-root .pts-journey-h h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--pr-ink); }
+
+.points-root .pts-jtrack {
+  list-style: none; margin: 0; padding: 2px 0 4px;
+  display: flex; gap: 4px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.points-root .pts-jnode {
+  position: relative; flex: 1 0 110px; min-width: 110px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+/* connector line coming in from the previous node (filled up to the current rung) */
+.points-root .pts-jnode + .pts-jnode::before {
+  content: ''; position: absolute; top: 18px; left: -52%; width: 100%; height: 3px;
+  background: var(--pr-line); z-index: 0; border-radius: 3px;
+}
+/* The connector into a reached rung wears that rung's own colour, so the track
+   reads as the ladder's palette left to right (rungTones.css). */
+.points-root .pts-jnode.done::before,
+.points-root .pts-jnode.current::before { background: var(--rung-solid, #5BA63C); }
+
+.points-root .pts-jdot {
+  position: relative; z-index: 1;
+  width: 38px; height: 38px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--pr-sunken); color: var(--pr-mut);
+  border: 2px solid var(--pr-line); font-weight: 800; font-size: 14px;
+}
+.points-root .pts-jdot svg { width: 18px; height: 18px; }
+/* Every node wears its rung's colour (rungTones.css) — done and current are
+   filled solid, a rung not yet reached shows the same colour as a tinted
+   outline, so the whole ladder's palette is visible before it is earned. */
+.points-root .pts-jnode.done .pts-jdot { background: var(--rung-solid, #5BA63C); border-color: var(--rung-solid, #5BA63C); color: #fff; }
+.points-root .pts-jnode.current .pts-jdot { background: var(--rung-solid, #FB2832); border-color: var(--rung-solid, #FB2832); color: #fff; box-shadow: 0 0 0 4px var(--rung-bg, rgba(251,40,50,.16)); }
+.points-root .pts-jnode.todo .pts-jdot { background: var(--rung-bg, var(--pr-sunken)); border-color: var(--rung-line, var(--pr-line)); color: var(--rung-fg, var(--pr-mut)); }
+.points-root .pts-jnode.build.todo .pts-jdot { border-style: dashed; }
+
+.points-root .pts-jname { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--rung-fg, var(--pr-ink)); line-height: 1.2; }
+.points-root .pts-jnode.todo .pts-jname { color: var(--rung-fg, var(--pr-mut)); opacity: .85; }
+.points-root .pts-jdetail { font-size: 11px; color: var(--pr-mut); margin-top: 3px; }
+.points-root .pts-jhere {
+  margin-top: 6px; font-size: 9.5px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--rung-fg, #FB2832);
+}
+
+/* ── sticky rail ─────────────────────────────────────────────────────────────
+   The column geometry (width, gap, sticky offset, collapse breakpoint) comes
+   from the shell's shared `.te-grid`/`.te-side` in TodayShell.css; only the
+   card's contents are styled here, so this page cannot drift from Projects,
+   Today or Cert Prep.
+
+   Deliberately NOT scoped under .points-root like the rest of this file: the
+   rail renders in the shell's aside, outside the drill-down's root element, so
+   a .points-root prefix would never match. The pts-rail- prefix carries the
+   scoping instead. */
+.pts-rail { padding: 18px; }
+.pts-rail-h { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted, #6B6B6B); margin: 0 0 12px; }
+.pts-rail-total { font-size: 34px; font-weight: 800; line-height: 1; color: var(--strong, #1A1A1A);
+  font-variant-numeric: tabular-nums; }
+.pts-rail-total span { font-size: 15px; font-weight: 700; color: var(--muted, #6B6B6B); margin-left: 6px; }
+.pts-rail-level { margin-top: 8px; font-weight: 700; color: var(--strong, #1A1A1A); }
+.pts-rail-bar { height: 8px; border-radius: 999px; background: var(--border, #E7E6E3); overflow: hidden; margin: 12px 0 8px; }
+.pts-rail-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--leaf, #2F7A46); }
+.pts-rail-next { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }
+.pts-rail-note { margin: 0; font-size: 13px; color: var(--muted, #6B6B6B); }
+
+/* Program milestones (lens 2 once the milestone ladder is on) */
+.points-root .pts-ms-list { list-style: none; margin: 10px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.points-root .pts-ms-row { border-top: 1px solid var(--pr-line); }
+.points-root .pts-ms-row:first-child { border-top: none; }
+.points-root .pts-ms-link { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 8px 0; color: inherit; text-decoration: none; border-radius: 8px; }
+.points-root a.pts-ms-link:hover .pts-ms-label, .points-root a.pts-ms-link:focus-visible .pts-ms-label { text-decoration: underline; }
+.points-root a.pts-ms-link:focus-visible { outline: 2px solid #367895; outline-offset: 2px; }
+.points-root .pts-ms-mark { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.points-root .pts-ms-mark svg { width: 20px; height: 20px; }
+.points-root .pts-ms-mark.is-done { color: #3D8A38; }
+.points-root .pts-ms-mark.is-progress { color: #E8920C; }
+.points-root .pts-ms-mark.is-todo { color: #B9B7B2; }
+.points-root .pts-ms-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.points-root .pts-ms-label { font-size: 13.5px; font-weight: 700; color: var(--pr-ink); }
+.points-root .pts-ms-row.is-done .pts-ms-label { color: var(--pr-mut); font-weight: 600; }
+.points-root .pts-ms-detail { font-size: 12.5px; color: var(--pr-mut); line-height: 1.4; }
+
+/* Skill XP, demoted below the milestone checklist (D7) */
+.points-root .pts-xp-demoted { grid-column: 1 / -1; border-top: 1px solid var(--pr-line); padding-top: 12px; margin-top: 4px; }
+.points-root .pts-xp-demoted .pts-xp-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--pr-mut); }
+.points-root .pts-xp-demoted .pts-xp-inline b { color: var(--pr-ink); font-family: 'Roboto Mono', monospace; font-weight: 800; }

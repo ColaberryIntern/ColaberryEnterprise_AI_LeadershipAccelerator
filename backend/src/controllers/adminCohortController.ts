@@ -1,13 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { updateCohortSchema } from '../schemas/cohortSchema';
+import { updateCohortSchema, createCohortSchema } from '../schemas/cohortSchema';
 import {
   listAllCohorts,
   getCohortDetail,
   updateCohort,
+  createCohort,
+  deleteCohort,
   getDashboardStats,
 } from '../services/cohortService';
 import { generateEnrollmentCsv } from '../services/csvService';
+
+function respondZodError(res: Response, error: ZodError): void {
+  res.status(400).json({
+    error: 'Validation failed',
+    details: error.issues.map((i) => ({
+      field: i.path.join('.'),
+      message: i.message,
+    })),
+  });
+}
 
 export async function handleAdminListCohorts(
   _req: Request,
@@ -46,12 +58,64 @@ export async function handleAdminUpdateCohort(
     res.json({ cohort });
   } catch (error) {
     if (error instanceof ZodError) {
-      res.status(400).json({
-        error: 'Validation failed',
-        details: error.issues.map((i) => ({
-          field: i.path.join('.'),
-          message: i.message,
-        })),
+      respondZodError(res, error);
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleAdminCreateCohort(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = createCohortSchema.parse(req.body);
+    const cohort = await createCohort(data);
+    res.status(201).json({ cohort });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      respondZodError(res, error);
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleAdminDeleteCohort(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const force = req.query.force === 'true';
+    const result = await deleteCohort(req.params.id as string, { force });
+    if (!result.deleted) {
+      res.status(409).json({
+        error:
+          'Cohort has a non-withdrawn, paid enrollment or a live session — refusing to ' +
+          'cascade-delete without force=true',
+        dependents: result.dependents,
+      });
+      return;
+    }
+    res.json(result);
+  } catch (error: any) {
+    // Surface the ACTUAL blocker rather than a generic failure. A cohort delete
+    // that hit a foreign key used to reach the admin as "Failed to delete cohort",
+    // naming neither the table that refused nor the reason — diagnosing one such
+    // case took a production database probe. Postgres hands us the constraint and
+    // table names on a 23503; passing them through turns a dead end into something
+    // an operator can act on or report.
+    const pg = error?.parent ?? error?.original ?? error;
+    if (pg?.code === '23503') {
+      res.status(409).json({
+        error: 'Cohort could not be deleted: rows in another table still reference its enrollments.',
+        error_class: 'ForeignKeyConstraint',
+        constraint: pg.constraint ?? null,
+        blocking_table: pg.table ?? null,
+        detail: pg.detail ?? null,
       });
       return;
     }

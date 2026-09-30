@@ -1,0 +1,422 @@
+import { Op, WhereOperators } from 'sequelize';
+import AdminUser from '../../models/AdminUser';
+import AiAgent from '../../models/AiAgent';
+import Enrollment from '../../models/Enrollment';
+import CommunityMember from '../../models/CommunityMember';
+import { Ticket, TicketActionLink, WorkLedgerEvent, EvidenceLink } from '../../models';
+import { derivePresence } from '../communityService';
+import type { CommunityPresenceStatus } from '../../models/CommunityMember';
+import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
+
+// liveAgentsService — powers the Workforce OS page's "Live Agents" section and
+// Activity Timeline (Ali: "I want to see Reese there... a timeline of all the
+// agents' work"). Generic by construction, never Reese-hardcoded: a real AiAgent
+// row counts as "live" here if and only if it has a linked AdminUser with
+// is_ai_operated=true and a non-null agent_id — the exact marker
+// agentBlueprint/agentIdentitySeed.ts's seedAgentIdentity() sets for every agent it
+// builds (see AdminUser.ts's "Reese Phase 1 — additive staff-identity columns"
+// comment). Reese was the first row to match; as of the Agent Ticket Standard
+// architects audit (2026-08-18, PR #1576) 21 more do (the 5 original ticket-creator
+// identities + the 16 department Strategy Architects), all through this exact same
+// generic condition — zero code change was needed here for any of them to appear.
+// Any future agent built the same way appears here automatically too.
+//
+// This file must NEVER import backend/src/services/workforce/orgRegistry.ts (the
+// static AI_ORG conceptual-director roster) or attribute any activity to it — the
+// static Directors have no real ProofDesk data, so an honest empty/Reese-only
+// result is correct, not a bug. See __tests__/liveAgentsService.test.ts for the
+// test that enforces this via a source-grep, not just a comment.
+
+export interface LiveAgent {
+  id: string;
+  agent_name: string;
+  /** Human-readable name for display (AdminUser.display_name, falling back to
+   * agent_name only if display_name is somehow unset). agent_name stays the raw
+   * technical identifier — the two are genuinely different concepts; conflating
+   * them was the original bug (Ali: raw "cory-engine" shown instead of "Cory
+   * Engine — Autonomous Operations"). */
+  display_name: string;
+  agent_type: string;
+  category: string | null;
+  description: string | null;
+  enabled: boolean;
+  live_status: CommunityPresenceStatus | 'unknown';
+  /** OPEN tickets only (status NOT IN done/cancelled) — NOT a lifetime total. See
+   * OPEN_TICKET_STATUS_FILTER above. Named explicitly (not just `ticket_count`) so
+   * a future reader cannot silently reintroduce the total-vs-open ambiguity that
+   * confused the founder (12,574 lifetime across 6 agents vs. 4,154 open
+   * board-wide) by trusting the field name alone. */
+  open_ticket_count: number;
+}
+
+export interface LiveAgentActivityEvent {
+  agent_id: string;
+  agent_name: string;
+  agent_display_name: string;
+  ticket_id: string;
+  ticket_number: number | null;
+  title: string;
+  type: string;
+  status: string;
+  priority: string;
+  occurred_at: Date | null;
+}
+
+const DEFAULT_ACTIVITY_LIMIT = 30;
+
+/** Every real AdminUser row built via the blueprint pattern (see header comment).
+ * Exported (Org Chart v4, 2026-08-20) so liveAgentsTimelineService.ts reuses this
+ * IDENTICAL "who counts as a live AI agent" definition instead of re-deriving it
+ * a second time and risking the two drifting apart. */
+export async function findBlueprintAdminUsers() {
+  return AdminUser.findAll({ where: { is_ai_operated: true, agent_id: { [Op.ne]: null } } });
+}
+
+// Statuses that count as "board-wide open" everywhere else in this repo
+// (ticketService.ts's entity-dedup check and its own getTicketStats()) — reused
+// here so an agent's card count means the same thing the ticket board's own open
+// count means. See OPEN_TICKET_COUNT fix (2026-08-18, session CC-20260818-wf9k):
+// this WAS an unfiltered Ticket.count() (a lifetime total), which read as
+// consistent with the board's "open" number and wasn't — 12,574 lifetime across
+// the 6 originally-registered agents vs. 4,154 open board-wide, a real founder-
+// facing discrepancy. Now genuinely Open, not Total.
+// Exported (org-chart hierarchy build, 2026-08-19) so orgChartService.ts
+// reuses this identical filter instead of re-deriving the same
+// ['done','cancelled'] literal a second time and risking drift. Explicitly
+// typed as WhereOperators (Sequelize's own public type for this shape,
+// generic parameter deliberately left at its own default of `any` — a bare
+// `export const` here fails `tsc --noEmit` with TS4023 ("...but cannot be
+// named"), since the Op.notIn computed-key object's inferred type references
+// a Sequelize-internal symbol type that can't be auto-named in an exported
+// declaration; a narrower `WhereOperators<string>` in turn broke the two
+// call sites that filter Ticket.status, typed TicketStatus not string — the
+// interface's own default keeps this a drop-in match at both the original
+// `status: OPEN_TICKET_STATUS_FILTER` (TicketStatus) and the new
+// `assigned_to_id`/status-filter usages in orgChartService.ts).
+export const OPEN_TICKET_STATUS_FILTER: WhereOperators = { [Op.notIn]: ['done', 'cancelled'] };
+
+/** The ONE canonical "how many OPEN tickets does this agent have" query — reused by
+ * `listLiveAgents()` below, `orgChartService.ts`'s per-card Leadership/Staff badges, and
+ * `agentDetailService.ts`'s Agent Detail page stat (Ticket Count Sync fix, 2026-08-21,
+ * session CC-20260818-x4nk continued). Extracted from this file's own `listLiveAgents()`
+ * loop, which already had this exactly right — the bug this run fixes was never in this
+ * query, it was in `orgChartService.ts` re-deriving its own (broken) version instead of
+ * reusing this one. A single per-agent query, not a batched cross-agent one: by
+ * construction every row this counts genuinely belongs to THIS agent (the WHERE clause is
+ * scoped to this agent's own match-id list), so there is no "which agent does this row
+ * actually belong to" attribution step for a caller to get wrong. Matches EITHER this
+ * agent's real `AdminUser.id` (`assigned_to_id`, the path every ticket uses going forward)
+ * OR any of its known legacy raw creator strings (`created_by_id`) — see
+ * `buildCreatorIdMatchList()`'s own header comment. */
+export async function countOpenTicketsForAgent(adminUserId: string, agent: AiAgent): Promise<number> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  return Ticket.count({
+    where: {
+      [Op.and]: [
+        { status: OPEN_TICKET_STATUS_FILTER },
+        {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+            { created_by_id: { [Op.in]: matchList } },
+          ],
+        },
+      ],
+    },
+  });
+}
+
+// Agent Detail redesign, Track A1 (2026-09-21) — the mockup's "Verified complete"
+// hero tile has no real "verified" concept anywhere in this codebase (no
+// `closed_at` column; `verification_status`/`outcome_status` on Ticket.ts are
+// free-text and unused by this flow) — relabeled "Completed (30d)" to stay
+// honest about what's actually being counted, per this run's own
+// execution-contract.md. `updated_at` is this file's own already-established
+// real proxy for "last touched" (see `getLastTicketActivityForAgent` below).
+const COMPLETED_WINDOW_DAYS = 30;
+
+/** Same real match-list/scoping shape as `countOpenTicketsForAgent()` above, but
+ * counts `done` tickets last touched within the window instead of open ones. */
+export async function countCompletedTicketsForAgent(adminUserId: string, agent: AiAgent): Promise<number> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const cutoff = new Date(Date.now() - COMPLETED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return Ticket.count({
+    where: {
+      [Op.and]: [
+        { status: 'done' },
+        { updated_at: { [Op.gte]: cutoff } },
+        {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+            { created_by_id: { [Op.in]: matchList } },
+          ],
+        },
+      ],
+    },
+  });
+}
+
+// Agent Detail polish round 5 (2026-09-30) — Ali, live: "Performance & Settings /
+// Results & Reports section needs to be redesigned and rebuilt." The mockup's
+// "Verified resolution" stat was deliberately NOT built in Track A1 above (no real
+// "verified" concept existed then). A real one now does:
+// summaryGeneratorService.ts's generateTicketSummary() only ever uses "verified"-
+// adjacent language when a real WorkLedgerEvent with result:'success' AND real
+// evidence (evidence_artifacts via evidence_links) both exist for a ticket — this
+// mirrors that exact gate as a lightweight aggregate COUNT, not by generating full
+// narrative text per ticket (needlessly expensive at scale).
+/** Same real match-list/scoping shape as `countOpenTicketsForAgent()`/
+ * `countCompletedTicketsForAgent()` above, but with NO status filter — "owned" here
+ * means every ticket ever assigned to or created by this agent, matching the
+ * mockup's own "N completed / N owned cases" wording literally. "verified" counts
+ * only tickets with a real success event AND real evidence — the identical honest
+ * gate `generateTicketSummary()` already enforces per-ticket.
+ * `mostRecentVerifiedTicketId` is the single most recently verified ticket (by its
+ * own latest real success event time) — `null` when none — so a caller (the
+ * Results & Reports manager-briefing card) can fetch that ONE ticket's real
+ * outcome sentence via the already-built `getTicketSummary()` rather than this
+ * function generating narrative text for every verified ticket. */
+export async function countVerifiedResolutionsForAgent(
+  adminUserId: string,
+  agent: AiAgent,
+): Promise<{ verified: number; owned: number; mostRecentVerifiedTicketId: string | null }> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const ownedTickets = await Ticket.findAll({
+    attributes: ['id'],
+    where: {
+      [Op.or]: [
+        { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+        { created_by_id: { [Op.in]: matchList } },
+      ],
+    },
+  });
+  const ticketIds = ownedTickets.map((t) => t.id);
+  if (ticketIds.length === 0) return { verified: 0, owned: 0, mostRecentVerifiedTicketId: null };
+
+  const links = await TicketActionLink.findAll({ where: { ticket_id: { [Op.in]: ticketIds } } });
+  const eventIds = links.map((l) => l.event_id);
+  const latestSuccessAtByTicketId = new Map<string, Date>();
+  if (eventIds.length > 0) {
+    const successEvents = await WorkLedgerEvent.findAll({
+      where: { event_id: { [Op.in]: eventIds }, result: 'success' },
+      attributes: ['event_id', 'occurred_at'],
+    });
+    const successEventTimeById = new Map(successEvents.map((e) => [e.event_id, e.occurred_at]));
+    for (const link of links) {
+      const occurredAt = successEventTimeById.get(link.event_id);
+      if (!occurredAt) continue;
+      const existing = latestSuccessAtByTicketId.get(link.ticket_id);
+      if (!existing || occurredAt > existing) latestSuccessAtByTicketId.set(link.ticket_id, occurredAt);
+    }
+  }
+
+  const successTicketIds = Array.from(latestSuccessAtByTicketId.keys());
+  const evidenceLinks = await EvidenceLink.findAll({
+    where: { ticket_id: { [Op.in]: successTicketIds } },
+    attributes: ['ticket_id'],
+  });
+  const evidenceTicketIds = new Set(evidenceLinks.map((l) => l.ticket_id));
+
+  let verified = 0;
+  let mostRecentVerifiedTicketId: string | null = null;
+  let mostRecentAt: Date | null = null;
+  for (const [id, occurredAt] of latestSuccessAtByTicketId) {
+    if (!evidenceTicketIds.has(id)) continue;
+    verified += 1;
+    if (!mostRecentAt || occurredAt > mostRecentAt) {
+      mostRecentAt = occurredAt;
+      mostRecentVerifiedTicketId = id;
+    }
+  }
+
+  return { verified, owned: ticketIds.length, mostRecentVerifiedTicketId };
+}
+
+/** Trust Contract fix (2026-08-24) — Ali, live, looking at Reese's real page: "Reese
+ * has several tickets that have been opened and that he opened for outreach but this
+ * says it's never been run." Real bug: `trust_contract.last_run_at` is honestly null
+ * for every event-driven agent (Reese, InboxCaseEngine — invoked outside the generic
+ * cron scheduler wrapper that stamps that column), so the UI fell back to a literal
+ * "Never" even while the ticket table two sections below showed activity as recent as
+ * hours ago. `last_run_at` staying null is correct (this agent genuinely has no
+ * scheduler-tracked runs); showing "Never" without that context is what was wrong. This
+ * is the same match-list query `countOpenTicketsForAgent()` uses, MAX(updated_at)
+ * instead of COUNT, and across every status (not just open) — a `done` ticket the
+ * agent closed yesterday is still real evidence the agent is active. */
+export async function getLastTicketActivityForAgent(adminUserId: string, agent: AiAgent): Promise<Date | null> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const row = await Ticket.findOne({
+    where: {
+      [Op.or]: [
+        { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+        { created_by_id: { [Op.in]: matchList } },
+      ],
+    },
+    order: [['updated_at', 'DESC']],
+    attributes: ['updated_at'],
+  });
+  return row?.updated_at ?? null;
+}
+
+/** Dara v2 Phase 5 ("open-ticket accountability") — the oldest still-OPEN
+ * ticket's `created_at`, for any agent. Same match-list/open-status shape as
+ * `countOpenTicketsForAgent()` above (ASC by created_at instead of a COUNT),
+ * added here rather than a new module since it's the same real "which
+ * tickets belong to this agent" query this file already owns.
+ *
+ * Read-only reporting only — this is information about age, never a signal
+ * this codebase (or any future caller) may use to auto-close or auto-resolve
+ * anything. No agent's ticket has ever been closed by this repo on elapsed
+ * time, and this function does not change that; it exists so a human looking
+ * at accountability can see "oldest open item is N days old," full stop.
+ */
+export async function getOldestOpenTicketAge(adminUserId: string, agent: AiAgent): Promise<{ oldestOpenCreatedAt: Date; ageDays: number } | null> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const row = await Ticket.findOne({
+    where: {
+      [Op.and]: [
+        { status: OPEN_TICKET_STATUS_FILTER },
+        {
+          [Op.or]: [
+            { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+            { created_by_id: { [Op.in]: matchList } },
+          ],
+        },
+      ],
+    },
+    order: [['created_at', 'ASC']],
+    attributes: ['created_at'],
+  });
+  if (!row?.created_at) return null;
+  const ageDays = Math.floor((Date.now() - row.created_at.getTime()) / (24 * 60 * 60 * 1000));
+  return { oldestOpenCreatedAt: row.created_at, ageDays };
+}
+
+export async function listLiveAgents(): Promise<LiveAgent[]> {
+  const adminUsers = await findBlueprintAdminUsers();
+  if (adminUsers.length === 0) return [];
+
+  const agentIds = adminUsers.map((u) => u.agent_id as string);
+  const agents = await AiAgent.findAll({ where: { id: { [Op.in]: agentIds } } });
+  const agentsById = new Map(agents.map((a) => [a.id, a]));
+
+  // Workforce OS perf fix (2026-08-18, session CC-20260818-wf9k) — this used to be
+  // an Enrollment.findOne + CommunityMember.findOne PER admin user, sequentially
+  // awaited in the loop below: an N+1 that grows linearly with the agent count.
+  // Batched into 2 queries total, looked up by map, regardless of how many agents
+  // exist. Real profiling (docker exec timing + EXPLAIN ANALYZE on production)
+  // showed this endpoint's actual dominant cost was elsewhere (schoolSignals.ts's
+  // gatherSignals(), fixed separately) — this N+1 was real but secondary; fixed
+  // here anyway since it's the same shape as the ticket-count fix below and free
+  // to batch while touching this function.
+  const emails = adminUsers.map((u) => u.email);
+  const enrollments = emails.length ? await Enrollment.findAll({ where: { email: { [Op.in]: emails } } }) : [];
+  const enrollmentByEmail = new Map(enrollments.map((e) => [e.email, e]));
+  const enrollmentIds = enrollments.map((e) => e.id);
+  const members = enrollmentIds.length
+    ? await CommunityMember.findAll({ where: { enrollment_id: { [Op.in]: enrollmentIds } } })
+    : [];
+  const memberByEnrollmentId = new Map(members.map((m) => [m.enrollment_id, m]));
+
+  // Workforce OS perf fix — the per-agent ticket count (the one query EXPLAIN
+  // ANALYZE confirmed does a real Seq Scan for some agents) now runs concurrently
+  // across all agents via Promise.all instead of one at a time in a sequential
+  // for-loop. Order of the returned array matches adminUsers' order (Promise.all
+  // preserves input order regardless of resolution order).
+  const settled = await Promise.all(adminUsers.map(async (adminUser): Promise<LiveAgent | null> => {
+    const agent = agentsById.get(adminUser.agent_id as string);
+    // An AdminUser whose agent_id points at a since-deleted AiAgent row is a data
+    // inconsistency this service should skip, not fabricate a card for.
+    if (!agent) return null;
+
+    let liveStatus: CommunityPresenceStatus | 'unknown' = 'unknown';
+    const enrollment = enrollmentByEmail.get(adminUser.email);
+    if (enrollment) {
+      const member = memberByEnrollmentId.get(enrollment.id);
+      if (member) liveStatus = derivePresence(member.last_active_at);
+    }
+
+    // Ticket Count Sync fix (2026-08-21) — was an inline query here; now the ONE
+    // shared per-agent count function (see its own header comment above), also
+    // reused by orgChartService.ts and agentDetailService.ts. Byte-for-byte
+    // equivalent WHERE clause to what ran here before this extraction.
+    const openTicketCount = await countOpenTicketsForAgent(adminUser.id, agent);
+
+    return {
+      id: agent.id,
+      agent_name: agent.agent_name,
+      display_name: adminUser.display_name || agent.agent_name,
+      agent_type: agent.agent_type,
+      category: agent.category ?? null,
+      description: agent.description ?? null,
+      enabled: agent.enabled,
+      live_status: liveStatus,
+      open_ticket_count: openTicketCount,
+    };
+  }));
+
+  return settled.filter((r): r is LiveAgent => r !== null);
+}
+
+export async function listLiveAgentActivity(limit: number = DEFAULT_ACTIVITY_LIMIT): Promise<LiveAgentActivityEvent[]> {
+  const adminUsers = await findBlueprintAdminUsers();
+  if (adminUsers.length === 0) return [];
+
+  const agentIds = adminUsers.map((u) => u.agent_id as string);
+  const agents = await AiAgent.findAll({ where: { id: { [Op.in]: agentIds } } });
+  const agentsById = new Map(agents.map((a) => [a.id, a]));
+
+  // Agent Alias & Identity Fix — one flat lookup map from EVERY identifier a
+  // ticket could carry (a real AdminUser.id, used going forward, OR any legacy
+  // raw creator string, used historically) to that agent's meta. The two id
+  // spaces never collide in practice (UUIDs vs. short process names), so a flat
+  // map is safe and avoids a per-agent query. An agent with zero legacy aliases
+  // (Reese) contributes exactly one entry — itself — so this is a pure superset
+  // of the original assigned_to_id-only behavior.
+  const metaByMatchId = new Map<string, { agent_id: string; agent_name: string; agent_display_name: string }>();
+  const allMatchIds: string[] = [];
+  for (const adminUser of adminUsers) {
+    const agent = agentsById.get(adminUser.agent_id as string);
+    if (!agent) continue;
+    const meta = {
+      agent_id: agent.id,
+      agent_name: agent.agent_name,
+      agent_display_name: adminUser.display_name || agent.agent_name,
+    };
+    for (const matchId of buildCreatorIdMatchList(adminUser.id, agent)) {
+      metaByMatchId.set(matchId, meta);
+      allMatchIds.push(matchId);
+    }
+  }
+
+  const tickets = await Ticket.findAll({
+    where: {
+      [Op.or]: [
+        { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: allMatchIds } },
+        { created_by_id: { [Op.in]: allMatchIds } },
+      ],
+    },
+    order: [['updated_at', 'DESC']],
+    limit,
+  });
+
+  const unknownMeta = { agent_id: '', agent_name: 'Unknown Agent', agent_display_name: 'Unknown Agent' };
+  return tickets.map((t: Ticket) => {
+    // A ticket matched the query above via EITHER assigned_to_id OR created_by_id
+    // (never both meaningfully — legacy tickets never populate assigned_to_id, and
+    // forward-fixed tickets populate both to the same real id) — check assigned_to_id
+    // first (the going-forward path), then created_by_id (the historical path).
+    const meta = metaByMatchId.get(t.assigned_to_id || '') || metaByMatchId.get(t.created_by_id || '') || unknownMeta;
+    return {
+      agent_id: meta.agent_id,
+      agent_name: meta.agent_name,
+      agent_display_name: meta.agent_display_name,
+      ticket_id: t.id,
+      ticket_number: t.ticket_number ?? null,
+      title: t.title,
+      type: t.type,
+      status: t.status,
+      priority: t.priority,
+      occurred_at: t.updated_at ?? null,
+    };
+  });
+}

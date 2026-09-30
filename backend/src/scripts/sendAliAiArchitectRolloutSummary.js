@@ -170,7 +170,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Ali - AI_ProjectArchitect rollout: 23 BC tickets + per-employee rubric spreadsheet for your refinement',
     text, html: HTML,

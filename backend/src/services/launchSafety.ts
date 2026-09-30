@@ -110,7 +110,8 @@ export function getThrottleMetrics(): {
 const KILL_SWITCH_KEY = 'system_kill_switch';
 
 // Outbound messaging agent categories that should be disabled on kill switch
-const OUTBOUND_AGENT_CATEGORIES = [
+// (exported for the registry's own pin: an agent that may contact people must sit in one of these)
+export const OUTBOUND_AGENT_CATEGORIES = [
   'email', 'sms', 'voice', 'outbound', 'messaging',
   'admissions_email', 'admissions_sms', 'admissions_voice',
 ];
@@ -125,6 +126,22 @@ export async function isKillSwitchActive(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * The same switch, read STRICTLY: an unreadable switch THROWS rather than
+ * answering "off" (Phase 5 T504).
+ *
+ * `isKillSwitchActive` above swallows a read error and returns false, which is
+ * right where it has always been used — pausing campaigns, gating agents — and
+ * where a database blip must not stop ordinary work. Governed execution needs
+ * the opposite bias: the switch that decides whether a person may be contacted
+ * must not read as "off" because a query failed, so its caller treats a throw
+ * as ON. Same key, same semantics, one switch; only the failure mode differs.
+ */
+export async function isKillSwitchActiveStrict(): Promise<boolean> {
+  const val = await getSetting(KILL_SWITCH_KEY);
+  return val === true || val === 'true';
 }
 
 /**

@@ -1,13 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import QuickAddLeadModal from '../../components/admin/QuickAddLeadModal';
+import ApolloImportModal from '../../components/admin/ApolloImportModal';
 import BatchActionBar from '../../components/admin/BatchActionBar';
 import TemperatureBadge from '../../components/TemperatureBadge';
-import Breadcrumb from '../../components/ui/Breadcrumb';
 import TableSkeleton from '../../components/ui/TableSkeleton';
 import Pagination from '../../components/ui/Pagination';
 import useDebounce from '../../hooks/useDebounce';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 interface LeadStats {
   total: number;
@@ -45,8 +49,42 @@ const ghlContactUrl = (contactId: string) =>
 
 const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
 
+/**
+ * NOTE ON THE NAME: this filter is labelled "Form" because the API maps it onto
+ * `form_type`, not `leads.source` (leadService.listLeads assigns params.source to
+ * where.form_type). Every value below is therefore a form_type. Renaming the
+ * PARAMETER would be the honest fix and is a breaking API change; renaming the
+ * label is not, so the label is what changed here. The real origin filter is the
+ * Website dropdown below, fed by /leads/source-groups.
+ *
+ * `business_account` was absent, which meant leads created by the enterprise site's
+ * business-account signup could not be filtered for at all -- no selection in this
+ * dropdown would ever reveal one.
+ */
+
+/** One website/origin group from GET /api/admin/leads/source-groups. */
+interface SourceGroup {
+  key: string;
+  label: string;
+  domain?: string;
+  kind: 'website' | 'event' | 'list' | 'internal' | 'test';
+  count: number;
+}
+
+// Websites first (what reps work daily), test data last.
+const WEBSITE_GROUP_ORDER: SourceGroup['kind'][] = ['website', 'event', 'list', 'internal', 'test'];
+const KIND_LABELS: Record<SourceGroup['kind'], string> = {
+  website: 'Our websites',
+  event: 'Events',
+  list: 'Pulled lists',
+  internal: 'Internal',
+  test: 'Test data',
+};
+
 const SOURCE_OPTIONS = [
-  { value: '', label: 'All Sources' },
+  { value: '', label: 'All Forms' },
+  { value: 'business_account', label: 'Business Account Signup' },
+  { value: 'open_house', label: 'Open House' },
   { value: 'executive_overview_download', label: 'Executive Briefing' },
   { value: 'contact', label: 'Contact Form' },
   { value: 'interest', label: 'Interest Form' },
@@ -71,8 +109,18 @@ function AdminLeadsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  /** Non-null when the last load failed. Distinguishes "broken" from "empty". */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [websiteFilter, setWebsiteFilter] = useState<string[]>(() => {
+    const raw = new URLSearchParams(window.location.search).get('website') || '';
+    return raw ? raw.split(',').filter(Boolean) : [];
+  });
+  const [prefLocked, setPrefLocked] = useState(false);
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [prefLoaded, setPrefLoaded] = useState(false);
+  const [sourceGroups, setSourceGroups] = useState<SourceGroup[]>([]);
   const [tempFilter, setTempFilter] = useState(() => new URLSearchParams(window.location.search).get('temperature') || '');
   const [scoreMin, setScoreMin] = useState('');
   const [scoreMax, setScoreMax] = useState('');
@@ -82,26 +130,120 @@ function AdminLeadsPage() {
   const search = useDebounce(searchInput, 300);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showApolloImport, setShowApolloImport] = useState(false);
+
+  /**
+   * The active filters, shared by the table query and the CSV export.
+   *
+   * Export used to call a bare `/export` with no params while the table sent
+   * all of these, so the downloaded file ignored the filters on screen and
+   * returned every lead (reported by Kes, 2026-08-25). Both callers read this
+   * one builder now; pagination and sort are added by the table only.
+   */
+  const buildFilterParams = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (statusFilter) params.status = statusFilter;
+    if (sourceFilter) params.source = sourceFilter;
+    if (websiteFilter.length) params.website = websiteFilter.join(',');
+    if (tempFilter) params.temperature = tempFilter;
+    if (scoreMin) params.scoreMin = scoreMin;
+    if (scoreMax) params.scoreMax = scoreMax;
+    if (dateFrom) params.dateFrom = dateFrom;
+    if (dateTo) params.dateTo = dateTo;
+    if (search) params.search = search;
+    return params;
+  }, [statusFilter, sourceFilter, websiteFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
 
   const fetchLeads = useCallback(async () => {
     try {
-      const params: Record<string, string> = { page: String(page), limit: '25' };
-      if (statusFilter) params.status = statusFilter;
-      if (sourceFilter) params.source = sourceFilter;
-      if (tempFilter) params.temperature = tempFilter;
-      if (scoreMin) params.scoreMin = scoreMin;
-      if (scoreMax) params.scoreMax = scoreMax;
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-      if (search) params.search = search;
+      const params: Record<string, string> = {
+        ...buildFilterParams(),
+        page: String(page),
+        limit: '25',
+        // Website signups outrank pulled-list names; see leadSourceGroups.ts.
+        sort: 'priority',
+      };
       const res = await api.get('/api/admin/leads', { params });
       setLeads(res.data.leads);
       setTotal(res.data.total);
       setTotalPages(res.data.totalPages);
+      setLoadError(null);
     } catch (err) {
+      /**
+       * This used to be `console.error` and nothing else. `leads` stayed at its
+       * initial [], so the table rendered its empty state -- "No leads yet. Click
+       * '+ Add Lead' to get started." -- and the header read "Leads (0)". That
+       * message asserts the database is empty. It was shown against 24,244 real
+       * lead rows, because the request had failed and nothing said so.
+       *
+       * A failed load and an empty result are different facts and must look
+       * different. The error is surfaced so the page can say which one happened.
+       */
       console.error('Failed to fetch leads:', err);
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      setLoadError(
+        status === 401 || status === 403
+          ? 'Your session is not authorized to read leads. Sign in again.'
+          : `Could not load leads${status ? ` (HTTP ${status})` : ''}. This is a load failure, not an empty list.`,
+      );
+      setLeads([]);
+      setTotal(0);
     }
-  }, [page, statusFilter, sourceFilter, tempFilter, scoreMin, scoreMax, dateFrom, dateTo, search]);
+  }, [page, buildFilterParams]);
+
+  const fetchSourceGroups = useCallback(async () => {
+    try {
+      const res = await api.get('/api/admin/leads/source-groups');
+      setSourceGroups(res.data.groups || []);
+    } catch (err) {
+      console.error('Failed to fetch lead source groups:', err);
+    }
+  }, []);
+
+  useEffect(() => { fetchSourceGroups(); }, [fetchSourceGroups]);
+
+  // Load this rep's saved settings. If they locked a selection and the URL did
+  // not already carry one, adopt it so the page opens the way they left it.
+  useEffect(() => {
+    let live = true;
+    api.get('/api/admin/leads/view-preference')
+      .then((res) => {
+        if (!live) return;
+        const pref = res.data.preference || { websites: [], locked: false };
+        setPrefLocked(!!pref.locked);
+        const fromUrl = new URLSearchParams(window.location.search).get('website');
+        if (!fromUrl && pref.locked && pref.websites.length) setWebsiteFilter(pref.websites);
+        setPrefLoaded(true);
+      })
+      .catch(() => { if (live) setPrefLoaded(true); });
+    return () => { live = false; };
+  }, []);
+
+  const toggleWebsite = (key: string) => {
+    setWebsiteFilter((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setPage(1);
+  };
+
+  const savePreference = async (locked: boolean) => {
+    setPrefSaving(true);
+    try {
+      const res = await api.put('/api/admin/leads/view-preference', { websites: websiteFilter, locked });
+      setPrefLocked(!!res.data.preference?.locked);
+    } catch (err) {
+      console.error('Failed to save lead view preference:', err);
+    } finally {
+      setPrefSaving(false);
+    }
+  };
+
+  // Keep ?website= in the address bar so a rep can bookmark "just my sites".
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (websiteFilter.length) params.set('website', websiteFilter.join(','));
+    else params.delete('website');
+    const qs = params.toString();
+    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+  }, [websiteFilter]);
 
   const fetchStats = async () => {
     try {
@@ -129,15 +271,22 @@ function AdminLeadsPage() {
 
   const handleExport = async () => {
     try {
-      const res = await api.get('/api/admin/leads/export', { responseType: 'blob' });
+      const res = await api.get('/api/admin/leads/export', {
+        params: buildFilterParams(),
+        responseType: 'blob',
+      });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'leads-export.csv';
+      // The server names the file, so a capped export arrives as
+      // leads-export-partial-first-N.csv instead of looking complete.
+      const disposition: string = res.headers?.['content-disposition'] ?? '';
+      a.download = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'leads-export.csv';
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to export leads:', err);
+      setLoadError('Could not export leads. The filters on screen were not applied to a file.');
     }
   };
 
@@ -149,6 +298,10 @@ function AdminLeadsPage() {
     setScoreMax('');
     setDateFrom('');
     setDateTo('');
+    // Temperature and website were left set by this handler, so "Clear" left
+    // the table filtered while the controls read as cleared.
+    setTempFilter('');
+    setWebsiteFilter([]);
     setPage(1);
   };
 
@@ -171,7 +324,32 @@ function AdminLeadsPage() {
     fetchStats();
   };
 
-  const hasFilters = search || statusFilter || sourceFilter || scoreMin || scoreMax || dateFrom || dateTo;
+  const hasFilters = search || statusFilter || sourceFilter || websiteFilter.length || scoreMin || scoreMax || dateFrom || dateTo;
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from live lead pipeline health.
+  const trust: TrustSignal = useMemo(() => {
+    const totalLeads = stats?.total ?? 0;
+    const newLeads = stats?.byStatus.new ?? 0;
+    const highIntent = stats?.highIntent ?? 0;
+    const level: TrustLevel = totalLeads > 0 ? 'live' : 'unverified';
+    return {
+      level,
+      source: 'leads table',
+      updatedAt: new Date().toISOString(),
+      summary: `${totalLeads} leads in pipeline, ${newLeads} new, ${highIntent} high-intent.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Pipeline',
+          status: level,
+          evidence: [
+            { label: 'Total', value: String(totalLeads) },
+            { label: 'New', value: String(newLeads) },
+          ],
+        },
+      ],
+    };
+  }, [stats]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -192,88 +370,72 @@ function AdminLeadsPage() {
   if (loading) {
     return (
       <>
-        <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads' }]} />
-        <div className="card admin-table-card">
-          <div className="card-body p-0">
-            <TableSkeleton rows={8} columns={7} />
-          </div>
-        </div>
+        <PageHeader
+          title="Lead Management"
+          icon="group-line"
+          subtitle="Track, qualify, and convert every inbound lead across all sources."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Leads' }]}
+          trust={trust}
+        />
+        <SectionCard padded={false}>
+          <TableSkeleton rows={8} columns={7} />
+        </SectionCard>
       </>
     );
   }
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Leads' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Lead Management
-        </h1>
-        <div className="d-flex gap-2">
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
-            + Add Lead
-          </button>
-          <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/import')}>
-            Import CSV
-          </button>
-          <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/apollo')}>
-            Apollo Enrich
-          </button>
-          <button className="btn btn-outline-secondary btn-sm" onClick={handleExport}>
-            Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      {stats && (
-        <div className="row g-3 mb-4">
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #4a5568' }}>
-                <div className="text-muted small">Total</div>
-                <div className="h4 fw-bold mb-0">{stats.total}</div>
-              </div>
+      <PageHeader
+        title="Lead Management"
+        icon="group-line"
+        subtitle="Track, qualify, and convert every inbound lead across all sources."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Leads' }]}
+        trust={trust}
+        actions={
+          <>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+              + Add Lead
+            </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => setShowApolloImport(true)}>
+              Pull in leads
+            </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/import')}>
+              Import CSV
+            </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={() => navigate('/admin/apollo')}>
+              Apollo Enrich
+            </button>
+            <button className="btn btn-outline-secondary btn-sm" onClick={handleExport}>
+              Export CSV
+            </button>
+          </>
+        }
+      >
+        {stats && (
+          <div className="row g-3">
+            <div className="col-6 col-md">
+              <StatCard label="Total" value={stats.total} icon="group-line" tone="neutral" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="New" value={stats.byStatus.new || 0} icon="user-add-line" tone="info" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="High-Intent" value={stats.highIntent} icon="fire-line" tone="danger" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="This Month" value={stats.thisMonth} icon="calendar-line" tone="primary" />
+            </div>
+            <div className="col-6 col-md">
+              <StatCard label="Conversion" value={stats.conversionRate} unit="%" icon="line-chart-line" tone="success" />
             </div>
           </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #0dcaf0' }}>
-                <div className="text-muted small">New</div>
-                <div className="h4 fw-bold mb-0" style={{ color: '#0dcaf0' }}>{stats.byStatus.new || 0}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #dc3545', background: 'linear-gradient(135deg, rgba(220,53,69,0.04) 0%, transparent 100%)' }}>
-                <div className="text-muted small">High-Intent</div>
-                <div className="h4 fw-bold mb-0 text-danger">{stats.highIntent}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #6f42c1' }}>
-                <div className="text-muted small">This Month</div>
-                <div className="h4 fw-bold mb-0" style={{ color: '#6f42c1' }}>{stats.thisMonth}</div>
-              </div>
-            </div>
-          </div>
-          <div className="col-6 col-md">
-            <div className="card admin-kpi-card">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #198754' }}>
-                <div className="text-muted small">Conversion</div>
-                <div className="h4 fw-bold mb-0 text-success">{stats.conversionRate}%</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </PageHeader>
 
       {/* Filters */}
-      <div className="card admin-table-card mb-4">
-        <div className="card-body">
+      <div className="mb-4">
+        <SectionCard>
           <div className="row g-3 align-items-end">
             <div className="col-md-3">
               <label className="form-label small text-muted">Search</label>
@@ -299,8 +461,72 @@ function AdminLeadsPage() {
                 ))}
               </select>
             </div>
+            <div className="col-md-3">
+              <label className="form-label small text-muted d-flex align-items-center gap-2">
+                Websites
+                {prefLocked && (
+                  <span className="badge bg-secondary" style={{ fontSize: 10 }} title="These settings are saved and reapplied every visit">
+                    locked
+                  </span>
+                )}
+              </label>
+              <details className="admin-website-picker position-relative">
+                <summary className="form-select d-flex align-items-center" style={{ cursor: 'pointer', listStyle: 'none' }}>
+                  {websiteFilter.length === 0
+                    ? 'All sites'
+                    : websiteFilter.length === 1
+                      ? (sourceGroups.find((g) => g.key === websiteFilter[0])?.label || '1 site')
+                      : `${websiteFilter.length} sites`}
+                </summary>
+                <div
+                  className="position-absolute bg-white border rounded shadow-sm p-2"
+                  style={{ zIndex: 20, minWidth: 260, maxHeight: 320, overflowY: 'auto' }}
+                >
+                  {WEBSITE_GROUP_ORDER.map((kind) => {
+                    const inKind = sourceGroups.filter((g) => g.kind === kind);
+                    if (!inKind.length) return null;
+                    return (
+                      <div key={kind} className="mb-2">
+                        <div className="text-muted" style={{ fontSize: 10, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                          {KIND_LABELS[kind]}
+                        </div>
+                        {inKind.map((g) => (
+                          <label key={g.key} className="d-flex align-items-center gap-2 py-1" style={{ fontSize: 13, cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={websiteFilter.includes(g.key)}
+                              onChange={() => toggleWebsite(g.key)}
+                            />
+                            <span className="flex-grow-1">{g.label}</span>
+                            <span className="text-muted" style={{ fontSize: 12 }}>{g.count.toLocaleString()}</span>
+                          </label>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  <div className="d-flex gap-2 border-top pt-2 mt-1">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary flex-grow-1"
+                      onClick={() => { setWebsiteFilter([]); setPage(1); }}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary flex-grow-1"
+                      disabled={prefSaving || !prefLoaded}
+                      onClick={() => savePreference(!prefLocked)}
+                      title={prefLocked ? 'Stop reapplying these settings' : 'Reapply these settings every visit'}
+                    >
+                      {prefSaving ? 'Saving...' : prefLocked ? 'Unlock' : 'Lock these'}
+                    </button>
+                  </div>
+                </div>
+              </details>
+            </div>
             <div className="col-md-2">
-              <label className="form-label small text-muted">Source</label>
+              <label className="form-label small text-muted">Form</label>
               <select
                 className="form-select"
                 value={sourceFilter}
@@ -371,7 +597,7 @@ function AdminLeadsPage() {
               </div>
             )}
           </div>
-        </div>
+        </SectionCard>
       </div>
 
       {/* Batch Actions */}
@@ -384,13 +610,9 @@ function AdminLeadsPage() {
       )}
 
       {/* Leads Table */}
-      <div className="card admin-table-card">
-        <div className="card-header fw-bold fs-6 py-3 d-flex justify-content-between">
-          <span>Leads ({total})</span>
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover table-striped mb-0">
+      <SectionCard title={`Leads (${total})`} padded={false}>
+        <div className="table-responsive">
+          <table className="table table-hover table-striped mb-0">
               <thead className="table-light">
                 <tr>
                   <th style={{ width: '40px' }}>
@@ -417,8 +639,19 @@ function AdminLeadsPage() {
               <tbody>
                 {leads.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="text-center text-muted py-4">
-                      {hasFilters ? 'No leads match the current filters.' : 'No leads yet. Click "+ Add Lead" to get started.'}
+                    {/* Three distinct states, because they call for three
+                        different actions. Saying "No leads yet" when the request
+                        failed sends someone to add a lead by hand against a
+                        database that already holds 24,000. */}
+                    <td
+                      colSpan={11}
+                      className={`text-center py-4 ${loadError ? 'text-danger' : 'text-muted'}`}
+                    >
+                      {loadError
+                        ? loadError
+                        : hasFilters
+                          ? 'No leads match the current filters.'
+                          : 'No leads yet. Click "+ Add Lead" to get started.'}
                     </td>
                   </tr>
                 ) : (
@@ -433,7 +666,10 @@ function AdminLeadsPage() {
                         />
                       </td>
                       <td className="fw-medium">
-                        {lead.name}
+                        {/* The name is the link. It was plain text, so the only way
+                            into a lead was the View button at the far right of a
+                            very wide row. */}
+                        <PersonLink name={lead.name} email={lead.email} leadId={lead.id} />
                         {lead.executive_briefing_score != null && lead.executive_briefing_score > 7 && (
                           <span className="badge bg-danger ms-2" style={{ fontSize: '0.65rem', verticalAlign: 'middle' }}>High Intent Exec</span>
                         )}
@@ -483,12 +719,12 @@ function AdminLeadsPage() {
                         </select>
                       </td>
                       <td>
-                        <span className="badge bg-light text-dark">{lead.form_type || lead.source}</span>
+                        <StatusBadge label={lead.form_type || lead.source} tone="neutral" />
                       </td>
                       <td className="text-nowrap small">{formatDate(lead.created_at)}</td>
                       <td>
                         <Link
-                          to={`/admin/leads/${lead.id}`}
+                          to={personPath({ leadId: lead.id }) ?? '/admin/people'}
                           className="btn btn-outline-primary btn-sm"
                         >
                           View
@@ -500,14 +736,13 @@ function AdminLeadsPage() {
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* Pagination */}
-        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
-          <span className="text-muted small">Page {page} of {totalPages}</span>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-        </div>
-      </div>
+          {/* Pagination */}
+          <div className="d-flex justify-content-between align-items-center p-3 border-top">
+            <span className="text-muted small">Page {page} of {totalPages}</span>
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        </SectionCard>
 
       {showAddModal && (
         <QuickAddLeadModal
@@ -515,6 +750,12 @@ function AdminLeadsPage() {
           onLeadCreated={() => { fetchLeads(); fetchStats(); }}
         />
       )}
+
+      <ApolloImportModal
+        show={showApolloImport}
+        onClose={() => setShowApolloImport(false)}
+        onImported={() => { fetchLeads(); fetchStats(); fetchSourceGroups(); }}
+      />
     </>
   );
 }

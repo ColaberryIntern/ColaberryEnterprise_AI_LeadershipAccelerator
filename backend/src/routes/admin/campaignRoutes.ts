@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { getRampStatus, manualAdvanceRamp } from '../../services/autonomousRampService';
 import {
@@ -20,6 +21,7 @@ import { generateTrackedLink, getCampaignROI } from '../../services/campaignLink
 import {
   handleListCampaigns,
   handleCreateCampaign,
+  handleListAssignableBrands,
   handleGetCampaign,
   handleUpdateCampaign,
   handleDeleteCampaign,
@@ -79,9 +81,56 @@ const router = Router();
 router.get('/api/admin/campaigns', requireAdmin, handleListCampaigns);
 router.post('/api/admin/campaigns', requireAdmin, handleCreateCampaign);
 router.post('/api/admin/campaigns/build-cold', requireAdmin, handleBuildColdCampaign);
+// Registered before '/api/admin/campaigns/:id' so the literal segment is not
+// swallowed by the id param — the ordering trap this repo has hit before.
+router.get('/api/admin/campaigns/assignable-brands', requireAdmin, handleListAssignableBrands);
 router.get('/api/admin/campaigns/sequence-templates', requireAdmin, handleGetSequenceTemplates);
 router.get('/api/admin/campaigns/:id', requireAdmin, handleGetCampaign);
 router.patch('/api/admin/campaigns/:id', requireAdmin, handleUpdateCampaign);
+
+// Assign (or confirm) the campaign's canonical UTM slug. The composer needs one before it
+// can mint tracked links; until this endpoint existed nothing in the app wrote the column.
+const SlugParams = z.object({ id: z.string().uuid() });
+const SlugBody = z.object({
+  offer: z.string().trim().max(80).nullable().optional(),
+  audience: z.string().trim().max(80).nullable().optional(),
+  // The brand the operator picked in the composer, used ONLY when the campaign has none.
+  brand_id: z.string().uuid().nullable().optional(),
+}).strict();
+router.post('/api/admin/campaigns/:id/slug', requireAdmin, async (req: Request, res: Response) => {
+  const params = SlugParams.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError' });
+  const body = SlugBody.safeParse(req.body ?? {});
+  if (!body.success) return void res.status(400).json({ error: 'Validation failed', error_class: 'ValidationError', details: body.error.flatten() });
+  try {
+    const { assignCampaignSlug } = await import('../../services/marketing/campaignSlugService');
+    const { WorkflowError } = await import('../../services/content/contentWorkflowService');
+    try {
+      const result = await assignCampaignSlug(params.data.id, {
+        offer: body.data.offer,
+        audience: body.data.audience,
+        brandId: body.data.brand_id ?? null,
+      });
+      res.json({
+        campaign_id: result.campaign.id,
+        utm_campaign_slug: result.slug,
+        unchanged: result.unchanged,
+        // So the composer can refresh a campaign that just gained a brand.
+        brand_id: result.campaign.brand_id,
+      });
+    } catch (err) {
+      if (err instanceof WorkflowError) return void res.status(err.status).json({ error: err.message, error_class: err.errorClass });
+      throw err;
+    }
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'marketing',
+      event: 'campaign_slug_failed', outcome: 'failure',
+      error_class: err?.name ?? 'Error', context: { campaignId: params.data.id, message: String(err?.message ?? err).slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Failed to assign the campaign slug', error_class: 'InternalError' });
+  }
+});
 router.delete('/api/admin/campaigns/:id', requireAdmin, handleDeleteCampaign);
 router.post('/api/admin/campaigns/:id/activate', requireAdmin, handleActivateCampaign);
 router.post('/api/admin/campaigns/:id/pause', requireAdmin, handlePauseCampaign);
@@ -101,6 +150,42 @@ router.post('/api/admin/campaigns/:id/ghl-sync', requireAdmin, handleGhlSync);
 router.get('/api/admin/campaigns/:id/ghl-status', requireAdmin, handleGhlStatus);
 router.post('/api/admin/campaigns/:id/ghl-test-sms', requireAdmin, handleGhlTestSms);
 router.post('/api/admin/campaigns/:id/ghl-resync-lead', requireAdmin, handleGhlResyncLead);
+
+/**
+ * Campaign 360 Attribution (T019). Three models over the campaign's identified leads, with
+ * identity coverage and the credit-sum guard reported rather than hidden.
+ */
+// Bounded window: 0 attributes nothing, years attribute a visit from another life. 1-365 days
+// is the range in which the answer means something. Zod, per the contract rule - the hand-written
+// regex and Number() checks this replaces were the T019 verifier's convention finding.
+const AttributionParams = z.object({ id: z.string().uuid() });
+const AttributionQuery = z.object({ window: z.coerce.number().int().min(1).max(365).default(30) });
+
+router.get('/api/admin/campaigns/:id/attribution', requireAdmin, async (req: Request, res: Response) => {
+  const params = AttributionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: 'Campaign id must be a UUID', error_class: 'ValidationError', details: params.error.flatten() });
+    return;
+  }
+  const query = AttributionQuery.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: 'window must be an integer number of days from 1 to 365', error_class: 'ValidationError', details: query.error.flatten() });
+    return;
+  }
+  const id = params.data.id;
+  const rawWindow = query.data.window;
+  try {
+    const { getCampaignAttribution } = await import('../../services/marketing/campaignAttributionService');
+    res.json(await getCampaignAttribution(id, rawWindow));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'marketing',
+      event: 'campaign_attribution_failed', outcome: 'failure',
+      error_class: err?.name ?? 'Error', context: { campaignId: id, message: String(err?.message ?? err).slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Failed to compute attribution', error_class: 'InternalError' });
+  }
+});
 router.post('/api/admin/campaigns/:id/generate-icp', requireAdmin, handleGenerateICP);
 router.post('/api/admin/campaigns/:id/reverse-engineer', requireAdmin, handleReverseEngineer);
 router.post('/api/admin/campaigns/:id/rebuild', requireAdmin, handleRebuildCampaign);
@@ -118,9 +203,10 @@ router.patch('/api/admin/campaigns/:id/mode', requireAdmin, async (req: Request,
     const { Campaign } = await import('../../models');
     const campaign = await Campaign.findByPk(req.params.id as string);
     if (!campaign) { res.status(404).json({ error: 'Campaign not found' }); return; }
-    (campaign as any).mode_override = mode || null;
+    // Typed write, no cast — see the note in autonomousRequirementExpansionService.
+    campaign.mode_override = mode || null;
     await campaign.save();
-    res.json({ id: campaign.id, mode_override: (campaign as any).mode_override });
+    res.json({ id: campaign.id, mode_override: campaign.mode_override });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

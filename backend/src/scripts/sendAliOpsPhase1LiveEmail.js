@@ -100,7 +100,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - Phase 1 v0 live (5,657 todos scored, 298 in your human_required queue, 1 OOM detour fixed)',
     html: HTML,
     text: TEXT,

@@ -68,7 +68,7 @@ function PortalAssignmentsPage() {
   if (loading) {
     return (
       <div className="text-center py-5">
-        <div className="spinner-border" style={{ color: 'var(--color-primary)' }} role="status">
+        <div className="spinner-border" style={{ color: '#FB2832' }} role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
       </div>
@@ -78,10 +78,10 @@ function PortalAssignmentsPage() {
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h4 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
+        <h1 className="h4 fw-bold mb-0" style={{ color: '#FB2832' }}>
           <i className="bi bi-file-earmark-text me-2"></i>Assignments
         </h1>
-        <button className="btn btn-primary btn-sm" style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} onClick={() => setShowModal(true)}>
+        <button className="btn btn-sm" style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }} onClick={() => setShowModal(true)}>
           <i className="bi bi-plus-lg me-1"></i>New Submission
         </button>
       </div>
@@ -187,7 +187,7 @@ function PortalAssignmentsPage() {
                   </div>
                   <div className="modal-footer">
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setShowModal(false)}>Cancel</button>
-                    <button type="submit" className="btn btn-primary btn-sm" disabled={submitting || !form.title} style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}>
+                    <button type="submit" className="btn btn-sm" disabled={submitting || !form.title} style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}>
                       {submitting ? <><span className="spinner-border spinner-border-sm me-1"></span>Submitting...</> : 'Submit'}
                     </button>
                   </div>

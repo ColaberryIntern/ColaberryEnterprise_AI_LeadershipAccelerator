@@ -120,7 +120,7 @@ export default function WorkstationTab({ token, apiUrl }: { token: string; apiUr
             {VARIABLES.map(v => (
               <div key={v.name} className="col-md-6">
                 <div className="d-flex align-items-start gap-2">
-                  <code className="text-nowrap" style={{ fontSize: 11, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>
+                  <code className="text-nowrap" style={{ fontSize: 11, background: 'var(--neutral-50)', padding: '2px 6px', borderRadius: 4 }}>
                     {v.name}
                   </code>
                   <span className="text-muted" style={{ fontSize: 11 }}>{v.desc}</span>

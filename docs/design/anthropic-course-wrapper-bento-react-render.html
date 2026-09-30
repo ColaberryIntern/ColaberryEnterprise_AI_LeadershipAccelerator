@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnthropicCoursesBento — React port, verified render</title>
+<style>
+  :root { --navy:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--navy);
+    font-family:system-ui,-apple-system,'Segoe UI',sans-serif; line-height:1.6; }
+  .wrap { max-width:1040px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  .sub { color:var(--muted); margin:0 0 24px; }
+  .meta { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 28px; }
+  .chip { font-size:12px; font-weight:700; letter-spacing:.02em; padding:6px 12px;
+    border-radius:999px; background:#fff; border:1px solid var(--line); color:var(--navy); }
+  .chip.ok { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04); padding:20px; margin:0 0 24px; }
+  .card h2 { font-size:16px; margin:0 0 12px; }
+  ul { margin:0; padding-left:1.1em; } li { margin:4px 0; }
+  code { background:#f1f5f9; padding:1px 6px; border-radius:4px; font-size:.92em; }
+  figure { margin:0; }
+  img { width:100%; height:auto; display:block; border:1px solid var(--line); border-radius:12px; }
+  figcaption { color:var(--muted); font-size:13px; margin-top:10px; }
+  .note { font-size:13px; color:var(--muted); }
+  a { color:#2563eb; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AnthropicCoursesBento — React port</h1>
+  <p class="sub">Production React build of the approved Colaberry DS bento, verified by headless render. For Kes's review before pulling.</p>
+
+  <div class="meta">
+    <span class="chip ok">tsc --noEmit ✓</span>
+    <span class="chip ok">render verified ✓</span>
+    <span class="chip">PR #82 → staging</span>
+    <span class="chip">commits 67fbf750 · e0d68eb2</span>
+    <span class="chip">2026-06-25</span>
+  </div>
+
+  <div class="card">
+    <h2>What shipped</h2>
+    <ul>
+      <li>New container <code>frontend/src/components/portal/anthropic-bento/AnthropicCoursesBento.tsx</code> — takes the whole Skilljar course list and arranges featured entry tile + compact supporting tiles + cherry path-anchor (computes count + total duration); 1 / 2 / 3+ responsive fallbacks.</li>
+      <li>New scoped stylesheet <code>anthropicBento.css</code> — the official Colaberry Design System (cherry/leaf/berry, Roboto + Roboto Mono, radius-xl/pill, cb-card/badge/btn), scoped under <code>.acw-ds</code> so the navy portal is untouched.</li>
+      <li><code>PortalSessionDetailPage.tsx</code> — the per-card map replaced with a single <code>&lt;AnthropicCoursesBento /&gt;</code>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Verified render — all states</h2>
+    <figure>
+      <img src="./anthropic-course-wrapper-bento-react-render.png" alt="AnthropicCoursesBento rendered in 3-course, 2-course, 1-course and dark-mode states" />
+      <figcaption>
+        Headless render (Edge) of the real component CSS. Top → bottom: 3-course full bento (featured spans two stacked compacts + full-width cherry path anchor), 2-course fallback, 1-course featured-only, and dark mode. Icon glyphs are blank here only because the Bootstrap Icons CDN font is network-blocked in headless capture — they render in the portal, which already links the font.
+      </figcaption>
+    </figure>
+  </div>
+
+  <div class="card">
+    <h2>Judgment calls (logged, no governance boundary)</h2>
+    <ul>
+      <li><strong>Icons:</strong> RemixIcon (DS default) swapped for Bootstrap Icons, already loaded by the portal — avoids a new icon-font dependency.</li>
+      <li><strong>"Start the path" CTA:</strong> points at the featured (lowest-numbered) course URL since no separate path URL exists yet — spec flagged this destination as TBD.</li>
+      <li><strong>Grid:</strong> the spec's fixed 3-up grid generalized to featured-spans-compacts so 4+ courses never break (pixel-identical to the spec at exactly 3).</li>
+      <li><strong>Hardened:</strong> compact ghost CTA bumped 38px → 44px (DS/WCAG touch goal); <code>prefers-reduced-motion</code> disables hover transforms. Dark-mode tokens present but inert until the portal adds a dark toggle.</li>
+    </ul>
+  </div>
+
+  <p class="note">Interactive design reference: <a href="./anthropic-course-wrapper-bento.html">anthropic-course-wrapper-bento.html</a> · spec: <a href="./anthropic-course-wrapper-bento.md">anthropic-course-wrapper-bento.md</a></p>
+</div>
+</body>
+</html>

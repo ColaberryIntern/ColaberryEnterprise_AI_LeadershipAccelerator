@@ -12,6 +12,7 @@ import LessonStepTracker, { StepInfo } from './LessonStepTracker';
 import SectionStepLabel from './SectionStepLabel';
 import SectionOutputPanel from './SectionOutputPanel';
 import { useMentorContext } from '../../../contexts/MentorContext';
+import { getParticipantToken } from '../../../utils/participantToken';
 
 interface ConceptV2Props {
   content: any;
@@ -144,7 +145,7 @@ export default function ConceptV2({ content, lessonId, isCompleted, onCanComplet
   };
 
   const handleSaveQuizProgress = useCallback((questionIndex: number, answer: string, correct: boolean) => {
-    const token = localStorage.getItem('participant_token');
+    const token = getParticipantToken();
     if (!token) return;
     fetch(`/api/portal/curriculum/lessons/${lessonId}/quiz-progress`, {
       method: 'POST',

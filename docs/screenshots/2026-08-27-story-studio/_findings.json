@@ -1,0 +1,866 @@
+{
+  "base": "https://enterprise.colaberry.ai",
+  "record": "268c5050-7f83-4b5d-ac39-cd44dbe433e2",
+  "slug": "ai-systems-architect-training-system",
+  "generatedAt": "2026-08-27T13:23:09.646Z",
+  "failures": 0,
+  "skips": 4,
+  "tabs": [
+    {
+      "key": "preflight",
+      "label": "PREFLIGHT — nothing below is worth anything if these are green against nothing",
+      "checks": [
+        {
+          "name": "the origin is reachable",
+          "verdict": "PASS",
+          "detail": "HTTP 200"
+        },
+        {
+          "name": "the admin API refuses an anonymous caller with 401",
+          "verdict": "PASS",
+          "detail": "HTTP 401"
+        },
+        {
+          "name": "the admin API accepts this token",
+          "verdict": "PASS",
+          "detail": "HTTP 200"
+        },
+        {
+          "name": "the pilot record is readable",
+          "verdict": "PASS",
+          "detail": "HTTP 200"
+        }
+      ],
+      "notes": [],
+      "shots": [],
+      "diagnostics": null
+    },
+    {
+      "key": "load",
+      "label": "THE RECORD LOADS",
+      "checks": [
+        {
+          "name": "the admin SPA rendered the record",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "the seven-tab strip renders",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "all seven tabs are present",
+          "verdict": "PASS",
+          "detail": "8 tab elements"
+        },
+        {
+          "name": "the publish gate band renders above the tab strip",
+          "verdict": "PASS",
+          "detail": "no gate band count rendered"
+        }
+      ],
+      "notes": [],
+      "shots": [],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "truth",
+      "label": "TRUTH",
+      "checks": [
+        {
+          "name": "TRUTH: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "TRUTH: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What is established about this record, who consented to what, and where did each value come from?"
+        },
+        {
+          "name": "TRUTH: the storyline panel states it is editorial direction, not a fact",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "TRUTH: the storyline panel declares its state in words",
+          "verdict": "PASS",
+          "detail": "already written: Last written by ali@colaberry.com."
+        },
+        {
+          "name": "TRUTH: storyline is editable",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "TRUTH: saving the storyline reports no error",
+          "verdict": "PASS",
+          "detail": "no error surface rendered"
+        },
+        {
+          "name": "TRUTH: the saved storyline is attributed on screen",
+          "verdict": "PASS",
+          "detail": "Last written by ali@colaberry.com."
+        },
+        {
+          "name": "TRUTH: the storyline round-trips through the server, not just the DOM",
+          "verdict": "PASS",
+          "detail": "authoredBy=ali@colaberry.com"
+        },
+        {
+          "name": "TRUTH: consent and privacy fields render with the record's values",
+          "verdict": "PASS",
+          "detail": "{\"orgMode\":\"named\",\"orgName\":\"Colaberry\",\"visibility\":\"public\",\"builderMode\":\"role_only\",\"orgConsent\":true,\"builderConsent\":false}"
+        },
+        {
+          "name": "TRUTH: the consent save control is present and clickable",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "TRUTH: saving consent tells the operator on THIS tab what happened",
+          "verdict": "PASS",
+          "detail": "band says: Consent saved on the record. Rebuild the snapshot with a sync and approve it again, or the gate will refuse the publish for a consent mismat"
+        },
+        {
+          "name": "TRUTH: the consent re-save left the record's consent unchanged",
+          "verdict": "PASS",
+          "detail": "named/public/role_only"
+        },
+        {
+          "name": "TRUTH: a consent save that FAILS is reported on screen, not swallowed",
+          "verdict": "PASS",
+          "detail": "error banner: Could not load this consent change (HTTP 500). This is a load failure, not an empty result."
+        },
+        {
+          "name": "TRUTH: the provenance version selector renders",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "TRUTH: provenance answers with rows or a named empty state",
+          "verdict": "PASS",
+          "detail": "14 provenance rows, empty=false"
+        },
+        {
+          "name": "TRUTH: no provenance row reads \"unknown\"",
+          "verdict": "PASS",
+          "detail": "0 of 14 rows read \"unknown\""
+        },
+        {
+          "name": "TRUTH: provenance rows carry a detail that makes the claim checkable",
+          "verdict": "PASS",
+          "detail": "14 of 14 rows carry a detail"
+        },
+        {
+          "name": "TRUTH: switching provenance version re-reads without erroring",
+          "verdict": "PASS",
+          "detail": "14 rows after the switch"
+        },
+        {
+          "name": "TRUTH: an OLDER snapshot version also reads its provenance without \"unknown\"",
+          "verdict": "PASS",
+          "detail": "0 of 14 rows read \"unknown\" on the previous version"
+        },
+        {
+          "name": "TRUTH: contributors render rows or a named empty state",
+          "verdict": "PASS",
+          "detail": "0 contributor elements, empty=true"
+        }
+      ],
+      "notes": [
+        {
+          "kind": "method",
+          "text": "the failure above was forced by fulfilling the consent PATCH with a 500 in the browser; the request never left the page, so production consent was not touched."
+        },
+        {
+          "kind": "measurement",
+          "text": "provenance: 14 rows, 0 unknown, sources named: repo_extraction, human_override"
+        },
+        {
+          "kind": "observation",
+          "text": "the provenance selector offers 2 snapshot version(s)"
+        }
+      ],
+      "shots": [
+        "01-truth.png"
+      ],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [
+          "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        ],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [
+          "500 PATCH https://enterprise.colaberry.ai/api/admin/case-studies/268c5050-7f83-4b5d-ac39-cd44dbe433e2"
+        ],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "sources",
+      "label": "SOURCES",
+      "checks": [
+        {
+          "name": "SOURCES: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "SOURCES: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What evidence exists, and what does each source actually prove?"
+        },
+        {
+          "name": "SOURCES: repositories render rows or a named empty state",
+          "verdict": "PASS",
+          "detail": "1 repository rows"
+        },
+        {
+          "name": "SOURCES: the attach form renders (reference + role + button)",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "SOURCES: attaching a repository actually attaches it",
+          "verdict": "PASS",
+          "detail": "1 -> 2 repositories (readings: 2)"
+        },
+        {
+          "name": "SOURCES: attaching a repository reports its outcome on THIS tab",
+          "verdict": "PASS",
+          "detail": "band says: Repository attached. Sync to read it."
+        },
+        {
+          "name": "SOURCES: the newly attached repository appears in the table",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "SOURCES: detaching restores the record to exactly the repositories it had",
+          "verdict": "PASS",
+          "detail": "1 repositories after detach (started at 1)"
+        },
+        {
+          "name": "SOURCES: the analyzer states its idle condition in words",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "SOURCES: data-testid=\"cs-analyze-repo\" resolves to exactly one element",
+          "verdict": "PASS",
+          "detail": "1 element(s) carry it"
+        },
+        {
+          "name": "SOURCES: the Analyze BUTTON carries its own distinct test id",
+          "verdict": "PASS",
+          "detail": "1 element(s) carry data-testid=\"cs-analyze-run\""
+        },
+        {
+          "name": "SOURCES: the analyzer returns a proof for a real repository",
+          "verdict": "PASS",
+          "detail": "7 proof elements rendered"
+        },
+        {
+          "name": "SOURCES: the analyzer reports BOTH what the repo proves and what it cannot",
+          "verdict": "PASS",
+          "detail": "What this repository proves / What it cannot prove"
+        },
+        {
+          "name": "SOURCES: the evidence panel renders rows or a named empty state",
+          "verdict": "PASS",
+          "detail": "8 evidence elements"
+        },
+        {
+          "name": "SOURCES: a manual sync reports an outcome on this tab",
+          "verdict": "PASS",
+          "detail": "null -> Last run: success 1 of 1 repositories read, 156 facts, 0 candidate metrics. Snapshot created (v31)."
+        },
+        {
+          "name": "SOURCES: sync history lists runs or states it is empty",
+          "verdict": "PASS",
+          "detail": "7 runs listed, empty=false"
+        },
+        {
+          "name": "SOURCES: the diff renders a table comparing published against draft",
+          "verdict": "PASS",
+          "detail": "10 diff elements"
+        }
+      ],
+      "notes": [
+        {
+          "kind": "observation",
+          "text": "analyzer access status: connected"
+        }
+      ],
+      "shots": [
+        "02-sources.png"
+      ],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "story",
+      "label": "STORY",
+      "checks": [
+        {
+          "name": "STORY: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "STORY: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What are we saying, in whose words, and has a human stood behind each sentence?"
+        },
+        {
+          "name": "STORY: the draft panel discloses which engine wrote the draft",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "STORY: the draft panel declares its state in words",
+          "verdict": "PASS",
+          "detail": "empty=true, no-source=false"
+        },
+        {
+          "name": "STORY: generating a draft either produces drafts or names its refusals",
+          "verdict": "PASS",
+          "detail": "15 draft elements"
+        },
+        {
+          "name": "STORY: the generator names itself rather than implying an LLM",
+          "verdict": "PASS",
+          "detail": "Last run by: deterministic"
+        },
+        {
+          "name": "STORY: generated drafts can be rejected, leaving no pending drafts behind",
+          "verdict": "PASS",
+          "detail": "0 pending drafts remain (rejected 4)"
+        },
+        {
+          "name": "STORY: the narrative panel offers an override or explains why it cannot",
+          "verdict": "PASS",
+          "detail": "override controls=1, no-snapshot=false"
+        },
+        {
+          "name": "STORY: with a snapshot present the override control is live, not inert",
+          "verdict": "PASS",
+          "detail": "override button disabled=false"
+        },
+        {
+          "name": "STORY: apply a narrative override on the pilot record",
+          "verdict": "SKIP",
+          "detail": "an override mints a new snapshot version and would move this published record into draft-ahead; exercised on the throwaway record instead"
+        },
+        {
+          "name": "STORY: metrics render rows or a named empty state",
+          "verdict": "PASS",
+          "detail": "9 metric elements"
+        },
+        {
+          "name": "STORY: the quotes panel renders its form and a named empty state",
+          "verdict": "PASS",
+          "detail": "form=true, empty=true"
+        },
+        {
+          "name": "STORY: the quotes panel states its consent condition",
+          "verdict": "PASS",
+          "detail": ""
+        }
+      ],
+      "notes": [
+        {
+          "kind": "observation",
+          "text": "draft generation left 15 draft element(s) on screen"
+        },
+        {
+          "kind": "observation",
+          "text": "suggested quote slots: none rendered (the page passes an empty list)"
+        }
+      ],
+      "shots": [
+        "03-story.png"
+      ],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "visuals",
+      "label": "VISUALS",
+      "checks": [
+        {
+          "name": "VISUALS: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "VISUALS: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What can be shown, and does every number in a picture come from a verified metric?"
+        },
+        {
+          "name": "VISUALS: artifacts render rows or a named empty state",
+          "verdict": "PASS",
+          "detail": "0 artifact rows, empty-state=true"
+        },
+        {
+          "name": "VISUALS: the chart panel states that a chart carries no numbers",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "VISUALS: the chart builder either offers metric keys or says there are none",
+          "verdict": "PASS",
+          "detail": "no-metrics=false, 1 metric checkboxes offered"
+        },
+        {
+          "name": "VISUALS: every offered metric key is offered exactly once",
+          "verdict": "PASS",
+          "detail": "1 checkboxes, 1 distinct keys"
+        },
+        {
+          "name": "VISUALS: saving a chart succeeds without an error",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "VISUALS: the saved chart is persisted",
+          "verdict": "PASS",
+          "detail": "3 charts on the record, charts-empty-state=false"
+        },
+        {
+          "name": "VISUALS: the chart says what it would actually render",
+          "verdict": "PASS",
+          "detail": "Renders: nothing — no metric it names is publishable and verified."
+        },
+        {
+          "name": "VISUALS: the architecture diagram",
+          "verdict": "SKIP",
+          "detail": "the mermaid diagram is rendered by the PUBLIC story page (StoryDiagram.tsx), not by any admin VISUALS control; it is checked separately against /stories/:slug"
+        }
+      ],
+      "notes": [
+        {
+          "kind": "empty-state",
+          "text": "no artifact rows exist, so hero selection, the promote control and the derived evidence/atmosphere column could not be exercised on this record"
+        },
+        {
+          "kind": "observation",
+          "text": "chart builder offers keys: verified_competencies"
+        },
+        {
+          "kind": "known-gap",
+          "text": "the chart builder offered metric keys read from the SNAPSHOT, but the resolver reads case_study_metrics — so the saved chart resolves to nothing. This is a missing metric-listing endpoint, not a bug in this tab, and is recorded rather than worked around. Unresolved reasons: verified_competencies — No metric on this record carries that key."
+        }
+      ],
+      "shots": [
+        "04-visuals.png"
+      ],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "surfaces",
+      "label": "SURFACES",
+      "checks": [
+        {
+          "name": "SURFACES: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "SURFACES: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "How does this one record read to four different audiences?"
+        },
+        {
+          "name": "SURFACES: the four-lens switcher renders",
+          "verdict": "PASS",
+          "detail": "tablist=true, 4 lens tabs"
+        },
+        {
+          "name": "SURFACES: the lab reports a state rather than a blank frame",
+          "verdict": "PASS",
+          "detail": "idle=false, 9 bands, no-bands=false"
+        },
+        {
+          "name": "SURFACES: the canonical truth line renders (it proves the lens changed no facts)",
+          "verdict": "PASS",
+          "detail": "Teaching people with no technical background to architect AI systems · Built by: Colaberry team · Organization: Colaberry · Verification: verified · Method: Repository · Production"
+        },
+        {
+          "name": "SURFACES: the publication state and gate verdict render",
+          "verdict": "PASS",
+          "detail": "published — live on this surface · gate: would publish"
+        },
+        {
+          "name": "SURFACES: the draft state is a named state, not an invented change count",
+          "verdict": "PASS",
+          "detail": "draft is ahead — draft v31 is not the published versionA state, not a count. Snapshots are content-hashed wholes, so nothing in this system can honestly say how"
+        },
+        {
+          "name": "SURFACES: the live surface is marked in text, not by colour alone",
+          "verdict": "PASS",
+          "detail": "↑ LIVE"
+        },
+        {
+          "name": "SURFACES: the lab carries the note that exploring a lens never publishes",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "SURFACES: selecting a GATED lens states the refusal instead of blanking",
+          "verdict": "PASS",
+          "detail": "\"Training\" -> Your session is not authorized to read this preview. Sign in again."
+        },
+        {
+          "name": "SURFACES: selecting the default lens again clears the refusal",
+          "verdict": "PASS",
+          "detail": "back to the default lens"
+        }
+      ],
+      "notes": [
+        {
+          "kind": "gate",
+          "text": "the second lens (\"Training\") is refused in production because CASE_STUDY_SURFACE_LAB_USER_IDS is unset: Your session is not authorized to read this preview. Sign in again."
+        },
+        {
+          "kind": "observation",
+          "text": "band order heading: Reading order on Enterprise"
+        }
+      ],
+      "shots": [
+        "05-surfaces.png"
+      ],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [
+          "Failed to load resource: the server responded with a status of 403 ()"
+        ],
+        "consoleWarnings": [],
+        "http4xx": [
+          "403 GET https://enterprise.colaberry.ai/api/admin/case-studies/268c5050-7f83-4b5d-ac39-cd44dbe433e2/preview?surfaceKey=training"
+        ],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "preview",
+      "label": "PREVIEW",
+      "checks": [
+        {
+          "name": "PREVIEW: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "PREVIEW: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What would a reader actually receive?"
+        },
+        {
+          "name": "PREVIEW: the panel states it has not previewed yet, rather than showing a blank frame",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "PREVIEW: the tab names which surface it is about to render",
+          "verdict": "PASS",
+          "detail": "Preview enterprise surface"
+        },
+        {
+          "name": "PREVIEW: previewing renders the projection beside the raw snapshot",
+          "verdict": "PASS",
+          "detail": "projection=true, raw=true, none=false"
+        },
+        {
+          "name": "PREVIEW: rendering the projection does not push the page wider than the viewport",
+          "verdict": "PASS",
+          "detail": "scrollWidth=1440 against clientWidth=1440"
+        },
+        {
+          "name": "PREVIEW: the panel names what the projection withheld",
+          "verdict": "PASS",
+          "detail": "What the projection withheld1 of 2 metrics are not shown publicly. A metric that is not publishable, or whose verification is still pending, has no public shape at all."
+        },
+        {
+          "name": "PREVIEW: the projection is shown as data a reviewer can read",
+          "verdict": "PASS",
+          "detail": "11481 characters"
+        }
+      ],
+      "notes": [
+        {
+          "kind": "measurement",
+          "text": "PREVIEW before previewing: scrollWidth=1440, clientWidth=1440"
+        },
+        {
+          "kind": "observation",
+          "text": "the preview button offers: \"Preview enterprise surface\" — the surface is inherited from the SURFACES tab, not chosen here"
+        },
+        {
+          "kind": "measurement",
+          "text": "PREVIEW after previewing: scrollWidth=1440, clientWidth=1440 (2026-08-26 measured 7745 against 1440 here)"
+        }
+      ],
+      "shots": [
+        "06-preview.png"
+      ],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "publish",
+      "label": "PUBLISH",
+      "checks": [
+        {
+          "name": "PUBLISH: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "PUBLISH: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What does the gate refuse, and what happens when it stops refusing?"
+        },
+        {
+          "name": "PUBLISH: readiness declares itself advisory rather than gating",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "PUBLISH: readiness names its gaps or states it has none",
+          "verdict": "PASS",
+          "detail": "5 gaps, none=false"
+        },
+        {
+          "name": "PUBLISH: the enterprise publication state renders",
+          "verdict": "PASS",
+          "detail": "published (8/25/2026, 5:13:23 PM)"
+        },
+        {
+          "name": "PUBLISH: the gate band renders above the tabs on this tab too",
+          "verdict": "PASS",
+          "detail": "no count rendered"
+        },
+        {
+          "name": "PUBLISH: data-testid=\"cs-action-note\" is not duplicated now the band renders on every tab",
+          "verdict": "PASS",
+          "detail": "1 element(s) carry it"
+        },
+        {
+          "name": "PUBLISH: data-testid=\"cs-action-error\" is not duplicated now the band renders on every tab",
+          "verdict": "PASS",
+          "detail": "0 element(s) carry it"
+        },
+        {
+          "name": "PUBLISH: the approve control is present",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "PUBLISH: the publish control is present",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "PUBLISH: the unpublish control is present",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "PUBLISH: the archive control is present",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "PUBLISH: approve / publish / unpublish / archive the live record",
+          "verdict": "SKIP",
+          "detail": "the pilot is live on the enterprise surface; these are exercised on a throwaway record"
+        }
+      ],
+      "notes": [
+        {
+          "kind": "observation",
+          "text": "readiness gaps: Identity — the hero is missing a standfirst, a summary, or both (-2 of 4)To close: write a | Story completeness — the build timeline has fewer than three entries (-2 of 4)To close: sy | Publication setup — no target surface is declared (-2 of 2)To close: create the publicatio | Publication setup — the declared surface is not publishable in Phase 1 (-1 of 1)To close:  | Publication setup — no approved snapshot exists (-1 of 1)To close: review the draft snapsh"
+        },
+        {
+          "kind": "observation",
+          "text": "the gate currently reports 0 blocker(s) on the publish panel"
+        }
+      ],
+      "shots": [
+        "07-publish.png"
+      ],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "public",
+      "label": "THE PUBLIC PAGE THIS RECORD PUBLISHES TO",
+      "checks": [
+        {
+          "name": "the published story page renders",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "the public page carries the record's headline",
+          "verdict": "PASS",
+          "detail": "Teaching people with no technical background to architect AI systems"
+        },
+        {
+          "name": "the architecture diagram either renders or is absent by design",
+          "verdict": "PASS",
+          "detail": "diagram blocks=1, rendered svg=1, placeholder=0"
+        }
+      ],
+      "notes": [],
+      "shots": [],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [],
+        "consoleWarnings": [],
+        "http4xx": [],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    },
+    {
+      "key": "throwaway",
+      "label": "A THROWAWAY RECORD — the lifecycle acts the live record must not receive",
+      "checks": [
+        {
+          "name": "the review desk loads",
+          "verdict": "PASS",
+          "detail": ""
+        },
+        {
+          "name": "a throwaway candidate can be created from a repository collection",
+          "verdict": "PASS",
+          "detail": "Created ZZ throwaway — Story Studio walkthrough 2026-08-27 13:18 as a draft with 1 repository. Nothing is public until it is approved and pu"
+        },
+        {
+          "name": "the created record can be identified by its own title",
+          "verdict": "PASS",
+          "detail": "id dc87dcfc-dc5a-42ad-a272-3592f63db862"
+        },
+        {
+          "name": "THROWAWAY/STORY: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "THROWAWAY/STORY: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What are we saying, in whose words, and has a human stood behind each sentence?"
+        },
+        {
+          "name": "THROWAWAY/STORY: with no snapshot, no override button is pressable",
+          "verdict": "PASS",
+          "detail": "0 of 3 override buttons are still enabled"
+        },
+        {
+          "name": "THROWAWAY/STORY: the inert override states why it is inert",
+          "verdict": "PASS",
+          "detail": "This candidate has no snapshot, so there is no field to override. Run a sync on the SOURCES tab to build one."
+        },
+        {
+          "name": "apply an override on the throwaway",
+          "verdict": "SKIP",
+          "detail": "the record has no snapshot, so the override is correctly inert — which is the fixed behaviour checked immediately above, not a failure to exercise the control"
+        },
+        {
+          "name": "THROWAWAY/PUBLISH: the tab reports itself selected",
+          "verdict": "PASS",
+          "detail": "aria-selected=true"
+        },
+        {
+          "name": "THROWAWAY/PUBLISH: the tab states the question it answers",
+          "verdict": "PASS",
+          "detail": "What does the gate refuse, and what happens when it stops refusing?"
+        },
+        {
+          "name": "approve is inert while there is no snapshot to approve",
+          "verdict": "PASS",
+          "detail": "the control is disabled rather than offering an action that cannot succeed"
+        },
+        {
+          "name": "the preview endpoint returns a gate decision in the shape this script reads",
+          "verdict": "PASS",
+          "detail": "allowed=false"
+        },
+        {
+          "name": "a refused publish names every reason on screen",
+          "verdict": "PASS",
+          "detail": "2 named reasons; banner: The publish gate refused this record for 2 named reasons. Every one is listed below."
+        },
+        {
+          "name": "the throwaway record is archived, leaving no debris on the desk",
+          "verdict": "PASS",
+          "detail": "status=archived"
+        }
+      ],
+      "notes": [
+        {
+          "kind": "observation",
+          "text": "the gate names 2 refusal(s) for a fresh record: case_study_not_approved, snapshot_not_approved"
+        }
+      ],
+      "shots": [],
+      "diagnostics": {
+        "pageErrors": [],
+        "consoleErrors": [
+          "Failed to load resource: the server responded with a status of 400 ()"
+        ],
+        "consoleWarnings": [],
+        "http4xx": [
+          "400 POST https://enterprise.colaberry.ai/api/admin/case-studies/dc87dcfc-dc5a-42ad-a272-3592f63db862/publish"
+        ],
+        "http5xx": [],
+        "requestFailures": []
+      }
+    }
+  ]
+}

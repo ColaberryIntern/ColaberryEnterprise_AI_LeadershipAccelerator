@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260818-p7n4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, August 18, 2026 at 4:12 PM</div>
+    <div><span class="sid">CC-20260818-p7n4</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Portal points earn smoke: move the daily check off the sandboxed cloud routine onto the production host, deterministically</h2>
+          <span class="badge">2026-08-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Founder received &quot;⚠ Portal points smoke FAILED — 2026-08-18&quot; and asked what it was. Traced it to scheduled cloud routine `portal-points-earn-smoke` (`trig_011HVpH5ZaQywE4xDJMm6cif`, created 2026-07-19, `0 13 * * *`), which has **never produced a single valid result**: its July runs died on `rate_limit: rejected (seven_day)` (1-second runs), and every August run sampled (10th, 12th, 17th, 18th) failed with `curl: (56) CONNECT tunnel failed, response 403` because the CCR sandbox&#39;s egress proxy does not allowlist `enterprise.colaberry.ai`. Not one request ever reached the API, so every alert described the monitor rather than the product, and the points economy went unwatched for a month behind a monitor that looked alive. Compounding it, runs before ~2026-08-14 had only `create_draft` on the Gmail connector, so those failures were parked silently in Drafts and never delivered; the failure rate did not change on the 14th, only the delivery did. The `www.google.com/url?q=…` wrapper visible in the alert is Outlook/Gmail link rewriting at display time, not what the agent curled (the run log shows the clean URL) — no defect there. Fix: replace the sandboxed LLM agent with a deterministic host-cron script, on the box that already serves the API, with no model in the assertion path. New `backend/src/scripts/pointsEarnSmoke.js` (host-cron runner, matching the existing `cron-env-wrapper.sh` + `backend/src/scripts/*.js` pattern used by ~15 other jobs) runs the same checks 2-6 as `tests/systemV2/pointsEarnFlow.e2e.js` at the API level: mint a throwaway `@colaberry-test.local` guest JWT, baseline `GET /api/portal/points`, load `GET /api/portal/classroom`, complete the first available non-gated point-bearing card, and assert both `points_awarded == the card&#39;s rendered badge` and `total rose by exactly that award`. All decision logic is extracted into new pure module `backend/src/scripts/lib/pointsSmokeChecks.js` (`badgeOf`, `selectCandidates`, `evaluateEarn`, `decideAlert`, `nextState`, and the two email formatters) precisely so the part that says &quot;the points economy is broken&quot; is the part CI exercises — the property the predecessor lacked. Failure-First: every request has a hard `AbortController` timeout (default 20s); transport-only retries capped at 2 with fixed 2s backoff on network error/429/5xx; the card-completion POST is explicitly **never** retried because it is the one call with a side effect and a retry could double-award; a harness crash still alerts and exits 2 rather than dying quietly. Alert policy is deterministic and idempotent: passing runs send nothing (no-noise rule), a failing run sends at most ONE email per UTC day keyed on `(date, kind)` in an atomically-written state file, and the first pass after a failure sends exactly one &quot;back to green&quot; notice so silence always means green rather than &quot;the monitor died again&quot;. Structured JSON logs with a per-run `correlation_id` and stable `error_class` values (`TimeoutError`, `UpstreamUnavailable`, `ContractViolation`, `HarnessError`, `AlertSendError`) to stdout, per the Observability Framework.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**22 new unit tests, all passing** (`npx jest src/scripts/lib/__tests__/pointsSmokeChecks.test.js` → `Tests: 22 passed, 22 total`), covering the four mandatory shapes: happy path, failure path (badge mismatch, accrual mismatch, and both reported together rather than stopping at the first), boundary cases (empty/absent/malformed feed, missing point buckets, zero-point and gated cards, non-zero baseline), and the idempotency contract (a second failing run on the same UTC day is deduped; the next day alerts again). Suite is collected by the existing CI gate — `backend/jest.config.ts` already matches `**/__tests__/**/*.test.js`. **BUILD-BREAK-HARDEN run against live production**, all five paths executed and recorded: (1) real run `PASS — awarded 10 == badge 10 [warmup]; total 0 -&gt; 10`, exit 0, `alert_sent:false`, 23 cards / 3 candidates, 8.2s; (2) forced-broken endpoint → `FAIL — check(s) 2`, exit 1, `alert_reason:&quot;first failure alert for this UTC day&quot;`, state file written; (3) immediate re-run → `alert_sent:false`, `alert_reason:&quot;failure already alerted today (dedup)&quot;`; (4) recovery → `alert_reason:&quot;transition fail -&gt; pass&quot;` once, and the run after it silent (`&quot;healthy, no-noise rule&quot;`); (5) `POINTS_SMOKE_TIMEOUT_MS=1` → three capped attempts (0,1,2) each logged `error_class:&quot;TimeoutError&quot;`, then exit 2 with an alert rather than a silent hang. Break runs used a scratch state path and no Mandrill key, so no mail was sent. CI guards run locally green: `node scripts/secret-scan.js` → `OK — scanned 4204 tracked files, no secrets found`; `node scripts/lint-route-auth.js` → `OK — all 91 admin route files are auth-guarded`. Independently of the script, the founder&#39;s actual question was answered by running all six checks by hand against production first: signup 201, points 200, feed 23 cards, completion 200 awarding 10 == badge 10, total 0 → 10 — the app was healthy the whole time the monitor was red.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Read-only checks aside, each run&#39;s real footprint on prod is one throwaway `@colaberry-test.local` guest plus one card completion for that guest, which is the same sanctioned daily footprint the cloud routine was authorised for; guests are unique per run so a re-run cannot corrupt earlier state or double-award anyone. Not handled by this monitor, stated explicitly: a semantically wrong but internally consistent award (if the API awards 10 and the badge also says 10, both being wrong is invisible here) and anything about the browser HUD, which stays with the Playwright e2e. Host crontab installation and disabling the cloud routine are recorded in the follow-up entry below.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Deployment record for the points earn smoke test above: host cron installed, dead cloud routine retired</h2>
+          <span class="badge">2026-08-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">No new application code — this is the deploy/verification record. **PR #1585** merged via `gh pr merge --admin --squash`, merge commit `baa86fe5`, previous prod SHA `f7c3768f`. This is a host-script change only (`backend/src/scripts/*.js` runs from source under `cron-env-wrapper.sh`), so **no container rebuild was performed and no service was restarted** — `git pull origin main` on the host is the entire release for this job, which also removed any exposure to the concurrent-deploy race and the shared-Postgres OOM cascade this repo has hit before. Pre-flight on the host confirmed no `docker compose … up` was running, `node v20.20.0` present, and `nodemailer` resolvable from `backend/src/scripts/` (the alert path&#39;s only dependency) before anything was changed. Crontab line installed idempotently (guarded on `grep -q pointsEarnSmoke.js`, so re-running the installer is a no-op) after backing up the existing crontab to `/root/crontab.backup.2026-08-18-points-smoke`: `30 13 * * * /opt/colaberry-accelerator/scripts/cron-env-wrapper.sh /opt/colaberry-accelerator/backend/src/scripts/pointsEarnSmoke.js &gt;&gt; /var/log/points-earn-smoke.log 2&gt;&amp;1` — 13:30 UTC / 08:30 CT, deliberately off the crowded `0 13` slot that already holds three jobs; crontab went 66 lines to 67 with the new line at 67 and every prior line intact. The old cloud routine `trig_011HVpH5ZaQywE4xDJMm6cif` was set `enabled: false` and renamed to `portal-points-earn-smoke (RETIRED 2026-08-18 — replaced by host cron pointsEarnSmoke.js)`, so its 08:00 CT false alarm does not fire again and anyone opening the routines list sees why it is off rather than re-enabling it. It is disabled rather than deleted because the API exposes no delete; deletion is a manual step at https://claude.ai/code/routines if wanted.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**All 6 CI checks green on PR #1585** (Backend typecheck, Frontend typecheck, Frontend build, Backend unit tests, Secret scan + route-auth lint, Static security scan — run `32185093981`). Notably &quot;Backend unit tests&quot; passed cleanly here, including this PR&#39;s own 22 new tests; the `watcherRun.test.ts` failure that the two prior sessions on 2026-08-18 had to justify as pre-existing did not recur on this base. **Live on the production host, after the pull:** `HEAD == origin/main == baa86fe5` confirmed by direct comparison (not assumed from the pull&#39;s exit code); both new files present with fresh timestamps. Ran the script on the host through the real `cron-env-wrapper.sh` twice — once `--dry` and once as the **exact crontab command**, byte-for-byte. Result both times: `PASS — awarded 10 == badge 10 [warmup]; total 0 -&gt; 10`, exit 0, `alert_sent:false`, `alert_reason:&quot;healthy, no-noise rule&quot;`, 23 cards / 3 candidates, 3.6s wall clock on the host versus 8.2s from a developer machine. The real run proved the three things a dry run cannot: `/var/log/points-earn-smoke.log` is created and written (2,234 bytes, structured JSON plus the PASS line), the state file `/opt/colaberry-accelerator/tmp/points-smoke-state.json` is written atomically (`{&quot;status&quot;:&quot;pass&quot;,&quot;lastRunDate&quot;:&quot;2026-08-18&quot;,&quot;lastAlertDate&quot;:null,&quot;lastAlertKind&quot;:null}`), and **zero `alert_skipped_no_mandrill_key` lines appear in the log**, which is the evidence that the wrapper really did supply `MANDRILL_API_KEY` and that a genuine failure would therefore have actually mailed rather than silently no-op&#39;ing. That last check is deliberate: a monitor that would fail to send is exactly the defect this whole change exists to remove, and &quot;the happy path passed&quot; would not have caught it. Routine disable confirmed by the API response (`&quot;enabled&quot;: false`).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Next scheduled fire is 2026-08-19 13:30 UTC; a passing run is silent by design, so the first expected signal is either an email or nothing. To confirm it fired, read `/var/log/points-earn-smoke.log`. The retired routine&#39;s `next_run_at` field still shows a timestamp in the API response, which is a display artifact of a disabled routine and not a pending fire. One residual gap, not addressed here and not caused by this change: the sandbox egress policy that blocked the old routine still blocks `enterprise.colaberry.ai` for every CCR cloud session, so any future scheduled cloud agent that needs to reach production will fail the same way — the durable lesson is that production-reaching checks belong on the production host, not in a sandbox.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260818-p7n4</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import portalApi from '../../utils/portalApi';
 import { useMentorContext } from '../../contexts/MentorContext';
 import { buildFinalPrompt } from '../../services/promptBuilder';
+import { CorySpark, CoryAvatar } from './CoryMark';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -9,25 +10,8 @@ interface Message {
   timestamp?: string;
 }
 
-/* AI Mentor avatar — circular photo used for FAB and message avatars */
-const MentorFace = ({ size = 40 }: { size?: number }) => (
-  <img
-    src="/ai-mentor-avatar.png"
-    alt="AI Mentor"
-    width={size}
-    height={size}
-    style={{ borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-  />
-);
-
-const MentorAvatar = ({ size = 28 }: { size?: number }) => (
-  <div
-    className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-    style={{ width: size, height: size, overflow: 'hidden' }}
-  >
-    <MentorFace size={size} />
-  </div>
-);
+/* Cory's spark mark + avatar live in ./CoryMark — faceless and genderless per
+   the locked persona. No photo, no depicted person. */
 
 /* Simple markdown renderer for mentor responses */
 function renderMarkdown(text: string): React.ReactNode[] {
@@ -56,7 +40,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (numMatch) {
       elements.push(
         <div key={i} className="d-flex gap-2 mb-1" style={{ fontSize: 12 }}>
-          <span className="flex-shrink-0" style={{ color: '#6366f1', fontWeight: 600, minWidth: 16 }}>{numMatch[1]}.</span>
+          <span className="flex-shrink-0" style={{ color: '#FB2832', fontWeight: 600, minWidth: 16 }}>{numMatch[1]}.</span>
           <span>{renderInline(numMatch[2])}</span>
         </div>
       );
@@ -68,7 +52,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (bulletMatch) {
       elements.push(
         <div key={i} className="d-flex gap-2 mb-1" style={{ fontSize: 12 }}>
-          <span style={{ color: '#6366f1', marginTop: 2 }}>&bull;</span>
+          <span style={{ color: '#FB2832', marginTop: 2 }}>&bull;</span>
           <span>{renderInline(bulletMatch[1])}</span>
         </div>
       );
@@ -289,7 +273,7 @@ function PortalMentorChat() {
           {/* Header */}
           <div
             style={{
-              background: isFullscreen ? '#fff' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              background: isFullscreen ? '#fff' : 'linear-gradient(135deg, #FB2832 0%, #367895 100%)',
               padding: isFullscreen ? '10px 20px' : '12px 16px',
               color: isFullscreen ? '#1e293b' : '#fff',
               borderBottom: isFullscreen ? '1px solid #e5e7eb' : 'none',
@@ -297,14 +281,9 @@ function PortalMentorChat() {
           >
             <div className="d-flex align-items-center justify-content-between mb-2">
               <div className="d-flex align-items-center gap-2">
-                <div
-                  className="d-flex align-items-center justify-content-center rounded-circle"
-                  style={{ width: 32, height: 32, background: isFullscreen ? '#eef2ff' : 'rgba(255,255,255,0.25)', overflow: 'hidden' }}
-                >
-                  <MentorFace size={32} />
-                </div>
+                <CoryAvatar size={32} />
                 <div>
-                  <div className="fw-semibold" style={{ fontSize: 13 }}>AI Mentor</div>
+                  <div className="fw-semibold" style={{ fontSize: 13 }}>Cory</div>
                   {!isFullscreen && (
                     <div style={{ fontSize: 10, opacity: 0.8 }}>
                       {lessonContext.lessonTitle || 'General guidance'}
@@ -379,10 +358,10 @@ function PortalMentorChat() {
             {messages.length === 0 && (
               <div className={isFullscreen ? 'd-flex flex-column align-items-center justify-content-center' : 'text-center py-3'} style={isFullscreen ? { minHeight: '50vh' } : {}}>
                 <div className="d-inline-block mb-3">
-                  <MentorFace size={isFullscreen ? 72 : 48} />
+                  <CoryAvatar size={isFullscreen ? 72 : 48} />
                 </div>
                 <h4 className={`fw-semibold ${isFullscreen ? 'mb-2' : 'small mb-1'}`} style={{ color: '#1e293b', fontSize: isFullscreen ? 22 : undefined }}>
-                  {isFullscreen ? 'What can I help you with?' : 'Hi! I\'m your AI Mentor.'}
+                  {isFullscreen ? 'What can I help you with?' : 'Hi! I\'m Cory, your mentor.'}
                 </h4>
                 <p className="text-muted mb-4" style={{ fontSize: isFullscreen ? 14 : 12, maxWidth: isFullscreen ? 480 : undefined }}>
                   {isFullscreen
@@ -429,7 +408,7 @@ function PortalMentorChat() {
               >
                 {msg.role === 'assistant' && (
                   <div className="me-2" style={{ marginTop: 2 }}>
-                    <MentorAvatar size={isFullscreen ? 32 : 24} />
+                    <CoryAvatar size={isFullscreen ? 32 : 24} />
                   </div>
                 )}
                 <div
@@ -439,7 +418,7 @@ function PortalMentorChat() {
                     borderRadius: isFullscreen
                       ? (msg.role === 'user' ? 20 : 0)
                       : (msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px'),
-                    background: msg.role === 'user' ? '#6366f1' : (isFullscreen ? 'transparent' : '#fff'),
+                    background: msg.role === 'user' ? '#FB2832' : (isFullscreen ? 'transparent' : '#fff'),
                     color: msg.role === 'user' ? '#fff' : '#334155',
                     fontSize: isFullscreen ? 14 : 12,
                     lineHeight: 1.7,
@@ -455,7 +434,7 @@ function PortalMentorChat() {
 
             {sending && (
               <div className="d-flex align-items-center gap-2 mb-3">
-                <MentorAvatar size={24} />
+                <CoryAvatar size={24} />
                 <div
                   style={{
                     padding: '8px 12px',
@@ -465,9 +444,9 @@ function PortalMentorChat() {
                   }}
                 >
                   <div className="d-flex gap-1">
-                    <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#6366f1' }} role="status"><span className="visually-hidden">Loading...</span></span>
-                    <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#6366f1', animationDelay: '0.15s' }}></span>
-                    <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#6366f1', animationDelay: '0.3s' }}></span>
+                    <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#FB2832' }} role="status"><span className="visually-hidden">Loading...</span></span>
+                    <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#FB2832', animationDelay: '0.15s' }}></span>
+                    <span className="spinner-grow spinner-grow-sm" style={{ width: 6, height: 6, color: '#FB2832', animationDelay: '0.3s' }}></span>
                   </div>
                 </div>
               </div>
@@ -536,12 +515,12 @@ function PortalMentorChat() {
                       key={i}
                       className="btn btn-sm"
                       style={{
-                        background: '#eef2ff',
-                        color: '#6366f1',
+                        background: 'rgba(251,40,50,0.08)',
+                        color: '#FB2832',
                         borderRadius: 12,
                         fontSize: 10,
                         padding: '3px 8px',
-                        border: '1px solid #c7d2fe',
+                        border: '1px solid rgba(251,40,50,0.25)',
                       }}
                       onClick={() => sendMessage(prompt)}
                       disabled={sending}
@@ -576,7 +555,7 @@ function PortalMentorChat() {
                 ref={inputRef}
                 className="form-control"
                 rows={isFullscreen ? 2 : 1}
-                placeholder="Ask your mentor..."
+                placeholder="Ask Cory..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -598,7 +577,7 @@ function PortalMentorChat() {
                   width: isFullscreen ? 42 : 34,
                   height: isFullscreen ? 42 : 34,
                   borderRadius: isFullscreen ? 12 : 8,
-                  background: input.trim() ? '#6366f1' : '#e2e8f0',
+                  background: input.trim() ? '#FB2832' : '#e2e8f0',
                   color: input.trim() ? '#fff' : '#94a3b8',
                   display: 'flex',
                   alignItems: 'center',
@@ -616,10 +595,10 @@ function PortalMentorChat() {
         </div>
       )}
 
-      {/* Floating Button — Mentor face */}
+      {/* Floating Button — Cory */}
       <button
         onClick={toggleOpen}
-        aria-label={isMentorOpen ? 'Close mentor chat' : 'Open AI Mentor'}
+        aria-label={isMentorOpen ? 'Close mentor chat' : 'Open Cory'}
         style={{
           position: 'fixed',
           bottom: 20,
@@ -627,7 +606,7 @@ function PortalMentorChat() {
           width: 60,
           height: 60,
           borderRadius: '50%',
-          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+          background: 'linear-gradient(135deg, #FB2832 0%, #367895 100%)',
           color: '#fff',
           border: '3px solid #fff',
           boxShadow: '0 4px 20px rgba(99,102,241,0.45)',
@@ -647,7 +626,7 @@ function PortalMentorChat() {
           <i className="bi bi-x-lg" style={{ fontSize: 22 }}></i>
         ) : (
           <>
-            <MentorFace size={54} />
+            <CorySpark size={30} color="#fff" />
             {hasNewMessage && (
               <span
                 style={{

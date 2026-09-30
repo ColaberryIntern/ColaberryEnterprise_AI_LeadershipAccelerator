@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today Timeline v2 — Plan</title>
+<style>
+  :root{
+    --ink:#0f172a; --ink-soft:#334155; --muted:#64748b; --line:#e2e8f0;
+    --bg:#f8fafc; --card:#ffffff; --brand:#1e40af; --brand-soft:#eff6ff;
+    --accent:#0891b2; --good:#047857; --good-bg:#ecfdf5; --warn:#b45309; --warn-bg:#fffbeb;
+    --gap:#b91c1c; --gap-bg:#fef2f2;
+    --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:900px;margin:0 auto;padding:0 24px 96px}
+  header.hero{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;padding:48px 0 40px;margin-bottom:40px;border-bottom:4px solid var(--accent)}
+  header.hero .wrap{padding-bottom:0}
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#93c5fd;font-weight:700;margin:0 0 10px}
+  h1{font-size:34px;line-height:1.18;margin:0 0 16px;font-weight:800;letter-spacing:-.02em}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .badge{display:inline-block;font-size:12px;font-weight:600;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.12);color:#e0e7ff;border:1px solid rgba(255,255,255,.18)}
+  .badge.plan{background:#fbbf24;color:#422006;border-color:#fbbf24}
+  h2{font-size:23px;margin:52px 0 6px;font-weight:800;letter-spacing:-.01em;padding-top:14px;border-top:1px solid var(--line)}
+  h2 .n{color:var(--brand);font-variant-numeric:tabular-nums;margin-right:10px}
+  h3{font-size:16px;margin:26px 0 6px;font-weight:700;color:var(--ink-soft)}
+  p{margin:12px 0}
+  .lead{font-size:17px;color:var(--ink-soft)}
+  strong{color:var(--ink);font-weight:700}
+  code{font-family:var(--mono);font-size:.88em;background:#f1f5f9;padding:2px 6px;border-radius:5px;color:#0f172a;border:1px solid var(--line)}
+  ul{margin:12px 0;padding-left:22px}
+  li{margin:7px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:20px 0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .callout{border-left:4px solid var(--brand);background:var(--brand-soft);padding:16px 20px;border-radius:0 12px 12px 0;margin:20px 0}
+  .callout.good{border-color:var(--good);background:var(--good-bg)}
+  .callout.warn{border-color:var(--warn);background:var(--warn-bg)}
+  .callout .t{font-weight:700;margin:0 0 4px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.5px}
+  th,td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f1f5f9;font-weight:700;font-size:12.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  td .st{font-weight:700}
+  .yes{color:var(--good)} .no{color:var(--gap)} .part{color:var(--warn)}
+  pre.diagram{font-family:var(--mono);font-size:12.5px;line-height:1.5;background:#0f172a;color:#cbd5e1;padding:20px;border-radius:12px;overflow-x:auto;margin:20px 0}
+  pre.code{font-family:var(--mono);font-size:13px;line-height:1.55;background:#0f172a;color:#e2e8f0;padding:18px 20px;border-radius:12px;overflow-x:auto;margin:16px 0}
+  pre.code .c{color:#64748b}
+  .pill{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;padding:2px 9px;border-radius:6px;margin:2px 2px}
+  .pill.today{background:#ede9fe;color:#5b21b6} .pill.class{background:#dbeafe;color:#1e40af}
+  .pill.project{background:#d1fae5;color:#065f46} .pill.comm{background:#fce7f3;color:#9d174d}
+  .pill.group{background:#fef3c7;color:#92400e} .pill.ambient{background:#cffafe;color:#155e75}
+  .phase{display:flex;gap:16px;align-items:flex-start;padding:16px 0;border-bottom:1px solid var(--line)}
+  .phase:last-child{border-bottom:none}
+  .phase .num{flex:none;width:38px;height:38px;border-radius:10px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px}
+  .phase.star .num{background:#f59e0b}
+  .phase .body h4{margin:0 0 4px;font-size:15.5px}
+  .phase .body p{margin:0;color:var(--ink-soft);font-size:14.5px}
+  .decision{background:#fff;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:0 12px 12px 0;padding:14px 18px;margin:14px 0}
+  .decision .q{font-weight:700}
+  .footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px}
+  .tag{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Learner Platform · Engagement Architecture</p>
+    <h1>Today Timeline v2 — Endless Engagement Feed<br>+ Surface Placement Model</h1>
+    <p class="lead" style="color:#dbeafe;max-width:680px">A never-ending, FB-style scroll of AI content that keeps free and paid users engaged even outside learning mode — and a clean answer to <em>"where does this card belong?"</em> so content routes itself.</p>
+    <div class="meta">
+      <span class="badge plan">STATUS: PLAN — awaiting approval</span>
+      <span class="badge">Session CC-20260719-p4k7</span>
+      <span class="badge">2026-07-19</span>
+      <span class="badge">Target: workstream/today-timeline-v2 off main</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="callout">
+    <p class="t">The scope, in one line</p>
+    <p style="margin:0">Ship the <strong>engagement engine first</strong> (infinite scroll + rotation + interact-to-hide), on top of a <strong>Surface structure</strong> that makes adding future content types — external AI feeds, community, groups — a <strong>drop-in</strong>, not a re-architecture.</p>
+  </div>
+
+  <h2><span class="n">1</span>The one idea that makes it all work</h2>
+  <p>Give every card <strong>two axes instead of one</strong>:</p>
+  <div class="card">
+    <p style="margin-top:0"><strong>Type</strong> = <em>what it is</em> (blog, lesson, project task). You already have this — the 36-type registry.</p>
+    <p style="margin-bottom:0"><strong>Surface</strong> = <em>where it belongs</em> <span class="pill today">today</span><span class="pill class">class</span><span class="pill project">project</span><span class="pill comm">community</span><span class="pill group">group</span> — the new dimension, declared at the <strong>curriculum-type level</strong> so new types inherit it automatically.</p>
+  </div>
+
+  <h2><span class="n">2</span>The one-way valve</h2>
+  <p>This enforces your "<strong>not the other way around</strong>" rule structurally:</p>
+  <pre class="diagram">                 ┌───────────────────────────────────────────────┐
+   TODAY  ◄───────┤  Class    Project    Community    Group          │   anchored, today_eligible=true
+   (aggregator)   └───────────────────────────────────────────────┘    → mirrored INTO Today
+
+   TODAY  ◄─────────  Blog   Podcast   Testimonial   (future: Article)     ambient, home = today
+                                                                            → Today-ONLY, rotated
+
+   Class / Project / Community / Group  ◄──  only their OWN cards.
+                                             Never ambient. Never each other's.</pre>
+  <ul>
+    <li><strong>Today aggregates everything</strong> eligible: all ambient cards (rotated) <strong>plus</strong> anchored cards flagged <code>today_eligible</code>.</li>
+    <li><strong>Anchored surfaces stay pure</strong> — a Class shows only class cards; a Project shows only its tasks. Enforced in typed code, not convention.</li>
+    <li><strong>Ambient is Today-only</strong> — blog / podcast / testimonial can <em>only</em> live in a timeline. Structurally impossible elsewhere.</li>
+  </ul>
+
+  <h2><span class="n">3</span>Where you stand today (on <code>main</code>)</h2>
+  <p>The Timeline Engine is real and ~70% of the way there. These three requirements are exactly the gaps:</p>
+  <table>
+    <thead><tr><th style="width:34%">Requirement</th><th style="width:40%">Today</th><th>Gap</th></tr></thead>
+    <tbody>
+      <tr><td>A <strong>"where the card fits"</strong> category</td><td>Cards have <code>type</code> + <code>bucket</code> (learning phase). Audience = <code>cohort_id</code>/<code>program_id</code> only.</td><td><span class="st no">✗</span> No Surface dimension. No project/community/group linkage.</td></tr>
+      <tr><td><strong>Directional aggregation</strong></td><td><code>getFeed</code> lists one cohort's curriculum.</td><td><span class="st no">✗</span> No aggregation, no one-way valve.</td></tr>
+      <tr><td><strong>Never-ending timeline</strong></td><td><code>getFeed</code> returns a finite list, no cursor.</td><td><span class="st no">✗</span> Not infinite scroll.</td></tr>
+      <tr><td><strong>Rotation + alternation + interact-to-hide</strong></td><td>Per-<em>media-item</em> dedup exists inside the pickers.</td><td><span class="st part">⚠</span> No card-level hide-on-interaction, no alternation, no cadence, no bottomless paging. Testimonials also lack a refresh cron.</td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="n">4</span>Proposed type classification</h2>
+  <p>Reversible product call — proposed defaults, set in <code>typeRegistry.ts</code>. ⚑ = wants your eye.</p>
+  <table>
+    <thead><tr><th style="width:30%">Surface · mode</th><th>Types</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill today">today</span><span class="pill ambient">ambient</span></td><td><code>blog</code> · <code>podcast</code> · <code>testimonial</code> · <code>video</code>⚑ · future <code>article</code></td></tr>
+      <tr><td><span class="pill today">today</span> system</td><td><code>milestone</code> · <code>achievement</code> · <code>daily_streak</code> · <code>completion_badge</code></td></tr>
+      <tr><td><span class="pill today">today</span> anchored</td><td><code>announcement</code>⚑ (broadcast)</td></tr>
+      <tr><td><span class="pill class">class</span> anchored</td><td><code>overview</code> · <code>warmup</code> · <code>knowledge_check</code> · <code>survey</code> · <code>prompt_lab</code> · <code>deep_dive</code> · <code>prompt_challenge</code> · <code>ai_video_feedback</code> · <code>mock_interview</code> · <code>anthropic_skills_jar</code> · <code>certification_exercise</code> · <code>evaluation</code> · <code>question</code> · <code>reflection</code> · <code>study_session</code> · <code>presentation</code> · <code>internship_activity</code></td></tr>
+      <tr><td><span class="pill project">project</span> anchored</td><td><code>implementation_task</code> · <code>artifact_submission</code> · <code>project_task</code> · <code>build_story</code> · <code>github_sync</code></td></tr>
+      <tr><td><span class="pill comm">community</span> anchored (stubbed)</td><td><code>discussion</code> · <code>community_discussion</code> · <code>demo</code></td></tr>
+      <tr><td><span class="pill group">group</span> anchored (stubbed)</td><td><code>live_class</code> · <code>event</code> · <code>demo_tuesday</code> · <code>kes_wednesday</code> · <code>marketing_friday</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2><span class="n">5</span>The engagement engine (ships first)</h2>
+  <p>A new <strong>Today Feed Composer</strong> produces a bottomless, per-user stream.</p>
+  <div class="card">
+    <h3 style="margin-top:0">Cursor pagination → infinite scroll</h3>
+    <p>Anchored cards are finite and exhaust; ambient cards are bottomless. When class work runs out, the feed goes pure-ambient and never ends. A per-user <strong>feed seed + cursor</strong> makes every page reproducible — scroll up/down or refresh gives the same feed, no dupes (also satisfies the repo idempotency gate).</p>
+    <h3>Rotation, alternation & cadence</h3>
+    <p>Reuse the existing pickers (unseen → least-recently-seen → tag-match). <strong>No two same-type ambient cards in a row</strong>; round-robin blog → podcast → testimonial, weighted by pool depth. Ambient injected every N slots between anchored cards; pure ambient once anchored is spent.</p>
+    <h3>Interact-to-hide + card-level dedup <span class="tag">(the missing piece)</span></h3>
+    <p>Open / click / dismiss a card → it's retired and a <strong>fresh</strong> one takes its slot; it won't reappear until the whole pool is exhausted. This is the "show/hide so no duplicates" behavior you described — the one part genuinely absent today.</p>
+  </div>
+
+  <div class="callout good">
+    <p class="t">The extension point (why "structure first" pays off)</p>
+    <p style="margin:0">Standardize blog/podcast/testimonial behind one <code>AmbientProvider</code> interface. Adding your <strong>external AI feed later</strong> = ingest a pool + implement that interface + set <code>home_surface=today, feed_mode=ambient</code>. The composer picks it up automatically — no re-architecture.</p>
+  </div>
+  <pre class="code"><span class="c">// new ambient types plug in without touching the composer</span>
+interface AmbientProvider {
+  slug: string;                                  <span class="c">// 'blog' | 'podcast' | 'article' ...</span>
+  pickNext(enrollmentId, ctx): AmbientItem | null;  <span class="c">// exists today</span>
+  recordSeen(enrollmentId, item, cardId): void;     <span class="c">// *_views UPSERT (exists)</span>
+  recordInteraction(enrollmentId, item, action): void; <span class="c">// interact-to-hide (new)</span>
+  poolDepth(enrollmentId): number;                  <span class="c">// alternation weighting</span>
+}</pre>
+
+  <h2><span class="n">6</span>Data model changes <span class="tag" style="font-size:13px">— additive, low-risk</span></h2>
+  <ul>
+    <li><strong><code>curriculum_type_definitions</code></strong> + registry: add <code>home_surface</code>, <code>feed_mode</code>, <code>today_eligible</code>. Seeded idempotently from the registry.</li>
+    <li><strong><code>timeline_cards</code></strong>: generic <code>home_kind</code> + <code>home_id</code> (locates project/community/group homes — the <strong>stub</strong> for those surfaces) and <code>surface_override</code> for per-card exceptions.</li>
+    <li><strong>New <code>today_feed_impressions</code></strong>: powers card-level interact-to-hide + stable pagination.</li>
+    <li>Add a <code>dismiss</code> action + generic "interacted" signal for ambient cards.</li>
+  </ul>
+  <p>All additive columns/tables with defaults → no migration risk. Each new table gets an <code>ensure*Schema()</code> hook.</p>
+
+  <h2><span class="n">7</span>Phasing</h2>
+  <div class="card">
+    <div class="phase"><div class="num">0</div><div class="body"><h4>Structure (thin)</h4><p>Surface fields on registry + <code>curriculum_type_definitions</code>; classify all 36 types; standardize the 3 providers behind <code>AmbientProvider</code>; add the missing testimonial refresh cron. Flag off — no behavior change.</p></div></div>
+    <div class="phase star"><div class="num">1</div><div class="body"><h4>Engagement engine ⭐ <span class="tag">the payoff</span></h4><p>Today Feed Composer: cursor pagination, rotation, alternation, cadence, interact-to-hide, deterministic seed; new endpoints; infinite-scroll Today (flag-gated); full BREAK/HARDEN.</p></div></div>
+    <div class="phase"><div class="num">2</div><div class="body"><h4>Directional aggregation</h4><p>Mirror anchored Class/Project cards into Today (relevance + dedup vs home); enforce the one-way valve; wire <code>home_kind='project'</code>.</p></div></div>
+    <div class="phase"><div class="num">3</div><div class="body"><h4>Extensibility hardening</h4><p>Update the <code>build-curriculum-type</code> skill so a new type declares its surface + (if ambient) a provider. Document the drop-in path.</p></div></div>
+    <div class="phase"><div class="num">→</div><div class="body"><h4>Future — you build later</h4><p>External-AI-feed curriculum type (as an ambient provider); Community + Groups entities to populate the stubbed surfaces.</p></div></div>
+  </div>
+
+  <h2><span class="n">8</span>Two things to confirm before I build</h2>
+  <div class="decision"><p class="q">1. Which "Today"?</p><p style="margin:0">Assuming the <strong>learner Timeline Engine feed</strong> (<code>getFeed</code>) — the FB-style content scroll — <em>not</em> the <code>CoryHome</code> project build-queue (a separate "one priority" surface that explicitly says "Not a feed"). Correct?</p></div>
+  <div class="decision"><p class="q">2. Free vs paid?</p><p style="margin:0">Assuming ambient content = everyone (the retention hook); anchored Class/Project = enrolled. OK?</p></div>
+
+  <div class="callout warn">
+    <p class="t">Branch note</p>
+    <p style="margin:0">The Timeline Engine lives on <code>main</code>, not the current branch (<code>workstream/chapter-quality-and-worker</code> has the legacy model). This work branches fresh off <code>main</code> as <code>workstream/today-timeline-v2</code>.</p>
+  </div>
+
+  <div class="footer">
+    <p><strong>Your move:</strong> (a) proceed to build Phase 0 → 1 off <code>main</code>, (b) run this through <code>story-build</code> to make it an assignable Basecamp plan, or (c) adjust classification / scope first. Doc not yet committed — I'll log it to PROGRESS.md and commit on your word.</p>
+    <p class="tag">Source: docs/TODAY_TIMELINE_V2_PLAN.md · Prepared by Claude Code · Session CC-20260719-p4k7</p>
+  </div>
+
+</div>
+</body>
+</html>

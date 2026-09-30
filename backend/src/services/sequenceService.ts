@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { FollowUpSequence, ScheduledEmail, Lead, Campaign, CampaignLead, StrategyCall, Enrollment, Cohort } from '../models';
 import type { SequenceStep } from '../models/FollowUpSequence';
 import type { CampaignChannel } from '../models/ScheduledEmail';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /* ------------------------------------------------------------------ */
 /*  Sequence Step Timing Validation                                    */
@@ -408,7 +409,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
       order: [['created_at', 'DESC']],
     });
     if (!enrollment || !(enrollment as any).cohort?.start_date) {
-      console.warn(`[Sequence] Cohort T-minus: no unpaid enrollment with cohort found for lead ${leadId} (${lead.email})`);
+      console.warn(`[Sequence] Cohort T-minus: no unpaid enrollment with cohort found for lead ${leadId} (${redactForLogs(lead.email)})`);
       // Fall through to delay_days=0 scheduling (all immediate) — degraded but non-breaking
     } else {
       const cohort = (enrollment as any).cohort;

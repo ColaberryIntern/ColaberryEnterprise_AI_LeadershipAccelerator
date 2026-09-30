@@ -55,7 +55,7 @@ export default function IntelWaterfallChart({ data, config }: IntelWaterfallChar
             borderRadius: 6,
             fontSize: 12,
           }}
-          formatter={(value: any, name?: string) => {
+          formatter={(value: any, name?: any) => {
             if (name === 'start') return ['', ''];
             return [value, 'Value'];
           }}

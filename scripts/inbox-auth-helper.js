@@ -22,6 +22,11 @@ const PORT = 9876;
 
 const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.modify'];
 
+// Single shared callback path so both colaberry + personal flows reuse the
+// redirect URI already registered in Google Cloud Console. The `account`
+// is passed via the OAuth `state` parameter and recovered in the callback.
+const GMAIL_CALLBACK_PATH = '/gmail/callback';
+
 function buildGmailClient(account) {
   const clientId = account === 'colaberry'
     ? (process.env.GMAIL_CLIENT_ID || process.env.GMAIL_COS_CLIENT_ID)
@@ -35,7 +40,7 @@ function buildGmailClient(account) {
   return new google.auth.OAuth2(
     clientId,
     clientSecret,
-    `http://localhost:${PORT}/gmail/${account}/callback`
+    `http://localhost:${PORT}${GMAIL_CALLBACK_PATH}`
   );
 }
 
@@ -55,12 +60,14 @@ app.get('/', (req, res) => {
     scope: GMAIL_SCOPES,
     prompt: 'consent',
     login_hint: 'ali@colaberry.com',
+    state: 'colaberry',
   });
   const personalUrl = personal && personal.generateAuthUrl({
     access_type: 'offline',
     scope: GMAIL_SCOPES,
     prompt: 'consent',
     login_hint: 'alimuwwakkil@gmail.com',
+    state: 'personal',
   });
 
   const msUrl = MS_CLIENT_ID
@@ -126,8 +133,10 @@ async function handleGmailCallback(account, req, res) {
   }
 }
 
-app.get('/gmail/colaberry/callback', (req, res) => handleGmailCallback('colaberry', req, res));
-app.get('/gmail/personal/callback',  (req, res) => handleGmailCallback('personal',  req, res));
+app.get(GMAIL_CALLBACK_PATH, (req, res) => {
+  const account = req.query.state === 'personal' ? 'personal' : 'colaberry';
+  return handleGmailCallback(account, req, res);
+});
 
 app.get('/hotmail/callback', async (req, res) => {
   const code = req.query.code;

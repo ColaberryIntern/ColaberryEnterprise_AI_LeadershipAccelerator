@@ -1,6 +1,8 @@
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 
-const SYSTEM_TYPES = [
+// Exported so seedComponentAuthoring's thumbnail contract test can treat these
+// legacy pre-registry slugs as valid authoring targets.
+export const SYSTEM_TYPES = [
   {
     slug: 'executive_reality_check',
     label: 'Executive Reality Check',

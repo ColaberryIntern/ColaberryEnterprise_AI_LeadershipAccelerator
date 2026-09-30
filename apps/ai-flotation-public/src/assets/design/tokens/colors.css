@@ -1,0 +1,56 @@
+/* AI Flotation color tokens. Source of truth: tokens/ai-flotation.json (Multi-Brand Tokens project).
+   Default = Option A "Forge". [data-variant="harbor"] = Option B. [data-theme="dark"] on <html> for dark mode.
+   All five AA pairs guaranteed in both modes (measured ratios in source exports/). */
+:root {
+  --system-id: "ai-flotation-a"; /* @kind other */
+  --bg: #F7F6F4;
+  --bg-elevated: #FFFFFF;
+  --fg: #1A1917;
+  --fg-muted: #56524B;
+  --accent: #BA430E;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: #FBE4D5;
+  --line: #DEDAD3;
+  --success: #1F7A3D;
+  --warning: #8F6400;
+  --danger: #BB3131;
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  --accent-press: color-mix(in srgb, var(--accent) 78%, #000);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+[data-theme="dark"] {
+  --bg: #121110;
+  --bg-elevated: #1C1A18;
+  --fg: #EDEAE6;
+  --fg-muted: #ADA79E;
+  --accent: #F0813C;
+  --accent-contrast: #221206;
+  --accent-soft: #3A2313;
+  --line: #35322E;
+  --success: #57BE7C;
+  --warning: #DFA83E;
+  --danger: #F0736B;
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, #fff);
+  --accent-press: color-mix(in srgb, var(--accent) 78%, #fff);
+}
+[data-variant="harbor"] {
+  --system-id: "ai-flotation-b"; /* @kind other */
+  --bg: #F6F8F7;
+  --bg-elevated: #FFFFFF;
+  --fg: #14201D;
+  --fg-muted: #4C5B57;
+  --accent: #0E6E63;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: #D8EEE9;
+  --line: #D6DEDB;
+}
+[data-variant="harbor"][data-theme="dark"] {
+  --bg: #0E1413;
+  --bg-elevated: #17201E;
+  --fg: #E9EFED;
+  --fg-muted: #A2B1AC;
+  --accent: #46C2AF;
+  --accent-contrast: #062B25;
+  --accent-soft: #123B35;
+  --line: #2C3936;
+}

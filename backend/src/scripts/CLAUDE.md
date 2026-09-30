@@ -85,13 +85,15 @@ Per root CLAUDE.md > Idempotency & Replayability: every send script must dedup. 
 - Never log a secret. If a script needs to print a token for debug, mask everything except the first 8 chars.
 - Tokens fetched from rotating sources (CCPP `Basecamp_AuthInfo`) are fetched fresh each run, never persisted to disk.
 
-## Not in PROGRESS.md
-Per root CLAUDE.md, the following do NOT need PROGRESS.md entries:
+## Not in the progress log
+Per root CLAUDE.md, the following do NOT need progress-log entries:
 - Mandrill emails sent on Ali's behalf
 - Basecamp ticket creation
 - Ad-hoc data pulls / discovery scripts
 
-The script FILE going into the repo does need a PROGRESS.md entry. The SEND/EXECUTION of it does not.
+The script FILE going into the repo does need an entry. The SEND/EXECUTION of it does not.
+
+The log is this session's own file, `docs/sessions/CC-<YYYYMMDD>-<id>.md` (root `PROGRESS.md` is a sealed archive; do not append to it).
 
 ## When NOT to add a script here
 - If it's a reusable service, lift it into `backend/src/services/`.

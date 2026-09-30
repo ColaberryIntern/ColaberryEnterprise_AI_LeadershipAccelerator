@@ -14,6 +14,7 @@ import { Op } from 'sequelize';
 import AgentWriteAudit from '../models/AgentWriteAudit';
 import ProposedAgentAction from '../models/ProposedAgentAction';
 import { AiAgent } from '../models';
+import { authorizeAgentAction } from './agentAuthorizationService';
 
 // ---------------------------------------------------------------------------
 // Permission Tiers
@@ -58,10 +59,41 @@ const AGENT_PERMISSIONS: Record<string, AgentPermission> = {
   WebsiteAutoRepairAgent: { tier: 'write_with_audit', allowedTables: ['website_issues'], allowedOperations: ['auto_repair'], requiresEvaluateSend: false },
   ExecutionAgent: { tier: 'write_with_audit', allowedTables: ['ai_agents', 'intelligence_decisions'], allowedOperations: ['update_agent_config', 'modify_agent_schedule', 'update_campaign_config', 'adjust_lead_scoring', 'launch_ab_test', 'pause_campaign'], requiresEvaluateSend: false },
 
+  // ProofDesk Work Graph capability-registry agents (Milestone 4 - Governance
+  // Enforcement, shadow mode). These 4 already write ticket/artifact state today via
+  // ticketAgentDispatcher.ts's dispatch path (M1-M3, live), audited by AgentRun +
+  // work_ledger_events - write_with_audit is the accurate existing-behavior tier, not
+  // a new grant. Without this entry, an unclassified agent falls to
+  // DEFAULT_PERMISSION ('suggest_only' -> ladder level 'suggest', which forbids
+  // 'write' category actions entirely) and every single ticket dispatch would
+  // incorrectly register as "would-deny" once T005/T006 wire authorizeAgentAction()
+  // into the dispatch path - an inaccurate signal unrelated to this milestone's actual
+  // R0-R4 goal. The risk_tier reconciliation (agentAutonomy.ts, T003) is what decides
+  // whether a SPECIFIC action needs a human, independent of this ladder-level grant.
+  CurriculumArchitectAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+  ArtifactGenerationAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+  CurriculumQAAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+  PlatformFixAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+
   // Tier 4 — COMMUNICATION: Agents that send outbound messages
   AdmissionsSMSAgent: { tier: 'communication', allowedTables: ['admissions_action_logs', 'communication_logs'], allowedOperations: ['send_sms'], requiresEvaluateSend: true },
   AdmissionsSynthflowCallAgent: { tier: 'communication', allowedTables: ['call_contact_logs', 'admissions_action_logs', 'communication_logs'], allowedOperations: ['synthflow_call'], requiresEvaluateSend: true },
   AdmissionsEmailAgent: { tier: 'communication', allowedTables: ['admissions_action_logs', 'communication_logs'], allowedOperations: ['send_email'], requiresEvaluateSend: true },
+
+  // AI Workforce directors (orgRegistry.ts) — one tool + one action each.
+  // 9 write_with_audit: internal task/message queue only, a human still has to
+  // act on the resulting row. Marketing is the sole outward-facing director,
+  // kept at suggest_only so a human reviews every content idea before it ships.
+  WorkforceStudentSuccessDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_student_success'], requiresEvaluateSend: false },
+  WorkforceCurriculumDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_curriculum'], requiresEvaluateSend: false },
+  WorkforceCareerDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_career'], requiresEvaluateSend: false },
+  WorkforceCertificationDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_certification'], requiresEvaluateSend: false },
+  WorkforceFinanceDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_finance'], requiresEvaluateSend: false },
+  WorkforceOperationsDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_operations'], requiresEvaluateSend: false },
+  WorkforceCommunityDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_community'], requiresEvaluateSend: false },
+  WorkforceTechnologyDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_agent_health_issue'], requiresEvaluateSend: false },
+  WorkforceResearchDirector: { tier: 'write_with_audit', allowedTables: ['workforce_messages'], allowedOperations: ['surface_insight'], requiresEvaluateSend: false },
+  WorkforceMarketingDirector: { tier: 'suggest_only', allowedTables: ['proposed_agent_actions'], allowedOperations: ['propose_content_idea'], requiresEvaluateSend: false },
 };
 
 // Default permission for unclassified agents — restrict to suggest_only
@@ -102,6 +134,14 @@ export async function validateAgentWrite(
 ): Promise<PermissionCheckResult> {
   const permission = getAgentPermission(agentName);
   const startTime = Date.now();
+
+  // ABAC shadow gate (TBI P2-1). Fire-and-forget + swallow-safe: records the would-deny verdict to
+  // ai_events (agent.authorization) for the Trust dashboard but NEVER alters this tier decision in
+  // shadow mode. Passing the known tier avoids a lookup. The existing tier logic below still governs.
+  void authorizeAgentAction({
+    agentId, agentName, action: operation, resourceType: targetTable, resourceId: targetId,
+    tier: permission.tier,
+  }).catch(() => { /* shadow authz must never break the write path */ });
 
   // Read-only agents cannot write anything
   if (permission.tier === 'read_only') {

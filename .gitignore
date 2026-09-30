@@ -28,7 +28,13 @@ yarn-error.log*
 
 # ── IDE & editor ──────────────────────────────────────────────────────────────
 .vscode/
+
+# /loop-architect skill run state (per-run scratch state, not source)
+.loop-architect/
 .idea/
+
+# Personal Claude Code overrides — project-scoped, never shared with the team
+CLAUDE.local.md
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
@@ -58,5 +64,48 @@ scripts/.demo_portal_token.txt
 scripts/.demo_onboarding_runs.json
 scripts/.demo_login_urls.txt
 
-# ── Personal finance documents — NEVER COMMIT (PII: SSNs, tax returns) ───────
+# OAuth / API token dumps written to the repo root by helper scripts — NEVER
+# COMMIT (live access/refresh tokens). These are one `git add .` from leaking.
+*_token.txt
+*_token.json
+colaberry_token.txt
+latest_token.txt
+hotmail_device_code.txt
+
+# Personal finance documents - NEVER COMMIT (sensitive PII: SSNs, tax returns, account numbers)
 docs/personal-finance/
+
+kes-tasks/
+
+# Google service-account key files — NEVER COMMIT (grants API access to GCP projects)
+credentials/
+
+# ops-engine runtime state — worker locks, *-state.json, *.cache (incl. the SECRET
+# Basecamp token cache, rotates every 2 weeks), *.jsonl logs. The ops-engine cron writes
+# these into the repo tree at runtime; ignoring the whole dir keeps the prod working tree
+# clean so `git pull` / deploys never hit a dirty-tree conflict. (0 tracked files here.)
+tmp/ops-engine/
+
+# Other prod-cron runtime state + generated reports written into the repo tree.
+# Same rationale as tmp/ops-engine/ above, and it is not theoretical: on
+# 2026-08-15 the prod checkout at /opt/colaberry-accelerator had 43 untracked
+# files, 21 of them these generated artifacts. A dirty tree there silently
+# blocks `git pull` while the &&-chained rebuild still runs, so prod rebuilds
+# STALE code with no error surfaced (see PROGRESS.md, 2026-06-24).
+# Deliberately pattern-scoped rather than ignoring tmp/ wholesale, because 18
+# files under tmp/ are already tracked and blanket-ignoring them would leave
+# them in the confusing ignored-but-tracked state.
+tmp/*.lock
+tmp/*-thread-id.json
+tmp/cb-ai-runner-state-*.json
+tmp/launch-pmo-*
+tmp/gov-*
+tmp/cohort-reports/
+backend/tmp/
+docs/reports/
+docs/gov-contracts-daily-*.html
+*-undo-*.json
+
+# loop-architect run state — dashboards, plans, verification logs for in-progress
+# autonomous build loops. Local working state, not shipped product code.
+.loop-architect/

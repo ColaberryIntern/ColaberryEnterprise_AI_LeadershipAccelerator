@@ -141,7 +141,7 @@ ${SIG_TEXT}`;
     ticketId: TRACKING_TODO,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'Gov Contracts intern sprint - Bonfire download + OP upload links (file step)',
     html: HTML,

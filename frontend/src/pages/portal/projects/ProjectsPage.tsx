@@ -1,0 +1,971 @@
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import PortalShell from '../today/PortalShell';
+import ProjectWizard from './ProjectWizard';
+import { useIsExplorer } from '../useIsExplorer';
+import ProjectPreview from './ProjectPreview';
+import ProjectInterior, { taskToFeedCard } from './ProjectInterior';
+import AddStoryPanel from './AddStoryPanel';
+import RepoWriteAccessBanner from './RepoWriteAccessBanner';
+import NextSessionStrip from './NextSessionStrip';
+import {
+  resolveBackendProjectId, startBuild as startServerBuild, pollBuild,
+  isDelivered, blockingReasons, requestDiscoveryCall, getIntakeReview,
+  retryBuild,
+} from '../../../services/sbpApi';
+import { describeCallOutcome, type CallNotice } from './describeCallOutcome';
+import { PipelineBanner, CallBanner, type PipelineState, type HandoffCounts } from './ProjectBanners';
+import ProjectsNextStepHero from './ProjectsNextStepHero';
+import TimelineCard, { type TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import {
+  useProjectsList, createProjectFromAnswers, claimBackendProject, projectProgress, projectPoints, reqVerified, nextTask, isTaskBlocked,
+  removeProjectLocally, setApprovalState,
+  StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
+} from './projectsStore';
+import { syncProjectsWithBackend, refreshProjectsFromBackend, hydrateProjectById, pushActiveProject } from './projectSync';
+import ProjectReviewPane from './ProjectReviewPane';
+import { approveProject, requestProjectChanges } from './projectApprovalApi';
+import ProjectDriftBanner from './ProjectDriftBanner';
+import ArchiveProjectDialog from './ArchiveProjectDialog';
+import {
+  fetchArchivedProjects, restoreProject as callRestore,
+  type ArchivedProjectSummary,
+} from './projectArchiveApi';
+import { deriveLegacyScope } from './deriveLegacyScope';
+import portalApi from '../../../utils/portalApi';
+import './projects.css';
+import '../today/TodayShell.css';
+// "Up next across your builds" renders .te-feed / .te-feed-head, defined ONLY
+// in feed.css. This page used to get that file transitively through FeedCard;
+// #2525 replaced FeedCard with TimelineCard and dropped the import, and a cold
+// load of /portal/projects then had none of those rules — the heading's list
+// icon fell back to the UA default and rendered as three 462px black pills
+// (Ali, 2026-09-14: "why are these black lines here"). The Today page hit the
+// identical failure on 2026-08-24 (see TodayShell.tsx). A page that renders a
+// class owns the import for it. feed.css is scoped to .te-feed*, so this
+// cannot leak.
+import '../feed/feed.css';
+
+// Projects tab, in the Today-page shape: a hero "your next step" (your build's
+// next action, or "create a project" if you have none), the next live session,
+// your builds, and a timeline of what's next across builds — with a right-side
+// dashboard. Builds are portal-native (lists + tasks, FB vibe), not Basecamp.
+
+// `taskId` is which task the workspace should open on the right. It lives in
+// the view rather than inside the interior so that everything which can ask
+// for a task — a feed card, the condensed header, a card inside the build —
+// drives the SAME drawer. Two sources of truth here meant clicking "Open
+// build" in the feed landed you in the project with nothing open.
+type View =
+  | { kind: 'overview' }
+  | { kind: 'wizard' }
+  | { kind: 'preview'; id: string }
+  | { kind: 'review'; id: string }
+  | { kind: 'interior'; id: string; taskId?: string | null };
+
+const DUE_RANK: Record<string, number> = { overdue: 0, today: 1, up: 2, done: 9 };
+
+/**
+ * Says which pipeline produced this build, on the card itself.
+ *
+ * The whole point is that a student can tell the two apart at a glance. A local
+ * starter template and a real generated plan rendered identically — same card,
+ * same progress bar, same task list — so the only way to know you had been
+ * served the lesser one was to notice the missing dates and count to ten.
+ */
+const OriginChip: React.FC<{ p: StudentProject }> = ({ p }) => {
+  if (p.sample) return <span className="pj-bc-st">training example</span>;
+  if (p.origin === 'pipeline') {
+    return (
+      <span className="pj-bc-st pj-origin real" title="Generated from your answers by the build pipeline, with scheduled dates and full prompts.">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+        your tailored plan
+      </span>
+    );
+  }
+  if (p.origin === 'local') {
+    return (
+      <span className="pj-bc-st pj-origin starter" title="A general starter template built in your browser. It has no schedule and no Command Center. Regenerate for the tailored version.">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+        starter template
+      </span>
+    );
+  }
+  return null;
+};
+
+/**
+ * "Not syncing to GitHub", on the one page a returning student actually lands on.
+ *
+ * Every other surface that says this fires on an ACTION — uploading an artifact,
+ * connecting a repo — and the students it needs to reach are precisely the ones
+ * who have stopped taking those actions. Measured 2026-08-23: of 17 students
+ * with a connected repo, 16 could not be written to, and eight of those had not
+ * uploaded in over five days. Nothing in the product told any of them.
+ *
+ * Renders ONLY on a recorded `blocked`. `unknown` (permission never recorded)
+ * and `no_repo` (weeks 1-3, expected) both render nothing — a badge that cries
+ * wolf on a repo that is fine is worse than no badge, because the next real one
+ * gets ignored too.
+ */
+const RepoSyncChip: React.FC<{ state?: string }> = ({ state }) => {
+  if (state !== 'blocked') return null;
+  return (
+    <span
+      className="pj-bc-st pj-origin starter"
+      title="Your artifacts are saved on the platform but are not being written to your GitHub repo, because Colaberry does not have push access. Open the project to see how to grant it — everything you have already built syncs as soon as you do."
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+      not syncing to GitHub
+    </span>
+  );
+};
+
+/**
+ * One build in the list — in the SAME visual language as the project interior.
+ *
+ * Ali: "the cards on the pre project select screen look different from the post
+ * project select screen. they should look like the latter."
+ *
+ * They did, and for no good reason: the list card had a coloured gradient banner,
+ * a 48px rounded icon tile hanging off it, and grey pill badges, while the
+ * interior's `TaskCard` uses a calm row — a small coloured dot, an uppercase
+ * eyebrow of chips, the title, the description, and a footer of actions. Two
+ * implementations of one look is how they drifted apart, so this card now RENDERS
+ * THE INTERIOR'S OWN CLASSES (`.pjt-card`, `.pjt-head`, `.pjt-ic`, `.pjt-main`,
+ * `.pjt-src`, `.chip`/`.sw`, `.pj-st`, `.pj-due`, `.pjt-owner`, `.pjt-title`,
+ * `.pjt-sub`, `.pjt-foot`, `.pw-act`) rather than a parallel set of its own. The
+ * only genuinely new rules are the progress bar and the list-specific footer,
+ * because the interior carries no equivalent.
+ *
+ * What the list keeps that the interior does not carry: progress, the task and
+ * verified counts, and the project's own name (real names shipped 2026-08-16).
+ *
+ * The card is no longer one big click target. It used to be a `role="button"`
+ * div, which cannot hold a Remove button inside it — a nested control inside a
+ * clickable parent is an accident waiting to happen, and this particular accident
+ * removes a build. Opening is now an explicit action in the footer, matching how
+ * the interior's task cards already behave.
+ */
+export function BuildCard({ p, onOpen, onRemove, repoSync }: {
+  p: StudentProject; onOpen: () => void; onRemove: (() => void) | null;
+  /** 'blocked' when artifacts are not reaching GitHub. Optional: absent renders nothing. */
+  repoSync?: string;
+}) {
+  const prog = projectProgress(p);
+  const pts = projectPoints(p);
+  const rv = reqVerified(p);
+  const creating = p.status === 'creating';
+  const stageLabel = creating ? 'Creating…' : (prog.pct === 100 ? 'Complete' : p.stage.split(' · ')[0]);
+  // Mirrors the interior's requirement-chip vocabulary so the same state reads
+  // the same way on both screens.
+  const progState = prog.pct === 100 ? 'verified' : (prog.done > 0 ? 'built' : 'planned');
+
+  return (
+    <div className={`pjt-card pjb-card${creating ? ' pjb-creating' : ''}`}>
+      <div className="pjt-head pjb-head">
+        <span className="pjt-ic" style={{ background: p.accent }}>
+          <svg viewBox="0 0 24 24" fill="none"><path d={p.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg>
+        </span>
+        <div className="pjt-main">
+          <div className="pjt-src">
+            <span className="chip" style={{ padding: '2px 9px', background: 'rgba(54,120,149,.12)', color: '#2E6A86' }}>
+              <span className="sw" style={{ background: p.accent }} />{stageLabel}
+            </span>
+            <span className={`pj-st ${progState}`}>{prog.done}/{prog.total} tasks</span>
+            {rv.total > 0 && <span className={`pj-due ${rv.v === rv.total ? 'done' : 'up'}`}>{rv.v}/{rv.total} verified</span>}
+            {/* What the build pays. The list card carried task and verified
+                counts but no points, so the one screen a student lands on was
+                the only project surface that never said what the work is worth
+                (Ali, 2026-09-13: "You are not showing the points in the project
+                section"). Absent — not "0 pts" — when nothing here is priced. */}
+            {pts.priced > 0 && (
+              <span
+                className={`pj-due ${pts.earned >= pts.available ? 'done' : 'up'}`}
+                title={`Verified work on this build pays ${pts.available} pts in total. ${pts.earned} earned so far — the platform pays each story when your repo verifies it.`}
+              >
+                {pts.earned}/{pts.available} pts
+              </span>
+            )}
+            <OriginChip p={p} />
+            <RepoSyncChip state={repoSync} />
+          </div>
+          <div className="pjt-title">{p.name}</div>
+          {p.descriptor && <div className="pjt-sub">{p.descriptor}</div>}
+          <div className="pjb-bar" aria-hidden="true">
+            <i style={{ width: `${prog.pct}%`, background: creating ? 'var(--berry)' : 'var(--leaf-action)' }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="pjt-foot">
+        <div className="pw-acts">
+          <button type="button" className="pw-act open" onClick={onOpen}>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Open build
+          </button>
+          {/* Destructive, but not alarming — this is a normal thing to want to
+              do. A quiet outlined control that only reddens on hover, sitting
+              apart from the primary action, and it opens a confirmation rather
+              than doing anything itself. */}
+          {onRemove && (
+            <button type="button" className="pjb-remove" onClick={onRemove}
+              aria-label={`Remove ${p.name}`}>
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const ProjectsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const projects = useProjectsList();
+  // The builds that are actually the STUDENT'S. `projects` always carries the
+  // seeded training example alongside them, so anything that counts, totals, or
+  // says "you have N" must read this list and not `projects`.
+  const ownBuilds = useMemo(() => projects.filter((p) => !p.sample), [projects]);
+  /** Points across the student's own builds, for the dashboard stat. */
+  const buildPoints = useMemo(() => ownBuilds.reduce(
+    (a, p) => { const q = projectPoints(p); return { earned: a.earned + q.earned, available: a.available + q.available }; },
+    { earned: 0, available: 0 },
+  ), [ownBuilds]);
+  // Backend-source flip: pull the student's persisted build (completions from
+  // other devices, or a build this browser has never seen) then mirror back up.
+  // Once per page session, flag-gated + best-effort (see projectSync).
+  useEffect(() => { void syncProjectsWithBackend(); }, []);
+  const demo = useIsExplorer();   // Explorer = demo mode: no real builds get created
+  const [view, setView] = useState<View>({ kind: 'overview' });
+  // Which path produced the student's plan, and why. Surfaced rather than
+  // hidden: a student is entitled to know whether they got the real thing.
+  const [pipeline, setPipeline] = useState<PipelineState>({ state: 'idle' });
+  const [callNotice, setCallNotice] = useState<CallNotice | null>(null);
+  // What Story 000 will say, in numbers, for the handoff on delivery. Null
+  // until the plan is delivered, and stays null if the review cannot be read:
+  // the handoff renders without counts rather than not at all.
+  const [handoff, setHandoff] = useState<HandoffCounts | null>(null);
+  /** True while a build is being created, so a second confirm cannot start one. */
+  const creatingRef = useRef(false);
+
+  // ── remove / restore a build ──────────────────────────────────────────────
+  const [removing, setRemoving] = useState<StudentProject | null>(null);
+  const [archived, setArchived] = useState<ArchivedProjectSummary[]>([]);
+  /**
+   * Badge data only, fetched on its own and DELIBERATELY kept out of
+   * projectSync/reconcileProjects. That machinery decides which builds exist and
+   * which survive a prune; it was repaired recently and is not worth destabilising
+   * so a card can show a chip. Read-only, display-only, and its failure mode is an
+   * empty map, which renders no badges at all.
+   */
+  const [repoSync, setRepoSync] = useState<Record<string, string>>({});
+  const [repoUrl, setRepoUrl] = useState<Record<string, string>>({});
+
+  const loadArchived = useCallback(async () => {
+    const r = await fetchArchivedProjects();
+    // A failure here (API flag off, offline) just means no restore strip. It
+    // must never break the page a student came to work on.
+    setArchived(r.ok ? r.value : []);
+  }, []);
+  useEffect(() => { void loadArchived(); }, [loadArchived]);
+
+  // Badge data. One request, once, purely for display — see the `repoSync` state
+  // above for why this does not go through projectSync. Silent on failure: a
+  // missing chip is invisible, whereas an error here would be noise on a page
+  // whose actual job is listing builds.
+  useEffect(() => {
+    let alive = true;
+    portalApi.get('/api/portal/projects')
+      .then((res: any) => {
+        if (!alive) return;
+        const rows = res?.data?.projects;
+        if (!Array.isArray(rows)) return;
+        const next: Record<string, string> = {};
+        const urls: Record<string, string> = {};
+        for (const r of rows) {
+          if (r?.id && typeof r.repo_sync === 'string') next[String(r.id)] = r.repo_sync;
+          if (r?.id && typeof r.repo_url === 'string') urls[String(r.id)] = r.repo_url;
+        }
+        setRepoSync(next);
+        setRepoUrl(urls);
+      })
+      .catch(() => { /* no badge is the correct degraded state */ });
+    return () => { alive = false; };
+  }, []);
+
+  /**
+   * The card goes NOW, not on the next pull.
+   *
+   * `pruneDeadProjects` would eventually drop it — the server stops listing an
+   * archived project, which is exactly its "reached the server and is now gone"
+   * case — but only on the next reconcile. Waiting for that would leave the
+   * student looking at a build they just removed, which is indistinguishable
+   * from the archive having failed. Removing locally on success keeps the two
+   * views in step; the prune remains the durable backstop on other devices.
+   */
+  const handleArchived = useCallback(async (local: StudentProject) => {
+    // Removed by its LOCAL id, which is not always the backend id — a
+    // browser-built project that was later mirrored up keeps its own `p<epoch>`
+    // id and carries the server's id in `pipelineProjectId`. Archiving talks to
+    // the server about one; localStorage is keyed on the other.
+    removeProjectLocally(local.id);
+    setRemoving(null);
+    await loadArchived();
+    // The server may have repointed the active project, so re-pull the tree.
+    await refreshProjectsFromBackend();
+  }, [loadArchived]);
+
+  /** A browser-only build has no server row: localStorage is the only copy. */
+  const handleRemoveLocalOnly = useCallback((p: StudentProject) => {
+    removeProjectLocally(p.id);
+    setRemoving(null);
+  }, []);
+
+  const handleRestore = useCallback(async (projectId: string) => {
+    const r = await callRestore(projectId);
+    if (!r.ok) return;
+    await loadArchived();
+    // Put the card back explicitly. `/active` only describes the ACTIVE project,
+    // so a restored non-active build has no other route onto this page — the row
+    // would leave "Removed builds" and nothing would appear, which reads as a
+    // broken button. Then the normal pull, in case the restore also adopted it
+    // as active (it does when the student had none).
+    await hydrateProjectById(projectId);
+    await refreshProjectsFromBackend();
+  }, [loadArchived]);
+
+  /**
+   * The student approves their reviewed build. On success the gate clears
+   * optimistically (so the workspace is reachable at once) and the interior
+   * opens; the server's `approval_state` is then reconciled by the pull. A
+   * failed approve intentionally does nothing — it must never fake-unlock a
+   * workspace the server did not actually open. Talks to the server about the
+   * backend UUID, which a pending build always has.
+   */
+  const handleApprove = useCallback(async (project: StudentProject): Promise<boolean> => {
+    const backendId = project.pipelineProjectId || project.id;
+    const r = await approveProject(backendId);
+    if (!r.ok) return false;
+    setApprovalState(backendId, 'approved');
+    setView({ kind: 'interior', id: project.id, taskId: null });
+    window.scrollTo(0, 0);
+    if (!project.sample) void pushActiveProject(backendId);
+    void refreshProjectsFromBackend();
+    return true;
+  }, []);
+
+  /**
+   * The student says the build is not what they wanted. Flags it for revision
+   * with a note; the pane then shows its confirmation state. Returns whether the
+   * server accepted it so the pane can surface an error instead of a false
+   * confirmation.
+   */
+  const handleRequestChanges = useCallback(async (project: StudentProject, notes: string): Promise<boolean> => {
+    const backendId = project.pipelineProjectId || project.id;
+    const r = await requestProjectChanges(backendId, notes);
+    if (!r.ok) return false;
+    setApprovalState(backendId, 'changes_requested');
+    void refreshProjectsFromBackend();
+    return true;
+  }, []);
+
+  /**
+   * Which builds may be removed, and by which route.
+   *
+   * The seeded training example is never removable: `projectsStore.read()`
+   * re-seeds it whenever it is absent, so the control would appear to work and
+   * silently undo itself on the next load.
+   *
+   * A build with no backend id never reached the server, so there is nothing to
+   * archive — it is dropped from this browser directly, with no confirmation
+   * dialog fetch that would only 404.
+   */
+  const removalRouteFor = (p: StudentProject): 'server' | 'local' | null => {
+    if (p.sample || demo) return null;
+    const backendId = p.pipelineProjectId || (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id) ? p.id : null);
+    return backendId ? 'server' : 'local';
+  };
+
+  const active = (view.kind === 'preview' || view.kind === 'interior' || view.kind === 'review')
+    ? projects.find((p) => p.id === view.id) : null;
+  const openInterior = (id: string, taskId?: string | null) => {
+    const target = projects.find((p) => p.id === id);
+    // Review gate: a freshly built project the student has not yet approved
+    // opens on the review screen, not the workspace. ONLY 'pending_approval'
+    // gates — null / 'approved' / 'changes_requested' fall through exactly as
+    // before, so every existing (ungated) student is unaffected.
+    if (target?.approvalState === 'pending_approval') {
+      setView({ kind: 'review', id });
+      window.scrollTo(0, 0);
+      return;
+    }
+    setView({ kind: 'interior', id, taskId: taskId ?? null });
+    window.scrollTo(0, 0);
+    // Make the switch durable. Opening a build is the only signal the student
+    // gives about which one they are working on, and until this call existed it
+    // went nowhere: `enrollments.active_project_id` stayed on the previous
+    // build, so the "Your next step" hero on the overview kept naming it and a
+    // reload dropped them back onto it. Fire-and-forget by design — the view has
+    // already changed and a failed preference write must not undo that.
+    if (target && !target.sample) void pushActiveProject(target.pipelineProjectId || target.id);
+  };
+  /**
+   * Open a task in the project WORKSPACE — the full page with the mentor on the
+   * right, the build-side twin of the classroom runtime. This used to open a
+   * slide-over drawer, which is not the same thing and did not feel like the
+   * same product. `from` is stamped so the workspace's back button returns to
+   * wherever the student actually came from.
+   */
+  const openTaskWorkspace = (projectId: string, task: ProjectTask | null) => {
+    if (!task) return;
+    // Same review gate: a pending build's task workspace is not reachable until
+    // the student approves — show the review screen here instead of navigating
+    // away to the workspace. Ungated projects are untouched.
+    const owner = projects.find((x) => x.id === projectId || x.pipelineProjectId === projectId);
+    if (owner?.approvalState === 'pending_approval') {
+      setView({ kind: 'review', id: owner.id });
+      window.scrollTo(0, 0);
+      return;
+    }
+    const key = task.storyId || task.id;
+    navigate(`/portal/projects/workspace/${projectId}/${encodeURIComponent(key)}`,
+      { state: { from: window.location.pathname } });
+  };
+  const openTaskById = (projectId: string, taskId: string | null) => {
+    if (!taskId) return;
+    const p = projects.find((x) => x.id === projectId);
+    const t = p?.lists.flatMap((l) => l.tasks).find((x) => x.id === taskId) ?? null;
+    openTaskWorkspace(projectId, t);
+  };
+  /**
+   * The handoff's one action. STORY-000 is slotted first by projectHydrate,
+   * so it is normally present the moment the plan is delivered; if a stale
+   * cache has not adopted it yet, the interior is the honest fallback and
+   * the story is at the top of it.
+   */
+  const openStory000 = (projectId: string) => {
+    const p = projects.find((x) => x.id === projectId || x.pipelineProjectId === projectId);
+    const t = p?.lists.flatMap((l) => l.tasks).find((x) => x.storyId === 'STORY-000') ?? null;
+    if (p && t) openTaskWorkspace(p.id, t);
+    else if (p) openInterior(p.id);
+  };
+
+  /**
+   * Start a build.
+   *
+   * Tries the real server pipeline first — a genuine requirements document,
+   * a gated plan, releases and stories derived from the student's own answers.
+   * Falls back to the local generator on ANY failure, including the pipeline
+   * being switched off (404).
+   *
+   * The fallback is deliberate rather than defensive: the local path still
+   * produces something a student can work with, so a pipeline problem degrades
+   * the quality of their plan instead of leaving them with nothing.
+   *
+   * What was NOT deliberate was how quiet it had become. The optimistic local
+   * build is created first, the view flips to it immediately, and every
+   * downstream failure just set a banner on a screen that was no longer
+   * mounted. Two of the five students on 2026-08-12/13 never reached the server
+   * at all and were shown a template with no indication anything had gone
+   * wrong. Three reached it, got correct plans, and were shown the same
+   * template because nothing published those plans.
+   *
+   * So: the placeholder now CLAIMS the backend project (so the real plan
+   * replaces it rather than joining it), every exit sets a pipeline state the
+   * student can actually see, and success is defined as `delivered` — the plan
+   * is in `student_tasks` — not merely as "the poll stopped".
+   */
+  /** Retry a failed generation from the answers already on the server. */
+  const retryFailedBuild = useCallback(async (projectId: string) => {
+    setPipeline({ state: 'generating', projectId });
+    const started = await retryBuild(projectId);
+    if (!started.ok) { setPipeline({ state: 'local', error: started.error }); return; }
+    const result = await pollBuild(projectId, { onUpdate: (st) => setPipeline({ state: 'generating', projectId, status: st.status }) });
+    if (!result.ok) { setPipeline({ state: 'local', error: result.error }); return; }
+    if (result.state.status === 'failed') {
+      setPipeline({ state: 'failed', projectId, errorClass: result.state.error?.error_class ?? 'Error', message: result.state.error?.message ?? '' });
+      return;
+    }
+    if (!isDelivered(result.state)) { setPipeline({ state: 'stalled', projectId }); return; }
+    await refreshProjectsFromBackend();
+    setPipeline({ state: 'delivered', projectId });
+  }, []);
+
+  const runCreate = useCallback(async (raw: NewBuildAnswers) => {
+    // The interview is generated now, so the three legacy scoping fields are
+    // derived from it rather than asked directly. Both the local fallback and
+    // the server read them, so derive once and use the same object for both.
+    const a: NewBuildAnswers = { ...raw, ...deriveLegacyScope(raw.answers) };
+
+    // Optimistic local build first, so the student sees their project
+    // immediately either way and the page has something to show. It is stamped
+    // `origin: 'local'` by the store, so it is labelled from birth.
+    const localId = createProjectFromAnswers(a);
+    setView({ kind: 'preview', id: localId });
+    window.scrollTo(0, 0);
+
+    const resolved = await resolveBackendProjectId();
+    if (!resolved.ok) { setPipeline({ state: 'local', error: resolved.error }); return; }
+
+    // Durable, so a reload mid-generation still folds the real plan into this
+    // placeholder instead of leaving the student with two lookalike builds.
+    claimBackendProject(localId, resolved.projectId);
+
+    const started = await startServerBuild({
+      project_id: resolved.projectId,
+      idea: a.idea,
+      name: a.name || undefined,
+      size: a.size,
+      users: a.users || undefined,
+      data_sources: a.dataSources || undefined,
+      done_definition: a.done || undefined,
+      answers: a.answers && a.answers.length ? a.answers : undefined,
+      covered: a.covered && a.covered.length ? a.covered : undefined,
+      target_weeks: a.weeks,
+    });
+    if (!started.ok) { setPipeline({ state: 'local', error: started.error }); return; }
+
+    setPipeline({ state: 'generating', projectId: resolved.projectId });
+
+    // The call, if asked for, goes AFTER the build has started: the server
+    // refuses to open an interview by phone and only continues one, and the
+    // truth it continues from is written by startBuild. Its outcome is
+    // reported in the server's own terms and never blocks the build.
+    if (a.call) {
+      const phone = a.call.phone;
+      const asked = await requestDiscoveryCall(resolved.projectId, {
+        phone, consent: true, consent_version: a.call.consentVersion,
+      });
+      setCallNotice(describeCallOutcome(asked.ok ? asked.outcome : { placed: false, reason: 'unreachable' }, phone));
+    }
+    const result = await pollBuild(resolved.projectId, {
+      onUpdate: (st) => setPipeline({ state: 'generating', projectId: resolved.projectId, status: st.status }),
+    });
+
+    if (!result.ok) { setPipeline({ state: 'local', error: result.error }); return; }
+
+    if (result.state.status === 'gate_failed') {
+      // Say what is actually wrong, using the server's BLOCKING list rather
+      // than the whole violation array. That array is mostly advisory quality
+      // warnings, so taking the first three of it told a student blocked on an
+      // uncovered must-have about a stylistically redundant story instead.
+      const blocking = blockingReasons(result.state);
+      setPipeline({
+        state: 'gate_failed',
+        projectId: resolved.projectId,
+        reasons: blocking.length
+          ? blocking.slice(0, 3).map((v) => v.message)
+          : ['The plan could not be verified against your requirements.'],
+      });
+      return;
+    }
+
+    if (result.state.status === 'failed') {
+      // Generation itself failed. Say why (the server now records it) and offer
+      // the retry that needs no retyping, instead of the `stalled` wording that
+      // tells a student their plan is fine when there is no plan.
+      setPipeline({
+        state: 'failed',
+        projectId: resolved.projectId,
+        errorClass: result.state.error?.error_class ?? 'Error',
+        message: result.state.error?.message ?? '',
+      });
+      return;
+    }
+
+    if (!isDelivered(result.state)) {
+      // `drafted`: generated, gate-clean, and never promoted. This is exactly
+      // the hole this whole change closes, so it is reported loudly rather than
+      // celebrated as a ready plan the way it used to be.
+      setPipeline({ state: 'stalled', projectId: resolved.projectId });
+      return;
+    }
+
+    // Pull the published plan in NOW. `syncProjectsWithBackend` is latched to
+    // once per page session and had already fired on mount, so calling it here
+    // was a no-op — the plan existed on the server and still did not appear.
+    await refreshProjectsFromBackend();
+    setPipeline({ state: 'delivered', projectId: resolved.projectId });
+    // The counts for the handoff, best effort: the truth this plan was built
+    // from, read back from the same store Story 000 renders. A failure here
+    // costs the numbers, not the handoff.
+    const review = await getIntakeReview(resolved.projectId);
+    if (review.ok && review.review) {
+      const c = review.review.counts;
+      setHandoff({
+        told: (c.needsConfirmation ?? 0) + (c.confirmed ?? 0),
+        inferred: c.inferences ?? 0,
+        unanswered: review.review.unanswered.length,
+      });
+    }
+    // The placeholder has been superseded by the real project, which carries
+    // the backend id. Point the view at it so the student lands on their plan.
+    setView({ kind: 'preview', id: resolved.projectId });
+  }, []);
+
+  /**
+   * One build per confirm.
+   *
+   * Every confirm now genuinely creates a project (that is the fix — the wizard
+   * used to build into whatever project was already active). So the double
+   * press a student makes when the first one appears to do nothing is no longer
+   * harmless: it would leave them with two builds from one intent. The guard is
+   * a ref rather than state because it has to take effect within the same tick
+   * as the first press, before any re-render.
+   *
+   * The banner is also cleared on entry: `pipeline` is set on every exit path
+   * of `runCreate` but was never reset, so a previous attempt's `gate_failed`
+   * or `stalled` message rendered over the new project's preview.
+   */
+  const handleCreate = useCallback(async (raw: NewBuildAnswers) => {
+    if (demo) return;   // demo — the wizard's create button is disabled; guard the store too
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    setPipeline({ state: 'idle' });
+    try {
+      await runCreate(raw);
+    } finally {
+      creatingRef.current = false;
+    }
+  }, [demo, runCreate]);
+
+  // primary build + hero next-step
+  const primary = projects[0] || null;
+  const primaryNext = primary ? nextTask(primary) : null;
+  const openBuildPrimary = () => { if (primary) openTaskWorkspace(primary.id, primaryNext?.task ?? null); };
+  const copyPrompt = () => { if (navigator.clipboard && primaryNext?.task.prompt) navigator.clipboard.writeText(primaryNext.task.prompt); };
+  const startBuild = () => setView({ kind: 'wizard' });
+
+  // Landing timeline: the next open stories across all builds, rendered as the
+  // SAME card the build interior renders — through the interior's own mapper.
+  //
+  // It used to build a thinner `FeedItem` of its own: title, list name, one
+  // line of description, "Open build". So the first screen a student sees
+  // described a story differently from the screen behind it — no points, no
+  // release chip, and a story LOCKED behind its release gate shown as an
+  // ordinary openable row. Two mappings of one thing is how they drifted.
+  //
+  // Unblocked work leads. A locked story still appears, locked, with the gate
+  // named — that is the detail Ali asked to match — but it never displaces
+  // something the student can actually start.
+  const feedCards: { card: TimelineFeedCard; projectId: string; task: ProjectTask }[] = [];
+  projects.forEach((p) => {
+    const opens: { t: ProjectTask; l: ProjectList }[] = [];
+    p.lists.forEach((l) => l.tasks.forEach((t) => { if (t.state === 'todo') opens.push({ t, l }); }));
+    opens.sort((a, b) => {
+      const ab = isTaskBlocked(p, a.t).blocked ? 1 : 0;
+      const bb = isTaskBlocked(p, b.t).blocked ? 1 : 0;
+      return ab !== bb ? ab - bb : DUE_RANK[a.t.due] - DUE_RANK[b.t.due];
+    });
+    opens.slice(0, 4).forEach(({ t, l }) => feedCards.push({
+      // The list label carries the BUILD name too: inside a project the project
+      // is obvious, here it is not, and the old row said which build it was.
+      card: taskToFeedCard(p, t, `${p.name} · ${l.name}`),
+      projectId: p.id,
+      task: t,
+    }));
+  });
+  const feedTop = feedCards.slice(0, 6);
+
+  // ── interior + wizard + preview take over the whole page ──
+  // The review screen, used by the explicit `review` view AND as a defensive
+  // guard below, so a stale `interior` view state cannot slip a pending build
+  // past the gate. Rendered (not setView-in-render) to avoid a render-phase
+  // side effect.
+  const renderReview = (p: StudentProject) => (
+    <PortalShell><div className="pj-root">
+      <ProjectReviewPane
+        project={p}
+        onApprove={() => handleApprove(p)}
+        onRequestChanges={(notes) => handleRequestChanges(p, notes)}
+        onBack={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }}
+      />
+    </div></PortalShell>
+  );
+
+  if (view.kind === 'review' && active) {
+    return renderReview(active);
+  }
+
+  if (view.kind === 'interior' && active) {
+    // A pending build is never reachable in the workspace, whatever the view
+    // state says. Only 'pending_approval' is caught; ungated projects fall
+    // straight through.
+    if (active.approvalState === 'pending_approval') {
+      return renderReview(active);
+    }
+    if (active.status === 'creating') {
+      return (
+        <PortalShell><div className="pj-root">
+          <div className="page-h"><div className="crumbs0">Building</div><h1>{active.name}</h1><div className="sub">Your build is being assembled. This preview updates the moment it's ready.</div></div>
+          <ProjectPreview project={active} onOpen={() => { }} onExplore={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} />
+        </div></PortalShell>
+      );
+    }
+    // The interior gets the SAME condensed header the overview has. Without it,
+    // scrolling inside a build left the next task pinned mid-page instead of
+    // riding up into the header, so the two screens behaved differently for no
+    // reason a student could see.
+    const activeNext = nextTask(active);
+    return (
+      <PortalShell
+        condensedSlot={(
+          <ProjectsNextStepHero
+            variant="condensed"
+            primary={active}
+            primaryNext={activeNext}
+            demo={demo}
+            onOpenBuild={() => openTaskWorkspace(active.id, activeNext?.task ?? null)}
+            onCopyPrompt={() => { if (navigator.clipboard && activeNext?.task.prompt) navigator.clipboard.writeText(activeNext.task.prompt); }}
+            onStartBuild={startBuild}
+          />
+        )}
+      >
+        {(condensed) => (
+          <div className="pj-root">
+            {/* Mounted here because this is the screen that shows a story as
+                0 of 3. Farhat read exactly that on a project she was not
+                building in, and had no way to find out. */}
+            <ProjectDriftBanner onSwitched={() => { void refreshProjectsFromBackend(); }} />
+            {/* Read works, write does not: the Command Center and the pushed
+                documents freeze. Rendered here, not as a tooltip, because this
+                is the screen a student is on when they notice. */}
+            <RepoWriteAccessBanner
+              state={repoSync[active.id]}
+              repoUrl={repoUrl[active.id]}
+              onOpenWorkspace={() => openTaskWorkspace(active.id, activeNext?.task ?? null)}
+            />
+            <ProjectInterior
+              project={active}
+              condensed={condensed}
+              onOpenTask={(taskId) => openTaskById(active.id, taskId)}
+              onBack={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }}
+            />
+            {/* Add only. Reads the plan sha on open and re-hydrates the project
+                tree on success, the same refresh the drift banner uses, so the
+                new task appears without a reload. Hidden for sample builds,
+                which have no backend plan to add to. */}
+            {!active.sample && !demo && (
+              <AddStoryPanel
+                projectId={active.pipelineProjectId || active.id}
+                onAdded={() => { void refreshProjectsFromBackend(); }}
+              />
+            )}
+          </div>
+        )}
+      </PortalShell>
+    );
+  }
+
+  if (view.kind === 'preview' && active) {
+    return (
+      <PortalShell><div className="pj-root">
+        <div className="page-h"><div className="crumbs0">Building</div><h1>{active.name}</h1><div className="sub">A preview of the AI tool you're building. It's assembling in the background — open the workspace to watch it fill in, or keep exploring.</div></div>
+        {/* The screen the student is actually on after creating a build. The
+            banner used to render only in the wizard branch they had already
+            left, so every degraded path arrived here saying nothing at all. */}
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+        <CallBanner notice={callNotice} />
+        <ProjectPreview project={active} onOpen={() => openInterior(active.id)} onExplore={() => { setView({ kind: 'overview' }); window.scrollTo(0, 0); }} />
+      </div></PortalShell>
+    );
+  }
+
+  if (view.kind === 'wizard') {
+    return (
+      <PortalShell><div className="pj-root">
+        <div className="page-h"><div className="crumbs0">Where work happens</div><h1>Start a new build</h1><div className="sub">Turn a raw idea into a scheduled build with lists and tasks — created in the background, right here in your portal.</div></div>
+        <button className="pj-back" onClick={() => setView({ kind: 'overview' })}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Back to projects</button>
+        <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+        <CallBanner notice={callNotice} />
+        <ProjectWizard onCreate={handleCreate} />
+      </div></PortalShell>
+    );
+  }
+
+  // ── overview (Today-shaped) ──
+  return (
+    <PortalShell
+      condensedSlot={(
+        <ProjectsNextStepHero
+          variant="condensed"
+          primary={primary}
+          primaryNext={primaryNext}
+          demo={demo}
+          onOpenBuild={openBuildPrimary}
+          onCopyPrompt={copyPrompt}
+          onStartBuild={startBuild}
+        />
+      )}
+    >
+      {(condensed) => (
+    <div className="pj-root">
+      <div className="page-h">
+        <div className="crumbs0">Build and learn</div>
+        <h1>Projects</h1>
+        <div className="sub">Your builds live here — every project you ship, as lists and tasks in the same feed you see across the platform.</div>
+      </div>
+
+      {/* Also here: a student who navigates back to the overview while their
+          build is generating (or after it degraded) must not lose the only
+          explanation they were given. */}
+      <PipelineBanner pipeline={pipeline} handoff={handoff} onRetry={retryFailedBuild} onOpenStory000={pipeline.state === 'delivered' ? () => openStory000(pipeline.projectId) : null} />
+      <CallBanner notice={callNotice} />
+
+      {demo && (
+        <div className="te-card" style={{ borderLeft: '3px solid var(--cherry)', padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flex: 'none', color: 'var(--cherry)' }}><path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 700 }}>Projects are a demo</div>
+            <div className="small">Explore how a real build works — click around the lists and tasks. Running prompts, marking done, and creating a build unlock when you enroll. (Your demo builds reset when you enroll.)</div>
+          </div>
+        </div>
+      )}
+
+      <div className="te-grid">
+        <div>
+          {/* hero: your next step */}
+          <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+            <ProjectsNextStepHero
+              variant="full"
+              primary={primary}
+              primaryNext={primaryNext}
+              demo={demo}
+              onOpenBuild={openBuildPrimary}
+              onCopyPrompt={copyPrompt}
+              onStartBuild={startBuild}
+            />
+          </div>
+
+          <NextSessionStrip />
+
+          {/* your builds */}
+          <div className="te-sec-title">Your builds</div>
+          <div className="pj-builds">
+            {projects.map((p) => {
+              const route = removalRouteFor(p);
+              return (
+                <BuildCard
+                  key={p.id} p={p} onOpen={() => openInterior(p.id)}
+                  repoSync={repoSync[p.id]}
+                  onRemove={route === null ? null : () => {
+                    if (route === 'local') handleRemoveLocalOnly(p);
+                    else setRemoving(p);
+                  }}
+                />
+              );
+            })}
+            <button className="pj-newbuild" onClick={() => setView({ kind: 'wizard' })}>
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+              Start a new build
+              <span className="small" style={{ fontWeight: 400 }}>Idea → shaping → requirements → schedule</span>
+            </button>
+          </div>
+
+          {/* Removed builds — the other half of "nothing is deleted". A promise
+              of reversibility with no visible way to reverse it is not a
+              promise. Rendered only when there is something to restore. */}
+          {archived.length > 0 && (
+            <div className="pjb-archived">
+              <div className="pjb-archived-h">Removed builds</div>
+              {archived.map((a) => (
+                <div className="pjb-archived-row" key={a.id}>
+                  <span className="pjb-archived-nm">{a.name || 'Unnamed build'}</span>
+                  <button type="button" className="pw-act skip" onClick={() => void handleRestore(a.id)}>
+                    Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* timeline: up next across builds */}
+          {feedTop.length > 0 && (
+            <div className="te-feed" style={{ marginTop: 24 }}>
+              <div className="te-feed-head"><span className="h"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Up next across your builds</span></div>
+              {/* `.tl-de` because every rule for these cards is scoped under it —
+                  the same wrapper the interior and the hero use. */}
+              <div className="tl-de">
+                {feedTop.map(({ card, projectId, task }) => (
+                  <TimelineCard
+                    key={card.id}
+                    card={card}
+                    onOpen={() => openTaskWorkspace(projectId, task)}
+                    onWorkspace={() => openTaskWorkspace(projectId, task)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* right sidebar: builds dashboard */}
+        <aside className="te-side">
+          <div className="te-card te-scard">
+            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Your builds</h3>
+            {/*
+              COUNT THE STUDENT'S BUILDS, NOT THE FIXTURE. `projects` always
+              carries the seeded training example — `read()` re-seeds
+              `sample-salon` whenever it is missing — so `projects.length` read
+              one too high at every value: 0 real builds showed "1", 1 showed
+              "2", 2 showed "3". That is the "Active builds: 2 while the API
+              returned 1" report; it was never a stale cache, it was a training
+              fixture being counted as a build the student owns.
+            */}
+            <div className="te-stat"><span className="lab">Active builds</span><span className="num">{ownBuilds.length}</span></div>
+            {/* The same figure the cards carry, totalled across the student's
+                OWN builds — `ownBuilds`, so the seeded training example never
+                inflates what they think their work is worth. Hidden entirely
+                when nothing is priced yet. */}
+            {buildPoints.available > 0 && (
+              <div className="te-stat" title="Across your builds. The platform pays each story when your repo verifies it.">
+                <span className="lab">Build points</span>
+                <span className="num">{buildPoints.earned}/{buildPoints.available}</span>
+              </div>
+            )}
+            {projects.map((p) => {
+              const prog = projectProgress(p);
+              return (
+                <button key={p.id} className="pj-sidebuild" onClick={() => openInterior(p.id)}>
+                  <span className="pj-sb-ic" style={{ background: p.accent }}><svg viewBox="0 0 24 24" fill="none"><path d={p.icon} stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></span>
+                  <span className="pj-sb-t">
+                    {/*
+                      The example still shows — it is a worked build a student
+                      can open and learn the shape from, which is its whole job —
+                      but it is named as one. Sitting unlabelled in "Your builds"
+                      it read as the student's own work, which is the other half
+                      of the same miscount.
+                    */}
+                    <span className="nm">{p.name}{p.sample && <span className="pj-sb-tag">example</span>}</span>
+                    <span className="bar"><i style={{ width: `${prog.pct}%`, background: p.status === 'creating' ? '#367895' : '#5BA63C' }} /></span>
+                  </span>
+                  <span className="pj-sb-pct">{p.status === 'creating' ? '…' : `${prog.pct}%`}</span>
+                </button>
+              );
+            })}
+            <button className="te-btn cherry sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={() => setView({ kind: 'wizard' })}>Start a new build</button>
+          </div>
+
+          <div className="te-card te-scard">
+            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> How builds work</h3>
+            <p className="te-muted" style={{ margin: '0 0 6px', fontSize: 14, lineHeight: 1.5 }}>Each build is decomposed into releases (lists) and stories (tasks). Every task carries a Claude Code prompt and acceptance you can check off. Completing tasks advances your requirements toward verified.</p>
+          </div>
+        </aside>
+      </div>
+
+      {removing && (
+        <ArchiveProjectDialog
+          projectId={removing.pipelineProjectId || removing.id}
+          fallbackName={removing.name}
+          onCancel={() => setRemoving(null)}
+          onArchived={() => { void handleArchived(removing); }}
+        />
+      )}
+    </div>
+      )}
+    </PortalShell>
+  );
+};
+
+export default ProjectsPage;

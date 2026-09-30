@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import StrategyCallIntelligence from '../models/StrategyCallIntelligence';
 import StrategyCall from '../models/StrategyCall';
@@ -11,7 +12,7 @@ let openaiClient: OpenAI | null = null;
 function getClient(): OpenAI {
   if (!openaiClient) {
     if (!env.openaiApiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = new OpenAI({ apiKey: env.openaiApiKey });
+    openaiClient = getInstrumentedOpenAI({ workflow_id: 'synthesis' }, { apiKey: env.openaiApiKey });
   }
   return openaiClient;
 }

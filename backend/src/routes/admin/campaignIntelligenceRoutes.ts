@@ -7,7 +7,7 @@ import { scoreMessageEffectiveness } from '../../services/aiMessageService';
 import { calculateMultiTouchAttribution } from '../../services/revenueDashboardService';
 import { parseNaturalLanguageCampaign } from '../../services/campaignBuilderService';
 import { getPersonaArchetypes } from '../../services/testing/testLeadGenerator';
-import { getCampaignGraphData, getNodeUsers, getEdgeUsers, getSlicedGraphData, buildTimelineBuckets, getCachedLeadPaths } from '../../services/reporting/campaignGraphService';
+import { getCampaignGraphData, getNodeUsers, getEdgeUsers, getSlicedGraphData, buildTimelineBuckets, getCachedLeadPaths, parseGraphScope } from '../../services/reporting/campaignGraphService';
 
 const router = Router();
 
@@ -181,9 +181,17 @@ router.get('/api/admin/campaign-intelligence/visitor-diagnostics', requireAdmin,
 // ── Campaign Intelligence Graph ─────────────────────────────────────────
 
 router.get('/api/admin/campaign-intelligence/graph', requireAdmin, async (req: Request, res: Response) => {
+  // Parsed by a pure, tested function (parseGraphScope) rather than inline, so the 400 for a
+  // malformed campaign id has a test that does not need the whole intelligence router mounted.
+  const scope = parseGraphScope(req.query as Record<string, unknown>);
+  if (!scope.ok) {
+    res.status(400).json({ error: scope.error, error_class: 'ValidationError' });
+    return;
+  }
   try {
-    const timeWindow = req.query.timeWindow as string | undefined;
-    const data = await getCampaignGraphData(timeWindow);
+    // T411: the journey terms ride the same parsed scope; an empty `journey` is no filter at all.
+    const { timeWindow, brandId, campaignId, journey } = scope;
+    const data = await getCampaignGraphData(timeWindow, brandId, campaignId, journey);
     if (req.query.timeline === 'true') {
       const paths = getCachedLeadPaths();
       if (paths) data.timeline_buckets = buildTimelineBuckets(paths);

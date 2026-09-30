@@ -5,6 +5,8 @@
  * Ensures every action in the company layer is tracked via tickets.
  * Creates TicketActivity audit trail entries automatically.
  */
+import { Op } from 'sequelize';
+import { getTicketCreatorAdminUserId } from '../agentBlueprint/ticketCreatorIdentitySeed';
 
 interface TicketInput {
   title: string;
@@ -82,7 +84,41 @@ export async function createDirectiveTicket(directiveId: string, companyId: stri
   });
 }
 
+// Agent Quality Cleanup, Item 2 — workforce_intelligence_engine's ticket
+// dedup. createWorkforceTicket() already computed a stable key (entityType:
+// 'agent', entityId: agentName) but called createTrackedTicket(), which has
+// no dedup at all — every call unconditionally inserts a new Ticket row
+// (confirmed live: 436 workforce tickets, 100% still open, the identical
+// "[Workforce] High error rate detected: 84%" finding for
+// OpenclawLearningOptimizationAgent refiled repeatedly). createTrackedTicket()
+// is also the shared primitive for createBPOSTicket()/createDirectiveTicket()
+// — deliberately left untouched here (bpos_orchestrator's dedup/resolution
+// logic is out of scope for this run) — so the check is added locally in
+// this function only. The key gets a condition-specific suffix
+// (':high_error_rate') rather than staying bare agentName, since only Rule 1
+// ("High error agents") in workforceIntelligenceEngine.ts creates tickets
+// today; a future rule can pick its own suffix without colliding with this one.
+const WORKFORCE_HIGH_ERROR_RATE_SUFFIX = 'high_error_rate';
+
 export async function createWorkforceTicket(companyId: string, agentName: string, decision: string, reasoning: string, priority: string = 'medium') {
+  const { Ticket } = await import('../../models');
+  const entityId = `${agentName}:${WORKFORCE_HIGH_ERROR_RATE_SUFFIX}`;
+
+  const existingOpenTicket = await (Ticket as any).findOne({
+    where: {
+      entity_type: 'agent',
+      entity_id: entityId,
+      type: 'workforce_decision',
+      status: { [Op.notIn]: ['done', 'cancelled'] },
+    },
+  });
+  if (existingOpenTicket) return existingOpenTicket;
+
+  // Agent Alias & Identity Fix (forward-fix) — createTrackedTicket() always
+  // creates with status:'backlog' (see below), which never intersects
+  // ticketManagementAgent.ts's status:'todo' auto-dispatch sweep, so it's safe
+  // to fully stamp workforce_intelligence_engine's real AdminUser id as assignee.
+  const workforceEngineAdminUserId = await getTicketCreatorAdminUserId('workforce_intelligence_engine');
   return createTrackedTicket({
     title: `[Workforce] ${decision.substring(0, 200)}`,
     description: reasoning,
@@ -93,12 +129,18 @@ export async function createWorkforceTicket(companyId: string, agentName: string
     createdById: 'workforce_intelligence_engine',
     companyId,
     entityType: 'agent',
-    entityId: agentName,
+    entityId,
+    ...(workforceEngineAdminUserId ? { assignedToType: 'ai_staff', assignedToId: workforceEngineAdminUserId } : {}),
     metadata: { agent_name: agentName, decision, reasoning },
   });
 }
 
 export async function createBPOSTicket(companyId: string, bpName: string, stage: string, bpId: string, parentTicketId?: string) {
+  // Agent Alias & Identity Fix (forward-fix) — createTrackedTicket() always
+  // creates with status:'backlog', and the caller (projectRoutes.ts) always
+  // immediately transitions it to 'in_progress' right after (never 'todo'), so
+  // it's safe to fully stamp bpos_orchestrator's real AdminUser id as assignee.
+  const bposAdminUserId = await getTicketCreatorAdminUserId('bpos_orchestrator');
   return createTrackedTicket({
     title: `[BPOS] ${bpName} — ${stage}`,
     description: `BPOS execution stage: ${stage} for business process "${bpName}"`,
@@ -111,6 +153,7 @@ export async function createBPOSTicket(companyId: string, bpName: string, stage:
     entityType: 'capability',
     entityId: bpId,
     parentTicketId,
+    ...(bposAdminUserId ? { assignedToType: 'ai_staff', assignedToId: bposAdminUserId } : {}),
     metadata: { bp_name: bpName, stage, bp_id: bpId },
   });
 }

@@ -1,0 +1,581 @@
+/**
+ * caseStudyPublishRules — the publish gate's vocabulary and its STRUCTURAL
+ * rules: lifecycle, snapshot approval, metric visibility, consent, repository
+ * exposure and required proof metadata (spec §15 conditions 1-8, plus §6.2's
+ * surface restriction).
+ *
+ * READ `caseStudyPublishGate.ts` FIRST. It carries the doctrine this file
+ * implements — why the gate fails closed, why it returns every blocker at once,
+ * and the recorded position on self-attested verification that rule 7b enforces.
+ *
+ * WHY THIS IS ITS OWN FILE. The gate, its structural rules and its prose scan
+ * together run to roughly 670 lines, past CLAUDE.md's 500-line hard ceiling. The
+ * same split already exists next door for the same reason
+ * (`caseStudySnapshotBuilder` + `…Sections` + `…Overrides` + `…Input`;
+ * `caseStudyReadinessService` + `…Rubric`). The dependency runs ONE way — this
+ * file is the leaf that owns the types, `caseStudyPublishClaimScan.ts` imports
+ * them, `caseStudyPublishGate.ts` imports both and re-exports — so the set is
+ * acyclic by construction and no consumer needs to know it is split at all.
+ *
+ * PURE. No clock, no randomness, no I/O, no database, no logging, no model
+ * import. Every function is a total function of its arguments.
+ */
+import { PUBLISHABLE_SURFACE_KEYS } from '../../types/caseStudy';
+import { isPublishableSurfaceKey } from '../../types/caseStudyGuards';
+import { repoLogIdentity } from './caseStudyRepoReader';
+import type {
+  CaseStudyBuilderIdentityMode,
+  CaseStudyContributor,
+  CaseStudyMetricEntry,
+  CaseStudyOrganizationIdentityMode,
+  CaseStudySnapshotContent,
+  CaseStudySnapshotStatus,
+  CaseStudyStatus,
+  CaseStudySurfaceKey,
+} from '../../types/caseStudy';
+import type { CaseStudyProvenance } from '../../types/caseStudyProvenance';
+
+/* ────────────────────────────────────────────────────────────── vocabulary ── */
+
+/**
+ * One code per rejection reason. Codes are what a LOG LINE carries — a blocker's
+ * message can quote a client's name or a builder's name, and a code never can —
+ * and what the admin UI anchors its remediation links to. Stable identifiers:
+ * retire one, never rename it.
+ */
+export type CaseStudyPublishBlockerCode =
+  | 'surface_not_publishable'
+  | 'case_study_not_approved'
+  | 'snapshot_not_approved'
+  | 'metric_pending'
+  | 'organization_consent'
+  | 'builder_consent'
+  | 'private_repo_exposed'
+  | 'proof_metadata_missing'
+  | 'self_attested_verification'
+  | 'ai_generated_quote'
+  | 'unverified_claim'
+  | 'metric_shape_payload_mismatch'
+  | 'metric_ratio_missing_denominator'
+  | 'metric_members_count_mismatch'
+  | 'metric_collected_sha_mismatch'
+  // Unified Project Discovery, Phase 7: a record linked to a student project
+  // carries that project's computed maturity. See caseStudyPublishMaturityRule.
+  | 'maturity_below_operational_result'
+  | 'project_truth_has_open_questions'
+  // The hero row. See caseStudyPublishHeroRules for the card row that made the
+  // library worse and why the skill alone could not stop it.
+  | 'headline_metric_is_a_bare_count'
+  | 'headline_metric_missing_plain_answers'
+  // 20 — the visual story failed `validateVisualStory` (graph, text or figure
+  // rule). Written stories are validated on save, so this catches a story that
+  // was valid then and is not now: a metric it cites lost its verification, or
+  // a snapshot was assembled by a path that skipped the write-time check.
+  | 'visual_story_invalid'
+  // 21 — the snapshot carries no visual story, or one that draws no workflow.
+  // Every published record carries one since the CORA pilot was approved
+  // (Ali, 2026-09-16); presence and a workflow are required, figures are not.
+  | 'visual_story_missing';
+
+export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
+  'surface_not_publishable',
+  'case_study_not_approved',
+  'snapshot_not_approved',
+  'metric_pending',
+  'organization_consent',
+  'builder_consent',
+  'private_repo_exposed',
+  'proof_metadata_missing',
+  'self_attested_verification',
+  'ai_generated_quote',
+  'unverified_claim',
+  'metric_shape_payload_mismatch',
+  'metric_ratio_missing_denominator',
+  'metric_members_count_mismatch',
+  'metric_collected_sha_mismatch',
+  'maturity_below_operational_result',
+  'project_truth_has_open_questions',
+  'headline_metric_is_a_bare_count',
+  'headline_metric_missing_plain_answers',
+  'visual_story_invalid',
+  'visual_story_missing',
+] as const;
+
+/** One reason a publish was refused. `message` names the FIELD and its VALUE. */
+export interface CaseStudyPublishBlocker {
+  readonly code: CaseStudyPublishBlockerCode;
+  /** Dotted path into the snapshot content, or a column name on the record. */
+  readonly field: string;
+  readonly message: string;
+  readonly remedy: string;
+}
+
+/** The `case_studies` columns the gate reads. Never the model instance itself. */
+export interface CaseStudyPublishRecord {
+  readonly id: string;
+  readonly status: CaseStudyStatus;
+  readonly organizationIdentityMode: CaseStudyOrganizationIdentityMode;
+  readonly organizationNamingConsent: boolean;
+  readonly organizationDisplayName?: string | null;
+  readonly builderIdentityMode: CaseStudyBuilderIdentityMode;
+  readonly builderNamingConsent: boolean;
+  readonly archivedAt?: string | null;
+}
+
+/** The `case_study_snapshots` row under consideration. `null` means none exists. */
+export interface CaseStudyPublishSnapshot {
+  readonly id: string;
+  readonly version: number;
+  readonly status: CaseStudySnapshotStatus;
+  readonly approvedBy?: string | null;
+  readonly approvedAt?: string | null;
+  readonly content: CaseStudySnapshotContent;
+  readonly provenance?: CaseStudyProvenance;
+}
+
+export interface CaseStudyPublishGateInput {
+  readonly surfaceKey: CaseStudySurfaceKey;
+  readonly caseStudy: CaseStudyPublishRecord;
+  readonly snapshot: CaseStudyPublishSnapshot | null;
+  /**
+   * The student project's computed maturity and open questions, when the
+   * record is about one: linked by `project_id`, or found through a cited
+   * repository that belongs to a student project (`via`). Absent or null means
+   * "nothing to judge" and the maturity rule is a no-op, so every record about
+   * our own work is untouched.
+   */
+  readonly foundation?: {
+    readonly maturity: string;
+    readonly openQuestions: number;
+    readonly via?: 'linked' | 'repository';
+  } | null;
+}
+
+export interface CaseStudyPublishDecision {
+  readonly allowed: boolean;
+  readonly blockers: readonly CaseStudyPublishBlocker[];
+  /** Deduplicated codes, in rule order. The log line carries these, not messages. */
+  readonly codes: readonly CaseStudyPublishBlockerCode[];
+  /** Spec §15's block, ready to hand to an admin. Empty when allowed. */
+  readonly summary: string;
+}
+
+/* ───────────────────────────────────────────────────────────────── helpers ── */
+
+export const arr = <T>(v: readonly T[] | undefined | null): readonly T[] => (Array.isArray(v) ? v : []);
+export const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+export const has = (v: unknown): boolean => text(v).length > 0;
+
+/** Collector. Rules push into it; nothing ever short-circuits the run. */
+export class Blockers {
+  private readonly list: CaseStudyPublishBlocker[] = [];
+
+  add(code: CaseStudyPublishBlockerCode, field: string, message: string, remedy: string): void {
+    this.list.push(Object.freeze({ code, field, message, remedy }));
+  }
+
+  all(): readonly CaseStudyPublishBlocker[] {
+    return Object.freeze([...this.list]);
+  }
+}
+
+export interface MetricAt {
+  readonly metric: CaseStudyMetricEntry;
+  readonly path: string;
+}
+
+/**
+ * Hero metrics then measurement metrics, deduplicated by `key` with hero
+ * winning — the same order `caseStudyReadinessRubric.buildReadinessContext` uses,
+ * deliberately, so the gate and the readiness panel are talking about the same
+ * list of figures even though they reach opposite kinds of conclusion.
+ */
+export function collectMetrics(content: CaseStudySnapshotContent): readonly MetricAt[] {
+  const out: MetricAt[] = [];
+  const seen = new Set<string>();
+  const push = (m: CaseStudyMetricEntry, path: string): void => {
+    if (!m || typeof m !== 'object') return;
+    const key = has(m.key) ? text(m.key) : path;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ metric: m, path });
+  };
+  arr(content.heroMetrics).forEach((m, i) => push(m, `heroMetrics[${i}]`));
+  arr(content.measurement?.metrics).forEach((m, i) => push(m, `measurement.metrics[${i}]`));
+  return out;
+}
+
+/**
+ * A metric is VISIBLE when `publishable` is true. `case_study_metrics.publishable`
+ * defaults FALSE in the DDL, so anything a human has not deliberately promoted
+ * is invisible and none of the visibility rules apply to it.
+ */
+export const visible = (m: MetricAt): boolean => m.metric?.publishable === true;
+
+/** `headline metric "41% fewer stockouts"` / `metric "Deploy frequency"`. */
+export function metricName(m: CaseStudyMetricEntry): string {
+  const shown = has(m.valueDisplay) ? text(m.valueDisplay) : text(m.label) || '(unnamed metric)';
+  return `${m?.isHeadline === true ? 'headline metric' : 'metric'} "${shown}"`;
+}
+
+/* ─────────────────────────────────────────────────────── the structural rules ── */
+
+/** 13 — only `enterprise` may be published in Phase 1 (spec §6.2). */
+export function ruleSurface(input: CaseStudyPublishGateInput, b: Blockers): void {
+  if (isPublishableSurfaceKey(input.surfaceKey)) return;
+  b.add('surface_not_publishable', 'surface_key',
+    `surface "${input.surfaceKey}" is accepted by the contract but is not publishable in Phase 1`,
+    `publish to ${PUBLISHABLE_SURFACE_KEYS.map((k) => `"${k}"`).join(' or ')}; the other surfaces exist so that adding one later is a publication row rather than a schema change`);
+}
+
+/** 1 — the Case Study itself must be approved, and must not be archived. */
+export function ruleStatus(record: CaseStudyPublishRecord, b: Blockers): void {
+  if (record.status !== 'approved') {
+    b.add('case_study_not_approved', 'case_studies.status',
+      `Case Study status is "${record.status}"; only an approved Case Study may be published`,
+      'move the record through review and approve it, then publish');
+  }
+  if (has(record.archivedAt)) {
+    b.add('case_study_not_approved', 'case_studies.archived_at',
+      `Case Study was archived at ${text(record.archivedAt)}, and an archived record may not be published`,
+      'restore the record before publishing');
+  }
+}
+
+/** 2 — an approved snapshot must exist, and must record who approved it. */
+export function ruleSnapshot(snapshot: CaseStudyPublishSnapshot | null, b: Blockers): void {
+  if (!snapshot) {
+    b.add('snapshot_not_approved', 'case_study_snapshots',
+      'no approved snapshot exists for this Case Study',
+      'review the latest draft snapshot and approve it; publication pins the approved version, so there is nothing to pin until one exists');
+    return;
+  }
+  if (snapshot.status !== 'approved') {
+    b.add('snapshot_not_approved', 'case_study_snapshots.status',
+      `snapshot version ${snapshot.version} has status "${snapshot.status}"; only an approved snapshot may be published`,
+      'approve that snapshot version, or approve a newer one and publish that');
+    return;
+  }
+  if (!has(snapshot.approvedBy) || !has(snapshot.approvedAt)) {
+    b.add('snapshot_not_approved', 'case_study_snapshots.approved_by',
+      `snapshot version ${snapshot.version} is marked approved but records no approver`,
+      're-approve the snapshot so approved_by and approved_at are both stamped; an approval nobody signed is not an approval');
+  }
+}
+
+/** 3 — no VISIBLE metric may still be `pending`. */
+export function rulePendingMetrics(metrics: readonly MetricAt[], b: Blockers): void {
+  for (const m of metrics) {
+    if (!visible(m)) continue;
+    if (m.metric.verification?.class !== 'pending') continue;
+    b.add('metric_pending', `${m.path}.verification.class`,
+      `${metricName(m.metric)} is marked publishable but its verification is still pending`,
+      'verify the figure and set its verification class, or clear its publishable flag so it stays off the page');
+  }
+}
+
+/** 4 — the organisation may not be named without recorded naming consent. */
+export function ruleOrganizationConsent(
+  record: CaseStudyPublishRecord, content: CaseStudySnapshotContent, b: Blockers,
+): void {
+  const identity = content.identity;
+  const mode = identity?.organizationIdentityMode;
+  const name = text(identity?.organizationDisplayName) || text(record.organizationDisplayName);
+  const named = `organization name${name ? ` "${name}"` : ''}`;
+
+  // Drift between the consent columns and the snapshot that would render is
+  // itself a blocker. Publication must never resolve a disagreement about
+  // consent by picking one of the two answers.
+  if (mode !== record.organizationIdentityMode) {
+    b.add('organization_consent', 'identity.organizationIdentityMode',
+      `organization identity mode differs between the Case Study record ("${record.organizationIdentityMode}") and the approved snapshot ("${mode}")`,
+      'change consent on the record, rebuild the snapshot and re-approve it');
+  }
+  if (identity?.organizationNamingConsent !== record.organizationNamingConsent) {
+    b.add('organization_consent', 'identity.organizationNamingConsent',
+      `organization naming consent differs between the Case Study record (${record.organizationNamingConsent}) and the approved snapshot (${identity?.organizationNamingConsent})`,
+      'rebuild the snapshot from the record and re-approve it');
+  }
+  if (mode === 'named'
+    && !(record.organizationNamingConsent === true && identity?.organizationNamingConsent === true)) {
+    b.add('organization_consent', 'identity.organizationNamingConsent',
+      `${named} is visible but naming consent is not approved`,
+      'record the organization\'s naming consent, or set the identity mode to "anonymized" so the record describes them without naming them');
+  }
+  if (mode === 'named' && !name) {
+    b.add('organization_consent', 'identity.organizationDisplayName',
+      'organization identity mode is "named" but no organization name is recorded',
+      'record the name that consent covers, or set the identity mode to "anonymized"');
+  }
+  if (mode === 'hidden' && name) {
+    b.add('organization_consent', 'identity.organizationDisplayName',
+      `organization identity mode is "hidden" but the snapshot still carries the name "${name}"`,
+      'clear the organization name from the snapshot, or raise the identity mode to "anonymized" or to "named" with consent');
+  }
+}
+
+/** 5 — no builder may be named without recorded builder consent. */
+export function ruleBuilderConsent(
+  record: CaseStudyPublishRecord, content: CaseStudySnapshotContent, b: Blockers,
+): void {
+  const identity = content.identity;
+  const mode = identity?.builderIdentityMode;
+  const consented = record.builderNamingConsent === true && identity?.builderNamingConsent === true;
+
+  if (mode !== record.builderIdentityMode) {
+    b.add('builder_consent', 'identity.builderIdentityMode',
+      `builder identity mode differs between the Case Study record ("${record.builderIdentityMode}") and the approved snapshot ("${mode}")`,
+      'change consent on the record, rebuild the snapshot and re-approve it');
+  }
+  if (identity?.builderNamingConsent !== record.builderNamingConsent) {
+    b.add('builder_consent', 'identity.builderNamingConsent',
+      `builder naming consent differs between the Case Study record (${record.builderNamingConsent}) and the approved snapshot (${identity?.builderNamingConsent})`,
+      'rebuild the snapshot from the record and re-approve it');
+  }
+  if (mode === 'named' && !consented) {
+    b.add('builder_consent', 'identity.builderNamingConsent',
+      'builder identity is "named" but builder naming consent is not approved',
+      'record the builder\'s consent, or set the builder identity mode to "role_only" so the page credits the role without the person');
+  }
+
+  /**
+   * THE SAME RULE FOR EVERY LIST OF PEOPLE ON THE SNAPSHOT. A per-surface
+   * variant may carry its own contributor list (2026-09-16), so a name the
+   * canonical list would be refused for cannot slip through a variant.
+   * `namedOk` collects the names this rule lets through, so the builder
+   * profile below is held to the same list.
+   */
+  const namedOk = new Set<string>();
+  const checkPeople = (prefix: string, people: unknown): void => {
+    arr(people as readonly CaseStudyContributor[]).forEach((c, i) => {
+      if (!c || c.displayMode !== 'named') return;
+      const who = `contributor "${text(c.displayName) || '(unnamed)'}"`;
+      const role = has(c.role) ? ` (${text(c.role)})` : '';
+      let ok = true;
+      if (!consented) {
+        ok = false;
+        b.add('builder_consent', `${prefix}[${i}].displayName`,
+          `${who}${role} would be named but builder naming consent is not approved`,
+          'record that contributor\'s consent, or change their displayMode to "role_only"');
+      }
+      if (mode !== 'named') {
+        ok = false;
+        b.add('builder_consent', `${prefix}[${i}].displayMode`,
+          `${who}${role} would be named while the builder identity mode is "${mode}"`,
+          'change the contributor to "role_only", or raise the builder identity mode to "named" with consent on file');
+      }
+      if (!has(c.consentRecordedAt)) {
+        ok = false;
+        b.add('builder_consent', `${prefix}[${i}].consentRecordedAt`,
+          `${who}${role} is named but records no consent timestamp`,
+          'stamp consentRecordedAt with when the consent was actually given; a named person with no recorded consent is the failure this field exists to prevent');
+      }
+      if (ok && has(c.displayName)) namedOk.add(text(c.displayName));
+    });
+  };
+  checkPeople('contributors', content.contributors);
+  const variants = (content as { surfaceVariants?: Record<string, any> }).surfaceVariants;
+  const variantEntries = variants && typeof variants === 'object' ? Object.entries(variants) : [];
+  for (const [surface, v] of variantEntries) {
+    if (!isPublishableSurfaceKey(surface)) {
+      b.add('builder_consent', `surfaceVariants.${surface}`,
+        `a surface variant is keyed on "${surface}", which is not a publishable surface`,
+        `key the variant on one of ${PUBLISHABLE_SURFACE_KEYS.join(', ')}, or remove it`);
+      continue;
+    }
+    if (v && typeof v === 'object' && v.contributors !== undefined) checkPeople(`surfaceVariants.${surface}.contributors`, v.contributors);
+  }
+  /**
+   * THE BUILDER PROFILE NAMES NOBODY THE GATE DID NOT. Its `displayName` must
+   * be a contributor this rule let through in the SAME content it will be
+   * projected with: the canonical profile against the canonical list, a
+   * variant's profile against that variant's list when it has one. The
+   * projection withholds the biography anyway; this makes the mistake a
+   * refusal with a path rather than a silently blank card.
+   */
+  const checkBuilder = (prefix: string, profile: unknown, people: unknown): void => {
+    const name = text((profile as { displayName?: unknown } | null)?.displayName);
+    if (!profile || typeof profile !== 'object' || !name) return;
+    const list = arr(people as readonly CaseStudyContributor[]);
+    const namedHere = list.some((c) => c?.displayMode === 'named' && text(c.displayName) === name && namedOk.has(name));
+    if (!namedHere) {
+      b.add('builder_consent', `${prefix}.displayName`,
+        `the builder profile names "${name}" but no named, consented contributor of that name is on the same content`,
+        'add the person as a named contributor with consent on file, or leave displayName empty so the card credits the role only');
+    }
+  };
+  checkBuilder('builder', (content as { builder?: unknown }).builder, content.contributors);
+  for (const [surface, v] of variantEntries) {
+    if (!v || typeof v !== 'object' || !isPublishableSurfaceKey(surface)) continue;
+    checkBuilder(`surfaceVariants.${surface}.builder`, v.builder, v.contributors !== undefined ? v.contributors : content.contributors);
+  }
+}
+
+/** 6 — a repository that is not demonstrably public may not be linked. */
+export function ruleRepositories(content: CaseStudySnapshotContent, b: Blockers): void {
+  arr(content.repositories).forEach((r, i) => {
+    if (!r || r.allowPublicRepoLink !== true) return;
+    if (r.visibility === 'public') return;
+    // `repoLogIdentity` fails closed on anything other than `public`, so a
+    // non-public repository is named here only by its opaque handle. That makes
+    // this message safe to surface to an admin AND safe to put in a log line.
+    const id = repoLogIdentity(text(r.repoOwner), text(r.repoName), r.visibility);
+    const ref = id.repo_ref ? `repo_ref ${id.repo_ref}` : `${id.owner}/${id.repo}`;
+    b.add('private_repo_exposed', `repositories[${i}].allowPublicRepoLink`,
+      `a repository whose visibility is "${r.visibility}" (role "${r.role}", ${ref}) is flagged allow_public_repo_link and would be exposed`,
+      r.visibility === 'unknown'
+        ? 're-read the repository\'s visibility; a repository we could not read is not a public one, so the flag cannot be honoured'
+        : 'clear allow_public_repo_link; a private repository survives on the page as an opaque count, never as a link');
+  });
+}
+
+/**
+ * 7 — required proof metadata, and 7b — the self-attestation position.
+ *
+ * 7b is stated in full in `caseStudyPublishGate.ts`'s header: a `verified` class
+ * on a `self` method is a MISLABEL, not weak evidence, and is refused outright.
+ * The `continue` is deliberate — reporting "and it also has no evidence pointer"
+ * about a metric whose label is wrong would bury the finding that matters.
+ */
+export function ruleProofMetadata(
+  metrics: readonly MetricAt[], content: CaseStudySnapshotContent, b: Blockers,
+): void {
+  for (const m of metrics) {
+    if (!visible(m)) continue;
+    const v = m.metric.verification;
+    if (v?.class === 'verified' && v?.method === 'self') {
+      b.add('self_attested_verification', `${m.path}.verification.method`,
+        `${metricName(m.metric)} is labelled verified but its verification method is "self"; a self-report is not third-party verification`,
+        'verify it against the repository, the platform or the client, or record it as "anonymized" or "illustrative" so the surface labels it as self-reported');
+      continue;
+    }
+    if (v?.class === 'verified' && !has(v?.evidenceId)) {
+      b.add('proof_metadata_missing', `${m.path}.verification.evidenceId`,
+        `${metricName(m.metric)} has no verified evidence`,
+        'link a case_study_evidence row to the metric; a verified class with no evidence pointer is an assertion, not proof');
+    }
+    const ctx = m.metric.measurement;
+    if (m.metric.isHeadline === true
+      && !(has(ctx?.baseline) || has(ctx?.sample) || has(ctx?.methodology))) {
+      b.add('proof_metadata_missing', `${m.path}.measurement`,
+        `${metricName(m.metric)} states no baseline, sample or methodology`,
+        'record how it was measured; spec §23 will not render a headline figure without the context that makes it honest');
+    }
+  }
+  const ps = content.identity?.productionStatus;
+  if (ps && ps.verification?.class === 'verified' && !has(ps.verification?.evidenceId)) {
+    b.add('proof_metadata_missing', 'identity.productionStatus.verification.evidenceId',
+      `production status "${ps.status}" is labelled verified but carries no evidence reference`,
+      'link the evidence that establishes the deployment, or lower the verification class');
+  }
+}
+
+/**
+ * 12 - a shaped metric has to agree with itself.
+ *
+ * A METRIC WITH NO SHAPE TRIGGERS NONE OF THIS, and that is the point. Every
+ * record published before shapes existed carries no `shape`, no `payload` and no
+ * `collected`, and must pass exactly the blockers it passed yesterday. This rule
+ * only ever fires on a record that opted in and then contradicted itself.
+ *
+ * The four disagreements it catches, in the order they cost a reader:
+ *
+ *   payload mismatch      the card is told to draw a meter from numbers that
+ *                         are not there, so it draws nothing or it draws wrong
+ *   missing denominator   "4 of 7" with no 7 is the original defect, restated
+ *                         in a structured field where it looks fixed
+ *   members disagree      six names under a figure that says four is a claim
+ *                         the reader can check and catch, which is worse than
+ *                         a number they cannot check at all
+ *   sha mismatch          the figure was computed at one commit and the
+ *                         evidence pinned to another, so "reproduce this" does
+ *                         not reproduce it
+ *
+ * Only VISIBLE metrics are checked, like every other content rule here. An
+ * unpublishable metric may be mid-edit, and blocking a page over a figure
+ * nobody will see would be the gate refusing work it is not doing.
+ */
+export function ruleMetricShapes(metrics: readonly MetricAt[], b: Blockers): void {
+  for (const m of metrics) {
+    if (!visible(m)) continue;
+    const metric = m.metric;
+    if (!metric.shape) continue;
+
+    const payload = metric.payload;
+    if (!payload || payload.shape !== metric.shape) {
+      b.add('metric_shape_payload_mismatch', `${m.path}.payload`,
+        `${metricName(metric)} declares shape ${metric.shape} but its payload ${payload ? `says ${payload.shape}` : 'is missing'}`,
+        'recollect the figure so the payload matches the declared shape, or clear the shape so the metric renders as plain text');
+      continue;
+    }
+
+    if ((payload.shape === 'ratio' || payload.shape === 'share')
+      && !(Number.isFinite(payload.denominator) && payload.denominator > 0)) {
+      b.add('metric_ratio_missing_denominator', `${m.path}.payload.denominator`,
+        `${metricName(metric)} is a ${payload.shape} with no usable denominator`,
+        'give the figure the total it is measured against; a ratio without one is the string "4 of 7" again');
+    }
+
+    if (payload.shape === 'ratio' && Array.isArray(payload.members) && payload.members.length > 0) {
+      // Members may be CAPPED - a collector that found 200 modules lists 40 -
+      // so more members than the denominator is the contradiction, not fewer.
+      if (payload.members.length > payload.denominator) {
+        b.add('metric_members_count_mismatch', `${m.path}.payload.members`,
+          `${metricName(metric)} lists ${payload.members.length} members against a denominator of ${payload.denominator}`,
+          'recollect the figure; a reader can count the names, so a list longer than the total reads as an error in the number');
+      }
+      const yes = payload.members.filter((member) => member.status === 'yes').length;
+      if (payload.members.length === payload.denominator && yes !== payload.numerator) {
+        b.add('metric_members_count_mismatch', `${m.path}.payload.members`,
+          `${metricName(metric)} says ${payload.numerator} but ${yes} of its ${payload.members.length} members are marked yes`,
+          'recollect the figure so the marked members and the numerator agree');
+      }
+    }
+
+    if (payload.shape === 'count' && Array.isArray(payload.members)
+      && payload.members.length > payload.value) {
+      b.add('metric_members_count_mismatch', `${m.path}.payload.members`,
+        `${metricName(metric)} counts ${payload.value} but lists ${payload.members.length} members`,
+        'recollect the figure so the count is at least as large as the list under it');
+    }
+  }
+}
+
+/**
+ * 13 - a collected figure must be pinned to a commit the record still describes.
+ *
+ * WHY THIS IS A BLOCKER AND NOT A WARNING. The entire claim of a collected
+ * metric is "run this command at this commit and you get this number". When the
+ * snapshot has moved on to a newer commit and the figure has not, the page
+ * shows a number computed from a tree it no longer describes, under a command
+ * that reproduces a version of the work nobody is reading about. A checkable
+ * promise that fails when checked is worse than no promise at all.
+ *
+ * A metric with no `collected` block was typed by a human and makes no such
+ * promise, so it is not checked here.
+ *
+ * The comparison is against EVERY pinned repository, not just one. A case study
+ * spanning three repositories has three shas, and a figure collected from any
+ * of them is correctly pinned. Matching on the set is the honest test; picking
+ * the first would fail every multi-repository record.
+ */
+export function ruleCollectedSha(
+  metrics: readonly MetricAt[], content: CaseStudySnapshotContent, b: Blockers,
+): void {
+  const pinned = new Set(
+    arr(content.repositories).map((repo) => text(repo.lastSeenSha)).filter((sha) => sha.length > 0),
+  );
+  // No pinned sha at all means the repositories were never analysed, which
+  // other rules already report. Blocking here would double-report one problem.
+  if (pinned.size === 0) return;
+
+  for (const m of metrics) {
+    if (!visible(m)) continue;
+    const collected = m.metric.collected;
+    if (!collected) continue;
+    if (pinned.has(collected.collectedSha)) continue;
+    b.add('metric_collected_sha_mismatch', `${m.path}.collected.collectedSha`,
+      `${metricName(m.metric)} was computed at ${collected.collectedSha.slice(0, 8)}, which is not a commit this record is pinned to`,
+      're-run the sync so the figure is recomputed at the commit the record describes; a reproduce command against a different commit does not reproduce the number');
+  }
+}

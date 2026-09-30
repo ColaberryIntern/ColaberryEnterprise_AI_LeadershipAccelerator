@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260731-x9q4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, July 31, 2026 at 10:45 AM</div>
+    <div><span class="sid">CC-20260731-x9q4</span><span class="count">7 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Foundation + discovery/matching/grouping layer for the new &quot;Inbox Intel — Case Resolution Engine,&quot; extending the existing Inbox Chief of Staff at `/admin/inbox` per Ali&#39;s full 25-section build spec. Session working in isolated worktree `worktree-inbox-intel-case-resolution` to avoid colliding with concurrent sponsor-portal work on `workstream/chapter-quality-and-worker`.**</h2>
+          <span class="badge">2026-07-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Phase 0 discovery (Explore agent architecture map: Inbox COS uses OpenAI via `getInstrumentedOpenAI`, not Anthropic — reused, no new AI provider added; Basecamp via `basecampClient.ts` bcGet/bcPost reused, no second client; DB schema via `ensure*Schema()` raw-DDL pattern, not `sequelize.sync`). Phase 1: 6 new Sequelize models (`InboxCase`, `InboxCaseItem`, `InboxIdentityAlias`, `InboxCaseQuestion`, `InboxCaseAction`, `InboxCaseEvent`) registered in `models/index.ts`; `backend/src/db/ensureInboxCaseSchema.ts` (idempotent DDL, additive-only, mirrors `ensureLiveSessionSchema.ts`) hooked into `server.ts` boot sequence; shared contracts in `backend/src/types/inboxCase.ts` (case state machine with validated transitions, disposition/action-type/risk taxonomy, match-score thresholds 0.85/0.65 per directive); Zod request schemas in `backend/src/schemas/inboxCaseSchema.ts`; `services/inboxCase/caseStateMachine.ts` + `caseRepository.ts` (the only code path allowed to write `InboxCase.state`) + `caseEventLog.ts` (append-only audit writer). Phase 2: `textNormalization.ts` (subject Re:/Fwd: stripping, Basecamp URL/recording-ID extraction, term-overlap &quot;semantic-ish&quot; scoring), `identityResolver.ts` + `topicExpansion.ts` (Mode A/B query resolution, no hardcoded person identifiers — aliases persisted to `InboxIdentityAlias`), `matchScoring.ts` (noisy-OR weighted evidence combination per the directive&#39;s strong/medium/weak signal tiers), `caseGroupingService.ts` (union-find clustering on STRONG connectors only — thread id, reply-chain, shared Basecamp reference, or subject+participant combo — never bare participant overlap alone, so &quot;same person participated&quot; cannot merge unrelated cases), 3 provider adapters (`sources/gmailCaseSource.ts` reusing `inboxSyncService`&#39;s existing OAuth2 Gmail clients with a deliberate separate `in:sent` query for context per the directive; `sources/hotmailCaseSource.ts` reusing `graphMailService.ts`; `sources/basecampCaseSource.ts` reusing `basecampClient.bcGet`, exact-reference-first then `OpsBcTodo` mirror), and `caseDiscoveryService.ts` (the Discover+Connect orchestrator — one query fans out into N `InboxCase` rows, one per real cluster). New routes mounted at `/api/admin/inbox/cases/*` (`routes/admin/inboxCaseRoutes.ts`, `controllers/inboxCaseController.ts` + `inboxCaseActionController.ts`), inheriting the existing `requireSection(&#39;inbox_content&#39;)` + `requireAdmin` two-layer gate — plan/approve/execute/verify/close endpoints scaffolded with typed 501 responses pending Phases 4-5.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`./node_modules/.bin/tsc --noEmit` clean except one PRE-EXISTING, unrelated error (`src/services/interviewService.ts` missing `@anthropic-ai/sdk` — declared in `package.json` but not installed; not touched by this work). `npx jest src/services/inboxCase` — 5 suites, 92/92 tests passing (state machine, text normalization, match scoring, grouping, and full Kes-scenario + AI-Flotation-LLC-scenario integration tests per directive section 20, using synthetic `example.com` fixtures only). Regression check: `npx jest src/services/inbox src/controllers/__tests__ src/scripts/__tests__` — 232/239 existing tests still pass unchanged; the 2 failing suites (`coraAgentService.test.ts`, `govContractsTurnWatcher.test.ts`) are PRE-EXISTING failures on `main` untouched by this session (confirmed via `git status` — zero diff on those files in this worktree).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Local-only build per governance; no production deploy/push/merge performed or authorized. Continuing through Phases 3-7 (assess/teach/ask, plan/approve, execute/close, frontend, break/harden) in the same session before final report.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Wrote `docs/inbox-resolution/ARCHITECTURE.md` (reuse map, data model, state machine, discovery pipeline) and `directives/resolve-inbox-case.md` (the operating SOP) for the Case Resolution Engine, per the build spec&#39;s Phase 0 requirement.**</h2>
+          <span class="badge">2026-07-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two new docs. No code changes in this entry.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Files exist at the stated paths; directive follows `directives/CLAUDE.md`&#39;s required section set (Purpose/Inputs/Steps/Outputs/Verification/Edge cases/Safety constraints).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Written after Phase 1-2 code landed (not before) so the doc reflects what was actually built, not a pre-build guess.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Structured AI assessment, Teach Me brief, and consolidated blocking questions for the Case Resolution Engine, reusing the existing `getInstrumentedOpenAI` factory (no new AI provider).**</h2>
+          <span class="badge">2026-07-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/inboxCase/promptSafety.ts` — untrusted-evidence wrapping (`wrapAsUntrustedEvidence`, explicit delimiters + truncation) and advisory (non-blocking) prompt-injection signal detection for the audit trail. Extended `schemas/inboxCaseSchema.ts` with `caseAssessmentOutputSchema` — the full Zod contract the model&#39;s JSON response must satisfy (facts/assumptions/contradictions with evidence citations, timeline, teaching_brief, consolidated `questions[]`) before it&#39;s trusted. `services/inboxCase/caseAssessmentService.ts::runAssessment()` — one OpenAI call (`gpt-4o-mini`, JSON mode, `workflow_id: &#39;inbox_case_assessment&#39;`) produces the assessment + Teach Me brief + question proposals together; evidence is bounded (top 25 non-excluded items, truncated per-item) so hundreds of full email bodies are never sent; on ANY failure (model error, invalid JSON, schema-validation failure, or zero evidence items) falls back to a safe, deterministic, zero-confidence assessment rather than crashing or fabricating detail. Consolidated questions dedupe against existing OPEN questions by normalized text so re-running Assess never spams duplicates. Case transitions to `NEEDS_ALI` (blocking questions exist) or `READY_TO_PLAN` (none do) — the only two valid post-assessment states per the state machine. New `POST /api/admin/inbox/cases/:caseId/assess` route + `handleAssessCase` controller.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npx jest src/services/inboxCase` — 7 suites, 116/116 tests passing (10 new in `caseAssessmentService.test.ts`: happy path with question creation and correct state transition, dedup on re-run, 4 distinct fallback scenarios including zero-evidence and schema-validation failure, prompt-injection flag observability). `./node_modules/.bin/tsc --noEmit` clean except the same pre-existing unrelated `interviewService.ts` error noted in the prior entry.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Local-only build per governance. Continuing to Phase 4 (action planner + approval controls).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Rule-based action planner and approval controls for the Case Resolution Engine.**</h2>
+          <span class="badge">2026-07-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/inboxCase/actionStateMachine.ts` (validated `InboxCaseAction` status transitions, mirroring the case state machine). `services/inboxCase/caseActionPlanner.ts::generatePlan()` — deterministic (not a second AI call) proposal of `InboxCaseAction` rows from the Phase 3 assessment: an `EMAIL_SEND` reply targeting the top-scored included email item, `MARK_WAITING` per commitment owned by someone other than Ali, `BASECAMP_COMMENT` per undispositioned Basecamp item, and an archive action (`EMAIL_LABEL`/`EMAIL_ARCHIVE` by provider) per included email — every archive action&#39;s `depends_on_action_ids` lists every other action in the plan so the Phase 5 executor can enforce &quot;archive runs last&quot; purely from the dependency graph. Every proposal carries a deterministic `idempotency_key` (`computeIdempotencyKey`, added to `textNormalization.ts`) so regenerating a plan is a no-op, never a duplicate. `requires_individual_approval` is always true for `EMAIL_SEND`/`BASECAMP_*` (per `ALWAYS_INDIVIDUAL_APPROVAL`) and for any `PROTECTED`-item archive action (auto-escalated to `HIGH` risk). `services/inboxCase/caseApprovalService.ts` — `approveAction()` (supports payload edits before approval), `rejectAction()`, `approveLowRiskActions()` (bulk-approves only `risk_level=LOW AND requires_individual_approval=false`, by construction excluding anything the directive requires individual review for). Wired `POST /cases/:caseId/plan`, `/actions/:actionId/approve`, `/actions/:actionId/reject`, `/actions/approve-low-risk` in `inboxCaseActionController.ts` (replacing the Phase-1 501 stubs).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npx jest src/services/inboxCase` — 10 suites, 147/147 tests passing (31 new: planner action-shape/idempotency/risk-classification tests, approval bulk/individual/already-transitioned tests, action state machine transition tests). `./node_modules/.bin/tsc --noEmit` clean except the same pre-existing unrelated `interviewService.ts` error.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Local-only build per governance. Continuing to Phase 5 (executor, closure guard, reopen).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Durable-outbox action executor, verification, and closure guard — the safety-critical core of the Case Resolution Engine.**</h2>
+          <span class="badge">2026-07-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`services/inboxCase/caseActionExecutors.ts` — one executor function per action type, reusing existing clients only (Gmail send via `getColaberryGmailClient`/`getPersonalGmailClient` with a raw-MIME reply builder that threads via In-Reply-To/References when the original message-id is known; Gmail archive via idempotent label ensure + `messages.modify` removing `INBOX`; Hotmail archive via `graphMailService.archiveMessage`; Basecamp comment/update/complete via `bcPost`/new `bcPut` added to the shared `basecampClient.ts`). Fixed a real gap found while building this: `thread_id`/`message_id`/`in_reply_to` were computed during discovery for grouping but never persisted onto `InboxCaseItem.snapshot`, which would have silently broken reply-threading at execution time — now persisted. `services/inboxCase/actionStateMachine.ts` (validated `InboxCaseAction` status transitions). `services/inboxCase/caseExecutionService.ts::executeApprovedActions()` — the durable-outbox loop: reconciles any action stuck `EXECUTING` from an interrupted prior run FIRST (promotes to `SUCCEEDED` if an `external_receipt` already exists, else resets to `APPROVED` for a safe retry — never re-sends a real email), then executes `APPROVED` actions in Kahn&#39;s-algorithm topological order over `depends_on_action_ids` so archive actions structurally run last; a `FAILED` dependency `SKIPS` (not executes) everything depending on it; case transitions to `FAILED` if anything failed, otherwise stays `EXECUTING` pending Verify. `services/inboxCase/caseVerificationService.ts::verifyCase()` — confirms each `SUCCEEDED` action&#39;s receipt carries the expected identifier before marking it `VERIFIED` (internal action types like `MARK_WAITING` verify trivially), then determines the case&#39;s post-execution state (`RESOLVED`/`WAITING`/`DELEGATED`/`FAILED`). `services/inboxCase/caseClosureService.ts::evaluateClosureGuard()` — all 10 directive closure conditions (undispositioned items, open questions, un-decided/un-executed/un-verified actions, failed actions, WAITING items missing an owner/follow-up, DELEGATED items missing a Basecamp link, empty audit chain), returning the EXACT blockers rather than a generic refusal; `closeCase()` stamps `closed_at` and transitions to `RESOLVED` only when the guard passes. Wired `POST /cases/:caseId/execute|verify|close` (replacing the last three Phase-1 501 stubs).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npx jest src/services/inboxCase` — 14 suites, 195/195 tests passing (48 new across executor/verification/closure/action-executor tests, including: a failed dependency SKIPs its dependent archive action rather than executing it; reconciliation never re-sends a real email after an interrupted run; a retried Execute call never re-runs an already-SUCCEEDED action; every one of the 10 closure-guard conditions individually verified to block with its specific reason; MIME reply threading headers verified byte-for-byte). `./node_modules/.bin/tsc --noEmit` clean except the same pre-existing unrelated `interviewService.ts` error.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Local-only build per governance — no email was actually sent, no Basecamp write actually posted (all executor tests run against mocked clients; no live credentials exist in this environment). Live-provider verification (does a real Gmail reply actually thread, does a real Basecamp PUT actually complete a todo) remains unverified against production APIs and is called out explicitly in the final report. Continuing to Phase 6 (frontend).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Resolve Work tab — the new default tab of Inbox COS — plus a Playwright smoke script.**</h2>
+          <span class="badge">2026-07-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Invoked `/frontend-design` and `/fixing-accessibility` before writing UI, per directive section 18. `frontend/src/services/inboxCaseApi.ts` — typed API client following the `missedOpportunitiesApi.ts` convention (not the older inline `utils/api` pattern the Decisions/Drafts tabs use). `frontend/src/pages/admin/inbox/InboxResolveWorkPage.tsx` — landing state (mode toggle, search, date-range selector, Discover button, KPI stat cards, case list with state filter) reusing the existing `PageHeader`/`SectionCard`/`StatCard` admin shell. `frontend/src/components/admin/inbox/resolve/CaseWorkspacePanel.tsx` — the 3-pane active-case workspace (evidence/items with include-exclude + disposition controls; executive summary + Teach Me + facts/assumptions/contradictions; blocking questions with choice buttons + accept-recommended + write-in, proposed actions with approve/reject/approve-low-risk/execute/verify, closure checklist showing exact blockers, reopen). Added `Resolve Work` as the FIRST/default tab in `InboxCOSPage.tsx`&#39;s `TABS` array (root directive section 4) — all 6 existing tabs (Decisions/Drafts/Rules/VIPs/Learning/Audit) preserved unchanged. Fixed a real pre-existing gap surfaced by this change: the backend&#39;s digest-action email redirect (`?tab=decisions&amp;emailId=...`) was never actually read by the frontend, meaning it always silently landed on whichever tab happened to be first — now `InboxCOSPage` reads `?tab=` via `useSearchParams` and falls back to the new default only when absent/invalid, fixing the digest-link flow as a side effect of making Resolve Work the default. Accessibility pass (self-audit against the 12-point WCAG checklist) found and fixed 3 real issues: a heading-level skip (case title was `&lt;h5&gt;` under `&lt;h2&gt;` SectionCard siblings — now `&lt;h2 className=&quot;fs-5&quot;&gt;`), non-keyboard-operable case-list table rows (added `tabIndex`, `role=&quot;button&quot;`, `aria-label`, Enter/Space `onKeyDown`), and no focus management when the case list swaps to the case workspace (now moves focus to the case title heading on load). `tests/systemV2/resolveWorkTabSmoke.e2e.js` — a Playwright smoke script following this repo&#39;s ACTUAL existing pattern (raw `playwright` + `node script.js`, since `@playwright/test` is not installed and no `playwright.config.ts` exists, despite `tests/CLAUDE.md` describing that framework) proving the default tab, landing controls, and a real `discover()` round trip render correctly; unlike the one existing example script it does NOT default to production (requires explicit `BASE_URL`/`ADMIN_JWT_SECRET`, aborts with no server contact if unset).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node ./node_modules/typescript/bin/tsc --noEmit` (frontend) clean, twice (before and after the accessibility fixes) — no `tsc` binary exists in `frontend/node_modules/.bin` in this worktree, invoked the `typescript` package&#39;s bin directly instead. Manually verified no `react-hooks/exhaustive-deps` disable comments and no hardcoded hex colors were introduced (the two documented CRA-production-build footguns in `frontend/CLAUDE.md`). `node --check` passed on the new Playwright script.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Full production build (`react-scripts build` via the nginx Docker image, the only verified-working path per prior sessions) was NOT run in this session — `docker system df` showed 66GB images / 31GB build cache (78% reclaimable) already on this shared host, a known recurring disk-pressure issue (see memory `reference_prod_disk_build_cache_fills_root`), so a fresh frontend Docker build was skipped to avoid risking other concurrent instances&#39; active containers (a live `revenue-preview` dev stack was running throughout this session and was not touched). The Playwright smoke script was authored but NOT executed — no dev server or admin JWT secret is available in this sandboxed session. Both gaps are called out explicitly in the final report. Continuing to Phase 7 (break/harden) and final validation.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Targeted break/harden pass and final full-suite validation before session close.**</h2>
+          <span class="badge">2026-07-31</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Reviewed the directive&#39;s break-scenario list against what this build already covers by construction vs. what needed a new test or fix. Found and fixed one genuine gap: proposed-action text (email bodies, Basecamp comments — sourced from the Phase 3 assessment&#39;s AI-generated wording) had no redaction pass before being persisted as an executable action, unlike the assessment call itself (which redacts SSN/card patterns on the way INTO the model via `getInstrumentedOpenAI`). A labeled secret mentioned in evidence (&quot;password: hunter2&quot;) could in principle survive into an assessment&#39;s recommended wording and then straight into a live Basecamp comment or email send with no further check. Added `promptSafety.ts::redactSecretLikePatterns()` (password/api_key/secret/bearer-token label patterns) and wired it — plus the existing `redactSensitive` — into `caseActionPlanner.ts::sanitizeProposal()`, applied to every action&#39;s `preview` and string `payload` fields at creation time, before persistence. Most other Phase 7 scenarios were already covered by construction and already have dedicated tests from earlier phases (duplicate Execute request, Gmail/Basecamp malformed-response handling via each adapter&#39;s per-item try/catch, model-unavailable/invalid-JSON fallback, prompt injection, database-interruption-equivalent reconciliation, closure with an unanswered question). Provider-side 429/503 retry/backoff is inherited unchanged from the existing, already-battle-tested `basecampClient.ts`/`bcRetry.ts` — not new code, not re-tested here.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">New tests in `promptSafety.test.ts` (5) and `caseActionPlanner.test.ts` (1) confirm the redaction fires and ordinary business text passes through untouched. Final full suite: `npx jest src/services/inboxCase` — 14 suites, **201/201 tests passing**. Regression: `npx jest src/services/inbox src/controllers/__tests__ src/scripts/__tests__` — 341/348 passing, the same 2 pre-existing unrelated failures (`coraAgentService.test.ts`, `govContractsTurnWatcher.test.ts`) as every prior entry this session, confirmed untouched by `git status`. `./node_modules/.bin/tsc --noEmit` (backend) clean except the one pre-existing unrelated `interviewService.ts`/`@anthropic-ai/sdk` error. Frontend `tsc --noEmit` clean.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Session CC-20260731-x9q4: PROGRESS.md audit — 9 entries this session (Phase 0-2, docs, Phase 3, Phase 4, Phase 5, Phase 6, this Phase 7 entry, plus this closing note), all files modified in the session traced to a session-tagged entry above. Not verified in this session (no live credentials/dev server/DB in this sandbox, disclosed per entry): live Gmail send/archive, live Basecamp write, live discover() against a real mailbox, frontend production build via Docker, Playwright script execution, telemetry emission (requires POSTing to a live `/api/portal/project/telemetry` endpoint this session had no safe access to — the only running containers on this host belong to a concurrent `revenue-preview` workstream and were not touched). No push, merge, or production deployment was performed, per governance. Full implementation report follows in the session&#39;s final message to Ali.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260731-x9q4</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

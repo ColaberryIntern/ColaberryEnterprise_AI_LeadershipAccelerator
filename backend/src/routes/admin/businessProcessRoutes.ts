@@ -38,7 +38,10 @@ router.put('/api/admin/business-processes/:id/hitl-config', requireAdmin, async 
 router.put('/api/admin/business-processes/:id/autonomy', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { applyAutonomyChange, assessAutonomy } = await import('../../intelligence/autonomyProgressionEngine');
-    await applyAutonomyChange(req.params.id as string, req.body.level, req.body.reason || 'Admin override');
+    await applyAutonomyChange(
+      req.params.id as string, req.body.level, req.body.reason || 'Admin override',
+      req.admin?.email || req.admin?.sub || 'admin',
+    );
     res.json(await assessAutonomy(req.params.id as string));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });

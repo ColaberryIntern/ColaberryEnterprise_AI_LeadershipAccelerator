@@ -14,11 +14,11 @@ export default function LLMChooser() {
           padding: '3px 28px 3px 10px',
           height: 28,
           borderRadius: 14,
-          borderColor: '#c7d2fe',
-          color: '#4338ca',
+          borderColor: 'rgba(251,40,50,0.25)',
+          color: '#FB2832',
           fontWeight: 600,
           maxWidth: 150,
-          background: '#eef2ff',
+          background: 'rgba(251,40,50,0.08)',
         }}
         value={selectedLLM.id}
         onChange={(e) => setSelectedLLMById(e.target.value)}

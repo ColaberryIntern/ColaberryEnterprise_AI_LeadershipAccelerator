@@ -46,34 +46,42 @@ export type NavItem = {
   children?: { path: string; label: string }[];
 };
 
+/**
+ * Single-persona navigation.
+ * There is ONE visitor: a decision-maker who is also the learner, evaluating
+ * the platform for their company and wanting to experience it themselves. No
+ * two-door split. One primary CTA everywhere: "Start free" -> /try (the
+ * free-account funnel that gives them BOTH the learner experience and their own
+ * organization / management view). A soft secondary invites a guided walkthrough.
+ * Nav carries informational links only; the CTAs render as buttons in
+ * PublicNavbar (see PRIMARY_CTA / SECONDARY_CTA).
+ */
 export const NAV_LINKS: NavItem[] = [
   { path: '/', label: 'Home' },
   {
-    label: 'Program',
+    label: 'The Program',
     children: [
-      { path: '/program', label: 'Program Overview' },
-      { path: '/ai-architect/instructor', label: 'Your Instructor' },
-      { path: '/advisory', label: 'Advisory' },
-      { path: '/case-studies', label: 'Case Studies' },
-    ],
-  },
-  {
-    label: 'Get Started',
-    children: [
+      { path: '/program', label: 'Program' },
       { path: '/pricing', label: 'Pricing' },
-      { path: '/sponsorship', label: 'Corporate Sponsorship' },
-      { path: '/enroll', label: 'Enroll' },
+      { path: '/case-studies', label: 'Case Studies' },
+      { path: '/demo-day', label: 'Demo Day' },
     ],
   },
   { path: '/contact', label: 'Contact' },
 ];
 
+/** One primary CTA everywhere: start a free account. Soft secondary for a guided walkthrough. */
+export const PRIMARY_CTA = { path: '/try', label: 'Start free' };
+export const SECONDARY_CTA = { path: '/contact', label: 'Book a walkthrough' };
+
+/** Footer link columns. Informational only; the free-start CTA lives in its own column. */
 export const FOOTER_LINKS = [
-  { path: '/program', label: 'Program' },
+  { path: '/program', label: 'How It Works' },
   { path: '/pricing', label: 'Pricing' },
-  { path: '/sponsorship', label: 'Corporate Sponsorship' },
-  { path: '/advisory', label: 'Enterprise AI Advisory' },
   { path: '/case-studies', label: 'Case Studies' },
-  { path: '/enroll', label: 'Enroll' },
+  { path: '/demo-day', label: 'Demo Day' },
   { path: '/contact', label: 'Contact' },
 ];
+
+/** Footer tagline — matches the new positioning. */
+export const FOOTER_TAGLINE = 'Most people consume AI. Very few learn to build with it.';

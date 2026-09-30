@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260721-t8k4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, July 21, 2026 at 7:47 PM</div>
+    <div><span class="sid">CC-20260721-t8k4</span><span class="count">4 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Edit-card drawer: &quot;open in a new tab&quot; buttons for this card&#39;s Experience Studio type and its student view</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The Timeline editor&#39;s Edit-card drawer (EditDrawer in TimelineEditorTab) gained a quick-links row with two buttons that open in a NEW browser tab so the editor stays open: (1) &quot;🎛 Experience Studio ↗&quot; opens /admin/orchestration?tab=types&amp;type=&lt;slug&gt; focused on this card&#39;s Curriculum Type; (2) &quot;👁 Student view ↗&quot; (saved cards only) opens /admin/orchestration/card-preview?card=&lt;id&gt;&amp;program=&lt;courseId&gt;, a full-page render of &quot;what the student sees&quot;. Deep-linking: AdminOrchestrationPage now reads ?tab=&amp;type= via useSearchParams (initializes the active tab and passes the type slug to ExperienceStudioTab, which auto-opens that component exactly once after its library loads, guarded by a ref). New StudentCardPreviewPage reuses the REAL &lt;CardDetailBody&gt; in preview mode (no live student calls) via adaptToFeedCard, wrapped in .tl-de/.tld-panel — the same single-source renderer the in-drawer popup uses, so it can&#39;t diverge from the student view; works for draft cards too. New auth-gated route /admin/orchestration/card-preview rendered WITHOUT the admin chrome. Frontend-only, 5 files: pages/admin/AdminOrchestrationPage.tsx, pages/admin/orchestration/{TimelineEditorTab.tsx, ExperienceStudioTab.tsx, StudentCardPreviewPage.tsx (new)}, routes/adminRoutes.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit -p tsconfig.json` → 0 errors across the whole frontend (real `npm ci` in the worktree — root node_modules was incomplete, so a full install was used, not the junction).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Student-view target confirmed with Ali = the card-detail preview (matches the drawer&#39;s existing &quot;Open the student view — full details →&quot; link), not the runtime workspace. The new-tab student view shows the LAST-SAVED version (a fresh tab can&#39;t carry unsaved draft edits); the in-drawer link still reflects live draft edits. New-tab buttons use window.open(..., &#39;_blank&#39;, &#39;noopener&#39;). Not yet deployed; branch workstream/timeline-card-open-in-studio off main.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Edit-card drawer: Edit ⟷ Student view toggle; retired the standalone card-preview page</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Follow-up to the new-tab student view (PR #593) — per Ali, the standalone full-page preview &quot;looked like this&quot; (a small card on an empty page). Replaced it with a segmented **view toggle** at the top of the Edit-card drawer (EditDrawer in TimelineEditorTab): `✎ Edit` ⟷ `👁 Student view`. Selecting Student view renders the REAL `&lt;CardDetailBody&gt;` (preview mode, no live student calls) inline in the drawer, built from the current draft — so it reflects **unsaved** edits live (the removed new-tab page only showed the last-saved version). The Save/Cancel footer stays in both views. Removed: the new-tab &quot;Student view ↗&quot; button, the `StudentCardPreviewPage` page + its `/admin/orchestration/card-preview` route, and the drawer&#39;s `courseId`/`onPreview` props (the finished-product tile + &quot;See the full student view →&quot; button now flip the toggle instead of opening a popup). Kept the &quot;🎛 Experience Studio ↗&quot; new-tab button. Frontend-only, 3 files: pages/admin/orchestration/TimelineEditorTab.tsx, routes/adminRoutes.tsx, and deleted pages/admin/orchestration/StudentCardPreviewPage.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit -p tsconfig.json` → 0 errors across the whole frontend (real npm ci in the worktree).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/student-view-toggle` off origin/main. The feed-tile student popup (SortableCard `onPreview` → CardDetailDrawer) is unchanged — only the editor drawer moved to the inline toggle. Supersedes the card-preview route from PR #593; any open card-preview tab will 404 after deploy (expected).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Student view gets an &quot;Open the workspace ↗&quot; button that opens the REAL runtime as a read-only test student</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">In the Edit-card drawer&#39;s Student view, a new &quot;Open the workspace ↗ (read-only)&quot; button (published saved cards only) opens the REAL student runtime (`/portal/runtime/:cardId`) in a new tab so the author sees the live experience — gated buttons, watch-bar, mentor, approvals, anti-cheat safeguards — as a NEUTRAL test student, read-only (server blocks every write, so nothing touches real member data). Backend: new `GET /api/admin/orchestration/timeline/cards/:cardId/workspace-preview-url` (requireAdmin) → `buildWorkspacePreviewUrl` (new `services/timeline/workspacePreviewService.ts`): validates the card is published (409 otherwise), resolves a cohort (card&#39;s program cohort, else any), idempotently provisions the fixed `test-warm@colaberry.test` enrollment via `createTestEnrollments`, mints a `read_only` participant JWT (`signReadOnlyParticipantJwt`, carries `impersonated_by` for audit), and returns a `/portal/view-as#t=&lt;jwt&gt;&amp;next=/portal/runtime/:cardId` deep-link (token in the hash, out of logs). The pure URL builder is split into `services/timeline/workspacePreviewUrl.ts` (unit-tested). Frontend: `PortalViewAsPage` now honors a `next=` hash target (internal `/portal/` paths only — open-redirect guard) instead of always landing on Today; the drawer button fetches the URL and `window.open`s it. Files: backend — services/timeline/{workspacePreviewService.ts, workspacePreviewUrl.ts} (new), controllers/timelineAdminController.ts, routes/admin/timelineAdminRoutes.ts, __tests__/services/workspacePreviewUrl.test.ts (new); frontend — pages/portal/PortalViewAsPage.tsx, pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` 0 errors; backend `tsc --noEmit` 0 errors in the changed/new files (junctioned root node_modules; the ~267 residual lines are the known pre-existing TS-4.9.5/zod-v4 `.d.cts` noise, none in my files); jest `workspacePreviewUrl.test.ts` 4/4 pass (URL contract: token-in-hash, encoded next, trailing-slash strip, prod fallback, next round-trips to a valid internal `/portal/` path).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/student-view-toggle` (continued). Read-only was Ali&#39;s explicit choice over a writable test-student run — so the gated controls RENDER but don&#39;t advance (watch beats are writes → 403; Complete won&#39;t unlock). The runtime only opens PUBLISHED cards (404 on drafts) and enforces gating (423 on a locked card for the non-staff test student) — hence the button shows for published cards only, and a gated card will show as locked (itself a visible safeguard). Reuses the existing read-only &quot;View as member&quot; token mechanism (`/portal/view-as`), scoped to a test student. Touches /backend → deploy is backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Fixed the cramped inline student view and moved the workspace CTA to the real footer position</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two fixes to the drawer&#39;s Student view (per Ali — it &quot;was not showing correctly&quot; and the workspace button was in the wrong place). (1) Rendering: the Student view now fills the drawer full-height like the real student popup — in student mode `.te-dbody` becomes a flex column (`.te-dbody--student`, padding 0, overflow hidden) and `&lt;CardDetailBody&gt;` renders in a `.te-studentfill` flex:1 container (head + scrolling body + footer), instead of being squished into a small bordered box (the Self Study reader was cut off top/bottom). (2) Workspace CTA: removed the separate top &quot;Open the workspace&quot; bar; the &quot;Enter workspace →&quot; button now lives in `&lt;CardDetailBody&gt;`&#39;s footer — the SAME spot the student sees it — wired via `onEnterWorkspace` to the existing read-only workspace opener (published saved cards only; drafts still show the &quot;this footer has Close and Enter workspace&quot; note). `CardDetailBody`: in `preview` mode, when `onEnterWorkspace` is provided, render the real &quot;Enter workspace →&quot; button instead of the note (unchanged for the feed-tile popup, which passes no `onEnterWorkspace`). Stayed READ-ONLY per Ali. Frontend-only, 2 files: components/timeline/CardDetailBody.tsx, pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` → 0 errors across the whole frontend.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/student-view-workspace-footer` off origin/main. Read-only confirmed again (writable &quot;run it for real&quot; was offered and declined). Frontend-only → deploy is nginx `--no-deps` (no backend restart). Flow: Student view toggle → footer &quot;Enter workspace →&quot; → new tab opens the read-only runtime for this card, just like a student going popup → workspace.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260721-t8k4</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

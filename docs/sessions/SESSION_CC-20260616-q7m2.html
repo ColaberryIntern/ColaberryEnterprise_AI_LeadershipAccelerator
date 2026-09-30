@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260616-q7m2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, June 16, 2026 at 6:56 AM</div>
+    <div><span class="sid">CC-20260616-q7m2</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**govContractsTurnWatcher — fix duplicate &quot;[Your Turn]&quot; email storm (idempotency + coalescing + lock).**</h2>
+          <span class="badge">2026-06-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali received ~10 identical `[Your Turn] UTD Residential Life - BUILD` emails (same bid, same next task, same 6:20 AM timestamp). Root cause in `backend/src/scripts/govContractsTurnWatcher.js`: dedup state (`tmp/ops-engine/gov-turn-state.json`) was written ONCE at end-of-run while the email fired mid-loop, so any crash after a send lost the checkpoint and a retrying scheduler re-sent the same handoff every cycle; separately the inner loop fired once PER new completion, so N completions on one bid = N emails for the same next task. Rewrote with: (1) per-handoff idempotency key `(bidId, nextTaskId)` stored in `state.firedKeys` — a sent handoff never re-emits even if its completion is re-detected; (2) crash-safe checkpoint — state is persisted immediately after a successful send, not at end-of-run; (3) a TTL lock file (`gov-turn.lock`) so concurrent invocations can&#39;t both fire; (4) one turn per bid max regardless of completion count; (5) per-tick COALESCING — all waiting bids bundle into ONE joint email (single bid keeps the old per-bid subject; multiple → `[Your Turn] N Gov Contracts bids waiting on you`), the consolidation Ali asked for; (6) `advanceSeen` skips bids whose send failed so they retry; (7) `pruneFiredKeys` bounds the dedup set at 30 days. Pure decision logic (`computeTurns`, `selectNextOverall`, `advanceSeen`, `recordFired`, `pruneFiredKeys`, `renderTurnsEmail`, `classify`, `turnKey`) extracted and exported behind a `require.main === module` guard.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npx jest src/scripts/__tests__/govContractsTurnWatcher.test.ts` → 19/19 pass, including explicit defect-guard cases (already-fired handoff does not re-emit; N completions → one turn; re-detecting a fired completion after `recordFired` yields zero turns; failed-send bid left un-advanced for retry; no em-dashes survive rendering). `node --check` passes; requiring the module loads only the pure helpers (does not fire Basecamp/Mandrill).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Idempotency violation per CLAUDE.md &gt; Idempotency &amp; Replayability (NON-NEGOTIABLE) — the &quot;works once but re-sends on retry&quot; class. The script is a host-cron operational script (not container code), so the fix takes effect on the next invocation without a deploy. New state field `firedKeys` is additive; the old `lastSeenCompletions` is still honored and `loadState` backfills both keys, so existing state files upgrade in place. Committed to `workstream/interview-prep-report`, not yet on origin/main.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260616-q7m2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

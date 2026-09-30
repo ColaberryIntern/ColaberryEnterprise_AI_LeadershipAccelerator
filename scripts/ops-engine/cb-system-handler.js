@@ -32,6 +32,20 @@ const LOG_PATH = path.resolve(REPO, 'tmp/ops-engine/cb-handler-log.jsonl');
 // the VPS host directly, not inside the backend container).
 const OpenAI = require(path.resolve(REPO, 'node_modules/openai')).default;
 const nodemailer = require(path.resolve(REPO, 'node_modules/nodemailer'));
+const { looksLikeToolCallLeak } = require('./cb-reply-sanitizer');
+const { composeReplyBody } = require('./cb-reply-body');
+const cbPeople = require('./cb-people');
+
+// Durable self-improvement lessons. Each confirmed failure pattern gets one
+// line appended here (by cb-quality-audit.js) and is injected into the system
+// prompt so CB stops repeating it. Soft-fail if the file is absent.
+const LESSONS_PATH = path.resolve(__dirname, 'cb-lessons.md');
+function loadLessons() {
+  try {
+    const raw = fs.readFileSync(LESSONS_PATH, 'utf8').trim();
+    return raw ? `\n\nLESSONS LEARNED (do not repeat these past failures):\n${raw}` : '';
+  } catch (_e) { return ''; }
+}
 let validateBeforeSend;
 try {
   ({ validateBeforeSend } = require(path.resolve(REPO, 'backend/src/scripts/lib/mandrillPreflight')));
@@ -60,11 +74,18 @@ HARD CONSTRAINTS (violations are production defects)
 2. Never share Ali's personal info, credentials, or internal-only pricing.
 3. Never commit Ali to a deadline, a price, or a hire on his behalf.
 4. If you are unsure whether an action is internal or outside-facing, treat it as outside-facing and queue it.
+5. OUTPUT FORMAT (critical): Invoke tools ONLY through the real function-calling mechanism. NEVER write tool-call syntax as prose - do not type "functions.basecamp_reply({...})", "content_html:", "functions.finish()", or any JSON/JS code that names a tool. If that text appears in a Basecamp comment it is a visible production defect. Your basecamp_reply content_html is plain Basecamp HTML for a human to read, nothing else.
+6. ADDRESSING: The system automatically @-mentions the person who tagged you, so they are notified. Do NOT paste raw <bc-attachment> mention tags yourself. Address the relevant person by first name in prose (e.g. "Ram, ...") when your reply answers their specific point.
 
 TOOL PICKING GUIDE
 - basecamp_reply: ALWAYS call this at least once per invocation, as the visible response in the thread. Brief acknowledgement + what you did or queued. Use Basecamp HTML (<div>, <strong>, <em>, <br>, <ul><li>). Sign off as "CB System" only if the thread is with someone other than Ali, otherwise no signoff.
+- TAGGING PEOPLE: to notify a teammate, write @ then their name (first name is enough, e.g. @Sohail, @Sai, @Ali). CB converts it into a real Basecamp mention that actually notifies them, but ONLY if they are a member of this project. If a name does not resolve (not on the project, or ambiguous) it stays plain text with no false notification, so prefer a first name that is unique on the project. Do NOT hand-write <bc-attachment> tags; just write @Name.
 - email_ali: when Ali asked you to email him something (a summary, research notes, a draft). Recipient is locked to ali@colaberry.com.
-- queue_followup: when the request needs work you cannot do in this turn (live research, cross-system lookups, external comms drafting, calendar booking). Creates a Basecamp todo in the same project, assigned to Ali, with your notes so Claude Code can finish it in his next session.
+HANDLING WORK - decide among THREE tiers (this is the most common place to get stuck; pick deliberately):
+- EXECUTE NOW: if the request is something your tools can finish this turn (reply, summarize prior thread content, create a PDF/XLSX, complete a todo, run a gov-bid op), just do it. Do not queue work you can actually do. "Execute" is internal-only: never send outside-facing comms, post publicly, book external calendar, or take personnel action yourself - those get queued.
+- create_task: when the request is a concrete unit of WORK someone must own and finish later ("make a task to X", "track this", "someone needs to do Y by Friday"). This creates a REAL tracked Basecamp todo with an owner and a due date. Use this, not queue_followup, when the thing is a deliverable with an owner.
+- queue_followup: lightweight parking only - when you need to hand a note to Ali's next Claude Code session (live research, cross-system lookups, external comms drafting) and there is no clean owner/due-date yet. It posts a FOLLOWUP note as a comment in this thread; it does NOT create a tracked todo.
+When you are unsure whether to create_task or queue_followup: if it has a clear owner and a deadline, create_task; if it is "hold this thought for the next working session", queue_followup. Never reply that you "are not sure what to do" without taking one of these three actions.
 - exit_intern_preview: when Ali asks you to remove, exit, terminate, kick out, or place-out an intern. PREVIEW ONLY - it does NOT execute the exit. Returns the CCPP candidate and the Basecamp todos that would be affected. You MUST follow exit_intern_preview with a basecamp_reply that shows Ali the preview AND the exact CLI command he can run to confirm. The execution is intentionally outside your reach - personnel actions need a human in the loop.
 - set_intern_nudge_mode: when Ali says "go live with nudges", "pause nudges", "enable intern nudges", "set nudge mode preview/live", or anything that flips the daily intern nudge cycle between digest-only (preview) and intern-facing (live). Updates a file on the VPS that the next scheduled run reads. ALWAYS follow this with a basecamp_reply confirming the change (what mode it was, what mode it is now, when it takes effect).
 - complete_todo: when Ali (or the requester) says "close this", "mark done", "complete it", "close out", "we're done here", or anything that resolves the ticket. Pass a closure_note explaining the reason - it gets posted as an auditable comment before completion. NEVER say "I will close this ticket" in a basecamp_reply without actually calling complete_todo in the same turn. Saying you will close it and then not closing it is the single worst failure pattern: Ali sees the promise, trusts you, then has to come back hours later and notice the ticket is still open. Either call complete_todo or do not promise to close.
@@ -146,6 +167,24 @@ const TOOLS = [
           notes: { type: 'string', description: 'What needs to happen, with enough context that a future Claude Code session can run it without re-asking.' },
         },
         required: ['title', 'notes'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_task',
+      description: 'Create a REAL, tracked Basecamp todo in the current project (not just a comment). Use when the request is a concrete unit of work that someone needs to own and complete later: "make a task for X", "add a todo to follow up on Y", "track this", "someone needs to do Z by Friday". Differs from queue_followup (which only parks a note as a comment) and from doing the work now. The todo lands in the todolist this thread belongs to (or the project default list), gets a due date, and is assigned. Every todo gets a due date at creation (hard rule).',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Short, action-oriented todo title (e.g. "Draft 3-week milestone landing copy").' },
+          notes: { type: 'string', description: 'Optional. Body/description with enough context that the assignee can act without re-asking.' },
+          due_on: { type: 'string', description: 'Due date as YYYY-MM-DD. If omitted, defaults to 3 days out. Always set when a real deadline exists.' },
+          assign_to: { type: 'string', enum: ['ali', 'requester'], description: 'Who owns it when it is Ali or the person who tagged CB. Default "ali". For a named third party use assignee_name instead.' },
+          assignee_name: { type: 'string', description: 'Optional. Name (or email) of a specific project member to assign, e.g. "Sohail". Resolved against the project roster; takes priority over assign_to. If it cannot be matched uniquely, the task falls back to Ali and the reply must say so.' },
+        },
+        required: ['title'],
       },
     },
   },
@@ -425,13 +464,22 @@ function appendLog(entry) {
 }
 
 // Build the toolImpls closure that has access to bc functions + state.
-function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId }) {
-  const sideEffects = { repliedHtml: null, emailMessageId: null, followupTodoId: null };
+function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, requesterRef, invocationId, requesterId, requesterName, aliId }) {
+  const sideEffects = { repliedHtml: null, emailMessageId: null, followupTodoId: null, qualityFlags: [] };
+  // Resolve a bare @Name (first name is enough) to a project member's sgid.
+  // Scoped to THIS project so first names are unambiguous; null on miss/ambiguity.
+  const resolveMention = (name) => cbPeople.resolveSgidSync(name, { bucketId });
 
+  // The single choke point every CB reply passes through. composeReplyBody
+  // sanitizes leaked tool-call scaffolding, resolves any @Name the model wrote
+  // into a real mention, and guarantees the requester is @-mentioned EXACTLY
+  // ONCE (promoting a leading "Aleem, ..." prose address to the tag instead of
+  // rendering the name twice - the fix for the "Aleem Aleem" doubling defect).
   async function basecamp_reply({ content_html }) {
-    const html = stripEmDashes(content_html);
-    await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: html });
-    sideEffects.repliedHtml = html;
+    const { body, wasLeak } = composeReplyBody(content_html, { resolveMention, mention, requesterRef });
+    if (wasLeak) sideEffects.qualityFlags.push('tool_call_leak_sanitized');
+    await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: body });
+    sideEffects.repliedHtml = body;
     return { ok: true };
   }
 
@@ -451,7 +499,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     const targetId = todo_id || recId;
     try {
       if (closure_note) {
-        const noteHtml = `<div>${mention()} closing this todo. <em>${stripEmDashes(closure_note)}</em></div>`;
+        const noteHtml = `<div>${mention(requesterRef)} closing this todo. <em>${stripEmDashes(closure_note)}</em></div>`;
         await bcPost(`/buckets/${bucketId}/recordings/${targetId}/comments.json`, { content: noteHtml });
       }
       // Completion endpoint takes empty body. bcPost serializes {} which BC accepts.
@@ -491,7 +539,7 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     // Simpler approach: post the followup as a structured comment in the same
     // thread (we'd need a todoset id to create a real todo). v1 = comment with FOLLOWUP tag.
     const html = `<div><strong>[FOLLOWUP for next Claude Code session]</strong></div>
-<div>${mention()} ${stripEmDashes(title)}</div>
+<div>${mention(requesterRef)} ${stripEmDashes(title)}</div>
 <div><br></div>
 <div>${stripEmDashes(notes).replace(/\n/g, '<br>')}</div>
 <div><br></div>
@@ -499,6 +547,71 @@ function buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId 
     await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, { content: html });
     sideEffects.followupTodoId = `comment-followup-${Date.now()}`;
     return { ok: true };
+  }
+
+  // Resolve the todolist a new todo should land in: prefer the list this
+  // thread's todo belongs to, else the most-recently-updated list in the
+  // project's first todoset.
+  async function resolveTargetTodolist() {
+    try {
+      const rec = await bcGet(`/buckets/${bucketId}/todos/${recId}.json`);
+      if (rec && rec.parent && rec.parent.id && /todolist/i.test(rec.parent.type || '')) {
+        return rec.parent.id;
+      }
+    } catch (_e) { /* recId may be a message, not a todo */ }
+    const project = await bcGet(`/projects/${bucketId}.json`);
+    const todoset = (project.dock || []).find((d) => d.name === 'todoset');
+    if (!todoset) throw new Error('project has no todoset');
+    let lists = [];
+    try { lists = await bcGet(`/buckets/${bucketId}/todosets/${todoset.id}/todolists.json`); } catch (_e) {}
+    if (!Array.isArray(lists) || lists.length === 0) throw new Error('project has no todolist');
+    lists.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    return lists[0].id;
+  }
+
+  // Resolve who a task should be assigned to. assignee_name (a named project
+  // member like "Sohail") wins; then assign_to=requester; default Ali. Returns
+  // { id, name, note } where note flags any fallback so the reply stays honest.
+  async function resolveAssignee({ assign_to, assignee_name }) {
+    if (assignee_name && assignee_name.trim()) {
+      const q = assignee_name.trim().toLowerCase();
+      try {
+        const people = await bcGet(`/projects/${bucketId}/people.json`);
+        const list = Array.isArray(people) ? people : [];
+        let matches = list.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.email_address || '').toLowerCase().includes(q));
+        if (matches.length > 1) {
+          const exact = matches.filter((p) => (p.name || '').toLowerCase().split(' ')[0] === q);
+          if (exact.length === 1) matches = exact;
+        }
+        if (matches.length === 1) return { id: matches[0].id, name: matches[0].name };
+        if (matches.length > 1) return { id: aliId, name: 'Ali', note: `"${assignee_name}" matched ${matches.length} people (${matches.map((m) => m.name).join(', ')}); assigned Ali instead` };
+        return { id: aliId, name: 'Ali', note: `"${assignee_name}" is not a member of this project; assigned Ali instead` };
+      } catch (e) {
+        return { id: aliId, name: 'Ali', note: `could not look up "${assignee_name}" (${e.message}); assigned Ali instead` };
+      }
+    }
+    if (assign_to === 'requester' && requesterId) return { id: requesterId, name: requesterName || 'requester' };
+    return { id: aliId || requesterId, name: 'Ali' };
+  }
+
+  async function create_task({ title, notes, due_on, assign_to, assignee_name }) {
+    try {
+      const listId = await resolveTargetTodolist();
+      const assignee = await resolveAssignee({ assign_to, assignee_name });
+      // Hard rule (memory: feedback_bc_todos_must_have_due_dates): every todo
+      // gets a due_on at creation. Default to 3 days out when none provided.
+      let due = (typeof due_on === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(due_on)) ? due_on : null;
+      if (!due) { const d = new Date(); d.setDate(d.getDate() + 3); due = d.toISOString().slice(0, 10); }
+      const body = {
+        content: stripEmDashes(title),
+        due_on: due,
+        assignee_ids: assignee.id ? [assignee.id] : undefined,
+      };
+      if (notes) body.description = `<div>${stripEmDashes(notes).replace(/\n/g, '<br>')}</div>`;
+      const todo = await bcPost(`/buckets/${bucketId}/todolists/${listId}/todos.json`, body);
+      sideEffects.createdTask = { todoId: todo.id, listId, url: todo.app_url || null, due_on: due, assigneeId: assignee.id, assigneeName: assignee.name, assigneeNote: assignee.note || null };
+      return { ok: true, todo_id: todo.id, url: todo.app_url || null, due_on: due, list_id: listId, assignee: assignee.name, assignee_note: assignee.note || null };
+    } catch (e) { return { ok: false, error: e.message }; }
   }
 
   async function set_intern_nudge_mode({ mode }) {
@@ -728,7 +841,7 @@ ${suggestion.stop_conditions.length ? `<div style="margin-top:12px"><strong styl
   }
 
   return {
-    impls: { basecamp_reply, complete_todo, add_gov_bid_by_number, email_ali, queue_followup, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, suggest_prompt, finish: async () => ({ ok: true, done: true }) },
+    impls: { basecamp_reply, complete_todo, add_gov_bid_by_number, email_ali, queue_followup, create_task, set_intern_nudge_mode, scrap_gov_bid, add_gov_bid, post_gov_bid_download_instructions, finalize_gov_bids_from_reply, vip_list, set_vip_sms_mode, exit_intern_preview, create_pdf, create_xlsx, create_image, suggest_prompt, finish: async () => ({ ok: true, done: true }) },
     sideEffects,
   };
 }
@@ -788,10 +901,17 @@ function summarizeComments(comments, aliId) {
  * Returns { ok, summary } so dispatcher can update state.
  */
 async function handleOpenEnded(ctx) {
-  const { bcGet, bcPost, bucketId, recId, comment, mention, aliId } = ctx;
+  const { bcGet, bcGetAll, bcPost, bucketId, recId, comment, mention, aliId } = ctx;
   const invocationId = `cb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Warm the PROJECT roster so @Name the model writes resolves to the real
+  // member (a mention only notifies project members; first names are unambiguous
+  // within a ~25-person roster). Best-effort: on failure mentions degrade to text.
+  try { await cbPeople.ensurePeopleLoaded({ bcGet: bcGetAll || bcGet, bucketId }); } catch (_e) {}
   const requesterId = comment.creator?.id;
   const requesterName = comment.creator?.name || 'team member';
+  // The person CB is replying to; carries attachable_sgid so mention() tags the
+  // real requester (Aleem, Kes, ...) instead of always tagging Ali.
+  const requesterRef = comment.creator || null;
   const isAli = requesterId === aliId;
   const availableTools = filterToolsForRequester(requesterId, aliId);
 
@@ -837,14 +957,22 @@ ${walkedContext}
 Decide and act. Always end with basecamp_reply, then finish.`;
 
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: SYSTEM_PROMPT + loadLessons() },
     { role: 'user', content: userMessage },
   ];
 
-  const { impls, sideEffects } = buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, invocationId });
+  const { impls, sideEffects } = buildToolImpls({ bcGet, bcPost, bucketId, recId, mention, requesterRef, invocationId, requesterId, requesterName, aliId });
   const toolsCalled = [];
   let finished = false;
   let lastError = null;
+  // tool_choice starts 'auto'. If the model ever replies with plain prose
+  // instead of calling a tool, we escalate to 'required' for exactly one retry
+  // (toolChoiceRetryUsed gate) to steer it back onto the proper basecamp_reply
+  // path before falling back to the force-wrap below. This cuts the
+  // "forced-reply (model returned text without a real tool_call)" defect that
+  // cb-quality-audit.js measures at the source.
+  let toolChoice = 'auto';
+  let toolChoiceRetryUsed = false;
 
   for (let i = 0; i < MAX_ITERATIONS && !finished; i++) {
     let resp;
@@ -853,7 +981,7 @@ Decide and act. Always end with basecamp_reply, then finish.`;
         model: MODEL,
         messages,
         tools: availableTools,
-        tool_choice: 'auto',
+        tool_choice: toolChoice,
         temperature: 0.3,
       });
     } catch (e) {
@@ -866,10 +994,29 @@ Decide and act. Always end with basecamp_reply, then finish.`;
     messages.push(msg);
     const calls = msg.tool_calls || [];
     if (calls.length === 0) {
-      // Model returned text without a tool — force a basecamp_reply with the text
+      // Model returned text without a real tool_call. First time: nudge it to
+      // actually call basecamp_reply (tool_choice 'required' guarantees a
+      // tool_call next turn) and retry once. The prose it just produced is
+      // preserved in `messages`, so the retry refines rather than discards it.
+      if (!toolChoiceRetryUsed) {
+        toolChoiceRetryUsed = true;
+        toolChoice = 'required';
+        messages.push({
+          role: 'system',
+          content: 'You replied with plain text instead of calling a tool. Post your answer by calling the basecamp_reply tool now (then finish). Do not reply with prose.',
+        });
+        continue;
+      }
+      // Retry already spent. Fall back to the force-wrap so the requester still
+      // gets an answer. This is the exact path that once leaked
+      // `functions.basecamp_reply({...})` into a live comment (2026-06-10, todo
+      // 9946499609). Hand the RAW text to basecamp_reply, which sanitizes it
+      // (recovers content_html from any leaked literal) and tags the requester.
+      // Do NOT pre-wrap - that defeated the extractor.
       const text = msg.content || '(no content)';
+      if (looksLikeToolCallLeak(text)) sideEffects.qualityFlags.push('model_emitted_tool_call_as_text');
       try {
-        await impls.basecamp_reply({ content_html: `<div>${mention()} ${stripEmDashes(text).replace(/\n/g, '<br>')}</div>` });
+        await impls.basecamp_reply({ content_html: text });
         toolsCalled.push({ name: 'basecamp_reply', forced: true });
       } catch (e) { lastError = `forced reply: ${e.message}`; }
       finished = true;
@@ -897,9 +1044,15 @@ Decide and act. Always end with basecamp_reply, then finish.`;
   if (!sideEffects.repliedHtml) {
     try {
       await bcPost(`/buckets/${bucketId}/recordings/${recId}/comments.json`, {
-        content: `<div>${mention()} Got your message. I tried to handle it but ran out of steps. Queued for review.</div>`,
+        content: `<div>${mention(comment.creator)} Got your message. I tried to handle it but ran out of steps. Queued for review.</div>`,
       });
     } catch (_e) {}
+  }
+
+  // Suppress audit-log writes during regeneration/replay (cb-self-improve,
+  // cb-replay) so dry re-runs don't pollute the log with phantom invocations.
+  if (process.env.CB_SUPPRESS_HANDLER_LOG) {
+    return { ok: !lastError, summary: `invocation=${invocationId} (log-suppressed) tools=${toolsCalled.map((t) => t.name).join(',')}`, error: lastError };
   }
 
   appendLog({
@@ -908,8 +1061,12 @@ Decide and act. Always end with basecamp_reply, then finish.`;
     comment_id: comment.id,
     bucket_id: bucketId,
     rec_id: recId,
+    requester_id: requesterId,
+    requester_name: requesterName,
     model: MODEL,
     tools_called: toolsCalled,
+    quality_flags: sideEffects.qualityFlags,
+    forced_reply: toolsCalled.some((t) => t.forced),
     side_effects: sideEffects,
     finished,
     error: lastError,

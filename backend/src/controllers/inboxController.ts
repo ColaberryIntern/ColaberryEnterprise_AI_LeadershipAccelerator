@@ -10,6 +10,7 @@ import InboxAuditLog from '../models/InboxAuditLog';
 import InboxLearningEvent from '../models/InboxLearningEvent';
 import InboxStyleProfile from '../models/InboxStyleProfile';
 import { logAuditEvent } from '../services/inbox/inboxAuditService';
+import { env } from '../config/env';
 
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
 
@@ -431,7 +432,13 @@ export async function handleDigestAction(req: Request, res: Response) {
 
     const jwt = await import('jsonwebtoken');
     try {
-      jwt.verify(token as string, process.env.JWT_SECRET || 'inbox-cos-secret');
+      // Verified against the one resolved signing secret. There is deliberately
+      // no literal fallback here: a fallback means a process with no JWT_SECRET
+      // would accept tokens signed with a constant that is readable in this
+      // repo, which is an auth bypass on an endpoint that takes its action
+      // straight off the query string. config/env.ts already refuses to boot in
+      // production without JWT_SECRET, so this path cannot regress silently.
+      jwt.verify(token as string, env.jwtSecret);
     } catch {
       return res.status(401).send('<h2>Link expired or invalid</h2><p>Please use the admin console instead.</p>');
     }

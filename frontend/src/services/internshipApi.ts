@@ -1,0 +1,507 @@
+import portalApi from '../utils/portalApi';
+
+/**
+ * Client for the participant internship endpoints.
+ *
+ * Note what is absent: no function here takes an application id. The server
+ * derives it from the session, so there is no id for this client to hold, pass,
+ * or get wrong.
+ */
+
+export type InternshipCardState =
+  | 'none'
+  | 'eligible'
+  | 'started'
+  | 'interview_choice'
+  | 'call_scheduled'
+  | 'interview_in_progress'
+  | 'under_review'
+  | 'information_requested'
+  | 'approved_documents_pending'
+  | 'documents_uploaded'
+  | 'payment_pending'
+  | 'activation_pending'
+  | 'active'
+  | 'rejected'
+  | 'waitlisted';
+
+export interface InternshipStatus {
+  card_state: InternshipCardState;
+  render: boolean;
+  may_pulse: boolean;
+  actionable: boolean;
+  title: string;
+  cta: string | null;
+  application: null | {
+    id: string;
+    state: string;
+    interview_channel: 'form' | 'phone' | null;
+    submitted_at: string | null;
+    is_terminal: boolean;
+  };
+}
+
+export async function fetchInternshipStatus(): Promise<InternshipStatus> {
+  const { data } = await portalApi.get<InternshipStatus>('/api/portal/internship/status');
+  return data;
+}
+
+export async function startInternshipApplication(): Promise<{ application_id: string; state: string; created: boolean }> {
+  const { data } = await portalApi.post('/api/portal/internship/application', {});
+  return data;
+}
+
+/** Group A only. The server rejects anything else, including a stray API key. */
+export async function saveInternshipIntake(values: Record<string, unknown>): Promise<InternshipStatus> {
+  const { data } = await portalApi.put<InternshipStatus>('/api/portal/internship/intake', values);
+  return data;
+}
+
+export async function selectInternshipChannel(channel: 'form' | 'phone'): Promise<InternshipStatus> {
+  const { data } = await portalApi.post<InternshipStatus>('/api/portal/internship/interview/channel', { channel });
+  return data;
+}
+
+// ── The interview (both channels) ───────────────────────────────────────────
+
+export interface InterviewQuestionView {
+  question_key: string;
+  section: string;
+  section_title: string;
+  prompt: string;
+  answer_type: 'text' | 'long_text' | 'yes_no' | 'choice';
+  options: string[] | null;
+  required: boolean;
+  is_confirmation: boolean;
+  /**
+   * What a phone call captured for this question, awaiting confirmation. Present
+   * only for `needs_followup` answers — the client pre-fills it and asks the
+   * applicant to confirm or edit rather than answer from scratch.
+   */
+  captured: { answer_text: string | null; answer_value: boolean | string | null; answered_via: string | null } | null;
+}
+
+export interface InterviewProgressView {
+  version: number;
+  total: number;
+  resolved: number;
+  remaining: number;
+  complete: boolean;
+  /** Answers captured from a call and awaiting confirmation (not yet resolved). */
+  captured_pending: number;
+}
+
+export interface InterviewView {
+  state: string;
+  channel: 'form' | 'phone' | null;
+  progress: InterviewProgressView;
+  scheduled_call: { session_id: string; scheduled_for: string } | null;
+  /**
+   * A phone call that has been placed and is not yet finished. Present from the
+   * moment the call is requested until it reconciles to a terminal state, so the
+   * interview screen can show the "on the call" overlay and advance when it clears.
+   */
+  live_call: { session_id: string; started_at: string } | null;
+  questions: InterviewQuestionView[];
+}
+
+export interface SummaryLineView {
+  question_key: string;
+  section: string;
+  section_title: string;
+  question: string;
+  answer_display: string;
+  state: string;
+  answered_via: string | null;
+  is_confirmation: boolean;
+}
+
+export interface SummaryView {
+  state: string;
+  progress: InterviewProgressView;
+  needs_confirmation: string[];
+  lines: SummaryLineView[];
+}
+
+export interface AnswerPayload {
+  question_key: string;
+  answer_text?: string | null;
+  answer_value?: boolean | string | null;
+  state?: 'answered' | 'skipped';
+}
+
+export async function fetchInterview(): Promise<InterviewView> {
+  const { data } = await portalApi.get<InterviewView>('/api/portal/internship/interview');
+  return data;
+}
+
+export async function saveInterviewAnswers(
+  answers: AnswerPayload[],
+  isCorrection = false,
+): Promise<{ saved: string[]; rejected: string[]; progress: InterviewProgressView; state: string }> {
+  const { data } = await portalApi.put('/api/portal/internship/interview/answers', {
+    answers, is_correction: isCorrection,
+  });
+  return data;
+}
+
+export async function fetchInterviewSummary(): Promise<SummaryView> {
+  const { data } = await portalApi.get<SummaryView>('/api/portal/internship/interview/summary');
+  return data;
+}
+
+export async function confirmInterviewSummary(): Promise<{ confirmed: number; interview_complete: boolean; state: string }> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/summary/confirm', { confirmed: true });
+  return data;
+}
+
+export async function submitInternshipApplication(): Promise<InternshipStatus> {
+  const { data } = await portalApi.post<InternshipStatus>('/api/portal/internship/submit', {});
+  return data;
+}
+
+/**
+ * Ask for the call now.
+ *
+ * A refusal comes back as 200 with `placed: false` and a human-readable `message`
+ * — no permission to call, no phone, nothing left to ask, cooldown, or calls
+ * unavailable. None of those are errors, so the caller shows the message rather
+ * than an error state.
+ */
+export async function requestInternshipCall(): Promise<
+  | { placed: true; session_id: string; remaining: number }
+  | { placed: false; reason: string; message: string }
+> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/call', {});
+  return data;
+}
+
+export async function scheduleInternshipCall(scheduledFor: string): Promise<{ session_id: string; scheduled_for: string }> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/call/schedule', { scheduled_for: scheduledFor });
+  return data;
+}
+
+export async function cancelInternshipCall(): Promise<{ cancelled: boolean }> {
+  const { data } = await portalApi.post('/api/portal/internship/interview/call/cancel', {});
+  return data;
+}
+
+// ── The offer-letter package ────────────────────────────────────────────────
+
+export interface OfferDocument {
+  id: string;
+  document_type: string;
+  title: string;
+  document_public_id: string;
+  revision: number;
+  byte_size: number;
+  requires_signature: boolean;
+  why: string;
+}
+
+export interface DocumentRequirement {
+  document_type: string;
+  title: string;
+  requires_signature: boolean;
+  generated: boolean;
+  latest_upload_revision: number | null;
+  verified: boolean;
+  correction_requested: boolean;
+  rejection_reason: string | null;
+}
+
+export interface DocumentsView {
+  state: string;
+  documents: OfferDocument[];
+  requirements: DocumentRequirement[];
+  all_verified: boolean;
+}
+
+export async function fetchInternshipDocuments(): Promise<DocumentsView> {
+  const { data } = await portalApi.get<DocumentsView>('/api/portal/internship/documents');
+  return data;
+}
+
+/**
+ * Download a generated document.
+ *
+ * Fetched as a blob through the authed client rather than linked directly: the
+ * endpoint requires the participant JWT, so a plain <a href> would 401. The object
+ * URL is revoked immediately after the click to avoid leaking it for the page's
+ * lifetime.
+ */
+export async function downloadInternshipDocument(documentId: string, filename: string): Promise<void> {
+  const res = await portalApi.get(`/api/portal/internship/documents/${documentId}/download`, {
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function uploadSignedInternshipDocument(
+  documentType: string,
+  file: File,
+): Promise<{ document_id: string; revision: number; state: string }> {
+  const form = new FormData();
+  form.append('document', file);
+  const { data } = await portalApi.post(
+    `/api/portal/internship/documents/${documentType}/signed`,
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data;
+}
+
+// ── Activation and onboarding ───────────────────────────────────────────────
+
+export interface ChecklistStep {
+  key: string;
+  order: number;
+  label: string;
+  detail: string;
+  actor: 'student' | 'colaberry';
+  blocking_activation: boolean;
+  complete: boolean;
+  waiting_on: string | null;
+}
+
+export interface MembershipCheck {
+  requires_subscription: boolean;
+  has_active_subscription: boolean;
+  has_active_comp: boolean;
+  ok: boolean;
+}
+
+export interface RequiredMeeting {
+  day: string;
+  kind: string;
+  time?: string;
+  timezone?: string;
+  audience?: 'interns_only' | 'public';
+  title?: string;
+  join_url?: string | null;
+  room_slug?: string | null;
+  room_id?: string | null;
+  room_name?: string | null;
+  registration_url?: string | null;
+}
+
+export interface OnboardingView {
+  state: string;
+  is_active: boolean;
+  cohort_id: string | null;
+  joined_at: string | null;
+  week: number | null;
+  minimum_weekly_hours: number;
+  max_active_projects: number;
+  required_meetings: RequiredMeeting[];
+  checklist: ChecklistStep[];
+  progress: { done: number; total: number };
+  next_action: ChecklistStep | null;
+  membership: MembershipCheck;
+}
+
+export type RequirementKey = 'claude_code_account' | 'own_api_key_with_billing' | 'never_share_credentials';
+export type AcknowledgementState =
+  | 'acknowledged_requirement'
+  | 'self_attested_ready'
+  | 'setup_verified_without_secret_collection';
+
+export async function fetchInternshipOnboarding(): Promise<OnboardingView> {
+  const { data } = await portalApi.get<OnboardingView>('/api/portal/internship/onboarding');
+  return data;
+}
+
+/**
+ * Record that the intern joined a required meeting today (fire-and-forget on the
+ * "Open in Rooms" click). Idempotent per day on the server, so a second click
+ * changes nothing. `meetingKey` is the meeting's day.
+ */
+export async function recordInternshipMeetingJoin(meetingKey: string): Promise<void> {
+  await portalApi.post('/api/portal/internship/meetings/join', { meeting_key: meetingKey });
+}
+
+// ── My Internship dashboard ──────────────────────────────────────────────────
+
+export interface DashboardActivity {
+  enrollment_id: string;
+  training: {
+    weeks: Array<{ week: number; published: number; completed: number; completed_pct: number; done: boolean }>;
+    first_three_weeks: { done: number; total: number; ready: boolean };
+  } | null;
+  project: {
+    name: string; stage: string | null; requirements_pct: number | null;
+    repo_connected: boolean; total_stories: number; verified_stories: number;
+  } | null;
+  cert_prep: { state: string; overall_scaled: number | null; evidence_coverage_pct: number | null; computed_at: string | null } | null;
+  case_studies: Array<{ id: string; title: string; status: string; slug: string }>;
+  attendance: { total: number; by_meeting: Record<string, number>; last_attended_at: string | null };
+}
+
+export interface AttentionItem { key: string; label: string; detail: string; waiting_on: string | null; blocking: boolean }
+export interface AttentionQueue { your_turn: AttentionItem[]; waiting_on_colaberry: AttentionItem[] }
+
+export type HandoffPhase = 'unknown' | 'before_week_3' | 'awaiting_assignment' | 'access_pending' | 'in_progress';
+export interface Week3Handoff {
+  phase: HandoffPhase;
+  owner: 'colaberry' | 'intern';
+  title: string;
+  detail: string;
+  project_name: string | null;
+  actionable: boolean;
+}
+
+export interface InternDashboard extends OnboardingView {
+  activity: DashboardActivity;
+  attention: AttentionQueue;
+  handoff: Week3Handoff;
+}
+
+export async function fetchInternshipDashboard(): Promise<InternDashboard> {
+  const { data } = await portalApi.get<InternDashboard>('/api/portal/internship/dashboard');
+  return data;
+}
+
+// ── Project portfolio ────────────────────────────────────────────────────────
+
+export interface ProjectReadinessComponent { key: string; label: string; score: number; weight: number; gap?: string }
+export interface ProjectReadiness { score: number; ready: boolean; components: ProjectReadinessComponent[]; gaps: string[] }
+
+export interface InternProjectStories {
+  total: number;
+  /** Self-reported completion — the readiness denominator. A claim, not a check. */
+  self_reported_complete: number;
+  /** Platform-confirmed (verified_at). Shown alongside, never swapped in. */
+  verified: number;
+  awaiting_verification: number;
+}
+
+export interface InternProject {
+  project_id: string;
+  name: string | null;
+  role: 'active' | 'owned' | 'archived';
+  stage: string;
+  has_repo: boolean;
+  repo_url: string | null;
+  command_center_url: string | null;
+  readiness: ProjectReadiness;
+  stories: InternProjectStories;
+  artifacts: number;
+  already_case_study: boolean;
+  risk_state: string;
+  risk_reason: string;
+}
+
+export interface InternProjectPortfolio {
+  state: string;
+  enrollment_id: string;
+  projects: InternProject[];
+  active_count: number;
+  has_live_project: boolean;
+}
+
+export async function fetchInternshipProjects(): Promise<InternProjectPortfolio> {
+  const { data } = await portalApi.get<InternProjectPortfolio>('/api/portal/internship/projects');
+  return data;
+}
+
+// ── Released mentor feedback ─────────────────────────────────────────────────
+
+export interface StudentFeedbackItem {
+  review_id: string;
+  submission_id: string;
+  /** AI-generated guidance. `human_reviewed` says whether a mentor then vetted it. */
+  ai_feedback: string;
+  review_status: 'auto_approved' | 'approved';
+  human_reviewed: boolean;
+  /** Present only on a mentor-approved item. */
+  reviewer_notes: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  submission: {
+    title: string;
+    assignment_type: string;
+    version_number: number;
+    status: string;
+    submitted_at: string | null;
+  } | null;
+}
+
+export interface InternshipFeedbackView {
+  state: string;
+  feedback: StudentFeedbackItem[];
+}
+
+export async function fetchInternshipFeedback(): Promise<InternshipFeedbackView> {
+  const { data } = await portalApi.get<InternshipFeedbackView>('/api/portal/internship/feedback');
+  return data;
+}
+
+// ── Certification (headline: practice readiness + official claim, kept separate) ──
+
+export interface InternCertReadiness {
+  state: string;
+  /** Colaberry estimate (100-1000), NOT an Anthropic exam score. */
+  overall_scaled: number | null;
+  knowledge_scaled: number | null;
+  evidence_coverage_pct: number | null;
+  /** When false, the estimate is a coverage figure, not exam-weighted. */
+  weights_available: boolean;
+  computed_at: string | null;
+}
+export interface InternOfficialCert {
+  status: 'none' | 'pending' | 'approved' | 'rejected';
+  passed_on: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+}
+export interface InternshipCertificationView {
+  state: string;
+  readiness: InternCertReadiness;
+  official: InternOfficialCert;
+}
+
+export async function fetchInternshipCertification(): Promise<InternshipCertificationView> {
+  const { data } = await portalApi.get<InternshipCertificationView>('/api/portal/internship/certification');
+  return data;
+}
+
+/**
+ * Record a tool-readiness acknowledgement.
+ *
+ * Note there is NO key parameter and no field for one. `verification_method` says
+ * HOW it was checked, never what was seen.
+ */
+export async function recordInternshipAcknowledgement(body: {
+  requirement_key: RequirementKey;
+  state: AcknowledgementState;
+  verification_method?: string | null;
+}): Promise<OnboardingView> {
+  const { data } = await portalApi.post<OnboardingView>('/api/portal/internship/acknowledgements', body);
+  return data;
+}
+
+export async function dismissInternshipCard(days = 14): Promise<void> {
+  await portalApi.post('/api/portal/internship/card/dismiss', { days });
+}
+
+/**
+ * Fire-and-forget analytics. Deliberately swallows its own errors: a metrics
+ * call that rejects must never surface as a broken card, and an unhandled
+ * rejection in a render effect is exactly how that happens.
+ */
+export function recordInternshipCardImpression(cardState: string): void {
+  portalApi.post('/api/portal/internship/card/impression', { card_state: cardState })
+    .catch(() => { /* analytics is best-effort */ });
+}
+
+export function recordInternshipCardOpened(cardState: string): void {
+  portalApi.post('/api/portal/internship/card/opened', { card_state: cardState })
+    .catch(() => { /* analytics is best-effort */ });
+}

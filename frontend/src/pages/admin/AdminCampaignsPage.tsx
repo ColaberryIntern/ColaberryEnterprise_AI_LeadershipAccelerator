@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import Modal from '../../components/ui/Modal';
-import Breadcrumb from '../../components/ui/Breadcrumb';
-import CampaignGraphTab from '../../components/admin/intelligence/entityPanel/CampaignGraphTab';
+import OutreachJourneyFlow from '../../components/admin/campaigns/journey/OutreachJourneyFlow';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
 interface Campaign {
   id: string;
@@ -40,22 +41,24 @@ const TYPE_LABELS: Record<string, string> = {
   executive_outreach: 'Executive Outreach',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'secondary',
+// Campaign status -> StatusBadge tone (active→success, paused→warning, draft→neutral, completed→info).
+const STATUS_TONE: Record<string, 'success' | 'warning' | 'neutral' | 'info'> = {
+  draft: 'neutral',
   active: 'success',
   paused: 'warning',
   completed: 'info',
 };
 
+// Campaign type -> brand chart token used as the card's top-border accent.
 const TYPE_BORDER_COLORS: Record<string, string> = {
-  cold_outbound: '#0dcaf0',
-  warm_nurture: '#fd7e14',
-  re_engagement: '#6f42c1',
-  behavioral_trigger: '#38a169',
-  alumni: '#e53e3e',
-  alumni_re_engagement: '#d69e2e',
-  payment_readiness: '#319795',
-  executive_outreach: '#1a365d',
+  cold_outbound: 'var(--chart-1)',
+  warm_nurture: 'var(--chart-4)',
+  re_engagement: 'var(--chart-5)',
+  behavioral_trigger: 'var(--chart-3)',
+  alumni: 'var(--chart-2)',
+  alumni_re_engagement: 'var(--chart-4)',
+  payment_readiness: 'var(--chart-6)',
+  executive_outreach: 'var(--chart-7)',
 };
 
 type CampaignTab = 'intelligence' | 'campaigns';
@@ -73,7 +76,18 @@ function AdminCampaignsPage() {
     sequence_id: '',
     budget_total: '',
     ai_system_prompt: '',
+    brand_id: '',
   });
+  /**
+   * Brands a campaign can be created under.
+   *
+   * Chosen at creation because it cannot be inferred later: nothing else on a
+   * campaign says which identity it belongs to, which is why every campaign made
+   * before this shipped is either the August tenancy backfill's default or
+   * unattributed, and why the brand filter on the journey chart had nothing to
+   * separate.
+   */
+  const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [triggerRules, setTriggerRules] = useState<{ signal_type: string; min_count: number }[]>([]);
   const [triggerSettings, setTriggerSettings] = useState({
     min_intent_score: 45,
@@ -108,6 +122,13 @@ function AdminCampaignsPage() {
 
   useEffect(() => {
     Promise.all([fetchCampaigns(), fetchSequences()]).finally(() => setLoading(false));
+    // Non-blocking: a brand list that fails to load leaves the selector empty and
+    // the campaign unattributed, which is the pre-existing behaviour rather than a
+    // broken form.
+    api
+      .get('/api/admin/campaigns/assignable-brands')
+      .then((res) => setBrands(res.data?.brands ?? []))
+      .catch((err) => console.error('Failed to load assignable brands:', err));
   }, [fetchCampaigns, fetchSequences]);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -117,6 +138,10 @@ function AdminCampaignsPage() {
         ...form,
         budget_total: form.budget_total ? parseFloat(form.budget_total) : null,
         sequence_id: form.sequence_id || null,
+        // Omitted rather than sent empty: the server treats a blank id as "no
+        // brand", and sending '' would look like a caller naming a brand that
+        // does not exist.
+        brand_id: form.brand_id || null,
       };
 
       if (form.type === 'behavioral_trigger') {
@@ -128,7 +153,7 @@ function AdminCampaignsPage() {
 
       await api.post('/api/admin/campaigns', payload);
       setShowModal(false);
-      setForm({ name: '', description: '', type: 'cold_outbound', sequence_id: '', budget_total: '', ai_system_prompt: '' });
+      setForm({ name: '', description: '', type: 'cold_outbound', sequence_id: '', budget_total: '', ai_system_prompt: '', brand_id: '' });
       setTriggerRules([]);
       setTriggerSettings({ min_intent_score: 45, require_all_rules: true, cooldown_hours: 72, auto_start_chat: false, exclude_identified: false });
       fetchCampaigns();
@@ -137,18 +162,68 @@ function AdminCampaignsPage() {
     }
   };
 
+  // Deterministic KPI roll-up from the loaded campaign list.
+  const kpis = useMemo(() => {
+    const total = campaigns.length;
+    const active = campaigns.filter((c) => c.status === 'active').length;
+    const leads = campaigns.reduce((sum, c) => sum + (c.lead_count || 0), 0);
+    const budget = campaigns.reduce((sum, c) => sum + (c.budget_total || 0), 0);
+    return { total, active, leads, budget };
+  }, [campaigns]);
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from live campaign health.
+  const trust: TrustSignal = useMemo(() => {
+    const { total, active } = kpis;
+    const level: TrustLevel = total > 0 ? 'live' : 'unverified';
+    return {
+      level,
+      source: 'campaigns table',
+      updatedAt: new Date().toISOString(),
+      summary: `${total} campaigns, ${active} active, ${kpis.leads} leads enrolled.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: level,
+          evidence: [
+            { label: 'Total', value: String(total) },
+            { label: 'Active', value: String(active) },
+          ],
+        },
+      ],
+    };
+  }, [kpis]);
+
+  const headerActions = (
+    <>
+      <Link to="/admin/campaigns/build-cold" className="btn btn-outline-primary btn-sm">
+        Build Cold Campaign
+      </Link>
+      <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
+        + New Campaign
+      </button>
+    </>
+  );
+
   if (loading) {
     return (
       <>
-        <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns' }]} />
+        <PageHeader
+          title="Campaigns"
+          icon="megaphone-line"
+          subtitle="Design, launch, and monitor every outreach campaign across all audiences."
+          breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Campaigns' }]}
+          trust={trust}
+          actions={headerActions}
+        />
         <div className="row g-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="col-md-6 col-lg-4">
-              <div className="card admin-table-card p-3">
+              <SectionCard>
                 <div className="skeleton mb-2" style={{ width: '60%', height: '18px' }} />
                 <div className="skeleton mb-2" style={{ width: '40%', height: '14px' }} />
                 <div className="skeleton" style={{ width: '80%', height: '14px' }} />
-              </div>
+              </SectionCard>
             </div>
           ))}
         </div>
@@ -157,19 +232,30 @@ function AdminCampaignsPage() {
   }
 
   return (
-    <div>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Campaigns' }]} />
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2 className="mb-0">Campaigns</h2>
-        <div className="d-flex gap-2">
-          <Link to="/admin/campaigns/build-cold" className="btn btn-outline-primary btn-sm">
-            Build Cold Campaign
-          </Link>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
-            + New Campaign
-          </button>
+    <>
+      <PageHeader
+        title="Campaigns"
+        icon="megaphone-line"
+        subtitle="Design, launch, and monitor every outreach campaign across all audiences."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Campaigns' }]}
+        trust={trust}
+        actions={headerActions}
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Campaigns" value={kpis.total} icon="megaphone-line" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Active" value={kpis.active} icon="play-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Leads Enrolled" value={kpis.leads} icon="group-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Total Budget" value={`$${kpis.budget.toFixed(0)}`} icon="money-dollar-circle-line" tone="neutral" />
+          </div>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Tab Navigation */}
       <ul className="nav nav-tabs mb-3">
@@ -196,20 +282,12 @@ function AdminCampaignsPage() {
         </li>
       </ul>
 
-      {/* Campaign Intelligence Graph — full viewport */}
-      {activeTab === 'intelligence' && (
-        <div style={{ height: 'calc(100vh - 220px)', minHeight: 400 }}>
-          <div className="card border-0 shadow-sm d-flex flex-column" style={{ height: '100%' }}>
-            <div className="card-header bg-white d-flex justify-content-between align-items-center py-2">
-              <span className="fw-semibold" style={{ color: 'var(--color-primary)', fontSize: '0.85rem' }}>Campaign Intelligence Graph</span>
-              <span className="text-muted" style={{ fontSize: '0.65rem' }}>Click nodes for details</span>
-            </div>
-            <div className="card-body p-0" style={{ flex: '1 1 0', minHeight: 0 }}>
-              <CampaignGraphTab fullWidth />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Outreach Journey Flow.
+          Brings its own SectionCard and its own controls, so the fixed-height
+          viewport wrapper the force graph needed is gone: a Sankey plus its table,
+          KPI strip and insight rail is a page that scrolls, not a canvas that must
+          be sized to the window. */}
+      {activeTab === 'intelligence' && <OutreachJourneyFlow />}
 
       {/* Campaign List Tab */}
       {activeTab === 'campaigns' && (
@@ -237,26 +315,24 @@ function AdminCampaignsPage() {
           </div>
 
           {campaigns.length === 0 ? (
-            <div className="card">
-              <div className="card-body text-center py-5 text-muted">
+            <SectionCard>
+              <div className="text-center py-5 text-muted">
                 <p className="mb-2">No campaigns yet.</p>
                 <button className="btn btn-outline-primary btn-sm" onClick={() => setShowModal(true)}>
                   Create your first campaign
                 </button>
               </div>
-            </div>
+            </SectionCard>
           ) : (
             <div className="row g-3">
               {campaigns.map((c) => (
                 <div key={c.id} className="col-md-6 col-lg-4">
                   <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none">
-                    <div className="card h-100 admin-table-card card-lift" style={{ borderTop: `3px solid ${TYPE_BORDER_COLORS[c.type] || '#6c757d'}` }}>
+                    <div className="card h-100 admin-table-card card-lift" style={{ borderTop: `3px solid ${TYPE_BORDER_COLORS[c.type] || 'var(--text-muted)'}` }}>
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start mb-2">
                           <h6 className="card-title text-dark mb-0">{c.name}</h6>
-                          <span className={`badge rounded-pill bg-${STATUS_COLORS[c.status] || 'secondary'}`}>
-                            {c.status}
-                          </span>
+                          <StatusBadge label={c.status} tone={STATUS_TONE[c.status]} />
                         </div>
                         <div className="d-flex gap-1 mb-2 flex-wrap">
                           <span className="badge bg-light text-dark border">
@@ -330,6 +406,26 @@ function AdminCampaignsPage() {
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
+          </div>
+          <div className="mb-3">
+            <label htmlFor="camp-brand" className="form-label">Brand</label>
+            <select
+              id="camp-brand"
+              className="form-select"
+              value={form.brand_id}
+              onChange={(e) => setForm({ ...form, brand_id: e.target.value })}
+              disabled={brands.length === 0}
+            >
+              <option value="">Unattributed</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+            <div className="form-text">
+              {brands.length === 0
+                ? 'No brands are configured, so this campaign will be unattributed.'
+                : 'Who this campaign sends as. Drives the brand filter on the Outreach Journey Flow.'}
+            </div>
           </div>
           <div className="row">
             <div className="col-md-6 mb-3">
@@ -514,7 +610,7 @@ function AdminCampaignsPage() {
           )}
         </form>
       </Modal>
-    </div>
+    </>
   );
 }
 

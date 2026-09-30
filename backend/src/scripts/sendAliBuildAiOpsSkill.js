@@ -109,7 +109,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - build-ai-ops-command-center skill .md (portable recipe for next project)',
     html: HTML,
     text: TEXT,

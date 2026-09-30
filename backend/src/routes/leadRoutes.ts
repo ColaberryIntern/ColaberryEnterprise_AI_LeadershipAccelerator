@@ -3,6 +3,20 @@ import rateLimit from 'express-rate-limit';
 import { submitLead } from '../controllers/leadController';
 import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
+import { handleFlotationPreview } from '../controllers/flotationPreviewController';
+import { handleFlotationInterview } from '../controllers/flotationInterviewController';
+import { handleFlotationApp } from '../controllers/flotationAppController';
+import { handleScholarshipInterview } from '../controllers/scholarshipInterviewController';
+import { handleSalesHubCory } from '../controllers/salesHubCoryController';
+import {
+  handleSponsorInquiry,
+  handleRequestSponsorLink,
+  handleVerifySponsorToken,
+} from '../controllers/sponsorController';
+import {
+  handleGetLeaderboard,
+  handleGetSponsorDashboard,
+} from '../controllers/challengeController';
 
 const leadRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -23,10 +37,80 @@ const ingestRateLimiter = rateLimit({
   message: { error: 'Ingest rate limit exceeded' },
 });
 
+/**
+ * The prospect polls this while their call is still running, so it is allowed to be chatty -
+ * but it reads by unguessable id, and a scraper walking ids would be doing so one guess at a
+ * time against a v4 UUID space. The cap is here to bound cost, not to stop enumeration;
+ * enumeration is stopped by the id itself and by every wrong answer looking identical.
+ */
+const previewRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Preview rate limit exceeded' },
+});
+
+const interviewRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Interview rate limit exceeded' },
+});
+
 const router = Router();
+
+// Sales-hub Cory RAG endpoint. Registered here (an early, public router) on
+// purpose: on the deployed server, routers mounted after leadRoutes sit behind
+// a broad auth guard, so a public endpoint must be reachable before them.
+const coryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded' },
+});
 
 router.post('/api/leads', leadRateLimiter, submitLead);
 router.post('/api/sponsorship-kit-request', leadRateLimiter, requestSponsorshipKit);
+// Door B "Sponsor Your Team" inquiry — public, must stay on leadRoutes (mounted
+// before the auth guard). Reuses the lead rate limiter.
+router.post('/api/sponsor-inquiry', leadRateLimiter, handleSponsorInquiry);
 router.post('/api/leads/ingest', ingestRateLimiter, handleLeadIngest);
+router.get('/api/flotation/preview/:token', previewRateLimiter, handleFlotationPreview);
+/**
+ * The interview is a MODEL CALL per message, so it is rate limited harder than the preview
+ * read. Twenty a minute is a fast conversation and a cheap ceiling; the interview service
+ * caps the exchanges within one conversation separately.
+ */
+router.post('/api/flotation/interview', interviewRateLimiter, handleFlotationInterview);
+
+// The OpportunityLift written interview. Same shape and the same limiter as the
+// flotation one above: keyed on the `raw_payload_id` the ingest form returned, one
+// model call per turn, so the abuse profile is identical and there is no reason to
+// give it a looser budget.
+router.post('/api/cpn/scholarship-interview', interviewRateLimiter, handleScholarshipInterview);
+/**
+ * A generated concept, rendered on its own for a phone. Shares the preview limiter: it is a
+ * read of something already produced, and a prospect passing their phone round a table will
+ * legitimately load it several times.
+ */
+router.get('/api/flotation/app/:token/:key', previewRateLimiter, handleFlotationApp);
+router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
+
+// One Class, Many Doors — read-only Challenge leaderboard + Sponsor dashboard.
+// Registered here (an early, public router) on purpose: routers mounted after
+// leadRoutes sit behind a broad auth guard on the deployed server, so these
+// public read surfaces must be reachable before them. The dashboard enforces a
+// per-sponsor access token in its controller (real-auth follow-up documented
+// there); the leaderboard is fully public.
+router.get('/api/challenge/leaderboard', handleGetLeaderboard);
+router.get('/api/sponsor/dashboard', handleGetSponsorDashboard);
+
+// Sponsor portal login (magic-link, replaces the sponsor.id-as-token stopgap
+// above). Rate-limited like the other public lead-adjacent endpoints.
+router.post('/api/sponsor/request-link', leadRateLimiter, handleRequestSponsorLink);
+router.get('/api/sponsor/verify', handleVerifySponsorToken);
 
 export default router;

@@ -1,0 +1,12 @@
+/* AI Flotation typography tokens. Scale: 16px × 1.3 (both variants).
+   Forge: Space Grotesk headings / Archivo body. Harbor: Manrope throughout. */
+:root {
+  --font-heading: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Archivo', system-ui, sans-serif;
+  --fw-heading: 700; /* @kind font */
+  --fs-caption: 13px; --fs-body: 16px; --fs-h4: 21px; --fs-h3: 27px; --fs-h2: 35px; --fs-h1: 46px;
+}
+[data-variant="harbor"] {
+  --font-heading: 'Manrope', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+}

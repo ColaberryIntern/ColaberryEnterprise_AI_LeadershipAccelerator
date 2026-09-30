@@ -1,0 +1,37 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:11.990
+When a call ends without a result, an admissions team's calling system plans the next one. Each planned call needs a time the lead can take it, and a place among hundreds of others.
+
+2
+00:00:13.100 --> 00:00:24.730
+On 10 September 2026 one five-minute window held 14 launch jobs against a cap of four, which is why the choice of a slot matters as much as the choice of a time.
+
+3
+00:00:25.800 --> 00:00:40.260
+The eligibility rule the product states, on a keyless local copy at the pinned commit with invented rows: new leads every day, cold leads Monday to Friday, both 8 to 22, in the caller's local timezone.
+
+4
+00:00:41.400 --> 00:00:58.020
+Campaign entries, voicemail retries and calls moved out of hours take their time from one shared grid. Since 10 September the allocator takes a database lock first, so two schedulers cannot both read the same free slot and fill it twice.
+
+5
+00:00:59.100 --> 00:01:10.920
+Six calls 75 seconds apart on that grid, and a callback the lead asked for sitting off it. Callbacks are written at an exact time, with no lock and no occupancy check.
+
+6
+00:01:12.000 --> 00:01:24.470
+Read from the platform's own tables on 19 September 2026. The periods before and after are not a controlled comparison, and the platform stores no reason for a cancellation.
+
+7
+00:01:25.600 --> 00:01:37.280
+A system pause holds the call, five guards can cancel it, and in live mode it must fall inside its campaign's window, in the zone the call platform reported on the lead's last call.
+
+8
+00:01:38.400 --> 00:01:51.450
+A call that could not go yet: the row cancelled, and a new row at Monday 11 AM Central, the lead's window start plus an hour. There is no link between the two rows, and no reason recorded.
+
+9
+00:01:52.500 --> 00:02:08.570
+The callbacks leads ask for skip the grid, their spoken times are read on the UTC clock rather than the lead's, a guard has cancelled every one of them since 24 August 2026, and the rebalancer can move calls earlier than planned.

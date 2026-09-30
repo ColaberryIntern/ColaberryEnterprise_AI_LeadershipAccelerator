@@ -9,6 +9,8 @@ interface EntryPointAttributes {
   page?: string | null;
   form_name?: string | null;
   description?: string | null;
+  /** landing_page | form | cta | campaign_link | partner_link | signup | application | intake */
+  entry_type?: string | null;
   is_active: boolean;
   created_at?: Date;
   updated_at?: Date;
@@ -22,6 +24,7 @@ class EntryPoint extends Model<EntryPointAttributes> implements EntryPointAttrib
   declare page: string | null;
   declare form_name: string | null;
   declare description: string | null;
+  declare entry_type: string | null;
   declare is_active: boolean;
   declare created_at: Date;
   declare updated_at: Date;
@@ -58,6 +61,11 @@ EntryPoint.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // --- multi-tenant ecosystem context -------------------------------------
+    // Declared because the DDL adds these columns and Sequelize only touches
+    // attributes the model knows about. A column present in Postgres but absent
+    // here reads back undefined and silently drops writes.
+    entry_type: { type: DataTypes.STRING(30), allowNull: true },
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

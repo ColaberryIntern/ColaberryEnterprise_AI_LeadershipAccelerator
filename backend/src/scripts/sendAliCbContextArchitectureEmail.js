@@ -134,7 +134,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     replyTo: 'claude-code@reply.colaberry.ai',
     subject: 'CB context architecture - what it sees, what just changed for Coca-Cola, plan for the rest',
     text, html,

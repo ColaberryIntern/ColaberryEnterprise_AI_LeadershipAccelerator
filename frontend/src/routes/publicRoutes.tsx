@@ -3,48 +3,72 @@ import { Route, Navigate } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
 import ProgramPage from '../pages/ProgramPage';
 import PricingPage from '../pages/PricingPage';
-import ContactPage from '../pages/ContactPage';
 import SponsorshipPage from '../pages/SponsorshipPage';
 import AdvisoryPage from '../pages/AdvisoryPage';
-import CaseStudiesPage from '../pages/CaseStudiesPage';
 import EnrollPage from '../pages/EnrollPage';
 import EnrollSuccessPage from '../pages/EnrollSuccessPage';
 import EnrollCancelPage from '../pages/EnrollCancelPage';
 import ExecOverviewThankYouPage from '../pages/ExecOverviewThankYouPage';
-import StrategyCallPrepPage from '../pages/StrategyCallPrepPage';
 import ExecutiveROICalculatorPage from '../pages/ExecutiveROICalculatorPage';
 import AIArchitectLandingPage from '../pages/AIArchitectLandingPage';
 import InstructorPage from '../pages/InstructorPage';
 import NotFoundPage from '../pages/NotFoundPage';
-import PilotZeroRiskPage from '../pages/PilotZeroRiskPage';
-import PilotAITeamPage from '../pages/PilotAITeamPage';
-import PilotExclusivePage from '../pages/PilotExclusivePage';
 import AgencyPartnerPage from '../pages/AgencyPartnerPage';
 import AIWorkforceDesignerPage from '../pages/AIWorkforceDesignerPage';
+import WorkingProfessionalsPage from '../pages/membership/WorkingProfessionalsPage';
+import BeginnersPage from '../pages/membership/BeginnersPage';
+import BuildersPage from '../pages/membership/BuildersPage';
+import SponsorChallengePage from '../pages/SponsorChallengePage';
+import LeaderboardPage from '../pages/LeaderboardPage';
+import DemoDayPage from '../pages/DemoDayPage';
+import SponsorDashboardPage from '../pages/SponsorDashboardPage';
+import ConsultingPage from '../pages/ConsultingPage';
 
 const publicRoutes = (
   <>
-    <Route path="/" element={<HomePage />} />
-    <Route path="/program" element={<ProgramPage />} />
-    <Route path="/pricing" element={<PricingPage />} />
+  {/*
+      CUTOVER: V2 is the site now.
+
+      These marketing paths were served by the old pages and are now owned by V2
+      or redirected to their nearest equivalent. They REDIRECT rather than 404,
+      because inbound links, the sitemap and search results still point at them.
+
+      Everything below this block is deliberately untouched: /enroll and its
+      success/cancel pair carry the payment flow, /sponsor/dashboard is how
+      sponsors get in, and /challenge, /leaderboard, the pilot, membership and
+      strategy-call pages are functional surfaces rather than marketing. Deleting
+      those because "the old site is not needed" would break paying customers.
+  */}
+  <Route path="/program" element={<Navigate to="/platform" replace />} />
+  <Route path="/case-studies" element={<Navigate to="/proof" replace />} />
+  <Route path="/demo-day" element={<Navigate to="/proof" replace />} />
+  <Route path="/advisory" element={<Navigate to="/services" replace />} />
+  <Route path="/consulting" element={<Navigate to="/services" replace />} />
+  <Route path="/about" element={<Navigate to="/" replace />} />
     <Route path="/sponsorship" element={<SponsorshipPage />} />
-    <Route path="/advisory" element={<AdvisoryPage />} />
-    <Route path="/case-studies" element={<CaseStudiesPage />} />
     <Route path="/enroll" element={<EnrollPage />} />
     <Route path="/enroll/success" element={<EnrollSuccessPage />} />
     <Route path="/enroll/cancel" element={<EnrollCancelPage />} />
-    <Route path="/contact" element={<ContactPage />} />
     <Route path="/executive-overview/thank-you" element={<ExecOverviewThankYouPage />} />
-    <Route path="/strategy-call-prep" element={<StrategyCallPrepPage />} />
     <Route path="/executive-roi-calculator" element={<ExecutiveROICalculatorPage />} />
     <Route path="/ai-architect" element={<AIArchitectLandingPage />} />
     <Route path="/ai-architect/instructor" element={<InstructorPage />} />
-    <Route path="/pilot/zero-risk" element={<PilotZeroRiskPage />} />
-    <Route path="/pilot/ai-team" element={<PilotAITeamPage />} />
-    <Route path="/pilot/exclusive" element={<PilotExclusivePage />} />
+    <Route path="/sponsor/dashboard" element={<SponsorDashboardPage />} />
+    {/* Retired enterprise-sales pages — folded into the sponsor-challenge model */}
+    <Route path="/strategy-call-prep" element={<Navigate to="/sponsorship" replace />} />
+    <Route path="/pilot/zero-risk" element={<Navigate to="/sponsorship" replace />} />
+    <Route path="/pilot/ai-team" element={<Navigate to="/sponsorship" replace />} />
+    <Route path="/pilot/exclusive" element={<Navigate to="/sponsorship" replace />} />
     <Route path="/partners" element={<AgencyPartnerPage />} />
     <Route path="/ai-workforce-designer" element={<AIWorkforceDesignerPage />} />
-    <Route path="/about" element={<Navigate to="/" replace />} />
+    <Route path="/membership/working-professionals" element={<WorkingProfessionalsPage />} />
+    <Route path="/membership/beginners" element={<BeginnersPage />} />
+    <Route path="/membership/builders" element={<BuildersPage />} />
+    <Route path="/challenge" element={<SponsorChallengePage />} />
+    <Route path="/leaderboard" element={<LeaderboardPage />} />
+    {/* /p/:slug (Capstone Record) is NOT here — it is defined under
+        PublicLayoutV2 in App.tsx so it gets the current site header rather than
+        this block's retired one. See the comment there. */}
     <Route path="*" element={<NotFoundPage />} />
   </>
 );

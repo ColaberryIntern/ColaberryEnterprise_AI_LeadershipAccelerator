@@ -1,0 +1,696 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { bandRungForLevel } from '../../services/bandLadder';
+import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
+import VideoEmbed from './VideoEmbed';
+import CardComments from './CardComments';
+import { toTitleCase } from '../../utils/titleCase';
+import portalApi from '../../utils/portalApi';
+import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
+import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
+import { ambientMediaOf } from './ambientMedia';
+import RitualBody from './RitualBody';
+import { useMediaBeats, type WatchBeatPayload } from './useMediaBeats';
+
+// Server-derived watch state for a card (the video watch gate). watched_pct is
+// the ratcheted server total; the collect button unlocks when met.
+interface WatchState { watched_pct: number; required_pct: number | null; met: boolean; }
+
+/** Mirrors POINTS_PER_COMMENT in backend/src/services/communityService.ts and
+ *  REPLY_POINTS in CommunityThreadPanel — what a reply earns, advertised on the
+ *  tile so the student knows before opening. The award itself is server-side. */
+const REPLY_POINTS = 2;
+
+/** A community post shows this many lines on the tile before "Show more".
+ *  Ali, 2026-09-12: "I would rather have 3 lines max with the ability for the
+ *  user to expand the text." Expressed in `em` against the body's own
+ *  line-height in timeline.css, so it stays three LINES if the type scale
+ *  changes. */
+const POST_CLAMP_LINES = 3;
+
+// Community byline helpers — a card carrying `author` renders as a post (avatar +
+// name + level badge) instead of the generic curriculum header.
+const authorInitials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?';
+const authorColor = (n: string) => { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return `hsl(${h % 360} 48% 42%)`; };
+
+/**
+ * TimelineCard — the universal card of the Timeline Engine, in Colaberry
+ * Design E. One presentational component renders every curriculum type; the
+ * card's `render_band` picks the icon + colour, `student_label` names it, and
+ * `points` drives the XP badge. Shared primitive owned by the Classroom tab.
+ *
+ * Interaction contract: ▶ on a playable card plays the video INLINE, right in
+ * the tile (FB-style, no panel). The "Open" button is the ONLY way to pull up
+ * the right-side detail panel.
+ */
+
+export interface TimelineFeedCard {
+  id: string;
+  type: string;
+  student_label: string;
+  render_band: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  week: number | null;
+  bucket: string;
+  order: number;
+  difficulty: string;
+  estimated_time: number | null;
+  points: { learning?: number; builder?: number; community?: number };
+  competencies: unknown;
+  status: 'locked' | 'available' | 'in_progress' | 'completed';
+  lock_reason?: string | null;   // when status='locked', why (e.g. "Finish the Learn tasks first")
+  quiz_score: number | null;
+  completed_at: string | null;
+  video?: { url: string; presenter: string | null; poster: string | null; title?: string | null; duration_seconds?: number | null } | null;
+  image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
+  content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // title = the generated lesson title ("Overview — {week topic}"), display beats the raw card title
+  course?: { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null;   // Skills Course (skills_jar): class name + link + completion mode
+  blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
+  capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
+  week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title (no week number)
+  author?: { name: string; avatar_url: string | null; level: number } | null;   // community posts: member byline (avatar + name + level) so the card reads as a real post
+  // Community-post items ONLY (Today feed `community:<postId>` refs). When set,
+  // `id` is a feed ref, NOT a card UUID — every card-scoped endpoint will reject
+  // it. Read this instead and talk to the community post endpoints: the drawer
+  // opens the post's discussion thread, and Comment opens the same thread.
+  community_post_id?: string | null;
+  comment_count?: number | null;   // community posts: replies on the thread
+  like_count?: number | null;      // community posts: cheers on the post
+  // Project-task items ONLY. When set, `id` is the `project:<uuid>` feed ref and
+  // the tile must navigate to /portal/projects/workspace/:project_id/:project_task_id
+  // rather than open the card drawer.
+  project_id?: string | null;
+  project_task_id?: string | null;
+  // Free-text meta the SOURCE wants on the tile in place of the difficulty word
+  // ("Due today", "Overdue"). The Projects page sets it; curriculum cards leave
+  // it unset and keep showing their difficulty.
+  meta?: string | null;
+  // The verb on a project task's CTA. Default "Build" — a story is built and
+  // verified from the repo. A demo-prep task is handed in ("Submit"), and Demo
+  // Day is marked by staff ("Demo Day"), so the button must not promise a
+  // build where there is nothing to build. Set by the projects mapper.
+  cta_verb?: string | null;
+}
+
+export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
+
+export interface Visual { kind: Kind; color: string; }
+
+// render_band -> Design E visual kind + accent colour (Colaberry palette).
+// EXPORTED as the format contract: every render_band the backend type registry
+// (backend/src/services/timeline/typeRegistry.ts) can emit MUST be a key here, or
+// the card silently falls back to the generic 'reading' visual — which would make
+// the Experience Studio demo and the real Classroom timeline event both lose the
+// type's intended format. curriculumFormatContract.test.ts enforces that.
+export const BAND: Record<string, Visual> = {
+  media: { kind: 'video', color: '#367895' },
+  live_class: { kind: 'video', color: '#FB2832' },
+  video_feedback: { kind: 'video', color: '#E8920C' },
+  event: { kind: 'event', color: '#FB2832' },
+  overview: { kind: 'reading', color: '#2E6A86' },
+  deepdive: { kind: 'reading', color: '#2E6A86' },
+  reading: { kind: 'reading', color: '#2E6A86' },
+  question: { kind: 'reading', color: '#367895' },
+  announcement: { kind: 'reading', color: '#367895' },
+  discussion: { kind: 'reading', color: '#367895' },
+  community: { kind: 'reading', color: '#367895' },
+  peer_wins: { kind: 'reading', color: '#5BA63C' },   // Cohort Wins grid — green = growth/celebration
+
+  study: { kind: 'reading', color: '#367895' },
+  warmup: { kind: 'reading', color: '#2E6A86' },
+  intel: { kind: 'reading', color: '#2E6A86' },   // Intelligence Pipeline types (news/research/tools/…)
+  survey: { kind: 'survey', color: '#E8920C' },
+  reflection: { kind: 'survey', color: '#E8920C' },
+  quiz: { kind: 'test', color: '#5BA63C' },
+  exam: { kind: 'test', color: '#5BA63C' },
+  evaluation: { kind: 'test', color: '#5BA63C' },
+  promptlab: { kind: 'lab', color: '#FB2832' },
+  prompt_catalog: { kind: 'lab', color: '#D97757' },   // Prompt Lab — Claude Code practice-prompt catalog
+  build_artifacts: { kind: 'lab', color: '#D97757' },   // Build Artifact(s) Lab — Claude Code build station
+  task: { kind: 'lab', color: '#FB2832' },
+  artifact: { kind: 'lab', color: '#FB2832' },
+  presentation: { kind: 'lab', color: '#FB2832' },
+  demo: { kind: 'lab', color: '#FB2832' },
+  interview: { kind: 'lab', color: '#FB2832' },
+  build_story: { kind: 'lab', color: '#5BA63C' },
+  github: { kind: 'lab', color: '#5BA63C' },
+  skills_jar: { kind: 'skilljar', color: '#E8920C' },
+  milestone: { kind: 'milestone', color: '#5BA63C' },
+  achievement: { kind: 'milestone', color: '#5BA63C' },
+  badge: { kind: 'milestone', color: '#5BA63C' },
+  streak: { kind: 'milestone', color: '#E8920C' },
+  setup_lab: { kind: 'setuplab', color: '#D97757' },   // Claude Code enablement lab (dark, get-unblocked)
+  claude_studio: { kind: 'lab', color: '#6C5CE7' },   // Claude Studio — Claude.ai four-stage loop (violet, NOT the coral Claude Code spine)
+  architect_mindset: { kind: 'timemachine', color: '#367895' },   // The Architect Time Machine (cinematic decision simulation)
+};
+export const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
+
+// Curriculum types that run IN Claude Code — the tile shows a "Claude Code" corner
+// strip so a student knows they'll need Claude Code open to complete the activity.
+export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'artifact_submission']);
+
+// Curriculum types that run in CLAUDE.AI (conversations / Projects / Artifacts)
+// rather than in Claude Code. Deliberately a separate strip in a separate colour:
+// a student glancing at the week needs to know which of the two tools an
+// activity needs, and "Claude Code" on a card that never opens a terminal is
+// the confusion this whole type exists to remove.
+export const CLAUDE_AI_TYPES = new Set(['claude_studio']);
+
+const KIND_GRADIENT: Record<Kind, string> = {
+  video: 'linear-gradient(135deg,#367895,#2E6A86)',
+  skilljar: 'linear-gradient(135deg,#367895,#2E6A86)',
+  lab: 'linear-gradient(135deg,#367895,#5BA63C)',
+  test: 'linear-gradient(135deg,#5BA63C,#367895)',
+  reading: 'linear-gradient(135deg,#2E6A86,#367895)',
+  survey: 'linear-gradient(135deg,#E8920C,#FB2832)',
+  event: 'linear-gradient(135deg,#FB2832,#C20E1E)',
+  milestone: 'linear-gradient(135deg,#5BA63C,#3C7A26)',
+  setuplab: 'linear-gradient(135deg,#22334f,#0c1322)',
+  timemachine: 'linear-gradient(135deg,#12303c,#0a1a22)',
+};
+
+// small header-tile icon per kind
+const Icon: React.FC<{ kind: Kind }> = ({ kind }) => {
+  switch (kind) {
+    case 'video': return <path d="M8 5v14l11-7z" fill="currentColor" />;
+    case 'skilljar': return <><path d="M12 3l9 4-9 4-9-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M6 10v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5" stroke="currentColor" strokeWidth="2" /></>;
+    case 'lab': return <path d="M9 3h6M8 8h8v12H8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />;
+    case 'test': return <><path d="M9 11l3 3 8-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M21 12v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8" stroke="currentColor" strokeWidth="2" /></>;
+    case 'reading': return <path d="M4 5h7v15H4zM13 5h7v15h-7z" stroke="currentColor" strokeWidth="2" />;
+    case 'survey': return <path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" fill="currentColor" />;
+    case 'event': return <><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></>;
+    case 'milestone': return <path d="M6 21V4M6 5h11l-2 3 2 3H6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />;
+    case 'setuplab': return <><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M7 9l3 3-3 3M13 15h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></>;
+    case 'timemachine': return <><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /><path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></>;
+    default: return <path d="M4 5h7v15H4z" stroke="currentColor" strokeWidth="2" />;
+  }
+};
+
+const StatePip: React.FC<{ status: TimelineFeedCard['status'] }> = ({ status }) => {
+  if (status === 'completed') return <span className="pip done"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>Completed</span>;
+  if (status === 'locked') return <span className="pip lock"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" /></svg>Locked</span>;
+  return <span className="pip up"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /></svg>Not started</span>;
+};
+
+function totalPoints(p: TimelineFeedCard['points']): number {
+  return (p.learning || 0) + (p.builder || 0) + (p.community || 0);
+}
+
+interface Props {
+  card: TimelineFeedCard;
+  onOpen?: (card: TimelineFeedCard) => void;
+  onLike?: (card: TimelineFeedCard) => void;
+  onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
+  /** Comment button: jump straight into the card's workspace (where the cohort comments live). */
+  onComments?: (card: TimelineFeedCard) => void;
+  /** Workspace shortcut: open the card's full runtime workspace (video + AI Mentor + comments). */
+  onWorkspace?: (card: TimelineFeedCard) => void;
+  /** Compact mode: drop the tall media tile + description, keep the header and the
+      social footer (likes / comments). Used for completed cards folded into the
+      "Completed" section so finished work stops eating vertical space but the
+      cohort can still like and comment on it. */
+  compact?: boolean;
+  /**
+   * A REAL like count, from a real source. Optional, and deliberately WITHOUT a
+   * default: when it is undefined the heart renders with no number beside it,
+   * rather than asserting a zero (or anything else) that nothing counted.
+   *
+   * There is currently no like endpoint and no like table, so no caller supplies
+   * this and no number is shown. Until 2026-08-24 two different callers passed a
+   * FABRICATED value here — `6 + ((i * 7) % 13)` keyed on the array index in
+   * TodayFeedV2, and `6 + (id.charCodeAt(id.length - 1) % 17)` keyed on a hash of
+   * the card id in TimelineFeed. Students were shown invented engagement on work
+   * nobody had reacted to, which is the exact thing the platform's own trust
+   * criterion forbids: no surface shows a number the project has not produced.
+   *
+   * This prop is the seam for whichever way the Like decision goes. To BUILD the
+   * feature, pass the real count here and a real `onLike`. To HIDE it, delete the
+   * button below and this prop with it. Neither path needs anything unpicked
+   * first.
+   */
+  likes?: number;
+  liked?: boolean;
+}
+
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWorkspace, compact = false, likes, liked = false }) => {
+  const v = visualFor(card.render_band);
+  // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE —
+  // and while playing, clicking the artwork toggles pause/play (the bar has the
+  // native controls too).
+  const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
+  const [playingInline, setPlayingInline] = useState(false);
+  const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
+  // Points are NEVER collected on the tile — every points card opens the drawer,
+  // where the type's completion gate lives. The tile only PREVIEWS progress (the
+  // video watch %); the drawer owns the Collect button.
+  const [watch, setWatch] = useState<WatchState | null>(null); // video watch progress (on-card % preview)
+  const toggleInline = () => {
+    if (locked) return;
+    if (!playingInline) { setPlayingInline(true); return; }
+    const a = inlineAudioRef.current;
+    if (a) { if (a.paused) { void a.play(); } else { a.pause(); } }
+  };
+  const done = card.status === 'completed';
+  const locked = card.status === 'locked';
+  const isSkillsJar = v.kind === 'skilljar';
+  const pts = totalPoints(card.points);
+  const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.meta ?? card.difficulty].filter(Boolean).join(' · ');
+  // A project story. Its points are paid by the platform when the repo VERIFIES
+  // the story, never by a click here — so the button says what building it
+  // pays and takes them to the workspace (Ali, 2026-09-11: "points instead of
+  // the open button, just like the Classroom").
+  const isProjectTask = !!card.project_task_id;
+  // Media/external cards keep their authored title casing; curriculum content
+  // titles are Title-Cased for display.
+  const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
+  const tc = (s: string) => (externalTitle ? s : toTitleCase(s));
+  const shortTitle = tc((card.week_title || card.content?.title || card.title).replace(/^[^·]*· /, ''));
+
+  // Poster background precedence: a card's OWN art wins — an explicit card
+  // image (blog cover), the video's saved poster (incl. podcast episode art /
+  // picked testimonial), a thumbnail DERIVED from the video URL (YouTube — so a
+  // plain video card shows ITS video's image, never the generic banner), or a
+  // blog card's post thumbnail; otherwise EVERY card defaults to its curriculum
+  // type's AI banner (the Experience Studio thumbnail); the Design-E gradient
+  // is the last-resort fallback. Darkened so the overlay text stays legible.
+  // Playable = a real video/audio source is attached. Only playable cards get
+  // the ▶ affordance — and ▶ plays INLINE in the tile (never opens the panel);
+  // everything else shows an "Open" pill (right-panel intent).
+  const source = parseVideoUrl(card.video?.url);
+  const playable = !!source;
+  const [showComments, setShowComments] = useState(false);
+
+  // Watch gate: a real (anchored) video card that awards points and can be
+  // collected has to be watched to the required % before Collect unlocks. Ambient
+  // media (ref `provider:id`, no card row) and podcasts (no points) are never
+  // watch-gated on the tile. The % is server-derived — the inline preview emits
+  // watch beats as it plays and the server returns the ratcheted total.
+  const anchored = !card.id.includes(':');
+  const watchable = playable && !podcastAudio && anchored && pts > 0 && !!onComplete;
+
+  // Listen-to-earn (Ali, 2026-09-11): a podcast or testimonial on the Today feed
+  // is ambient — no card row — so it was never watch-gated and never paid. The
+  // server now stamps its points (35 / 10) onto the item and tracks playback
+  // through the ambient media gate, keyed on the provider id. The tile's job is
+  // to emit beats from the inline player and preview the %; collection happens
+  // in the drawer, gated server-side at 75%, exactly like a video card.
+  const ambient = ambientMediaOf(card);
+  const mediaTracked = !!ambient && pts > 0 && !!onComplete && !done;
+  const mediaBeat = (beat: WatchBeatPayload) => {
+    if (!ambient) return;
+    runtimeApi.mediaWatch(ambient.kind, ambient.id, beat).then((r) => setWatch(r)).catch(() => { /* best-effort */ });
+  };
+  const audioBeats = useMediaBeats(mediaTracked && ambient?.kind === 'podcast' ? mediaBeat : undefined, 'audio');
+  // Hydrate the % on mount so a half-listened episode shows its progress before
+  // the student presses play again (and "points unlocked" if they already crossed 75%).
+  useEffect(() => {
+    if (!mediaTracked || !ambient) return;
+    let alive = true;
+    runtimeApi.mediaVerdict(ambient.kind, ambient.id).then((r) => { if (alive) setWatch(r); }).catch(() => { /* best-effort */ });
+    return () => { alive = false; };
+  }, [mediaTracked, ambient?.kind, ambient?.id]);
+
+  // A Today-feed community post. Its `id` is the feed ref (`community:<uuid>`),
+  // so every card-scoped affordance on this tile has to route to the post's own
+  // endpoints instead — see community_post_id on TimelineFeedCard.
+  const isCommunityPost = !!card.community_post_id;
+  // Long enough that rendering it in full would push every other card off the
+  // screen. Measured on the STRING, not on layout: deterministic, testable, and
+  // it cannot change under a re-render. A "Steal This Prompt" post runs ~2,000
+  // characters; a Skill Drop answer runs ~200 and is never clamped.
+  // A community post is clamped to POST_CLAMP_LINES until the student expands
+  // it, in place, on the tile. Whether it NEEDS expanding is a question about
+  // layout, so it is measured (scrollHeight vs clientHeight) rather than
+  // guessed from the character count — a three-word post must not be handed a
+  // "Show more" that reveals nothing.
+  const [postExpanded, setPostExpanded] = useState(false);
+  const [postOverflows, setPostOverflows] = useState(false);
+  const postBodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = postBodyRef.current;
+    if (!el) { setPostOverflows(false); return; }
+    // Measured while clamped; 2px absorbs sub-pixel line rounding.
+    setPostOverflows(el.scrollHeight > el.clientHeight + 2);
+  }, [card.description, isCommunityPost]);
+
+  // A project task's destination is the project workspace, not the drawer. The
+  // routing decision deliberately does NOT live here: this tile is rendered by
+  // several containers, some outside a <Router>, so it stays a pure
+  // presentational component and hands the card up through onOpen/onWorkspace.
+  // TodayShell — the only container that ever receives a project task — reads
+  // project_id/project_task_id and navigates. (A useNavigate() here broke four
+  // test suites that render the tile without a Router; CI caught it.)
+
+  // Viewport autoplay: a media card (video OR podcast audio) starts playing while
+  // it is in view and stops when scrolled away — so only what you're looking at
+  // plays. Video is a muted, click-through preview; a podcast starts its episode.
+  useEffect(() => {
+    if (!((playable || !!podcastAudio) && !locked)) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.55 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [playable, podcastAudio, locked]);
+  useEffect(() => {
+    if ((playable || !!podcastAudio) && !locked) setPlayingInline(inView);
+  }, [inView, playable, podcastAudio, locked]);
+  const ownPoster =
+    (card.image && card.image.trim()) ||
+    card.video?.poster ||
+    videoThumbnail(source) ||
+    (card.type === 'blog' && card.blog?.thumbnail) || null;
+  const posterUrl = ownPoster || card.type_thumbnail || null;
+  const posterStyle: React.CSSProperties = posterUrl
+    ? {
+        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    : { background: KIND_GRADIENT[v.kind] };
+
+  // ONE uniform 16:9 tile for EVERY card. Playable cards play INLINE on click
+  // (the tile swaps to the live player — FB-style, no panel). The footer "Open"
+  // button (and the Open pill on non-playable tiles) is the ONLY way to pull up
+  // the right-side detail panel, where content/quiz/reflection render and the
+  // SkillsJar course + certificate upload happen.
+  const metaText = isSkillsJar
+    ? 'External course · certificate required'
+    : metaLine || (v.kind === 'video' ? 'video' : '');
+
+  // Skills Course (skills_jar) adds a second action beside ▶: "Open" jumps
+  // straight to the external course/assignment link, while ▶ still opens the
+  // right panel (course details + certificate upload). Open falls back to the
+  // panel when no link is attached, so neither button is ever dead. Because that
+  // needs two buttons, the skills_jar tile is a <div> (nesting a button in the
+  // whole-tile <button> would be invalid) — every other card keeps the uniform
+  // single-button tile.
+  const course = card.course || null;
+  const openCourseLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (locked) return;
+    if (course?.url) window.open(course.url, '_blank', 'noopener,noreferrer');
+    else onOpen?.(card);
+  };
+
+  // The big watermark icon only decorates gradient tiles — real artwork
+  // (own poster or type banner) doesn't need it and reads cleaner without.
+  const watermark = posterUrl ? null : (
+    <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+  );
+
+  const media = isSkillsJar ? (
+    // Clicking the tile opens the right panel (course details + certificate upload);
+    // the chevron jumps straight to the external course. No separate "Open" overlay —
+    // the footer "Open" button already opens the panel.
+    <div
+      className="mthumb skilljar" style={posterStyle}
+      role="button" tabIndex={0}
+      onClick={() => !locked && onOpen?.(card)}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); onOpen?.(card); } }}
+      aria-label={`Open ${card.title}`}
+    >
+      {watermark}
+      <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
+      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
+      <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="mt-play" onClick={openCourseLink} aria-label={course?.url ? 'Go to the course' : 'Open course details'}>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      </div>
+    </div>
+  ) : playable && !podcastAudio && playingInline ? (
+    // Viewport autoplay PREVIEW: muted (autoplay ⇒ muted in VideoEmbed). Unlike the
+    // old click-through-to-drawer behaviour, the tile's own controls (native
+    // play/pause/mute/seek, revealed on hover) are directly usable right here — the
+    // footer "Open"/"Workspace" buttons are now the only ways to the side panel, and
+    // both stop this inline preview first so the drawer's own player is never
+    // competing with an unmuted tile playing underneath it. A muted scroll-by
+    // preview never marks the card complete — completion happens in the drawer.
+    <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
+      <VideoEmbed
+        source={source}
+        title={card.video?.title || shortTitle}
+        poster={ownPoster || posterUrl}
+        autoplay
+        badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+        onEnded={() => setPlayingInline(false)}
+        // Sibling of CardDetailBody's reportBeats: the heartbeat deliberately
+        // outlives completion. Gating it on `!done` froze watched_pct at the
+        // moment the student collected points (75%), so the stored value was
+        // capped at the unlock threshold instead of measuring real playback.
+        onWatchBeat={watchable
+          ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
+          : mediaTracked && ambient?.kind === 'testimonial'
+            ? mediaBeat   // ambient testimonial: same beats, the media gate instead of the card gate
+            : undefined}
+      />
+    </div>
+  ) : podcastAudio ? (
+    // Podcast tile with a direct audio episode: clicking the artwork starts the
+    // episode playing INLINE (the footer "Open" still opens the drawer, which
+    // never autoplays). Two interactive elements ⇒ a <div> tile like skills_jar.
+    <div
+      className={`mthumb${done ? ' done' : ''}`} style={posterStyle} role="button" tabIndex={0}
+      onClick={toggleInline}
+      onKeyDown={(e) => {
+        // Only claim Enter/Space BEFORE playback starts — once the player is up,
+        // the native <audio> keyboard controls (space = pause) must win.
+        if (!playingInline && (e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); setPlayingInline(true); }
+      }}
+      aria-label={playingInline ? `Pause ${card.video?.title || card.title}` : `Play ${card.video?.title || card.title}`}
+    >
+      {watermark}
+      <span className="mt-ribbon">Podcast</span>
+      <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
+      {!playingInline && <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>}
+      {playingInline ? (
+        // The control bar must own ALL its pointer/keyboard events — nothing may
+        // bubble to the tile (which toggles playback) or steal the native controls.
+        <span
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          style={{ position: 'absolute', left: 10, right: 10, bottom: 10, zIndex: 5, display: 'block' }}
+        >
+          <audio
+            ref={inlineAudioRef}
+            style={{ width: '100%' }} src={podcastAudio} controls autoPlay
+            // Read fresh on every (re)mount — this element is destroyed and recreated
+            // each time the tile scrolls out of and back into view, so a stale
+            // useState here would silently re-mute an episode the student already
+            // unmuted. See podcastMutePreference for the sticky cross-episode contract.
+            muted={getPodcastMuted()}
+            onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
+            // Listen-to-earn: the same accumulator VideoEmbed uses, so a podcast's
+            // 75% means what a video's does. Pause/end flush the tail so the last
+            // stretch before the student stops is not lost.
+            onTimeUpdate={audioBeats.onTimeUpdate}
+            onPause={audioBeats.onPauseOrEnd}
+            onEnded={() => { audioBeats.onPauseOrEnd(); setPlayingInline(false); }}
+          />
+        </span>
+      ) : (
+        <span className="mt-open">{done
+          ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+          : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>
+      )}
+    </div>
+  ) : (
+    <button
+      type="button"
+      className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`}
+      style={posterStyle}
+      onClick={() => !locked && onOpen?.(card)}
+      aria-label={`Open ${card.video?.title || card.title}`}
+    >
+      {watermark}
+      {CLAUDE_CODE_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#D97757,#C4633A)' }}>Claude Code</span>}
+      {CLAUDE_AI_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#6C5CE7,#5546C9)' }}>Claude.ai</span>}
+      {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
+      {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
+      {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
+      <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
+      <span className="mt-meta"><b>{card.video?.title || card.blog?.title || shortTitle}</b><span>{metaText}</span></span>
+      {/* Corner affordance: ✓ when done, ▶ when the card can play inline. A
+          NON-playable tile shows nothing here — the single "Open" lives in the
+          footer, so a card never carries two Open buttons. */}
+      {done
+        ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
+        : playable
+          ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
+          : null}
+    </button>
+  );
+
+  return (
+    <div ref={cardRef} className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
+      <div className="fc-head">
+        {card.author
+          ? (card.author.avatar_url
+              ? <img className="tc-avatar" src={card.author.avatar_url} alt={card.author.name} />
+              : <span className="tc-avatar" style={{ background: authorColor(card.author.name) }}>{authorInitials(card.author.name)}</span>)
+          : <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>}
+        <div style={{ minWidth: 0 }}>
+          <div className="ttl">{card.author ? card.author.name : tc(card.week_title || card.content?.title || card.title)}</div>
+          <div className="sub">
+            {card.author
+              ? <span className={`tc-lvl-badge lvl-${card.author.level}`}>{bandRungForLevel(card.author.level)}</span>
+              : <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>}
+            {!card.author && pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
+          </div>
+        </div>
+        <span className="st-ic"><StatePip status={card.status} /></span>
+      </div>
+      {/* Compact completed card reads like a regular (smaller) feed post: keep the
+          text, drop the big 16:9 media tile. The body is skipped entirely only
+          when a compact card has no description to show. */}
+      {(!compact || card.description) && (
+      <div className="fc-body">
+        {/* A community post keeps the shape the student typed — labelled
+            sections, line breaks, bullet lists — because that is what the
+            drawer shows when they click it (Ali, 2026-09-11). One renderer for
+            both, so the two cannot drift; `<p>` collapsed every newline into a
+            wall of prose. A very long post is clamped with a fade and reads in
+            full in the drawer: the feed is a scroll of many cards, not one. */}
+        {card.description && (isCommunityPost
+          ? (
+            <>
+              <div
+                ref={postBodyRef}
+                className={`fc-rbwrap${postExpanded ? '' : ' clamped'}`}
+                style={postExpanded ? undefined : { maxHeight: `${POST_CLAMP_LINES * 1.55}em` }}
+              >
+                <RitualBody body={card.description} classes={{ sec: 'fc-rb', label: 'fc-rb-lab', value: 'fc-rb-val' }} />
+              </div>
+              {postOverflows && (
+                <button
+                  type="button"
+                  className="fc-rbmore"
+                  aria-expanded={postExpanded}
+                  onClick={() => setPostExpanded((v) => !v)}
+                >
+                  {postExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </>
+          )
+          : <p>{card.description}</p>)}
+        {/* Locked: a big lock over the tile, dimmed, and an overlay that swallows
+            every pointer/keyboard interaction so nothing opens or plays. */}
+        {!compact && (
+        <div className="fc-media-wrap">
+          {media}
+          {locked && (
+            <div className="fc-lock" role="note" aria-label={`Locked${card.lock_reason ? ` — complete ${card.lock_reason} first` : ''}`}>
+              <span className="fc-lock-ic"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2.5" stroke="currentColor" strokeWidth="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="15.5" r="1.5" fill="currentColor" /></svg></span>
+              <span className="fc-lock-txt">Locked</span>
+              {card.lock_reason && <span className="fc-lock-sub">Complete {card.lock_reason} to unlock</span>}
+            </div>
+          )}
+        </div>
+        )}
+        {/* On-card watch progress — the video watch gate, shown right on the tile
+            (was drawer-only). Fills as the inline preview plays; turns green +
+            "points unlocked" at the required %. */}
+        {(watchable || mediaTracked) && watch && watch.required_pct != null && !done && (
+          <div className="tc-watchrow" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
+              <i style={{ display: 'block', height: '100%', width: `${Math.min(100, watch.watched_pct)}%`, background: watch.met ? '#5BA63C' : v.color, transition: 'width .4s ease' }} />
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', color: watch.met ? '#5BA63C' : 'var(--text-muted,#6B6B6B)' }}>
+              {(() => {
+                // "Listened" for a podcast, "Watched" for everything else.
+                const verb = ambient?.kind === 'podcast' ? 'Listened' : 'Watched';
+                return watch.met ? `✓ ${verb} — points unlocked` : `${verb} ${watch.watched_pct}% · reach ${watch.required_pct}%`;
+              })()}
+            </span>
+          </div>
+        )}
+      </div>
+      )}
+      <div className="fc-foot">
+        <button type="button" className={`like${liked ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && onLike?.(card)}>
+          <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg>{typeof likes === 'number' ? <> {likes}</> : null}
+        </button>
+        {/* Comment opens the class thread RIGHT HERE in the feed (the workspace
+            shows the same thread beside the AI Mentor). Disabled while locked.
+            A community POST has no class thread — its conversation is the post's
+            OWN reply thread, which lives in the drawer, so Comment opens that
+            instead of a card-scoped thread the post's ref cannot address. */}
+        <button
+          type="button"
+          className={`cmt${showComments && !isCommunityPost ? ' liked' : ''}`}
+          disabled={locked}
+          onClick={() => {
+            if (locked) return;
+            // A project story's conversation lives in its workspace (beside the
+            // mentor), not in a card thread its `project:<uuid>` id cannot address.
+            if (isCommunityPost || isProjectTask) { setPlayingInline(false); onOpen?.(card); return; }
+            setShowComments((s) => !s);
+          }}
+        >
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+          {isCommunityPost && (card.comment_count ?? 0) > 0
+            ? ` ${card.comment_count} ${card.comment_count === 1 ? 'reply' : 'replies'}`
+            : ' Comment'}
+        </button>
+        {/* Quick shortcut into the full workspace (video + AI Mentor + comments).
+            Stops the tile's own inline preview first — same reason as "Open" below —
+            so an unmuted tile doesn't keep playing underneath the drawer's own player.
+            A community post has no workspace: `card.id` is its feed ref, not a card. */}
+        {onWorkspace && !locked && !isCommunityPost && (
+          <button type="button" className="cmt" onClick={() => { setPlayingInline(false); onWorkspace(card); }}>
+            <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 20h8M12 17v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Workspace
+          </button>
+        )}
+        <span className="spacer" />
+        {done
+          ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
+          : locked
+            ? <span className="pip lock" style={{ fontSize: 13 }} title={card.lock_reason || undefined}>{card.lock_reason || 'Unlocks later'}</span>
+            : (
+              // Every card opens the drawer — points are only ever collected there,
+              // behind the type's completion gate. Points cards advertise the reward.
+              <button
+                type="button"
+                className={`fc-cta ${pts > 0 || v.kind === 'lab' || isCommunityPost ? 'cherry' : 'berry'}`}
+                onClick={() => { setPlayingInline(false); onOpen?.(card); }}
+                title={isProjectTask
+                  ? (pts > 0
+                    ? (card.cta_verb ? `Open this task — verified work pays +${pts} pts` : `Build this story in your workspace — verified work pays +${pts} pts`)
+                    : 'Open this task in your project workspace')
+                  : isCommunityPost ? `Reply to earn +${REPLY_POINTS} pts`
+                    : pts > 0 ? `Open to collect +${pts} pts` : undefined}
+              >
+                {isProjectTask
+                  // Not "Collect": nothing here is collected by clicking. The
+                  // platform pays the story when the repo verifies it, and the
+                  // button says what that is worth on the way in.
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {pts > 0 ? <>{card.cta_verb || 'Build'} · +{pts} pts</> : 'Start'}</>
+                  : pts > 0
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
+                  : isCommunityPost
+                    // A community post pays for the REPLY, not for opening. Say so on the
+                    // button (Ali, 2026-09-11) — "Open" told the student nothing about why
+                    // they might want to.
+                    ? <><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Reply · +{REPLY_POINTS} pts</>
+                    : <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}</>}
+              </button>
+            )}
+      </div>
+      {/* The class thread — toggled by the Comment button, shared with the workspace.
+          Never for locked cards, and never for a community post (its Comment button
+          opens the post's own thread in the drawer instead). */}
+      {showComments && !locked && !isCommunityPost && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
+    </div>
+  );
+};
+
+export default TimelineCard;

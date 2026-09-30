@@ -1,0 +1,60 @@
+{
+  "activeBuildsStat": "2",
+  "originChips": [
+    "starter template"
+  ],
+  "sidebarRows": [
+    {
+      "name": "Sponsor Utilisation Dashboard",
+      "tag": null
+    },
+    {
+      "name": "Hair Salon Booking & Payments",
+      "tag": null
+    }
+  ],
+  "storeOwnBuilds": 1,
+  "storeFirstOrigin": "local",
+  "storeFirstTaskCount": 27,
+  "storeFirstListNames": [
+    "Release 0 - Walking skeleton",
+    "Release 1 - Utilisation and alerts",
+    "Project DNA & Requirements",
+    "Core build",
+    "Reliability & polish",
+    "Showcase & portfolio"
+  ],
+  "storeFirstTaskTitles": [
+    "Stand up the Command Center and let the platform see your pushes",
+    "Model the sponsor, the seat and the utilisation window",
+    "Ingest the weekly seat-usage export",
+    "Normalise partial weeks and mid-week seat changes"
+  ],
+  "storeFirstListBreakdown": [
+    {
+      "name": "Release 0 - Walking skeleton",
+      "tasks": 9
+    },
+    {
+      "name": "Release 1 - Utilisation and alerts",
+      "tasks": 8
+    },
+    {
+      "name": "Project DNA & Requirements",
+      "tasks": 2
+    },
+    {
+      "name": "Core build",
+      "tasks": 4
+    },
+    {
+      "name": "Reliability & polish",
+      "tasks": 2
+    },
+    {
+      "name": "Showcase & portfolio",
+      "tasks": 2
+    }
+  ],
+  "mirrorAttemptsBlocked": 1
+}

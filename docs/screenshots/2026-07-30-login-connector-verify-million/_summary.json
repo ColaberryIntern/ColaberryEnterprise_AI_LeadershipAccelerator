@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-07-30T04:37:25.107Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "01-training-colaberry-home.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\OneDrive\\Business\\Colaberry Novedea\\AI Projects\\Colaberry Enterprise AI Leadership Accelerator\\docs\\screenshots\\2026-07-30-login-connector-verify\\01-training-colaberry-home.png",
+      "note": "training.colaberry.com landing page"
+    },
+    {
+      "file": "02-portal-login-filled.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\OneDrive\\Business\\Colaberry Novedea\\AI Projects\\Colaberry Enterprise AI Leadership Accelerator\\docs\\screenshots\\2026-07-30-login-connector-verify\\02-portal-login-filled.png",
+      "note": "Portal login page, email filled in"
+    },
+    {
+      "file": "03-portal-login-result.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\OneDrive\\Business\\Colaberry Novedea\\AI Projects\\Colaberry Enterprise AI Leadership Accelerator\\docs\\screenshots\\2026-07-30-login-connector-verify\\03-portal-login-result.png",
+      "note": "Result after submit. Rejected as pending approval: false"
+    }
+  ]
+}

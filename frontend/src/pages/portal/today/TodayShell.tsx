@@ -1,0 +1,642 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import './TodayShell.css';
+import {
+  fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground, fetchStreak, claimDailyStreak,
+  levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
+} from '../../../services/onboardingApi';
+import { loadSchedule } from '../scheduleCache';
+import PortalShell from './PortalShell';
+import OpenOnPhone from './OpenOnPhone';
+import { usePortalFlags } from '../../../hooks/usePortalFlags';
+import {
+  readParticipant, countdown, firstClassTargetMs,
+  fmtCentralDateTime, projectWorkspacePath,
+} from './shellUtils';
+import portalApi from '../../../utils/portalApi';
+import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../../services/pointsFx';
+import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi';
+import { runtimeApi } from '../runtime/runtimeApi';
+import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import { ambientMediaOf } from '../../../components/timeline/ambientMedia';
+import TodayFeedV2 from './TodayFeedV2';
+import TodayEventsRail from './TodayEventsRail';
+import TodayPlan from './TodayPlan';
+import { useTodayPlanGate } from './useTodayPlanGate';
+import type { Category } from './todayCategoryFilter';
+import TimelineFilterChips from './TimelineFilterChips';
+import SkillDetailDrawer from './SkillDetailDrawer';
+import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
+import CommunityPulse from './CommunityPulse';
+import TodayStreakCard from './TodayStreakCard';
+import TodayJourneyNudges from './TodayJourneyNudges';
+import NextLiveClassCard from './NextLiveClassCard';
+import InternshipOpportunityCard from './InternshipOpportunityCard';
+import InternshipCommandCard from './InternshipCommandCard';
+import { fetchInternshipStatus, InternshipStatus } from '../../../services/internshipApi';
+import { useNextLiveSession } from './useNextLiveSession';
+import '../../../components/timeline/timeline.css';
+// The "Your timeline" section below renders .te-feed / .te-feed-head /
+// .te-feed-filter / .fchip, all of which are defined ONLY in feed.css. It used
+// to reach the bundle just via the CommunityPage / RoomsPage / FeedCard lazy
+// chunks, so a cold load of /portal/today — the default portal landing — had
+// none of those rules: the header icon fell back to the UA default (measured
+// at 462x462 in production on 2026-08-24) and the filter chips rendered as
+// raw default buttons. feed.css is fully scoped to .te-feed*, so importing it
+// here cannot leak into other surfaces.
+import '../feed/feed.css';
+import SkillMeter from '../SkillMeter';
+import SetupModal from './SetupModal';
+import { useReferralForm } from './useReferralForm';
+import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeApi';
+import { useTodayNextStep } from './useTodayNextStep';
+import TodayNextStepBanner from './TodayNextStepBanner';
+import TodayNextStepCondensed from './TodayNextStepCondensed';
+
+const TodayShell: React.FC = () => {
+  // False until the first loadAll() settles. Gates every derived number in the
+  // command band so a cold load shows placeholders rather than confident zeros.
+  const [hydrated, setHydrated] = useState(false);
+  const [points, setPoints] = useState<PointsSummary | null>(null);
+  const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
+  const [profile, setProfile] = useState<OnboardingProfileView | null>(null);
+  const [now, setNow] = useState<number>(() => Date.now());
+  const [toast, setToast] = useState<string>('');
+  const [showUpload, setShowUpload] = useState(false);
+  // The onboarding checklist ("Get set up") now lives in a modal off a small
+  // persistent completion prompt above the skills chart, instead of eating the
+  // top of the main column permanently — see the te-setup-modal render below.
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const openUpload = () => { setShowSetupModal(true); setShowUpload(true); };
+  const [uploadName, setUploadName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [streak, setStreak] = useState<StreakView | null>(null);
+  // AI Internship card. Null until the status call settles, and null forever if
+  // the flag is off or the call fails — the rail simply has one fewer card,
+  // which is the correct degraded state for an optional opportunity surface.
+  const [internship, setInternship] = useState<InternshipStatus | null>(null);
+  const [internshipToken, setInternshipToken] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    fetchInternshipStatus()
+      .then((s) => { if (alive) setInternship(s); })
+      .catch(() => { if (alive) setInternship(null); });
+    return () => { alive = false; };
+  }, [internshipToken]);
+  const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
+  // Section-bucket order for the whole curriculum feed (pre_class -> learn ->
+  // ... -> advance) — needed to find the "active next step" the same way
+  // Classroom itself orders a week's cards (see findActiveNextCard).
+  const [curriculumBuckets, setCurriculumBuckets] = useState<string[]>([]);
+  const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
+  const navigate = useNavigate();
+
+  // "Open" a card. Almost always that means the drawer — but a project task is
+  // not a card, it is a task in the student's project, and its real home is the
+  // project workspace (build context, repo state, AI mentor). The drawer could
+  // only ever show its title and a broken "Enter workspace" button. Routed
+  // rather than location.assign so the shell, auth and scroll position survive.
+  // This decision lives here, not in TimelineCard, because the tile is rendered
+  // by containers with no Router and must stay presentational.
+  const openCard = useCallback((card: TimelineFeedCard) => {
+    const workspace = projectWorkspacePath(card);
+    if (workspace) { navigate(workspace); return; }
+    setSelectedCard(card);
+  }, [navigate]);
+  // CAPE Phase 0-1 profile (drives SkillMeter + Readiness); Phase 5 filter-chip counts + skill-drawer selection.
+  const [capeProfile, setCapeProfile] = useState<LearnerSkillProfile | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
+  const [categoryCounts, setCategoryCounts] = useState<Record<Category, number>>({ my_path: 0, ai_pulse: 0, classroom: 0, projects: 0, community: 0, review: 0 });
+  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+  const selectedSkill = capeProfile?.skills.find((s) => s.skill_id === selectedSkillId);
+
+  const me = useMemo(readParticipant, []);
+  const { flags } = usePortalFlags();
+  // CAPE Phase 5 — Today-Plan/Explore-feed mount gate; see useTodayPlanGate.ts.
+  const { planRefs, setPlanRefs } = useTodayPlanGate(flags);
+  // Next live class (from live_sessions). Null for Explorers/guests with no
+  // scheduled session — the shell then falls back to the first-class card.
+  const { session: nextLiveSession } = useNextLiveSession();
+
+  const loadAll = useCallback(async () => {
+    // fetchSchedule (via the shared scheduleCache, not a raw direct call) —
+    // PortalShell's useEntitlement()/useIsExplorer() hooks (which wrap every
+    // page, including this one) ALSO need this same payload. Calling the raw
+    // fetchSchedule() here duplicated that request: two near-simultaneous GETs
+    // to the same endpoint, which on a loaded box can each take seconds,
+    // stalling this Promise.allSettled (and therefore curriculum, and
+    // therefore the scroll-restore effect below, which waits on curriculum)
+    // far longer than necessary for zero benefit — scheduleCache exists
+    // exactly to make two callers share one in-flight request.
+    const [p, s, pr, cl, st, cp] = await Promise.allSettled([
+      fetchPoints(), loadSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(), fetchSkillProfile(),
+    ]);
+    if (p.status === 'fulfilled') setPoints(p.value);
+    if (s.status === 'fulfilled') setSchedule(s.value);
+    if (pr.status === 'fulfilled') setProfile(pr.value);
+    if (cl.status === 'fulfilled') {
+      setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
+      setCurriculumBuckets((cl.value.data?.buckets as string[]) || []);
+    }
+    if (st.status === 'fulfilled') setStreak(st.value);
+    if (cp.status === 'fulfilled') setCapeProfile(cp.value);
+    // Every value below is derived from state that starts null, and the render
+    // treats null as ZERO rather than UNKNOWN — so before this resolves the
+    // command band confidently claims "0 points", "Apprentice", "1/3 setup" and
+    // "you're all caught up", then flips to the truth a few seconds later.
+    // `hydrated` lets those spots render a skeleton instead of a wrong number.
+    // Set after ALL settle (never in a per-promise branch) so the band changes
+    // once, rather than twitching as each request lands.
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+  // Refetch the Today feed + status whenever points are earned (e.g. a quick-check
+  // completed in the drawer) so the sidebar stays live without a navigation.
+  useEffect(() => onPointsEarned(() => { void loadAll(); }), [loadAll]);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const flash = (msg: string) => { setToast(msg); window.setTimeout(() => setToast(''), 2600); };
+
+  const total = points?.total ?? 0;
+  const lvl = levelFor(total);
+  // Architect Readiness — backend-owned (CAPE Phase 0-1), replaces the previous
+  // hardcoded 0/100 literal. Rounds the same overall_proficiency SkillMeter renders,
+  // so the ring and the radar can never disagree (design doc §2, §11, §17 AC 10).
+  const readiness = capeProfile ? Math.round(capeProfile.overall_proficiency) : 0;
+  const oh = schedule?.next_open_house || null;
+  const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
+  const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
+  const hasBackground = !!(profile && (profile.has_resume || profile.linkedin_url));
+  const hasReferral = !!profile?.has_referral;
+  const rsvped = !!schedule?.my_rsvp;
+  // Redesign flag (default ON while loading). firstName from the real profile —
+  // never the raw email prefix.
+  const redesign = flags?.today_redesign ?? true;
+  const firstName = profile?.profile?.full_name?.trim().split(/\s+/)[0] || '';
+
+  // The real registration lives on Eventbrite; RSVP here records it + awards
+  // points, then sends the student to Eventbrite to secure their seat.
+  //
+  // The destination is THIS event's own `registration_url` (CCPP
+  // `EventBrite_Events.URL`), never a constant. It used to open a hardcoded link
+  // to the Jul 16 2026 Open House, so the card correctly named the upcoming
+  // event and then sent everyone to a completed one. Every upcoming event in
+  // CCPP carries its own URL, so there is nothing to fall back to — and sending
+  // someone to the wrong event is worse than sending them nowhere.
+  const doRsvp = async () => {
+    if (!oh || busy) return;
+    // Captured before the awaits: `oh` can be replaced by loadAll() below, and
+    // this must be the event the student actually clicked on.
+    const registrationUrl = oh.registration_url;
+    setBusy(true);
+    try {
+      const r = await rsvpOpenHouse(oh.id);
+      await loadAll();
+      emitPointsEarned(r.awarded ? (r.points ?? 0) : 0);
+      flash(r.awarded ? `RSVP confirmed — +${r.points} points` : 'You are already RSVP\'d');
+    } catch { flash('Could not RSVP right now'); } finally { setBusy(false); }
+    // Still opened when the points call failed — securing the Eventbrite seat is
+    // the part that actually matters to the student.
+    if (registrationUrl) window.open(registrationUrl, '_blank', 'noopener');
+  };
+
+  // Resume / LinkedIn are BOTH uploads. LinkedIn can't be scraped from a link,
+  // so the user exports their LinkedIn profile to PDF (profile → More → Save to
+  // PDF) or uploads a resume. Text files are read here; binary files (PDF/DOCX)
+  // are captured and parsed server-side where the LLM key exists (degrades to a
+  // no-op locally). Extraction feeds the background ProjectDNA prefill silently.
+  const onFilePicked = async (file: File | null) => {
+    if (!file || busy) return;
+    setBusy(true);
+    setUploadName(file.name);
+    const prevTotal = points?.total ?? 0;
+    try {
+      const isText = /\.(txt|md)$/i.test(file.name) || file.type.startsWith('text/');
+      if (isText) {
+        await ingestBackground({ resume_text: await file.text() });
+      } else {
+        // Binary (PDF/DOCX/etc — incl. LinkedIn "Save to PDF"): send the REAL
+        // file bytes to the extracting endpoint, NOT a placeholder, so the
+        // resume/LinkedIn actually parses server-side and fills the profile.
+        const data_base64 = await fileToBase64(file);
+        await uploadResume({ file_name: file.name, mime: file.type || 'application/octet-stream', data_base64 });
+      }
+      await loadAll();
+      // Refresh the HUD total and celebrate any newly-awarded points (+25 the
+      // first time a resume/LinkedIn is uploaded).
+      try {
+        const fresh = await fetchPoints();
+        setPoints(fresh);
+        const gained = (fresh?.total ?? 0) - prevTotal;
+        if (gained > 0) emitPointsEarned(gained);
+      } catch { /* keep prior total */ }
+      setShowUpload(false);
+      flash('Got it — personalizing your experience in the background');
+    } catch { flash('Could not upload that right now'); } finally { setBusy(false); }
+  };
+
+  const {
+    showReferral, setShowReferral, referralFriends, referralSubmitted,
+    addReferralRow, updateReferralRow, removeReferralRow, submitReferralFriends, resetReferralForm,
+  } = useReferralForm({ busy, setBusy, points, setPoints, loadAll, flash });
+
+  const claimedToday = !!streak?.claimed_today;
+  const doClaimStreak = async () => {
+    if (claimedToday || busy) return;
+    setBusy(true);
+    try {
+      const r = await claimDailyStreak();
+      setStreak(r.streak);
+      emitPointsEarned(r.awarded ? r.points : 0);
+      // Streak points fold into the score — refresh the points total too.
+      try { setPoints(await fetchPoints()); } catch { /* keep prior total */ }
+      flash(r.awarded
+        ? `Daily streak — ${r.streak.count} day${r.streak.count === 1 ? '' : 's'} · +${r.points} pts`
+        : 'Already claimed today');
+    } catch { flash('Could not claim your streak right now'); } finally { setBusy(false); }
+  };
+
+  const steps = [
+    { key: 'account', title: 'Create your free account', done: true, meta: 'Welcome to Colaberry', pts: 0, action: null as null | (() => void) },
+    { key: 'resume', title: 'Upload your resume or LinkedIn PDF', done: hasBackground, meta: 'Personalizes your experience in the background', pts: 25, action: !hasBackground ? () => setShowUpload((v) => !v) : null },
+    { key: 'referral', title: 'Recommend a friend', done: hasReferral, meta: 'Know someone who’d love this?', pts: 25, action: !hasReferral ? () => setShowReferral((v) => !v) : null },
+  ];
+
+  const setupRemaining = steps.filter((s) => !s.done).length;
+  const setupDone = steps.filter((s) => s.done).length;
+  const setupPct = Math.round((setupDone / steps.length) * 100);
+  const streakCount = streak?.count ?? 0;
+  const streakWeek = streak?.week ?? [];
+  // The single "what should I do right now" answer the Command Center leads
+  // with — see useTodayNextStep.ts for the enrolled-vs-explorer branching.
+  const nextSetupStep = steps.find((s) => !s.done) ?? null;
+  const nextStep = useTodayNextStep({
+    isExplorer: !!schedule?.is_explorer,
+    curriculum,
+    buckets: curriculumBuckets,
+    setupRemaining,
+    nextSetupStep,
+    planFlagOn: !!flags?.cape_today_plan,
+    refreshToken: points,
+  });
+  const scrollToAnchor = (id: string) => () => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  // Shared collect handler for TodayFeedV2 + TodayPlan (CAPE Phase 5) — one
+  // implementation so the two surfaces never drift. Throws on the server
+  // watch/read/lock gate (422); ambient blogs (`blog:<id>`) use the read gate.
+  // ONE collect path for every kind of Today item. The tile and the drawer both
+  // land here; what differs is only which gate the server applies:
+  //   blog:<id>                → the 2-minute read gate
+  //   podcast:/testimonial:<id> → the 75% listen/watch gate (ambient media)
+  //   everything else          → the card's own completion gate
+  // Server-side rejections (422) propagate so the caller can surface the reason.
+  const collectCard = useCallback(async (card: TimelineFeedCard): Promise<{ points_awarded?: number } | null> => {
+    const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+    const media = ambientMediaOf(card);
+    if (blogId) return runtimeApi.blogCollect(blogId);
+    if (media) return runtimeApi.mediaCollect(media.kind, media.id);
+    return (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
+  }, []);
+
+  const handleCardComplete = useCallback(async (card: TimelineFeedCard) => {
+    const res = await collectCard(card);
+    await loadAll();
+    emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
+    emitCardCollected(card.id);                 // drop it off the feed
+  }, [collectCard, loadAll]);
+
+  return (
+    <PortalShell
+      todayBadge={hydrated ? setupRemaining : 0}
+      condensedSlot={<TodayNextStepCondensed nextStep={nextStep} onScrollTo={scrollToAnchor} />}
+    >
+      {(condensed) => (
+        <>
+      {toast && <div className="te-toast">{toast}</div>}
+
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+      {redesign ? (
+        /* command band — greeting + primary next step + the three meters in one row */
+        <div className="te-band">
+          <div>
+            <div className="crumb">◆ {schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
+            <h2>
+              {hydrated
+                ? (firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋')
+                : <><span className="te-skel te-skel-name" />&nbsp;</>}
+            </h2>
+            {/* The next-step line is the worst offender: pre-load it reads
+                "0 points — you're all caught up in Classroom!", which is both
+                wrong and demoralising for someone with 678 points. */}
+            {hydrated ? (
+              <TodayNextStepBanner
+                nextStep={nextStep}
+                total={total}
+                onScrollTo={scrollToAnchor}
+              />
+            ) : (
+              <div className="te-skel-lines" aria-hidden="true">
+                <span className="te-skel te-skel-line" />
+                <span className="te-skel te-skel-line short" />
+              </div>
+            )}
+          </div>
+          <div className="te-cluster">
+            {/* Rings render as empty dials until the real figures land. The
+                SETUP ring is omitted entirely rather than skeletoned, because
+                whether it appears at all depends on setupRemaining — guessing
+                would make the row reflow when the answer arrives. */}
+            {hydrated ? (
+              <>
+                <div className="te-ringwrap lf">
+                  <div className="te-ring" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b><span>pts</span></div></div>
+                  <div className="cap">{lvl.name}</div>
+                </div>
+                {setupRemaining > 0 && (
+                  <div className="te-ringwrap">
+                    <div className="te-ring" style={{ '--p': setupPct, '--c': 'var(--berry)' } as React.CSSProperties}><div className="v"><b>{setupDone}/{steps.length}</b><span>setup</span></div></div>
+                    <div className="cap">Setup</div>
+                  </div>
+                )}
+                <div className="te-ringwrap">
+                  <div className="te-ring" style={{ '--p': Math.max(2, readiness), '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>{readiness}</b><span>/100</span></div></div>
+                  <div className="cap">Skill proficiency</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="te-ringwrap lf" aria-hidden="true">
+                  <div className="te-ring te-ring-skel"><div className="v"><span className="te-skel te-skel-num" /></div></div>
+                  <div className="cap"><span className="te-skel te-skel-cap" /></div>
+                </div>
+                <div className="te-ringwrap" aria-hidden="true">
+                  <div className="te-ring te-ring-skel"><div className="v"><span className="te-skel te-skel-num" /></div></div>
+                  <div className="cap"><span className="te-skel te-skel-cap" /></div>
+                </div>
+              </>
+            )}
+            <div className="te-metacol">
+              <span className="lab">Next tier</span>
+              {/* Tier and streak both come from the same fetch; pre-load they
+                  read "Builder / 150 pts to go / 0-day streak" for someone who
+                  is actually mid-tier with a live streak. */}
+              <span className="big">{hydrated ? (lvl.next ? lvl.next.name : 'Max level') : <span className="te-skel te-skel-tier" />}</span>
+              <span className="to">{hydrated ? (lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached') : <span className="te-skel te-skel-sub" />}</span>
+              <button className="te-bandflame" type="button" onClick={doClaimStreak} disabled={!hydrated || claimedToday || busy}>
+                {hydrated
+                  ? <>🔥 {streakCount}-day streak · {claimedToday ? 'claimed' : `claim${streak ? ` +${streak.next_points}` : ''}`}</>
+                  : <span className="te-skel te-skel-streak" />}
+              </button>
+              <OpenOnPhone />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="te-page-h">
+          <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
+          <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
+          <div className="sub">{schedule?.is_explorer
+            ? "Explore AI for free — watch, listen, learn, and try. Enroll when you're ready to build for real."
+            : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
+        </div>
+      )}
+      </div>
+
+      {schedule?.is_explorer && (
+        <div className="te-card" style={{ background: 'linear-gradient(135deg,#2E6A86,#367895)', color: '#fff', padding: '20px 22px', marginBottom: 18, border: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', opacity: 0.9 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 8h16v8H4zM4 8l2-3h12l2 3M9 12h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+            Free AI Preview
+          </div>
+          <h2 style={{ margin: '8px 0 6px', fontSize: 22, color: '#fff' }}>You're learning AI for free</h2>
+          <p style={{ margin: '0 0 14px', opacity: 0.92, maxWidth: '54ch' }}>Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live build classes, the community, and your certification.</p>
+          {(fcCd || ohCd) && (
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', margin: '2px 0 16px' }}>
+              {fcCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>Next class starts in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{fcCd.d}d {fcCd.h}h {fcCd.m}m {fcCd.s}s</div></div>}
+              {oh && ohCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>{oh.title} in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</div></div>}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link className="te-btn cherry" to="/portal/settings?tab=subscription">Enroll to unlock →</Link>
+            {oh && <button className="te-btn" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.6)', background: 'rgba(255,255,255,.14)' }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd for the event" : 'RSVP for the event'}</button>}
+          </div>
+        </div>
+      )}
+
+      <div className="te-grid">
+        <div>
+          {/* hero — the command band carries the primary CTA when the redesign flag is on */}
+          {!redesign && (
+          <div className="te-hero">
+            <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next step</div>
+            <h2>{hasBackground ? "You're set up — we're personalizing as you go" : 'Upload your resume or LinkedIn to personalize everything'}</h2>
+            <p>{hasBackground
+              ? 'Thanks for sharing your background. Your program tailors itself quietly in the background as you engage — nothing else to do right now.'
+              : "LinkedIn can't be imported by link, so export your LinkedIn profile to PDF (profile → More → Save to PDF) or grab your resume, and upload it. We tailor your experience from it in the background."}</p>
+            {!hasBackground && <button className="te-btn cherry" onClick={openUpload}>Upload resume / LinkedIn</button>}
+          </div>
+          )}
+
+          {/* open house strip */}
+          {oh && (
+            <div className="te-oh">
+              <span className="ic">◷</span>
+              <div className="body">
+                <div className="t">{oh.title}</div>
+                <div className="w">{fmtCentralDateTime(oh.starts_at)} {ohCd && <>· <span className="cd">{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</span></>}</div>
+              </div>
+              <button className="te-btn berry sm" onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd" : 'RSVP for the next event'}</button>
+            </div>
+          )}
+
+          {/* skills chart replaces the old permanent "Get set up" checklist — the
+              checklist now lives behind a small completion prompt (shown only
+              while steps remain) that opens it in a modal. */}
+          {hydrated && setupRemaining > 0 && (
+            <button type="button" className="te-setup-prompt" onClick={() => setShowSetupModal(true)}>
+              <span className="ic">✦</span>
+              <span className="t">{setupDone} of {steps.length} set up · finish for +{steps.filter((s) => !s.done).reduce((sum, s) => sum + s.pts, 0)} pts</span>
+              <span className="go">→</span>
+            </button>
+          )}
+          <SkillMeter profile={capeProfile} onSkillClick={flags?.cape_today_plan ? setSelectedSkillId : undefined} />
+
+          {showSetupModal && (
+            <SetupModal
+              onClose={() => setShowSetupModal(false)}
+              steps={steps}
+              busy={busy}
+              showUpload={showUpload}
+              setShowUpload={setShowUpload}
+              uploadName={uploadName}
+              fileRef={fileRef}
+              onFilePicked={onFilePicked}
+              showReferral={showReferral}
+              setShowReferral={setShowReferral}
+              referralFriends={referralFriends}
+              referralSubmitted={referralSubmitted}
+              addReferralRow={addReferralRow}
+              updateReferralRow={updateReferralRow}
+              removeReferralRow={removeReferralRow}
+              submitReferralFriends={submitReferralFriends}
+              resetReferralForm={resetReferralForm}
+            />
+          )}
+
+          {/* CAPE Phase 5 finite Today Plan — flag-gated, see useTodayPlanGate.ts.
+              id is the "Jump to Today's Plan" scroll target from the command
+              band's `nextStep.kind === 'plan'` CTA above. */}
+          {flags?.cape_today_plan && (
+            <div id="te-today-plan-anchor">
+              <TodayPlan
+                onRefs={setPlanRefs}
+                onOpen={openCard}
+                onWorkspace={openCard}
+                onComplete={handleCardComplete}
+              />
+            </div>
+          )}
+
+          {/* Upcoming public events, above the timeline — the Classroom's own
+              events rail, next 7 (Ali, 2026-09-11). Self-rendering: shows
+              nothing when there are no events or CCPP is unreachable. */}
+          <TodayEventsRail />
+
+          {/* ── aggregated timeline — the big feed pulling from every page ──
+              id is the "See your timeline" scroll target above. */}
+          <div className="te-feed" id="te-timeline-anchor">
+            <div className="te-feed-head">
+              <span className="h">
+                {/* Explicit width/height as well as the CSS rule: an SVG with
+                    neither falls back to the UA default ~300x150 the moment its
+                    stylesheet is missing, which is exactly what shipped here and
+                    in the 2026-08-04 CAPE incident. Belt and braces. */}
+                <svg viewBox="0 0 24 24" fill="none" width={16} height={16}><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="2" /></svg>
+                Your timeline · everything in one place
+              </span>
+            </div>
+            <TimelineFilterChips
+              enabled={!!flags?.cape_today_plan}
+              filter={categoryFilter}
+              counts={categoryCounts}
+              onChange={setCategoryFilter}
+            />
+            {/* Gated on planRefs !== null — closes the mount-order race. */}
+            {planRefs !== null && (
+              <TodayFeedV2
+                fallbackCards={curriculum}
+                onOpen={openCard}
+                onWorkspace={openCard}
+                onComplete={handleCardComplete}
+                excludeRefs={planRefs}
+                filter={flags?.cape_today_plan ? categoryFilter : undefined}
+                onCounts={flags?.cape_today_plan ? setCategoryCounts : undefined}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* ── right sidebar ── */}
+        <aside className="te-side">
+          {/* Growth Journey nudges (Phase 5) — its own read; renders nothing until a rollout writes a row */}
+          <TodayJourneyNudges />
+          {/* Live community pulse — surfaces rooms people are in + live/next sessions */}
+          <CommunityPulse />
+          {/* Your day — meters fold into the command band when the redesign flag is on */}
+          {!redesign && (
+          <div className="te-card te-scard accent-leaf">
+            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Your day</h3>
+            <div className="te-stat"><span className="lab">{lvl.name}</span><span className="num">{total.toLocaleString()} pts</span></div>
+            <div className="te-ribbon"><i style={{ width: `${lvl.pct}%`, background: 'var(--leaf)' }} /></div>
+            <div className="te-muted" style={{ margin: '-4px 0 12px' }}>{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level reached'}</div>
+            <div className="te-stat"><span className="lab">Setup progress</span><span className="num">{setupDone}/{steps.length}</span></div>
+            <div className="te-ribbon"><i style={{ width: `${setupPct}%`, background: 'var(--berry)' }} /></div>
+            <div className="te-stat"><span className="lab">Skill proficiency</span><span className="num">{readiness}/100</span></div>
+            <div className="te-ribbon" style={{ marginBottom: 4 }}><i style={{ width: `${Math.max(2, readiness)}%`, background: 'var(--cherry)' }} /></div>
+            <div className="te-muted" style={{ fontSize: 12 }}>Grows as you build once the program starts.</div>
+            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/points">Break down my points</Link>
+            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} to="/portal/path">See your path</Link>
+            <div className="te-chip guest" style={{ marginTop: 12 }}>Free preview account</div>
+          </div>
+          )}
+
+          {/* Daily streak */}
+          <TodayStreakCard streak={streak} streakCount={streakCount} streakWeek={streakWeek} claimedToday={claimedToday} busy={busy} doClaimStreak={doClaimStreak} />
+
+          {/* Next live class — when the student has an upcoming/live session
+              (from live_sessions) show the live-session card; otherwise fall
+              back to the first-class cohort countdown UNCHANGED. The Open House
+              "Coming up" card below is unaffected in either case. */}
+          {/* Once someone is an intern the recruiting card is replaced by the
+              command card — "after activation, replace the recruiting card with a
+              compact Internship Command Card". Same slot, different job. */}
+          {internship?.render && internship.card_state === 'active' && <InternshipCommandCard />}
+          {internship?.render && internship.card_state !== 'active' && (
+            <InternshipOpportunityCard
+              status={internship}
+              onChanged={() => setInternshipToken((n) => n + 1)}
+            />
+          )}
+          {nextLiveSession ? (
+            <NextLiveClassCard session={nextLiveSession} />
+          ) : schedule?.first_class ? (
+            <div className="te-card te-scard">
+              <h3>Countdown to your first class</h3>
+              <div className="te-muted">{schedule.first_class.cohort_name || 'Your cohort'}{schedule.first_class.core_day ? ` · ${schedule.first_class.core_day}s ${schedule.first_class.core_time || ''}` : ''}</div>
+              {fcCd && (
+                <div className="te-count">
+                  <div className="seg"><b>{fcCd.d}</b><span>days</span></div>
+                  <div className="seg"><b>{fcCd.h}</b><span>hrs</span></div>
+                  <div className="seg"><b>{fcCd.m}</b><span>min</span></div>
+                </div>
+              )}
+              {schedule.first_class.source === 'next_open_cohort' && <div className="te-muted" style={{ marginTop: 8 }}>Next cohort start (join to lock your seat)</div>}
+            </div>
+          ) : null}
+
+          <div className="te-card te-scard">
+            <h3>Coming up</h3>
+            {oh ? (
+              <>
+                <div className="te-stat"><span className="lab">{oh.title}</span></div>
+                <div className="te-muted">{fmtCentralDateTime(oh.starts_at)}</div>
+                <button className="te-btn berry sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd" : 'RSVP for the next event'}</button>
+              </>
+            ) : <div className="te-muted">No open house scheduled yet — check back soon.</div>}
+          </div>
+        </aside>
+      </div>
+      <CardDetailDrawer
+        card={selectedCard}
+        onClose={() => setSelectedCard(null)}
+        onComplete={async (card) => {
+          // Same dispatch as the tile (collectCard); the drawer additionally closes.
+          // A server rejection propagates so the drawer surfaces the reason.
+          const res = await collectCard(card);
+          setSelectedCard(null);
+          await loadAll();
+          emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime
+          emitCardCollected(card.id);                   // drop it off the feed
+        }}
+      />
+      <SkillDetailDrawer
+        skillId={selectedSkillId}
+        skillName={selectedSkill?.name ?? null}
+        placement={selectedSkill?.placement ?? 0}
+        verified={selectedSkill?.proficiency ?? 0}
+        onClose={() => setSelectedSkillId(null)}
+      />
+        </>
+      )}
+    </PortalShell>
+  );
+};
+
+export default TodayShell;

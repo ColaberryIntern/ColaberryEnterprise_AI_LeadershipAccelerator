@@ -117,7 +117,7 @@ Ali`;
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'aleem@colaberry.com',
     cc: ['ram@colaberry.com'],
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Aleem - FYI: RE Magazine half-page ad with David (M4 V6 current state, 3 caption options)',
     html: HTML,

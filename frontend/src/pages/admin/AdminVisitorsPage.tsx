@@ -1,10 +1,16 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
 import Pagination from '../../components/ui/Pagination';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
+import { personPath } from '../../adminOs/personLink';
+import PersonLink from '../../components/admin/person/PersonLink';
 
-const VisitorFlowGraph = lazy(() => import('../../components/admin/visitors/VisitorFlowGraph'));
+// Swapped from the force-directed VisitorFlowGraph: a force layout answers
+// "what connects to what", while the question this tab is asked is about the
+// VOLUME along each path. Sankey band width carries that directly.
+const VisitorSankeyFlow = lazy(() => import('../../components/admin/visitors/VisitorSankeyFlow'));
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -29,6 +35,10 @@ interface Visitor {
   region?: string;
   country?: string;
   // live-only fields
+  session_id?: string;
+  site_slug?: string | null;
+  is_bot?: boolean;
+  is_likely_bot?: boolean;
   current_page?: string;
   exit_page?: string;
   session_duration?: number;
@@ -43,6 +53,23 @@ interface Visitor {
     last_signal_at?: string;
     score_updated_at?: string;
   } | null;
+}
+
+/**
+ * Someone signed into the portal right now, by name.
+ *
+ * A different unit from `Visitor` and rendered in its own list on purpose: this
+ * comes from portal presence (which knows who people are), not from the
+ * anonymous tracker (which knows only a fingerprint). Merging them would imply
+ * an equivalence that does not hold and could count one human twice.
+ */
+interface SignedInPerson {
+  enrollment_id: string;
+  name: string;
+  avatar_url: string | null;
+  last_active_at: string;
+  cohort_id: string | null;
+  presence_status: string;
 }
 
 interface BehavioralSignalData {
@@ -83,6 +110,54 @@ interface VisitorStats {
   sessions30d: number;
   avgDuration: number;
   bounceRate: number;
+}
+
+/**
+ * The raw stats payload, in the snake_case the API actually speaks.
+ *
+ * This page declared `VisitorStats` in camelCase and assigned the response
+ * straight into it, so every field read back undefined and each card fell to its
+ * `?? 0`. TypeScript could not catch it: the value arrived as `any` from the HTTP
+ * client, and `?? 0` makes an undefined read look like a legitimate zero.
+ */
+interface RawVisitorStats {
+  liveCount?: number;
+  live_count?: number;
+  todayVisitors?: number;
+  visitors_today?: number;
+  todaySessions?: number;
+  sessions_today?: number;
+  visitors30d?: number;
+  total_visitors?: number;
+  sessions30d?: number;
+  total_sessions?: number;
+  avgDuration?: number;
+  avg_session_duration?: number;
+  bounceRate?: number;
+  bounce_rate?: number;
+}
+
+/**
+ * Normalise either naming convention into the view model.
+ *
+ * Accepting both is not indecision — it is what keeps the page correct across
+ * the deploy gap. The frontend ships as a cached bundle (Cloudflare holds app
+ * assets for hours) while the backend restarts immediately, so for a window the
+ * new page talks to the old API or the reverse. Reading both names means neither
+ * ordering shows a false zero.
+ */
+function normalizeStats(raw: RawVisitorStats | null | undefined): VisitorStats | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const pick = (a?: number, b?: number): number => (typeof a === 'number' ? a : typeof b === 'number' ? b : 0);
+  return {
+    liveCount: pick(raw.liveCount, raw.live_count),
+    todayVisitors: pick(raw.todayVisitors, raw.visitors_today),
+    todaySessions: pick(raw.todaySessions, raw.sessions_today),
+    visitors30d: pick(raw.visitors30d, raw.total_visitors),
+    sessions30d: pick(raw.sessions30d, raw.total_sessions),
+    avgDuration: pick(raw.avgDuration, raw.avg_session_duration),
+    bounceRate: pick(raw.bounceRate, raw.bounce_rate),
+  };
 }
 
 interface TopPage {
@@ -182,31 +257,81 @@ const TabletIcon = () => (
   </svg>
 );
 
+/**
+ * A coloured tile row — the visual language the Sankey outcome tiles use.
+ *
+ * Introduced because three tabs (High Intent, Sessions, All Visitors) were fixed
+ * for correctness and gained NOTHING to look at: same table, different rows. A
+ * ranked list with no summary makes the reader compute the shape of the data in
+ * their head, which is exactly the job a dashboard is supposed to do for them.
+ *
+ * The colour is a SECOND channel, never the only one: every tile carries its
+ * label and its number, so the meaning survives a colourblind reader, a
+ * greyscale print, and forced-colours mode. The dot and the left border repeat
+ * what the words already say.
+ */
+function TileRow({ tiles }: { tiles: Array<{ label: string; value: string | number; color: string; sub?: string }> }) {
+  if (tiles.length === 0) return null;
+  return (
+    <div className="row g-2 mb-3">
+      {tiles.map((t) => (
+        <div className={`col-6 col-lg-${Math.max(2, Math.floor(12 / tiles.length))}`} key={t.label}>
+          <div
+            className="h-100 p-2 rounded"
+            style={{ background: 'var(--surface-sunken, #f7f7f6)', borderLeft: `4px solid ${t.color}` }}
+          >
+            <div className="small text-muted d-flex align-items-center gap-1">
+              <span
+                aria-hidden="true"
+                style={{ width: 8, height: 8, borderRadius: '50%', background: t.color, display: 'inline-block' }}
+              />
+              {t.label}
+            </div>
+            <div className="fw-bold" style={{ fontSize: '1.25rem', lineHeight: 1.2 }}>
+              {typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
+            </div>
+            {t.sub && <div className="small text-muted">{t.sub}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Palette validated for colourblind separation; see VisitorSankeyFlow. */
+const TILE = {
+  red: '#FB2832',
+  teal: '#2BA39A',
+  amber: '#E8920C',
+  violet: '#7A5AF0',
+  green: '#5BA63C',
+  magenta: '#C2185B',
+  grey: '#8C8C8C',
+};
+
 function DeviceIcon({ type }: { type?: string }) {
   if (type === 'mobile') return <MobileIcon />;
   if (type === 'tablet') return <TabletIcon />;
   return <DesktopIcon />;
 }
 
+type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
+
 function IntentBadge({ score, level }: { score?: number | null; level?: string | null }) {
   if (score == null && !level) return <span className="text-muted small">-</span>;
   const displayScore = score ?? 0;
   const displayLevel = level || 'low';
-  const badgeClass =
-    displayLevel === 'very_high' ? 'bg-danger' :
-    displayLevel === 'high' ? 'bg-warning text-dark' :
-    displayLevel === 'medium' ? 'bg-info text-dark' :
-    'bg-light text-dark';
+  const tone: BadgeTone =
+    displayLevel === 'very_high' ? 'danger' :
+    displayLevel === 'high' ? 'warning' :
+    displayLevel === 'medium' ? 'info' :
+    'neutral';
   const labelText =
     displayLevel === 'very_high' ? 'Very High' :
     displayLevel === 'high' ? 'High' :
     displayLevel === 'medium' ? 'Medium' : 'Low';
 
-  return (
-    <span className={`badge ${badgeClass}`} title={`Intent Score: ${displayScore}/100`}>
-      {displayScore} {labelText}
-    </span>
-  );
+  return <StatusBadge label={`${displayScore} ${labelText}`} tone={tone} />;
 }
 
 function getIntentScore(v: Visitor): number | null {
@@ -227,6 +352,16 @@ function AdminVisitorsPage() {
 
   /* --- Live visitors --- */
   const [liveVisitors, setLiveVisitors] = useState<Visitor[]>([]);
+  // Authoritative live count from the server. Kept apart from `liveVisitors.length`
+  // because the table is LIMITed — the list can be capped while the count is not.
+  const [liveCount, setLiveCount] = useState<number | null>(null);
+  // Self-identifying crawlers are hidden by default — "who is on the site" is a
+  // question about people. Off rather than on because the counts feed judgement
+  // about real demand.
+  const [showBots, setShowBots] = useState(false);
+  // Signed-in portal people, from presence. Separate state because it is a
+  // separate list from a separate source, not another page of `liveVisitors`.
+  const [signedIn, setSignedIn] = useState<SignedInPerson[]>([]);
   const [loading, setLoading] = useState(true);
 
   /* --- All visitors --- */
@@ -261,6 +396,9 @@ function AdminVisitorsPage() {
 
   /* --- High Intent --- */
   const [highIntentVisitors, setHighIntentVisitors] = useState<any[]>([]);
+  // Distribution comes from the server, filtered identically to the list, so the
+  // tiles and the table below them always describe the same population.
+  const [intentDistribution, setIntentDistribution] = useState<Record<string, number>>({});
 
   /* --- Detail modal signals --- */
   const [visitorSignals, setVisitorSignals] = useState<BehavioralSignalData[]>([]);
@@ -271,7 +409,7 @@ function AdminVisitorsPage() {
   const [chatTotal, setChatTotal] = useState(0);
   const [chatPage, setChatPage] = useState(1);
   const [chatTotalPages, setChatTotalPages] = useState(1);
-  const [chatStats, setChatStats] = useState<{ total_conversations: number; active_conversations: number; today_conversations: number; avg_messages: number } | null>(null);
+  const [chatStats, setChatStats] = useState<{ total_conversations: number; active_conversations: number; engaged_conversations?: number; abandoned_conversations?: number; today_conversations: number; avg_messages: number } | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<ChatConversationData | null>(null);
   const [conversationMessages, setConversationMessages] = useState<ChatMessageData2[]>([]);
 
@@ -289,17 +427,33 @@ function AdminVisitorsPage() {
 
   const fetchLive = useCallback(async () => {
     try {
-      const res = await api.get('/api/admin/visitors/live');
-      setLiveVisitors(res.data.visitors || []);
+      const res = await api.get('/api/admin/visitors/live', {
+        params: showBots ? { includeBots: 'true' } : undefined,
+      });
+      // The endpoint now returns `{ visitors, count }`; it used to return the
+      // bare array. Both are read so a cached bundle and a fresh API — in either
+      // order — still populate the table.
+      const payload = res.data;
+      const rows: Visitor[] = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.visitors)
+          ? payload.visitors
+          : [];
+      setLiveVisitors(rows);
+      if (typeof payload?.count === 'number') setLiveCount(payload.count);
+      setSignedIn(Array.isArray(payload?.signed_in) ? payload.signed_in : []);
     } catch (err) {
       console.error('Failed to fetch live visitors:', err);
     }
-  }, []);
+    // `showBots` is a real dependency: the poll closes over it, so omitting it
+    // would leave the 30s refresh permanently fetching the value the toggle had
+    // at mount and silently undo the user's choice on the next tick.
+  }, [showBots]);
 
   const fetchStats = useCallback(async () => {
     try {
       const res = await api.get('/api/admin/visitors/stats');
-      setStats(res.data.stats || res.data);
+      setStats(normalizeStats(res.data?.stats || res.data));
     } catch (err) {
       console.error('Failed to fetch visitor stats:', err);
     }
@@ -323,15 +477,34 @@ function AdminVisitorsPage() {
 
   const fetchAnalytics = useCallback(async () => {
     try {
-      const [trendRes, topRes, srcRes, sitesRes] = await Promise.all([
+      // Top Pages and Traffic Sources used to be read off the /visitors/trend
+      // response as `.topPages` and `.trafficSources`. That endpoint returns a
+      // flat array of daily {date, visitors, sessions, pageviews} and has never
+      // had either key, so both panels rendered their empty state permanently
+      // while /visitor-analytics/pages sat unused (and, until this change,
+      // 500ing on a malformed interval).
+      const [trendRes, statsRes, pagesRes, srcRes, sitesRes] = await Promise.all([
         api.get('/api/admin/visitors/trend'),
         api.get('/api/admin/visitors/stats'),
-        api.get('/api/admin/visitors/stats'),
+        api.get('/api/admin/visitor-analytics/pages', { params: { days: 30, limit: 20 } }).catch(() => null),
+        api.get('/api/admin/visitor-analytics/traffic-sources').catch(() => null),
         api.get('/api/admin/visitor-analytics/sites', { params: { days: 30 } }).catch(() => null),
       ]);
-      setTopPages(trendRes.data.topPages || []);
-      setTrafficSources(trendRes.data.trafficSources || []);
-      setStats(topRes.data.stats || topRes.data);
+      // The service speaks column names (page_path / view_count); the table reads
+      // page / views. Mapped here rather than renamed server-side because
+      // `TopPage` is an exported type with other consumers.
+      setTopPages(
+        (pagesRes?.data || []).map((p: any) => ({
+          page: p.page_path ?? p.page ?? '(unknown)',
+          views: Number(p.view_count ?? p.views ?? 0),
+          unique_visitors: Number(p.unique_visitors ?? 0),
+        })),
+      );
+      setTrafficSources(srcRes?.data || []);
+      // Normalised, not assigned raw. This writes the SAME `stats` state the
+      // header cards read, so skipping the mapping here would re-break every
+      // card the moment the Analytics tab loaded.
+      setStats(normalizeStats(statsRes.data?.stats || statsRes.data));
       setSitesBreakdown(sitesRes?.data || []);
     } catch (err) {
       console.error('Failed to fetch analytics:', err);
@@ -351,7 +524,11 @@ function AdminVisitorsPage() {
 
   const fetchHighIntent = useCallback(async () => {
     try {
-      const res = await api.get('/api/admin/visitors/high-intent', { params: { threshold: 20, limit: 50 } });
+      const [res, distRes] = await Promise.all([
+        api.get('/api/admin/visitors/high-intent', { params: { threshold: 20, limit: 50 } }),
+        api.get('/api/admin/visitors/intent-distribution').catch(() => null),
+      ]);
+      if (distRes?.data) setIntentDistribution(distRes.data.distribution ?? distRes.data);
       setHighIntentVisitors(res.data || []);
     } catch (err) {
       console.error('Failed to fetch high intent visitors:', err);
@@ -391,10 +568,27 @@ function AdminVisitorsPage() {
     setVisitorSignals([]);
     setVisitorIntentScore(null);
     try {
-      const [sessRes, intentRes] = await Promise.all([
+      const [sessRes, intentRes, profileRes] = await Promise.all([
         api.get(`/api/admin/visitors/${visitor.id}/sessions`),
         api.get(`/api/admin/visitors/${visitor.id}/intent`).catch(() => null),
+        // The full profile, which the modal has never actually fetched.
+        //
+        // `selectedVisitor` was set straight from the clicked ROW. A row from the
+        // live table carries session-shaped fields only — no first_seen_at,
+        // last_seen_at, total_sessions or total_pageviews — so the modal read
+        // undefined for each and its `?? 0` turned that into a confident
+        // "Total Sessions 0" for a visitor with 161 of them, and an empty
+        // First Seen. Same failure mode as the dashboard zeros: a missing field
+        // rendered as a plausible number rather than as missing.
+        api.get(`/api/admin/visitors/${visitor.id}`).catch(() => null),
       ]);
+      // Merged over the row rather than replacing it: the row holds live-only
+      // context (current_page, session_duration, site_slug) that the profile
+      // does not, and dropping it would empty half the modal to fill the rest.
+      if (profileRes?.data) {
+        const profile = profileRes.data.visitor ?? profileRes.data;
+        setSelectedVisitor((prev) => ({ ...(prev as Visitor), ...profile }));
+      }
       setVisitorSessions(sessRes.data.sessions || sessRes.data || []);
       if (intentRes?.data) {
         setVisitorIntentScore(intentRes.data.intent);
@@ -443,15 +637,65 @@ function AdminVisitorsPage() {
     }
   }, [activeTab, fetchLive, fetchStats, fetchAllVisitors, fetchHighIntent, fetchAnalytics, fetchSessions, fetchChat]);
 
-  // Auto-refresh for live tab
+  /**
+   * Live figures refresh on every tab, not just the Live tab.
+   *
+   * The header stat cards and the Live badge render above the tab strip, so they
+   * are on screen the whole time — but the poll used to be scoped to
+   * `activeTab === 'live'`, and the initial fetch too. Landing on the default
+   * Navigation Flow tab therefore showed no header cards at all, and any other
+   * tab froze them at whatever was last loaded. "Who is on the site" was only
+   * ever true on one tab.
+   *
+   * Polling pauses while the browser tab is hidden and fires once immediately on
+   * return: an admin tab left open overnight should not spend 2,880 requests
+   * refreshing a screen nobody is looking at, and the first thing he sees on
+   * coming back should be current rather than eight hours stale.
+   */
   useEffect(() => {
-    if (activeTab !== 'live') return;
-    const interval = setInterval(() => {
+    let cancelled = false;
+
+    const refresh = () => {
+      if (cancelled || document.visibilityState === 'hidden') return;
       fetchLive();
       fetchStats();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab, fetchLive, fetchStats]);
+    };
+
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [fetchLive, fetchStats]);
+
+  /* ---------------------------------------------------------------- */
+  /*  Per-page trust signal (Basecamp todo 10027085963)               */
+  /* ---------------------------------------------------------------- */
+
+  const trust: TrustSignal = useMemo(() => {
+    const live = liveCount ?? stats?.liveCount ?? liveVisitors.length;
+    return {
+      level: 'live',
+      source: 'visitor analytics',
+      updatedAt: new Date().toISOString(),
+      summary: `${live} visitor${live === 1 ? '' : 's'} live now; sessions and intent scored from first-party tracking.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Freshness',
+          status: 'live',
+          evidence: [
+            { label: 'Source', value: 'visitor_sessions / pageviews' },
+            { label: 'Live now', value: String(live) },
+          ],
+        },
+      ],
+    };
+  }, [stats, liveCount, liveVisitors.length]);
 
   /* ---------------------------------------------------------------- */
   /*  Filter helpers                                                   */
@@ -484,12 +728,19 @@ function AdminVisitorsPage() {
     </div>
   );
 
-  const renderStatusBadge = (v: Visitor) =>
-    v.lead_id ? (
-      <span className="badge bg-success">Known</span>
-    ) : (
-      <span className="badge bg-secondary">Anonymous</span>
-    );
+  const renderStatusBadge = (v: Visitor) => {
+    // "Bot" outranks Known/Anonymous: whether a crawler is identified is not the
+    // useful fact about it, and a row reading "Anonymous" for Googlebot invites
+    // the reader to treat it as a person.
+    if (v.is_bot) return <StatusBadge label="Bot" tone="warning" />;
+    // Distinct label from "Bot": this one is an inference from behaviour (40+
+    // pages over 2+ hours, or a crawl rate no person sustains), not something
+    // the client declared. Saying which rule fired lets the reader judge it.
+    if (v.is_likely_bot) return <StatusBadge label="Likely bot" tone="warning" />;
+    return v.lead_id
+      ? <StatusBadge label="Known" tone="success" />
+      : <StatusBadge label="Anonymous" tone="neutral" />;
+  };
 
   /* ---------------------------------------------------------------- */
   /*  Tab content                                                      */
@@ -501,31 +752,13 @@ function AdminVisitorsPage() {
       {stats && (
         <div className="row g-3 mb-4">
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #38a169' }}>
-                <div className="text-muted small d-flex align-items-center gap-1">
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38a169', display: 'inline-block' }} />
-                  Live Now
-                </div>
-                <div className="h4 fw-bold mb-0">{stats.liveCount ?? liveVisitors.length}</div>
-              </div>
-            </div>
+            <StatCard label="Live Now" value={liveCount ?? stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #2b6cb0' }}>
-                <div className="text-muted small">Sessions Today</div>
-                <div className="h4 fw-bold mb-0">{stats.todaySessions ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Sessions Today" value={stats.todaySessions ?? 0} icon="time-line" tone="info" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #1a365d' }}>
-                <div className="text-muted small">Visitors Today</div>
-                <div className="h4 fw-bold mb-0">{stats.todayVisitors ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Visitors Today" value={stats.todayVisitors ?? 0} icon="user-line" tone="primary" />
           </div>
         </div>
       )}
@@ -534,151 +767,231 @@ function AdminVisitorsPage() {
       {stats && (stats.visitors30d > 0 || stats.sessions30d > 0) && (
         <div className="row g-3 mb-4">
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #805ad5' }}>
-                <div className="text-muted small">Visitors (30 days)</div>
-                <div className="h4 fw-bold mb-0">{stats.visitors30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Visitors (30 days)" value={stats.visitors30d ?? 0} icon="group-line" tone="primary" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #319795' }}>
-                <div className="text-muted small">Sessions (30 days)</div>
-                <div className="h4 fw-bold mb-0">{stats.sessions30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Sessions (30 days)" value={stats.sessions30d ?? 0} icon="stack-line" tone="info" />
           </div>
           <div className="col-sm-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #dd6b20' }}>
-                <div className="text-muted small">Avg Duration / Bounce Rate</div>
-                <div className="h4 fw-bold mb-0">{formatDuration(stats.avgDuration ?? 0)} / {stats.bounceRate ?? 0}%</div>
-              </div>
-            </div>
+            <StatCard
+              label="Avg Duration / Bounce"
+              value={`${formatDuration(stats.avgDuration ?? 0)} / ${stats.bounceRate ?? 0}%`}
+              icon="timer-line"
+              tone="warning"
+            />
           </div>
         </div>
       )}
 
-      {/* Live visitors table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>Active Visitors ({liveVisitors.length})</span>
-          <span className="text-muted small">Auto-refreshes every 30s</span>
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
-            <table className="table table-hover mb-0">
-              <thead className="table-light">
+      {/* Signed-in people — named, from portal presence, not the tracker */}
+      <SectionCard
+        title={`Signed in now (${signedIn.length})`}
+        icon="user-star-line"
+        actions={
+          <span className="text-muted small">
+            People in the portal, by name — from presence, not tracking
+          </span>
+        }
+        className="mb-4"
+        padded={false}
+      >
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Person</th>
+                <th>Status</th>
+                <th>Last active</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signedIn.length === 0 ? (
                 <tr>
-                  <th>Visitor</th>
-                  <th>Status</th>
-                  <th>Intent</th>
-                  <th>Current Page</th>
-                  <th>Duration</th>
-                  <th>Pages</th>
-                  <th>Referrer</th>
-                  <th>Device</th>
+                  <td colSpan={3} className="text-center py-4">
+                    <div className="text-muted">Nobody is signed into the portal right now.</div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {liveVisitors.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-4">
-                      <div className="text-muted mb-2">No visitors currently on the site.</div>
-                      <button
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={() => setActiveTab('flow')}
-                      >
-                        View Navigation Flow &rarr;
-                      </button>
+              ) : (
+                signedIn.map((p) => (
+                  <tr key={p.enrollment_id}>
+                    <td>
+                      <PersonLink tab="activity" name={p.name} enrollmentId={p.enrollment_id} />
                     </td>
+                    <td><StatusBadge label="Signed in" tone="success" /></td>
+                    <td className="small text-muted">{formatRelative(p.last_active_at)}</td>
                   </tr>
-                ) : (
-                  liveVisitors.map((v) => (
-                    <tr
-                      key={v.id}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => fetchVisitorDetail(v)}
-                    >
-                      <td>{renderVisitorCell(v)}</td>
-                      <td>{renderStatusBadge(v)}</td>
-                      <td><IntentBadge score={getIntentScore(v)} level={getIntentLevel(v)} /></td>
-                      <td className="small text-truncate" style={{ maxWidth: 200 }}>
-                        {v.current_page || v.exit_page || '-'}
-                      </td>
-                      <td className="text-nowrap small">{formatDuration(v.session_duration || 0)}</td>
-                      <td>{v.pageview_count ?? v.total_pageviews ?? 0}</td>
-                      <td className="small">{v.referrer_domain || 'Direct'}</td>
-                      <td><DeviceIcon type={v.device_type} /></td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </SectionCard>
+
+      {/* Live visitors table */}
+      <SectionCard
+        // Says "50 of 63" rather than "50" when the list is truncated. A bare
+        // count that silently stops at the limit reads as a ceiling on traffic.
+        // Named "Anonymous" rather than "Active" because the distinction is the
+        // whole point of the two tables: this one can only ever show fingerprints
+        // from the public sites, and reading it as "everyone on the site" is
+        // exactly the misunderstanding that made a signed-in colleague look
+        // missing.
+        title={
+          liveCount != null && liveCount > liveVisitors.length
+            ? `Anonymous visitors (${liveVisitors.length} of ${liveCount})`
+            : `Anonymous visitors (${liveVisitors.length})`
+        }
+        icon="pulse-line"
+        actions={
+          <div className="d-flex align-items-center gap-3">
+            <div className="form-check form-switch mb-0">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="live-show-bots"
+                checked={showBots}
+                onChange={(e) => setShowBots(e.target.checked)}
+              />
+              <label className="form-check-label small" htmlFor="live-show-bots">
+                Show bots
+              </label>
+            </div>
+            <span className="text-muted small">Auto-refreshes every 30s</span>
+          </div>
+        }
+        padded={false}
+      >
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Visitor</th>
+                <th>Status</th>
+                <th>Site</th>
+                <th>Intent</th>
+                <th>Current Page</th>
+                <th>Duration</th>
+                <th>Pages</th>
+                <th>Referrer</th>
+                <th>Device</th>
+              </tr>
+            </thead>
+            <tbody>
+              {liveVisitors.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-4">
+                    <div className="text-muted mb-2">No visitors currently on the site.</div>
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => setActiveTab('flow')}
+                    >
+                      View Traffic Flow &rarr;
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                liveVisitors.map((v) => (
+                  <tr
+                    // Keyed on the session, not the visitor: one visitor can hold
+                    // two concurrent sessions (two tabs, or desktop and phone) and
+                    // a visitor-id key would collide and drop a live row.
+                    key={v.session_id || v.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => fetchVisitorDetail(v)}
+                  >
+                    <td>{renderVisitorCell(v)}</td>
+                    <td>{renderStatusBadge(v)}</td>
+                    <td className="small">{v.site_slug || <span className="text-muted">-</span>}</td>
+                    <td><IntentBadge score={getIntentScore(v)} level={getIntentLevel(v)} /></td>
+                    <td className="small text-truncate" style={{ maxWidth: 200 }}>
+                      {v.current_page || v.exit_page || '-'}
+                    </td>
+                    <td className="text-nowrap small">{formatDuration(v.session_duration || 0)}</td>
+                    <td>{v.pageview_count ?? v.total_pageviews ?? 0}</td>
+                    <td className="small">{v.referrer_domain || 'Direct'}</td>
+                    <td><DeviceIcon type={v.device_type} /></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
     </>
   );
 
   const renderAllTab = () => (
     <>
+      {/* Named vs anonymous is the only split that matters on this list: a named
+          visitor can be followed up, an anonymous one cannot. */}
+      <TileRow
+        tiles={[
+          { label: 'Visitors', value: allTotal, color: TILE.violet, sub: 'crawlers excluded' },
+          {
+            label: 'Named',
+            value: allVisitors.filter((v) => v.lead_id).length,
+            color: TILE.green,
+            sub: 'on this page',
+          },
+          {
+            label: 'Anonymous',
+            value: allVisitors.filter((v) => !v.lead_id).length,
+            color: TILE.grey,
+            sub: 'on this page',
+          },
+          { label: 'Visitors (30d)', value: stats?.visitors30d ?? 0, color: TILE.teal, sub: 'people only' },
+        ]}
+      />
       {/* Filters */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-body">
-          <div className="d-flex gap-2 mb-0 flex-wrap align-items-center">
-            <input
-              type="text"
-              className="form-control form-control-sm"
-              style={{ maxWidth: 220 }}
-              placeholder="Search name, email, fingerprint..."
-              value={filters.search}
-              onChange={(e) => updateFilter('search', e.target.value)}
-              aria-label="Search visitors"
-            />
-            <select
-              className="form-select form-select-sm"
-              style={{ maxWidth: 150 }}
-              value={filters.identified}
-              onChange={(e) => updateFilter('identified', e.target.value)}
-            >
-              <option value="">All Visitors</option>
-              <option value="true">Known</option>
-              <option value="false">Anonymous</option>
-            </select>
-            <input
-              type="date"
-              className="form-control form-control-sm"
-              style={{ maxWidth: 150 }}
-              value={filters.dateFrom}
-              onChange={(e) => updateFilter('dateFrom', e.target.value)}
-              aria-label="Date from"
-            />
-            <input
-              type="date"
-              className="form-control form-control-sm"
-              style={{ maxWidth: 150 }}
-              value={filters.dateTo}
-              onChange={(e) => updateFilter('dateTo', e.target.value)}
-              aria-label="Date to"
-            />
-            {hasFilters && (
-              <button className="btn btn-sm btn-outline-secondary" onClick={clearFilters}>
-                Clear
-              </button>
-            )}
-          </div>
+      <SectionCard className="mb-4">
+        <div className="d-flex gap-2 mb-0 flex-wrap align-items-center">
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            style={{ maxWidth: 220 }}
+            placeholder="Search name, email, fingerprint..."
+            value={filters.search}
+            onChange={(e) => updateFilter('search', e.target.value)}
+            aria-label="Search visitors"
+          />
+          <select
+            className="form-select form-select-sm"
+            style={{ maxWidth: 150 }}
+            value={filters.identified}
+            onChange={(e) => updateFilter('identified', e.target.value)}
+          >
+            <option value="">All Visitors</option>
+            <option value="true">Known</option>
+            <option value="false">Anonymous</option>
+          </select>
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            style={{ maxWidth: 150 }}
+            value={filters.dateFrom}
+            onChange={(e) => updateFilter('dateFrom', e.target.value)}
+            aria-label="Date from"
+          />
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            style={{ maxWidth: 150 }}
+            value={filters.dateTo}
+            onChange={(e) => updateFilter('dateTo', e.target.value)}
+            aria-label="Date to"
+          />
+          {hasFilters && (
+            <button className="btn btn-sm btn-outline-secondary" onClick={clearFilters}>
+              Clear
+            </button>
+          )}
         </div>
-      </div>
+      </SectionCard>
 
       {/* All visitors table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold">
-          Visitors ({allTotal})
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
+      <SectionCard title={`Visitors (${allTotal})`} icon="user-search-line" padded={false}>
+        <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
@@ -696,7 +1009,7 @@ function AdminVisitorsPage() {
               <tbody>
                 {allVisitors.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-muted py-4">
+                    <td colSpan={10} className="text-center text-muted py-4">
                       {hasFilters ? 'No visitors match the current filters.' : 'No visitor data yet.'}
                     </td>
                   </tr>
@@ -721,13 +1034,12 @@ function AdminVisitorsPage() {
                 )}
               </tbody>
             </table>
-          </div>
         </div>
-        <div className="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div className="d-flex justify-content-between align-items-center px-3 py-2 border-top">
           <span className="text-muted small">Page {allPage} of {allTotalPages}</span>
           <Pagination page={allPage} totalPages={allTotalPages} onPageChange={setAllPage} />
         </div>
-      </div>
+      </SectionCard>
     </>
   );
 
@@ -737,48 +1049,34 @@ function AdminVisitorsPage() {
       {stats && (
         <div className="row g-3 mb-4">
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #1a365d' }}>
-                <div className="text-muted small">Visitors (30d)</div>
-                <div className="h4 fw-bold mb-0">{stats.visitors30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Visitors (30d)" value={stats.visitors30d ?? 0} icon="group-line" tone="primary" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #2b6cb0' }}>
-                <div className="text-muted small">Sessions (30d)</div>
-                <div className="h4 fw-bold mb-0">{stats.sessions30d ?? 0}</div>
-              </div>
-            </div>
+            <StatCard label="Sessions (30d)" value={stats.sessions30d ?? 0} icon="stack-line" tone="info" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #38a169' }}>
-                <div className="text-muted small">Avg Duration</div>
-                <div className="h4 fw-bold mb-0">{formatDuration(stats.avgDuration ?? 0)}</div>
-              </div>
-            </div>
+            <StatCard label="Avg Duration" value={formatDuration(stats.avgDuration ?? 0)} icon="timer-line" tone="success" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #e53e3e' }}>
-                <div className="text-muted small">Bounce Rate</div>
-                <div className="h4 fw-bold mb-0">{stats.bounceRate != null ? `${stats.bounceRate}%` : '-'}</div>
-              </div>
-            </div>
+            <StatCard
+              label="Bounce Rate"
+              value={stats.bounceRate != null ? `${stats.bounceRate}%` : '-'}
+              icon="logout-box-r-line"
+              tone="danger"
+            />
           </div>
         </div>
       )}
 
       {/* By Site (cross-site visibility — lights up as external sites install /v1/track.js) */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-          <span>By Site (last 30d)</span>
-          <span className="text-muted small">visitor_sessions.site_slug</span>
-        </div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
+      <SectionCard
+        title="By Site (last 30d)"
+        icon="global-line"
+        actions={<span className="text-muted small">visitor_sessions.site_slug</span>}
+        padded={false}
+        className="mb-4"
+      >
+        <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
@@ -815,92 +1113,97 @@ function AdminVisitorsPage() {
                 )}
               </tbody>
             </table>
-          </div>
         </div>
-      </div>
+      </SectionCard>
 
       <div className="row g-4">
         {/* Top Pages */}
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">Top Pages</div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
+          <SectionCard title="Top Pages" icon="file-list-3-line" padded={false}>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Page</th>
+                    <th>Views</th>
+                    <th>Unique Visitors</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topPages.length === 0 ? (
                     <tr>
-                      <th>Page</th>
-                      <th>Views</th>
-                      <th>Unique Visitors</th>
+                      <td colSpan={3} className="text-center text-muted py-3">No page data yet.</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {topPages.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="text-center text-muted py-3">No page data yet.</td>
+                  ) : (
+                    topPages.map((p, i) => (
+                      <tr key={i}>
+                        <td className="small text-truncate" style={{ maxWidth: 250 }}>{p.page}</td>
+                        <td>{p.views}</td>
+                        <td>{p.unique_visitors}</td>
                       </tr>
-                    ) : (
-                      topPages.map((p, i) => (
-                        <tr key={i}>
-                          <td className="small text-truncate" style={{ maxWidth: 250 }}>{p.page}</td>
-                          <td>{p.views}</td>
-                          <td>{p.unique_visitors}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
 
         {/* Traffic Sources */}
         <div className="col-lg-6">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">Traffic Sources</div>
-            <div className="card-body p-0">
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
+          <SectionCard title="Traffic Sources" icon="route-line" padded={false}>
+            <div className="table-responsive">
+              <table className="table table-hover mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Source</th>
+                    <th>Visitors</th>
+                    <th>Sessions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trafficSources.length === 0 ? (
                     <tr>
-                      <th>Source</th>
-                      <th>Visitors</th>
-                      <th>Sessions</th>
+                      <td colSpan={3} className="text-center text-muted py-3">No source data yet.</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {trafficSources.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="text-center text-muted py-3">No source data yet.</td>
+                  ) : (
+                    trafficSources.map((s, i) => (
+                      <tr key={i}>
+                        <td className="small">{s.source || 'Direct'}</td>
+                        <td>{s.visitors}</td>
+                        <td>{s.sessions}</td>
                       </tr>
-                    ) : (
-                      trafficSources.map((s, i) => (
-                        <tr key={i}>
-                          <td className="small">{s.source || 'Direct'}</td>
-                          <td>{s.visitors}</td>
-                          <td>{s.sessions}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </SectionCard>
         </div>
       </div>
     </>
   );
 
   const renderHighIntentTab = () => (
-    <div className="card border-0 shadow-sm">
-      <div className="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
-        <span>High Intent Visitors ({highIntentVisitors.length})</span>
-        <span className="text-muted small">Score 20+ (decayed over 7-day half-life)</span>
-      </div>
-      <div className="card-body p-0">
-        <div className="table-responsive">
+    <>
+      {/* The shape of the list, above the list. A ranked table alone makes the
+          reader count rows to find out whether "high intent" means five people
+          or five hundred. */}
+      <TileRow
+        tiles={[
+          { label: 'Very high', value: intentDistribution.very_high ?? 0, color: TILE.red, sub: 'score 70-100' },
+          { label: 'High', value: intentDistribution.high ?? 0, color: TILE.amber, sub: 'score 45-69' },
+          { label: 'Medium', value: intentDistribution.medium ?? 0, color: TILE.teal, sub: 'score 20-44' },
+          { label: 'Showing', value: highIntentVisitors.length, color: TILE.violet, sub: 'above threshold' },
+        ]}
+      />
+    <SectionCard
+      title={`High Intent Visitors (${highIntentVisitors.length})`}
+      icon="fire-line"
+      actions={<span className="text-muted small">Score 20+ (decayed over 7-day half-life)</span>}
+      padded={false}
+    >
+      <div className="table-responsive">
           <table className="table table-hover mb-0">
             <thead className="table-light">
               <tr>
@@ -956,11 +1259,9 @@ function AdminVisitorsPage() {
                         {item.last_signal_at ? formatRelative(item.last_signal_at) : '-'}
                       </td>
                       <td>
-                        {lead ? (
-                          <span className="badge bg-success">Known</span>
-                        ) : (
-                          <span className="badge bg-secondary">Anonymous</span>
-                        )}
+                        {lead
+                          ? <StatusBadge label="Known" tone="success" />
+                          : <StatusBadge label="Anonymous" tone="neutral" />}
                       </td>
                     </tr>
                   );
@@ -968,9 +1269,9 @@ function AdminVisitorsPage() {
               )}
             </tbody>
           </table>
-        </div>
       </div>
-    </div>
+    </SectionCard>
+    </>
   );
 
   const renderChatTab = () => (
@@ -979,45 +1280,36 @@ function AdminVisitorsPage() {
       {chatStats && (
         <div className="row g-3 mb-4">
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid var(--color-primary, #1a365d)' }}>
-                <div className="text-muted small">Total Conversations</div>
-                <div className="h4 fw-bold mb-0">{chatStats.total_conversations}</div>
-              </div>
-            </div>
+            <StatCard label="Total Conversations" value={chatStats.total_conversations} icon="chat-3-line" tone="primary" />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #38a169' }}>
-                <div className="text-muted small">Active Now</div>
-                <div className="h4 fw-bold mb-0">{chatStats.active_conversations}</div>
-              </div>
-            </div>
+            {/* Was "Active Now" reading `status = 'active'` — a column nothing ever
+                changes, so it showed 129 of 129 and implied 129 live chats. Only 7
+                had more than one message. Engaged is the honest headline. */}
+            <StatCard
+              label="Engaged (2+ messages)"
+              value={chatStats.engaged_conversations ?? chatStats.active_conversations}
+              icon="chat-smile-2-line"
+              tone="success"
+            />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #2b6cb0' }}>
-                <div className="text-muted small">Today</div>
-                <div className="h4 fw-bold mb-0">{chatStats.today_conversations}</div>
-              </div>
-            </div>
+            <StatCard
+              label="Abandoned (no reply)"
+              value={chatStats.abandoned_conversations ?? 0}
+              icon="chat-delete-line"
+              tone="warning"
+            />
           </div>
           <div className="col-6 col-lg-3">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body p-3" style={{ borderLeft: '4px solid #e53e3e' }}>
-                <div className="text-muted small">Avg Messages</div>
-                <div className="h4 fw-bold mb-0">{chatStats.avg_messages}</div>
-              </div>
-            </div>
+            <StatCard label="Avg Messages" value={chatStats.avg_messages} icon="message-2-line" tone="warning" />
           </div>
         </div>
       )}
 
       {/* Conversations table */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white fw-semibold">Chat Conversations</div>
-        <div className="card-body p-0">
-          <div className="table-responsive">
+      <SectionCard title="Chat Conversations" icon="chat-history-line" padded={false}>
+        <div className="table-responsive">
             <table className="table table-hover mb-0">
               <thead className="table-light">
                 <tr>
@@ -1044,33 +1336,34 @@ function AdminVisitorsPage() {
                       <td className="fw-medium small">
                         {conv.visitor?.lead?.name || `Anonymous (${conv.visitor?.fingerprint?.slice(0, 8)}...)`}
                         {conv.visitor?.lead && (
-                          <span className="badge bg-info ms-1" style={{ fontSize: '0.65rem' }}>Known</span>
+                          <span className="ms-1"><StatusBadge label="Known" tone="info" /></span>
                         )}
                       </td>
                       <td className="text-nowrap small">{formatRelative(conv.started_at)}</td>
                       <td>
-                        <span className="badge bg-light text-dark">{conv.message_count}</span>
+                        <StatusBadge label={String(conv.message_count)} tone="neutral" />
                       </td>
                       <td className="small">{conv.page_category || '-'}</td>
                       <td className="small">
-                        <span className={`badge bg-${conv.trigger_type === 'proactive_behavioral' ? 'warning' : 'light'} text-dark`}>
-                          {conv.trigger_type.replace(/_/g, ' ')}
-                        </span>
+                        <StatusBadge
+                          label={conv.trigger_type.replace(/_/g, ' ')}
+                          tone={conv.trigger_type === 'proactive_behavioral' ? 'warning' : 'neutral'}
+                        />
                       </td>
                       <td>
-                        <span className={`badge bg-${conv.status === 'active' ? 'success' : conv.status === 'escalated' ? 'danger' : 'secondary'}`}>
-                          {conv.status}
-                        </span>
+                        <StatusBadge
+                          label={conv.status}
+                          tone={conv.status === 'active' ? 'success' : conv.status === 'escalated' ? 'danger' : 'neutral'}
+                        />
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
-          </div>
         </div>
         {chatTotalPages > 1 && (
-          <div className="card-footer bg-white">
+          <div className="px-3 py-2 border-top">
             <Pagination
               page={chatPage}
               totalPages={chatTotalPages}
@@ -1078,15 +1371,24 @@ function AdminVisitorsPage() {
             />
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 
   const renderSessionsTab = () => (
-    <div className="card border-0 shadow-sm">
-      <div className="card-header bg-white fw-semibold">Recent Sessions</div>
-      <div className="card-body p-0">
-        <div className="table-responsive">
+    <>
+      {/* Sessions had no summary at all — just a list. These come from the same
+          bot-free stats the header cards use, so the two can never disagree. */}
+      <TileRow
+        tiles={[
+          { label: 'Sessions (30d)', value: stats?.sessions30d ?? 0, color: TILE.teal, sub: 'people only' },
+          { label: 'Visitors (30d)', value: stats?.visitors30d ?? 0, color: TILE.violet, sub: 'people only' },
+          { label: 'Bounce rate', value: `${stats?.bounceRate ?? 0}%`, color: TILE.amber, sub: 'one page and gone' },
+          { label: 'Avg session', value: formatDuration(stats?.avgDuration ?? 0), color: TILE.green, sub: 'time on site' },
+        ]}
+      />
+    <SectionCard title="Recent Sessions" icon="history-line" padded={false}>
+      <div className="table-responsive">
           <table className="table table-hover mb-0">
             <thead className="table-light">
               <tr>
@@ -1117,11 +1419,9 @@ function AdminVisitorsPage() {
                     <td className="small text-truncate" style={{ maxWidth: 180 }}>{s.entry_page || '-'}</td>
                     <td className="small text-truncate" style={{ maxWidth: 180 }}>{s.exit_page || '-'}</td>
                     <td>
-                      {s.is_bounce ? (
-                        <span className="badge bg-warning text-dark">Yes</span>
-                      ) : (
-                        <span className="badge bg-light text-dark">No</span>
-                      )}
+                      {s.is_bounce
+                        ? <StatusBadge label="Yes" tone="warning" />
+                        : <StatusBadge label="No" tone="neutral" />}
                     </td>
                     <td className="small">{s.referrer_domain || 'Direct'}</td>
                   </tr>
@@ -1129,9 +1429,9 @@ function AdminVisitorsPage() {
               )}
             </tbody>
           </table>
-        </div>
       </div>
-    </div>
+    </SectionCard>
+    </>
   );
 
   /* ---------------------------------------------------------------- */
@@ -1180,7 +1480,7 @@ function AdminVisitorsPage() {
                 {v.lead_id && (
                   <div className="mb-3">
                     <Link
-                      to={`/admin/leads/${v.lead_id}`}
+                      to={personPath({ leadId: v.lead_id }, 'activity') ?? '/admin/people'}
                       className="btn btn-sm btn-outline-primary"
                     >
                       View Lead Profile
@@ -1273,7 +1573,7 @@ function AdminVisitorsPage() {
                                       style={{
                                         width: 40,
                                         height: 6,
-                                        background: '#e2e8f0',
+                                        background: 'var(--neutral-200)',
                                         borderRadius: 3,
                                         overflow: 'hidden',
                                       }}
@@ -1283,9 +1583,9 @@ function AdminVisitorsPage() {
                                           width: `${Math.min(sig.signal_strength, 100)}%`,
                                           height: '100%',
                                           background:
-                                            sig.signal_strength >= 40 ? '#e53e3e' :
-                                            sig.signal_strength >= 25 ? '#dd6b20' :
-                                            '#38a169',
+                                            sig.signal_strength >= 40 ? 'var(--status-danger)' :
+                                            sig.signal_strength >= 25 ? 'var(--status-warning)' :
+                                            'var(--status-success)',
                                           borderRadius: 3,
                                         }}
                                       />
@@ -1349,7 +1649,7 @@ function AdminVisitorsPage() {
                                       {new Date(evt.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                     </td>
                                     <td>
-                                      <span className="badge bg-light text-dark">{evt.event_type}</span>
+                                      <StatusBadge label={evt.event_type} tone="neutral" />
                                     </td>
                                     <td className="text-truncate" style={{ maxWidth: 200 }}>
                                       {evt.page_url || '-'}
@@ -1383,19 +1683,45 @@ function AdminVisitorsPage() {
 
   return (
     <>
-      <Breadcrumb items={[{ label: 'Dashboard', to: '/admin/dashboard' }, { label: 'Visitors' }]} />
-
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 fw-bold mb-0" style={{ color: 'var(--color-primary)' }}>
-          Visitor Intelligence
-        </h1>
-      </div>
+      <PageHeader
+        title="Visitors"
+        icon="eye-line"
+        subtitle="Live sessions, identified visitors, intent scoring, and on-site chat — all first-party tracked."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Visitors' }]}
+        trust={trust}
+        actions={
+          <button
+            className="btn btn-outline-primary btn-sm"
+            onClick={() => { fetchLive(); fetchStats(); }}
+            disabled={loading}
+          >
+            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
+          </button>
+        }
+      >
+        {stats && (
+          <div className="row g-3">
+            <div className="col-6 col-lg-3">
+              <StatCard label="Live Now" value={liveCount ?? stats.liveCount ?? liveVisitors.length} icon="broadcast-line" tone="success" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Visitors Today" value={stats.todayVisitors ?? 0} icon="user-line" tone="primary" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Sessions Today" value={stats.todaySessions ?? 0} icon="time-line" tone="info" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Visitors (30d)" value={stats.visitors30d ?? 0} icon="group-line" tone="neutral" />
+            </div>
+          </div>
+        )}
+      </PageHeader>
 
       {/* Tab navigation */}
       <nav>
         <ul className="nav nav-tabs mb-4">
           {([
-            { key: 'flow' as TabKey, label: 'Navigation Flow' },
+            { key: 'flow' as TabKey, label: 'Traffic Flow' },
             { key: 'live' as TabKey, label: 'Live Visitors' },
             { key: 'all' as TabKey, label: 'All Visitors' },
             { key: 'high_intent' as TabKey, label: 'High Intent' },
@@ -1436,7 +1762,7 @@ function AdminVisitorsPage() {
       {activeTab === 'flow' && (
         <div style={{ height: 'calc(100vh - 200px)', minHeight: 400 }}>
           <Suspense fallback={<div className="text-center py-4"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading...</span></div></div>}>
-            <VisitorFlowGraph />
+            <VisitorSankeyFlow />
           </Suspense>
         </div>
       )}
@@ -1456,8 +1782,8 @@ function AdminVisitorsPage() {
                 <button type="button" className="btn-close" onClick={() => { setSelectedConversation(null); setConversationMessages([]); }} />
               </div>
               <div className="modal-body">
-                <div className="d-flex gap-3 mb-3 flex-wrap">
-                  <span className={`badge bg-${selectedConversation.status === 'active' ? 'success' : 'secondary'}`}>{selectedConversation.status}</span>
+                <div className="d-flex gap-3 mb-3 flex-wrap align-items-center">
+                  <StatusBadge label={selectedConversation.status} tone={selectedConversation.status === 'active' ? 'success' : 'neutral'} />
                   <small className="text-muted">Started: {formatRelative(selectedConversation.started_at)}</small>
                   <small className="text-muted">Messages: {selectedConversation.message_count}</small>
                   <small className="text-muted">Trigger: {selectedConversation.trigger_type.replace(/_/g, ' ')}</small>
@@ -1475,7 +1801,7 @@ function AdminVisitorsPage() {
                         className="px-3 py-2 rounded"
                         style={{
                           maxWidth: '80%',
-                          backgroundColor: msg.role === 'visitor' ? '#e8f0fe' : msg.role === 'system' ? '#fff3cd' : '#f8f9fa',
+                          backgroundColor: msg.role === 'visitor' ? 'var(--status-info-bg)' : msg.role === 'system' ? 'var(--status-warning-bg)' : 'var(--surface-subtle)',
                           border: '1px solid var(--color-border)',
                           fontSize: '13px',
                         }}

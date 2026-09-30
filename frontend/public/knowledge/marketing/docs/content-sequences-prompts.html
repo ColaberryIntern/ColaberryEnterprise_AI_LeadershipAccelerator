@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Sequences (Prompt Engine) · Open House Marketing Hub</title>
+<link rel="icon" href="../assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../assets/hub.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><img src="../assets/logo/colaberry-horizontal.png" alt="Colaberry"></div>
+    <a class="nav home" href="../index.html"><span class="cb-i"><i class="ri-arrow-left-line"></i></span> Marketing Hub</a>
+    <div class="navsec">On this page</div>
+    <a class="nav" href="#how"><span class="cb-i"><i class="ri-flow-chart"></i></span> How it works</a>
+    <a class="nav" href="#system"><span class="cb-i"><i class="ri-shield-keyhole-line"></i></span> Shared system prompt</a>
+    <a class="nav" href="#beats"><span class="cb-i"><i class="ri-quill-pen-line"></i></span> Per-beat prompts</a>
+    <a class="nav" href="#segments"><span class="cb-i"><i class="ri-group-line"></i></span> Segment overlays</a>
+    <a class="nav" href="#tokens"><span class="cb-i"><i class="ri-braces-line"></i></span> Tokens &amp; rules</a>
+  </aside>
+  <main class="content">
+    <div class="hero ink">
+      <p class="crumbs"><a href="../index.html">Marketing Hub</a> / Content Sequences (Prompt Engine)</p>
+      <p class="eyebrow">How the engine generates posts</p>
+      <h1>Content Sequences (Prompt Engine)</h1>
+      <p>The prompts that drive the native campaign engine: one shared system prompt, five per-beat generation prompts, and three segment overlays. Posts are generated at send time and queued for human approval. Nothing auto-sends.</p>
+      <div class="meta"><span class="pill">Open House Jul 16</span><span class="pill">Founding Cohort</span></div>
+    </div>
+    <div class="actionbar">
+      <a class="btn btn-ghost" href="../../index.html"><span class="cb-i"><i class="ri-stack-line"></i></span> Knowledge Base</a> <a class="btn btn-ghost" href="../index.html"><span class="cb-i"><i class="ri-home-4-line"></i></span> Hub</a>
+      <div class="spacer"></div>
+      <a class="btn btn-ghost" href="content-sequences-prompts.html" download><span class="cb-i"><i class="ri-download-2-line"></i></span> Download this doc</a>
+      <a class="btn btn-primary" href="#" onclick="window.print();return false;"><span class="cb-i"><i class="ri-printer-line"></i></span> Print / PDF</a>
+    </div>
+    <div class="wrap">
+
+      <!-- ============ HOW IT WORKS ============ -->
+      <section class="section" id="how">
+        <h2>How it works</h2>
+        <p class="sub">The Accelerator runs a native, prompt-based campaign engine. Each segment campaign carries its own <code>ai_system_prompt</code>. Posts and emails are generated at send time from that system prompt plus the context of the current beat, then queued for a human to approve. There is no auto-send.</p>
+
+        <div class="diagram">
+          <div class="cap">Generation flow: rules in, draft out, human in the loop.</div>
+          <pre class="mermaid">
+flowchart LR
+  A["ai_system_prompt<br/>program facts, voice, rules"] --> G
+  B["Beat context<br/>theme, goal, subjects, CTA"] --> G
+  S["Segment overlay<br/>verbatim primary message"] --> G
+  G["Generated post<br/>at send time"] --> Q["Queued for approval"]
+  Q --> H{"Human reviews"}
+  H -->|"Approve"| P["Publish to channel"]
+  H -->|"Edit or reject"| G
+  P --> L["Registrations return as<br/>open_house_* leads"]
+</pre>
+        </div>
+
+        <div class="grid cols-3" style="margin-top:18px">
+          <div class="card accent-top">
+            <h3 class="h">Generated at send time</h3>
+            <p>The engine composes each post when the beat fires, not weeks ahead. The prompts below are the durable inputs. The copy is the disposable output.</p>
+          </div>
+          <div class="card accent-top">
+            <h3 class="h">Queued, never auto-sent</h3>
+            <p>Every draft lands in an approval queue. A person reviews voice, facts, and the one CTA before anything ships to LinkedIn, X, Instagram, or email.</p>
+          </div>
+          <div class="card accent-top">
+            <h3 class="h">Leads return clean</h3>
+            <p>Links use <code>env.openHouseLandingUrl</code> with UTM and <code>campaign_id</code>. Registrations come back through the OpenHouseModal to <code>/api/leads</code> as <code>open_house_*</code> leads.</p>
+          </div>
+        </div>
+
+        <div class="callout info" style="margin-top:18px">
+          <span class="cb-i"><i class="ri-information-line"></i></span>
+          <div>
+            <div class="ttl">Awareness mode</div>
+            <div class="body">Everything generated here is outbound awareness copy. Pricing is revealed at the Open House, so no price appears in any prompt, post, caption, subject line, or body. The system prompt enforces this as a hard rule.</div>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ============ SHARED SYSTEM PROMPT ============ -->
+      <section class="section" id="system">
+        <h2>A shared system prompt</h2>
+        <p class="sub">One system prompt sits under every beat and every segment. It encodes the non-negotiables: the program facts, the voice, the no-price rule, the no-em-dash rule, exactly one CTA to the Open House, and the <code>[reg link]</code> token. Paste it as the campaign's <code>ai_system_prompt</code>.</p>
+
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-shield-keyhole-line"></i></span> Shared system prompt (ai_system_prompt)</div>
+          <div class="copytext">You are the content generator for the AI Systems Architect Accelerator, powered by Anthropic and Claude Code, from Colaberry. Your job is to write short, warm, credible awareness copy that drives free registrations for the Open House.
+
+PROGRAM FACTS (use only these, never invent):
+- Public name: AI Systems Architect Accelerator, powered by Anthropic + Claude Code.
+- Positioning: Learn With Claude. Build Through Colaberry. Deploy In The Real World.
+- One-liner: a 12-week, implementation-focused program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder.
+- Journey: Weeks 1-3 Build Your AI Foundation. Weeks 4-6 Create Your AI Team. Weeks 7-9 Connect AI To The Real World. Weeks 10-12 Design AI That Scales.
+- Certification: Anthropic Architect certification.
+- Proof: 5,000+ careers since 2012. Warm, inclusive, proven since 2012.
+- Open House (free): Thursday, July 16, 2026. Founding Cohort kickoff: Thursday, July 23, 2026.
+- Founding seats: 40 total.
+
+HARD RULES:
+- Never state, hint at, or imply a price. Pricing is revealed at the Open House. No numbers, no ranges, no "affordable", no "free trial" of the paid program.
+- Never use an em-dash character. Use periods and commas.
+- No emoji anywhere.
+- Sentence case in body copy. Speak directly to "you". Lead with proof or insight, not hype.
+- Exactly one call to action per post, and it always drives to the free Open House.
+- Place the registration link as the literal token [reg link]. Do not write a URL.
+- If you need a time or timezone, use the literal token [time + TZ]. Do not guess.
+- Do not invent metrics, names, quotes, testimonials, or claims beyond the program facts above.
+
+OUTPUT:
+- Write for the channel you are told to target: LinkedIn (primary, alumni and working pros), X (punchy and short), Instagram (visual, carousel or stories), or email (the owned channel).
+- Keep one clear idea per post. End with the beat CTA, then [reg link].</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <div class="dodont" style="margin-top:18px">
+          <div class="col do">
+            <h4><span class="cb-i"><i class="ri-checkbox-circle-line"></i></span> The system prompt guarantees</h4>
+            <ul>
+              <li>No price ever leaks into awareness copy.</li>
+              <li>No em-dash characters, no emoji.</li>
+              <li>One CTA, always to the free Open House.</li>
+              <li>Links render as the <code>[reg link]</code> token for safe insertion.</li>
+            </ul>
+          </div>
+          <div class="col dont">
+            <h4><span class="cb-i"><i class="ri-close-circle-line"></i></span> What it blocks</h4>
+            <ul>
+              <li>Invented stats, names, quotes, or testimonials.</li>
+              <li>Multiple competing CTAs in one post.</li>
+              <li>Hard-coded URLs, times, or timezones.</li>
+              <li>Hype that runs ahead of the proof.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ============ PER-BEAT PROMPTS ============ -->
+      <section class="section" id="beats">
+        <h2>Per-beat generation prompts</h2>
+        <p class="sub">Each beat in the approved five-part sequence gets its own generation prompt. It rides on top of the shared system prompt and supplies the theme, the goal, the approved subject options as raw material, and the beat CTA. The approved subjects are inputs for the model to draw from, not lines to ship verbatim unless approved.</p>
+
+        <div class="stats" style="margin-bottom:18px">
+          <div class="stat info"><div class="n">5</div><div class="l">beats in the sequence</div></div>
+          <div class="stat good"><div class="n">1</div><div class="l">CTA per post</div></div>
+          <div class="stat"><div class="n">Jul 16</div><div class="l">all roads lead here</div></div>
+        </div>
+
+        <!-- BEAT 1 -->
+        <h3 class="h"><span class="badge info">Beat 1</span> The shift is already happening</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-quill-pen-line"></i></span> Beat 1 generation prompt</div>
+          <div class="copytext">BEAT 1 of 5. Theme: The shift is already happening.
+Goal: Open the sequence by reframing AI as a building skill, not a usage habit. Create urgency around the gap between people who use AI and people who build with it.
+
+Use these approved subject lines as raw material for the hook. Pull the angle and the framing, adapt for the channel:
+- AI Isn't Replacing People. It's Replacing People Who Don't Know How To Build With It.
+- The Biggest Career Opportunity In AI Isn't What You Think.
+- Most People Use AI. Very Few Build With It.
+
+Write one short post for the channel you are targeting. Lead with the insight. Make the reader feel the shift is current and personal. Reference the free Open House on Thursday, July 16, 2026 as the next step.
+CTA: Reserve Your Free Seat.
+End with the CTA, then [reg link].</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <!-- BEAT 2 -->
+        <h3 class="h"><span class="badge info">Beat 2</span> From AI user to AI builder</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-quill-pen-line"></i></span> Beat 2 generation prompt</div>
+          <div class="copytext">BEAT 2 of 5. Theme: From AI user to AI builder.
+Goal: Draw the line between using AI and building real AI systems. Show that prompting alone is not enough, and that there is a path from idea to working system.
+
+Use these approved subject lines as raw material for the hook:
+- What If You Could Turn Your Idea Into A Real AI System?
+- The Difference Between AI Users And AI Builders.
+- Why Prompts Are No Longer Enough.
+
+Write one short post for the channel you are targeting. Speak to the reader's ambition. You may reference the 12-week, implementation-focused journey at a high level without listing every phase. Point to the free Open House on Thursday, July 16, 2026 as where they see the path.
+CTA: Register For The Open House.
+End with the CTA, then [reg link].</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <!-- BEAT 3 -->
+        <h3 class="h"><span class="badge info">Beat 3</span> See what you'll build</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-quill-pen-line"></i></span> Beat 3 generation prompt</div>
+          <div class="copytext">BEAT 3 of 5. Theme: See what you'll build.
+Goal: Make the outcome concrete. Show what happens across the 12 weeks and that learners arrive with an idea and leave with a working AI system. This beat works well as an Instagram carousel or a structured LinkedIn post.
+
+Use these approved subject lines as raw material for the hook:
+- What Happens During The 12 Weeks?
+- Bring Your Idea. Leave With A Working AI System.
+- Inside The AI Systems Architect Accelerator.
+
+You may reference the four phases by name: Build Your AI Foundation, Create Your AI Team, Connect AI To The Real World, Design AI That Scales. You may reference the Anthropic Architect certification. Keep it concrete and visual. Drive to the free Open House on Thursday, July 16, 2026 to see the full build.
+CTA: Reserve Your Seat.
+End with the CTA, then [reg link].</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <!-- BEAT 4 -->
+        <h3 class="h"><span class="badge info">Beat 4</span> Meet the founding cohort</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-quill-pen-line"></i></span> Beat 4 generation prompt</div>
+          <div class="copytext">BEAT 4 of 5. Theme: Meet the founding cohort.
+Goal: Introduce the Founding Cohort as a limited, invitational opportunity. Build scarcity honestly around the seat cap. Do not mention price. Pricing is revealed at the Open House.
+
+Use these approved subject lines as raw material for the hook:
+- Founding Cohort Enrollment Opens Soon.
+- Only 40 Seats Available.
+- This Is Your Invitation To Build.
+
+Write one short post for the channel you are targeting. You may state that there are 40 founding seats. Frame it as a chance to be among the first builders. The Founding Cohort kicks off Thursday, July 23, 2026, one week after the Open House. Drive readers to register for the free Open House first.
+CTA: Register Before Seats Fill.
+End with the CTA, then [reg link].</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <!-- BEAT 5 -->
+        <h3 class="h"><span class="badge info">Beat 5</span> Final reminder</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-quill-pen-line"></i></span> Beat 5 generation prompt</div>
+          <div class="copytext">BEAT 5 of 5. Theme: Final reminder.
+Goal: Close the sequence with a warm, low-friction nudge on the day of the event. Short and direct. Reduce the cost of saying yes.
+
+Use these approved subject lines as raw material for the hook:
+- We're Live Tomorrow.
+- Last Chance To Join Us.
+- Your Open House Starts Tomorrow.
+
+Write one short post for the channel you are targeting. Keep it brief and friendly. The free Open House is Thursday, July 16, 2026. If you need a start time, use the token [time + TZ]. Make it easy to act now.
+CTA: Add To Calendar.
+End with the CTA, then [reg link].</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <div class="callout success" style="margin-top:18px">
+          <span class="cb-i"><i class="ri-calendar-check-line"></i></span>
+          <div>
+            <div class="ttl">Suggested cadence (all pre-Open-House)</div>
+            <div class="body">Beat 1 on Jul 7, Beat 2 on Jul 9, Beat 3 carousel on Jul 13, Beat 4 with the 40-seat angle on Jul 15, Beat 5 plus live-today on Jul 16. Optional teaser on Jul 2. Adjustable. See the calendar doc for the channel map.</div>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ============ SEGMENT OVERLAYS ============ -->
+      <section class="section" id="segments">
+        <h2>Segment overlay prompts</h2>
+        <p class="sub">Three overlays adjust the framing for each audience by injecting the approved primary message verbatim. On organic social these are content angles for broadcast. They become true audience segments only for paid and retargeting. Each overlay stacks on the shared system prompt plus any beat prompt.</p>
+
+        <div class="grid cols-3" style="margin-bottom:18px">
+          <div class="card"><span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span><p style="margin-top:10px">Primary channel for alumni and working pros.</p></div>
+          <div class="card"><span class="chchip ch-x"><i class="ri-twitter-x-fill"></i> X</span><p style="margin-top:10px">Punchy and short. Cut to the angle.</p></div>
+          <div class="card"><span class="chchip ch-ig"><i class="ri-instagram-fill"></i> Instagram</span><p style="margin-top:10px">Visual. Carousel and stories.</p></div>
+        </div>
+
+        <!-- ALUMNI -->
+        <h3 class="h"><span class="badge neutral">Overlay</span> Alumni</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-graduation-cap-line"></i></span> Alumni overlay prompt</div>
+          <div class="copytext">SEGMENT OVERLAY: Alumni.
+Audience: people who already studied with Colaberry. They have invested in their growth and trust the brand.
+Tone: proud, forward-looking, peer to peer. Acknowledge what they have already built before pointing to what is next.
+
+Inject this approved primary message verbatim as the spine of the post:
+"You've already invested in your future. Now learn how to build with AI."
+
+Keep all shared rules. No price. No em-dash. One CTA to the free Open House. Use [reg link] for the link.</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <!-- DROPOUTS -->
+        <h3 class="h"><span class="badge neutral">Overlay</span> Dropouts</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-restart-line"></i></span> Dropouts overlay prompt</div>
+          <div class="copytext">SEGMENT OVERLAY: Dropouts.
+Audience: people who started a journey with Colaberry but did not finish. Be warm and non-judgmental. Open a door, do not reopen a wound.
+Tone: encouraging, fresh-start, low pressure. Frame this as a new opportunity built for today's AI economy.
+
+Inject this approved primary message verbatim as the spine of the post:
+"Your journey doesn't have to end here. Here's a new opportunity built for today's AI economy."
+
+Keep all shared rules. No price. No em-dash. One CTA to the free Open House. Use [reg link] for the link.</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <!-- PROSPECTS -->
+        <h3 class="h"><span class="badge neutral">Overlay</span> Prospects</h3>
+        <div class="copyblock prompt">
+          <div class="label"><span class="cb-i"><i class="ri-user-search-line"></i></span> Prospects overlay prompt</div>
+          <div class="copytext">SEGMENT OVERLAY: Prospects.
+Audience: people new to Colaberry who are curious about AI but have not enrolled in anything. They use AI but do not yet build with it.
+Tone: insightful, inviting, credible. Lead with the gap between consuming AI and building with it, then offer a clear next step.
+
+Inject this approved primary message verbatim as the spine of the post:
+"Most people are consuming AI. Very few are learning how to build with it."
+
+Keep all shared rules. No price. No em-dash. One CTA to the free Open House. Use [reg link] for the link.</div>
+          <button class="copy-btn">Copy</button>
+        </div>
+
+        <div class="callout warn" style="margin-top:18px">
+          <span class="cb-i"><i class="ri-error-warning-line"></i></span>
+          <div>
+            <div class="ttl">Organic vs paid</div>
+            <div class="body">On organic social, treat these three as content angles broadcast to everyone. They become real targeted segments only for paid and retargeting, where the segment is known.</div>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ============ TOKENS & RULES ============ -->
+      <section class="section" id="tokens">
+        <h2>Tokens and rules at a glance</h2>
+        <p class="sub">The engine leaves these as literal tokens until a human inserts the approved value. Never guess. Never hard-code.</p>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>Token</th><th>Meaning</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>[reg link]</code></td><td>Open House registration URL. Built from <code>env.openHouseLandingUrl</code> with UTM and <code>campaign_id</code>.</td><td class="cell-info">From BC 9946499609</td></tr>
+              <tr><td><code>[time + TZ]</code></td><td>Exact Open House start time and timezone.</td><td class="cell-warn">Needs approval</td></tr>
+              <tr><td>Price</td><td>Any cost, rate, range, or discount.</td><td class="cell-bad">Never in awareness copy</td></tr>
+              <tr><td>Em-dash</td><td>The long dash character.</td><td class="cell-bad">Blocked. Use periods and commas</td></tr>
+              <tr><td>Seat count</td><td>Founding seat cap.</td><td class="cell-good">40 (approved)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:18px">
+          <div class="callout approval">
+            <span class="cb-i"><i class="ri-draft-line"></i></span>
+            <div>
+              <div class="ttl">Needs approval before send</div>
+              <div class="body">The exact start time and timezone for <code>[time + TZ]</code>, and the final registration URL for <code>[reg link]</code>. Both stay as tokens until confirmed.</div>
+            </div>
+          </div>
+          <div class="callout danger">
+            <span class="cb-i"><i class="ri-price-tag-3-line"></i></span>
+            <div>
+              <div class="ttl">No price anywhere</div>
+              <div class="body">Pricing is revealed at the Open House. Keep it out of every generated post, caption, subject, and body. This rule lives in the system prompt and is enforced at review.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="foot">
+        Content Sequences (Prompt Engine). Grounded in the approved strategy (Basecamp 9946499631) and Ali-confirmed facts (2026-06-25). Draft only. Awareness mode: no price anywhere. Registration link and Open House time remain tokens pending approval.
+      </div>
+    </div>
+  </main>
+</div>
+<script src="../assets/hub.js"></script>
+</body>
+</html>

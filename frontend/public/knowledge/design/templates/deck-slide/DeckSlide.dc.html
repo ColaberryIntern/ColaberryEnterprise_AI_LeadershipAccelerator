@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Deck · Deck Slide" description="16:9 presentation slides — cherry title slide + content slide with chart, on-brand and PPTX-ready." -->
+<helmet>
+<script src="./ds-base.js"></script>
+</helmet>
+<div style="background:var(--surface-subtle);min-height:100vh;padding:32px;font-family:var(--font-body);display:flex;flex-direction:column;gap:28px;align-items:center">
+
+  <!-- Title slide -->
+  <div data-export="colaberry-slide-title" data-export-w="1920" style="width:960px;max-width:100%;aspect-ratio:16/9;border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);background:linear-gradient(135deg,var(--red-500),var(--red-700));color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:56px 60px">
+    <img src="../../assets/logo/colaberry-horizontal-white.png" alt="Colaberry" style="height:34px;align-self:flex-start">
+    <h1 style="font-family:var(--font-display);font-weight:900;font-size:clamp(34px,5vw,60px);line-height:1.03;letter-spacing:-.02em;margin:0;max-width:18ch;text-wrap:balance">Future-proof your career in data &amp; AI</h1>
+    <div style="display:flex;gap:28px;font-size:16px;opacity:.85"><span>Investor Briefing</span><span>Q2 2026</span></div>
+  </div>
+
+  <!-- Content slide -->
+  <div data-export="colaberry-slide-content" data-export-w="1920" style="width:960px;max-width:100%;aspect-ratio:16/9;border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);background:var(--surface-card);border:1px solid var(--border-subtle);display:flex;flex-direction:column;padding:48px 60px">
+    <span style="font-family:var(--font-mono);font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--red-500)">Outcomes</span>
+    <h2 style="font-family:var(--font-display);font-weight:900;font-size:clamp(26px,3.4vw,40px);color:var(--text-strong);margin:6px 0 28px;letter-spacing:-.02em">Graduates placed, year over year</h2>
+    <div style="flex:1;display:flex;align-items:flex-end;gap:26px;padding-bottom:24px">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><div style="width:100%;height:52%;background:var(--chart-1);border-radius:var(--radius-sm) var(--radius-sm) 0 0"></div><span style="font-size:14px;color:var(--text-muted)">2023</span></div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><div style="width:100%;height:68%;background:var(--chart-3);border-radius:var(--radius-sm) var(--radius-sm) 0 0"></div><span style="font-size:14px;color:var(--text-muted)">2024</span></div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><div style="width:100%;height:84%;background:var(--chart-2);border-radius:var(--radius-sm) var(--radius-sm) 0 0"></div><span style="font-size:14px;color:var(--text-muted)">2025</span></div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><div style="width:100%;height:97%;background:var(--chart-4);border-radius:var(--radius-sm) var(--radius-sm) 0 0"></div><span style="font-size:14px;color:var(--text-muted)">2026</span></div>
+    </div>
+    <p style="font-size:15px;color:var(--text-muted);margin:0;border-top:1px solid var(--border-subtle);padding-top:16px">5,000+ careers changed · 49 countries served</p>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

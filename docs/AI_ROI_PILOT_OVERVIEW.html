@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI ROI Pilot — Launch Control</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --navy:#1a365d; --navy2:#2b6cb0; --ink:#1a202c; --muted:#5a6b80; --line:#e2e8f0;
+    --bg:#f5f7fa; --card:#ffffff; --accent:#2b6cb0;
+    --done:#2f855a; --done-bg:#f0fff4; --done-line:#9ae6b4;
+    --wait:#b7791f; --wait-bg:#fffaf0; --wait-line:#fbd38d;
+    --block:#c53030; --block-bg:#fff5f5; --block-line:#feb2b2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px 80px}
+  header.hero{background:linear-gradient(135deg,#0f1f3a 0%,var(--navy) 55%,#234e86 100%);color:#fff;padding:48px 0 40px;margin-bottom:8px}
+  header.hero .wrap{padding-bottom:0}
+  .kicker{letter-spacing:.16em;text-transform:uppercase;font-size:12px;font-weight:700;color:#90cdf4;margin:0 0 10px}
+  h1{font-size:34px;margin:0 0 8px;font-weight:800}
+  .sub{font-size:17px;color:#cbd8e8;max-width:760px;margin:0}
+  .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  .chip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);padding:6px 12px;border-radius:999px;font-size:13px}
+  .chip b{color:#90cdf4}
+  section{margin:38px 0 0}
+  h2{font-size:22px;margin:0 0 4px;color:var(--navy)}
+  .lead{color:var(--muted);margin:0 0 18px;font-size:15px}
+  .grid{display:grid;gap:16px}
+  .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:880px){.g3,.g2,.g4{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 18px;box-shadow:0 1px 3px rgba(16,42,76,.06)}
+  .status{border-left:5px solid var(--line)}
+  .status.done{border-left-color:var(--done)} .status.wait{border-left-color:var(--wait)} .status.block{border-left-color:var(--block)}
+  .pill{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;margin-bottom:8px}
+  .pill.done{background:var(--done-bg);color:var(--done);border:1px solid var(--done-line)}
+  .pill.wait{background:var(--wait-bg);color:var(--wait);border:1px solid var(--wait-line)}
+  .pill.block{background:var(--block-bg);color:var(--block);border:1px solid var(--block-line)}
+  .card h3{margin:0 0 6px;font-size:16px}
+  .card p{margin:0 0 8px;font-size:14px;color:#3a4658}
+  .next{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding-top:8px;margin-top:6px}
+  .next b{color:var(--navy)}
+  .diagram{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;overflow-x:auto}
+  .offer{display:flex;gap:22px;flex-wrap:wrap;align-items:stretch}
+  .price{background:linear-gradient(135deg,var(--navy),#234e86);color:#fff;border-radius:14px;padding:24px;min-width:240px;flex:1}
+  .price .big{font-size:40px;font-weight:800;line-height:1}
+  .price .small{color:#bcd2ec;font-size:14px;margin-top:6px}
+  .ladder{flex:2;min-width:280px}
+  .ladder .card{margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#eef3f9;color:var(--navy);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  tr:last-child td{border-bottom:none}
+  .day{font-weight:800;color:var(--navy2);white-space:nowrap}
+  .goal{color:var(--muted)}
+  .timeline{position:relative;margin-left:8px;padding-left:26px;border-left:3px solid var(--line)}
+  .tl{position:relative;margin-bottom:16px}
+  .tl::before{content:'';position:absolute;left:-34px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 0 0 2px var(--accent)}
+  .tl .t{font-weight:800;color:var(--navy)}
+  .tl .d{color:#3a4658;font-size:14px}
+  .todo{background:var(--wait-bg);border:1px solid var(--wait-line);border-radius:12px;padding:6px 0}
+  .todo .row{display:flex;gap:12px;padding:12px 18px;border-bottom:1px solid #fbe7c2;align-items:flex-start}
+  .todo .row:last-child{border-bottom:none}
+  .num{flex:0 0 26px;height:26px;border-radius:50%;background:var(--wait);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .todo .row b{color:var(--navy)}
+  a.btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;font-weight:700;font-size:14px}
+  .links{display:flex;gap:10px;flex-wrap:wrap}
+  .links a{display:inline-block;background:#fff;border:1px solid var(--line);color:var(--navy2);text-decoration:none;padding:9px 14px;border-radius:8px;font-weight:600;font-size:14px}
+  .foot{margin-top:46px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid var(--line);padding-top:18px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:50%}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Colaberry AI &middot; Launch Control</p>
+    <h1>AI ROI Pilot — everything in motion for Monday</h1>
+    <p class="sub">A productized way to win small-business CEOs: a low-risk 6-week pilot that proves value first, then converts into a flexible deal. Templated from the LandJet build. This page is the single view of every piece being put in place.</p>
+    <div class="meta">
+      <span class="chip">Prepared <b>Sat 2026-06-20</b></span>
+      <span class="chip">Go-live <b>Mon 2026-06-22</b></span>
+      <span class="chip">First batch <b>100 leads, staggered</b></span>
+      <span class="chip">Sequence <b>7 emails</b></span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- STATUS BOARD -->
+  <section>
+    <h2>Status board</h2>
+    <p class="lead">Every component, color-coded. Green = built/verified, amber = staged or waiting on you, red = blocked.</p>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--done)"></span> Done</span>
+      <span><span class="dot" style="background:var(--wait)"></span> Staged / needs you</span>
+      <span><span class="dot" style="background:var(--block)"></span> Blocked</span>
+    </div>
+    <div class="grid g3" style="margin-top:14px">
+
+      <div class="card status done">
+        <span class="pill done">Done</span>
+        <h3>Strategy &amp; offer</h3>
+        <p>The full GTM thesis, the $2,500 pilot, the continuation ladder, ICP, funnel, and 30/60/90.</p>
+        <div class="next"><b>Artifact:</b> AI_ROI_PILOT_GTM_STRATEGY.md</div>
+      </div>
+
+      <div class="card status done">
+        <span class="pill done">Done</span>
+        <h3>Apollo targeting</h3>
+        <p>Ran live on prod. Pulled 50 verified-email SMB CEOs (test batch). Query tightened to ops-heavy verticals and scaling to 100 for Monday.</p>
+        <div class="next"><b>Next:</b> re-pull 100 tightened on your go</div>
+      </div>
+
+      <div class="card status done">
+        <span class="pill done">Done</span>
+        <h3>7-email campaign</h3>
+        <p>Seven-touch sequence written, each designed to earn a reply so we can build their application. Sender script built.</p>
+        <div class="next"><b>Artifact:</b> AI_ROI_PILOT_EMAIL_SEQUENCE.md</div>
+      </div>
+
+      <div class="card status wait">
+        <span class="pill wait">Staged</span>
+        <h3>Landing page <code>/ai-pilot</code></h3>
+        <p>Built and in PR #49. CEO-focused, dark, with lead capture into the CRM. A live editable preview is open for your review.</p>
+        <div class="next"><b>Needs you:</b> merge PR #49, then it deploys</div>
+      </div>
+
+      <div class="card status wait">
+        <span class="pill wait">Staged</span>
+        <h3>Cold-email sender</h3>
+        <p>100 leads, staggered across the business day via Mandrill scheduled sends. Idempotent, capped, CAN-SPAM + em-dash guards.</p>
+        <div class="next"><b>Needs you:</b> mailing address + "go"</div>
+      </div>
+
+      <div class="card status done">
+        <span class="pill done">Done</span>
+        <h3>CRM capture</h3>
+        <p>Inbound landing-page leads flow straight into the existing leads pipeline (source <code>ai-pilot</code>) with scoring and stages.</p>
+        <div class="next"><b>Live</b> via /api/leads</div>
+      </div>
+
+      <div class="card status block">
+        <span class="pill block">Blocked</span>
+        <h3>Basecamp tracking ticket</h3>
+        <p>Script is built and ran clean, but the account Basecamp token is expired (rekeyed). A one-shot re-auth runbook is in your Downloads.</p>
+        <div class="next"><b>Needs you:</b> run basecamp-reauth-oneshot.sh</div>
+      </div>
+
+      <div class="card status wait">
+        <span class="pill wait">Staged</span>
+        <h3>Deploy</h3>
+        <p>Merging PR #49 to main and rebuilding the nginx image puts the landing page live at enterprise.colaberry.ai/ai-pilot.</p>
+        <div class="next"><b>Needs you:</b> approve merge + deploy</div>
+      </div>
+
+      <div class="card status done">
+        <span class="pill done">Done</span>
+        <h3>Review list</h3>
+        <p>The best 18 ops-heavy operators (closest to LandJet) curated from the test pull. CSV saved to your Downloads.</p>
+        <div class="next"><b>Artifact:</b> ai-pilot-leads-2026-06-20.csv</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PIPELINE DIAGRAM -->
+  <section>
+    <h2>How it all connects</h2>
+    <p class="lead">From cold list to a signed pilot to a flexible long-term deal.</p>
+    <div class="diagram">
+      <pre class="mermaid">
+flowchart LR
+  A["Apollo pull<br/>100 SMB CEOs<br/>ops-heavy"]:::src --> C["7-email campaign<br/>staggered across day"]:::act
+  A --> B["/ai-pilot landing page/"]:::act
+  C --> D{"Reply or<br/>fit call?"}:::dec
+  B --> D
+  D -- yes --> E["20-min fit call"]:::act
+  E --> F["$2,500<br/>6-week pilot"]:::win
+  F --> G["Real ROI win<br/>we build their app"]:::win
+  G --> H["Continuation:<br/>retainer / rev-share / per-outcome"]:::goal
+  D -- no --> I["Nurture / re-touch later"]:::src
+  classDef src fill:#edf2f7,stroke:#a0aec0,color:#1a202c;
+  classDef act fill:#e6f0fb,stroke:#2b6cb0,color:#1a365d;
+  classDef dec fill:#fffaf0,stroke:#b7791f,color:#744210;
+  classDef win fill:#f0fff4,stroke:#2f855a,color:#22543d;
+  classDef goal fill:#1a365d,stroke:#1a365d,color:#ffffff;
+      </pre>
+    </div>
+  </section>
+
+  <!-- OFFER -->
+  <section>
+    <h2>The offer</h2>
+    <p class="lead">Low barrier in, flexible upside out. The pilot is the foot in the door; the deal that follows is the business.</p>
+    <div class="offer">
+      <div class="price">
+        <div class="big">$2,500</div>
+        <div class="small">6-week AI ROI Pilot. 100% credited toward whatever we build next. One real working system, not slideware.</div>
+      </div>
+      <div class="ladder">
+        <div class="card"><b>Monthly retainer</b> &mdash; predictable fee to keep building and running. Best when they have a backlog of ideas.</div>
+        <div class="card"><b>Revenue share</b> &mdash; lower fixed fee plus a share of revenue the system generates. The structure Percy asked for.</div>
+        <div class="card"><b>Pay per outcome</b> &mdash; a set fee per result, e.g. each new booked client. Pure performance.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 EMAIL CAMPAIGN -->
+  <section>
+    <h2>The 7-email campaign</h2>
+    <p class="lead">Each touch has one job: earn a reply so we can scope and build their AI application. Plain text, personalized, sent from ali@colaberry.com. Anyone who replies is pulled out of the sequence immediately.</p>
+    <table>
+      <thead><tr><th>When</th><th>Touch</th><th>Goal</th></tr></thead>
+      <tbody>
+        <tr><td class="day">Day 0</td><td>The idea</td><td class="goal">Open with a specific AI idea + the $2,500 pilot. Ask for a reply.</td></tr>
+        <tr><td class="day">Day 2</td><td>Proof</td><td class="goal">The LandJet-style result. Show this is real software, not a pitch.</td></tr>
+        <tr><td class="day">Day 5</td><td>Their build</td><td class="goal">Two or three things we would build for a company like theirs.</td></tr>
+        <tr><td class="day">Day 8</td><td>De-risk</td><td class="goal">Why it is only $2,500, credited forward, no retainer until it works.</td></tr>
+        <tr><td class="day">Day 12</td><td>Scarcity</td><td class="goal">Limited pilot slots this cycle. Light urgency, honest.</td></tr>
+        <tr><td class="day">Day 16</td><td>Make it easy</td><td class="goal">Direct ask + calendar link. One click to a 20-minute call.</td></tr>
+        <tr><td class="day">Day 21</td><td>Break-up</td><td class="goal">"Should I close this out?" The reply-or-release nudge.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- MONDAY -->
+  <section>
+    <h2>What to expect Monday</h2>
+    <p class="lead">100 leads, staggered across the business day so sends look human and protect deliverability. Nothing fires until you approve the batch and confirm the mailing address.</p>
+    <div class="timeline">
+      <div class="tl"><div class="t">Sun night / Mon AM</div><div class="d">I re-pull 100 tightened ops-heavy CEOs and hand you the final review CSV. You confirm the mailing address.</div></div>
+      <div class="tl"><div class="t">You approve batch 1</div><div class="d">One "go" and the landing page is live (PR #49 merged + deployed) and Touch 1 is queued.</div></div>
+      <div class="tl"><div class="t">~9:00am to ~5:00pm CT</div><div class="d">Touch 1 delivers to all 100, staggered via Mandrill scheduled sends (roughly one every 4-5 minutes), so it never looks like a blast.</div></div>
+      <div class="tl"><div class="t">Throughout the day</div><div class="d">Replies land in your inbox and on the landing page. Repliers drop out of the sequence; the rest roll into Touch 2 on Wednesday.</div></div>
+      <div class="tl"><div class="t">Next 3 weeks</div><div class="d">The 7-touch sequence runs automatically. Your only job becomes taking fit calls and signing pilots.</div></div>
+    </div>
+  </section>
+
+  <!-- NEEDS YOU -->
+  <section>
+    <h2>What I need from you</h2>
+    <p class="lead">Four small unlocks. Items 1 and 2 are all that stand between here and Monday's send.</p>
+    <div class="todo">
+      <div class="row"><div class="num">1</div><div><b>Merge PR #49</b> (or say "admin-merge #49 and deploy"). Puts the landing page live.</div></div>
+      <div class="row"><div class="num">2</div><div><b>Mailing address</b> for the CAN-SPAM footer. The sender refuses to go live without a real one.</div></div>
+      <div class="row"><div class="num">3</div><div><b>List call:</b> "all" the tightened 100, or a curated subset. I recommend the tightened 100 ops-heavy operators.</div></div>
+      <div class="row"><div class="num">4</div><div><b>Basecamp token</b> (optional, internal tracking only): run <b>basecamp-reauth-oneshot.sh</b> from your Downloads, then I create the tracking ticket.</div></div>
+    </div>
+  </section>
+
+  <!-- LINKS -->
+  <section>
+    <h2>Everything in one place</h2>
+    <div class="links">
+      <a href="./AI_ROI_PILOT_LANDING_PREVIEW.html">Open landing-page preview</a>
+      <a href="./AI_ROI_PILOT_GTM_STRATEGY.md">Strategy doc</a>
+      <a href="./AI_ROI_PILOT_EMAIL_SEQUENCE.md">7-email copy</a>
+      <a href="https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/49">PR #49</a>
+    </div>
+  </section>
+
+  <div class="foot">
+    Colaberry AI &middot; AI ROI Pilot launch control &middot; generated 2026-06-20 (session CC-20260620-r7x2). Status reflects work completed at generation time.
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'base', securityLevel: 'loose',
+    themeVariables: { fontFamily: "Segoe UI, system-ui, sans-serif", fontSize: '14px' } });
+</script>
+</body>
+</html>

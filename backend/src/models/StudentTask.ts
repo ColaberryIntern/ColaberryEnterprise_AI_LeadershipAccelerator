@@ -1,0 +1,209 @@
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../config/database';
+
+export type StudentTaskStatus = 'not_started' | 'in_progress' | 'complete' | 'blocked';
+
+export interface StudentTaskAttributes {
+  id?: string;
+  task_list_id: string;
+  project_id: string;
+  requirement_map_id?: string | null;
+  requirement_key?: string | null;
+  title: string;
+  description?: string | null;
+  status?: StudentTaskStatus;
+  position?: number;
+  // Unified story-driven fields (all nullable) — merges the Story-Driven Build
+  // engine's task shape into this one canonical model. Requirement-based tasks
+  // (Kes's ProjectDnaWizard path) leave these null; story/engine-based tasks
+  // leave requirement_key null and carry these instead.
+  story_id?: string | null;
+  narrative?: string | null;
+  owner_agent?: string | null;
+  acceptance?: any;
+  build?: string | null;
+  vibe?: string | null;
+  trust?: string | null;
+  execution_mode?: string | null;
+  fulfills?: any;
+  release_key?: string | null;
+  blocked_by?: string[] | null;   // story_ids this task waits on (walking-skeleton release gate)
+  /** Derived at publish from the cohort window and the plan's release weeks. */
+  due_on?: Date | string | null;
+  /** The FIRST due date this task ever had. Written once, never updated. */
+  due_baseline_on?: Date | string | null;
+  /**
+   * When the platform CONFIRMED this story is done — not when the student said
+   * so (that is `status`). Points will be gated on this being set, so it must
+   * never be writable as a side effect of a student updating their own task.
+   */
+  verified_at?: Date | string | null;
+  /** Who or what confirmed it: a reviewer's identity, or the check that passed. */
+  verified_by?: string | null;
+  /**
+   * The evidence commit sha, FROZEN at award time. Write-once, like
+   * `verified_at` beside it, and for the same reason: `evidence_records` keys
+   * an award on `<story_id>@<this sha>`, so it is the only durable way to find
+   * what a story was actually awarded once the student rewrites their history.
+   */
+  verified_ref?: string | null;
+  /**
+   * The LATEST verification verdict for this story, refreshed on every sync:
+   * state (not_started / in_progress / submitted / verified), which acceptance
+   * criteria are still outstanding, the evidence commit, and why it is not
+   * verified yet.
+   *
+   * A MUTABLE VIEW, not the record. `verified_at` above is the record. This
+   * field is a snapshot of the last repo read and is allowed to change, because
+   * "3 of 4 criteria, waiting on a commit" is a live answer a student needs
+   * now. It is NOT allowed to lower a story below `verified` — see
+   * `applyVerificationLatch` in sbp/verification/verificationLatch.ts, which
+   * every read and every write of this field goes through. Shape:
+   * StoryVerificationRecord in sbp/verification.
+   */
+  verification_json?: unknown;
+  // ── AI Project Factory attributes (nullable, additive; db/ensureFactoryTaskSchema.ts) ──
+  // The typed executor CLASS (owner_agent stays the agent's name); the accountable human; and
+  // the attributes a human-or-AI allocation is decided against. Null until the factory sets them.
+  // `any` on the JSONB columns (required_skills, source_evidence) follows this model's own
+  // convention (acceptance, fulfills): their shape is the typed factoryContract (skill-id and
+  // block-id string[]), enforced by factoryValidate() at the service boundary, not the ORM type.
+  executor_type?: string | null;
+  accountable_identity_id?: string | null;
+  required_skills?: any;
+  judgment_level?: string | null;
+  decision_authority?: string | null;
+  data_sensitivity?: string | null;
+  interaction_pattern?: string | null;
+  frequency?: string | null;
+  factory_confidence?: number | null;
+  source_evidence?: any;
+  decomposition_method?: string | null;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAttributes {
+  declare id: string;
+  declare task_list_id: string;
+  declare project_id: string;
+  declare requirement_map_id: string | null;
+  declare requirement_key: string;
+  declare title: string;
+  declare description: string | null;
+  declare status: StudentTaskStatus;
+  declare position: number;
+  declare story_id: string | null;
+  declare narrative: string | null;
+  declare owner_agent: string | null;
+  declare acceptance: any;
+  declare build: string | null;
+  declare vibe: string | null;
+  declare trust: string | null;
+  declare execution_mode: string | null;
+  declare fulfills: any;
+  declare release_key: string | null;
+  declare blocked_by: string[] | null;
+  declare due_on: Date | string | null;
+  declare due_baseline_on: Date | string | null;
+  declare verified_at: Date | string | null;
+  declare verified_by: string | null;
+  declare verified_ref: string | null;
+  declare verification_json: unknown;
+  declare executor_type: string | null;
+  declare accountable_identity_id: string | null;
+  declare required_skills: any;
+  declare judgment_level: string | null;
+  declare decision_authority: string | null;
+  declare data_sensitivity: string | null;
+  declare interaction_pattern: string | null;
+  declare frequency: string | null;
+  declare factory_confidence: number | null;
+  declare source_evidence: any;
+  declare decomposition_method: string | null;
+  declare created_at: Date;
+  declare updated_at: Date;
+}
+
+StudentTask.init(
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    task_list_id: { type: DataTypes.UUID, allowNull: false, references: { model: 'student_task_lists', key: 'id' } },
+    project_id: { type: DataTypes.UUID, allowNull: false, references: { model: 'projects', key: 'id' } },
+    requirement_map_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'requirements_maps', key: 'id' } },
+    // Nullable in the unified model: story/engine-based tasks have no requirement_key.
+    requirement_key: { type: DataTypes.STRING(255), allowNull: true },
+    title: { type: DataTypes.STRING(500), allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
+    status: {
+      type: DataTypes.ENUM('not_started', 'in_progress', 'complete', 'blocked'),
+      allowNull: false,
+      defaultValue: 'not_started',
+    },
+    position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // ── Unified story-driven fields (nullable) ──
+    story_id: { type: DataTypes.STRING(60), allowNull: true },
+    narrative: { type: DataTypes.TEXT, allowNull: true },
+    owner_agent: { type: DataTypes.STRING(120), allowNull: true },
+    acceptance: { type: DataTypes.JSONB, allowNull: true },
+    build: { type: DataTypes.TEXT, allowNull: true },
+    vibe: { type: DataTypes.TEXT, allowNull: true },
+    trust: { type: DataTypes.TEXT, allowNull: true },
+    execution_mode: { type: DataTypes.STRING(30), allowNull: true },
+    fulfills: { type: DataTypes.JSONB, allowNull: true },
+    release_key: { type: DataTypes.STRING(60), allowNull: true },
+    blocked_by: { type: DataTypes.JSONB, allowNull: true },
+    // Without these two declared here, Sequelize silently DROPS them on write:
+    // the columns exist, the values are computed, and every task still lands
+    // with a null date. Found end-to-end on a real account, not in a test.
+    due_on: { type: DataTypes.DATEONLY, allowNull: true },
+    due_baseline_on: { type: DataTypes.DATEONLY, allowNull: true },
+    // Same reason as the two dates above, and the reason is worth repeating
+    // because it costs a whole feature every time it is forgotten: an attribute
+    // absent from this init block is stripped from the INSERT/UPDATE by
+    // Sequelize before the query is built. No error, no warning, column stays
+    // null. DATE (not DATEONLY) — this is an instant a verification happened,
+    // not a calendar day, and it is stored as TIMESTAMPTZ.
+    verified_at: { type: DataTypes.DATE, allowNull: true },
+    verified_by: { type: DataTypes.TEXT, allowNull: true },
+    verified_ref: { type: DataTypes.TEXT, allowNull: true },
+    // Same warning as the four above: omit it here and Sequelize strips it from
+    // the UPDATE without a word, and every story renders as "not started"
+    // forever while the loop reports success.
+    verification_json: { type: DataTypes.JSONB, allowNull: true },
+    // ── AI Project Factory attributes (nullable, additive). Declared here for the same
+    // reason as the fields above: an attribute absent from init is silently stripped from
+    // INSERT/UPDATE, so the factory would write executor/accountable and get nulls back. ──
+    executor_type: { type: DataTypes.TEXT, allowNull: true },
+    accountable_identity_id: { type: DataTypes.TEXT, allowNull: true },
+    required_skills: { type: DataTypes.JSONB, allowNull: true },
+    judgment_level: { type: DataTypes.TEXT, allowNull: true },
+    decision_authority: { type: DataTypes.TEXT, allowNull: true },
+    data_sensitivity: { type: DataTypes.TEXT, allowNull: true },
+    interaction_pattern: { type: DataTypes.TEXT, allowNull: true },
+    frequency: { type: DataTypes.TEXT, allowNull: true },
+    factory_confidence: { type: DataTypes.DOUBLE, allowNull: true },
+    source_evidence: { type: DataTypes.JSONB, allowNull: true },
+    decomposition_method: { type: DataTypes.TEXT, allowNull: true },
+  },
+  {
+    sequelize,
+    tableName: 'student_tasks',
+    timestamps: true,
+    underscored: true,
+    indexes: [
+      { fields: ['task_list_id'] },
+      { fields: ['project_id'] },
+      { fields: ['requirement_map_id'] },
+      { fields: ['story_id'] },
+      // NO unique on (project_id, requirement_key): one requirement is fulfilled
+      // by many stories (SBP-REQ-v1 FR-012). The old `student_tasks_unique_req_key`
+      // is dropped in ensureStudentTaskMergeSchema(). Task identity is
+      // (project_id, story_id) — see `student_tasks_unique_story`, created there
+      // as a partial unique so requirement-based rows (story_id NULL) are exempt.
+      { fields: ['requirement_key'] },
+    ],
+  }
+);
+
+export default StudentTask;

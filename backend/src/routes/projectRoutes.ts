@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
+import { SetPortfolioSharingSchema } from '../schemas/portfolioShareSchema';
 
 const router = Router();
 
@@ -352,51 +354,42 @@ router.get('/api/portal/project', requireParticipant, async (req: Request, res: 
 
 // ─── Multi-project: list / create / switch ─────────────────────────────────
 
-/** GET /api/portal/projects — all projects for the enrollment, with summary + which is active. */
-router.get('/api/portal/projects', requireParticipant, async (req: Request, res: Response) => {
-  try {
-    const enrollmentId = req.participant!.sub;
-    const { listProjectsForEnrollment } = await import('../services/projectService');
-    const { Enrollment, Capability, RequirementsMap } = await import('../models');
-    const [projects, enrollment] = await Promise.all([
-      listProjectsForEnrollment(enrollmentId),
-      Enrollment.findByPk(enrollmentId),
-    ]);
-    const activeId = (enrollment as any)?.active_project_id || (projects[0] && projects[0].id);
-    const summaries = await Promise.all(projects.map(async (p: any) => {
-      const [capCount, reqCount] = await Promise.all([
-        Capability.count({ where: { project_id: p.id, applicability_status: 'active' } }),
-        RequirementsMap.count({ where: { project_id: p.id } }),
-      ]);
-      const ss = p.setup_status || {};
-      const stage = !(p.requirements_document && String(p.requirements_document).trim()) && reqCount === 0
-        ? 'needs_requirements'
-        : (ss.activated ? 'built_out' : (ss.architect_slug && !ss.requirements_loaded ? 'building' : 'has_requirements'));
-      return {
-        id: p.id,
-        name: p.name || p.organization_name || 'Untitled project',
-        project_stage: p.project_stage,
-        stage,
-        capability_count: capCount,
-        requirements_count: reqCount,
-        is_active: p.id === activeId,
-        created_at: p.created_at,
-      };
-    }));
-    res.json({ projects: summaries, active_project_id: activeId });
-  } catch (err: any) {
-    console.error('[ProjectRoutes] GET /projects error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+// GET /api/portal/projects is deliberately NOT declared here.
+//
+// It lives in `projectsPortalRoutes.ts`, which participantRoutes mounts AFTER
+// this router. A copy here won every request and silently disabled the two
+// guards written for that path: the `projectApiEnabled` dark-ship flag checked
+// by that module's `gate()`, and `requireContentEntitlement('projects')`,
+// which participantRoutes registers between the two mounts and so could only
+// ever fire for a request this router did not already answer.
+//
+// The DTO handler is also the safer list: its active-project fallback goes
+// through `adoptableWhere`, which excludes the platform record — the copy that
+// used to be here fell back to `projects[0]` and could name that row as a
+// student's active build.
+//
+// Re-adding it re-breaks both guards. `__tests__/projectsList.entitlement.ts`
+// asserts this router declares no such route.
 
-/** POST /api/portal/projects — create a NEW project and make it active. */
+/**
+ * POST /api/portal/projects — the project a NEW build should be generated into,
+ * made active.
+ *
+ * This is the ONLY sanctioned way for a client to obtain a project id to build
+ * in. It creates a fresh row unless the active project has never been built into
+ * at all, in which case that empty row is reused and claimed — see
+ * `resolveProjectForNewBuild`, which documents why the decision has to be made
+ * here rather than in the browser.
+ *
+ * `reused` is returned so the caller can tell the two apart. The client must not
+ * act on it to choose a project; it exists for telemetry and tests.
+ */
 router.post('/api/portal/projects', requireParticipant, async (req: Request, res: Response) => {
   try {
     const enrollmentId = req.participant!.sub;
-    const { createNewProjectForEnrollment } = await import('../services/projectService');
-    const project = await createNewProjectForEnrollment(enrollmentId);
-    res.json({ id: project.id, project_stage: (project as any).project_stage });
+    const { resolveProjectForNewBuild } = await import('../services/projectService');
+    const { project, reused } = await resolveProjectForNewBuild(enrollmentId);
+    res.json({ id: project.id, project_stage: (project as any).project_stage, reused });
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /projects error:', err.message);
     res.status(500).json({ error: err.message });
@@ -463,6 +456,44 @@ router.get('/api/portal/project/portfolio', requireParticipant, async (req: Requ
   } catch (err: any) {
     console.error('[ProjectRoutes] GET /project/portfolio error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/portal/project/portfolio/share
+ * Read the current sharing state (token + enabled) for the participant's project.
+ */
+router.get('/api/portal/project/portfolio/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getPortfolioSharing } = await import('../services/portfolioShareService');
+    const result = await getPortfolioSharing(enrollmentId);
+    res.json(result);
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404 : 500;
+    console.error('[ProjectRoutes] GET /project/portfolio/share error:', err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/project/portfolio/share
+ * Enable/disable the public, unauthenticated shareable portfolio link.
+ * Idempotent — repeat calls with the same `enabled` value are a no-op.
+ */
+router.post('/api/portal/project/portfolio/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const parsed = SetPortfolioSharingSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+    const enrollmentId = req.participant!.sub;
+    const { setPortfolioSharing } = await import('../services/portfolioShareService');
+    const result = await setPortfolioSharing(enrollmentId, parsed.data.enabled);
+    res.json(result);
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404 : 500;
+    console.error('[ProjectRoutes] POST /project/portfolio/share error:', err.message);
+    res.status(status).json({ error: err.message });
   }
 });
 
@@ -710,8 +741,7 @@ router.post('/api/portal/project/requirements/expand-questions', requireParticip
       { phase: 'differentiators', category: 'Differentiators',        axis: 'Moat — none yet, simulation/digital twin, or proprietary models?' },
     ];
 
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -2357,8 +2387,10 @@ router.get('/api/portal/project/business-processes', requireParticipant, async (
         attributes: ['capability_id', 'mode_override'],
       });
       for (const c of linkedCampaigns) {
-        if ((c as any).mode_override && (c as any).capability_id) {
-          campaignModeMap.set((c as any).capability_id, (c as any).mode_override);
+        // Typed reads, no cast — Campaign now declares both columns. Duplicate of the block
+        // in autonomousRequirementExpansionService; both were casts for the same reason.
+        if (c.mode_override && c.capability_id) {
+          campaignModeMap.set(c.capability_id, c.mode_override);
         }
       }
     } catch { /* campaign mode is optional */ }
@@ -4683,7 +4715,33 @@ router.post('/api/portal/project/cognitive/incidents/:id/dispatch', requireParti
     if ((inc as any).project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
 
     const { fanOutIncident, persistDispatchLog } = await import('../intelligence/systemStateEngine/incidents/incidentFanoutEngine');
+    const { default: IncidentDispatchLog } = await import('../models/IncidentDispatchLog');
     const r = inc as any;
+
+    // Idempotency: a double-click or client retry on this endpoint must not
+    // re-send the incident email. Registering the email subscriber (this
+    // ticket) turns this manual-trigger route from an inert fanout (no
+    // subscribers were ever registered before) into one with a real side
+    // effect, so a dedup gate is required per the repo's idempotency rule.
+    const DISPATCH_COOLDOWN_MS = 15 * 60 * 1000;
+    const recent = await IncidentDispatchLog.findOne({
+      where: { incident_id: r.id },
+      order: [['dispatched_at', 'DESC']],
+    });
+    if (recent && Date.now() - new Date((recent as any).dispatched_at).getTime() < DISPATCH_COOLDOWN_MS) {
+      res.json({
+        incident_id: r.id,
+        attempted_subscribers: (recent as any).attempted_subscribers,
+        outcomes: (recent as any).outcomes,
+        succeeded: (recent as any).succeeded,
+        failed: (recent as any).failed,
+        skipped: 0,
+        elapsed_ms: 0,
+        deduped: true,
+      });
+      return;
+    }
+
     const payload = {
       incident_id: r.id,
       project_id: r.project_id,
@@ -7668,7 +7726,8 @@ router.put('/api/portal/project/business-processes/:id/autonomy', requirePartici
     const cap = await findOwnedCapability(req.participant!.sub, req.params.id as string);
     if (!cap) { res.status(404).json({ error: 'Process not found' }); return; }
     const { applyAutonomyChange, assessAutonomy } = await import('../intelligence/autonomyProgressionEngine');
-    await applyAutonomyChange(req.params.id as string, req.body.level, req.body.reason || 'User adjustment');
+    // The student is changing their own process; the history says so.
+    await applyAutonomyChange(req.params.id as string, req.body.level, req.body.reason || 'User adjustment', req.participant!.sub);
     res.json(await assessAutonomy(req.params.id as string));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -7931,6 +7990,12 @@ router.post('/api/portal/project/execution-ticket', requireParticipant, async (r
       } catch (innerErr: any) {
         // Fallback: create a simple ticket directly if orchestrator fails (e.g., missing columns)
         const { Ticket } = await import('../models');
+        // Agent Alias & Identity Fix (forward-fix) — this fallback always creates
+        // status:'in_progress' directly (never 'todo'), so it's safe to fully
+        // stamp bpos_orchestrator's real AdminUser id as assignee, same as the
+        // primary createBPOSTicket() path above.
+        const { getTicketCreatorAdminUserId } = await import('../services/agentBlueprint/ticketCreatorIdentitySeed');
+        const bposAdminUserId = await getTicketCreatorAdminUserId('bpos_orchestrator');
         const ticket = await (Ticket as any).create({
           title: `[BPOS] ${componentName || 'Unknown'} — ${stepLabel || 'Build step'}`,
           type: 'bpos_execution',
@@ -7939,6 +8004,7 @@ router.post('/api/portal/project/execution-ticket', requireParticipant, async (r
           source: 'bpos_engine',
           created_by_type: 'cory',
           created_by_id: 'bpos_orchestrator',
+          ...(bposAdminUserId ? { assigned_to_type: 'ai_staff', assigned_to_id: bposAdminUserId } : {}),
           entity_type: 'capability',
           entity_id: componentId || null,
           metadata: { prompt_target: promptTarget, step_label: stepLabel, component_name: componentName },
@@ -8411,8 +8477,7 @@ router.post('/api/portal/project/business-processes/:id/resync', requireParticip
         // Real changes — use LLM with delta context, request bullets
         const changedReqs = processReqs.filter(r => r.verified_by === 'process_level' || r.verified_by === 'e2e_test' || r.verified_by === 'manual').slice(0, 5);
         const newlyMatched = matched - preserved;
-        const OpenAI = (await import('openai')).default;
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 200,
           messages: [{
@@ -8652,8 +8717,7 @@ Keep it practical, structured, and non-generic. Use specifics from the context a
     // Use OpenAI for the learn response
     let response = '';
     try {
-      const { default: OpenAI } = await import('openai');
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
@@ -8745,8 +8809,7 @@ router.post('/api/portal/project/steer/:actionId/apply', requireParticipant, asy
     if (intent?.type === 'add_process') {
       {
         // Delegate to existing NLP add logic
-        const OpenAI = (await import('openai')).default;
-        const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 2000,
           response_format: { type: 'json_object' },
@@ -9924,8 +9987,7 @@ router.post('/api/portal/project/business-processes/add', requireParticipant, as
     if (!description.trim()) { res.status(400).json({ error: 'Description is required' }); return; }
 
     // Use LLM to generate process name + requirements from description
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'project_routes' });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini', temperature: 0.3, max_tokens: 2000,
       response_format: { type: 'json_object' },
@@ -11592,6 +11654,39 @@ router.get('/api/portal/project/handoff/summary', requireParticipant, async (req
     const engine = await import('../intelligence/systemStateEngine');
     res.json(engine.buildOperatorContinuitySummary(organization_id || undefined));
   } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Student Task Lists (Project Builder Flow) ────────────────────────────────
+// Returns StudentTaskList rows with nested StudentTask rows for the student's
+// active project. StudentTaskList/StudentTask models land with
+// feat/wire-project-dna-requirements (#93); until that merges, returns [].
+
+router.get('/api/portal/project/tasks', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const project = await getParticipantProject(req.participant!.sub);
+    if (!project) { res.json({ taskLists: [] }); return; }
+
+    // Dynamic import — models absent before PR #93 merges; fails safe to empty
+    const models = await import('../models');
+    const StudentTaskList = (models as any).StudentTaskList;
+    const StudentTask = (models as any).StudentTask;
+    if (!StudentTaskList || !StudentTask) { res.json({ taskLists: [] }); return; }
+
+    const lists = await StudentTaskList.findAll({
+      where: { project_id: (project as any).id },
+      order: [['position', 'ASC']],
+      include: [{ model: StudentTask, as: 'tasks', order: [['position', 'ASC']] }],
+    });
+
+    res.json({ taskLists: lists });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'backend', event: 'project_tasks_fetch_failed',
+      outcome: 'failure', error_class: err.constructor?.name ?? 'Error',
+      context: { message: err.message },
+    }));
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

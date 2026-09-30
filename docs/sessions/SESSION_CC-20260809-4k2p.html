@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260809-4k2p — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Monday, August 10, 2026 at 2:32 PM</div>
+    <div><span class="sid">CC-20260809-4k2p</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Two live-only defects on the public sponsor surface, plus durable auditing for magic-link issue and access**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">three things, all on code already on `main`. (1) **`GET /api/sponsor/verify` returned 500 for an empty or non-UUID `?token=`, and wrote no audit record.** `sponsors.portal_token` is a `DataTypes.UUID` column, so Postgres raises a type error on a malformed literal instead of simply not matching, and the throw happened inside `Sponsor.findOne` before anything could be logged — so probing the endpoint with junk produced server errors and left no trace. A valid-shaped but unknown UUID behaved correctly; only malformed input was affected. Now guarded by a UUID shape test at the top of `verifySponsorPortalToken`: anything not UUID-shaped is a bad link, gets the same 401 as any other, and records `link_rejected` with reason `malformed_token`. (2) **New `sponsor_portal_audit_log`** (`SponsorPortalAuditLog` model + `sponsorAuditService`) recording `link_generated` on issue — written before the send, so a link that is minted but never delivered is still on record — and `link_accessed` / `link_rejected` on both outcomes of verify, each with a correlation id, redacted email, client IP and user agent. Tokens are stored as a **SHA-256 fingerprint, never plaintext**, so an access can be joined back to the generation event that issued it without the table becoming a credential store; a value that was never a token is not fingerprinted at all. Audit writes are best-effort — a failed insert logs `sponsor_portal_audit_write_failed` and continues rather than locking a customer out of their dashboard. `ensureSponsorPortalAuditSchema()` added to the boot sequence, since boot runs no global sync and the table would otherwise never exist in prod. (3) **`/sponsor/dashboard` rendered a heading beginning with a bare colon and four stat cards with labels but no numbers** once a real sponsor signed in. The page and `GET /api/sponsor/dashboard` were never reconciled: the endpoint sends `company_name` and a nested `seats{purchased,…}`, the page reads `company` and flat `seatsPurchased`; backend tiers are lowercase `bronze|silver|gold` while `tierTone()`/`progressTone()` key off `Gold|Silver|Bronze` and know an `Unranked` state the API never sends. The only boundary check was `Array.isArray(payload.participants)`, which an empty array satisfies — so a wrong-shaped payload was accepted as valid and `undefined` rendered into every other field instead of falling back to sample data. Replaced with an explicit `ApiSponsorDashboard` type, a mapper, and a check that validates the fields actually used. Two related defects fixed in passing: the React key was `p.email`, but the endpoint deliberately does not expose participant emails to the sponsor surface, so every live row would have keyed on `undefined` (participants now carry an `id`, `enrollment_id` for live data); and Demo Day membership now reads the server&#39;s own `demo_day_candidates` list rather than re-deriving the rule client-side, so the two cannot drift.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">23 tests green across 2 suites, including three regression cases (`&#39;&#39;`, `&#39;garbage&#39;`, a truncated UUID) that assert the database is **never queried** for malformed input — checkable without a real Postgres, which is precisely what the original tests could not do. Backend and frontend `tsc --noEmit` both clean. Defect (1) was reproduced and then confirmed fixed against a **real Postgres on the dev stack** (`:9999`, `accelerator_dev1`): before, `?token=` empty / `garbage` / absent all returned 500; after, all four bad-token shapes return 401 and the previously-lost probes appear as three `malformed_token` rows in `sponsor_portal_audit_log`, while a genuine emailed link still returns 200. Defect (3) verified by serving the rebuilt bundle (`main.86117d95.js`) and confirming the mapper literals are present in the shipped JavaScript rather than trusting the build.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Neither defect was caught by the test suite** — 41 green tests and two clean typechecks shipped both. (1) needed a real database, because mocked Sequelize models string-compare anything and cannot reproduce column-type behaviour; (3) needed a human looking at a rendered page. Worth remembering that this repo still has nothing running against a real Postgres in CI. Found while building STORY-001 (self-serve sponsor magic link) on `feature/story-001-sponsor-magic-link` / PR #1313. **That story was withdrawn before merge, not shipped**: it added a second manager identity (`Sponsor` + magic link on a public route) alongside the `Organization` + `OrgMember` manager surface that already exists behind the portal login at `/portal/company`, and its seats-and-redemption-codes model belongs to the retired $4,500 sponsorship offer rather than the current $149/mo pricing. Ali made that call; the correct home for a corporate manager is the authenticated portal. Only the three fixes above were carried across, on a clean branch off `origin/main`. Separately filed issue #1332: the Maya chat widget polls `/api/chat/proactive-check` roughly every 5s and 401s **every time** (231 consecutive failures observed from one visitor in ~13 minutes, from two duplicate pollers), putting a red &quot;Authentication required&quot; box in front of prospects on every public page — untouched here on purpose, it is a shared component that deserves its own review.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260809-4k2p</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

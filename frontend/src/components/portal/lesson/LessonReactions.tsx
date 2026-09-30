@@ -42,9 +42,9 @@ export default function LessonReactions({ onConfused }: LessonReactionsProps) {
                 fontSize: 14,
                 padding: '4px 10px',
                 borderRadius: 20,
-                border: `1.5px solid ${isActive ? (isConfused ? '#fecaca' : '#c7d2fe') : '#e2e8f0'}`,
-                background: isActive ? (isConfused ? '#fef2f2' : '#eef2ff') : '#fff',
-                color: isActive ? (isConfused ? '#ef4444' : '#6366f1') : '#64748b',
+                border: `1.5px solid ${isActive ? (isConfused ? '#fecaca' : 'rgba(251,40,50,0.25)') : '#e2e8f0'}`,
+                background: isActive ? (isConfused ? '#fef2f2' : 'rgba(251,40,50,0.08)') : '#fff',
+                color: isActive ? (isConfused ? '#ef4444' : '#FB2832') : '#64748b',
                 transition: 'all 0.15s',
                 lineHeight: 1,
               }}

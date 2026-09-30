@@ -1,0 +1,37 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:08.650
+When a call ends, an admissions team's calling system has work to finish, and the team needs to know what happened to each piece of it.
+
+2
+00:00:09.800 --> 00:00:21.820
+Three systems own different parts of the work. Postgres holds process state, Redis and its queue carry execution only, and the CRM owns contacts, tasks and notes.
+
+3
+00:00:22.900 --> 00:00:38.080
+The webhook adds the job row and queues it inside one transaction, and answers 202 Accepted only after the commit. If the commit fails, the caller gets an error, and the queued job, with no row behind it, is dropped.
+
+4
+00:00:39.200 --> 00:00:51.380
+Queue Health, on a local copy with invented rows: jobs stuck past their time, which an operator can cancel, and expired leases, which the worker returns to pending by itself.
+
+5
+00:00:52.500 --> 00:01:04.850
+A worker claims a committed job with a five-minute lease. Every 30 seconds the loop returns expired leases to pending and queues due rows again, but only while the default worker runs.
+
+6
+00:01:06.000 --> 00:01:18.780
+The Exceptions Monitor, on the same local copy. Most jobs that fail for good open an exception; the system closes a pending-call exception when its call ends, and an operator acts on the rest.
+
+7
+00:01:19.900 --> 00:01:31.270
+Read from the platform's own tables on 19 September 2026. One reading is not a record of lateness, and an ignored exception is not a resolved one.
+
+8
+00:01:32.400 --> 00:01:47.660
+Contacts and tasks, call notes and the call log each reach the CRM through a client of their own, with its own write switch and a bounded retry. A task write carries no idempotency key, so a repeat can land twice.
+
+9
+00:01:48.800 --> 00:02:04.970
+The caller gets an error, not an acceptance. Outbound launches are swept for a missing completion, inbound calls are not, and no test covers the path. Recovery runs on one worker role, and two job types fail without opening an exception.

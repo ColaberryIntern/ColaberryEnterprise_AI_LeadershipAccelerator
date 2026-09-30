@@ -324,7 +324,7 @@ Ali`);
   });
   return transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
-    to: DAVID, cc: ['ram@colaberry.com'], bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    to: DAVID, cc: ['ram@colaberry.com'], bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: `Re: Open for Advertising - RE Magazine - Mockup 4 ${newVersion} (auto-applied)`,
     text: TEXT, html: strip(HTML),
@@ -384,7 +384,7 @@ Ali`);
   });
   return transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>', to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Ali - David ad trigger needs you (auto-apply aborted)',
     text: TEXT, html: strip(HTML),

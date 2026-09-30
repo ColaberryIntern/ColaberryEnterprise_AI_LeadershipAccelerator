@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Factory Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#eef1f6; --canvas:#f6f8fb; --card:#ffffff; --ink:#151c28; --muted:#5c6676;
+    --line:#e2e7ef; --line-2:#eef2f7;
+    --navy:#13314e; --navy-2:#1d456b; --pine:#12695a; --pine-100:#e2f1ee;
+    --brand:#e11d2a; --brand-100:#fdeaeb;
+    --human:#2b6cb0; --human-100:#e9f1fb; --ai:#12897a; --ai-100:#def0ed;
+    --auto:#b0791d; --auto-100:#fbf1dd; --det:#64707f; --det-100:#eef1f4;
+    --ok:#2f855a; --ok-100:#e6f4ec; --warn:#b0791d;
+    --shadow:0 1px 2px rgba(15,23,40,.05),0 10px 30px rgba(15,23,40,.06);
+    --shadow-sm:0 1px 2px rgba(15,23,40,.06);
+  }
+  :root:not([data-theme="light"]){}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0d1219; --canvas:#0f1620; --card:#151d29; --ink:#e7ecf3; --muted:#95a1b3;
+      --line:#243040; --line-2:#1c2634;
+      --navy:#0c1a2b; --navy-2:#163150; --pine:#2aa08c; --pine-100:#123028;
+      --brand:#ff5b64; --brand-100:#2a1417;
+      --human:#6aa8e6; --human-100:#122234; --ai:#3fc0ac; --ai-100:#0f2a25;
+      --auto:#e0ad51; --auto-100:#2c2412; --det:#8b97a6; --det-100:#1b232f;
+      --ok:#54b981; --ok-100:#12281d;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0d1219; --canvas:#0f1620; --card:#151d29; --ink:#e7ecf3; --muted:#95a1b3;
+    --line:#243040; --line-2:#1c2634;
+    --navy:#0c1a2b; --navy-2:#163150; --pine:#2aa08c; --pine-100:#123028;
+    --brand:#ff5b64; --brand-100:#2a1417;
+    --human:#6aa8e6; --human-100:#122234; --ai:#3fc0ac; --ai-100:#0f2a25;
+    --auto:#e0ad51; --auto-100:#2c2412; --det:#8b97a6; --det-100:#1b232f;
+    --ok:#54b981; --ok-100:#12281d;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);
+    font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    line-height:1.5;font-size:14px}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+  h1,h2,h3{margin:0}
+  .num{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+
+  /* ---- command bar ---- */
+  .bar{position:sticky;top:0;z-index:20;background:linear-gradient(100deg,var(--navy),var(--navy-2));
+    color:#fff;padding:calc(env(safe-area-inset-top,0px) + 16px) 22px 16px;box-shadow:var(--shadow-sm)}
+  .bar-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .mark{width:34px;height:34px;border-radius:9px;background:var(--brand);display:flex;align-items:center;
+    justify-content:center;font-weight:700;font-size:16px;flex:0 0 auto;box-shadow:0 2px 8px rgba(225,29,42,.4)}
+  .bar .who{flex:1 1 auto;min-width:220px}
+  .bar .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#9db8d6;font-weight:600}
+  .bar h1{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:21px;line-height:1.1;margin-top:2px;letter-spacing:.2px}
+  .bar-stats{display:flex;gap:10px;flex-wrap:wrap}
+  .bstat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:7px 12px;text-align:left}
+  .bstat .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#9db8d6;font-weight:600}
+  .bstat .v{font-weight:600;font-size:14px;margin-top:1px;display:flex;align-items:center;gap:6px}
+  .led{width:8px;height:8px;border-radius:99px;display:inline-block}
+  .led.ok{background:#48c78e;box-shadow:0 0 0 3px rgba(72,199,142,.25)}
+  .led.warn{background:#f0c14b}
+
+  /* ---- layout ---- */
+  .wrap{max-width:1240px;margin:0 auto;padding:22px 22px 56px}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--pine);font-weight:600}
+  .grid{display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start}
+  @media (max-width:940px){.grid{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:18px;min-width:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+  .card > .hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line-2)}
+  .card > .hd h2{font-size:13px;letter-spacing:.02em;font-weight:600}
+  .card > .hd .sub{font-size:12px;color:var(--muted)}
+  .card > .bd{padding:16px 18px}
+
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:99px;padding:3px 10px;line-height:1.4;white-space:nowrap}
+  .chip .mono{font-size:10.5px}
+  .c-human{background:var(--human-100);color:var(--human)} .c-ai{background:var(--ai-100);color:var(--ai)}
+  .c-auto{background:var(--auto-100);color:var(--auto)} .c-det{background:var(--det-100);color:var(--det)}
+  .c-ok{background:var(--ok-100);color:var(--ok)} .c-brand{background:var(--brand-100);color:var(--brand)}
+  .c-line{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .dotk{width:7px;height:7px;border-radius:99px;flex:0 0 auto}
+
+  /* ---- tracks ribbon ---- */
+  .tracks{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:620px){.tracks{grid-template-columns:1fr}}
+  .track{border:1px solid var(--line);border-radius:12px;padding:14px;background:linear-gradient(180deg,var(--card),var(--canvas))}
+  .track .t{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .track .t h3{font-size:13.5px;font-weight:600}
+  .track .meta{margin-top:9px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+  .track .meta b{color:var(--ink);font-weight:600}
+  .prog{height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:11px}
+  .prog>i{display:block;height:100%;border-radius:99px}
+
+  /* ---- flow graph ---- */
+  .flow{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:6px 2px 10px}
+  .stage{min-width:150px;flex:0 0 auto;display:flex;flex-direction:column;gap:8px;padding:0 10px;position:relative}
+  .stage + .stage::before{content:"";position:absolute;left:-6px;top:34px;width:12px;height:2px;background:var(--line)}
+  .slabel{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:center}
+  .node{border:1px solid var(--line);border-radius:11px;background:var(--card);padding:10px;box-shadow:var(--shadow-sm);position:relative}
+  .node.term{background:var(--navy);color:#fff;border-color:transparent;text-align:center;font-weight:600;padding:12px 10px}
+  .node.decision{border-color:var(--auto);background:var(--auto-100)}
+  .node .nt{font-size:12.5px;font-weight:600;line-height:1.25}
+  .node .nx{margin-top:7px;display:flex;flex-wrap:wrap;gap:5px}
+  .node .who{margin-top:8px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .ic{width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex:0 0 auto}
+  .ic.ai{background:var(--ai)} .ic.person{background:var(--human)}
+  .branchwrap{display:flex;flex-direction:column;gap:8px}
+  .branch-lab{font-family:"IBM Plex Mono",monospace;font-size:9.5px;color:var(--auto);text-align:center;margin-top:-2px}
+
+  /* ---- allocation matrix ---- */
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead th{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);text-align:left;font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+  tbody td{padding:11px 10px;border-bottom:1px solid var(--line-2);vertical-align:top}
+  tbody tr:last-child td{border-bottom:0}
+  td .task{font-weight:600;color:var(--ink)}
+  td .rat{color:var(--muted);font-size:11.5px;margin-top:2px;max-width:34ch}
+
+  /* ---- roster ---- */
+  .role{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid var(--line-2)}
+  .role:last-child{border-bottom:0}
+  .avatar{width:36px;height:36px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff}
+  .role .nm{font-weight:600;font-size:13px}
+  .role .df{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .oversight{margin-top:7px;font-size:11px;color:var(--ai);display:flex;align-items:center;gap:6px}
+
+  /* ---- gate panel ---- */
+  .gaterow{display:flex;align-items:center;gap:9px;padding:7px 0;font-size:12.5px;border-bottom:1px solid var(--line-2)}
+  .gaterow:last-child{border-bottom:0}
+  .gaterow .r{flex:1}
+  .tick{color:var(--ok);font-weight:700}
+  .approve{display:flex;gap:8px;margin-top:14px}
+  .btn{flex:1;text-align:center;padding:10px;border-radius:9px;font-weight:600;font-size:12.5px;cursor:default;border:1px solid transparent}
+  .btn.primary{background:var(--pine);color:#fff}
+  .btn.ghost{background:transparent;border-color:var(--line);color:var(--muted)}
+
+  /* ---- compliance ---- */
+  .req{padding:11px 0;border-bottom:1px solid var(--line-2)}
+  .req:last-child{border-bottom:0}
+  .req .rq{display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .req .rq .id{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--pine);font-weight:600}
+  .req .st{font-size:12.5px;font-weight:600;margin-top:4px}
+  .req .trace{font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+  /* rolemap */
+  .rolemap{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .rm-old{flex:1;min-width:150px;border:1px dashed var(--line);border-radius:10px;padding:11px;background:var(--canvas)}
+  .rm-arrow{color:var(--ai);font-size:20px;font-weight:700}
+  .rm-new{flex:1;min-width:150px;border:1px solid var(--ai);border-radius:10px;padding:11px;background:var(--ai-100)}
+  .rm-lab{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .rm-new .rm-lab{color:var(--ai)}
+  .kept{margin-top:7px;font-size:11px;color:var(--ink)}
+  .kept b{color:var(--ai)}
+
+  .footer{max-width:1240px;margin:26px auto 0;padding:0 22px;color:var(--muted);font-size:11.5px;line-height:1.7;text-align:center}
+  .footer .mono{color:var(--pine)}
+  .banner{max-width:1240px;margin:0 auto 0;padding:9px 22px;background:var(--brand-100);color:var(--brand);
+    font-size:12px;font-weight:600;text-align:center;letter-spacing:.02em}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="bar-in">
+    <div class="mark">CF</div>
+    <div class="who">
+      <div class="eyebrow">Factory Command Center · Delivery Contract</div>
+      <h1>AI Government Contract Finder</h1>
+    </div>
+    <div class="bar-stats">
+      <div class="bstat"><div class="k">Gate</div><div class="v"><span class="led ok"></span> Passed</div></div>
+      <div class="bstat"><div class="k">Approval</div><div class="v">Documented · v1</div></div>
+      <div class="bstat"><div class="k">Tasks</div><div class="v num">6</div></div>
+      <div class="bstat"><div class="k">Workforce</div><div class="v">2 people · 1 agent</div></div>
+    </div>
+  </div>
+</div>
+<div class="banner">DESIGN PREVIEW · rendered from the real factory sample (buildSampleContractProject) · Phase 3 will wire this to live data</div>
+
+<div class="wrap">
+  <div class="grid">
+
+    <!-- ============ LEFT COLUMN ============ -->
+    <div class="col">
+
+      <!-- Tracks -->
+      <div class="card">
+        <div class="hd"><h2>Two-track contract</h2><span class="sub">one requirement spine, two workstreams</span></div>
+        <div class="bd">
+          <div class="tracks">
+            <div class="track">
+              <div class="t"><h3>Proposal</h3><span class="chip c-line">in progress</span></div>
+              <div class="meta">
+                <span>Owner · <b>Proposal Lead</b></span>
+                <span>Requirements borne · <b>1 administrative</b></span>
+                <span class="mono" style="font-size:11px">REQ-3 → proposal §L.3.3</span>
+              </div>
+              <div class="prog"><i style="width:62%;background:var(--human)"></i></div>
+            </div>
+            <div class="track">
+              <div class="t"><h3>Solution build</h3><span class="chip c-line">in progress</span></div>
+              <div class="meta">
+                <span>Owner · <b>Compliance Analyst</b></span>
+                <span>Linked student build · <b>1 project</b></span>
+                <span class="mono" style="font-size:11px">REQ-1 · REQ-2 · REQ-4 → build stories</span>
+              </div>
+              <div class="prog"><i style="width:48%;background:var(--pine)"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Process flow -->
+      <div class="card">
+        <div class="hd"><h2>Process — how the work flows</h2><span class="sub">PROC-1 · a traceable compliance matrix</span></div>
+        <div class="bd">
+          <div class="flow">
+            <div class="stage">
+              <div class="slabel">start</div>
+              <div class="node term">Solicitation received</div>
+            </div>
+            <div class="stage">
+              <div class="slabel">extract</div>
+              <div class="node">
+                <div class="nt">Extract requirements from the solicitation</div>
+                <div class="nx"><span class="chip c-ai"><span class="dotk" style="background:var(--ai)"></span>LLM · 0.72</span></div>
+                <div class="who"><span class="ic ai">AI</span> Extraction Agent · <span style="color:var(--human)">Analyst accountable</span></div>
+              </div>
+            </div>
+            <div class="stage">
+              <div class="slabel">classify</div>
+              <div class="node decision">
+                <div class="nt">Classify each requirement</div>
+                <div class="nx"><span class="chip c-ai"><span class="dotk" style="background:var(--ai)"></span>LLM · 0.68</span> <span class="chip c-auto">decision</span></div>
+                <div class="who"><span class="ic ai">AI</span> Extraction Agent · <span style="color:var(--human)">Analyst accountable</span></div>
+              </div>
+            </div>
+            <div class="stage">
+              <div class="slabel">route</div>
+              <div class="branchwrap">
+                <div class="branch-lab">▸ administrative</div>
+                <div class="node">
+                  <div class="nt">Map to proposal sections</div>
+                  <div class="nx"><span class="chip c-human">inferred</span></div>
+                  <div class="who"><span class="ic person">P</span> Proposal Lead</div>
+                </div>
+                <div class="branch-lab">▸ technical</div>
+                <div class="node">
+                  <div class="nt">Map to build stories</div>
+                  <div class="nx"><span class="chip c-human">inferred</span></div>
+                  <div class="who"><span class="ic person">P</span> Compliance Analyst</div>
+                </div>
+              </div>
+            </div>
+            <div class="stage">
+              <div class="slabel">end</div>
+              <div class="node term">Compliance matrix complete</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Allocation matrix -->
+      <div class="card">
+        <div class="hd"><h2>Human / AI allocation</h2><span class="sub">who does each task, and who is accountable</span></div>
+        <div class="bd" style="padding-top:4px">
+          <table>
+            <thead><tr><th>Task</th><th>Execution</th><th>Performer</th><th>Accountable</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="task">Extract requirements</div><div class="rat">Pattern work the agent drafts; a human confirms before it counts.</div></td>
+                <td><span class="chip c-ai">ai · with approval</span></td>
+                <td><span class="chip c-line mono">agent.extract</span></td>
+                <td><span class="chip c-human">Compliance Analyst</span></td>
+              </tr>
+              <tr>
+                <td><div class="task">Classify requirements</div><div class="rat">Judgment on ambiguous items, so a human is accountable.</div></td>
+                <td><span class="chip c-ai">ai · with approval</span></td>
+                <td><span class="chip c-line mono">agent.extract</span></td>
+                <td><span class="chip c-human">Compliance Analyst</span></td>
+              </tr>
+              <tr>
+                <td><div class="task">Map to proposal sections</div><div class="rat">Proposal-side mapping owned by the Proposal Lead.</div></td>
+                <td><span class="chip c-human">human</span></td>
+                <td><span class="chip c-human">Proposal Lead</span></td>
+                <td><span class="chip c-line">—</span></td>
+              </tr>
+              <tr>
+                <td><div class="task">Map to build stories</div><div class="rat">Build-side mapping owned by the Compliance Analyst.</div></td>
+                <td><span class="chip c-human">human</span></td>
+                <td><span class="chip c-human">Compliance Analyst</span></td>
+                <td><span class="chip c-line">—</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Role map -->
+      <div class="card">
+        <div class="hd"><h2>How the role changed</h2><span class="sub">old function → AI contribution → retained human work</span></div>
+        <div class="bd">
+          <div class="rolemap">
+            <div class="rm-old">
+              <div class="rm-lab">Was</div>
+              <div style="font-weight:600">Manual compliance reviewer</div>
+              <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Read every solicitation line by hand and sorted it.</div>
+            </div>
+            <div class="rm-arrow">→</div>
+            <div class="rm-new">
+              <div class="rm-lab">Now · Compliance Analyst</div>
+              <div style="font-size:12px">AI extracts and classifies requirements from the solicitation.</div>
+              <div class="kept"><b>Human still owns:</b> confirm ambiguous requirements · approve the compliance matrix</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ RIGHT COLUMN ============ -->
+    <div class="col">
+
+      <!-- Gate / approval -->
+      <div class="card">
+        <div class="hd"><h2>Gate &amp; approval</h2><span class="chip c-ok"><span class="dotk" style="background:var(--ok)"></span>0 errors</span></div>
+        <div class="bd">
+          <div class="gaterow"><span class="tick">✓</span><span class="r">Every task cites its source evidence</span><span class="chip c-line mono">coverage</span></div>
+          <div class="gaterow"><span class="tick">✓</span><span class="r">Every AI task has an accountable human</span><span class="chip c-line mono">oversight</span></div>
+          <div class="gaterow"><span class="tick">✓</span><span class="r">Every task has a performer</span><span class="chip c-line mono">performer</span></div>
+          <div class="gaterow"><span class="tick">✓</span><span class="r">One start, reachable end, no dead ends</span><span class="chip c-line mono">flow</span></div>
+          <div class="gaterow"><span class="tick">✓</span><span class="r">Decision branches are labeled and distinct</span><span class="chip c-line mono">decision</span></div>
+          <div style="margin-top:12px;font-size:11.5px;color:var(--muted)">
+            Content hash <span class="mono">a1f3…9c2e</span> · enrichment <b style="color:var(--warn)">partial</b> (roles still resolving)
+          </div>
+          <div class="approve">
+            <div class="btn primary">Approve process</div>
+            <div class="btn ghost">Request changes</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workforce roster -->
+      <div class="card">
+        <div class="hd"><h2>Workforce</h2><span class="sub">this process</span></div>
+        <div class="bd" style="padding-top:6px">
+          <div class="role">
+            <div class="avatar" style="background:var(--human)">CA</div>
+            <div>
+              <div class="nm">Compliance Analyst <span class="chip c-human" style="margin-left:4px">person</span></div>
+              <div class="df">Owns the compliance matrix and confirms ambiguous requirements.</div>
+            </div>
+          </div>
+          <div class="role">
+            <div class="avatar" style="background:var(--ai)">RA</div>
+            <div>
+              <div class="nm">Requirement Extraction Agent <span class="chip c-ai" style="margin-left:4px">AI employee</span></div>
+              <div class="df">Extracts and classifies requirements from the solicitation.</div>
+              <div class="oversight">◆ Accountable human · <b style="margin-left:4px">Compliance Analyst</b></div>
+            </div>
+          </div>
+          <div class="role">
+            <div class="avatar" style="background:var(--navy-2)">PL</div>
+            <div>
+              <div class="nm">Proposal Lead <span class="chip c-human" style="margin-left:4px">person</span></div>
+              <div class="df">Owns proposal-side mapping and submission readiness.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compliance traceability -->
+      <div class="card">
+        <div class="hd"><h2>Compliance matrix</h2><span class="sub">4 requirements</span></div>
+        <div class="bd" style="padding-top:6px">
+          <div class="req">
+            <div class="rq"><span class="id">REQ-1</span><span class="chip c-ai" style="font-size:10px">planned</span></div>
+            <div class="st">Extract requirements from a solicitation</div>
+            <div class="trace"><span class="chip c-line" style="font-size:10px">technical · must</span> → solution build</div>
+          </div>
+          <div class="req">
+            <div class="rq"><span class="id">REQ-2</span><span class="chip c-ai" style="font-size:10px">planned</span></div>
+            <div class="st">Classify each requirement</div>
+            <div class="trace"><span class="chip c-line" style="font-size:10px">technical · must</span> → solution build</div>
+          </div>
+          <div class="req">
+            <div class="rq"><span class="id">REQ-3</span><span class="chip c-ai" style="font-size:10px">planned</span></div>
+            <div class="st">Map administrative requirements to proposal sections</div>
+            <div class="trace"><span class="chip c-line" style="font-size:10px">administrative · should</span> → proposal §L.3.3</div>
+          </div>
+          <div class="req">
+            <div class="rq"><span class="id">REQ-4</span><span class="chip c-ai" style="font-size:10px">planned</span></div>
+            <div class="st">Map technical requirements to build stories</div>
+            <div class="trace"><span class="chip c-line" style="font-size:10px">technical · must</span> → build stories</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  A command center for one AI-decomposed contract. Every task traces to a source line; every AI worker has a human who is accountable; the process is approved as a transaction with a content hash and a version.<br>
+  <span class="mono">Phase 3 build target · rendered from the Phase-1/2 factory model · not yet wired to live data</span>
+</div>
+
+</body>
+</html>

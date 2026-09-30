@@ -10,6 +10,11 @@ interface LeadSourceAttributes {
   hmac_secret?: string | null;
   hmac_secret_prev?: string | null;
   rate_limit?: number | null;
+  /** Multi-tenant ecosystem ownership. The server resolves site_slug -> tenant/brand
+   *  through THIS row, so a null here means the source cannot be attributed. */
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  source_type?: string | null;
   is_active: boolean;
   created_at?: Date;
   updated_at?: Date;
@@ -24,6 +29,9 @@ class LeadSource extends Model<LeadSourceAttributes> implements LeadSourceAttrib
   declare hmac_secret: string | null;
   declare hmac_secret_prev: string | null;
   declare rate_limit: number | null;
+  declare tenant_id: string | null;
+  declare brand_id: string | null;
+  declare source_type: string | null;
   declare is_active: boolean;
   declare created_at: Date;
   declare updated_at: Date;
@@ -65,6 +73,13 @@ LeadSource.init(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    // --- multi-tenant ecosystem context -------------------------------------
+    // Declared because the DDL adds these columns and Sequelize only touches
+    // attributes the model knows about. A column present in Postgres but absent
+    // here reads back undefined and silently drops writes.
+    tenant_id: { type: DataTypes.UUID, allowNull: true },
+    brand_id: { type: DataTypes.UUID, allowNull: true },
+    source_type: { type: DataTypes.STRING(30), allowNull: true },
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

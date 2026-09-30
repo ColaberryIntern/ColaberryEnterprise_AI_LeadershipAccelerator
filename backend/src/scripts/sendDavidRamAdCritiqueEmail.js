@@ -221,7 +221,7 @@ Ali`);
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'dlahme@colaberry.com',
     cc: ['ram@colaberry.com'],
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Re: Open for Advertising - RE Magazine - 7 ad concepts for your review',
     text, html: HTML, attachments,

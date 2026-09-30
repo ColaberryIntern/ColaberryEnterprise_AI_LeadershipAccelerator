@@ -1,9 +1,11 @@
 // ─── Experiment Service ───────────────────────────────────────────────────
 // Converts insights into experiment proposals and auto-creates tickets.
 
-import { ExperimentProposal, Ticket, ReportingInsight } from '../../models';
+import { ExperimentProposal, ReportingInsight } from '../../models';
 import { logEvent } from '../ledgerService';
+import { createTicket } from '../ticketService';
 import type { ExperimentType, ExperimentStatus, ExperimentPriority } from '../../models/ExperimentProposal';
+import type { TicketPriority } from '../../models/Ticket';
 
 // ─── Propose Experiment ───────────────────────────────────────────────────
 
@@ -60,19 +62,36 @@ function inferPriority(finalScore: number): string {
 
 // ─── Ticket Creation ──────────────────────────────────────────────────────
 
+// ProofDesk Work Ledger (Milestone 6 audit fix, 2026-08-06): previously called
+// `Ticket.create()` directly, which bypassed ticketService.createTicket()'s ledger
+// emission entirely (found during the ProofDesk M6 acceptance-criteria audit —
+// criterion 1's ledger-coverage check) — every experiment-driven ticket was
+// permanently invisible to the work ledger, with no way to ever backfill it after
+// the fact. Also fixes a second, independently-found bug in the same line: the old
+// `status: 'open'` value is not a member of TicketStatus (`backlog | todo |
+// in_progress | in_review | done | cancelled` — see Ticket.ts) and was only
+// reachable via an `as any` cast; it silently produced tickets with an
+// application-unrecognized status that ticketManagementAgent.ts's `status: 'todo'`
+// auto-dispatch query would never pick up. Routing through createTicket() gets both
+// the ledger emission and a valid status (`todo`, matching the auto-dispatch query
+// and the original "ready for an agent to pick up" intent) for free, with identical
+// dedup/priority/metadata behavior to every other real ticket-creation path in this
+// repo.
 export async function createExperimentTicket(proposalId: string): Promise<any> {
   const proposal = await ExperimentProposal.findByPk(proposalId);
   if (!proposal) throw new Error('Experiment proposal not found');
 
-  const ticket = await Ticket.create({
+  const ticket = await createTicket({
     title: proposal.title,
     description: proposal.hypothesis || '',
     type: 'strategic',
-    priority: proposal.priority,
-    status: 'open',
+    priority: proposal.priority as TicketPriority,
+    status: 'todo',
     source: 'reporting_agent',
+    created_by_type: 'agent',
+    created_by_id: 'ExperimentRecommendationAgent',
     metadata: { experiment_proposal_id: proposal.id },
-  } as any);
+  });
 
   await proposal.update({ ticket_id: ticket.id });
 

@@ -26,13 +26,13 @@ export default function ConceptV1({ content }: ConceptV1Props) {
 
       {/* Business Example */}
       {content.business_example && (
-        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #6366f1' }}>
+        <div className="card border-0 shadow-sm mb-4" style={{ borderLeft: '4px solid #FB2832' }}>
           <div className="card-header bg-white border-bottom d-flex align-items-center gap-2" style={{ padding: '14px 20px' }}>
-            <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: '#eef2ff' }}>
-              <i className="bi bi-building" style={{ color: '#6366f1', fontSize: 14 }}></i>
+            <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: 'rgba(251,40,50,0.08)' }}>
+              <i className="bi bi-building" style={{ color: '#FB2832', fontSize: 14 }}></i>
             </div>
             <span className="fw-semibold" style={{ color: '#1e293b', fontSize: 14 }}>Applied Example</span>
-            <span className="badge" style={{ background: '#eef2ff', color: '#6366f1', fontSize: 10 }}>Personalized</span>
+            <span className="badge" style={{ background: 'rgba(251,40,50,0.08)', color: '#FB2832', fontSize: 10 }}>Personalized</span>
           </div>
           <div className="card-body" style={{ padding: 20 }}>
             <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, color: '#334155', fontSize: 14 }}>

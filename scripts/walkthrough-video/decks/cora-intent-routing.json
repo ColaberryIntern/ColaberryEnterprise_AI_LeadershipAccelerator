@@ -1,0 +1,94 @@
+{
+  "slug": "turning-call-intent-into-the-next-action",
+  "output": "cora-intent-routing-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 6,
+      "title": "The Call Ended. The Next Step Didn't Have To.",
+      "subtitle": "Cora Recap Engine  ·  an operational AI system",
+      "caption": "An AI voice agent finishes a call with a prospect. Someone has to decide what happens next."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "The next step waited for a person.",
+      "subtitle": "A summary, a task, a lead-state update. Then a queue.",
+      "caption": "Until March 2026 the analysis of an answered call ended in a task. A request for a person and a hang-up looked the same on the console."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Three inputs. One intent. One action.",
+      "subtitle": "The transcript, the platform's reported actions, the call's duration.",
+      "caption": "Kes built rule-based detection with no language model in it, a fixed priority order, and one handler per intent that schedules, changes the lead's state, or stops."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-intent-lead-lifecycle.png",
+      "caption": "The Lead Lifecycle Monitor shows each lead's last intent and the next action the rules scheduled. Every row here is a placeholder."
+    },
+    {
+      "kind": "diagram",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/AppData/Local/Temp/claude/c--Users-ali-m-OneDrive-Business-Colaberry-Novedea-AI-Projects-Colaberry-Enterprise-AI-Leadership-Accelerator-docs/06248086-6cad-4632-a0d4-9bf2eb506699/scratchpad/diagram-cora-intent-portrait.png",
+      "phases": [
+        "Analyse the call",
+        "Detect the intent",
+        "Priority order",
+        "Run the handler",
+        "Schedule, with reason",
+        "Dashboard"
+      ],
+      "caption": "Stop signals win over requests, the platform's own actions win over the transcript, and the first match decides."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-intent-contact-drilldown.png",
+      "caption": "On the drill-down, the job the handler cancelled sits beside the follow-up it scheduled, with its reason in the payload."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "Every route has an end.",
+      "subtitle": "Caps of two for retries. No retry for inconclusive calls.",
+      "caption": "In August an audit found one contact still being retried across five reasons. Kes capped or removed every remaining loop the same day."
+    },
+    {
+      "kind": "cards",
+      "seconds": 9,
+      "rows": [
+        [
+          "0",
+          "retries after inconclusive calls since the cap, from 551 before"
+        ],
+        [
+          "96%",
+          "of answered calls routed to a next step, 2,227 of 2,326"
+        ],
+        [
+          "476 of 529",
+          "due follow-ups completed"
+        ]
+      ],
+      "accent_index": 0,
+      "caption": "Read from the production tables: 2,227 of 2,326 answered calls received a next step by rule, and retries after inconclusive calls went from 551 to none."
+    },
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "What is not measured.",
+      "subtitle": "Routing correctness needs a reviewed sample. A transfer is measured to the attempt.",
+      "caption": "The record says what it cannot show: no labelled sample says how often the rules chose the right intent."
+    },
+    {
+      "kind": "title",
+      "seconds": 6,
+      "title": "Colaberry  ·  Case Study",
+      "subtitle": "Built by Kes. Verified from commits and production tables.",
+      "caption": "Every claim on this page is pinned to a commit or a query. Every figure spoken here is on the page underneath."
+    }
+  ]
+}

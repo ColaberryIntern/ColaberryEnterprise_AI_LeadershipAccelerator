@@ -1,0 +1,124 @@
+/* ============================================================================
+   goalDiagram.css -- the line-art figure under each goal.
+
+   House style from training.colaberry.com: hairline strokes, no fills except
+   where something is "on", small-caps labels, dashed connectors that march.
+
+   Each goal gets its own accent from the official palette. The accent is the
+   only colour in the drawing; everything else is a neutral stroke, so the eye
+   lands on the thing the diagram is actually about.
+   ========================================================================== */
+
+.cbv2-gd {
+  margin: 0;
+  --gd-line: var(--border-strong, #c9d1d9);
+  --gd-ink: var(--text-subtle, #6b7482);
+  --gd-accent: var(--cherry, #fb2832);
+}
+.cbv2-gd--opportunity { --gd-accent: #367895; }
+.cbv2-gd--workflow { --gd-accent: var(--cherry, #fb2832); }
+.cbv2-gd--people { --gd-accent: #77bb4a; }
+.cbv2-gd--team { --gd-accent: #e8920c; }
+
+.cbv2-gd svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 320px;
+  overflow: visible;
+}
+
+.cbv2-gd figcaption {
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* ------------------------------------------------------------------ pieces */
+
+.cbv2-gd__lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  fill: var(--gd-ink);
+}
+
+.cbv2-gd__box,
+.cbv2-gd__pen {
+  fill: none;
+  stroke: var(--gd-line);
+  stroke-width: 1.5;
+}
+.cbv2-gd__pen { stroke-dasharray: 5 4; }
+.cbv2-gd__box.is-accent { stroke: var(--gd-accent); stroke-width: 2; }
+.cbv2-gd__box.is-ok { stroke: #77bb4a; stroke-width: 2; }
+
+.cbv2-gd__head,
+.cbv2-gd__body {
+  fill: none;
+  stroke: var(--gd-line);
+  stroke-width: 1.5;
+}
+.cbv2-gd__head.is-accent { stroke: var(--gd-accent); stroke-width: 2.2; }
+
+.cbv2-gd__hub { fill: none; stroke: var(--gd-accent); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.cbv2-gd__hubdot { fill: var(--gd-accent); }
+
+.cbv2-gd__pick {
+  fill: none;
+  stroke: var(--gd-accent);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.cbv2-gd__tick {
+  fill: none;
+  stroke: #77bb4a;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Ranked bars: the leader takes the accent, the rest stay neutral. Deliberately
+   unlabelled -- they show that ranking HAPPENS, not what anyone's ranking was. */
+.cbv2-gd__bar { fill: var(--gd-line); opacity: 0.45; }
+.cbv2-gd__bar.is-lead { fill: var(--gd-accent); opacity: 1; }
+
+/* ------------------------------------------------------------- the movement */
+
+.cbv2-gd__flow {
+  fill: none;
+  stroke: var(--gd-accent);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 5;
+  stroke-linecap: round;
+  animation: cbv2-gd-march 1.1s linear infinite;
+}
+/* The return leg marches the other way, because it is a handback. */
+.cbv2-gd__flow--back { animation-direction: reverse; }
+.cbv2-gd__flow--b { animation-delay: 0.35s; }
+.cbv2-gd__flow--down { animation-delay: 0.2s; }
+@keyframes cbv2-gd-march { to { stroke-dashoffset: -20; } }
+
+.cbv2-gd__pulse {
+  fill: var(--gd-accent);
+  animation: cbv2-gd-pulse 2s ease-in-out infinite;
+}
+@keyframes cbv2-gd-pulse {
+  0%, 100% { opacity: 1; r: 5; }
+  50% { opacity: 0.35; r: 6.5; }
+}
+
+/*
+ * Reduced motion stops the drawing entirely. Nothing is lost: every diagram is
+ * legible as a still, because the connectors are drawn along their whole length
+ * rather than being revealed by the animation.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-gd__flow,
+  .cbv2-gd__pulse { animation: none; }
+}

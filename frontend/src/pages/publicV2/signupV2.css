@@ -1,0 +1,102 @@
+/* ============================================================================
+   signupV2.css -- free business account creation.
+   Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+/* The card sits on the dark page hero, so it needs its own light ground and
+   its own text colours -- inheriting the hero's would make the labels vanish. */
+.cbv2-signup-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-7);
+  color: var(--text-strong);
+  display: grid;
+  gap: var(--space-5);
+}
+.cbv2-signup-card .cbv2-field__label,
+.cbv2-signup-card legend { color: var(--text-strong); }
+
+.cbv2-signup-card__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  color: var(--text-strong);
+}
+.cbv2-signup-card__sub {
+  margin: calc(var(--space-2) * -1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.6;
+}
+.cbv2-signup-card form { display: grid; gap: var(--space-5); }
+
+.cbv2-signup-card__go { width: 100%; justify-content: center; }
+.cbv2-signup-card__foot {
+  margin: 0;
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: var(--fs-caption);
+}
+.cbv2-signup-card__actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.cbv2-signup-card__actions .cbv2-btn { flex: 1; justify-content: center; min-width: 160px; }
+
+/* A soft note under a field: reassurance, not an error, so it must not read as one. */
+.cbv2-hint {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------- includes ---- */
+
+.cbv2-includes {
+  list-style: none;
+  margin: var(--space-7) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+  max-width: 52ch;
+}
+.cbv2-includes li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  line-height: 1.55;
+}
+
+/* ---------------------------------------------------------------- goals ---- */
+
+.cbv2-goals { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+
+.cbv2-goal {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  min-height: var(--target-min, 44px);
+  color: var(--text-strong);
+}
+.cbv2-goal:hover { border-color: var(--text-subtle); }
+/* Selected state carries weight and border, never colour alone. */
+.cbv2-goal.is-selected {
+  border-color: var(--text-strong);
+  border-width: var(--border-2, 2px);
+  background: var(--surface-sunken);
+  font-weight: 600;
+}
+
+@media (max-width: 980px) {
+  .cbv2-includes { margin-top: var(--space-6); }
+  .cbv2-signup-card { padding: var(--space-6); }
+}

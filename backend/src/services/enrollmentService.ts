@@ -1,6 +1,20 @@
+import crypto from 'crypto';
 import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
+import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
+import { pickBestEnrollment } from './participantService';
+import { redactForLogs } from '../utils/piiRedaction';
+
+// Lazy import (the convention ghlService itself uses for aiEventService): a
+// top-level import pulls settingsService -> SystemSetting -> config/database and
+// constructs Sequelize at module load, which breaks any consumer that does not
+// have a DATABASE_URL - including this service's own unit tests.
+async function pushLeadToGhl(lead: unknown): Promise<void> {
+  const { syncNewLeadToGhl } = await import('./ghlService');
+  await syncNewLeadToGhl(lead as never);
+}
+
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
   const cohort = await Cohort.findByPk(cohortId);
@@ -86,7 +100,10 @@ export async function createInvoiceEnrollment(
   return enrollment;
 }
 
-export async function markEnrollmentPaid(externalId: string): Promise<Enrollment | null> {
+export async function markEnrollmentPaid(
+  externalId: string,
+  paymentDetails?: { paymentId: number; amount: number }
+): Promise<Enrollment | null> {
   // Look up by external ID (CB-{customerId}-{timestamp}) — this is what PaySimple sends in webhooks
   const enrollment = await Enrollment.findOne({
     where: { paysimple_external_id: externalId },
@@ -98,6 +115,15 @@ export async function markEnrollmentPaid(externalId: string): Promise<Enrollment
   if (enrollment.payment_status === 'paid') return enrollment;
 
   enrollment.payment_status = 'paid';
+  // Confirmed payment is the self-serve grant condition — without this, requestMagicLink
+  // (participantService) keeps rejecting the paid student with "pending admin approval"
+  // forever, since it gates strictly on portal_enabled, not payment_status.
+  enrollment.portal_enabled = true;
+  if (paymentDetails) {
+    enrollment.paysimple_payment_id = String(paymentDetails.paymentId);
+    enrollment.amount_paid = paymentDetails.amount;
+    enrollment.enrolled_at = new Date();
+  }
   await enrollment.save();
 
   // Increment seats on confirmed payment
@@ -110,7 +136,43 @@ export async function markEnrollmentPaid(externalId: string): Promise<Enrollment
   exitPaymentCampaign(enrollment.email)
     .catch(err => console.error('[Payment Campaign] Auto-exit failed:', err.message));
 
+  // A paying student may still hold a lingering free "Explorer" account from an
+  // earlier Open House visit (a separate row in the Explorer cohort). Now that
+  // they've paid, retire that redundant free row so they appear once — as a paid
+  // student — and not also as an active free prospect. Best-effort + idempotent;
+  // never touches the paid row, seats, or money. This is the observable
+  // "moved out of the free class once you pay and activate".
+  retireRedundantExplorerAccounts(enrollment.email, enrollment.id)
+    .catch(err => console.error('[Enrollment] Explorer reconcile failed (non-fatal):', err.message));
+
   return enrollment;
+}
+
+/**
+ * When someone becomes a paid student, withdraw any OTHER still-active Explorer
+ * (free Open House) enrollment they hold, so the same person is not counted as
+ * both a paid student and a free prospect. Idempotent: withdrawn rows are skipped
+ * on re-run, and the paid enrollment itself is never touched. enrollment_type is
+ * left as 'explorer' so dashboards keep excluding it; status='withdrawn' removes
+ * it from the active free-prospect view.
+ */
+export async function retireRedundantExplorerAccounts(email: string, paidEnrollmentId: string): Promise<void> {
+  const strays = await Enrollment.findAll({
+    where: {
+      email: email.toLowerCase().trim(),
+      enrollment_type: 'explorer',
+      status: 'active',
+    },
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  for (const stray of strays) {
+    if (stray.id === paidEnrollmentId) continue;
+    await stray.update({
+      status: 'withdrawn',
+      notes: `${stray.notes ? stray.notes + ' | ' : ''}Retired ${today}: superseded by paid enrollment ${paidEnrollmentId}`,
+    });
+    console.log(`[Enrollment] Retired redundant Explorer ${stray.id} (${email}) — now a paid student`);
+  }
 }
 
 export async function markEnrollmentFailed(externalId: string): Promise<Enrollment | null> {
@@ -167,7 +229,17 @@ export async function createAdminEnrollment(data: {
     payment_status: 'paid',
     payment_method: 'invoice',
     status: 'active',
-    portal_enabled: false,
+    // Portal access ON at creation. This was `false`, which meant every student
+    // an admin rostered manually hit "Your enrollment is pending admin approval
+    // for portal access" on the login screen and could not get in — only the
+    // /quick-add-student route flipped it on afterwards. Found live when the
+    // 2026-07-23 Orientation cohort could not check in via the class QR, and
+    // independently confirmed 2026-07-30 when 9 real paying Open House seat-hold
+    // depositors turned out silently locked out the same way for two weeks.
+    // An admin who wants a rostered-but-locked-out student can still revoke via
+    // setPortalAccess(); the safe default is the one that matches the admin's
+    // intent when they add a paid student to a cohort.
+    portal_enabled: true,
     notes: data.notes || 'Manually added by admin',
   });
 
@@ -178,6 +250,187 @@ export async function createAdminEnrollment(data: {
     ps.createProjectForEnrollment(enrollment.id)
   ).catch(err => console.error('[Project] Auto-create failed:', err.message));
 
+  return enrollment;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Explorer (Open House) enrollments                                  */
+/* ------------------------------------------------------------------ */
+
+// An "Explorer" is an Open House visitor who can log into the portal and explore
+// the app but has NOT paid or joined a class. They are placed in the dedicated
+// Explorer cohort (a "free class of its own"), flagged enrollment_type='explorer',
+// and — critically — do NOT consume a paid seat and are excluded from student
+// metrics. Placement is deterministic (the explorer cohort), NOT start_date-based:
+// the old getLatestOpenCohort() routing filed prospects into whichever cohort
+// started soonest, which dumped real signups into a demo cohort.
+export async function createExplorerEnrollment(input: {
+  name: string;
+  email: string;
+  phone?: string;
+  company?: string;
+  title?: string;
+  company_size?: string;
+  order_id?: string;
+  source?: string;
+  utm_source?: string;
+  utm_campaign?: string;
+  page_url?: string;
+}): Promise<{ enrollment: Enrollment; created: boolean; cohort_id: string }> {
+  const email = input.email.toLowerCase().trim();
+  if (!email) throw new AppError('email is required', 400);
+
+  const { getOrCreateExplorerCohort } = await import('./cohortService');
+  const cohort = await getOrCreateExplorerCohort();
+  if (!cohort) throw new AppError('No cohort available to place the Explorer under', 409);
+
+  // Idempotent: reuse any existing ACTIVE enrollment for this email across
+  // EVERY cohort, not just the Explorer one -- including a real paid student
+  // -- so we never duplicate or downgrade anyone. This used to check only
+  // `cohort_id: cohort.id` (the Explorer cohort itself), which meant anyone
+  // who already had a real seat in a *different* cohort got a brand-new
+  // duplicate Explorer row every time this ran (a repeat Open House RSVP
+  // through the live registration endpoint, or a resynced Eventbrite batch
+  // row) -- the query never even looked at their real enrollment. That
+  // duplicate then silently shadowed the student's real points/attendance
+  // (`pickBestEnrollment`'s recency tiebreak could make the new, empty
+  // duplicate outrank their real account at login) or, if the duplicate
+  // landed in a different cohort than the one their live sessions belong to,
+  // caused live-session check-in to fail outright with no useful error.
+  // Found live 2026-07-31 across 8+ real students (Sonya Parker, Britiana
+  // Akhile, Martin Mungai, Marcus Zeno, and others) before being traced back
+  // to this exact query scope -- every one of those was a symptom, this is
+  // the actual source. `pickBestEnrollment` picks the same canonical account
+  // the real login flow would, so a caller who already has multiple active
+  // rows (a pre-existing duplicate from before this fix) still gets routed
+  // to their real one, not an arbitrary match.
+  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });
+  const existing = pickBestEnrollment(existingCandidates);
+  if (existing) {
+    return { enrollment: existing, created: false, cohort_id: existing.cohort_id };
+  }
+
+  const source = input.source || 'Open House Explorer';
+  const enrollment = await Enrollment.create({
+    full_name: input.name.trim() || 'Open House Guest',
+    email,
+    company: input.company?.trim() || '',
+    title: input.title?.trim() || undefined,
+    company_size: input.company_size?.trim() || undefined,
+    phone: input.phone || undefined,
+    cohort_id: cohort.id,
+    enrollment_type: 'explorer',
+    payment_status: 'pending',
+    payment_method: 'credit_card',
+    status: 'active',
+    portal_enabled: true,
+    notes: `${source}${input.order_id ? ` | eventbrite_order:${input.order_id}` : ''}`,
+  });
+  // NOTE: intentionally does NOT increment cohort.seats_taken — Explorers are not
+  // paying students and must never consume a paid seat.
+
+  // Capture as a Lead for CRM visibility (best-effort — never block the account).
+  let leadId: number | null = null;
+  try {
+    const [lead] = await Lead.findOrCreate({
+      where: { email },
+      defaults: {
+        name: enrollment.full_name,
+        email,
+        phone: input.phone || '',
+        source: 'open_house',
+        form_type: 'open_house',
+        status: 'new',
+        utm_source: input.utm_source,
+        utm_campaign: input.utm_campaign,
+        page_url: input.page_url,
+      } as any,
+    });
+    leadId = (lead as any)?.id ?? null;
+
+    // Push to GHL so admissions and Cora Voice can actually reach them. This
+    // path captured leads for months without ever calling the sync, which is
+    // why 490 open-house leads had no GHL contact (Kes, 2026-08-25).
+    // Fire-and-forget, matching every other sync call site: lead capture is
+    // already best-effort here and a CRM hiccup must not fail the signup.
+    // ghlAccountRouting withholds the push while the School of Data Analytics
+    // key is unprovisioned, so this cannot write to the wrong account.
+    if (lead) {
+      pushLeadToGhl(lead).catch((e: any) =>
+        console.error('[OpenHouse] GHL sync error:', e?.message)
+      );
+    }
+  } catch (err: any) {
+    console.error('[OpenHouse] Lead capture failed (non-fatal):', err.message);
+  }
+
+  // Send the branded welcome with a one-click portal magic link, targeting THIS
+  // specific new enrollment. We generate the token on `enrollment` directly rather
+  // than doing an email-keyed lookup, which previously (via requestMagicLink) could
+  // land the token on a stale enrollment when a person has several. Best-effort so
+  // an email hiccup never loses the account, but the outcome is recorded to
+  // CommunicationLog and any failure is surfaced — never silently swallowed. Only
+  // fires on first creation, so re-running onboarding never double-sends.
+  {
+    const subject = 'Welcome to Colaberry — your AI journey starts now';
+    let sent = false;
+    let messageId: string | null = null;
+    let errorMessage: string | null = null;
+    try {
+      const { sendTrainingWelcome } = await import('./emailService');
+      const ttlDays = Math.max(1, env.trainingWelcomeTokenTtlDays || 30);
+      const token = crypto.randomUUID();
+      await enrollment.update({
+        portal_token: token,
+        portal_token_expires_at: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+      });
+      const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
+      const result = await sendTrainingWelcome({
+        to: email,
+        fullName: enrollment.full_name,
+        portalLink: `${base}/portal/verify?token=${token}`,
+      });
+      sent = result.sent;
+      messageId = result.messageId || null;
+      if (!sent) errorMessage = 'welcome email not sent (kill switch active or SMTP unconfigured)';
+    } catch (err: any) {
+      errorMessage = err?.message || 'unknown error';
+    }
+    if (!sent) {
+      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${email}): ${errorMessage}`);
+    }
+    try {
+      const { logCommunication } = await import('./communicationLogService');
+      await logCommunication({
+        lead_id: leadId,
+        channel: 'email',
+        direction: 'outbound',
+        delivery_mode: 'live',
+        status: sent ? 'sent' : 'failed',
+        to_address: email,
+        from_address: env.trainingWelcomeFromEmail,
+        subject,
+        provider: 'mandrill',
+        provider_message_id: messageId,
+        error_message: errorMessage,
+        metadata: { event: 'open_house_welcome', enrollment_id: enrollment.id },
+      });
+    } catch (e: any) {
+      console.error('[OpenHouse] welcome comm-log failed (non-fatal):', e?.message);
+    }
+  }
+
+  return { enrollment, created: true, cohort_id: cohort.id };
+}
+
+// Admin "Convert to enrolled": flip an Explorer into a standard enrollment. Seat
+// reservation + payment follow the normal enrollment path, not this flag flip.
+export async function convertExplorerToStandard(enrollmentId: string): Promise<Enrollment> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) throw new AppError('Enrollment not found', 404);
+  if (enrollment.enrollment_type === 'explorer') {
+    await enrollment.update({ enrollment_type: 'standard' });
+  }
   return enrollment;
 }
 
@@ -214,7 +467,7 @@ async function enrollInPaymentCampaignIfUnpaid(enrollment: Enrollment): Promise<
 
   const { enrollLeadsInCampaign } = await import('./campaignService');
   const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
 }
 
 /* ------------------------------------------------------------------ */
@@ -249,7 +502,7 @@ export async function enrollInClassReadinessCampaign(enrollment: Enrollment): Pr
 
   const { enrollLeadsInCampaign } = await import('./campaignService');
   const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
 }
 
 async function exitPaymentCampaign(email: string): Promise<void> {

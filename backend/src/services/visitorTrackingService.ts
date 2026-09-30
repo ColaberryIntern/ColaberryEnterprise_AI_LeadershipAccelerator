@@ -1,22 +1,50 @@
 import { Op } from 'sequelize';
 import { Visitor, VisitorSession, PageEvent, Lead, Activity, EventLedger } from '../models';
 import { env } from '../config/env';
+import { extractAttributionFromUrl } from './marketing/clickClassification';
+import { categorizeForBrand } from './pageCategoryMaps';
 
 /**
  * Maps a URL path to a known page category.
  * Strips query parameters and trailing slashes before matching.
  */
-export function categorizePagePath(path: string): string {
+/**
+ * Decide what a page means, for the brand it belongs to.
+ *
+ * `brandSlug` is optional and the omission is meaningful, not lazy: when it is absent, or
+ * when the brand declares no map of its own, this falls through to the Colaberry route
+ * map below and behaves exactly as it always has. The platform is bit-for-bit unchanged.
+ *
+ * When a brand DOES declare a map, that map is authoritative and the Colaberry map is not
+ * consulted at all. This is the whole point. A shared fallback is how AI Flotation's
+ * `/about` came to be labelled `homepage` — Colaberry's rule, applied confidently to
+ * another company's page.
+ */
+export function categorizePagePath(path: string, brandSlug?: string | null): string {
   // Strip query parameters
   let cleaned = path.split('?')[0];
   // Strip trailing slashes (but keep leading slash)
   cleaned = cleaned.replace(/\/+$/, '') || '/';
+
+  if (brandSlug) {
+    const brandCategory = categorizeForBrand(cleaned, brandSlug);
+    if (brandCategory !== null) return brandCategory;
+  }
 
   const categoryMap: Record<string, string> = {
     '/': 'homepage',
     '': 'homepage',
     '/pricing': 'pricing',
     '/program': 'program',
+    // The canonical Case Study route is `/stories`; `/case-studies` is only a
+    // redirect to it (frontend/src/routes/publicRoutes.tsx). Because the browser
+    // reports the RESOLVED path, every real visit was tracked as `/stories`,
+    // which matched nothing here and fell through to 'other' below - so the
+    // `case_studies` category has never once been produced in production, and
+    // the six consumers that branch on it were dead code. Both keys are kept:
+    // a direct hit on the legacy URL, logged before the redirect resolves, must
+    // categorise identically or the same visit changes category mid-session.
+    '/stories': 'case_studies',
     '/case-studies': 'case_studies',
     '/contact': 'contact',
     '/enroll': 'enroll',
@@ -49,6 +77,13 @@ export function categorizePagePath(path: string): string {
   if (cleaned.startsWith('/referrals')) return 'referrals';
   if (cleaned.startsWith('/portal')) return 'portal';
   if (cleaned.startsWith('/admin')) return 'admin';
+  // Case Study detail pages: `/stories/:slug`. The trailing slash in the prefix
+  // is load-bearing - a bare `startsWith('/stories')` would also swallow any
+  // future sibling route such as `/stories-of-x` or `/storiesboard`, silently
+  // mislabelling an unrelated page as a Case Study view and inflating the
+  // strength-20 `deep_scroll_case_study` lead signal. The index route itself is
+  // matched by the exact `/stories` key in the map above.
+  if (cleaned.startsWith('/stories/')) return 'case_studies';
 
   return categoryMap[cleaned] || 'other';
 }
@@ -135,6 +170,17 @@ export async function getOrCreateSession(
     ip_address?: string;
     device_type?: string;
     site_slug?: string;
+    // Multi-tenant ecosystem context, resolved server-side by the caller from
+    // site_slug or hostname. All optional: an unregistered site still tracks, with
+    // null context and an emitted metric. Tracking is fail-soft by design — see
+    // tenantResolver.ts. NEVER accept these from a request body.
+    tenant_id?: string | null;
+    brand_id?: string | null;
+    source_id?: string | null;
+    entry_point_id?: string | null;
+    campaign_id?: string | null;
+    campaign_lead_id?: string | null;
+    organization_id?: string | null;
   }
 ): Promise<string> {
   const timeoutMs = env.visitorSessionTimeoutMinutes * 60 * 1000;
@@ -173,6 +219,29 @@ export async function getOrCreateSession(
     entry_page: pagePath,
     exit_page: pagePath,
     referrer_url: data.referrer_url || null,
+    // Attribution read from the LANDING PAGE URL, server-side, rather than from separate body
+    // fields. The UTMs and click IDs are already in `page_url` - the ad platform put them
+    // there - so parsing here means adopting a new click ID is a backend change alone, with
+    // no frontend release and no wait for cached tracker copies to refresh.
+    //
+    // That is not hypothetical: the tracker has always sent utm_source/campaign/medium as body
+    // fields and never utm_term/utm_content, so those two have been unavailable server-side for
+    // as long as the tracker has existed, despite being present in the URL of every click that
+    // carried them.
+    //
+    // Body values still win when present, so nothing that works today changes behaviour.
+    ...(() => {
+      const a = extractAttributionFromUrl(data.page_url);
+      return {
+        utm_content: a.utm_content,
+        utm_term: a.utm_term,
+        fbclid: a.fbclid,
+        gclid: a.gclid,
+        msclkid: a.msclkid,
+        ttclid: a.ttclid,
+        click_ids: Object.keys(a.click_ids).length > 0 ? a.click_ids : null,
+      };
+    })(),
     utm_source: data.utm_source || null,
     utm_campaign: data.utm_campaign || null,
     utm_medium: data.utm_medium || null,
@@ -181,6 +250,16 @@ export async function getOrCreateSession(
     is_bounce: true,
     landing_page_category: landingCategory,
     site_slug: data.site_slug || null,
+    // The session is the container that answers "which brand was this browsing on?".
+    // Visitors stay global because one browser legitimately moves between ecosystem
+    // brands; the brand relationship belongs to the session, not the browser.
+    tenant_id: data.tenant_id || null,
+    brand_id: data.brand_id || null,
+    source_id: data.source_id || null,
+    entry_point_id: data.entry_point_id || null,
+    campaign_id: data.campaign_id || null,
+    campaign_lead_id: data.campaign_lead_id || null,
+    organization_id: data.organization_id || null,
   } as any);
 
   // Increment visitor total_sessions
@@ -204,6 +283,18 @@ export async function recordPageEvent(params: {
   page_category?: string;
   event_data?: Record<string, any>;
   timestamp: Date;
+  // Multi-tenant ecosystem context. Denormalised onto the event rather than reached
+  // through a join to the session because page_events is the highest-row-count table
+  // in the database and the journey/analytics queries that need brand filtering are
+  // exactly the ones that cannot afford the join. Optional and never trusted from a
+  // request body; the caller resolves them server-side.
+  tenant_id?: string | null;
+  brand_id?: string | null;
+  source_id?: string | null;
+  entry_point_id?: string | null;
+  campaign_id?: string | null;
+  campaign_lead_id?: string | null;
+  organization_id?: string | null;
 }): Promise<void> {
   // Insert the page event
   await PageEvent.create({
@@ -216,6 +307,13 @@ export async function recordPageEvent(params: {
     page_category: params.page_category || null,
     event_data: params.event_data || null,
     timestamp: params.timestamp,
+    tenant_id: params.tenant_id || null,
+    brand_id: params.brand_id || null,
+    source_id: params.source_id || null,
+    entry_point_id: params.entry_point_id || null,
+    campaign_id: params.campaign_id || null,
+    campaign_lead_id: params.campaign_lead_id || null,
+    organization_id: params.organization_id || null,
   } as any);
 
   // Fetch the session to update aggregates
@@ -287,6 +385,33 @@ export async function resolveIdentity(
       },
     }
   );
+
+  // Backfill page events the same way (D1). Without this, page_events.lead_id
+  // would only ever be populated by the historical backfill script and would go
+  // stale the moment a new visitor is identified — and contextGraphService's
+  // booking-attempt query reads exactly this column.
+  //
+  // Guarded separately and swallowed on failure: identity resolution is the
+  // caller's actual job, and it must still link the visitor, write the Activity
+  // row, and emit the ledger event even if this analytics backfill fails. The
+  // `lead_id IS NULL` predicate keeps it idempotent and stops an already-
+  // attributed event from being reassigned to a different lead.
+  try {
+    await PageEvent.update(
+      { lead_id: leadId } as any,
+      {
+        where: {
+          visitor_id: visitorId,
+          lead_id: { [Op.is]: null as any },
+        },
+      }
+    );
+  } catch (err: any) {
+    console.warn(
+      '[VisitorTracking] page_events lead_id backfill failed (non-fatal):',
+      err?.message
+    );
+  }
 
   // Log activity on the lead
   await Activity.create({

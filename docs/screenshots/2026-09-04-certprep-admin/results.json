@@ -1,0 +1,108 @@
+[
+  {
+    "name": "the runner served and accepted answers",
+    "pass": true,
+    "detail": "10 answered"
+  },
+  {
+    "name": "a score is shown after finishing",
+    "pass": true
+  },
+  {
+    "name": "no console errors from cert-prep",
+    "pass": true,
+    "detail": "16 console errors total"
+  },
+  {
+    "name": "cert_diagnostic_complete was awarded through the route",
+    "pass": true,
+    "detail": "[{\"event_type\":\"cert_diagnostic_complete\",\"n\":\"1\",\"points\":\"40\"}]"
+  },
+  {
+    "name": "the mock shows a countdown, not just a question",
+    "pass": true,
+    "detail": "119:57 left"
+  },
+  {
+    "name": "an in-progress mock exists to expire",
+    "pass": true,
+    "detail": "2 session(s) expired"
+  },
+  {
+    "name": "the expired sitting is not still presented as answerable",
+    "pass": true,
+    "detail": "Colaberry AI Systems Architect Accelerator NEXT CLASS 0d 0h NEXT EVENT — Apprentice 40 pts 110 pts to Builder CE YOUR DA"
+  },
+  {
+    "name": "the admin page renders",
+    "pass": true,
+    "detail": "Colaberry Admin"
+  },
+  {
+    "name": "tab \"Question bank\" renders",
+    "pass": true
+  },
+  {
+    "name": "tab \"Review queue\" renders",
+    "pass": true
+  },
+  {
+    "name": "tab \"Evidence\" renders",
+    "pass": true
+  },
+  {
+    "name": "tab \"Audit\" renders",
+    "pass": true
+  },
+  {
+    "name": "a draft item was prepared for review",
+    "pass": true,
+    "detail": "CCARF-A1"
+  },
+  {
+    "name": "the draft item is shown with its answer key",
+    "pass": true,
+    "detail": "looking for CCARF-A1"
+  },
+  {
+    "name": "the server stamped the AUTHENTICATED admin as reviewer",
+    "pass": true,
+    "detail": "reviewer=walkthrough-admin@colaberry.test status=approved"
+  },
+  {
+    "name": "a pending evidence mapping was seeded",
+    "pass": true,
+    "detail": "6c826053-6df8-4259-966a-8c8f02e99bb5"
+  },
+  {
+    "name": "a rejection with no reason is REFUSED by the UI",
+    "pass": true
+  },
+  {
+    "name": "the rejection was recorded with a named human",
+    "pass": true,
+    "detail": "state=rejected by=walkthrough-admin@colaberry.test reason=The artifact is a plan, not a build."
+  },
+  {
+    "name": "the audit trail shows a question decision",
+    "pass": true
+  },
+  {
+    "name": "the audit trail shows an EVIDENCE decision — the bug fixed this session",
+    "pass": true
+  },
+  {
+    "name": "the rejection reason is readable in the trail",
+    "pass": true
+  },
+  {
+    "name": "no horizontal overflow at 390px (cert prep)",
+    "pass": false,
+    "detail": "scrollWidth=792 clientWidth=390"
+  },
+  {
+    "name": "control: a pre-existing admin page at 390px",
+    "pass": false,
+    "detail": "/admin/accelerator scrollWidth=838 clientWidth=390"
+  }
+]

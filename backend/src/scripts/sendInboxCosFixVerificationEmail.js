@@ -112,7 +112,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     subject: '[Verified] Inbox COS digest action flow fixed - Playwright walkthrough',
     text,
     html,

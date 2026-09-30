@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260817-k4q9 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Monday, August 17, 2026 at 2:26 PM</div>
+    <div><span class="sid">CC-20260817-k4q9</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**`POST /api/portal/sbp/builds` refused any single interview answer over 2,000 characters, on a field the student never filled in, and the portal narrated that refusal as &quot;we could not reach the requirements service ... once you are back online&quot;**</h2>
+          <span class="badge">2026-08-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Taiwo Oludimimu (taiwo@colaberry.com) reported that running the build wizard from the start produced a starter-template banner ending `(Invalid input)`. `Invalid input` is this repo&#39;s generic Zod 400 (`sbpRoutes.ts` `fail()`), so the server was reached and REFUSED the payload; the banner reported a refusal as an outage and told him to retry once back online, which is the one action that could not help. Root cause is an internal contract mismatch, not an outage: `frontend/src/pages/portal/projects/deriveLegacyScope.ts` copies ONE whole interview answer verbatim into `users` / `data_sources` / `done_definition`, and `startSchema` capped those three at `2_000` while the `answers[].answer` field they are copied FROM is capped at `4_000`. So the real ceiling on a single interview reply was 2,000 characters, enforced on a derived field with no UI, on a wizard whose own copy says &quot;Tell us everything ... Don&#39;t hold back&quot;. Four fixes, in two groups. **(1) The payload defect:** introduced an exported `ANSWER_MAX = 4_000` in `sbpRoutes.ts` and pointed all four fields at it so the derived fields can no longer be tighter than their own source; `deriveLegacyScope` now clamps each derived field to the same ceiling (lossless, since the full text always travels in `answers`); `ProjectWizard.tsx` gained `maxLength` on the idea, name and answer inputs plus a `Counter` that appears at 80% so the boundary is met while typing rather than after Confirm; `intakeQuestionsService.ts`&#39;s `isQuestionShaped()` gained the missing UPPER bounds (`id` 80, `question` 500) that `startSchema` already enforced on the way back in, closing a second latent 400 where a long model-written question would have refused a build on text the student never wrote. **(2) The lie:** extracted failure classification into a new dependency-free `frontend/src/services/sbpFailure.ts` with `classifyError()` (returns a `kind` of `unreachable` / `rejected` / `server_error` / `not_enabled` / `unavailable` / `timeout`) and `describeFailure()` (title, body, action per kind). `classifyError` also salvages the server&#39;s `issues` array, which was already on the wire and which the old `toError` discarded, so the banner can name the field instead of printing the word `Invalid input`. `PipelineState`&#39;s `local` variant now carries the whole classified `SbpError` rather than a bare message string, and the banner renders per-kind copy; only a genuine `unreachable` still mentions the network. Also closed the observability gap that hid all of this: `fail()`&#39;s ZodError branch returns without calling `next(err)`, so no global handler ever saw a rejected build and NOTHING recorded which field failed; it now emits a structured `sbp_request_rejected` log carrying field paths and limits only, never the student&#39;s own text.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Reproduced against the deployed production artifact**, read-only, no writes and no student data: a script run inside `accelerator-backend` using prod&#39;s own zod `4.3.6` and the caps as shipped in `/app/dist/routes/sbpRoutes.js` accepts a 2,000-character answer and returns `400 Invalid input -&gt; users(too_big)` at 2,001, while the fixed caps accept all of 500/2,000/2,001/2,500/4,000. Tests confirmed FAILING FIRST for both halves before the fix: `sbpRoutes.startSchema.derivedScope.test.ts` 2 of 3 failed with the rejected path reported as exactly `&quot;users&quot;`; `sbpFailureHonesty.test.ts` 8 of 11 failed against a restored copy of the original `toError` + single-banner behaviour; `deriveLegacyScopeLength.test.ts` 2 of 4 failed with the clamp removed. All 19 pass with the fix. One assertion was tightened after the failing-first run exposed it as weak: &quot;does not tell a 400 to come back once they are online&quot; passed against the ORIGINAL code because &quot;back online&quot; lived in the action line, not the body, so it now asserts on `copy.action`. Regression: `jest src/routes/__tests__ src/services/sbp/__tests__` 770 passed / 772; the 2 failures (`projectRoutes.test.ts`, `enrollmentRoutes.test.ts`) are unrelated to every changed file and were proven to be full-run resource contention by re-running each in isolation immediately after (5/5 and 4/4 passed). `tsc --noEmit`: frontend clean, exit 0, zero output; backend clean for both changed files (the 15 backend errors are all pre-existing `Cannot find module &#39;axios&#39;/&#39;playwright&#39;` junction artifacts in unrelated openclaw/inbox files).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Not deployed. No deploy was performed and none should be inferred from this entry.** Blast radius established from live prod rather than assumed: this does NOT hit every student, it hits students who write a long answer, which selects for the most thorough ones. Two students carry the exact fallback signature (10 tasks, all client-minted `p&lt;epoch&gt;-tN` story ids, zero `build_intake`, zero `build_plans`): Taiwo Oludimimu `c30f8234` and Ikenna Nzeribe `c16a410c`, both 2026-08-14. Taiwo has exactly ONE project, not several: today&#39;s second attempt reused his existing active project and created nothing, and all 10 of his tasks are `not_started` with none verified, so nothing of his is at risk, and nothing of his was touched. Four further projects (qninying 10, shabana 10, bfglz 3, farhat 1) carry residual client-minted tasks alongside real plans from a later successful attempt; those were deliberately left alone. **A separate, unfixed defect is disclosed:** the browser keeps its `Date.now()` pseudo-id even after a successful build and never adopts the server UUID, producing 125 `400`s on `/api/portal/workspace/*` in a 4.7-hour window from non-UUID `project_id`s; that is an id-reconciliation bug needing its own fix. Also noted and not built: `startSchema` already accepts a `document` field at 400,000 characters that the wizard never uses, which is the natural home for the pasted requirements document that triggered this.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Wizard 400 fix deployed to production</h2>
+          <span class="badge">2026-08-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Nothing yet. Branch `workstream/build-wizard-400-honesty` off `origin/main` (`017763fa`), authored in external worktree `C:/Users/ali_m/wizard-400-wt`, not from the OneDrive tree.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Blocked, deliberately. Deploy was not authorised in this session, so the entry stays unchecked until a deploy is actually confirmed against the running container.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Until this ships, students who paste long answers keep hitting the same wall. Taiwo was told this honestly rather than being sent to retry into it.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260817-k4q9</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

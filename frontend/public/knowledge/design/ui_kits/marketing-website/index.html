@@ -1,0 +1,43 @@
+<!-- @dsCard group="Marketing Website" viewport="1280x880" name="Marketing site" subtitle="Home · Program · Enroll — interactive click-through" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colaberry — Future-proof your career in data &amp; AI</title>
+<link rel="icon" href="../../assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="../../styles.css">
+<link rel="stylesheet" href="site.css">
+</head>
+<body class="cbsite">
+<div id="root"></div>
+
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="../../components/core/_standalone.jsx"></script>
+<script type="text/babel" src="parts.jsx"></script>
+<script type="text/babel" src="home.jsx"></script>
+<script type="text/babel" src="program-enroll.jsx"></script>
+<script type="text/babel">
+  const { Header, Footer, HomeView, ProgramView, EnrollView } = window;
+  function App() {
+    const [view, setView] = React.useState('home');
+    const go = (v) => { setView(v); window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' }); };
+    React.useEffect(() => {
+      if (window.lucide && window.lucide.createIcons) window.lucide.createIcons();
+    });
+    const View = view === 'program' ? ProgramView : view === 'enroll' ? EnrollView : HomeView;
+    return (
+      <React.Fragment>
+        <Header go={go} current={view} />
+        <View key={view} go={go} />
+        <Footer go={go} />
+      </React.Fragment>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

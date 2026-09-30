@@ -78,7 +78,7 @@ ali@colaberry.com`);
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ram@colaberry.com',
-    cc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    cc: ['ali@colaberry.com'],
     inReplyTo: '<19e82ebe3c63678e@mail.gmail.com>',
     references: '<19e82ebe3c63678e@mail.gmail.com>',
     subject: 'Re: Expense Reimbursement List for payroll period ending 05/08/2026 - cleanup done',

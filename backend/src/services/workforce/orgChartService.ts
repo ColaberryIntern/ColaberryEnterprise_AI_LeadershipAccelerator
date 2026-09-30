@@ -1,0 +1,456 @@
+import { Op } from 'sequelize';
+import Organization from '../../models/Organization';
+import OrgMember from '../../models/OrgMember';
+import AdminUser from '../../models/AdminUser';
+import Enrollment from '../../models/Enrollment';
+import AiAgent from '../../models/AiAgent';
+import { Ticket } from '../../models';
+import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
+import { OPEN_TICKET_STATUS_FILTER, countOpenTicketsForAgent } from './liveAgentsService';
+import { assignHierarchyColors } from './orgChartColorAssignment';
+
+/**
+ * orgChartService — the real, drill-down org chart Ali asked for: Human
+ * Employees (real org_members on the "Colaberry" org) -> AI Leadership (real
+ * AiAgent rows with reports_to_type='human') -> AI Staff (reports_to_type=
+ * 'agent', chained through Leadership). Every field traces to live data;
+ * nothing here is hand-written prose. Powers the WorkforceOSPage org-chart
+ * section (replacing the fictional AI_ORG director roster) and its Mermaid
+ * overview. See directives/register-ticket-creating-agent.md Step 10 for the
+ * authoritative hierarchy spec this reads.
+ *
+ * Reuses resolveReportsToChainWithTrail() (the SAME recursive walk
+ * ticketService.createTicket() gates ticket creation on) rather than
+ * re-deriving the chain — this is the read-only "who reports to whom" view of
+ * the same data that write path already enforces.
+ *
+ * Zero N+1 by construction: every per-entity lookup below (display names,
+ * open ticket counts, throttled human tasks) is ONE batched query across all
+ * entities, not one query per row — see each section's comment.
+ */
+
+const COLABERRY_ORG_NAME = 'Colaberry';
+
+/** Ali's 6 named departments (live, 2026-08-19, session CC-20260818-x4nk
+ * continued — see the org-chart-departments run's request.md), in the order
+ * he gave them. Any human whose `team` isn't one of these (including null)
+ * buckets into `OTHER_DEPARTMENT` — never silently dropped from the chart. */
+export const NAMED_DEPARTMENTS = ['Exec', 'Sales', 'Operations', 'Recruiting', 'Customer Support', 'Marketing'] as const;
+export const OTHER_DEPARTMENT = 'Other';
+
+/** Org Chart v3 (2026-08-19, session CC-20260818-x4nk continued) — Ali,
+ * live: "the red Ali should be removed." `ali+10@colaberry.com` is a real,
+ * deliberate `org_members` row (used for something else Ali has going on)
+ * that should never render as a human employee on this chart. Excluded
+ * HERE, at display time, rather than deleted — the row itself is untouched
+ * in the DB. Named after the specific complaint it fixes (its old hash-based
+ * avatar color happened to land on `--chart-2`, "cherry red") so a future
+ * reader knows exactly why this one address is special-cased instead of
+ * wondering if it's a stale TODO. A `Set`, not a single constant, so a
+ * future similar exclusion doesn't need a second parallel mechanism. */
+export const EXCLUDED_HUMAN_EMAILS = new Set(['ali+10@colaberry.com']);
+
+function resolveDepartment(team: string | null): string {
+  if (team && (NAMED_DEPARTMENTS as readonly string[]).includes(team)) return team;
+  return OTHER_DEPARTMENT;
+}
+
+/** Thrown when the "Colaberry" Organization row itself can't be found — a
+ * distinct, named error class (not a generic Error) per this repo's error-
+ * classification rule, since a missing seed row is a different failure mode
+ * than "the org exists but has zero members" (which is not an error at all). */
+export class ColaberryOrgNotFoundError extends Error {
+  readonly error_class = 'ColaberryOrgNotFoundError' as const;
+
+  constructor() {
+    super('No Organization row named "Colaberry" was found — cannot build the org chart without it.');
+    this.name = 'ColaberryOrgNotFoundError';
+  }
+}
+
+export interface OrgChartTask {
+  id: string;
+  ticket_number: number | null;
+  title: string;
+  status: string;
+  priority: string;
+  type: string;
+  created_at: Date | null;
+}
+
+export interface OrgChartHuman {
+  id: string;
+  name: string;
+  email: string;
+  team: string | null;
+  /** One of `NAMED_DEPARTMENTS`, or `OTHER_DEPARTMENT` for a null/
+   * unrecognized `team` — always present, never null (the frontend's
+   * department-grouping render key). */
+  department: string;
+  role: 'manager' | 'member';
+  /** AiAgent ids with reports_to_type='human' resolving directly to this human. */
+  leadership_agent_ids: string[];
+  /** Count of AI Staff agents whose FULL reports_to chain resolves to this
+   * human, however many hops it takes — not just direct reports, so a future
+   * 3rd tier still counts correctly with zero code change here. */
+  staff_count: number;
+  /** The one throttled, most-recent OPEN ticket assigned to this human, or
+   * null when they genuinely have none yet — never a fabricated placeholder
+   * (Ali, live: "start them off with just one task a piece for right now"). */
+  task: OrgChartTask | null;
+  /** Org Chart v3 (2026-08-19) — this human's distinct "main" color from the
+   * --chart-1..8 palette, present ONLY when they have >=1 AI Leadership
+   * agent reporting to them (see orgChartColorAssignment.ts). `null` for
+   * everyone else — Ali, live: "use the main colors for the people that
+   * have AI Agent staff" implies everyone else needs no meaningful color;
+   * the frontend decides that fallback, not this API. */
+  hierarchy_color: string | null;
+}
+
+export interface OrgChartLeadershipAgent {
+  id: string;
+  agent_name: string;
+  display_name: string;
+  reports_to_human_id: string;
+  /** Real, human-readable "Reports to: <human name>" string — present on
+   * every resolved leadership entry so a card can show it before a click
+   * (Ali, live: "Each AI staff should have a tag on them to show who they
+   * report to on their cards before even clicking"). Never present for an
+   * `unresolved` agent, which has no chain to summarize. */
+  reports_to_summary: string;
+  staff_ids: string[];
+  open_ticket_count: number;
+  /** Org Chart v3 (2026-08-19) — always equal to the resolving human's
+   * `hierarchy_color` (every leadership agent resolves to SOME human, so
+   * this is never null in practice — see orgChartColorAssignment.ts). */
+  hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — real `AiAgent.enabled`. Before this,
+   * `getOrgChart()` had no enabled filter or field at all, so a deactivated
+   * agent rendered identically to an active one — this closes that honesty
+   * gap alongside the reset feature itself (Ali, live: "we just need to
+   * remove all of the task they are assigned with... deactivate current"). */
+  enabled: boolean;
+}
+
+export interface OrgChartStaffAgent {
+  id: string;
+  agent_name: string;
+  display_name: string;
+  /** The leadership agent this staff agent reports through, or `null` for an
+   * individual contributor who reports directly to a human (Org Chart v5,
+   * 2026-09-16) — there is no leadership card to link back to in that case. */
+  reports_to_agent_id: string | null;
+  /** Real "Reports to: <leadership agent's display name>" string, or
+   * "Reports to: <human name>" for the direct-to-human case above — same
+   * pre-click visibility requirement as OrgChartLeadershipAgent's. */
+  reports_to_summary: string;
+  open_ticket_count: number;
+  /** Org Chart v3 (2026-08-19) — the SAME color as the leadership agent this
+   * staff agent reports through (propagated down the branch). */
+  hierarchy_color: string | null;
+  /** AI Workforce Reset (2026-08-24) — see OrgChartLeadershipAgent.enabled's
+   * own comment; same honesty gap, same fix, for the Staff tier. */
+  enabled: boolean;
+}
+
+export interface OrgChartUnresolvedAgent {
+  id: string;
+  agent_name: string;
+  /** The trail's final hop, e.g. "AgentName (agent) -> [dangling]" — an
+   * honest disclosure of exactly where the chain breaks, not a bare boolean. */
+  reason: string;
+}
+
+export interface OrgChartResponse {
+  organization: { id: string; name: string };
+  humans: OrgChartHuman[];
+  leadership: OrgChartLeadershipAgent[];
+  staff: OrgChartStaffAgent[];
+  unresolved: OrgChartUnresolvedAgent[];
+  generated_at: Date;
+}
+
+interface HumanRollup {
+  leadershipIds: string[];
+  staffCount: number;
+}
+
+/** All ticket-creating agents this hierarchy applies to (only rows with a
+ * reports_to chain configured at all — the many other AiAgent rows in this
+ * table, e.g. website-intelligence/openclaw agents, have no reports_to and
+ * are correctly out of scope for this chart, not "unresolved"). */
+async function fetchHierarchyAgents(): Promise<AiAgent[]> {
+  return AiAgent.findAll({ where: { reports_to_type: { [Op.ne]: null } } });
+}
+
+/** Real display names for hierarchy agents, batched in one query (mirrors
+ * liveAgentsService.ts's findBlueprintAdminUsers() + map-by-id pattern). */
+async function fetchAgentIdentities(agentIds: string[]): Promise<Map<string, AdminUser>> {
+  if (agentIds.length === 0) return new Map();
+  const admins = await AdminUser.findAll({ where: { agent_id: { [Op.in]: agentIds } } });
+  return new Map(admins.map((a) => [a.agent_id as string, a]));
+}
+
+/** Open ticket counts for every hierarchy agent — one `countOpenTicketsForAgent()`
+ * call per agent (the SAME shared, canonical per-agent query `liveAgentsService.ts`'s
+ * `listLiveAgents()` and `agentDetailService.ts` also use), run concurrently via
+ * `Promise.all` rather than sequentially (small, proven-safe fan-out — ~23 hierarchy
+ * agents today, the same count `listLiveAgents()` already fans out to in production).
+ *
+ * Ticket Count Sync fix (2026-08-21, session CC-20260818-x4nk continued) — this used
+ * to be ONE batched `Ticket.findAll` across every agent's combined match-id list,
+ * followed by a JS loop that guessed which agent a returned row belonged to via
+ * `row.assigned_to_id || row.created_by_id`, preferring `assigned_to_id` whenever it
+ * was non-null. That guess was wrong as soon as `assigned_to_id` stopped being
+ * exclusively an agent identity: this same session's earlier `reports_to`/ticket-
+ * reassignment build now sets `assigned_to_id` to a HUMAN org_member id on most
+ * agent-created tickets, so those rows' `assigned_to_id` matched nothing in the
+ * agent lookup map and were silently dropped — the org chart summed to ~92 against a
+ * real total of 476 open tickets. Rather than patch the attribution guess in place (a
+ * second bugfix that risks drifting from the two OTHER already-correct
+ * implementations of "this agent's open ticket count" — `liveAgentsService.ts` and
+ * `ticketCreatorFilterResolver.ts`/`ticketService.ts`'s `?creator=` filter), this now
+ * reuses the same per-agent query `listLiveAgents()` already had right, eliminating
+ * the attribution step (and the bug class it enabled) entirely: N queries instead of
+ * 1 batched query, correctness over a premature optimization the org chart's own
+ * agent count (~23 today) doesn't need. */
+async function fetchOpenTicketCountsByAgent(
+  agents: AiAgent[],
+  identityByAgentId: Map<string, AdminUser>,
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  await Promise.all(agents.map(async (agent) => {
+    const identity = identityByAgentId.get(agent.id);
+    if (!identity) return; // no linked AdminUser -> no ticket identity to count against
+    counts.set(agent.id, await countOpenTicketsForAgent(identity.id, agent));
+  }));
+  return counts;
+}
+
+/** Each human's single throttled most-recent OPEN task, in ONE query across
+ * all humans (order DESC, keep only the first row seen per assigned_to_id —
+ * matches liveAgentsService.ts's batch-then-map convention, zero N+1). */
+async function fetchThrottledTaskByHuman(humanIds: string[]): Promise<Map<string, Ticket>> {
+  if (humanIds.length === 0) return new Map();
+  const rows = await Ticket.findAll({
+    where: {
+      assigned_to_type: 'org_member',
+      assigned_to_id: { [Op.in]: humanIds },
+      status: OPEN_TICKET_STATUS_FILTER,
+    },
+    order: [['created_at', 'DESC']],
+  });
+  const byHuman = new Map<string, Ticket>();
+  for (const row of rows) {
+    const humanId = row.assigned_to_id as string;
+    if (!byHuman.has(humanId)) byHuman.set(humanId, row); // first-seen = most recent (DESC order)
+  }
+  return byHuman;
+}
+
+/** Real display names: Enrollment.full_name, falling back to email — the
+ * exact pattern orgService.ts::getRoster() already uses for the same "Business
+ * Account roster" data, reused rather than re-derived. */
+async function fetchHumanNames(humanMembers: OrgMember[]): Promise<Map<string, string>> {
+  const enrollmentIds = humanMembers.map((m) => m.enrollment_id).filter((id): id is string => !!id);
+  if (enrollmentIds.length === 0) return new Map();
+  const enrollments = await Enrollment.findAll({ where: { id: { [Op.in]: enrollmentIds } } });
+  return new Map(enrollments.map((e) => [e.id, e.full_name]));
+}
+
+/** The ONE display-name resolution rule for a human (Enrollment.full_name,
+ * falling back to email) — shared by the final `humans` map AND the
+ * leadership `reports_to_summary` computation below, so the two can never
+ * drift into showing a different name for the same person. */
+function humanDisplayName(member: OrgMember, nameByEnrollmentId: Map<string, string>): string {
+  return (member.enrollment_id && nameByEnrollmentId.get(member.enrollment_id)) || member.email;
+}
+
+/** Excludes org_members whose email belongs to an AI-operated AdminUser
+ * identity (e.g. reese@colaberry.com, the Reese agent's real free-account
+ * email) — those are AI Staff wearing a human roster row, not real humans;
+ * live-verified 2026-08-19 against the real Colaberry roster. */
+async function excludeAiOperatedMembers(members: OrgMember[]): Promise<OrgMember[]> {
+  const emails = members.map((m) => m.email);
+  if (emails.length === 0) return members;
+  const aiOperated = await AdminUser.findAll({
+    where: { email: { [Op.in]: emails }, is_ai_operated: true },
+    attributes: ['email'],
+  });
+  const aiOperatedEmails = new Set(aiOperated.map((a) => a.email));
+  return members.filter((m) => !aiOperatedEmails.has(m.email));
+}
+
+export async function getOrgChart(): Promise<OrgChartResponse> {
+  const org = await Organization.findOne({ where: { name: COLABERRY_ORG_NAME } });
+  if (!org) throw new ColaberryOrgNotFoundError();
+
+  const allMembers = await OrgMember.findAll({ where: { org_id: org.id }, order: [['created_at', 'ASC']] });
+  const aiExcludedMembers = await excludeAiOperatedMembers(allMembers);
+  // Org Chart v3 — see EXCLUDED_HUMAN_EMAILS's own comment above.
+  const humanMembers = aiExcludedMembers.filter((m) => !EXCLUDED_HUMAN_EMAILS.has(m.email.toLowerCase()));
+  const nameByEnrollmentId = await fetchHumanNames(humanMembers);
+  const humanIds = humanMembers.map((m) => m.id);
+  const taskByHuman = await fetchThrottledTaskByHuman(humanIds);
+
+  const agents = await fetchHierarchyAgents();
+  const identityByAgentId = await fetchAgentIdentities(agents.map((a) => a.id));
+  const openCountByAgentId = await fetchOpenTicketCountsByAgent(agents, identityByAgentId);
+
+  // Precomputed once, before the resolution loop, so a staff entry's
+  // `reports_to_summary` can look up its target leadership agent's display
+  // name regardless of which order `agents` iterates in (a staff agent may
+  // be processed before the leadership agent it reports to). Same source of
+  // truth the loop itself would otherwise compute per-agent — no duplicate
+  // logic, just precomputed for random-access lookup.
+  const agentDisplayNameById = new Map(agents.map((a) => [a.id, identityByAgentId.get(a.id)?.display_name || a.agent_name]));
+  // Same idea for humans' reports_to_summary — reuses the exact humanDisplayName()
+  // rule the final `humans` map below also uses, so the two can never show a
+  // different name for the same person.
+  const humanDisplayNameById = new Map(humanMembers.map((m) => [m.id, humanDisplayName(m, nameByEnrollmentId)]));
+
+  const leadership: OrgChartLeadershipAgent[] = [];
+  const staff: OrgChartStaffAgent[] = [];
+  const unresolved: OrgChartUnresolvedAgent[] = [];
+  const humanRollup = new Map<string, HumanRollup>();
+
+  const bumpRollup = (humanId: string, isLeadership: boolean, agentId: string) => {
+    const entry = humanRollup.get(humanId) ?? { leadershipIds: [], staffCount: 0 };
+    if (isLeadership) entry.leadershipIds.push(agentId);
+    else entry.staffCount += 1;
+    humanRollup.set(humanId, entry);
+  };
+
+  // Org Chart v5 (2026-09-16, Ali live: "Why is Dara in AI leadership instead
+  // of just AI Staff") — Leadership means "at least one OTHER agent reports
+  // through it," not merely "reports directly to a human." The two are the
+  // same thing for CoryBrain/workforce_intelligence_engine (this table's
+  // original 2 leadership agents), which is why `reports_to_type==='human'`
+  // alone worked as a proxy for years — but it silently miscategorized every
+  // individually-accountable agent that reports straight to a human with no
+  // one under it (Dara plus 6 pre-existing agents, confirmed live 2026-09-16:
+  // WorkforceCurriculumDirector, WorkforceCertificationDirector,
+  // AdmissionsConversionArchitect, StudentSuccessArchitect,
+  // FinanceIntelligenceArchitect, OperationsOptimizationArchitect). Computed
+  // as a real Set from the agents actually fetched, not merely "any agent
+  // with reports_to_type='agent'" — an agent whose target is unresolved would
+  // otherwise still count as giving its target a subordinate.
+  const agentIdsWithSubordinates = new Set(
+    agents.filter((a) => a.reports_to_type === 'agent').map((a) => a.reports_to_id as string),
+  );
+
+  for (const agent of agents) {
+    const displayName = agentDisplayNameById.get(agent.id) || agent.agent_name;
+    const openTicketCount = openCountByAgentId.get(agent.id) ?? 0;
+    // eslint-disable-next-line no-await-in-loop -- only 23 agents today, each a
+    // fast indexed findByPk per hop (1-2 hops); reuses the canonical resolver
+    // rather than re-deriving the walk, per this run's execution contract.
+    const { resolvedHumanId, trail } = await resolveReportsToChainWithTrail(agent);
+
+    if (!resolvedHumanId) {
+      unresolved.push({ id: agent.id, agent_name: agent.agent_name, reason: trail[trail.length - 1] ?? 'unresolved' });
+      continue;
+    }
+
+    const isLeadership = agent.reports_to_type === 'human' && agentIdsWithSubordinates.has(agent.id);
+
+    if (isLeadership) {
+      const reportsToName = humanDisplayNameById.get(resolvedHumanId) ?? resolvedHumanId;
+      leadership.push({
+        id: agent.id,
+        agent_name: agent.agent_name,
+        display_name: displayName,
+        reports_to_human_id: resolvedHumanId,
+        reports_to_summary: `Reports to: ${reportsToName}`,
+        staff_ids: [],
+        open_ticket_count: openTicketCount,
+        hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
+        enabled: agent.enabled,
+      });
+      bumpRollup(resolvedHumanId, true, agent.id);
+    } else if (agent.reports_to_type === 'human') {
+      // An individual contributor reporting directly to a human, with no
+      // subordinates of its own — real "AI Staff" by the fixed definition
+      // above, but with no leadership agent to hang its `reports_to_agent_id`
+      // off of. `reports_to_summary` still names the real accountable human.
+      const reportsToName = humanDisplayNameById.get(resolvedHumanId) ?? resolvedHumanId;
+      staff.push({
+        id: agent.id,
+        agent_name: agent.agent_name,
+        display_name: displayName,
+        reports_to_agent_id: null,
+        reports_to_summary: `Reports to: ${reportsToName}`,
+        open_ticket_count: openTicketCount,
+        hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
+        enabled: agent.enabled,
+      });
+      bumpRollup(resolvedHumanId, false, agent.id);
+    } else {
+      const reportsToAgentId = agent.reports_to_id as string;
+      const reportsToName = agentDisplayNameById.get(reportsToAgentId) ?? reportsToAgentId;
+      staff.push({
+        id: agent.id,
+        agent_name: agent.agent_name,
+        display_name: displayName,
+        reports_to_agent_id: reportsToAgentId,
+        reports_to_summary: `Reports to: ${reportsToName}`,
+        open_ticket_count: openTicketCount,
+        hierarchy_color: null, // filled in below, once `humans` exists — see assignHierarchyColors() call
+        enabled: agent.enabled,
+      });
+      bumpRollup(resolvedHumanId, false, agent.id);
+    }
+  }
+
+  const leadershipById = new Map(leadership.map((l) => [l.id, l]));
+  for (const s of staff) {
+    if (!s.reports_to_agent_id) continue; // reports directly to a human — no leadership card to backfill
+    leadershipById.get(s.reports_to_agent_id)?.staff_ids.push(s.id);
+  }
+
+  const humans: OrgChartHuman[] = humanMembers.map((m) => {
+    const rollup = humanRollup.get(m.id) ?? { leadershipIds: [], staffCount: 0 };
+    const task = taskByHuman.get(m.id);
+    return {
+      id: m.id,
+      name: humanDisplayName(m, nameByEnrollmentId),
+      email: m.email,
+      team: m.team,
+      department: resolveDepartment(m.team),
+      role: m.role,
+      leadership_agent_ids: rollup.leadershipIds,
+      staff_count: rollup.staffCount,
+      task: task
+        ? {
+            id: task.id,
+            ticket_number: task.ticket_number ?? null,
+            title: task.title,
+            status: task.status,
+            priority: task.priority,
+            type: task.type,
+            created_at: task.created_at ?? null,
+          }
+        : null,
+      hierarchy_color: null, // filled in below, once every human's leadership_agent_ids is known
+    };
+  });
+
+  // Org Chart v3 (2026-08-19) — hierarchy-anchored colors. Computed AFTER
+  // humans/leadership/staff are fully built (assignHierarchyColors() needs
+  // each human's real leadership_agent_ids and each agent's real
+  // reports_to_* to do the branch propagation) — a final merge pass, not a
+  // re-derivation of anything the loop above already computed.
+  const { humanColors, leadershipColors, staffColors } = assignHierarchyColors(humans, leadership, staff);
+  for (const h of humans) h.hierarchy_color = humanColors.get(h.id) ?? null;
+  for (const l of leadership) l.hierarchy_color = leadershipColors.get(l.id) ?? null;
+  for (const s of staff) s.hierarchy_color = staffColors.get(s.id) ?? null;
+
+  return {
+    organization: { id: org.id, name: org.name },
+    humans,
+    leadership,
+    staff,
+    unresolved,
+    generated_at: new Date(),
+  };
+}

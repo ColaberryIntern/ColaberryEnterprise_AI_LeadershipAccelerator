@@ -114,7 +114,7 @@ ${SIG_TEXT}`;
     bucketId: 33392153, // Family Goals & Life Planning
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'addie.m.mack@gmail.com',
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Fwd: 2025 tax return - IRS update + IP PIN + Lakeesha mailing the signed return',
     html: HTML,

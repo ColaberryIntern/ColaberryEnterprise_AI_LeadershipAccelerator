@@ -267,7 +267,7 @@ Sleep well. - CC-20260602-9q4r`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - AI Ops Command Center overnight project complete (test in the morning)',
     html: TEASER_HTML,
     text: TEASER_TEXT,

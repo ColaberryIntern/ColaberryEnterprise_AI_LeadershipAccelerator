@@ -60,7 +60,7 @@ CB drafts; you direct + approve:
 
 - **Day 1 after Basecamp activation** — read this brief + draft material in `Sales & Admissions` list
 - **Week 5 (Jul 5-10) and onward** — sales calls active as prospects come through the funnel
-- **2026-07-13 (Mon)** — Cohort 1 kickoff, your conversion focus shifts to Cohort 2
+- **2026-07-27 (Mon)** — Cohort 1 kickoff, your conversion focus shifts to Cohort 2
 
 ---
 

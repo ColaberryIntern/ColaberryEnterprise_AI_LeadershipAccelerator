@@ -1,0 +1,244 @@
+# Gitleaks configuration — Colaberry Enterprise AI Accelerator
+#
+# This repository is PUBLIC. Anything committed here is world-readable forever,
+# including content later "deleted" — git history keeps the blob. This config is
+# the single source of truth shared by three consumers:
+#
+#   1. .githooks/pre-commit          -> blocks a secret before it becomes a commit
+#   2. .github/workflows/secret-scan.yml -> blocks a secret before it reaches main
+#   3. `npm run secrets:history`     -> sweeps the entire history on demand
+#
+# Keeping one config for all three means a finding cannot pass CI but fail locally
+# (or the reverse). Change rules here, never in one consumer only.
+#
+# Escape hatches (documented in docs/SECRET_SCANNING.md):
+#   - inline `gitleaks:allow` comment on the offending line
+#   - a fingerprint entry in .gitleaksignore (reviewable, committed)
+# Both are deliberate and auditable. `git commit --no-verify` bypasses the hook
+# but NOT CI, which is the point: local speed-bumps are skippable, main is not.
+
+title = "Colaberry secret scanning"
+
+# Inherit the ~180 upstream rules (AWS, GCP, OpenAI, Slack, Stripe, GitHub, JWT,
+# private keys, ...) and extend rather than replace them. Replacing the default
+# set is the most common way a gitleaks config silently stops catching things.
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Repository-specific rules
+# ---------------------------------------------------------------------------
+# These cover credential shapes the upstream default set does not flag, and that
+# this codebase demonstrably produces. The database-URI rule exists because a
+# live Postgres URI with an inline password was committed to a compose file —
+# the upstream rules do not catch that shape, and neither did the previous
+# hand-rolled scanner.
+
+[[rules]]
+id = "colaberry-db-connection-uri"
+description = "Database/broker connection URI with an inline password"
+# postgres|postgresql|mysql|mongodb(+srv)|redis|amqp :// user : SECRET @ host
+regex = '''(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss|amqps?)://[a-z0-9._%+-]+:([^\s:@/'"]{6,})@[a-z0-9.-]+'''
+secretGroup = 1
+keywords = ["postgres://", "postgresql://", "mysql://", "mongodb://", "mongodb+srv://", "redis://", "rediss://", "amqp://", "amqps://"]
+entropy = 2.5
+[rules.allowlist]
+regexTarget = "match"
+# Placeholders, local development, and docs examples are not credentials.
+regexes = [
+  # A password that is literally the word "password", a template marker, or an
+  # instruction to replace it. `change[_-]?me` is a prefix match on purpose:
+  # `CHANGE_ME_strong_password_here` is a placeholder, and the previous
+  # whole-word `changeme` did not recognise it.
+  '''(?i):(?:password|pass|pwd|secret|change[_-]?me[a-z0-9_-]*|placeholder|your[_-]?password|xxx+|\*+|<[^>]+>|\$\{[^}]+\}|%[a-z_]+%)@''',
+
+  # Local and container-internal database hosts.
+  #
+  # The trailing delimiter here USED to be `[:/ ]`, which could never match. The
+  # rule's own regex ends the match at the hostname — `@[a-z0-9.-]+` stops at
+  # the `:` before the port — so the match text is `postgres://u:p@localhost`
+  # with no delimiter left to anchor on. Every local dev URI in the repo was
+  # therefore reported, 14 of them, and the noise is why nobody read the report.
+  # Anchor on end-of-match instead.
+  #
+  # This stays an explicit LIST rather than a "hostname with no dot" heuristic.
+  # A dotless host is unreachable from the internet, but the password beside it
+  # is still readable and may be reused elsewhere, so a new service name should
+  # cost one reviewed line here rather than being silently absorbed by a
+  # pattern. Add compose service names as they appear.
+  '''(?i)@(?:localhost|127\.0\.0\.1|\[::1\]|host\.docker\.internal|postgres|pgvector|accelerator-db|db|mysql|mongo|redis)(?:[:/ ]|$)''',
+]
+
+[[rules]]
+id = "colaberry-mandrill-api-key"
+description = "Mandrill / Mailchimp Transactional API key"
+regex = '''(?i)\b(?:mandrill|mailchimp)[_-]?(?:api)?[_-]?key['"\s:=]{1,10}([a-zA-Z0-9_-]{20,25})\b'''
+secretGroup = 1
+keywords = ["mandrill", "mailchimp"]
+
+[[rules]]
+id = "colaberry-basecamp-token"
+description = "Basecamp OAuth access/refresh token"
+regex = '''(?i)\bbc[_-]?(?:access|refresh)?[_-]?token['"\s:=]{1,10}(BAh[a-zA-Z0-9+/=_-]{20,}|[a-f0-9]{40,})\b'''
+secretGroup = 1
+keywords = ["bc_token", "bc-token", "bcaccesstoken", "basecamp"]
+
+[[rules]]
+id = "colaberry-generic-assigned-secret"
+description = "High-entropy value assigned to a credential-named variable"
+regex = '''(?i)\b(?:api[_-]?key|apikey|secret[_-]?key|auth[_-]?token|access[_-]?token|client[_-]?secret|private[_-]?key|passwd|password)\s*[:=]\s*['"]([a-zA-Z0-9/+_=-]{24,})['"]'''
+secretGroup = 1
+entropy = 3.5
+keywords = ["api_key", "apikey", "secret_key", "auth_token", "access_token", "client_secret", "password", "passwd"]
+
+# ---------------------------------------------------------------------------
+# Global allowlist
+# ---------------------------------------------------------------------------
+# Declared in the array form `[[allowlists]]` rather than the singular
+# `[allowlist]`: gitleaks refuses to load a config that mixes the two, and the
+# scanner-artifact block below needs its own `regexTarget`.
+[[allowlists]]
+description = "Paths and values that cannot contain a real credential"
+
+# NOTE ON SCOPE: docs/, *.md and test files are deliberately NOT excluded here.
+# The previous scanner skipped them, which is precisely where a pasted
+# credential goes unnoticed. Only machine-generated, vendored, or binary
+# content is excluded — none of which a human ever pastes a secret into.
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)(dist|build|coverage|\.next|out)/''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)yarn\.lock$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''\.(png|jpe?g|gif|svg|ico|pdf|woff2?|ttf|eot|mp4|mov|zip|gz|tgz|webp|avif)$''',
+  '''(^|/)docs/screenshots/''',
+]
+
+regexes = [
+  # Documentation placeholders and obvious fakes.
+  '''(?i)\b(?:EXAMPLE|SAMPLE|PLACEHOLDER|CHANGEME|REDACTED|DUMMY|FAKE|TODO|XXXXX)\b''',
+  '''(?i)your[_-]?(?:api[_-]?key|secret|token|password)[_-]?here''',
+  # Env-var indirection is a reference, not a value.
+  '''process\.env\.[A-Z0-9_]+''',
+  '''\$\{[A-Z0-9_]+\}''',
+  '''<[A-Z0-9_ -]+>''',
+]
+
+# ---------------------------------------------------------------------------
+# Scanner artifacts
+# ---------------------------------------------------------------------------
+# These two patterns are not exceptions granted to real credentials. They are
+# places where a rule matches something that is structurally NOT a value, and
+# the right fix is here rather than a per-line fingerprint: a fingerprint is
+# anchored to a line number, so it goes stale the moment the file shifts and
+# the same false positive returns under a new identity.
+#
+# Matched against the full match text, not the captured secret, because in both
+# cases it is the surrounding shape that proves the value is not a credential.
+[[allowlists]]
+description = "Rule artifacts: matches that are structurally not a value"
+regexTarget = "match"
+regexes = [
+  # An EMPTY assignment in an env template, immediately followed by the next
+  # variable. `SKOOL_PASSWORD=` holds nothing; the rule ran past the line break
+  # and captured the following line's `SKOOL_DAILY_LIMIT=10` as the secret.
+  #
+  # The trailing `[A-Z][A-Z0-9_]*=` is load-bearing, not decoration. Matching a
+  # bare newline after the `=` would also allow a real secret that a formatter
+  # wrapped onto the next line:
+  #
+  #     const api_key =
+  #       'sk-a-genuinely-real-key-here';
+  #
+  # Requiring another SHOUTING_CASE assignment restricts this to the .env
+  # template shape, where the value is provably absent rather than just
+  # elsewhere.
+  '''(?i)(?:password|passwd|secret|token|key|pass|pwd)[ \t]*=[ \t]*[\r\n]+[A-Z][A-Z0-9_]*[ \t]*=''',
+
+  # A field NAMED *_key that holds an identifier. `quota_key: 'executions_per_24h'`
+  # is a map key, not an API key.
+  #
+  # Deliberately a short list of names that are STRUCTURAL by nature — a sort
+  # key, a partition key, a dedup key. Names like `config_key`, `feature_key` or
+  # `meta_key` are excluded on purpose: they are generic enough to plausibly
+  # hold a real credential one day, and an allowlist entry that might one day be
+  # wrong is worse than a false positive that gets read.
+  '''(?i)\b(?:quota|cache|sort|group|partition|idempotency|dedup|primary|foreign|composite|translation|i18n)[_-]key\s*[:=]''',
+]
+
+[[allowlists]]
+description = "Historical commits carrying secrets that have been triaged (CC-20260901-r3k7)"
+
+# WHY COMMITS AND NOT FINGERPRINTS OR PATHS.
+#
+# These findings were first silenced with .gitleaksignore fingerprints. That
+# did not hold. A gitleaks fingerprint is <commit>:<path>:<rule>:<line>, and
+# the same secret is reported once per commit that carries it, so the entries
+# only matched the commit set of the scan that produced them. A later sweep
+# walked more commits, emitted different SHAs for the identical file, rule and
+# line, and matched ZERO of 32 entries while reporting 184 findings.
+#
+# A PATH allowlist would hold, and is worse: excluding these files would also
+# stop the pre-commit hook catching a NEW secret pasted into them tomorrow.
+# The block above says exactly why test files are not path-excluded, and this
+# must not quietly undo that.
+#
+# TWO COMMIT SETS, DELIBERATELY. The first pass listed the SHAs a local scan
+# reported. CI still failed with 21 findings, and its own SARIF artifact named
+# 14 commits with ZERO overlap with the local 16: identical secrets, identical
+# files, entirely different SHAs, because this worktree's history has diverged
+# from origin's lineage. The CI set is the one that gates, and both are listed
+# so a local sweep and the pipeline agree.
+#
+# Commits are immutable and bounded. A secret
+# added in any FUTURE commit to any of these same files is still caught.
+#
+# WHAT IS IN THEM, all triaged 2026-09-02 to 2026-09-05:
+#
+#   - Test fixtures. Invented values. manifestValidator.secrets.test.ts is the
+#     sharpest case: its job is proving secret DETECTION works, so it has to
+#     contain realistic fakes or it is not testing anything.
+#   - A production JWT signing key in verifyInboxCosDigestFlow.js. DEAD:
+#     SHA-256 of the committed value does not match the running backend's
+#     JWT_SECRET, so it signs nothing. Compared by hash; neither value printed.
+#   - Two single-use portal tokens, a magic link pasted into PROGRESS.md and a
+#     test account link in an onboarding doc. Both absent from every token
+#     table in production, so neither can be redeemed.
+#   - An Opportunity Pulse password for ali@colaberry.com, public since
+#     2026-05-19. The code already reads OP_ADMIN_PASSWORD from the
+#     environment, which is why the working tree scans clean. Ali reviewed it
+#     on 2026-09-05 and chose NOT to rotate. If that changes, rotating in
+#     Opportunity Pulse is the entire fix; rewriting history is not, because
+#     forks, clones and caches already have it.
+commits = [
+  '''061c722f527f84232ed8a3d6c72c7e4d504db4d3''',
+  '''ad7359f5c9c459c86e5d37cae49f9fcfe45aa89e''',
+  '''e1467449277f937cdf52e1e0543ab95972e6a142''',
+  '''aae26b2a1f89c4eb6ec77f6ebb09d5a909765193''',
+  '''950f39bebdc66db3382c7314c5bdd46174705d82''',
+  '''5cf8419dd6f35abdcd6fb33208b718b738d92694''',
+  '''5fe1b8660f2d83b93b34461e23cc6215f0010579''',
+  '''b017e2b6a66994f032ed6ce6f6d6f21a3b8ceda1''',
+  '''15f4d1d0d50db7aa8113bc2e911d1edb59134e8a''',
+  '''dbf4ffa07329ff469465e5997c66fbbd1be8d5ca''',
+  '''939a5b98f19ec4232c331802f4f3af6f723abc8e''',
+  '''4de4d8f4d53a2ea30a0a42c1887ee4a2b3565f67''',
+  '''73b65e369d7fe74f7f5d34a5cd25da30551c29df''',
+  '''f4208fa642e968fa3a51d0c5fad8dc6948cee6fb''',
+  '''3352a0a2393223f9d6398dac15b39d7180c61715''',
+  '''c2f3656867986ecf5f1eb48902b42ec1c099adff''',
+  '''c21cd66e78aa1def22cd42fe4b9ac687978f30ec''',   # reported by CI
+  '''1cd0a65ca27b94c5942b82a4f21ae88e638f73a9''',   # reported by CI
+  '''2b5ce0128a82a8a35f8e083796acc5c5332b1474''',   # reported by CI
+  '''8d6fa2c99312078a618124d64f79f0546aea6229''',   # reported by CI
+  '''9aaa85219fe1e037ce3d2a7fc45cc79bf15885ce''',   # reported by CI
+  '''a09771e936f64e4d68ebe6d376dda7ec1018f06a''',   # reported by CI
+  '''1cd204e3372e5e136936a093649bc604d580be50''',   # reported by CI
+  '''f19103e4c4c702c6d557a404381a8783833a1b39''',   # reported by CI
+  '''b0c5520bf0a72dd27745a6f233b37405b035ecc2''',   # reported by CI
+  '''17b3ad6d77514de1c828349017abd9e5b5d75d15''',   # reported by CI
+  '''191a7624b7f1a661f1375d7de32e7aab47f6bf52''',   # reported by CI
+  '''d53d326e2f51364ca2e7e6b45600ff81c71144a0''',   # reported by CI
+  '''0ea00477ac575c49fd45ef8368d364db0cf738c6''',   # reported by CI
+  '''713790cf29b6abd558098f29448412d9d398966d''',   # reported by CI
+]

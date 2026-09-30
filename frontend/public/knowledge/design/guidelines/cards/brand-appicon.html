@@ -1,0 +1,23 @@
+<!-- @dsCard group="Brand" viewport="700x170" name="App icon & favicons" subtitle="Rounded tile + 48 / 32 / 16 favicons" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 28px 32px; background: var(--surface-page); display:flex; align-items:center; gap: 40px; }
+  .tile { box-shadow: var(--shadow-md); border-radius: 26px; }
+  .favs { display:flex; align-items:flex-end; gap: 22px; }
+  .favs figure { margin: 0; display:flex; flex-direction:column; align-items:center; gap: 8px; }
+  .favs figcaption { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <img class="tile" src="../../assets/logo/export/icon-192.png" width="104" height="104" alt="App icon">
+  <div class="favs">
+    <figure><img src="../../assets/logo/export/favicon-48.png" width="48" height="48" alt=""><figcaption>48</figcaption></figure>
+    <figure><img src="../../assets/logo/export/favicon-32.png" width="32" height="32" alt=""><figcaption>32</figcaption></figure>
+    <figure><img src="../../assets/logo/export/favicon-16.png" width="16" height="16" alt=""><figcaption>16</figcaption></figure>
+  </div>
+</body>
+</html>

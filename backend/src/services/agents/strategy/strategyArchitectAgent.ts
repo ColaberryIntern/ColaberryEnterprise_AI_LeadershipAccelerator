@@ -8,10 +8,19 @@ import {
   generateInitiativeTickets,
 } from '../../departmentInitiativeEngine';
 import { STRATEGY_CONFIGS } from './departmentStrategyConfigs';
+import { deriveOpportunityDedupKey, hasDedupKeyTag, toDedupKeyTag } from './departmentInitiativeDedupKey';
 import type { AgentExecutionResult, AgentAction } from '../types';
 
 const OPENCLAW_MODEL = 'gpt-4o';
 
+// Ticket-duplicate-explosion fix (Agent Ticket Standard audit, 2026-08-18, session
+// CC-20260818-a7d2): the LLM used to be asked only to avoid *literal title text* duplicates
+// ("Never propose duplicate initiatives — check existing ones"), which does not survive the
+// LLM paraphrasing the same underlying finding differently every 6h cycle (confirmed live:
+// see departmentInitiativeDedupKey.ts's header comment). It is now REQUIRED to classify each
+// opportunity into the same bounded, stable `opportunity_type` enum the rule-based path
+// already uses, and dedup is enforced in code against that type (never trusted from the LLM's
+// prose alone — see `normalizeOpportunityType()`), not by asking the model to police itself.
 const SYSTEM_PROMPT = `You are a strategic department architect for an AI-powered enterprise education platform.
 Your role is to analyze department health, identify improvement opportunities, and propose concrete initiatives.
 
@@ -22,6 +31,10 @@ Rules:
 4. Be data-driven — reference actual metrics in your reasoning
 5. Prioritize based on impact and urgency
 6. Never propose duplicate initiatives — check existing ones
+7. Classify every opportunity's "opportunity_type" as exactly one of: health_gap,
+   innovation_gap, stale_initiative, no_active_work, cross_dept, other. This is used
+   downstream to detect duplicates across cycles even when your wording changes, so pick the
+   type that matches the underlying condition, not the wording of your title.
 
 Return valid JSON with this structure:
 {
@@ -32,6 +45,7 @@ Return valid JSON with this structure:
       "description": "...",
       "priority": "critical|high|medium|low",
       "risk_level": "low|medium|high",
+      "opportunity_type": "health_gap|innovation_gap|stale_initiative|no_active_work|cross_dept|other",
       "supporting_department_slugs": [],
       "tags": []
     }
@@ -97,12 +111,18 @@ export async function runStrategyArchitectAgent(
       entity_id: deptId,
     });
 
-    // 3. Get existing initiatives to avoid duplicates
+    // 3. Get existing initiatives to avoid duplicates. Keyed by stable opportunity type (via
+    // the `dedup_key:` tag), not title text — see departmentInitiativeDedupKey.ts's header
+    // comment for why exact-title matching cannot survive an LLM paraphrasing the same
+    // finding differently every cycle. `existingTitles` is kept as a secondary, best-effort
+    // signal fed to the LLM prompt only (so it still gets useful context on what already
+    // exists) — it is never used to gate creation.
     const existingInitiatives = await Initiative.findAll({
       where: { department_id: deptId, status: { [Op.in]: ['planned', 'active'] } },
-      attributes: ['title', 'status'],
+      attributes: ['title', 'status', 'tags'],
     });
     const existingTitles = existingInitiatives.map((i: any) => i.title.toLowerCase());
+    const existingDedupTags: string[] = existingInitiatives.flatMap((i: any) => i.tags || []);
 
     // 4. Get recent events
     const recentEvents = await DepartmentEvent.findAll({
@@ -156,13 +176,16 @@ export async function runStrategyArchitectAgent(
     // 7. Merge opportunities (prefer LLM if available, fall back to rule-based)
     const opportunities = llmOpportunities.length > 0 ? llmOpportunities : ruleOpportunities;
 
-    // 8. Create initiatives from opportunities
+    // 8. Create initiatives from opportunities. Dedup key computed BEFORE creation and
+    // checked against both the in-memory `existingDedupTags` (cheap, avoids most redundant
+    // work) and `createStrategicInitiative()`'s own DB query (authoritative, race-safe) —
+    // never against title text, per the fix documented above.
     let initiativesCreated = 0;
     for (const opp of opportunities) {
       const title = opp.title || '';
-      if (existingTitles.includes(title.toLowerCase())) continue;
 
-      // Resolve supporting department IDs from slugs
+      // Resolve supporting department IDs from slugs (needed before key derivation so a
+      // cross_dept opportunity's key can include its real partner department id).
       let supportingDepts: string[] = [];
       if (opp.supporting_department_slugs && opp.supporting_department_slugs.length > 0) {
         const supportDepts = await Department.findAll({
@@ -174,6 +197,10 @@ export async function runStrategyArchitectAgent(
         supportingDepts = opp.supporting_departments;
       }
 
+      const rawOpportunityType = opp.opportunity_type ?? opp.type;
+      const dedupKey = deriveOpportunityDedupKey(rawOpportunityType, supportingDepts[0]);
+      if (hasDedupKeyTag(existingDedupTags, dedupKey)) continue;
+
       const initiative = await createStrategicInitiative({
         department_id: deptId,
         title,
@@ -183,7 +210,16 @@ export async function runStrategyArchitectAgent(
         supporting_departments: supportingDepts,
         created_by_agent: agentName,
         tags: opp.tags || strategyConfig.focus_areas.slice(0, 3),
+        opportunity_key: dedupKey,
       });
+
+      // Record this key as seen for the rest of THIS cycle's loop, so if two opportunities in
+      // the same LLM response map to the same type, the second one skips at the top-of-loop
+      // check above instead of racing `createStrategicInitiative()`'s DB query twice.
+      // (`createStrategicInitiative()`'s own DB query remains the authoritative dedup — this
+      // is only an in-memory fast path, same defense-in-depth relationship the pre-existing
+      // `existingTitles` check had to the DB-level title dedup it used to gate.)
+      existingDedupTags.push(toDedupKeyTag(dedupKey));
 
       // Generate tickets for the new initiative
       const tickets = await generateInitiativeTickets(initiative.id, agentName);

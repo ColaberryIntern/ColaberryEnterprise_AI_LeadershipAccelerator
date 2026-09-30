@@ -21,6 +21,8 @@ import {
   handleGetVisitorSignals,
   handleGetVisitorIntent,
   handleGetHighIntentVisitors,
+  handleGetCrossBrandVisitors,
+  handleGetTrackingEstate,
   handleGetIntentDistribution,
   handleGetSignalDefinitions,
   handleListSessions,
@@ -58,6 +60,11 @@ router.get('/api/admin/visitors/stats', requireAdmin, handleGetVisitorStats);
 router.get('/api/admin/visitors/live', requireAdmin, handleGetLiveVisitors);
 router.get('/api/admin/visitors/trend', requireAdmin, handleGetVisitorTrend);
 router.get('/api/admin/visitors/high-intent', requireAdmin, handleGetHighIntentVisitors);
+// One row per human across brands, not one per site. requireAdmin: this joins
+// behaviour to named leads, so it is strictly more sensitive than the per-site views.
+router.get('/api/admin/visitors/cross-brand', requireAdmin, handleGetCrossBrandVisitors);
+// Estate map: every brand, hostname and reporting site slug in one payload.
+router.get('/api/admin/tracking/estate', requireAdmin, handleGetTrackingEstate);
 router.get('/api/admin/visitors/intent-distribution', requireAdmin, handleGetIntentDistribution);
 router.get('/api/admin/visitors/signal-definitions', requireAdmin, handleGetSignalDefinitions);
 router.get('/api/admin/visitors', requireAdmin, handleListVisitors);

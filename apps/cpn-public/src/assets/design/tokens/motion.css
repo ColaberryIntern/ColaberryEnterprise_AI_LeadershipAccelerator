@@ -1,0 +1,11 @@
+/* CPN motion — "Steady: calm and unhurried; nothing startles."
+   fast → hover/press/toggles · base → menus/toasts/accordions · slow → modals/view changes.
+   Exits run at fast with the exit curve. */
+:root{
+  --motion-fast:170ms; /* @kind other */ --motion-base:280ms; /* @kind other */ --motion-slow:420ms; /* @kind other */
+  --ease:cubic-bezier(0.45,0.05,0.25,1); /* @kind other */
+  --ease-enter:cubic-bezier(0.25,0,0.2,1); /* @kind other */
+  --ease-exit:cubic-bezier(0.5,0,0.8,1); /* @kind other */
+  --enter-distance:10px; --press-scale:0.985; /* @kind other */
+}
+@media (prefers-reduced-motion: reduce){ *, *::before, *::after{ transition:none !important; animation:none !important; } }

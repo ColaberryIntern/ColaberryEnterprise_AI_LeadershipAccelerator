@@ -1,0 +1,22 @@
+{
+ "slug": "the-request-was-messy-the-price-couldnt-be",
+ "output": "landjet-reservations-walkthrough.mp4",
+ "slides": [
+  {"kind": "title", "seconds": 9, "title": "The Request Was Messy. The Price Couldn't Be.", "subtitle": "Reservation intake for a small team, told as a retrospective",
+   "caption": "At an executive ground-transportation company, a reservation request arrived three ways: a vendor's web form, a forwarded thread, or a few lines of prose. The price that came back had to be one a person could trust."},
+  {"kind": "title", "seconds": 10, "title": "One question a messy request raises.", "subtitle": "What may a model read, and what may only a function decide?",
+   "caption": "On 22 June 2026 the client sent four real inbound examples with the instruction to respond to any of them. That made the reading the hard part and the arithmetic the part that could not be allowed to move."},
+  {"kind": "screenshot", "seconds": 12, "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-landjet-reservations-queue.png",
+   "caption": "The queue on a keyless local copy at the pinned commit, with invented requests the product's own code priced: a merged duplicate marked ready on a flat-rate route, a held round trip, a forward-only market, and two requests a person must read."},
+  {"kind": "title", "seconds": 10, "title": "Separate the reading from the arithmetic.", "subtitle": "Rules and a model fill fields; a pure function prices; a model-read field holds the quote.",
+   "caption": "The price is a pure function of typed inputs, with every rate a literal in one file. Any quote built from a field a model read is marked for a person, so a deterministic price is only as right as the fields behind it."},
+  {"kind": "screenshot", "seconds": 12, "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-landjet-quote-tester.png",
+   "caption": "The Quote Tester: a trip entered by hand, priced by the same engine, and explained line by line with a running total, a margin band and the alert that the 200-mile minimum applied. Explain the number before trusting it."},
+  {"kind": "cards", "seconds": 12, "rows": [["19,809", "paid extraction calls against 191 reservation rows in about eight days of June 2026, about 100 dollars, closed by a cost guard in the last commit"], ["239 of 239", "tests pass at the last commit across the nine reservation and pricing suites, the pricing engine's idempotency among them"], ["13", "duplicate rows merged into 11 groups by the first backfill on 24 June 2026; one run, no later count"]],
+   "caption": "Counts with dates, from the repository's own log and a test run at the last commit. No revenue, bookings or hours figure exists, and none is claimed; no post-fix cost figure exists either."},
+  {"kind": "screenshot", "seconds": 12, "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-landjet-reservations-dashboard.png",
+   "caption": "The dashboard over the invented rows, with the product's own sentence that auto-send stays off. The 0.90 gate is a constant and a helper that nothing calls; at no commit did a quote leave without a person's click."},
+  {"kind": "title", "seconds": 11, "title": "What remains unresolved.", "subtitle": "A model-written reply without a guard, a cost guard that resets on restart, a rate card a mailbox cannot reach.",
+   "caption": "Computed dead legs, reply stripping and forward merging were built locally after the last commit and never committed or deployed. The project was sunset in September 2026."}
+ ]
+}

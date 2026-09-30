@@ -1,0 +1,583 @@
+/**
+ * `.colaberry/progress.json` — the two-way contract between the platform and
+ * the Claude Code session running in the student's repo.
+ *
+ * The PLATFORM writes the plan side: which stories exist, and the exact text of
+ * each acceptance criterion. CLAUDE CODE writes the completion side: which of
+ * those criteria now pass, which files it touched, which tests it added.
+ *
+ * WHY A JSON FILE THE AGENT MAINTAINS, rather than parsing commit messages or
+ * scraping markdown checkboxes:
+ *   - Commit messages are prose. Students (and models) reformat them, squash
+ *     them, amend them. Any parser we write is guessing.
+ *   - Markdown checkboxes live in a file the student is invited to edit and
+ *     restructure — the story docs are theirs. A regex over `- [x]` breaks the
+ *     first time somebody reorders a list or wraps a line.
+ *   - We already control the instructions the agent follows, through the
+ *     managed block in their CLAUDE.md. A structured file we ask for in that
+ *     block is the one artefact we can specify exactly and validate exactly.
+ *
+ * PURE. Zod at the read boundary, no I/O, no clock. Everything here is
+ * unit-testable without GitHub.
+ *
+ * HONESTY: a student can open this file and type `"passed": true` on every
+ * line. Nothing here prevents that and nothing here pretends to — see
+ * docs/BUILD_VERIFICATION_CONTRACT.md for the actual defences and their limits.
+ */
+import { z } from 'zod';
+import { normaliseCriterion, resolveCriterionKey } from './criterionIdentity';
+
+/**
+ * Re-exported, not moved away.
+ *
+ * `normaliseCriterion` and the supersession table now live in
+ * `./criterionIdentity` — this file had reached 547 lines against CLAUDE.md's
+ * 500-line hard ceiling, which requires a split before new code goes in, and
+ * "criterion identity" was the section that wanted to grow.
+ *
+ * The re-export keeps the public contract exactly as it was: every existing
+ * importer of `normaliseCriterion` from `progressContract` still compiles and
+ * still gets the same function. Renaming a public symbol would have been a
+ * breaking contract change needing every consumer updated in the same diff, and
+ * there is no reason to spend that here.
+ */
+export { normaliseCriterion, resolveCriterionKey, SUPERSEDED_CRITERIA } from './criterionIdentity';
+export type { SupersededWording } from './criterionIdentity';
+
+/**
+ * Bumped only for a BREAKING shape change. Additive fields do NOT bump it — see
+ * MIN_READABLE_PROGRESS_VERSION for why that distinction is load-bearing.
+ *
+ * v1 → v2 added the platform-owned `verification` block and `totals`. Both are
+ * optional in the schema, so v1 and v2 files are mutually parseable.
+ */
+export const PROGRESS_SCHEMA_VERSION = 2;
+
+/**
+ * The oldest version this reader still understands.
+ *
+ * WHY A RANGE RATHER THAN AN EQUALITY. The original check was
+ * `declared !== PROGRESS_SCHEMA_VERSION`, which looked conservative and was
+ * actually destructive: the moment we bumped to 2, every student's existing v1
+ * file failed to parse, `mergeProgressFile` fell back to the freshly rendered
+ * file, and every tick their agent had written was silently wiped on the next
+ * publish. The safe direction is asymmetric — refuse a file from the FUTURE
+ * (we cannot know what a field means), accept one from the PAST (every version
+ * so far only added optional fields, so an old file is a valid new file with
+ * absences).
+ */
+export const MIN_READABLE_PROGRESS_VERSION = 1;
+
+export const PROGRESS_FILE_PATH = '.colaberry/progress.json';
+
+/**
+ * One acceptance criterion. `text` is the anchor: the reader matches a claim
+ * back to the plan by its normalised text, so an agent that reorders the array
+ * still lands on the right criterion, and an agent that INVENTS a criterion
+ * matches nothing and is rejected rather than counted.
+ */
+const criterionSchema = z.object({
+  text: z.string().min(1, 'criterion text may not be empty'),
+  passed: z.boolean(),
+  /**
+   * Optional free-text from the agent: how it knows this passes. Not capped
+   * per field: see the note on `notes` below.
+   */
+  evidence: z.string().optional(),
+});
+
+/**
+ * The PLATFORM's conclusion about a story, mirrored into the repo so a static
+ * page can render build progress with no API and no login. Written on publish
+ * and on every sync; never merged up from the repo, because this side is not
+ * the student's to assert — a page that trusted it would be reading a number
+ * the reader could have typed themselves.
+ *
+ * NOTHING VOLATILE MAY LIVE HERE. Every field must be stable while the build is
+ * stable, or the file's bytes change on every sync, `changedFiles` sees a diff,
+ * and we commit to the student's repo for nothing. That is why `checked_at`
+ * (which moves every run) is deliberately absent while `verified_at` (first
+ * write wins, never moves) is present. Freshness belongs in the manifest — see
+ * docs/COMMAND_CENTER_DATA_CONTRACT.md.
+ */
+const storyVerificationSchema = z.object({
+  state: z.enum(['not_started', 'in_progress', 'submitted', 'verified']),
+  criteria_passed: z.number().int().min(0),
+  criteria_total: z.number().int().min(0),
+  /** ISO-8601. Set once, by the platform, and never moved afterwards. */
+  verified_at: z.string().max(64).nullish(),
+  /** The commit the platform accepted as evidence. */
+  commit_sha: z.string().max(64).nullish(),
+  /** Absolute, clickable, and checkable by a stranger with no account. */
+  commit_url: z.string().max(500).nullish(),
+  commit_at: z.string().max(64).nullish(),
+  /** Builder XP this story has been awarded, or null when nothing was awarded. */
+  points_awarded: z.number().nullish(),
+  /** Criterion text still outstanding — what the student has left to do. */
+  outstanding: z.array(z.string()).max(200).default([]),
+});
+
+const storyProgressSchema = z.object({
+  id: z.string().min(1),
+  /** Written by the platform; informational. */
+  release: z.string().nullish(),
+  /** Written by the platform: how many criteria the plan says this story has. */
+  acceptance_total: z.number().int().min(0).nullish(),
+  criteria: z.array(criterionSchema).max(200).default([]),
+  files_touched: z.array(z.string().min(1)).max(500).default([]),
+  tests_added: z.array(z.string().min(1)).max(500).default([]),
+  /**
+   * The agent's own build notes. NOT capped per field, and that is deliberate.
+   *
+   * This used to be `.max(4000)`, and a student who wrote 4,001 characters of
+   * notes on one story had his WHOLE file rejected: every claim on every story
+   * became unreadable, verification stalled, and `mergeProgressFile` (which
+   * then saw an unreadable file) replaced his file with the clean template and
+   * reset seven verified stories to false. Found live 2026-09-15: two stories
+   * over the cap, ten stories lost. Nothing on the platform reads this field;
+   * it only rides along back into the student's own file. A cap on it protects
+   * nothing. The bound that does protect us is on the file: `PROGRESS_FILE_MAX_BYTES`.
+   */
+  notes: z.string().nullish(),
+  /** ISO-8601, written by the agent. Advisory only — never trusted as proof. */
+  updated_at: z.string().max(64).nullish(),
+  /**
+   * Platform-owned (v2+). Absent on a file written before verification ran.
+   *
+   * `.catch(null)` is what keeps `MIN_READABLE_PROGRESS_VERSION = 1` honest. A
+   * v1 file carried `{state, commit}` here, which does not satisfy v2's shape,
+   * and without the catch one stale block rejected the WHOLE file and every
+   * criterion the student had ticked with it. This side is ours and is
+   * recomputed on every run, so a copy we cannot read is discarded rather than
+   * treated as a reason to disbelieve the student's side. See
+   * `__tests__/progressV1PlatformBlocks.test.ts`.
+   */
+  verification: storyVerificationSchema.nullish().catch(null),
+});
+
+/** Whole-build counts, so a page can show a headline without summing 40 stories. */
+const progressTotalsSchema = z.object({
+  stories_total: z.number().int().min(0),
+  stories_verified: z.number().int().min(0),
+  stories_submitted: z.number().int().min(0),
+  stories_in_progress: z.number().int().min(0),
+  stories_not_started: z.number().int().min(0),
+  criteria_total: z.number().int().min(0),
+  criteria_passed: z.number().int().min(0),
+  points_awarded: z.number().min(0),
+});
+
+export const progressFileSchema = z.object({
+  schema_version: z.number().int(),
+  /** Informational; the platform writes it so a human opening the file knows whose it is. */
+  project: z.string().nullish(),
+  /**
+   * Platform-owned rollup (v2+).
+   *
+   * Leniently parsed for the same reason as `verification` above: v1 emitted
+   * five of these eight keys, and a partial rollup we never read must not be
+   * able to condemn the criteria we do read.
+   */
+  totals: progressTotalsSchema.nullish().catch(null),
+  stories: z.array(storyProgressSchema).max(500),
+});
+
+export type ProgressCriterion = z.infer<typeof criterionSchema>;
+export type StoryVerificationSummary = z.infer<typeof storyVerificationSchema>;
+export type ProgressTotals = z.infer<typeof progressTotalsSchema>;
+export type StoryProgress = z.infer<typeof storyProgressSchema>;
+export type ProgressFile = z.infer<typeof progressFileSchema>;
+
+export type ProgressParseErrorClass =
+  | 'ProgressFileMissing'
+  | 'ProgressFileNotJson'
+  | 'ProgressFileTooLarge'
+  | 'ProgressFileSchemaMismatch'
+  | 'ProgressFileUnsupportedVersion';
+
+/**
+ * The one size bound on the file. GitHub's contents API will not hand back a
+ * blob over 1 MB, so nothing the reader can fetch exceeds this; it exists so
+ * that a file arriving by another route (a download merge, a pasted body)
+ * meets the same ceiling. Per-field caps on student text were removed in
+ * favour of this: see `notes` on the story schema.
+ */
+export const PROGRESS_FILE_MAX_BYTES = 1_000_000;
+
+export interface ProgressParseFailure {
+  ok: false;
+  error_class: ProgressParseErrorClass;
+  /** One sentence a student can act on. Rendered in the portal verbatim. */
+  reason: string;
+  /** Field-level detail for the log line. Never shown raw to a student. */
+  issues?: string[];
+}
+
+export interface ProgressParseSuccess {
+  ok: true;
+  file: ProgressFile;
+}
+
+export type ProgressParseResult = ProgressParseSuccess | ProgressParseFailure;
+
+/** Every issue sits at the top level, so the file's SHAPE is what is wrong. */
+function rootLevelOnly(issues: Array<{ path: PropertyKey[] }>): boolean {
+  return issues.length === 0 || issues.every((i) => i.path.length <= 1);
+}
+
+/**
+ * `stories.4.notes: Too big` means nothing to a student; `STORY-006 notes: Too
+ * big` is a line they can act on. Swap the array index for the story's own id
+ * whenever the raw file offers one.
+ */
+function describeIssue(path: PropertyKey[], message: string, raw: unknown): string {
+  const segs = path.map(String);
+  if (segs[0] === 'stories' && /^\d+$/.test(segs[1] ?? '')) {
+    const entry = (raw as { stories?: unknown[] })?.stories?.[Number(segs[1])] as { id?: unknown } | undefined;
+    if (entry && typeof entry.id === 'string' && entry.id.trim()) {
+      const rest = segs.slice(2).join('.');
+      return `${entry.id.trim()}${rest ? ' ' + rest : ''}: ${message}`;
+    }
+  }
+  return `${segs.join('.') || '(root)'}: ${message}`;
+}
+
+/**
+ * Parse the raw file contents.
+ *
+ * A malformed file is REJECTED with a reason. It is never downgraded to "an
+ * empty progress file", because those two states must produce different
+ * outcomes: an empty file means the student has not started, a mangled file
+ * means we cannot tell — and telling a student "nothing done" when the truth is
+ * "your file is broken" sends them off to redo work they already did.
+ *
+ * A rejected read also leaves every existing verification untouched. Nothing in
+ * this loop ever REVOKES a verification on the strength of a file it could not
+ * read.
+ */
+export function parseProgressFile(raw: string | null | undefined): ProgressParseResult {
+  if (raw === null || raw === undefined || raw.trim() === '') {
+    return {
+      ok: false,
+      error_class: 'ProgressFileMissing',
+      reason:
+        `${PROGRESS_FILE_PATH} is not in your repo. Sync your build plan from the portal to get it, `
+        + 'then let Claude Code fill it in as it finishes stories.',
+    };
+  }
+
+  if (raw.length > PROGRESS_FILE_MAX_BYTES) {
+    return {
+      ok: false,
+      error_class: 'ProgressFileTooLarge',
+      reason:
+        `${PROGRESS_FILE_PATH} is ${Math.round(raw.length / 1000)} KB, and the platform reads it up to `
+        + `${PROGRESS_FILE_MAX_BYTES / 1000} KB. Trim the notes or evidence text, commit, and push.`,
+      issues: [`size ${raw.length} > ${PROGRESS_FILE_MAX_BYTES}`],
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    return {
+      ok: false,
+      error_class: 'ProgressFileNotJson',
+      reason:
+        `${PROGRESS_FILE_PATH} is not valid JSON, so the platform cannot read which stories you finished. `
+        + 'Fix the syntax (a trailing comma or an unclosed brace is the usual cause) and sync again.',
+      issues: [err instanceof Error ? err.message : String(err)],
+    };
+  }
+
+  // Version is checked BEFORE the shape. A v3 file failing v2's shape check
+  // should say "written for a newer platform", not "your file is malformed".
+  //
+  // The check is a RANGE, not an equality, and the asymmetry is deliberate:
+  // a file from the future is unreadable (we cannot know what its fields mean),
+  // a file from the past is readable (every bump so far has only ADDED optional
+  // fields). Getting this wrong is not a cosmetic bug — an over-strict check
+  // makes `mergeProgressFile` discard the existing file and republish wipes
+  // every criterion the student's agent had ticked.
+  const declared = (parsed as { schema_version?: unknown })?.schema_version;
+  if (typeof declared === 'number'
+    && (declared > PROGRESS_SCHEMA_VERSION || declared < MIN_READABLE_PROGRESS_VERSION)) {
+    return {
+      ok: false,
+      error_class: 'ProgressFileUnsupportedVersion',
+      reason:
+        `${PROGRESS_FILE_PATH} declares schema_version ${declared}, but this platform reads versions `
+        + `${MIN_READABLE_PROGRESS_VERSION} to ${PROGRESS_SCHEMA_VERSION}. Sync your build plan from `
+        + 'the portal to get a fresh file.',
+    };
+  }
+
+  const result = progressFileSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues.map((issue) => describeIssue(issue.path, issue.message, parsed));
+    return {
+      ok: false,
+      error_class: 'ProgressFileSchemaMismatch',
+      // THE ADVICE MUST BE ADVICE THE STUDENT CAN TAKE. This used to end "Sync
+      // your build plan from the portal to restore the file", which assumes the
+      // platform can WRITE to their repo. It writes with
+      // `process.env.GITHUB_TOKEN`, and on a bring-your-own repo that identity
+      // routinely holds only `pull` — verified live on 2026-08-17, where
+      // ColaberryIntern's permissions on one student's repo were
+      // {"admin":false,"maintain":false,"push":false,"triage":false,"pull":true}.
+      // No number of Syncs could ever have restored her file, so the sentence
+      // sent her round a loop with no exit.
+      //
+      // AND IT MUST NAME THE FIELD THAT FAILED. The shape sentence below used to
+      // be the only one, whatever had failed. A student whose file had both
+      // `schema_version` and `stories` and one over-long `notes` was told to add
+      // `schema_version` and `stories`, could not, and wrote in twice. So: the
+      // shape advice only when the shape is what is wrong; otherwise the fields,
+      // by story id where the file gives us one.
+      reason: rootLevelOnly(result.error.issues)
+        ? `${PROGRESS_FILE_PATH} does not match the expected shape, so the platform cannot tell which `
+          + 'criteria you marked as passing. It needs a top-level "schema_version" number and a '
+          + '"stories" array — correct those in the file, commit it, and push.'
+        : `${PROGRESS_FILE_PATH} has ${issues.length === 1 ? 'a field' : `${issues.length} fields`} the platform cannot read: `
+          + issues.slice(0, 3).join('; ') + (issues.length > 3 ? `; and ${issues.length - 3} more` : '')
+          + '. The rest of the file is fine. Fix those, commit, and push.',
+      issues,
+    };
+  }
+  return { ok: true, file: result.data };
+}
+
+// ── the platform's side of the file ─────────────────────────────────────────
+
+export interface PlanStorySeed {
+  id: string;
+  release?: string | null;
+  acceptance?: string[] | null;
+}
+
+/**
+ * One story's build progress as the PLATFORM holds it server-side, ready to be
+ * mirrored into the repo. Assembled from `student_tasks` (verified_at,
+ * verified_ref, verification_json) and `evidence_records` (builder_xp).
+ */
+export interface StoryProgressInput {
+  story_id: string;
+  state: StoryVerificationSummary['state'];
+  criteria_passed: number;
+  criteria_total: number;
+  verified_at?: string | null;
+  commit_sha?: string | null;
+  commit_at?: string | null;
+  points_awarded?: number | null;
+  outstanding?: string[] | null;
+}
+
+export interface ProgressRenderInput {
+  /** Server-side progress, by story. Omitted ⇒ the plan side only, all false. */
+  progress?: StoryProgressInput[] | null;
+  /**
+   * Repo web URL (`https://github.com/owner/repo`), used to build clickable
+   * commit links. A portfolio reader has no login, so a bare sha is not a
+   * citation — the URL is what makes a claim checkable by a stranger.
+   */
+  repoUrl?: string | null;
+}
+
+/** `https://github.com/owner/repo` + sha ⇒ the commit page. Null when either is absent. */
+export function commitUrl(repoUrl: string | null | undefined, sha: string | null | undefined): string | null {
+  if (!repoUrl?.trim() || !sha?.trim()) return null;
+  return `${repoUrl.trim().replace(/\.git$/, '').replace(/\/+$/, '')}/commit/${sha.trim()}`;
+}
+
+/** Sum the per-story verification blocks into the headline a page shows first. */
+export function summariseTotals(stories: StoryProgress[]): ProgressTotals {
+  const t: ProgressTotals = {
+    stories_total: stories.length,
+    stories_verified: 0,
+    stories_submitted: 0,
+    stories_in_progress: 0,
+    stories_not_started: 0,
+    criteria_total: 0,
+    criteria_passed: 0,
+    points_awarded: 0,
+  };
+  for (const s of stories) {
+    const v = s.verification;
+    t.criteria_total += v?.criteria_total ?? s.acceptance_total ?? s.criteria.length;
+    t.criteria_passed += v?.criteria_passed ?? 0;
+    t.points_awarded += v?.points_awarded ?? 0;
+    switch (v?.state ?? 'not_started') {
+      case 'verified': t.stories_verified += 1; break;
+      case 'submitted': t.stories_submitted += 1; break;
+      case 'in_progress': t.stories_in_progress += 1; break;
+      default: t.stories_not_started += 1;
+    }
+  }
+  return t;
+}
+
+/**
+ * The file the platform writes from a plan: every story, every criterion, all
+ * `passed: false`. Seeding the criteria TEXT from the plan is deliberate — the
+ * agent flips a boolean rather than retyping a sentence, so the common case
+ * produces claims that match the plan exactly and the reader's rejection path
+ * only fires on genuinely invented criteria.
+ *
+ * PURE and deterministic: same plan in, byte-identical file out, which is what
+ * lets repoWriter's content-hash idempotency hold.
+ */
+export function renderProgressFile(
+  stories: PlanStorySeed[],
+  projectName?: string | null,
+  input: ProgressRenderInput = {},
+): ProgressFile {
+  const byStory = new Map((input.progress ?? []).map((p) => [p.story_id, p]));
+
+  const rendered: StoryProgress[] = [...stories]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((s) => {
+      const p = byStory.get(s.id);
+      const acceptance = s.acceptance ?? [];
+      return {
+        id: s.id,
+        release: s.release ?? null,
+        acceptance_total: acceptance.length,
+        criteria: acceptance.map((text) => ({ text, passed: false })),
+        files_touched: [],
+        tests_added: [],
+        notes: null,
+        updated_at: null,
+        // The platform's side. Always present once we have a verification run,
+        // even for an untouched story: "not_started" stated explicitly beats a
+        // missing key, because a page cannot tell an absent field from a zero.
+        verification: p
+          ? {
+            state: p.state,
+            criteria_passed: p.criteria_passed,
+            criteria_total: p.criteria_total,
+            verified_at: p.verified_at ?? null,
+            commit_sha: p.commit_sha ?? null,
+            commit_url: commitUrl(input.repoUrl, p.commit_sha),
+            commit_at: p.commit_at ?? null,
+            points_awarded: p.points_awarded ?? null,
+            outstanding: p.outstanding ?? [],
+          }
+          : null,
+      };
+    });
+
+  return {
+    schema_version: PROGRESS_SCHEMA_VERSION,
+    project: projectName ?? null,
+    totals: summariseTotals(rendered),
+    stories: rendered,
+  };
+}
+
+/**
+ * Merge a freshly rendered progress file over whatever is already in the repo.
+ *
+ * The same shape of ownership as the managed block in CLAUDE.md: the PLAN side
+ * is ours and is replaced outright (a republished plan may add, drop or reword
+ * stories), the COMPLETION side is the agent's and survives.
+ *
+ * Without this, republishing a plan silently wipes every tick the student's
+ * agent had written. Verifications already stamped server-side would survive —
+ * `markTaskVerifiedComplete` is first-write-wins — but everything at
+ * `submitted` would drop back to `not_started`, which reads to a student as the
+ * platform losing their work.
+ *
+ * Matching is by story id, then by normalised criterion text. A criterion whose
+ * wording the plan changed is intentionally NOT carried over: the sentence the
+ * student ticked is not the sentence that is now being asked for.
+ *
+ * THE OWNERSHIP LINE, field by field:
+ *   platform, replaced outright — `schema_version`, `project`, `totals`, story
+ *     `id`/`release`/`acceptance_total`, criterion `text`, and the whole
+ *     `verification` block
+ *   agent, carried across  — criterion `passed` and `evidence`,
+ *     `files_touched`, `tests_added`, `notes`, `updated_at`
+ * `verification` is explicitly on the platform side: it is our conclusion about
+ * their evidence, so reading it back out of the repo would let the file assert
+ * its own verification.
+ *
+ * AN UNREADABLE EXISTING FILE IS A REFUSAL, NOT A CLEAN START. This used to
+ * `return rendered` when the repo's copy failed to parse, on the theory that
+ * "we lose nothing we could read". We lost everything the STUDENT could read:
+ * one over-long notes field made a 42 KB file of 26 ticked criteria unparseable,
+ * the merge handed back the template, and the sync committed it over his work.
+ * He restored it by hand, the next sync did it again. A merge that cannot see
+ * one side must not write; the caller decides what that means (the repo
+ * writer skips the file, the download path gives the student the fresh render
+ * they asked for).
+ */
+export type ProgressMergeResult =
+  | { ok: true; file: ProgressFile }
+  | { ok: false; error_class: ProgressParseErrorClass; reason: string; issues?: string[] };
+
+export function mergeProgressFile(rendered: ProgressFile, existingRaw: string | null | undefined): ProgressMergeResult {
+  const parsed = parseProgressFile(existingRaw);
+  if (!parsed.ok) return { ok: false, error_class: parsed.error_class, reason: parsed.reason, issues: parsed.issues };
+
+  const priorByStory = new Map(parsed.file.stories.map((s) => [s.id, s]));
+
+  const file: ProgressFile = {
+    ...rendered,
+    stories: rendered.stories.map((story) => {
+      const prior = priorByStory.get(story.id);
+      if (!prior) return story;
+
+      /**
+       * The student's prior claims, keyed by the criterion of the CURRENT plan
+       * they are about.
+       *
+       * Resolution runs on the PRIOR side, not the rendered side, and that
+       * direction is load-bearing. A file written before a rewording carries the
+       * old sentence; keying it by `resolveCriterionKey` files it under the new
+       * one, so the lookup below — which asks with today's text — finds it. Key
+       * the rendered side instead and a superseded claim is never consulted at
+       * all, which is the bug this is here to prevent.
+       *
+       * A prior claim whose text resolves to nothing is dropped, exactly as
+       * before: a criterion the plan genuinely reworded without an entry in the
+       * supersession table is not the sentence being asked for now, and a claim
+       * the student invented was never counted.
+       *
+       * Ties go to the pessimistic answer, matching `decideStory`. Two prior
+       * lines can now land on one key (the old wording and the new one both
+       * present, which is exactly what a half-repaired file looks like), and a
+       * file asserting both `true` and `false` for one criterion is not evidence
+       * of a pass.
+       */
+      const planKeys = new Set(story.criteria.map((c) => normaliseCriterion(c.text)));
+      const priorByText = new Map<string, ProgressCriterion>();
+      for (const c of prior.criteria) {
+        const key = resolveCriterionKey(c.text, planKeys);
+        if (!key) continue;
+        const already = priorByText.get(key);
+        priorByText.set(key, already ? { ...already, passed: already.passed && c.passed } : c);
+      }
+      return {
+        ...story,
+        criteria: story.criteria.map((c) => {
+          const was = priorByText.get(normaliseCriterion(c.text));
+          return was ? { ...c, passed: was.passed, ...(was.evidence ? { evidence: was.evidence } : {}) } : c;
+        }),
+        files_touched: prior.files_touched,
+        tests_added: prior.tests_added,
+        notes: prior.notes ?? null,
+        updated_at: prior.updated_at ?? null,
+        // Restated rather than left to the spread above, so that a later refactor
+        // reordering these keys cannot quietly start honouring the repo's copy.
+        verification: story.verification ?? null,
+      };
+    }),
+  };
+  return { ok: true, file };
+}
+
+/** Serialise for the repo: stable key order via the schema, trailing newline. */
+export function serialiseProgressFile(file: ProgressFile): string {
+  return `${JSON.stringify(file, null, 2)}\n`;
+}

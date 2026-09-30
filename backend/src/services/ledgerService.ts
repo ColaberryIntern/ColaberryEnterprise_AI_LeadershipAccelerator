@@ -1,12 +1,25 @@
 import EventLedger from '../models/EventLedger';
 import { Op } from 'sequelize';
 
+/**
+ * The ecosystem context an event belongs to. `event_ledger` has carried these
+ * two nullable columns since the multi-tenant DDL added them, and until Phase 4
+ * (T401) nothing wrote them: every ledger row was platform-wide. A caller that
+ * knows the tenant and brand passes them here; every existing caller passes
+ * nothing and writes NULL, exactly as before.
+ */
+export interface LedgerScope {
+  tenant_id?: string | null;
+  brand_id?: string | null;
+}
+
 export async function logEvent(
   eventType: string,
   actor: string,
   entityType: string,
   entityId: string,
-  payload?: any
+  payload?: any,
+  scope?: LedgerScope
 ): Promise<void> {
   await EventLedger.create({
     event_type: eventType,
@@ -14,6 +27,8 @@ export async function logEvent(
     entity_type: entityType,
     entity_id: entityId,
     payload: payload || null,
+    tenant_id: scope?.tenant_id ?? null,
+    brand_id: scope?.brand_id ?? null,
   } as any);
 }
 

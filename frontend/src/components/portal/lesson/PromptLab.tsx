@@ -37,7 +37,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (numMatch) {
       elements.push(
         <div key={i} className="d-flex gap-2 mb-1" style={{ fontSize: 13 }}>
-          <span className="flex-shrink-0" style={{ color: '#8b5cf6', fontWeight: 600, minWidth: 16 }}>{numMatch[1]}.</span>
+          <span className="flex-shrink-0" style={{ color: '#367895', fontWeight: 600, minWidth: 16 }}>{numMatch[1]}.</span>
           <span>{renderInline(numMatch[2])}</span>
         </div>
       );
@@ -48,7 +48,7 @@ function renderMarkdown(text: string): React.ReactNode[] {
     if (bulletMatch) {
       elements.push(
         <div key={i} className="d-flex gap-2 mb-1" style={{ fontSize: 13 }}>
-          <span style={{ color: '#8b5cf6', marginTop: 2 }}>&bull;</span>
+          <span style={{ color: '#367895', marginTop: 2 }}>&bull;</span>
           <span>{renderInline(bulletMatch[1])}</span>
         </div>
       );
@@ -144,10 +144,10 @@ export default function PromptLab({ lessonId, promptTemplate }: PromptLabProps) 
   if (!prompt && !loading) return null;
 
   return (
-    <div className="card border-0 shadow-sm mb-4" style={{ borderTop: '3px solid #8b5cf6' }}>
+    <div className="card border-0 shadow-sm mb-4" style={{ borderTop: '3px solid #367895' }}>
       <div className="card-header bg-white border-bottom d-flex align-items-center gap-2" style={{ padding: '14px 20px' }}>
-        <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: '#f5f3ff' }}>
-          <i className="bi bi-terminal" style={{ color: '#8b5cf6', fontSize: 14 }}></i>
+        <div className="d-flex align-items-center justify-content-center rounded" style={{ width: 28, height: 28, background: 'rgba(54,120,149,0.10)' }}>
+          <i className="bi bi-terminal" style={{ color: '#367895', fontSize: 14 }}></i>
         </div>
         <span className="fw-semibold" style={{ color: '#1e293b', fontSize: 14 }}>Prompt Lab Result</span>
       </div>
@@ -220,7 +220,7 @@ export default function PromptLab({ lessonId, promptTemplate }: PromptLabProps) 
             <button
               className="btn btn-sm d-flex align-items-center gap-1"
               style={{
-                background: '#8b5cf6',
+                background: '#367895',
                 color: '#fff',
                 borderRadius: 6,
                 fontSize: 12,
@@ -237,8 +237,8 @@ export default function PromptLab({ lessonId, promptTemplate }: PromptLabProps) 
               className="btn btn-sm d-flex align-items-center gap-1"
               style={{
                 background: '#fff',
-                color: '#6366f1',
-                border: '1px solid #c7d2fe',
+                color: '#FB2832',
+                border: '1px solid rgba(251,40,50,0.25)',
                 borderRadius: 6,
                 fontSize: 12,
                 fontWeight: 600,
@@ -252,8 +252,8 @@ export default function PromptLab({ lessonId, promptTemplate }: PromptLabProps) 
               className="btn btn-sm d-flex align-items-center gap-1"
               style={{
                 background: '#fff',
-                color: '#6366f1',
-                border: '1px solid #c7d2fe',
+                color: '#FB2832',
+                border: '1px solid rgba(251,40,50,0.25)',
                 borderRadius: 6,
                 fontSize: 12,
                 fontWeight: 600,

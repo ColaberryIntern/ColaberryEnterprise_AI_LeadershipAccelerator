@@ -232,7 +232,7 @@ ${SIG_TEXT}`;
     ticketId: TRACKING_TODO,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'CORRECTION - gov-bid sprint: 5 active pursuits not 8, need your call on the gap',
     html: HTML,

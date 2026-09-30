@@ -17,6 +17,7 @@ const DEFAULTS: Record<string, any> = {
   email_from: 'ali@colaberry.com',
   email_from_name: 'Colaberry Enterprise AI',
   admin_notification_emails: '', // comma-separated list; falls back to email_from
+  cognitive_incident_notification_emails: '', // comma-separated list; falls back to email_from
   // Voice (Synthflow) configuration
   synthflow_api_key: '',
   synthflow_welcome_agent_id: '',
@@ -49,6 +50,23 @@ const DEFAULTS: Record<string, any> = {
   ghl_enabled: false,
   ghl_api_key: '',
   ghl_location_id: 'JFWwp8q7l6T12NWTIOKG',
+  // Group key -> GHL sub-account. Open-house and training-site signups belong in
+  // the School of Data Analytics account, NOT the default (Agent Cory AI) that
+  // every other source uses. Their key lives in ghl_api_key_school_of_data_analytics,
+  // which is intentionally unset: until it is provisioned those leads are
+  // withheld from GHL rather than written to the wrong account.
+  // See services/leads/ghlAccountRouting.ts.
+  ghl_account_routes: {
+    open_house: 'school_of_data_analytics',
+    training_colaberry: 'school_of_data_analytics',
+  },
+  ghl_api_key_school_of_data_analytics: '',
+  // Consent gate (TBI P0-3): 'off' | 'shadow' | 'enforce'. Default shadow = evaluate + log every
+  // outbound send's consent verdict but NEVER block, until Ali flips it to 'enforce'.
+  consent_enforcement: 'shadow',
+  // ABAC agent-authorization gate (TBI P2-1): 'off' | 'shadow' | 'enforce'. Default shadow =
+  // evaluate + log every agent action's authorization verdict but NEVER block, until flipped on.
+  abac_enforcement: 'shadow',
 };
 
 export async function getSetting(key: string): Promise<any> {

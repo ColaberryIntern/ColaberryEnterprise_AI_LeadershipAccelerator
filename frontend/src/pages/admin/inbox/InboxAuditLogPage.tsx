@@ -34,7 +34,7 @@ function ProviderBadge({ provider, fromAddress }: { provider?: string | null; fr
   if (isForwarded) {
     return <span className="badge" style={{ backgroundColor: '#0078d4', color: 'white' }}>hotmail (fwd)</span>;
   }
-  const p = (provider && PROVIDER_COLORS[provider]) || { bg: '#6c757d', label: provider || 'unknown' };
+  const p = (provider && PROVIDER_COLORS[provider]) || { bg: 'var(--text-muted)', label: provider || 'unknown' };
   return <span className="badge" style={{ backgroundColor: p.bg, color: 'white' }}>{p.label}</span>;
 }
 

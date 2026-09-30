@@ -38,7 +38,7 @@ export default function CurriculumMapNavigator({ modules, selectedLessonId, onSe
     <div className="card border-0 shadow-sm mb-2">
       <div className="card-header bg-white py-2">
         <span className="fw-semibold small">
-          <i className="bi bi-map me-1" style={{ color: 'var(--color-primary, #1a365d)' }}></i>
+          <i className="bi bi-map me-1" style={{ color: 'var(--red-500)' }}></i>
           Curriculum Map
         </span>
       </div>
@@ -60,10 +60,10 @@ export default function CurriculumMapNavigator({ modules, selectedLessonId, onSe
                     onClick={() => toggleModule(mod.id)}
                     style={{
                       fontSize: 11,
-                      color: hasSelected ? 'var(--color-primary, #1a365d)' : 'var(--color-text, #2d3748)',
+                      color: hasSelected ? 'var(--red-500)' : 'var(--text-strong)',
                       fontWeight: hasSelected ? 600 : 500,
                       borderRadius: 0,
-                      borderLeft: hasSelected ? '3px solid var(--color-primary-light, #2b6cb0)' : '3px solid transparent',
+                      borderLeft: hasSelected ? '3px solid var(--red-500)' : '3px solid transparent',
                     }}
                   >
                     <i className={`bi bi-chevron-${isExpanded ? 'down' : 'right'}`} style={{ fontSize: 9, width: 12 }}></i>
@@ -87,11 +87,11 @@ export default function CurriculumMapNavigator({ modules, selectedLessonId, onSe
                               onClick={() => onSelectLesson(lesson.id)}
                               style={{
                                 fontSize: 10,
-                                color: isActive ? 'var(--color-primary, #1a365d)' : 'var(--color-text-light, #718096)',
+                                color: isActive ? 'var(--red-500)' : 'var(--text-muted)',
                                 fontWeight: isActive ? 600 : 400,
-                                background: isActive ? 'rgba(43, 108, 176, 0.06)' : 'transparent',
+                                background: isActive ? 'color-mix(in srgb, var(--red-500) 6%, transparent)' : 'transparent',
                                 borderRadius: 0,
-                                borderLeft: isActive ? '3px solid var(--color-primary-light, #2b6cb0)' : '3px solid transparent',
+                                borderLeft: isActive ? '3px solid var(--red-500)' : '3px solid transparent',
                               }}
                             >
                               <i className="bi bi-file-earmark" style={{ fontSize: 10 }}></i>

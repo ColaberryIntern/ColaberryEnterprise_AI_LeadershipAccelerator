@@ -25,9 +25,25 @@
     <meta property="og:image" content="%PUBLIC_URL%/colaberry-logo.png" />
     <meta name="twitter:image" content="%PUBLIC_URL%/colaberry-logo.png" />
 
-    <link rel="canonical" href="https://www.colaberry.com/" />
+    <!-- Canonical for crawlers that do not execute JS. SeoV2 overrides this
+         per-route at runtime, but the static value is what a non-JS crawler
+         indexes -- and it used to read https://www.colaberry.com/, telling search
+         engines that every page of THIS site was a duplicate of another domain. -->
+    <link rel="canonical" href="https://enterprise.colaberry.ai/" />
     <title>Colaberry Enterprise AI Leadership Accelerator</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- RemixIcon: preconnect + <link> so it downloads in parallel with main.css.
+         It used to be an @import inside colaberry/tokens/fonts.css, which put it
+         behind main.css in the request chain and cost a serial round-trip on
+         first paint. Keep the version here in sync with the brand icon set. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css">
+    <script src="https://d3js.org/d3.v7.min.js" defer></script>
+    <!--
+      Fonts are self-hosted in src/fonts/. They used to load from
+      fonts.googleapis.com here, which fired on every page BEFORE the consent
+      banner was answered, handing the visitor's IP and user-agent to Google
+      whatever they then chose. Same files, served from our own origin.
+    -->
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

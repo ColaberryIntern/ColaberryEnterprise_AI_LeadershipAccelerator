@@ -7,6 +7,7 @@
  * Same input = same output. Feedback is deduped via hash in the store.
  */
 import { createFeedback, CreateFeedbackInput } from './uiFeedbackStore';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -242,8 +243,7 @@ export async function augmentWithLLM(options: {
   }
 
   try {
-    const OpenAI = (await import('openai')).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const openai = getInstrumentedOpenAI({ workflow_id: 'ui_feedback' });
 
     const elementSummary = elements.slice(0, 30).map(e =>
       `${e.element_id} [${e.tag}] "${(e.text || '').substring(0, 40)}"`

@@ -1,0 +1,26 @@
+/* AI Flotation .b-* component classes (verbatim from source dist css). */
+.b-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--touch-target); padding: 10px 18px; border-radius: var(--radius); border: 1px solid transparent; background: var(--accent); color: var(--accent-contrast); font: 600 15px var(--font-body); cursor: pointer; box-shadow: var(--shadow); transition: background var(--motion-fast) var(--ease), transform var(--motion-fast) var(--ease), box-shadow var(--motion-fast) var(--ease); }
+.b-btn:hover { background: var(--accent-hover); }
+.b-btn:active { background: var(--accent-press); transform: scale(var(--press-scale)); transition-duration: 40ms; }
+.b-btn:focus-visible, .b-input:focus-visible, a:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.b-btn--secondary { background: var(--bg-elevated); color: var(--fg); border-color: var(--line); box-shadow: none; }
+.b-btn--secondary:hover { background: var(--accent-soft); }
+.b-btn--ghost { background: transparent; color: var(--accent); box-shadow: none; }
+.b-btn--ghost:hover { background: var(--accent-soft); }
+.b-btn--danger { background: transparent; color: var(--danger); border-color: var(--danger); box-shadow: none; }
+.b-field { display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+.b-field label { font: 600 14px var(--font-body); }
+.b-input { min-height: var(--touch-target); width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-elevated); color: var(--fg); font: 400 15px var(--font-body); transition: border-color var(--motion-fast) var(--ease), box-shadow var(--motion-fast) var(--ease); }
+.b-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.b-input--error { border-color: var(--danger); }
+.b-help { font-size: 13px; color: var(--fg-muted); }
+.b-error-text { font-size: 13px; color: var(--danger); }
+.b-card { background: var(--bg-elevated); border: 1px solid var(--line); border-radius: calc(var(--radius) + 4px); box-shadow: var(--shadow); padding: 20px 22px; }
+.b-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--accent); font: 700 12px var(--font-body); padding: 3px 10px; border-radius: 999px; }
+.b-alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: var(--radius); font-size: 14px; border: 1px solid; }
+.b-alert--success { background: color-mix(in srgb, var(--success) 9%, var(--bg)); border-color: color-mix(in srgb, var(--success) 40%, transparent); }
+.b-alert--success strong { color: var(--success); }
+.b-alert--warning { background: color-mix(in srgb, var(--warning) 9%, var(--bg)); border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.b-alert--warning strong { color: var(--warning); }
+.b-alert--danger { background: color-mix(in srgb, var(--danger) 9%, var(--bg)); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.b-alert--danger strong { color: var(--danger); }

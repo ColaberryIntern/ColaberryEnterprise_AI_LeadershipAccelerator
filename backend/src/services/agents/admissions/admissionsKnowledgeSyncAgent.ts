@@ -22,7 +22,20 @@ const PAGE_SOURCES: { route: string; file: string }[] = [
   { route: '/pricing', file: 'PricingPage.tsx' },
   { route: '/sponsorship', file: 'SponsorshipPage.tsx' },
   { route: '/advisory', file: 'AdvisoryPage.tsx' },
-  { route: '/case-studies', file: 'CaseStudiesPage.tsx' },
+  // REMOVED 2026-08-23: '/case-studies' → CaseStudiesPage.tsx.
+  //
+  // That page carried three case studies with invented client quotations. The
+  // repository's own claims registry records it as `casestudy.fabricated` /
+  // `DO_NOT_PUBLISH` (frontend/src/config/claimsRegistry.ts) and prescribed
+  // exactly this removal, which had not been executed — so the knowledge base
+  // that answers prospect questions was being fed fabricated customer stories
+  // as ground truth, and Maya and the chat agent could repeat them as fact.
+  //
+  // The page has been deleted and `/case-studies` now redirects to `/stories`,
+  // which is served from the Case Study OS: published records only, each with
+  // provenance and a verification class. Do not re-add a marketing page to this
+  // list without checking the claims registry first — anything ingested here is
+  // repeated to real prospects.
   { route: '/enroll', file: 'EnrollPage.tsx' },
   { route: '/contact', file: 'ContactPage.tsx' },
   { route: '/strategy-call-prep', file: 'StrategyCallPrepPage.tsx' },

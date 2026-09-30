@@ -28,14 +28,14 @@ function parseLayers(promptText: string): PromptLayer[] {
 }
 
 const LAYER_COLORS: Record<string, string> = {
-  'PROGRAM CONTEXT': '#7c3aed',
-  'SECTION BLUEPRINT': '#2b6cb0',
-  'MINI-SECTIONS': '#0d9488',
-  'LEARNER CONTEXT': '#dd6b20',
-  'LEARNER DATA': '#dd6b20',
-  'EXPECTED ARTIFACTS': '#e53e3e',
-  'SESSION CONTEXT': '#38a169',
-  'MENTOR BRIEF': '#805ad5',
+  'PROGRAM CONTEXT': 'var(--chart-5)',
+  'SECTION BLUEPRINT': 'var(--chart-1)',
+  'MINI-SECTIONS': 'var(--chart-6)',
+  'LEARNER CONTEXT': 'var(--chart-4)',
+  'LEARNER DATA': 'var(--chart-4)',
+  'EXPECTED ARTIFACTS': 'var(--status-danger)',
+  'SESSION CONTEXT': 'var(--status-success)',
+  'MENTOR BRIEF': 'var(--chart-5)',
 };
 
 const DEFAULT_PROFILE = {
@@ -115,7 +115,7 @@ export default function PromptDebuggerPanel({ lessonId, token, apiUrl, externalP
         onClick={() => setCollapsed(!collapsed)}
       >
         <span className="fw-semibold small">
-          <i className="bi bi-layers me-1" style={{ color: 'var(--color-primary, #1a365d)' }}></i>
+          <i className="bi bi-layers me-1" style={{ color: 'var(--red-500)' }}></i>
           Prompt Debugger
           {layers.length > 0 && (
             <span className="badge bg-primary ms-1" style={{ fontSize: 8 }}>{layers.length} layers</span>
@@ -187,14 +187,14 @@ export default function PromptDebuggerPanel({ lessonId, token, apiUrl, externalP
               <button
                 className="btn btn-link p-0 text-decoration-none d-flex align-items-center gap-1 w-100 mb-1"
                 onClick={() => toggleLayer(-1)}
-                style={{ fontSize: 10, color: '#e53e3e' }}
+                style={{ fontSize: 10, color: 'var(--status-danger)' }}
               >
                 <i className={`bi bi-chevron-${expandedLayers.has(-1) ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
                 <i className="bi bi-shield-lock"></i>
                 <span className="fw-semibold">System Prompt</span>
               </button>
               {expandedLayers.has(-1) && (
-                <pre className="p-2 rounded mb-0" style={{ fontSize: 9, maxHeight: 200, overflow: 'auto', background: '#1a202c', color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                <pre className="p-2 rounded mb-0" style={{ fontSize: 9, maxHeight: 200, overflow: 'auto', background: 'var(--surface-inverse)', color: 'var(--neutral-200)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {systemPrompt}
                 </pre>
               )}
@@ -203,7 +203,7 @@ export default function PromptDebuggerPanel({ lessonId, token, apiUrl, externalP
 
           {/* Layered View */}
           {viewMode === 'layered' && layers.map((layer, i) => {
-            const color = LAYER_COLORS[layer.name] || '#718096';
+            const color = LAYER_COLORS[layer.name] || 'var(--text-muted)';
             return (
               <div key={i} className="mb-2">
                 <button
@@ -212,14 +212,14 @@ export default function PromptDebuggerPanel({ lessonId, token, apiUrl, externalP
                   style={{ fontSize: 10, color }}
                 >
                   <i className={`bi bi-chevron-${expandedLayers.has(i) ? 'down' : 'right'}`} style={{ fontSize: 8 }}></i>
-                  <span className="badge" style={{ fontSize: 7, background: `${color}18`, color, border: `1px solid ${color}30`, minWidth: 16 }}>
+                  <span className="badge" style={{ fontSize: 7, background: `color-mix(in srgb, ${color} 9%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 19%, transparent)`, minWidth: 16 }}>
                     {i + 1}
                   </span>
                   <span className="fw-semibold">{layer.name}</span>
                   <span className="text-muted ms-auto" style={{ fontSize: 8 }}>{layer.content.length} chars</span>
                 </button>
                 {expandedLayers.has(i) && (
-                  <pre className="p-2 rounded mb-0 ms-3" style={{ fontSize: 9, maxHeight: 250, overflow: 'auto', background: '#1a202c', color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', borderLeft: `3px solid ${color}` }}>
+                  <pre className="p-2 rounded mb-0 ms-3" style={{ fontSize: 9, maxHeight: 250, overflow: 'auto', background: 'var(--surface-inverse)', color: 'var(--neutral-200)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', borderLeft: `3px solid ${color}` }}>
                     {layer.content}
                   </pre>
                 )}
@@ -229,7 +229,7 @@ export default function PromptDebuggerPanel({ lessonId, token, apiUrl, externalP
 
           {/* Full View */}
           {viewMode === 'full' && rawUser && (
-            <pre className="p-2 rounded" style={{ fontSize: 9, maxHeight: 500, overflow: 'auto', background: '#1a202c', color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            <pre className="p-2 rounded" style={{ fontSize: 9, maxHeight: 500, overflow: 'auto', background: 'var(--surface-inverse)', color: 'var(--neutral-200)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
               {rawUser}
             </pre>
           )}

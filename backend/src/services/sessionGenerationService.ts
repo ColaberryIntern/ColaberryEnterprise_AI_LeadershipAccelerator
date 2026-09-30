@@ -1,5 +1,6 @@
 import { Cohort, LiveSession } from '../models';
 import { AppError } from '../utils/AppError';
+import { env } from '../config/env';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -17,12 +18,82 @@ export interface ScheduleConfig {
   end_time: string;
   total_sessions: number;
   core_days: string[];
+  /** Optional per-day time override, e.g. a Tuesday/Saturday cohort meeting at
+   *  different times on each day. A recurring day missing from this map falls back
+   *  to the shared start_time/end_time above — so every cohort that never sets this
+   *  (i.e. every cohort before this field existed) behaves byte-identically. */
+  day_times?: Record<string, { start_time: string; end_time: string }>;
 }
 
 export interface GenerateResult {
   sessions: any[];
   deleted: number;
   message: string;
+}
+
+const DEFAULT_PROGRAM_WEEKS = 12;
+
+/**
+ * Parse a human core_time string ("1:00–3:00 PM CT", "10:00 AM - 12:00 PM")
+ * into 24h "HH:MM" start/end. Falls back to 13:00–15:00 (the program default)
+ * when the string can't be parsed. Timezone tokens (CT / EST / …) are ignored
+ * here; session times are stored wall-clock and rendered in the cohort timezone.
+ */
+export function parseCoreTime(coreTime?: string): { start_time: string; end_time: string } {
+  const fallback = { start_time: '13:00', end_time: '15:00' };
+  if (!coreTime) return fallback;
+  const parts = coreTime.replace(/[–—]/g, '-').split('-');
+  if (parts.length < 2) return fallback;
+  const meridiemOf = (s: string): 'AM' | 'PM' | null => {
+    const m = s.toUpperCase().match(/\b(AM|PM)\b/);
+    return m ? (m[1] as 'AM' | 'PM') : null;
+  };
+  const to24 = (raw: string, inherit: 'AM' | 'PM' | null): number | null => {
+    const t = raw.match(/(\d{1,2}):(\d{2})/);
+    if (!t) return null;
+    let h = parseInt(t[1], 10);
+    const min = parseInt(t[2], 10);
+    const mer = meridiemOf(raw) || inherit;
+    if (mer === 'PM' && h < 12) h += 12;
+    if (mer === 'AM' && h === 12) h = 0;
+    return h * 60 + min;
+  };
+  // A meridiem stated only once (at the end) applies to both sides unless the
+  // span crosses noon (e.g. "10:00 AM - 12:00 PM"), which states both explicitly.
+  const rightMer = meridiemOf(parts[1]);
+  const startMin = to24(parts[0], meridiemOf(parts[0]) || rightMer);
+  const endMin = to24(parts[1], rightMer);
+  if (startMin == null || endMin == null) return fallback;
+  const fmt = (mins: number) =>
+    `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+  return { start_time: fmt(startMin), end_time: fmt(endMin) };
+}
+
+/**
+ * Resolve a cohort's session schedule. Prefers an explicit
+ * settings_json.schedule, but otherwise derives one from the cohort's top-level
+ * fields (core_day / optional_lab_day / core_time) so a cohort seeded with only
+ * those fields still generates sessions. This reconciles the two schedule
+ * representations that previously disagreed: seedCohorts wrote top-level fields,
+ * while the generator only read settings_json.schedule and therefore threw.
+ */
+export function resolveSchedule(cohort: any): ScheduleConfig {
+  const explicit: Partial<ScheduleConfig> = (cohort.settings_json || {}).schedule || {};
+  const parsed = parseCoreTime(cohort.core_time);
+  if (explicit.recurring_days?.length && explicit.total_sessions) {
+    return {
+      recurring_days: explicit.recurring_days,
+      core_days: explicit.core_days || (cohort.core_day ? [cohort.core_day] : []),
+      start_time: explicit.start_time || parsed.start_time,
+      end_time: explicit.end_time || parsed.end_time,
+      total_sessions: explicit.total_sessions,
+      day_times: explicit.day_times,
+    };
+  }
+  const recurring_days = [cohort.core_day, cohort.optional_lab_day].filter(Boolean);
+  const core_days = cohort.core_day ? [cohort.core_day] : [];
+  const total_sessions = recurring_days.length ? recurring_days.length * DEFAULT_PROGRAM_WEEKS : 0;
+  return { recurring_days, core_days, start_time: parsed.start_time, end_time: parsed.end_time, total_sessions };
 }
 
 /**
@@ -36,28 +107,21 @@ export async function generateSessionsFromCohort(cohortId: string): Promise<Gene
   const cohort = await Cohort.findByPk(cohortId);
   if (!cohort) throw new AppError('Cohort not found', 404);
 
-  const settings = (cohort as any).settings_json || {};
-  const schedule: ScheduleConfig = settings.schedule;
-
-  if (!schedule || !schedule.recurring_days?.length || !schedule.total_sessions) {
-    throw new AppError(
-      'Cohort has no schedule configuration. Set recurring_days and total_sessions in cohort settings.',
-      400
-    );
-  }
-
   const startDate = cohort.start_date;
   if (!startDate) {
     throw new AppError('Cohort has no start_date', 400);
   }
 
-  const {
-    recurring_days,
-    start_time = '13:00',
-    end_time = '15:00',
-    total_sessions,
-    core_days = [],
-  } = schedule;
+  const schedule = resolveSchedule(cohort);
+  if (!schedule.recurring_days.length || !schedule.total_sessions) {
+    throw new AppError(
+      'Cohort has no usable schedule. Set core_day (and optionally optional_lab_day) on the cohort, ' +
+        'or a settings_json.schedule with recurring_days and total_sessions.',
+      400
+    );
+  }
+
+  const { recurring_days, start_time, end_time, total_sessions, core_days, day_times } = schedule;
 
   // Delete existing sessions for this cohort (idempotent regeneration)
   const deleted = await LiveSession.destroy({
@@ -94,17 +158,35 @@ export async function generateSessionsFromCohort(cohortId: string): Promise<Gene
     const dateStr = date.toISOString().split('T')[0];
     const defaultTitle = DEFAULT_SESSION_TITLES[i] || `Session ${i + 1}`;
     const title = `Session ${i + 1} — ${defaultTitle}`;
+    // A day with its own time in day_times wins; otherwise every day shares the
+    // cohort's single start_time/end_time (the pre-existing, unchanged behavior).
+    const dayTime = day_times?.[dayName];
+    const sessionStart = dayTime?.start_time ?? start_time;
+    const sessionEnd = dayTime?.end_time ?? end_time;
 
     const session = await LiveSession.create({
       cohort_id: cohortId,
       session_number: i + 1,
       title,
       session_date: dateStr,
-      start_time: start_time + ':00',
-      end_time: end_time + ':00',
+      start_time: sessionStart + ':00',
+      end_time: sessionEnd + ':00',
       session_type: sessionType,
       status: 'scheduled',
     } as any);
+
+    // Bulk generation is a separate code path from acceleratorService.createSession
+    // (used for one-off/admin session creates), which already does this — this was
+    // the actual gap that left every real, bulk-generated session without a
+    // Colaberry Commons room. Same flag-gated, best-effort, non-fatal pattern.
+    if (env.communityRoomsEnabled) {
+      try {
+        const { ensureRoomForSession } = await import('./communityRooms/roomService');
+        await ensureRoomForSession(session);
+      } catch (err: any) {
+        console.warn('[CommunityRooms] ensureRoomForSession failed (non-fatal):', err?.message);
+      }
+    }
 
     sessions.push(session);
     console.log(

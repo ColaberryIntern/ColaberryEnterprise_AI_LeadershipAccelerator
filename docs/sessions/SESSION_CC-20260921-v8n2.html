@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260921-v8n2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, September 29, 2026 at 10:45 PM</div>
+    <div><span class="sid">CC-20260921-v8n2</span><span class="count">16 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Conversion imports every signature document activation checks for; the offer-letter step accepts a verified signed copy</h2>
+          <span class="badge">2026-09-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest `src/services/internship` 23 suites / 310 tests green, re-run after the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">No test had ever fed the producer&#39;s rows to the consumer — the E2E only converts an</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Deployed #2779, proved it end to end on prod, and converted the eight existing interns to `active`</h2>
+          <span class="badge">2026-09-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">independent read-only query after the run — 8 applications `active`,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">screenshots of each intern&#39;s portal sections are NOT yet captured — the auto-mode classifier</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Proof the eight interns can access every portal section: 120/120 real View-as screenshots + review doc</h2>
+          <span class="badge">2026-09-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`[capture] 120/120 sections loaded across 8 members` — every page HTTP 200 under the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">product observation for Ali — the platform starts every converted intern at Week 1 with the</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Applicant queue: &quot;open&quot; now ends at the decision, so an active intern stops reading as mid-enrollment</h2>
+          <span class="badge">2026-09-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/internshipReviewQueueBuckets.test.ts`, 8 tests, all green, and the whole</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the partition test is the point. These are hand-maintained state lists, and their failure mode</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Internship applicant detail: a way to close the open file and get back to the empty pane</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `frontend/src/pages/admin/internship/__tests__/InternshipDetailPanelClose.test.tsx`,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the first test run failed 6/8 on my own fixture (`suggested_next_step` where the real</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Intern projects are generated through the Student Build Pipeline, not typed one story at a time</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `src/services/internship` + the auto-publish suite — **26 suites / 355 tests</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`SBP_PIPELINE_ENABLED=true` and `PROJECT_API_ENABLED=true` verified in the prod container, so</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Start a project for an intern in one click, from the roster row</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/InternshipProjectReadinessStart.test.tsx`, **5 green** — hands up the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is the SECOND admin door built for the same job. `StartProjectForStudent` already existed</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Detailed requirements survive the crossing: stop clipping at intake, stop capping at decompose</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/buildIntakeAdapterCompleteness.test.ts`, **8 green** — 40 items at ~12k</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ANSWERS_MAX was NOT the cause and is worth not chasing again — there are only 20 dimensions,</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Requirement coverage: compare what the customer SAID against what the plan contains</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/requirementCoverage.test.ts` **11 green**, plus 4 added to</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the granularity is DIMENSIONS, deliberately. A plan requirement cites `from_dimensions`, not</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>The coverage report on screen: what they said, beside what the plan covers</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/RequirementCoveragePanel.test.tsx` **11 green**; all four internship</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the panel is currently wired only into the generator&#39;s review step, which is the door Ali</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>Intern projects board: every project, who it is assigned to, at class-board depth</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/projectDeliveryInterns.test.ts` **6 green** — matches on membership not</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">one test earned its keep immediately — &quot;is absent unless asked for&quot; failed because I had put</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>Click a story, see the requirements it fulfils</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/projectDeliveryStoryRequirements.test.ts` **9 green** — the columns are</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">a hand-written `jest.mock` factory for `projectReleaseMeta` cost a run by omitting</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>Import a project from its repository, decomposed like any other</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/repoProjectImport.test.ts` **14 green** — every paste form parsed, bad</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the service import in the route is DEFERRED (`await import(...)` inside the handler), not</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>Wire the requirement packing into the live path it was written for</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">6 new tests in `buildIntakeAdapterCompleteness.test.ts` that go through</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">found by reading the map of the intake before adding to it, not by a failing test -</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>Attach a document to the intake, read before the next question and used in the requirements</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `intakeDocuments.test.ts` 18 green; 71 green across the three service</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the first mutation run exposed one of my own tests as unfailable - it compared</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>Move the review hold into the conversation intake, and the plan review with it</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">58 suites / 1251 tests green across `src/services/delivery` plus the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`InternshipProjectGenerator` is NOT deleted, deliberately, and this is for Ali to</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260921-v8n2.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

@@ -6,7 +6,7 @@
  * were too frequent and the VIP alerts duplicated the new
  * vipInboxWatcher -> Mandrill -> gmail push system.
  *
- * NEW: every alert now routes through Mandrill to alimuwwakkil@gmail.com.
+ * NEW: every alert now routes through Mandrill to ali@colaberry.com.
  * Gmail's mobile push notification is the alert (same UX as the VIP
  * system). Subject line is engineered for lock-screen preview.
  *
@@ -22,9 +22,10 @@
 import nodemailer from 'nodemailer';
 import { sequelize } from '../../config/database';
 import { QueryTypes } from 'sequelize';
+import { inboxCosAlertsEnabled } from './inboxAlertsConfig';
 
 const LOG_PREFIX = '[InboxCOS][Alert]';
-const ALERT_TO = process.env.INBOX_COS_ALERT_GMAIL || 'alimuwwakkil@gmail.com';
+const ALERT_TO = process.env.INBOX_COS_ALERT_GMAIL || 'ali@colaberry.com';
 
 // Narrowed 2026-06-05 from 12 to 4. Dropped "urgent" (74/wk noise from
 // promo bodies), "immediate" (14/wk - vague), "time-sensitive", "critical",
@@ -42,6 +43,10 @@ const URGENT_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 const AUTH_FAILURE_DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function sendSms(message: string): Promise<boolean> {
+  if (!inboxCosAlertsEnabled()) {
+    console.log(`${LOG_PREFIX} alerts disabled (INBOX_COS_ALERTS_ENABLED!=true) - dropped`);
+    return false;
+  }
   if (!process.env.MANDRILL_API_KEY) {
     console.warn(`${LOG_PREFIX} MANDRILL_API_KEY missing - alert dropped`);
     return false;

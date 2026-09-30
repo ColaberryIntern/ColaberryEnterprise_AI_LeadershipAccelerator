@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260819-w7nq — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 19, 2026 at 7:39 PM</div>
+    <div><span class="sid">CC-20260819-w7nq</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**D2 (headline) + D1 + D4 — three portal-Projects display defects, all pre-existing on `main` and none caused by PR #1635.**</h2>
+          <span class="badge">2026-08-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**D2.** A student whose build published a gate-clean plan was shown the browser&#39;s starter template, permanently, chipped &quot;⚠ starter template&quot; over a tooltip saying it has no schedule and no Command Center. Root cause read from the code and reproduced: `claimBackendProject` calls `adoptServerIds`, which re-keys the placeholder&#39;s `id` **to the server UUID at claim time**, minutes before the plan exists. From that moment `reconcileProjects`&#39; `matchIdx` matches, so the `supersede` branch — guarded by `matchIdx &lt; 0 &amp;&amp; mirrorIdx &lt; 0` — is unreachable in exactly the case it was written for. **The brief&#39;s stated follow-on mechanism was inverted and the corrected one matters:** overlay was *not* a no-op. `generateSkeleton`&#39;s template tasks carry **no `storyId` at all** (`id: &#39;&lt;localId&gt;-t&lt;n&gt;&#39;` and nothing else), so the template&#39;s keys and the plan&#39;s `STORY-NNN` keys are wholly **disjoint** — `adoptServerTasks` therefore **added** the plan to the template instead of replacing it. The card became the union, ten generic tasks plus the real stories, still `origin: &#39;local&#39;`. That is exactly the 27 and 29 measured in the browser against published plans of 17 and 19 stories: **10 + 17 and 10 + 19**. Fix: decide supersede on whether the row *is* this plan, using task identity, which is the only thing ids can no longer answer. New pure helper `sharesNoTaskIdentity(p, tree)` — a row sharing **at least one** task key with the tree is this plan (possibly stale, possibly missing a story) and is adopted/overlaid, never superseded; a row sharing **nothing** is the placeholder and the plan supersedes it. New `supersededBy()` carries the placeholder&#39;s `legacyIds` (and its own prior id) onto the server plan so bookmarked `/workspace/:id` URLs still resolve through `canonicalProjectId`. **D1.** &quot;Active builds&quot; rendered `projects.length`, and `read()` re-seeds `sample-salon` whenever it is missing, so the number was one too high at every value (0→1, 1→2, 2→3) — the &quot;Active builds: 2 while the API returned 1&quot; report was a training fixture counted as a build the student owns, not a stale cache. Now counts non-sample builds via a memoised `ownBuilds`, and the example carries an `example` tag in the sidebar so it stops reading as the student&#39;s own work. **D4** needed no separate fix — see Notes. Files: `projectHydrate.ts`, `ProjectsPage.tsx`, `projects.css`, 2 new test files, 1 new capture script, review doc + screenshots.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Every new assertion watched failing against unmodified `origin/main` first, in a separate base worktree** (`C:\Users\ali_m\multibuild-base-wt`, detached at `main`), with its real output: D2 `expect(r.next[0].origin).toBe(&#39;pipeline&#39;)` → **`Expected: &quot;pipeline&quot;  Received: &quot;local&quot;`**; `expect(total).toBe(17)` → **`Expected: 17  Received: 27`**; the D4 agreement assertion → **`Expected: 17  Received: 27`**; D1 → **`Expected: &quot;1&quot;  Received: &quot;2&quot;`** and **`Expected: &quot;2&quot;  Received: &quot;3&quot;`** (Quincy&#39;s report, exactly). The four guard tests (qninying&#39;s cached-plan-missing-a-story, an already-hydrated `origin: &#39;pipeline&#39;` row, a round-tripped client build, a student mid-build) **pass on `main` and still pass after** — they pin behaviour the fix must not disturb. After the fix: `pages/portal/projects` **22 suites, 291 tests, all passing**; full frontend suite **1255 passed**, the only 2 failures (`sbpApi.test.ts › startBuild surfaces a failure`, and `intersectionObserverMock.ts` &quot;must contain at least one test&quot;) **reproduced identically on unmodified `main`** and are untouched by this branch. Frontend `tsc --noEmit` **clean, exit 0**, using pinned TypeScript **5.7.3** (a bare `npx tsc` resolves 4.9.5 here and both invents and hides errors). **Browser-verified on the dev instance, not only in tests** — `/opt/acc-multibuild`, compose project `accelerator-dev`, nginx `:9999`. DB proved dev by asking the app&#39;s own connection rather than trusting the variable: `select current_database()` → **`accelerator_dev1`** (the copied `.env` carries `DB_NAME=accelerator_prod` on line 7 **and a second `DATABASE_URL=…/accelerator_prod` landmine on line 8**; both forced on the command line). Running image proved to contain this commit by grepping the **container filesystem and the bundle served over HTTP**, not the build log: `pj-sb-tag` (new in this commit) present in `static/css/main.ebc71045.css` and `static/js/885.ab6dcf44.chunk.js`. Walked with a throwaway account against a seeded 17-story plan: page reports `activeBuildsStat: &quot;1&quot;`, `originChips: [&quot;your tailored plan&quot;]`, `storeFirstOrigin: &quot;pipeline&quot;`, `storeFirstTaskCount: 17`, list names and task titles both the **server&#39;s**. Evidence: `docs/MULTIBUILD_REVIEW.html`, `docs/screenshots/2026-08-19-multibuild-display/`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Not merged, not deployed to production — PR #1643, dev only.** Production was never read or written; another session deployed #1638 to prod at 22:19 UTC and that was left alone. **D2, choice of fix and the alternative rejected:** the two candidates were (a) relax the `supersede` guard in `reconcileProjects` and (b) defer id adoption in `claimBackendProject`. (b) was rejected on evidence, not taste — that side-car-only shape **is** the defect the id-adoption fix removed (`projectIdentity.ts` documents it: the placeholder id &quot;stayed the project&#39;s identity, went into the workspace route, and was rejected 400&quot;, surfacing as &quot;your GitHub username is invalid&quot;), and `projectsStore.idAdoption.test.ts` pins it. (b) would have reintroduced a fixed production defect to fix a display one. **What happens to a student mid-build when this lands:** the repair is lossless by construction — the completed-work guard is kept, so the only rows replaced are rows that share no task with the plan **and** have nothing ticked on them. A student who ticked something keeps today&#39;s behaviour exactly; carrying a completion across is impossible to do honestly because the two key sets are disjoint, and marking a plan story done that they never did would be a worse defect. A test pins that. **D4 fell out of D2 and got no separate fix** — the archive dialog reads live server counts from `GET …/archive-preview` while the card read localStorage, so &quot;17 tasks across 6 lists, your published plan&quot; beside &quot;starter template, 0/27 tasks&quot; was one divergence seen from two sides; a test now pins the agreement. **D3 scoped and deliberately NOT built** (architectural, recommended separately in the PR): the build list is genuinely client state — `reconcileProjects` has exactly one production caller and is handed only `GET /api/portal/projects/active`, one tree; the inventory is reduced to `{known, ids[], activeId}` and used only by `pruneDeadProjects` and for ordering. A student with 4 published builds on a fresh browser sees **2 cards** (their active build + the training example); `hydrateProjectById` is the only path that can add a non-active build and it is reachable only from &quot;Restore&quot; on an archived project. **Two blocking findings for whoever picks D3 up:** (1) `GET /api/portal/projects` is **route-shadowed** — `projectRoutes.ts:358` is mounted before `projectsPortalRoutes.ts:85` and wins, so `listEnrollmentProjectsSummary`/`toProjectSummaryDto` are dead code and both the `projectApiEnabled` gate and `requireContentEntitlement(&#39;projects&#39;)` are bypassed for that path; (2) the protected platform record `fcce50ef-…` is deliberately **not** filtered out of `listProjectsForEnrollment`, so a naive server-rendered list ships a second &quot;Untitled project&quot; card to Ali&#39;s own account on day one. Cheapest correct first slice is not the full unification: loop `hydrateProjectById` over inventory ids not already local (~15 lines in `projectSync.ts`), leaving every `pruneDeadProjects` interlock untouched; a card-shaped DTO then becomes a payload optimisation rather than an architectural flip (one tree is ~114 KB, so 4 builds ≈ 456 KB into a ~5 MB localStorage budget). **Fixtures cleaned up and proven gone** (see PR body for the post-cleanup counts); no student rows, no Quincy, no Ali, no emails, no `git stash`, explicit-path commits only.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260819-w7nq</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

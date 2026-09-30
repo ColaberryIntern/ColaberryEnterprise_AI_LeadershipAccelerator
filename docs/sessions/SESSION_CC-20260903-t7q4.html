@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260903-t7q4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, September 4, 2026 at 5:57 AM</div>
+    <div><span class="sid">CC-20260903-t7q4</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Teaching guide: a plain-English, slide-by-slide pre-class read for every session</h2>
+          <span class="badge">2026-09-03</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `renderTeachingGuide(spec)` turns the KitSpec an instructor already presents from into a long-form document: every slide in order with what is on screen, what that kind of moment asks of them, their own direction split out of the authored script, the prompt with its expected result / stop condition / rescue, the diagram, and the vocabulary the slide uses. Four new modules under `backend/src/services/classKit/` — `teachingGuideHtml.ts` (composer), `teachingGuideSlides.ts` (one card per slide), `teachingGuideStyles.ts` (CSS + browser runtime), `teachingGuideTerms.ts` (the programme&#39;s vocabulary). Wired through `renderSessionTeachingGuide` in `sessionKitDocService.ts`, `handleGetSessionTeachingGuide`, `GET /api/admin/accelerator/sessions/:id/teaching-guide`, and a &quot;📖 Teaching guide (download)&quot; item in the Present split-button menu on `AdminAcceleratorPage.tsx`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">42 new tests green, including a parametrised render of **all 25 sessions** (Orientation + 12 weeks × 2 days). Full backend CI config green. `tsc --noEmit` clean on backend and frontend. Rendered five real sessions and **looked at them in a headless browser**: 43 cards / 19 diagrams for Session 13, 0 mermaid parse errors, 0 page errors.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**It is a projection, not a second copy.** Every line is derived from fields the deck already authors, so a guide cannot drift away from the class it describes, and it picks up any Customize override saved for that session. **Two defects were caught by looking rather than by the suite.** (1) The first workload badge was slides ÷ minutes, which called Week 6&#39;s 50-minute guided build &quot;roomy&quot; and its 5-minute opening &quot;dense&quot; — the exact inverse of where a build day runs long; it now counts prompts the room has to get working, and Session 13 correctly reads &quot;8 prompts · crunch&quot; on the guided build. (2) Collapsed cards used `display:none`, so mermaid sized every hidden diagram to zero and a **printed** guide — where the CSS forces all cards open — would have shown raw mermaid source on every page; collapse is now `height:0` + `visibility:hidden` so all 19 diagrams render on load without opening anything. **Why a term dictionary rather than reading the deck:** `KitSlide.definitions` exists and is preferred where present, but only Week 5 authors any (30 entries, every other week zero), so a glossary built from the deck alone would appear on one week and vanish everywhere else.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260903-t7q4.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

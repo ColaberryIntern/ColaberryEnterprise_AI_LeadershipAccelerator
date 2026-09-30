@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import api from '../../utils/api';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 
 interface AutomatedReport {
   id: string;
@@ -89,30 +91,52 @@ export default function AdminReportsPage() {
     return { total, enabled, failing };
   }, [reports]);
 
+  // Per-page trust signal (Basecamp todo 10027085963) derived from report health.
+  const trust: TrustSignal = useMemo(() => {
+    const { total, enabled, failing } = summary;
+    const level: TrustLevel = failing > 0 ? 'stale' : enabled === total && total > 0 ? 'verified' : 'live';
+    const score = total === 0 ? 0 : Math.round(((enabled - failing) / total) * 100);
+    return {
+      level, score, source: 'automated_reports table', updatedAt: new Date().toISOString(),
+      summary: `${enabled}/${total} reports enabled, ${failing} failing.`, href: '/admin/trust',
+      pillars: [
+        { name: 'Coverage', status: 'live', score: total === 0 ? 0 : Math.round((enabled / total) * 100),
+          evidence: [{ label: 'Enabled', value: `${enabled}/${total}` }] },
+        { name: 'Health', status: failing > 0 ? 'error' : 'verified',
+          evidence: [{ label: 'Failing runs', value: String(failing) }] },
+      ],
+    };
+  }, [summary]);
+
   return (
-    <div className="container-fluid py-4" style={{ maxWidth: 1400 }}>
-      <div className="d-flex justify-content-between align-items-end mb-4">
-        <div>
-          <h1 className="h3 mb-1" style={{ color: '#1a365d', fontWeight: 700 }}>Automated Reports</h1>
-          <div className="text-muted" style={{ fontSize: 14 }}>
-            Schedule, prompts, recipients, and recent run history for every report sent on your behalf.
+    <>
+      <PageHeader
+        title="Automated Reports"
+        icon="mail-send-line"
+        subtitle="Schedule, prompts, recipients, and recent run history for every report sent on your behalf."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Automated Reports' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-outline-primary btn-sm" onClick={loadList} disabled={loading}>
+            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
+          </button>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Total" value={summary.total} icon="file-list-3-line" tone="info" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Enabled" value={summary.enabled} icon="checkbox-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Failing" value={summary.failing} icon="error-warning-line" tone={summary.failing ? 'danger' : 'neutral'} />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Healthy" value={Math.max(0, summary.enabled - summary.failing)} icon="shield-check-line" tone="success" />
           </div>
         </div>
-        <div className="d-flex gap-3">
-          <div className="text-center px-3 py-2 rounded" style={{ background: '#f1f5f9' }}>
-            <div className="h4 mb-0" style={{ color: '#1a365d' }}>{summary.total}</div>
-            <div className="text-muted" style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>Total</div>
-          </div>
-          <div className="text-center px-3 py-2 rounded" style={{ background: '#dcfce7' }}>
-            <div className="h4 mb-0" style={{ color: '#166534' }}>{summary.enabled}</div>
-            <div className="text-muted" style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>Enabled</div>
-          </div>
-          <div className="text-center px-3 py-2 rounded" style={{ background: summary.failing ? '#fee2e2' : '#f1f5f9' }}>
-            <div className="h4 mb-0" style={{ color: summary.failing ? '#991b1b' : '#1a365d' }}>{summary.failing}</div>
-            <div className="text-muted" style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>Failing</div>
-          </div>
-        </div>
-      </div>
+      </PageHeader>
 
       {loading && <div className="text-center py-5"><div className="spinner-border text-primary" /></div>}
 
@@ -125,34 +149,34 @@ export default function AdminReportsPage() {
       {!loading && reports.length > 0 && (
         <div className="row g-3">
           <div className={selectedId ? 'col-lg-7' : 'col-12'}>
-            <div className="card border-0 shadow-sm">
+            <SectionCard padded={false}>
               <div className="table-responsive">
-                <table className="table mb-0" style={{ fontSize: 13 }}>
-                  <thead style={{ background: '#1a365d', color: 'white' }}>
+                <table className="table table-hover align-middle mb-0" style={{ fontSize: 13 }}>
+                  <thead className="table-light">
                     <tr>
-                      <th style={{ padding: '12px 16px' }}>Report</th>
-                      <th style={{ padding: '12px 16px' }}>Schedule</th>
-                      <th style={{ padding: '12px 16px' }}>Last Run</th>
-                      <th style={{ padding: '12px 16px' }}>Status</th>
-                      <th style={{ padding: '12px 16px' }}>On</th>
-                      <th style={{ padding: '12px 16px' }}></th>
+                      <th>Report</th>
+                      <th>Schedule</th>
+                      <th>Last Run</th>
+                      <th>Status</th>
+                      <th>On</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {reports.map((r) => (
-                      <tr key={r.id} style={{ background: selectedId === r.id ? '#eff6ff' : undefined }}>
-                        <td style={{ padding: '14px 16px' }}>
-                          <div style={{ fontWeight: 600, color: '#1a365d' }}>{r.name}</div>
+                      <tr key={r.id} style={{ background: selectedId === r.id ? 'var(--red-50)' : undefined }}>
+                        <td>
+                          <div className="fw-semibold">{r.name}</div>
                           <div className="text-muted" style={{ fontSize: 11 }}>{r.script_path || r.owner || ''}</div>
                         </td>
-                        <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontSize: 12 }}>{r.cron_schedule || '—'}</td>
-                        <td style={{ padding: '14px 16px' }}>{formatDate(r.last_run_at)}</td>
-                        <td style={{ padding: '14px 16px' }}>
-                          {r.last_status === 'success' && <span className="badge bg-success">success</span>}
-                          {(r.last_status === 'failure' || r.last_status === 'error') && <span className="badge bg-danger">{r.last_status}</span>}
-                          {!r.last_status && <span className="text-muted">—</span>}
+                        <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{r.cron_schedule || '—'}</td>
+                        <td>{formatDate(r.last_run_at)}</td>
+                        <td>
+                          {r.last_status
+                            ? <StatusBadge label={r.last_status} />
+                            : <span className="text-muted">—</span>}
                         </td>
-                        <td style={{ padding: '14px 16px' }}>
+                        <td>
                           <button
                             className={`btn btn-sm ${r.enabled ? 'btn-success' : 'btn-outline-secondary'}`}
                             disabled={saving}
@@ -161,7 +185,7 @@ export default function AdminReportsPage() {
                             {r.enabled ? 'On' : 'Off'}
                           </button>
                         </td>
-                        <td style={{ padding: '14px 16px' }}>
+                        <td>
                           <button
                             className="btn btn-sm btn-outline-primary"
                             onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}
@@ -174,18 +198,13 @@ export default function AdminReportsPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </SectionCard>
           </div>
 
           {selectedId && detail && (
             <div className="col-lg-5">
-              <div className="card border-0 shadow-sm">
-                <div className="card-header" style={{ background: '#1a365d', color: 'white' }}>
-                  <div style={{ fontWeight: 700 }}>{detail.report.name}</div>
-                  <div style={{ fontSize: 12, opacity: 0.85 }}>{detail.report.description || ''}</div>
-                </div>
-                <div className="card-body">
-                  <div className="mb-3">
+              <SectionCard title={detail.report.name} subtitle={detail.report.description || undefined}>
+                <div className="mb-3">
                     <div className="text-muted" style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 600 }}>Recipients</div>
                     <div style={{ fontSize: 13 }}>{(detail.report.recipients || []).join(', ') || '—'}</div>
                   </div>
@@ -222,9 +241,7 @@ export default function AdminReportsPage() {
                               <tr key={run.id}>
                                 <td>{formatDate(run.started_at)}</td>
                                 <td>
-                                  {run.status === 'success' && <span className="badge bg-success">success</span>}
-                                  {(run.status === 'failure' || run.status === 'error') && <span className="badge bg-danger">{run.status}</span>}
-                                  {!run.status && <span className="text-muted">—</span>}
+                                  {run.status ? <StatusBadge label={run.status} /> : <span className="text-muted">—</span>}
                                 </td>
                                 <td>{(run.recipients_sent || []).length}</td>
                                 <td>{run.triggered_by || '—'}</td>
@@ -235,12 +252,11 @@ export default function AdminReportsPage() {
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
+              </SectionCard>
             </div>
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }

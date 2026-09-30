@@ -4,6 +4,7 @@
 // Composite Context Graph. No LLM calls — pure code validation.
 
 import type { CompositeContext } from './contextGraphService';
+import { explorerFactIssues } from './explorerGrowth/explorerFactGuard';
 
 export interface ValidationResult {
   valid: boolean;
@@ -130,7 +131,23 @@ export function validateGeneratedMessage(
     }
   }
 
-  // 9. Previous message duplication check
+  // 9. Explorer fact guard — the April-14 rule at send time (plan §11.4).
+  //
+  // Only for Explorer sends: `context.explorer` present is the discriminator.
+  // Every other campaign is unaffected, so this cannot change behaviour for the
+  // existing outbound paths.
+  //
+  // This is the ONLY one of §11.4's three enforcement points that sees what the
+  // model actually wrote. The copy lint reads seeded definition files and the
+  // system prompt is an instruction to a generator — neither constrains runtime
+  // output. An invented cohort date is the most confident thing a fluent
+  // generator produces, and it reaches a person unless something reads the
+  // generated text and checks it against resolved facts.
+  if (context.explorer) {
+    issues.push(...explorerFactIssues(cleaned, context.explorer));
+  }
+
+  // 10. Previous message duplication check
   if (context.previousMessages.length > 0) {
     const lastBody = context.previousMessages[0].bodyPreview.toLowerCase();
     const currentBody = cleaned.toLowerCase().replace(/<[^>]+>/g, '');

@@ -121,12 +121,12 @@ export default function CampaignTimelineModal({
                     top: 8,
                     bottom: 8,
                     width: 2,
-                    backgroundColor: 'var(--color-border, #e2e8f0)',
+                    backgroundColor: 'var(--border-subtle)',
                   }}
                 />
 
                 {timeline.timeline.map((entry, i) => {
-                  const dotColor = entry.type === 'error' ? '#e53e3e' : entry.type === 'activity' ? '#2b6cb0' : '#38a169';
+                  const dotColor = entry.type === 'error' ? 'var(--status-danger)' : entry.type === 'activity' ? 'var(--status-info)' : 'var(--status-success)';
 
                   return (
                     <div key={i} className="position-relative mb-3">
@@ -139,7 +139,7 @@ export default function CampaignTimelineModal({
                           width: 12,
                           height: 12,
                           backgroundColor: dotColor,
-                          border: '2px solid white',
+                          border: '2px solid var(--surface-card)',
                           boxShadow: `0 0 0 1px ${dotColor}`,
                         }}
                       />

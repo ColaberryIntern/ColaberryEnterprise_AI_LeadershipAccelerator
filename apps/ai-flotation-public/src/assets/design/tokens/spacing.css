@@ -1,0 +1,13 @@
+/* AI Flotation spacing, radius, shadow, layout tokens. */
+:root {
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px; --space-12: 48px; --space-16: 64px;
+  --radius: 2px;
+  --shadow: 0 1px 2px rgba(20,18,16,0.30);
+  --touch-target: 44px;
+  --page-padding: clamp(16px, 4vw, 32px);
+  --bp-sm: 640px; --bp-md: 768px; --bp-lg: 1024px; --bp-xl: 1280px;
+}
+[data-variant="harbor"] {
+  --radius: 6px;
+  --shadow: 0 1px 3px rgba(10,20,18,0.18);
+}

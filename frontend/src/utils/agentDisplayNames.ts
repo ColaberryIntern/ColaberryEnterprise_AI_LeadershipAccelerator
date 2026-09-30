@@ -107,6 +107,18 @@ const AGENT_DISPLAY_NAMES: Record<string, string> = {
   // Engines (not agent_name but sometimes shown)
   AnomalyDetectionEngine: 'Anomaly Detection',
   AutonomousEngine: 'Autonomous Operations',
+
+  // AI Workforce directors (orgRegistry.ts)
+  WorkforceStudentSuccessDirector: 'Student Success',
+  WorkforceCurriculumDirector: 'Curriculum',
+  WorkforceCareerDirector: 'Career',
+  WorkforceCertificationDirector: 'Certification',
+  WorkforceFinanceDirector: 'Finance',
+  WorkforceOperationsDirector: 'Operations',
+  WorkforceCommunityDirector: 'Community',
+  WorkforceTechnologyDirector: 'Technology',
+  WorkforceResearchDirector: 'Research',
+  WorkforceMarketingDirector: 'Marketing',
 };
 
 /**

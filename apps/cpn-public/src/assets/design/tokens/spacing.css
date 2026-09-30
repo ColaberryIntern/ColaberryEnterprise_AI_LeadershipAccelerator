@@ -1,0 +1,8 @@
+/* CPN spacing, shape, layout. Breakpoints: sm 640px · md 768px · lg 1024px · xl 1280px.
+   Fluid layout: paddings clamp, grids use minmax(min(Npx,100%),1fr). */
+:root{
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px; --space-8:32px; --space-12:48px; --space-16:64px;
+  --radius:12px;
+  --touch-target:44px;
+  --page-padding:clamp(16px, 4vw, 32px);
+}

@@ -3,6 +3,7 @@ import { sequelize } from '../config/database';
 import { Department, Initiative, DepartmentEvent, AiAgent, Ticket } from '../models';
 import { createTicket } from './ticketService';
 import type { DeptStrategyConfig } from './agents/strategy/departmentStrategyConfigs';
+import { deriveOpportunityDedupKey, toDedupKeyTag } from './agents/strategy/departmentInitiativeDedupKey';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,16 @@ export interface CreateInitiativeInput {
   created_by_agent: string;
   parent_strategy_id?: string;
   tags?: string[];
+  /**
+   * Stable dedup key (see `agents/strategy/departmentInitiativeDedupKey.ts`), e.g.
+   * `opportunity_type:health_gap`. Required going forward — dedup no longer keys on `title`
+   * text, which an LLM-sourced opportunity can never be relied on to repeat verbatim across
+   * cycles (the confirmed live root cause of the duplicate-explosion bug this fixes; see
+   * directives/register-ticket-creating-agent.md Step 1). Optional only for backward
+   * compatibility with any caller not yet updated; a missing key disables dedup for that call
+   * (falls back to title-match, the old behavior) rather than throwing.
+   */
+  opportunity_key?: string;
 }
 
 // ── Health Evaluation ────────────────────────────────────────────────────
@@ -184,15 +195,28 @@ export async function identifyOpportunities(
 export async function createStrategicInitiative(
   data: CreateInitiativeInput,
 ): Promise<any> {
-  // Dedup: check for existing active initiative with same title
-  const existing = await Initiative.findOne({
-    where: {
-      department_id: data.department_id,
-      title: data.title,
-      status: { [Op.in]: ['planned', 'active'] },
-    },
-  });
+  // Dedup: prefer the stable opportunity-type key (opportunity_key) over title text.
+  // Title-text dedup is exact-match and cannot survive an LLM paraphrasing the same finding
+  // differently every cycle (confirmed live root cause — see this function's JSDoc above and
+  // directives/register-ticket-creating-agent.md Step 1). `opportunity_key` is stored as a
+  // reserved-prefix tag in the existing `tags` JSONB column (no schema migration) and matched
+  // via JSONB containment, mirroring `artifactService.ts`'s existing `Op.contains` usage on a
+  // JSONB array column in this codebase.
+  const dedupWhere: Record<string, any> = {
+    department_id: data.department_id,
+    status: { [Op.in]: ['planned', 'active'] },
+  };
+  if (data.opportunity_key) {
+    dedupWhere.tags = { [Op.contains]: [toDedupKeyTag(data.opportunity_key)] };
+  } else {
+    // Backward-compatible fallback only, for any caller not yet passing opportunity_key.
+    dedupWhere.title = data.title;
+  }
+  const existing = await Initiative.findOne({ where: dedupWhere });
   if (existing) return existing;
+
+  const tags = [...(data.tags || [])];
+  if (data.opportunity_key) tags.push(toDedupKeyTag(data.opportunity_key));
 
   const initiative = await Initiative.create({
     department_id: data.department_id,
@@ -204,7 +228,7 @@ export async function createStrategicInitiative(
     supporting_departments: data.supporting_departments || [],
     created_by_agent: data.created_by_agent,
     parent_strategy_id: data.parent_strategy_id,
-    tags: data.tags || [],
+    tags,
     start_date: new Date(),
     progress: 0,
   } as any);

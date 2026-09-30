@@ -1,13 +1,41 @@
 import { Router } from 'express';
 import { auditMiddleware } from '../middlewares/auditMiddleware';
+import { requireAdmin, requireSection } from '../middlewares/authMiddleware';
+import { mgmtSectionGate } from '../middlewares/mgmtSectionGate';
+import { caseStudySurfaceLabGate } from '../middlewares/caseStudySurfaceLabGate';
 import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
+import peopleRoutes from './admin/peopleRoutes';
+import personProfileRoutes from './admin/personProfileRoutes';
 import leadRoutes from './admin/leadRoutes';
+import organizationRoutes from './admin/organizationRoutes';
+import brandRoutes from './admin/brandRoutes';
+import contentComposerRoutes from './admin/contentComposerRoutes';
+import publishingRoutes from './admin/publishingRoutes';
+import channelAccountRoutes from './admin/channelAccountRoutes';
+import contentMediaRoutes from './admin/contentMediaRoutes';
+import linkedInConnectRoutes from './admin/linkedInConnectRoutes';
+import marketingConnectRoutes from './admin/marketingConnectRoutes';
+import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
+import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
+import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
+import explorerGrowthRoutes from './admin/explorerGrowthRoutes';
+import growthJourneyRoutes from './admin/growthJourneyRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
 import acceleratorRoutes from './admin/acceleratorRoutes';
+import flotationIntakeRoutes from './admin/flotationIntakeRoutes';
+import kbRoutes from './admin/kbRoutes';
 import orchestrationRoutes from './admin/orchestrationRoutes';
+import timelineAdminRoutes from './admin/timelineAdminRoutes';
+import componentRoutes from './admin/componentRoutes';
+import composerRoutes from './admin/composerRoutes';
+import feedControlRoutes from './admin/feedControlRoutes';
+import intelRoutes from './admin/intelRoutes';
+import opsCenterRoutes from './admin/opsCenterRoutes';
+import workforceRoutes from './admin/workforceRoutes';
+import enterpriseIntelligenceRoutes from './admin/enterpriseIntelligenceRoutes';
 import aiOpsRoutes from './admin/aiOpsRoutes';
 import intelligenceRoutes from './admin/intelligenceRoutes';
 import campaignTestRoutes from './admin/campaignTestRoutes';
@@ -26,6 +54,7 @@ import admissionsRoutes from './admin/admissionsRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
+import careerReviewRoutes from './admin/careerReviewRoutes';
 import openclawRoutes from './admin/openclawRoutes';
 import reportingRoutes from './admin/reportingRoutes';
 import governanceCenterRoutes from './admin/governanceCenterRoutes';
@@ -54,29 +83,133 @@ import roleRoutes from './admin/roleRoutes';
 import implementationStrategyRoutes from './admin/implementationStrategyRoutes';
 import visitorAnalyticsRoutes from './admin/visitorAnalyticsRoutes';
 import inboxRoutes from './admin/inboxRoutes';
+import inboxCaseRoutes from './admin/inboxCaseRoutes';
+import inboxZeroRoutes from './admin/inboxZeroRoutes';
+import missedOpportunitiesRoutes from './admin/missedOpportunitiesRoutes';
 import contentQueueRoutes from './admin/contentQueueRoutes';
 import sourceRoutes from './admin/sourceRoutes';
+import refundRoutes from './admin/refundRoutes';
 import formDefinitionRoutes from './admin/formDefinitionRoutes';
 import routingRuleRoutes from './admin/routingRuleRoutes';
 import ingestLogRoutes from './admin/ingestLogRoutes';
+import workLedgerRoutes from './admin/workLedgerRoutes';
+import agentDetailRoutes from './admin/agentDetailRoutes';
+import agentRoleCharterRoutes from './admin/agentRoleCharterRoutes';
+import reeseBehaviourSwitchRoutes from './admin/reeseBehaviourSwitchRoutes';
+import managerDirectiveRoutes from './admin/managerDirectiveRoutes';
+import managerInboxRoutes from './admin/managerInboxRoutes';
+import approvalRequestRoutes from './admin/approvalRequestRoutes';
+import agentManagerConversationRoutes from './admin/agentManagerConversationRoutes';
+import agentGoalRoutes from './admin/agentGoalRoutes';
+import agentOneOnOneRoutes from './admin/agentOneOnOneRoutes';
+import agentReportSubscriptionRoutes from './admin/agentReportSubscriptionRoutes';
+import agentMemoryProposalRoutes from './admin/agentMemoryProposalRoutes';
+import agentExplainabilityRoutes from './admin/agentExplainabilityRoutes';
 import generatorRoutes from './admin/generatorRoutes';
 import autonomousIngestRoutes from './admin/autonomousRoutes';
 import automatedReportsRoutes from './admin/automatedReportsRoutes';
 import opsRoutes from './admin/opsRoutes';
+import cbSystemRoutes from './admin/cbSystemRoutes';
 import anthropicRoutes from './admin/anthropicRoutes';
 import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
+import mentorReviewRoutes from './admin/mentorReviewRoutes';
+import trustRoutes from './admin/trustRoutes';
+import communityModerationRoutes from './admin/communityModerationRoutes';
+import communityMemberRoutes from './admin/communityMemberRoutes';
+import podcastRoutes from './admin/podcastRoutes';
+import studentStoryRoutes from './admin/studentStoryRoutes';
+import internshipAdminRoutes from './admin/internshipRoutes';
+import factoryAdminRoutes from './admin/factoryRoutes';
+import govQualificationRoutes from './admin/govQualificationRoutes';
+import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
+import certificationAdminRoutes from './admin/certificationAdminRoutes';
+import checklistRoutes from './admin/checklistRoutes';
 
 const router = Router();
 
 router.use(auditMiddleware);
+// RBAC: global section gate. Caps bridge-minted scoped mgmt roles (curriculum,
+// revenue, admissions, support) to their allowed sections by request path.
+// Legacy admins and owner pass untouched; runs before every admin sub-router.
+router.use(mgmtSectionGate);
 router.use(authRoutes);
 router.use(cohortRoutes);
+router.use(personProfileRoutes);
+router.use(peopleRoutes);
 router.use(leadRoutes);
+router.use(organizationRoutes);
+router.use(brandRoutes);
+router.use(contentComposerRoutes);
+router.use(publishingRoutes);
+router.use(channelAccountRoutes);
+router.use(contentMediaRoutes);
+router.use(linkedInConnectRoutes);
+router.use(marketingConnectRoutes);
+// Case Study OS admin surface. Every path is fully qualified
+// (/api/admin/case-studies/...) and carries requireAdmin per route, so its
+// position among the sibling sub-routers is not load-bearing — but it MUST stay
+// below router.use(mgmtSectionGate) above, or scoped management roles bypass the
+// section check entirely. Its PATH_SECTION entry maps it to 'program', the same
+// section /api/admin/projects uses: a Case Study is the publishable projection
+// of a Project, so the roles that manage Projects manage these.
+// Case Study four-lens surface lab — the ONLY code path in the system that
+// renders a non-enterprise surface. Mounted PATH-SCOPED, above the sub-router it
+// guards, and deliberately not as `router.use(gate)` inside
+// caseStudyAdminRoutes: sub-routers here mount with no path prefix, so an
+// unscoped guard inside one applies to every later router's paths as well. That
+// has already caused a production outage in this repo.
+//
+// `requireAdmin` is repeated here rather than relied upon from the sub-router
+// because middleware on this mount runs BEFORE the route's own guards, and the
+// lab gate needs `req.admin.sub` to exist. It is scoped to this one path, so it
+// cannot leak onto a sibling.
+//
+// It refuses a REQUEST, not a route: an `enterprise` preview, and every other
+// Case Study admin call, passes through untouched.
+router.use('/api/admin/case-studies/:id/preview', requireAdmin, caseStudySurfaceLabGate);
+router.use(caseStudyAdminRoutes);
+// Story Studio authoring routes. A SIBLING of the review-desk router rather than
+// growth inside it: that file is what a reviewer can do, this one is what an
+// author can do, and keeping the two route tables separately readable is worth
+// more than one import. Mounted identically — no path prefix, `requireAdmin` on
+// each route individually — and every path sits under `/api/admin/case-studies`,
+// so `mgmtSectionGate`'s existing `program` row already covers them. A new
+// prefix would be deny-by-default for every scoped management role while legacy
+// admin passed, which is a surface that half-works and looks fine.
+router.use(caseStudyStudioRoutes);
+// Case Study metric runs. A THIRD sibling for the same reason the first two are
+// apart: the review desk is what a reviewer can do, Story Studio is what an
+// author can do, and this is what an operator can MEASURE. It is also the only
+// one of the three whose routes spend GitHub quota, which is worth being able to
+// see in one route table. Mounted identically — no path prefix, `requireAdmin`
+// on each route individually — and every path sits under
+// `/api/admin/case-studies`, so `mgmtSectionGate`'s existing `program` row
+// already covers it.
+router.use(caseStudyMetricRoutes);
+// Explorer Growth OS Command Center (spec 27). Mounted like every sibling: no
+// path prefix here, because the sub-router declares full /api/admin paths and
+// carries its own PATH-SCOPED requireAdmin. Its paths sit under
+// /api/admin/explorer-growth, which mgmtSectionGate classifies as campaigns
+// (see the PATH_SECTION row) - a new prefix left unmapped would be
+// deny-by-default for every scoped management role while legacy admin passed,
+// which is a surface that half-works and looks fine.
+router.use(explorerGrowthRoutes);
+router.use(growthJourneyRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);
 router.use(acceleratorRoutes);
+router.use(flotationIntakeRoutes);
+router.use(kbRoutes);
 router.use(orchestrationRoutes);
+router.use(timelineAdminRoutes);
+router.use(componentRoutes);
+router.use(composerRoutes);
+router.use(feedControlRoutes);
+router.use(intelRoutes);
+router.use(opsCenterRoutes);
+router.use(workforceRoutes);
+router.use(enterpriseIntelligenceRoutes);
 router.use(aiOpsRoutes);
 router.use(intelligenceRoutes);
 router.use(campaignTestRoutes);
@@ -95,6 +228,7 @@ router.use(admissionsRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);
+router.use(careerReviewRoutes);
 router.use(openclawRoutes);
 router.use(reportingRoutes);
 router.use(governanceCenterRoutes);
@@ -122,17 +256,66 @@ router.use(userJourneyMapsRoutes);
 router.use(roleRoutes);
 router.use(implementationStrategyRoutes);
 router.use(visitorAnalyticsRoutes);
+// RBAC: the Inbox & Content section is excluded for mgmt 'admin' (Kes) and every
+// scoped role — enforced server-side (not just hidden in the nav). Path-scoped so
+// it runs only for these prefixes, before each sub-router's own requireAdmin.
+router.use('/api/admin/inbox', requireSection('inbox_content'));
+router.use('/api/admin/content-queue', requireSection('inbox_content'));
 router.use(inboxRoutes);
+// Inbox Intel — Case Resolution Engine: mounted under the same /api/admin/inbox
+// prefix, so it inherits the requireSection('inbox_content') gate above.
+router.use(inboxCaseRoutes);
+// /inbox-zero operator console API: same /api/admin/inbox prefix, same section gate.
+router.use(inboxZeroRoutes);
+router.use(missedOpportunitiesRoutes);
 router.use(contentQueueRoutes);
 router.use(sourceRoutes);
+router.use(refundRoutes);
+router.use(podcastRoutes);
 router.use(formDefinitionRoutes);
 router.use(routingRuleRoutes);
 router.use(ingestLogRoutes);
+router.use(workLedgerRoutes);
+router.use(agentDetailRoutes);
+router.use(agentRoleCharterRoutes);
+router.use(reeseBehaviourSwitchRoutes);
+router.use(managerDirectiveRoutes);
+router.use(managerInboxRoutes);
+router.use(approvalRequestRoutes);
+router.use(agentManagerConversationRoutes);
+router.use(agentGoalRoutes);
+router.use(agentOneOnOneRoutes);
+router.use(agentReportSubscriptionRoutes);
+router.use(agentMemoryProposalRoutes);
+router.use(agentExplainabilityRoutes);
 router.use(generatorRoutes);
 router.use(autonomousIngestRoutes);
 router.use(automatedReportsRoutes);
 router.use(opsRoutes);
+router.use(cbSystemRoutes);
 router.use(anthropicRoutes);
 router.use(qrAnalyticsRoutes);
+router.use(mentorReviewRoutes);
+router.use(trustRoutes);
+router.use(communityModerationRoutes);
+router.use(communityMemberRoutes);
+router.use(studentStoryRoutes);
+// AI Internship review queue. Its path prefix is registered in
+// mgmtSectionGate's PATH_SECTION under 'internship' — without that row the
+// gate is deny-by-default and Dhee's 'admissions' token 403s on every call.
+router.use(internshipAdminRoutes);
+router.use(factoryAdminRoutes);
+// Gov qualification workspace (Phase 2). Paths are nested under /api/admin/factory/qualification, so
+// mgmtSectionGate's existing '/api/admin/factory' → 'program' PREFIX row already covers them.
+router.use(govQualificationRoutes);
+// Cert Prep instructor surface. Path prefix is registered in mgmtSectionGate's
+// PATH_SECTION under 'program' - without that row the gate is deny-by-default
+// and every scoped mgmt token 403s here while legacy admin passes.
+router.use(certPrepAdminRoutes);
+// Certification review queue (under /api/admin/cert-prep, already mapped to
+// 'program') and the milestone-ladder recompute (/api/admin/progression, its
+// own gate row). Every route carries requireAdmin.
+router.use(certificationAdminRoutes);
+router.use(checklistRoutes);
 
 export default router;

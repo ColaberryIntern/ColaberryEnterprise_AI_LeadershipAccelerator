@@ -1,0 +1,78 @@
+# Gitleaks fingerprint allowlist.
+#
+# This is the reviewable escape hatch. Each line silences ONE specific finding,
+# identified by a fingerprint that gitleaks prints when it blocks you:
+#
+#   <commit-sha>:<file-path>:<rule-id>:<line-number>
+#
+# For a finding in the working tree (pre-commit, not yet committed) the
+# fingerprint has no commit component:
+#
+#   <file-path>:<rule-id>:<line-number>
+#
+# Copy the fingerprint exactly as printed, add it below, and — this is the part
+# that makes the hatch safe — write a comment above it saying WHY it is not a
+# secret. Because this file is committed, every exception goes through code
+# review. That is the difference between an escape hatch and a hole.
+#
+# Do NOT add a fingerprint to silence a real credential. If it is real, the fix
+# is to remove it, move it to an env var, and rotate it. A fingerprint here just
+# hides it from the scanner while it stays readable to the whole internet.
+#
+# Prefer an inline `gitleaks:allow` comment when you can edit the offending line
+# — it keeps the justification next to the code. Use this file when you cannot
+# (generated files, fixtures, binary-ish content, historical commits).
+#
+# --- entries below this line ---
+
+# refactored.ai legacy capture — Google reCAPTCHA SITE key on the contact page.
+#
+# WHY THIS IS NOT A SECRET: it is a `data-sitekey` on a `g-recaptcha` div. reCAPTCHA
+# site keys are public by design — Google requires them to be embedded in the HTML of
+# every page that renders the widget, so this exact string is already served to every
+# visitor of https://www.refactored.ai/contact-us/. The half that must stay private is
+# the reCAPTCHA SECRET key, which lives server-side and is not in this capture.
+#
+# WHY A FINGERPRINT RATHER THAN AN INLINE `gitleaks:allow`: this file is a byte-faithful
+# point-in-time capture of a live page. Editing it to insert a scanner directive would
+# change bytes the capture exists to preserve, break the sizes recorded in
+# manifest.json, and make a future re-capture diff as though the page had changed. The
+# capture must not be edited, so the exception belongs here.
+#
+# NOTE: line-anchored, and that is correct. Re-running capture.js after the site changes
+# will move or remove this line, the finding returns, and it gets re-reviewed rather than
+# silently inheriting an old exemption.
+apps/refactored-public/legacy-capture/pages/contact-us.html:generic-api-key:195
+
+# PROGRESS.md, 2026-06-23 entry (session CC-20260623-w9f2).
+#
+# WHY THIS IS NOT A SECRET: the value is the string `local-crm-test-secret`,
+# used as a Bearer token in a `curl` against `http://localhost:3002`. It is a
+# local development fixture, it names itself as one, and it authenticates
+# against nothing that exists outside a developer's own machine.
+#
+# WHY A FINGERPRINT RATHER THAN AN INLINE `gitleaks:allow`: PROGRESS.md is an
+# append-only audit log, and CLAUDE.md's concurrent-instance rule forbids
+# editing an entry written by another session. Rewriting a historical
+# verification record to satisfy a scanner would corrupt the audit trail this
+# repo relies on. The line stays exactly as it was written.
+#
+# NOTE: this fingerprint is line-anchored. PROGRESS.md is append-only, so line
+# 7200 is stable; if an entry is ever inserted above it the finding returns and
+# gets re-reviewed, which is the correct failure mode.
+PROGRESS.md:curl-auth-header:7200
+
+# ==========================================================================
+# The 2026-09-02 triage entries were REMOVED on 2026-09-05.
+#
+# 32 fingerprints were added here to silence triaged history findings. They
+# did not hold. A fingerprint is <commit>:<path>:<rule>:<line>, and the same
+# secret is reported once per commit that carries it, so those entries only
+# ever matched the commit set of the scan that produced them. A later sweep
+# emitted different SHAs for the identical file, rule and line: ZERO of 32
+# matched, against 184 findings.
+#
+# They now live in .gitleaks.toml as a `commits` allowlist, which is immutable
+# and bounded, and which still catches a new secret added to the same files in
+# a future commit. See the block there for what each finding actually is.
+# ==========================================================================

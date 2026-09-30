@@ -1,99 +1,286 @@
-import React from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import React, { lazy } from 'react';
+import { Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
-import AdminLoginPage from '../pages/admin/AdminLoginPage';
-import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
-import WarRoomPage from '../pages/admin/WarRoomPage';
-import AdminCohortDetailPage from '../pages/admin/AdminCohortDetailPage';
-import AdminLeadsPage from '../pages/admin/AdminLeadsPage';
-import AdminLeadDetailPage from '../pages/admin/AdminLeadDetailPage';
-import AdminPipelinePage from '../pages/admin/AdminPipelinePage';
+const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
+const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
+const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
+const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
+const WarRoomPage = lazy(() => import('../pages/admin/WarRoomPage'));
+const AdminCohortDetailPage = lazy(() => import('../pages/admin/AdminCohortDetailPage'));
+const AdminLeadsPage = lazy(() => import('../pages/admin/AdminLeadsPage'));
+const AdminBusinessAccountsPage = lazy(() => import('../pages/admin/AdminBusinessAccountsPage'));
+const AdminBusinessAccountDetailPage = lazy(() => import('../pages/admin/AdminBusinessAccountDetailPage'));
+const AdminPipelinePage = lazy(() => import('../pages/admin/AdminPipelinePage'));
 
-import AdminImportPage from '../pages/admin/AdminImportPage';
-import AdminRevenueDashboardPage from '../pages/admin/AdminRevenueDashboardPage';
-import AdminSettingsPage from '../pages/admin/AdminSettingsPage';
-import AdminEventLedgerPage from '../pages/admin/AdminEventLedgerPage';
-import AdminCampaignsPage from '../pages/admin/AdminCampaignsPage';
-import AdminCampaignDetailPage from '../pages/admin/AdminCampaignDetailPage';
-import AdminApolloPage from '../pages/admin/AdminApolloPage';
-import CampaignBuilderPage from '../pages/admin/CampaignBuilderPage';
-import AdminICPInsightsPage from '../pages/admin/AdminICPInsightsPage';
-import AdminVisitorsPage from '../pages/admin/AdminVisitorsPage';
-import AdminOpportunitiesPage from '../pages/admin/AdminOpportunitiesPage';
-import AdminAcceleratorPage from '../pages/admin/AdminAcceleratorPage';
-import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
-import IntelligenceOSPage from '../pages/admin/intelligence/IntelligenceOSPage';
-import IntelligenceDiscoveryPage from '../pages/admin/intelligence/IntelligenceDiscoveryPage';
-import IntelligenceSettingsPage from '../pages/admin/intelligence/IntelligenceSettingsPage';
-import AgentOrphansPage from '../pages/admin/AgentOrphansPage';
-import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketingDashboardPage';
-import AdminCommunicationsPage from '../pages/admin/AdminCommunicationsPage';
-import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
-import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
-import AdminGovernancePolicyPage from '../pages/admin/AdminGovernancePolicyPage';
-import AdminProjectOverview from '../pages/admin/AdminProjectOverview';
-import InboxCOSPage from '../pages/admin/inbox/InboxCOSPage';
-import ContentQueuePage from '../pages/admin/ContentQueuePage';
-import AdminSourcesPage from '../pages/admin/AdminSourcesPage';
-import AdminGeneratorPage from '../pages/admin/AdminGeneratorPage';
-import AdminIngestLogsPage from '../pages/admin/AdminIngestLogsPage';
-import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
-import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
-import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
-import AdminReportsPage from '../pages/admin/AdminReportsPage';
-import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
-import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
-import AiOpsCommandCenter from '../pages/admin/AiOpsCommandCenter';
+const AdminImportPage = lazy(() => import('../pages/admin/AdminImportPage'));
+const AdminRevenueDashboardPage = lazy(() => import('../pages/admin/AdminRevenueDashboardPage'));
+const AdminRefundsPage = lazy(() => import('../pages/admin/AdminRefundsPage'));
+const AdminSettingsPage = lazy(() => import('../pages/admin/AdminSettingsPage'));
+const AdminCapeSettingsPage = lazy(() => import('../pages/admin/AdminCapeSettingsPage'));
+const AdminFeedControlGovernancePage = lazy(() => import('../pages/admin/AdminFeedControlGovernancePage'));
+const AdminCertPrepPage = lazy(() => import('../pages/admin/certprep/AdminCertPrepPage'));
+const AdminEventLedgerPage = lazy(() => import('../pages/admin/AdminEventLedgerPage'));
+const AdminCampaignsPage = lazy(() => import('../pages/admin/AdminCampaignsPage'));
+const ExplorerGrowthPage = lazy(() => import('../pages/admin/ExplorerGrowthPage'));
+const AdminCampaignDetailPage = lazy(() => import('../pages/admin/AdminCampaignDetailPage'));
+const AdminApolloPage = lazy(() => import('../pages/admin/AdminApolloPage'));
+const CampaignBuilderPage = lazy(() => import('../pages/admin/CampaignBuilderPage'));
+const AdminICPInsightsPage = lazy(() => import('../pages/admin/AdminICPInsightsPage'));
+const AdminVisitorsPage = lazy(() => import('../pages/admin/AdminVisitorsPage'));
+const PeoplePage = lazy(() => import('../pages/admin/PeoplePage'));
+const PersonProfilePage = lazy(() => import('../pages/admin/PersonProfilePage'));
+const AdminTrackingEstatePage = lazy(() => import('../pages/admin/AdminTrackingEstatePage'));
+const AdminOpportunitiesPage = lazy(() => import('../pages/admin/AdminOpportunitiesPage'));
+const AdminAcceleratorPage = lazy(() => import('../pages/admin/AdminAcceleratorPage'));
+const AdminAcceleratorSessionTimelinePage = lazy(() => import('../pages/admin/AdminAcceleratorSessionTimelinePage'));
+const AdminStudentSuccessSnapshotPage = lazy(() => import('../pages/admin/studentSuccessSnapshot/AdminStudentSuccessSnapshotPage'));
+const AdminCommunityRolesPage = lazy(() => import('../pages/admin/AdminCommunityRolesPage'));
+const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStoryPage'));
+const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
+const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrationPage'));
+const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
+const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
+const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
+const IntelligenceOSPage = lazy(() => import('../pages/admin/intelligence/IntelligenceOSPage'));
+const IntelligenceDiscoveryPage = lazy(() => import('../pages/admin/intelligence/IntelligenceDiscoveryPage'));
+const IntelligenceSettingsPage = lazy(() => import('../pages/admin/intelligence/IntelligenceSettingsPage'));
+const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportunitiesPage'));
+const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
+const MarketingShell = lazy(() => import('../pages/admin/marketing/MarketingShell'));
+const AdminMarketingOverviewPage = lazy(() => import('../pages/admin/marketing/AdminMarketingOverviewPage'));
+const AdminMarketingPerformancePage = lazy(() => import('../pages/admin/marketing/AdminMarketingPerformancePage'));
+const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
+const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
+const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
+const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
+const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
+const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
+const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
+const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
+const GovernanceCommandCenter = lazy(() => import('../pages/admin/GovernanceCommandCenter'));
+const AdminGovernancePolicyPage = lazy(() => import('../pages/admin/AdminGovernancePolicyPage'));
+const AdminProjectOverview = lazy(() => import('../pages/admin/AdminProjectOverview'));
+const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesPage'));
+const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPage'));
+const AdminFactoryCommandCenterPage = lazy(() => import('../pages/admin/AdminFactoryCommandCenterPage'));
+const AdminGovOpportunitiesPage = lazy(() => import('../pages/admin/AdminGovOpportunitiesPage'));
+const AdminGovQualificationPage = lazy(() => import('../pages/admin/AdminGovQualificationPage'));
+const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
+const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
+const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
+const AdminSourcesPage = lazy(() => import('../pages/admin/AdminSourcesPage'));
+const AdminGeneratorPage = lazy(() => import('../pages/admin/AdminGeneratorPage'));
+const AdminIngestLogsPage = lazy(() => import('../pages/admin/AdminIngestLogsPage'));
+const AdminWorkLedgerHealthPage = lazy(() => import('../pages/admin/AdminWorkLedgerHealthPage'));
+const AdminExecutiveNarrativePage = lazy(() => import('../pages/admin/AdminExecutiveNarrativePage'));
+const AdminRoutingRulesPage = lazy(() => import('../pages/admin/AdminRoutingRulesPage'));
+const AdminAutonomousPage = lazy(() => import('../pages/admin/AdminAutonomousPage'));
+const AdminAutomationPage = lazy(() => import('../pages/admin/AdminAutomationPage'));
+const AdminReportsPage = lazy(() => import('../pages/admin/AdminReportsPage'));
+const CEOCommandCenter = lazy(() => import('../pages/admin/CEOCommandCenter'));
+const AdminFunnelPage = lazy(() => import('../pages/admin/AdminFunnelPage'));
+const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
+const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
+const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
+// Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
+// no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
+// in — see docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md. Serving the
+// client room from a staff-authenticated route makes it reviewable by staff WITHOUT
+// implying an external client can reach it.
+/**
+ * /admin/leads/:id -> the 360 profile for that lead.
+ *
+ * `replace` so Back returns to wherever the reader came from rather than
+ * bouncing them through the retired URL again.
+ */
+function LeadDetailRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/admin/people/${encodeURIComponent(`lead:${id}`)}`} replace />;
+}
+
+/**
+ * Redirect that CARRIES THE QUERY STRING.
+ *
+ * A bare `<Navigate to="/new/path" />` drops `?a=b`, which is fine for a page that takes no
+ * parameters and silently destructive for one that does. `/admin/brands` is the second kind:
+ * LinkedIn's OAuth callback returns the browser to it with `?linkedin=connected&brand=…`, and
+ * a redirect that ate those would connect the account and then show the operator a page with
+ * nothing on it to say so.
+ */
+export function RedirectKeepingQuery({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to}${search}${hash}`} replace />;
+}
+
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
     <Route path="/admin/login" element={<AdminLoginPage />} />
     <Route element={<ProtectedRoute />}>
+      {/* Staff → own student portal ("AI Training"): mints a full-access portal
+          token, redirects to /portal/today. Sits outside AdminLayout, like the
+          portal's mirror-image /portal/mgmt-enter sits outside PortalLayout. */}
+      <Route path="/admin/ai-training-enter" element={<AdminPortalEnterPage />} />
+      {/* The Client Review Room renders OUTSIDE AdminLayout, deliberately.
+          Wrapping a client-facing surface in the operations sidebar (Revenue, Lead
+          Ingestion, Campaigns, Intelligence) contradicts the one thing Gate 10 exists
+          to guarantee: a client sees a different, narrower world than an operator.
+          It is not a leak while the route is staff-only and no client can authenticate,
+          but it makes the eventual mistake easy — the day someone shares this URL the
+          projection layer would be doing its job while the chrome advertised the lead
+          pipeline. Found by deploying to dev and LOOKING; CI cannot see this.
+          Staff auth is retained via ProtectedRoute. */}
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        <Route path="/admin/people" element={<PeoplePage />} />
+        {/* `:ref` rather than `:email`: admin surfaces link with whatever identifier
+            their rows carry, and most carry a lead id and no address. The segment
+            accepts an email, `lead:123` or `enrollment:<uuid>`, all resolved
+            server-side. Existing /admin/people/<email> links are unchanged. */}
+        <Route path="/admin/people/:ref" element={<PersonProfilePage />} />
+        {/* Portfolio review. INSIDE ProtectedRoute and AdminLayout: it first shipped
+            beside /admin/login, outside the auth guard entirely, so the page was
+            publicly loadable (the API still 401d, so no data leaked, but the surface
+            was reachable). Found by Ali opening it and seeing no admin chrome — the
+            missing sidebar was the visible symptom of the missing guard. */}
+        <Route path="/admin/career-review" element={<CareerReviewPage />} />
+        {/* Account self-service: reachable by every admin identity regardless
+            of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
+        <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />
+        {/* War Room stays. It was redirected into the Command Center on 2026-09-06 and
+            that was wrong: War Room composes six sources (admin stats, revenue
+            dashboard, live metrics, alerts, feed, visitor stats) and the Command
+            Center had absorbed two of them. Redirecting a richer page into a
+            thinner one loses working tooling, and "only owner and admin hold
+            war_room" was an argument about who is affected, not about what is
+            lost. The redirect is reverted until the Command Center actually
+            covers what this page does. */}
         <Route path="/admin/war-room" element={<WarRoomPage />} />
         <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
         <Route path="/admin/pipeline" element={<AdminPipelinePage />} />
         <Route path="/admin/leads" element={<AdminLeadsPage />} />
-        <Route path="/admin/leads/:id" element={<AdminLeadDetailPage />} />
+        {/* Business accounts: the staff-side view of `organizations`. Detail is
+            declared after the list so "/admin/business-accounts" is not eaten
+            by the ":id" segment. */}
+        <Route path="/admin/business-accounts" element={<AdminBusinessAccountsPage />} />
+        <Route path="/admin/business-accounts/:id" element={<AdminBusinessAccountDetailPage />} />
+        {/* RETIRED 2026-09-10. The 360 profile is a superset of this page --
+            parity checked field by field: all 18 of its fields are among the
+            360's 94, and the shared write components (pipeline, status/notes,
+            strategy prep) are the SAME components, so there is no second write
+            path left to drift.
+
+            Redirected rather than deleted: the brief forbids removing route
+            files in the first release, and every bookmark, email link and
+            external reference to /admin/leads/:id must keep working. The page
+            component still exists on disk and can be re-routed in one line. */}
+        <Route path="/admin/leads/:id" element={<LeadDetailRedirect />} />
         <Route path="/admin/visitors" element={<AdminVisitorsPage />} />
+        {/* Estate map: which sites report to which brand, read live. */}
+        <Route path="/admin/tracking-estate" element={<AdminTrackingEstatePage />} />
         <Route path="/admin/funnel" element={<AdminFunnelPage />} />
         <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
         <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
+        <Route path="/admin/explorer-growth" element={<ExplorerGrowthPage />} />
         <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />
         <Route path="/admin/campaigns/:id" element={<AdminCampaignDetailPage />} />
         <Route path="/admin/apollo" element={<AdminApolloPage />} />
         <Route path="/admin/sequences" element={<Navigate to="/admin/campaigns" replace />} />
         <Route path="/admin/import" element={<AdminImportPage />} />
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
+        <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />
+        <Route path="/admin/feed-control-governance" element={<AdminFeedControlGovernancePage />} />
+        <Route path="/admin/cert-prep" element={<AdminCertPrepPage />} />
         <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
+        <Route path="/admin/accelerator/sessions/:sessionId/timeline" element={<AdminAcceleratorSessionTimelinePage />} />
+        <Route path="/admin/accelerator/enrollments/:id/success-snapshot" element={<AdminStudentSuccessSnapshotPage />} />
+        <Route path="/admin/community-roles" element={<AdminCommunityRolesPage />} />
+        <Route path="/admin/students" element={<AdminStudentStoryPage />} />
+        <Route path="/admin/knowledge-ops" element={<AdminKnowledgeOpsPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
+        {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
+        <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
+        <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        {/* Real-enforcement scoping, Phase 1 (2026-09-20) — the first real UI
+            for the already-real approval-requests backend routes. */}
+        <Route path="/admin/approval-requests" element={<ApprovalRequestsPage />} />
+        <Route path="/admin/brain" element={<EnterpriseIntelligencePage />} />
         <Route path="/admin/ai-settings" element={<Navigate to="/admin/intelligence" replace />} />
         <Route path="/admin/intelligence" element={<IntelligenceOSPage />} />
+        <Route path="/admin/missed-opportunities" element={<MissedOpportunitiesPage />} />
         <Route path="/admin/intelligence/discovery" element={<IntelligenceDiscoveryPage />} />
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
-        <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
+        {/* Every marketing page sits inside one frame that holds the chosen brand, the way
+            Loomly scopes every screen to a calendar. A layout route rather than a component
+            each page renders, so a new marketing page inherits the frame by being routed
+            here instead of by remembering to include it. */}
+        <Route element={<MarketingShell />}>
+          <Route path="/admin/marketing" element={<AdminMarketingOverviewPage />} />
+          <Route path="/admin/marketing/performance" element={<AdminMarketingPerformancePage />} />
+          {/* Brands is a marketing surface and now lives under the marketing prefix with its
+              siblings. `/admin/brands` stays as a redirect rather than a deletion: it is in
+              bookmarks, it is where the LinkedIn OAuth callback returns the browser, and the
+              redirect preserves that callback's query string. */}
+          <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
+          {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
+              the detail page already carries the tabs the spec describes, and a second page would
+              be the duplicate destination the spec forbids. The marketing path exists so the IA
+              in the spec resolves; the canonical page is unchanged. */}
+          <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
+          <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
+          {/* Marketing composer (spec 8.1). Inherits section `campaigns` from /admin/marketing by
+              longest prefix; the API side maps /api/admin/content the same way. */}
+          <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
+          <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
+          {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
+          <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
+          <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
+        </Route>
+        <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
+        <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
         <Route path="/admin/governance-policy" element={<AdminGovernancePolicyPage />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
+        {/* Case Studies: the review desk for the publishable projection of a
+            Project. The LIST is declared before the ":id" detail route.
+            Under react-router v6 that ordering is a READABILITY convention, not
+            a correctness requirement: v6 ranks by specificity, so a literal
+            "/admin/case-studies/new" beats ":id" whichever order they appear in
+            (probe-verified against 6.28.1). An earlier version of this comment
+            claimed the literal would "resolve as an id" — that is v5 behaviour
+            and is wrong here. Kept in this order anyway so the file reads the
+            same way as the business-account pair above. */}
+        <Route path="/admin/case-studies" element={<AdminCaseStudiesPage />} />
+        <Route path="/admin/internship" element={<AdminInternshipPage />} />
+        <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
+        <Route path="/admin/gov-opportunities" element={<AdminGovOpportunitiesPage />} />
+        <Route path="/admin/gov-qualification" element={<AdminGovQualificationPage />} />
+        <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />
         <Route path="/admin/sources" element={<AdminSourcesPage />} />
         <Route path="/admin/generator/:sourceSlug/:entrySlug" element={<AdminGeneratorPage />} />
         <Route path="/admin/ingest-logs" element={<AdminIngestLogsPage />} />
+        <Route path="/admin/work-ledger-health" element={<AdminWorkLedgerHealthPage />} />
+        <Route path="/admin/executive-narrative" element={<AdminExecutiveNarrativePage />} />
         <Route path="/admin/routing-rules" element={<AdminRoutingRulesPage />} />
         <Route path="/admin/autonomous" element={<AdminAutonomousPage />} />
         <Route path="/admin/automation" element={<AdminAutomationPage />} />
         <Route path="/admin/reports" element={<AdminReportsPage />} />
         <Route path="/admin/ceo" element={<CEOCommandCenter />} />
-        <Route path="/admin/ops" element={<AiOpsCommandCenter />} />
+        <Route path="/admin/cb-system" element={<CbSystemCommand />} />
+        {/* Old "Run My Day" port retired — it duplicated the advisor's /my-day.
+            Redirect the old URL to the CB System Command dashboard. */}
+        <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
+        <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
       </Route>
     </Route>
   </>

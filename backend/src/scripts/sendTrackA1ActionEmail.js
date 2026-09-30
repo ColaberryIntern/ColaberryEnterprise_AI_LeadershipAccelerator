@@ -128,7 +128,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Track A1] VIP SMS router shipped - 3 actions needed from you',
     text: stripEmDashes(text),
     html: stripEmDashes(html),

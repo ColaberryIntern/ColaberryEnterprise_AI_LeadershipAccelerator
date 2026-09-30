@@ -9,20 +9,40 @@ export interface EnrollmentAttributes {
   title?: string;
   phone?: string;
   company_size?: string;
-  cohort_id: string;
+  cohort_id?: string | null;
   paysimple_invoice_id?: string;
   paysimple_customer_id?: string;
   paysimple_external_id?: string;
+  paysimple_payment_id?: string;
+  intensives?: string;
+  industry_track?: string;
+  referral_channel?: string;
+  amount_paid?: number;
+  enrolled_at?: Date;
   payment_status: 'paid' | 'pending' | 'pending_invoice' | 'failed';
   payment_method: 'credit_card' | 'ach' | 'invoice';
   payment_mode?: 'test' | 'live';
   status?: 'active' | 'completed' | 'withdrawn' | 'suspended';
+  tier?: 'guest' | 'member';
   readiness_score?: number;
   prework_score?: number;
   attendance_score?: number;
   assignment_score?: number;
   maturity_level?: number;
   intake_completed?: boolean;
+  /**
+   * Free-form intake answers.
+   *
+   * DO NOT read `intake_data_json.credit_applied`. It is a dead mirror of the account
+   * credit ledger, stamped at checkout by an out-of-repo operational script and never
+   * updated when the credit is actually consumed. On 2026-08-19 all 24 rows carrying
+   * the key read `false`, including Marcus Zeno's — whose $50 credit had been applied
+   * on 2026-07-31 — and that stale `false` nearly drove a duplicate credit grant.
+   * A mirror that is right sometimes is worse than no mirror, so it is retired rather
+   * than repaired: nothing in this repo writes it, nothing may read it, and
+   * `account_credits` (accountCreditService) is the only authority on credit state.
+   * Enforced by appPaymentReconcileService.test.ts's tripwire, not by convention.
+   */
   intake_data_json?: any;
   notes?: string;
   created_at?: Date;
@@ -30,6 +50,22 @@ export interface EnrollmentAttributes {
   portal_token_expires_at?: Date;
   portal_enabled?: boolean;
   active_project_id?: string | null;
+  enrollment_type?: 'standard' | 'explorer';
+  avatar_data_url?: string | null;
+  /** Nullable future-dated access gate. NULL = no gate (default, unchanged
+   *  behavior). Set = full curriculum access is deferred until this date even if
+   *  payment_status='paid'; free-tier/Explorer portal access is unaffected. See
+   *  contentEntitlement.ts. Format: 'YYYY-MM-DD'. */
+  access_starts_at?: string | null;
+  /** Nullable per-student notification pause. NULL (the default for every
+   *  pre-existing row) = notifiable, unchanged behavior. Set = the Accelerator
+   *  senders keyed on this enrollment (session reminders, missed-session mail)
+   *  must withhold. This is the enrollment-side equivalent of the lead-side
+   *  unsubscribe machinery, which these senders never consulted. See
+   *  services/notifications/enrollmentNotificationSuppression.ts. */
+  notifications_paused_at?: Date | string | null;
+  /** Why the pause was applied, for the operator who finds it later. */
+  notifications_paused_reason?: string | null;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -44,10 +80,17 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare paysimple_invoice_id: string;
   declare paysimple_customer_id: string;
   declare paysimple_external_id: string;
+  declare paysimple_payment_id: string;
+  declare intensives: string;
+  declare industry_track: string;
+  declare referral_channel: string;
+  declare amount_paid: number;
+  declare enrolled_at: Date;
   declare payment_status: 'paid' | 'pending' | 'pending_invoice' | 'failed';
   declare payment_method: 'credit_card' | 'ach' | 'invoice';
   declare payment_mode: 'test' | 'live';
   declare status: 'active' | 'completed' | 'withdrawn' | 'suspended';
+  declare tier: 'guest' | 'member';
   declare readiness_score: number;
   declare prework_score: number;
   declare attendance_score: number;
@@ -60,6 +103,11 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare portal_token_expires_at: Date;
   declare portal_enabled: boolean;
   declare active_project_id: string | null;
+  declare enrollment_type: 'standard' | 'explorer';
+  declare avatar_data_url: string | null;
+  declare access_starts_at: string | null;
+  declare notifications_paused_at: Date | string | null;
+  declare notifications_paused_reason: string | null;
   declare created_at: Date;
 }
 
@@ -95,8 +143,9 @@ Enrollment.init(
       allowNull: true,
     },
     cohort_id: {
+      // Nullable so free/guest (non-member) accounts can exist without a cohort.
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: { model: 'cohorts', key: 'id' },
     },
     paysimple_invoice_id: {
@@ -109,6 +158,33 @@ Enrollment.init(
     },
     paysimple_external_id: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    paysimple_payment_id: {
+      // PaySimple's payment_id from the payment_created webhook — idempotency key
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      unique: true,
+    },
+    intensives: {
+      // Comma-separated SKUs: AISA-BUNDLE | AISA-S1 | AISA-S2 | AISA-S3 | AISA-S4
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    industry_track: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    referral_channel: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    amount_paid: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    enrolled_at: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     payment_status: {
@@ -129,6 +205,14 @@ Enrollment.init(
       type: DataTypes.ENUM('active', 'completed', 'withdrawn', 'suspended'),
       allowNull: false,
       defaultValue: 'active',
+    },
+    tier: {
+      // Membership tier: 'member' = enrolled/paid student; 'guest' = free
+      // self-serve preview account (0 points, no cohort). Source of truth for
+      // access level — payment_status is not meaningful for guests.
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'member',
     },
     readiness_score: {
       type: DataTypes.FLOAT,
@@ -182,6 +266,39 @@ Enrollment.init(
       type: DataTypes.UUID,
       allowNull: true,
     },
+    enrollment_type: {
+      // 'explorer' = Open House visitor who can log in and explore but has NOT
+      // paid or joined a class; excluded from paid-seat + student metrics.
+      // 'standard' = a normal (paying) enrollment.
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'standard',
+    },
+    avatar_data_url: {
+      // Profile photo stored as a small (client-downscaled) base64 data URL.
+      // Kept in the DB rather than on disk so it survives container redeploys
+      // (uploads dir is ephemeral) and needs no static-file serving.
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    access_starts_at: {
+      // NULL = no gate. Set = full curriculum access deferred until this date
+      // (see contentEntitlement.ts hasFullCurriculumAccess). Free-tier access is
+      // never affected by this field.
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    notifications_paused_at: {
+      // NULL = notifiable (every pre-existing row). Set = the Accelerator
+      // senders keyed on this enrollment must withhold. Column added additively
+      // by db/ensureEnrollmentNotificationSchema.ts.
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    notifications_paused_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -196,6 +313,8 @@ Enrollment.init(
       { fields: ['created_at'], name: 'idx_enrollments_created_at' },
       { fields: ['cohort_id'], name: 'idx_enrollments_cohort_id' },
       { fields: ['payment_status'], name: 'idx_enrollments_payment_status' },
+      { fields: ['paysimple_payment_id'], name: 'idx_enrollments_ps_payment', where: { paysimple_payment_id: { [require('sequelize').Op.ne]: null } } },
+      { fields: ['enrollment_type'], name: 'idx_enrollments_enrollment_type' },
     ],
   }
 );

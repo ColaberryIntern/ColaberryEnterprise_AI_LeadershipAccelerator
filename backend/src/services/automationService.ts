@@ -8,6 +8,7 @@ import { recordOutcome, recordActionOutcome } from './interactionService';
 import { syncLeadToGhl } from './ghlService';
 import { getSetting } from './settingsService';
 import { buildConversationHistory, generateMessage } from './aiMessageService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 interface LogParams {
   type: 'email' | 'voice_call' | 'alert';
@@ -286,7 +287,7 @@ export async function runLeadAutomation(lead: LeadData): Promise<void> {
           where: { sequence_id: targetSequence.id, status: 'active' },
         });
         const actions = await enrollLeadInSequence(lead.id, targetSequence.id, associatedCampaign?.id);
-        console.log(`[Automation] Lead enrolled in ${sequenceName}:`, lead.email);
+        console.log(`[Automation] Lead enrolled in ${sequenceName}:`, redactForLogs(lead.email));
 
         // Sync to GHL with campaign interest group
         if (associatedCampaign?.interest_group) {

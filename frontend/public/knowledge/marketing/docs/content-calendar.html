@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Calendar · Open House Marketing Hub</title>
+<link rel="icon" href="../assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../assets/hub.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><img src="../assets/logo/colaberry-horizontal.png" alt="Colaberry"></div>
+    <a class="nav home" href="../index.html"><span class="cb-i"><i class="ri-arrow-left-line"></i></span> Marketing Hub</a>
+    <div class="navsec">On this page</div>
+    <a class="nav" href="#july"><span class="cb-i"><i class="ri-calendar-2-line"></i></span> July 2026 at a glance</a>
+    <a class="nav" href="#runway"><span class="cb-i"><i class="ri-route-line"></i></span> The runway</a>
+    <a class="nav" href="#sends"><span class="cb-i"><i class="ri-mail-send-line"></i></span> Send schedule</a>
+    <a class="nav" href="#beats"><span class="cb-i"><i class="ri-megaphone-line"></i></span> Beats and channels</a>
+    <a class="nav" href="#notes"><span class="cb-i"><i class="ri-information-line"></i></span> How to use this</a>
+  </aside>
+  <main class="content">
+    <div class="hero cherry">
+      <p class="crumbs"><a href="../index.html">Marketing Hub</a> / Content Calendar</p>
+      <p class="eyebrow">When it ships</p>
+      <h1>Content Calendar</h1>
+      <p>The full July 2026 runway to the Open House on July 16. Every beat, every channel, every suggested send time on one page so the team always knows what goes out next.</p>
+      <div class="meta"><span class="pill">Open House Jul 16</span><span class="pill">Founding Cohort</span></div>
+    </div>
+    <div class="actionbar">
+      <a class="btn btn-ghost" href="../../index.html"><span class="cb-i"><i class="ri-stack-line"></i></span> Knowledge Base</a> <a class="btn btn-ghost" href="../index.html"><span class="cb-i"><i class="ri-home-4-line"></i></span> Hub</a>
+      <div class="spacer"></div>
+      <a class="btn btn-ghost" href="content-calendar.html" download><span class="cb-i"><i class="ri-download-2-line"></i></span> Download this doc</a>
+      <a class="btn btn-primary" href="#" onclick="window.print();return false;"><span class="cb-i"><i class="ri-printer-line"></i></span> Print / PDF</a>
+    </div>
+    <div class="wrap">
+
+      <!-- ===================== JULY 2026 CALENDAR ===================== -->
+      <section class="section" id="july">
+        <h2><span class="cb-i"><i class="ri-calendar-2-line"></i></span> July 2026 at a glance</h2>
+        <p class="sub">The five approved beats roll out across the two weeks before the Open House. July 1, 2026 is a Wednesday, so the month opens mid-week. Key dates are highlighted, and the optional teaser on July 2 runs only if the team chooses to warm the audience early.</p>
+
+        <div class="legend">
+          <span><i style="background:var(--blue-600)"></i> Beat 1. The shift is already happening</span>
+          <span><i style="background:var(--green-600)"></i> Beat 2. From AI user to AI builder</span>
+          <span><i style="background:var(--blue-500)"></i> Beat 3. See what you will build</span>
+          <span><i style="background:var(--amber-500)"></i> Beat 4. Meet the founding cohort</span>
+          <span><i style="background:var(--red-500)"></i> Beat 5. Final reminder</span>
+          <span><i style="background:var(--neutral-900)"></i> Open House (live)</span>
+          <span><i style="background:var(--blue-600);opacity:.45"></i> Optional teaser</span>
+        </div>
+
+        <div class="cal">
+          <!-- day-of-week headers -->
+          <div class="dow">Sun</div>
+          <div class="dow">Mon</div>
+          <div class="dow">Tue</div>
+          <div class="dow">Wed</div>
+          <div class="dow">Thu</div>
+          <div class="dow">Fri</div>
+          <div class="dow">Sat</div>
+
+          <!-- Week 1: leading empties Sun-Tue, month starts Wed Jul 1 -->
+          <div class="day empty" aria-hidden="true"></div>
+          <div class="day empty" aria-hidden="true"></div>
+          <div class="day empty" aria-hidden="true"></div>
+          <div class="day"><span class="dn">1</span></div>
+          <div class="day"><span class="dn">2</span><span class="ev b1" style="opacity:.55">Optional teaser</span></div>
+          <div class="day"><span class="dn">3</span></div>
+          <div class="day"><span class="dn">4</span></div>
+
+          <!-- Week 2 -->
+          <div class="day"><span class="dn">5</span></div>
+          <div class="day"><span class="dn">6</span></div>
+          <div class="day"><span class="dn">7</span><span class="ev b1">Beat 1 launch</span></div>
+          <div class="day"><span class="dn">8</span></div>
+          <div class="day"><span class="dn">9</span><span class="ev b2">Beat 2</span></div>
+          <div class="day"><span class="dn">10</span></div>
+          <div class="day"><span class="dn">11</span></div>
+
+          <!-- Week 3 -->
+          <div class="day"><span class="dn">12</span></div>
+          <div class="day"><span class="dn">13</span><span class="ev b3">Beat 3 carousel</span></div>
+          <div class="day"><span class="dn">14</span></div>
+          <div class="day"><span class="dn">15</span><span class="ev b4">Beat 4. 40 seats</span></div>
+          <div class="day is-key"><span class="dn">16</span><span class="ev oh">Open House (live)</span><span class="ev b5">Beat 5. Live today</span></div>
+          <div class="day"><span class="dn">17</span></div>
+          <div class="day"><span class="dn">18</span></div>
+
+          <!-- Week 4 -->
+          <div class="day"><span class="dn">19</span></div>
+          <div class="day"><span class="dn">20</span></div>
+          <div class="day"><span class="dn">21</span></div>
+          <div class="day"><span class="dn">22</span></div>
+          <div class="day is-key"><span class="dn">23</span><span class="ev oh" style="background:var(--green-700)">Cohort 1 kickoff</span></div>
+          <div class="day"><span class="dn">24</span></div>
+          <div class="day"><span class="dn">25</span></div>
+
+          <!-- Week 5 + trailing empties -->
+          <div class="day"><span class="dn">26</span></div>
+          <div class="day"><span class="dn">27</span></div>
+          <div class="day"><span class="dn">28</span></div>
+          <div class="day"><span class="dn">29</span></div>
+          <div class="day"><span class="dn">30</span></div>
+          <div class="day"><span class="dn">31</span></div>
+          <div class="day empty" aria-hidden="true"></div>
+        </div>
+
+        <div class="callout info">
+          <span class="cb-i"><i class="ri-calendar-event-line"></i></span>
+          <div>
+            <p class="ttl">The Open House feeds Cohort 1 by one week</p>
+            <p class="body">The free Open House lands Thursday, July 16. Cohort 1 kicks off the following Thursday, July 23. Every beat on this calendar drives free Open House registrations first. Enrollment conversation happens at and after the event.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== RUNWAY GANTT ===================== -->
+      <section class="section" id="runway">
+        <h2><span class="cb-i"><i class="ri-route-line"></i></span> The runway</h2>
+        <p class="sub">A timeline view of the same five beats. Use it to see overlap and pacing at a glance. The optional teaser sits on the far left, Beats 1 through 4 build awareness across the two pre-event weeks, and Beat 5 plus the live event close it out on July 16.</p>
+
+        <div class="diagram">
+          <div class="cap"><span class="cb-i"><i class="ri-bar-chart-horizontal-line"></i></span> Pre-Open-House runway, July 2026</div>
+          <pre class="mermaid">
+gantt
+  title Open House runway to July 16
+  dateFormat YYYY-MM-DD
+  axisFormat %b %d
+  section Warmup
+  Optional teaser            :done, t1, 2026-07-02, 1d
+  section Awareness beats
+  Beat 1 the shift           :active, b1, 2026-07-07, 1d
+  Beat 2 user to builder     :b2, 2026-07-09, 1d
+  Beat 3 see what you build   :b3, 2026-07-13, 1d
+  Beat 4 forty seats         :b4, 2026-07-15, 1d
+  section Event
+  Beat 5 final reminder       :crit, b5, 2026-07-16, 1d
+  Open House live             :milestone, oh, 2026-07-16, 0d
+  section Conversion
+  Cohort 1 kickoff           :milestone, ck, 2026-07-23, 0d
+          </pre>
+        </div>
+
+        <div class="callout success">
+          <span class="cb-i"><i class="ri-pulse-line"></i></span>
+          <div>
+            <p class="ttl">Read the rhythm, not the rigidity</p>
+            <p class="body">Beats are spaced roughly two days apart so the audience never feels crowded, with the final two beats compressing toward the event for urgency. The dates are the approved suggestion and stay adjustable as registration data comes in.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== SEND SCHEDULE TABLE ===================== -->
+      <section class="section" id="sends">
+        <h2><span class="cb-i"><i class="ri-mail-send-line"></i></span> Send schedule</h2>
+        <p class="sub">Each beat ships across the owned email channel and the three organic social channels. The campaign engine generates the actual posts and emails at send time from each segment prompt. Colored cells flag the heaviest push days so you can plan team coverage.</p>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Day</th>
+                <th>Beat</th>
+                <th>Channels</th>
+                <th>Suggested time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">Jul 2</td>
+                <td>Thu</td>
+                <td>Optional teaser. Save the date</td>
+                <td>
+                  <span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span>
+                  <span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span>
+                </td>
+                <td class="cell-info">9:00 am local</td>
+              </tr>
+              <tr>
+                <td class="num">Jul 7</td>
+                <td>Tue</td>
+                <td>Beat 1. The shift is already happening</td>
+                <td>
+                  <span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span>
+                  <span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span>
+                  <span class="chchip ch-x"><i class="ri-twitter-x-line"></i> X</span>
+                  <span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span>
+                </td>
+                <td class="cell-good">8:30 am local</td>
+              </tr>
+              <tr>
+                <td class="num">Jul 9</td>
+                <td>Thu</td>
+                <td>Beat 2. From AI user to AI builder</td>
+                <td>
+                  <span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span>
+                  <span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span>
+                  <span class="chchip ch-x"><i class="ri-twitter-x-line"></i> X</span>
+                </td>
+                <td>11:30 am local</td>
+              </tr>
+              <tr>
+                <td class="num">Jul 13</td>
+                <td>Mon</td>
+                <td>Beat 3. See what you will build (carousel)</td>
+                <td>
+                  <span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span>
+                  <span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span>
+                  <span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span>
+                </td>
+                <td>12:00 pm local</td>
+              </tr>
+              <tr>
+                <td class="num">Jul 15</td>
+                <td>Wed</td>
+                <td>Beat 4. Meet the founding cohort. 40 seats</td>
+                <td>
+                  <span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span>
+                  <span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span>
+                  <span class="chchip ch-x"><i class="ri-twitter-x-line"></i> X</span>
+                  <span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span>
+                </td>
+                <td class="cell-warn">9:00 am local</td>
+              </tr>
+              <tr>
+                <td class="num">Jul 16</td>
+                <td>Thu</td>
+                <td>Beat 5. Final reminder. Live today</td>
+                <td>
+                  <span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span>
+                  <span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span>
+                  <span class="chchip ch-x"><i class="ri-twitter-x-line"></i> X</span>
+                  <span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span>
+                </td>
+                <td class="cell-bad">Morning of, then [time + TZ]</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <span class="cb-i"><i class="ri-time-line"></i></span>
+          <div>
+            <p class="ttl">Send times are placeholders</p>
+            <p class="body">The times above are starting points, not locked windows. Tune them to your audience and time zone, and replace the [time + TZ] token on July 16 with the confirmed Open House start time and timezone once it is set in Basecamp 9946499609.</p>
+          </div>
+        </div>
+
+        <div class="callout approval">
+          <span class="cb-i"><i class="ri-error-warning-line"></i></span>
+          <div>
+            <p class="ttl">Open tokens to resolve before send</p>
+            <p class="body">[reg link] is the Open House registration URL from Basecamp 9946499609. [time + TZ] is the exact Open House start time and timezone. Both must be filled before any send goes live.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== BEATS + CHANNELS ===================== -->
+      <section class="section" id="beats">
+        <h2><span class="cb-i"><i class="ri-megaphone-line"></i></span> Beats and channels</h2>
+        <p class="sub">A quick reference for the theme and call to action behind each beat, and where each channel does its best work. No price appears anywhere in awareness copy. Pricing is revealed at the Open House.</p>
+
+        <div class="grid cols-3">
+          <div class="card accent-top">
+            <h4><span class="badge info">Beat 1</span> The shift is already happening</h4>
+            <p class="prose">Set the frame. Most people use AI, very few build with it. CTA. Reserve your free seat.</p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="badge info">Beat 2</span> From AI user to AI builder</h4>
+            <p class="prose">Turn the idea into a possibility the reader can picture. CTA. Register for the Open House.</p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="badge info">Beat 3</span> See what you will build</h4>
+            <p class="prose">Show the 12 weeks. Bring your idea, leave with a working AI system. CTA. Reserve your seat.</p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="badge info">Beat 4</span> Meet the founding cohort</h4>
+            <p class="prose">Scarcity with warmth. Only 40 seats available. CTA. Register before seats fill.</p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="badge info">Beat 5</span> Final reminder</h4>
+            <p class="prose">We are live today. Last chance to join us. CTA. Add to calendar.</p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="badge locked">Locked</span> Drive to the Open House</h4>
+            <p class="prose">Every post and email points to the free registration. No price, no em-dashes, warm and credible voice throughout.</p>
+          </div>
+        </div>
+
+        <h3 class="h">Where each channel earns its place</h3>
+        <div class="dodont">
+          <div class="col do">
+            <h4><span class="cb-i"><i class="ri-checkbox-circle-line"></i></span> Lean in</h4>
+            <ul>
+              <li>LinkedIn is primary. It reaches alumni and working professionals.</li>
+              <li>X carries the punchy, short angle that sparks replies.</li>
+              <li>Instagram does the visual lift. Carousel for Beat 3, stories for urgency.</li>
+              <li>Email is the parallel owned channel running the approved five-email sequence.</li>
+            </ul>
+          </div>
+          <div class="col dont">
+            <h4><span class="cb-i"><i class="ri-close-circle-line"></i></span> Keep out</h4>
+            <ul>
+              <li>No price in any awareness or outbound copy. It is revealed at the Open House.</li>
+              <li>No em-dash characters. Use periods and commas.</li>
+              <li>No emoji anywhere.</li>
+              <li>No invented seat counts. If a number appears, it is 40 founding seats.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- ===================== HOW TO USE ===================== -->
+      <section class="section" id="notes">
+        <h2><span class="cb-i"><i class="ri-information-line"></i></span> How to use this</h2>
+        <p class="sub">This calendar is the operating layer for the campaign. Read it alongside the five-beat sequence and the campaign brief.</p>
+
+        <div class="steps">
+          <div class="step">
+            <h4>Confirm the open tokens</h4>
+            <p>Fill [reg link] and [time + TZ] from Basecamp 9946499609 before the first send.</p>
+          </div>
+          <div class="step">
+            <h4>Decide on the teaser</h4>
+            <p>Run the July 2 teaser only if you want to warm the audience early. It is optional and faded on the calendar for that reason.</p>
+          </div>
+          <div class="step">
+            <h4>Let the engine generate at send time</h4>
+            <p>Each segment campaign has its own prompt. Posts and emails are generated when they send, with baked-in rules. No price, no em-dashes, drive to the Open House.</p>
+          </div>
+          <div class="step">
+            <h4>Watch registrations and adjust</h4>
+            <p>Registrations return through the Open House modal as open_house leads. If pace lags, tighten the spacing of Beats 3 through 5. Dates are adjustable.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="foot">
+        Content Calendar. Open House Marketing Hub. Grounded in the approved strategy (Basecamp 9946499631) and Ali-confirmed facts (2026-06-25). Suggested dates and send times are adjustable placeholders. Draft only, pending final review.
+      </div>
+    </div>
+  </main>
+</div>
+<script src="../assets/hub.js"></script>
+</body>
+</html>

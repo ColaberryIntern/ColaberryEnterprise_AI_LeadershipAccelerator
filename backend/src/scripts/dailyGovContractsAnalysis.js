@@ -180,7 +180,7 @@ function computeFeasibility(bid, today) {
 const PROJECT_ID = 47346103;
 const RECIPIENT = process.env.GOV_REPORT_RECIPIENT || 'ali@colaberry.com';
 // Phone-accessible secondary recipient — independent of Inbox COS / work email filtering.
-const RECIPIENT_PHONE = process.env.GOV_REPORT_RECIPIENT_PHONE || 'alimuwwakkil@gmail.com';
+const RECIPIENT_PHONE = process.env.GOV_REPORT_RECIPIENT_PHONE || '';
 const BASECAMP_TOKEN = (process.env.BASECAMP_ACCESS_TOKEN || '').trim(); // set by runReportingAuditAndSend (CCPP Basecamp_AuthInfo)
 const BASE = 'https://3.basecampapi.com/3945211';
 const H = { Authorization: 'Bearer ' + BASECAMP_TOKEN, 'User-Agent': 'Colaberry Gov Report', Accept: 'application/json' };
@@ -664,7 +664,7 @@ Open the email for the per-bid breakdown and the human-task assignment suggestio
     }).sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: RECIPIENT,
-      cc: [RECIPIENT_PHONE, 'ram@colaberry.com'],
+      cc: [RECIPIENT_PHONE, 'ram@colaberry.com'].filter(Boolean),
       subject: `[Daily Report] Gov Contracts - ${new Date().toLocaleDateString()} - ${data.bidData.reduce((s, b) => s + b.open, 0)} open todos`,
       text: textBody,
       html,
@@ -677,7 +677,7 @@ Open the email for the per-bid breakdown and the human-task assignment suggestio
       },
     });
     console.log('Sent:', r.messageId);
-    await recorder.end(runRecord, { status: 'success', messageIds: [r.messageId], recipientsSent: [RECIPIENT, RECIPIENT_PHONE] });
+    await recorder.end(runRecord, { status: 'success', messageIds: [r.messageId], recipientsSent: [RECIPIENT, RECIPIENT_PHONE].filter(Boolean) });
   } catch (e) {
     console.error('FAIL:', e.message);
     await recorder.end(runRecord, { status: 'failure', error: e.message });

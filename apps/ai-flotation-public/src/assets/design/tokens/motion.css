@@ -1,0 +1,15 @@
+/* AI Flotation motion tokens. Personality: decisive — crisp, immediate, no flourish.
+   fast → hover, press, toggles · base → menus, toasts, accordions · slow → modals, view changes.
+   Exits run at fast with the exit curve. Never hand-pick durations. */
+:root {
+  --motion-fast: 80ms; /* @kind other */ --motion-base: 140ms; /* @kind other */ --motion-slow: 210ms; /* @kind other */
+  --ease: cubic-bezier(0.3,0,0,1); /* @kind other */ --ease-enter: cubic-bezier(0.16,0,0,1); /* @kind other */ --ease-exit: cubic-bezier(0.4,0,1,1); /* @kind other */
+  --enter-distance: 5px; --press-scale: 0.99; /* @kind other */
+}
+@keyframes b-enter { from { opacity: 0; transform: translateY(var(--enter-distance)); } to { opacity: 1; transform: none; } }
+@keyframes b-pop { from { opacity: 0; transform: scale(0.94) translateY(var(--enter-distance)); } to { opacity: 1; transform: none; } }
+@keyframes b-shimmer { from { background-position: 130% 0; } to { background-position: -70% 0; } }
+.b-enter { animation: b-enter var(--motion-base) var(--ease-enter) both; }
+.b-pop { animation: b-pop var(--motion-slow) var(--ease-enter) both; }
+.b-skeleton { background: linear-gradient(90deg, var(--line) 30%, var(--bg-elevated) 50%, var(--line) 70%); background-size: 200% 100%; animation: b-shimmer 1.5s linear infinite; border-radius: 6px; opacity: 0.7; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }

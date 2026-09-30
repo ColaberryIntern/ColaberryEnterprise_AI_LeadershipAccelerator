@@ -120,7 +120,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Plan] 3-Track Build - SMS+Voice / Gov pipeline / AI auto-runner',
     text: stripEmDashes(text),
     html: stripEmDashes(html),

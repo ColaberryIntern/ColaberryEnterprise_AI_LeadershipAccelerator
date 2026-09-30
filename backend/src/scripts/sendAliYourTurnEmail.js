@@ -242,7 +242,7 @@ function renderText(todos) {
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: `Ali - Your Turn (${todos.length} blocked, top 5 with Claude Code prompts inline)`,
     html,
     text,

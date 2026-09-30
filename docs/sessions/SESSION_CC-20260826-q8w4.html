@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260826-q8w4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 26, 2026 at 1:57 PM</div>
+    <div><span class="sid">CC-20260826-q8w4</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Attacked the Story System&#39;s twelve claimed guarantees; closed four real defects — a private repository identity reaching the public page through prose, a published URL mutable without a republish, sixteen Studio routes whose authorization nothing could prove, and an AI-draft promotion attributable to nobody.**</h2>
+          <span class="badge">2026-08-26</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**`caseStudyPublishClaimScan.ts`** — new gate rule 11, `ruleRepoIdentityInProse`, wired into `caseStudyPublishGate.ts` after rule 10. It refuses a snapshot whose narrative fields carry the URL or the `owner/name` slug of a repository THIS record withholds — anything not both `visibility: &#39;public&#39;` and `allowPublicRepoLink: true`. The blocker carries `opaqueRepoRef`, never the identity, so the refusal cannot itself become the leak. **`caseStudyAdminPublicationGuard.ts` (new)** — `assertNotPublished` moved out of `caseStudyAdminService.ts`, which the first draft of this change pushed to 525 lines, past CLAUDE.md&#39;s 500 hard ceiling; the Modular Composition Rule says the next change splits before it adds. Plus new `assertSlugChangeAllowed`: a slug CHANGE on a published record is refused, a re-send of the current slug is not. `caseStudyAdminService.ts` ends at 470 lines, nineteen fewer than before. **`caseStudyStudioRoutes.ts`** — `actorOf` no longer ends `|| &#39;admin&#39;`; an admin token carrying neither `sub` nor `email` is refused instead of being handed a fabricated name, and two `run()` thunks were made `async` so the refusal maps to a 400 through `sendError` rather than escaping as a bare Express 500. **`caseStudyStudioRoutes.guard.test.ts` (new, 44 tests)** — the per-route authorization proof this router never had. **`caseStudyAdminGuardProof.test.ts`** — a real personal address removed from a JWT fixture, per the Test Plan&#39;s own Checkpoint D rule that no test may carry a hardcoded personal identifier.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` on the **workspace 5.9.3** binary (`backend/node_modules/.bin/tsc`, never the root 4.9.5 that false-cleans) — **exit 0**; a baseline run before any edit was also exit 0, so the result is attributable rather than merely green. Backend case-study suite — **60 suites, 1285 tests, all pass**. Full frontend suite, unscoped — 141 suites, **1953 passed, 10 failed across 6 suites, all pre-existing** (`claimsRegistry`, `PlatformV2`, `HomeV2`, `AgentDetailPage.smoke`, `linkIntegrity`, and an `intersectionObserverMock` helper matched as a suite); `git status` shows **zero frontend files modified** and the merge from `origin/main` touched none of those six, so they are inherited rather than introduced. Frontend `tsc --noEmit` exit 0. `node scripts/lint-route-auth.js` OK. **Every new guard was mutated, watched go red by name, and restored byte-exact, with `git hash-object` matching the pre-mutation SHA-1 in all four cases.**</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The most valuable finding was in the defence, not the code.** All sixteen Story Studio routes really did carry `requireAdmin`, and always had; nothing could have noticed if one stopped. `caseStudyAdminGuardProof.test.ts` imports `caseStudyAdminRoutes` and only that, the other three authorization suites are scoped to the same sibling router, and the CI backstop `scripts/lint-route-auth.js:31` is `src.includes(&#39;requireAdmin&#39;)` at FILE granularity — one surviving occurrence in a 451-line file satisfies it. Proved by mutation: `requireAdmin` deleted from one route left the lint printing &quot;all 94 admin route files are auth-guarded&quot; while the new suite went red on four assertions. A property that is true, unproven and undefended is the condition CLAUDE.md&#39;s Definition of Done calls incomplete. **The V-29 fix deliberately does NOT scrub the projection.** `caseStudyPrivateRepoLeakProof.test.ts` still asserts `expect(summary.standfirst).toContain(S.url)`, unchanged — scrubbing at projection time would silently rewrite what a human approved, which is the one thing the snapshot model exists to prevent. The projection stays a FIELD allowlist; the gate is what stops such a record reaching it, and that assertion&#39;s meaning has changed from &quot;the boundary leaks&quot; to &quot;the boundary is a field allowlist, and the gate is the control&quot;. **The first version of that rule was too aggressive and the existing suite caught it**, which is worth recording because it is the good case: `nameIsDistinctive` originally accepted any repository name of 12+ characters, and `caseStudyPublicationService.test.ts`&#39;s fixture repository is called `reconciliation` — 14 characters, an ordinary English word — while the same record&#39;s summary legitimately reads &quot;A batch reconciliation pipeline was rebuilt…&quot;. The gate refused a publish over a word describing the work. Length is not evidence of distinctiveness; the rule now requires a separator or a digit, and the residue (a single-word private repository is matched by its URL and its slug but not by its bare name) is stated in the rule&#39;s header rather than left to be discovered later. **Snapshot immutability was real, but narrower than the sentence people were using for it.** `case_study_snapshots.content` genuinely never mutates — one `create`, two status-only `update`s, no upsert, no raw SQL — and `caseStudyIntegration.test.ts:276-320` proves a re-sync cannot change a live page, with a positive control that stops it being vacuous. But `toCandidate` (`caseStudyPublicStore.ts:106-119`) reads **six fields off the mutable `case_studies` draft row**, and `slug` is the public URL itself and `seo.canonicalUrl`. &quot;The approved snapshot never mutates&quot; and &quot;the published page never changes without a republish&quot; are different claims; the gap between them is every field the public read takes from the live row instead of the snapshot. Only `slug` is fixed here. **Four findings deliberately left open, with reasons.** The four `?? study.x` taxonomy fallbacks at `caseStudyPublicStore.ts:112-119` feed filters and facets with a live fallback the projection does not mirror, so index and detail can disagree about the same record — but a pre-Format-V1 record may depend on exactly those columns for its facets, and removing them risks dropping existing records out of the index, which the backward-compatibility requirement forbids. V-26 (`assertCaseStudySchema` is presence-only and blind to an extra column no model declares) is a drift-detection gap rather than a safety one, and failing on extra columns would break any environment carrying a legitimate one. `emphasis` is still on the wire with zero consumers, but removing a public contract field is Checkpoint C&#39;s C-8 and a coordinated breaking change, not a hardening fix. The publication re-pin hazard — a retried publish after an interleaved approval silently ships a newly-approved version, because `resolveApprovedSnapshot` takes the highest-version approved row rather than the one the caller saw — is fixed by the caller passing `snapshotId`, which is an API change. **Two behaviour changes that will bite before they help.** An already-published record whose prose names one of its own withheld repositories can no longer be republished until the prose is edited — that refusal IS the leak being surfaced — and renaming a published record now requires unpublish, rename, republish, which is the sequence that produces the audit trail a URL change should always have had. **NOT DEPLOYED.**</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260826-q8w4.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

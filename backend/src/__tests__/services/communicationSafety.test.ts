@@ -8,6 +8,7 @@ const mockLeadFindByPk = jest.fn();
 const mockCampaignFindByPk = jest.fn();
 const mockCommLogCount = jest.fn().mockResolvedValue(0);
 const mockUnsubFindOne = jest.fn().mockResolvedValue(null);
+const mockUnsubFindAll = jest.fn().mockResolvedValue([]);
 const mockGetTestOverrides = jest.fn();
 const mockGetSetting = jest.fn().mockResolvedValue(null);
 
@@ -15,7 +16,13 @@ jest.mock('../../models', () => ({
   Lead: { findByPk: (...args: any[]) => mockLeadFindByPk(...args) },
   Campaign: { findByPk: (...args: any[]) => mockCampaignFindByPk(...args) },
   CommunicationLog: { count: (...args: any[]) => mockCommLogCount(...args) },
-  UnsubscribeEvent: { findOne: (...args: any[]) => mockUnsubFindOne(...args) },
+  // `findAll` as well as `findOne`. checkLeadSendable reads EVERY unsubscribe
+  // row for the lead now: once the channel matters, "the most recent one was
+  // sms" must not be able to hide an older global opt-out behind it.
+  UnsubscribeEvent: {
+    findOne: (...args: any[]) => mockUnsubFindOne(...args),
+    findAll: (...args: any[]) => mockUnsubFindAll(...args),
+  },
 }));
 
 jest.mock('../../services/settingsService', () => ({
@@ -45,6 +52,7 @@ describe('communicationSafetyService', () => {
     mockCampaignFindByPk.mockResolvedValue({ id: 'c1', status: 'active' });
     mockCommLogCount.mockResolvedValue(0);
     mockUnsubFindOne.mockResolvedValue(null);
+    mockUnsubFindAll.mockResolvedValue([]);
   });
 
   // ─── Test Mode Fail-Safe ─────────────────────────────────────────────────
@@ -143,10 +151,39 @@ describe('communicationSafetyService', () => {
 
     test('should block leads with unsubscribe events even if status is still active', async () => {
       mockLeadFindByPk.mockResolvedValue({ id: 1, status: 'new', source: 'manual' });
-      mockUnsubFindOne.mockResolvedValue({ id: 'unsub-1', lead_id: 1 });
+      mockUnsubFindAll.mockResolvedValue([
+        { channel: 'email', created_at: new Date('2099-01-01T00:00:00Z') },
+      ]);
+      // No channel named — the pre-existing contract, which every current
+      // caller relies on: ANY event blocks, whatever its channel.
       const result = await checkLeadSendable(1);
       expect(result.sendable).toBe(false);
       expect(result.reason).toBe('unsubscribe_event_exists');
+    });
+
+    test('a NEW sms opt-out no longer blocks email (§35 D-4)', async () => {
+      // The behaviour this change exists to create. Someone who texted STOP has
+      // not declined email, and under CAN-SPAM email is permitted by default.
+      mockLeadFindByPk.mockResolvedValue({ id: 1, status: 'new', source: 'manual' });
+      mockUnsubFindAll.mockResolvedValue([
+        { channel: 'sms', created_at: new Date('2099-01-01T00:00:00Z') },
+      ]);
+
+      expect((await checkLeadSendable(1, 'email')).sendable).toBe(true);
+      expect((await checkLeadSendable(1, 'sms')).sendable).toBe(false);
+    });
+
+    test('an OLD sms opt-out still blocks email, and must', async () => {
+      // Written under global semantics and enforced that way ever since.
+      // Narrowing it retroactively would re-open a door someone closed.
+      mockLeadFindByPk.mockResolvedValue({ id: 1, status: 'new', source: 'manual' });
+      mockUnsubFindAll.mockResolvedValue([
+        { channel: 'sms', created_at: new Date('2026-01-01T00:00:00Z') },
+      ]);
+
+      const result = await checkLeadSendable(1, 'email');
+      expect(result.sendable).toBe(false);
+      expect(result.reason).toContain('legacy');
     });
 
     test('should allow leads with good status and no unsub events', async () => {

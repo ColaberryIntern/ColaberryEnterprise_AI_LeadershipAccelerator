@@ -9,6 +9,11 @@
 import { Op } from 'sequelize';
 import { Lead, Campaign, CommunicationLog, UnsubscribeEvent } from '../models';
 import { getTestOverrides, getSetting } from './settingsService';
+import { assertConsentForSend } from './consentService';
+import { checkBrandPreference } from '../modules/communications/brandPreferenceGate';
+import { isSuppressedForChannel, type SuppressibleChannel } from './channelSuppression';
+// Phase 5 T511: the journey's campaign registry - a module with no imports, an in-memory lookup.
+import { isRegisteredJourneyCampaignKey } from './growthJourney/execution/campaignKeys';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -89,9 +94,20 @@ export function clearTestOverrideCache(): void {
 /**
  * Check if a lead is allowed to receive communications.
  * Returns sendable=false if lead is unsubscribed, DND, or bounced.
+ *
+ * `channel` is OPTIONAL, and omitting it preserves the previous behaviour
+ * EXACTLY: any unsubscribe event blocks. Every caller that predates this
+ * parameter is in that position, so no unreviewed send path changes.
+ *
+ * Naming a channel opts into per-channel suppression (§35 D-4): a NEW sms
+ * opt-out stops blocking email, while an opt-out recorded before the cutoff
+ * still blocks everything, because that is what it meant when it was written
+ * and how it has been enforced since. See `channelSuppression.ts` — that
+ * asymmetry is the safety property, not an inconsistency.
  */
 export async function checkLeadSendable(
   leadId: number,
+  channel?: SuppressibleChannel,
 ): Promise<{ sendable: boolean; reason?: string }> {
   try {
     const lead = await Lead.findByPk(leadId, {
@@ -107,13 +123,23 @@ export async function checkLeadSendable(
       return { sendable: false, reason: `lead_${lead.status}` };
     }
 
-    // Check for recent unsubscribe events (belt-and-suspenders with lead.status)
-    const recentUnsub = await UnsubscribeEvent.findOne({
+    // Unsubscribe events (belt-and-suspenders with lead.status).
+    //
+    // ALL of them, not just the newest. The previous version read only the most
+    // recent row, which was harmless while any row blocked everything — but
+    // once channel matters, "the latest one was sms" must not be allowed to
+    // hide an older global opt-out sitting behind it.
+    const unsubEvents = await UnsubscribeEvent.findAll({
       where: { lead_id: leadId },
+      attributes: ['channel', 'created_at'],
       order: [['created_at', 'DESC']],
     });
-    if (recentUnsub) {
-      return { sendable: false, reason: 'unsubscribe_event_exists' };
+    const suppression = isSuppressedForChannel(
+      unsubEvents as unknown as { channel: string | null; created_at: Date }[],
+      channel,
+    );
+    if (suppression.suppressed) {
+      return { sendable: false, reason: suppression.reason };
     }
 
     return { sendable: true };
@@ -130,12 +156,13 @@ export async function checkLeadSendable(
  */
 export async function checkCampaignSendable(
   campaignId?: string | null,
-): Promise<{ sendable: boolean; reason?: string }> {
+): Promise<{ sendable: boolean; reason?: string; campaignKey?: string | null }> {
   if (!campaignId) return { sendable: true };
 
   try {
+    // Phase 5 T511: `settings` rides this read so step 3.7 can see the campaign's key without a second query.
     const campaign = await Campaign.findByPk(campaignId, {
-      attributes: ['id', 'status'],
+      attributes: ['id', 'status', 'settings'],
     });
 
     if (!campaign) {
@@ -146,7 +173,8 @@ export async function checkCampaignSendable(
       return { sendable: false, reason: `campaign_${campaign.status}` };
     }
 
-    return { sendable: true };
+    const key = (campaign.settings as Record<string, unknown> | null | undefined)?.campaign_key;
+    return { sendable: true, campaignKey: typeof key === 'string' ? key : null };
   } catch (err: any) {
     console.error('[CommunicationSafety] Campaign sendable check failed:', err.message);
     return { sendable: false, reason: 'campaign_check_failed' };
@@ -306,6 +334,68 @@ export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
         blockedReason: leadCheck.reason,
         deliveryMode: 'blocked',
       };
+    }
+  }
+
+  // 3.5 Consent gate (TBI P0-3). SHADOW BY DEFAULT — assertConsentForSend records the verdict
+  // (ai_events consent.check) but only reports enforced=true when consent_enforcement === 'enforce'.
+  // It is swallow-safe and fails OPEN, so a consent-system error can never block a live send.
+  // Skip simulations (test leads have no consent records by design).
+  if (!req.simulationId) {
+    const consent = await assertConsentForSend({
+      channel: req.channel,
+      leadId: req.leadId,
+      email: req.toEmail,
+      phone: req.toPhone,
+    });
+    if (consent.enforced && consent.verdict === 'block') {
+      return {
+        allowed: false,
+        redirect: null,
+        testMode: false,
+        blockedReason: `consent_${consent.reason}`,
+        deliveryMode: 'blocked',
+      };
+    }
+  }
+
+  // 3.6 Per-brand communication permission (master plan §16, DEC-05).
+  //
+  // Runs AFTER checkLeadSendable on purpose. That check is the authority on global
+  // suppression -- hard bounces, complaints, unsubscribes -- which are facts about the
+  // ADDRESS and which no brand-level preference may override. This gate only ever
+  // narrows what that already allowed.
+  //
+  // Applies only to campaigns carrying a brand_id, so today's mail is untouched: every
+  // existing campaign was backfilled to a brand but none were authored against one, and
+  // the gate short-circuits without one. Every future CPN or AI Flotation campaign is
+  // enforced from its first send instead of from whenever someone remembers.
+  if (!req.simulationId) {
+    const brandPref = await checkBrandPreference({
+      leadId: req.leadId,
+      campaignId: req.campaignId,
+      channel: req.channel === 'sms' ? 'sms' : req.channel === 'voice' ? 'voice' : 'email',
+    });
+    if (!brandPref.allowed) {
+      return {
+        allowed: false,
+        redirect: null,
+        testMode: false,
+        blockedReason: `brand_${brandPref.reason}`,
+        deliveryMode: 'blocked',
+      };
+    }
+  }
+
+  // 3.7 The Growth Journey's send-time hold (Phase 5 T511). For every campaign in production today this
+  // is an in-memory registry check and nothing else - no query, no require of the journey tree, no change
+  // to the decision. A REGISTERED key reaches the hold: the lead's open receipt, then the same flags, kill
+  // switch and pauses the executor asks, so a pause set after enrolment stops step 3, not only step 0.
+  if (req.campaignId && isRegisteredJourneyCampaignKey(campaignCheck.campaignKey)) {
+    const { checkJourneyHold } = require('./growthJourney/execution/sendHold') as typeof import('./growthJourney/execution/sendHold'); // eslint-disable-line @typescript-eslint/no-var-requires
+    const hold = await checkJourneyHold({ leadId: req.leadId, campaignId: req.campaignId, campaignKey: campaignCheck.campaignKey });
+    if (hold.held) {
+      return { allowed: false, redirect: null, testMode: false, blockedReason: hold.reason, deliveryMode: 'blocked' };
     }
   }
 

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { LeadSource, EntryPoint, FormDefinition, RoutingRule, RawLeadPayload, Lead } from '../models';
+import { routingRuleCreateSchema, routingRuleUpdateSchema } from '../schemas/routingRuleSchema';
 
 /* --- LeadSource CRUD --- */
 
@@ -166,11 +167,15 @@ export async function listRoutingRules(_req: Request, res: Response) {
 }
 
 export async function createRoutingRule(req: Request, res: Response) {
-  const { name, priority, conditions, actions, continue_on_match, is_active } = req.body || {};
-  if (!name || !conditions || !actions) {
-    res.status(400).json({ error: 'name, conditions, and actions are required' });
+  // T226: validated against the action registry. An action type the engine
+  // does not know used to be accepted and then run as `unknown` — a rule that
+  // looked saved and did nothing. Now it is a 400 that names the type.
+  const parsed = routingRuleCreateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid routing rule', issues: parsed.error.issues });
     return;
   }
+  const { name, priority, conditions, actions, continue_on_match, is_active } = parsed.data;
   try {
     const rr = await RoutingRule.create({
       name,
@@ -192,11 +197,26 @@ export async function updateRoutingRule(req: Request, res: Response) {
     res.status(404).json({ error: 'Routing rule not found' });
     return;
   }
-  const allowed = ['name', 'priority', 'conditions', 'actions', 'continue_on_match', 'is_active'];
+  const parsed = routingRuleUpdateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid routing rule', issues: parsed.error.issues });
+    return;
+  }
   const updates: Record<string, any> = { updated_at: new Date() };
-  for (const k of allowed) if (req.body?.[k] !== undefined) updates[k] = req.body[k];
+  for (const [k, v] of Object.entries(parsed.data)) if (v !== undefined) updates[k] = v;
+  // T226: a change to WHAT the rule matches or DOES is a new version, so an
+  // execution row can always name the rule as it was when it fired. A rename
+  // or a pause is not.
+  if (ruleBehaviourChanged(rr, updates)) updates.version = (rr.version ?? 1) + 1;
   await rr.update(updates as any);
   res.json({ routing_rule: rr });
+}
+
+function ruleBehaviourChanged(rr: RoutingRule, updates: Record<string, any>): boolean {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  if (updates.conditions !== undefined && !same(updates.conditions, rr.conditions)) return true;
+  if (updates.actions !== undefined && !same(updates.actions, rr.actions)) return true;
+  return false;
 }
 
 export async function deleteRoutingRule(req: Request, res: Response) {

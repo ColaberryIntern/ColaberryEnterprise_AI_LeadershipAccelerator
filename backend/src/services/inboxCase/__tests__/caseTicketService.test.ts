@@ -1,0 +1,234 @@
+import { randomUUID } from 'crypto';
+
+const mockCreateTicket = jest.fn();
+const mockUpdateTicketStatus = jest.fn(async () => ({}));
+const mockAddTicketComment = jest.fn(async () => ({}));
+const mockGetTicketsByEntity = jest.fn();
+const mockGetTicketCreatorAdminUserId = jest.fn();
+const mockRecordWorkUnitForCaseState = jest.fn();
+
+jest.mock('../../ticketService', () => ({
+  createTicket: (...args: any[]) => mockCreateTicket(...args),
+  updateTicketStatus: (...args: any[]) => mockUpdateTicketStatus(...args),
+  addTicketComment: (...args: any[]) => mockAddTicketComment(...args),
+  getTicketsByEntity: (...args: any[]) => mockGetTicketsByEntity(...args),
+}));
+jest.mock('../../agentBlueprint/ticketCreatorIdentitySeed', () => ({
+  getTicketCreatorAdminUserId: (...args: any[]) => mockGetTicketCreatorAdminUserId(...args),
+}));
+// Work Graph auto-recorder (2026-08-23) — syncTicketForCase() now calls this
+// alongside the status sync. Mocked here (this file tests WIRING) — the
+// recorder's own state-machine/idempotency/honesty-gate behavior has its own
+// unit tests in workGraph/__tests__/inboxCaseWorkGraphAutoRecorder.test.ts.
+jest.mock('../../workGraph/inboxCaseWorkGraphAutoRecorder', () => ({
+  recordWorkUnitForCaseState: (...args: any[]) => mockRecordWorkUnitForCaseState(...args),
+}));
+
+import { ensureCaseTicket, syncTicketForCase, postCaseProgressNote } from '../caseTicketService';
+
+function ticket(overrides: Partial<any> = {}) {
+  return { id: randomUUID(), status: 'backlog', type: 'inbox_case', created_at: new Date(), ...overrides };
+}
+
+beforeEach(() => {
+  mockCreateTicket.mockReset();
+  mockUpdateTicketStatus.mockReset().mockResolvedValue({});
+  mockAddTicketComment.mockReset().mockResolvedValue({});
+  mockGetTicketsByEntity.mockReset();
+  mockGetTicketCreatorAdminUserId.mockReset().mockResolvedValue('admin-inboxcaseengine-1');
+  mockRecordWorkUnitForCaseState.mockReset().mockResolvedValue(undefined);
+});
+
+describe('ensureCaseTicket', () => {
+  it('creates a ticket tagged with entity_type/entity_id/type for dedup', async () => {
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-1', 'AI Flotation LLC ownership', 'TOPIC', 'ali@colaberry.com');
+
+    expect(mockCreateTicket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity_type: 'inbox_case',
+        entity_id: 'case-1',
+        type: 'inbox_case',
+        source: 'inbox_case',
+        title: expect.stringContaining('AI Flotation LLC ownership'),
+      })
+    );
+  });
+
+  // Agent Quality Cleanup, Item 4 — real per-ticket description.
+  it('description leads with the real case title, not a byte-identical boilerplate string', async () => {
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-1', 'AI Flotation LLC ownership', 'TOPIC', 'ali@colaberry.com');
+
+    const callArgs = mockCreateTicket.mock.calls[0][0];
+    expect(callArgs.description).toContain('AI Flotation LLC ownership');
+    // The process-narrative sentence is still present — added to, not lost.
+    expect(callArgs.description).toContain('Tracks Discover -> Assess -> Plan -> Approve -> Execute -> Verify -> Close.');
+  });
+
+  it('two different cases produce two different descriptions, each carrying its own real title verbatim — no two cases collide on boilerplate', async () => {
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-1', 'AI Flotation LLC ownership', 'TOPIC', 'ali@colaberry.com');
+    const firstDescription = mockCreateTicket.mock.calls[0][0].description;
+
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-2', 'Career Pathways Network EIN filing', 'PERSON', 'ali@colaberry.com');
+    const secondDescription = mockCreateTicket.mock.calls[1][0].description;
+
+    expect(firstDescription).not.toBe(secondDescription);
+    expect(firstDescription).toContain('AI Flotation LLC ownership');
+    expect(secondDescription).toContain('Career Pathways Network EIN filing');
+  });
+
+  it('never throws when ticket creation fails (best-effort)', async () => {
+    mockCreateTicket.mockRejectedValueOnce(new Error('DB unavailable'));
+    await expect(ensureCaseTicket('case-1', 'Title', 'PERSON', 'ali@colaberry.com')).resolves.toBeUndefined();
+  });
+
+  // Agent Alias & Identity Fix (forward-fix)
+  it('forward-fix: stamps InboxCaseEngine\'s real AdminUser id as assignee, without touching created_by_type/created_by_id', async () => {
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+    await ensureCaseTicket('case-1', 'Title', 'PERSON', 'ali@colaberry.com');
+
+    expect(mockGetTicketCreatorAdminUserId).toHaveBeenCalledWith('InboxCaseEngine');
+    expect(mockCreateTicket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assigned_to_type: 'ai_staff',
+        assigned_to_id: 'admin-inboxcaseengine-1',
+        created_by_type: 'agent',
+        created_by_id: 'InboxCaseEngine',
+      })
+    );
+  });
+
+  it('forward-fix failure path: identity not yet resolvable (null) never writes a literal null/undefined assignee id', async () => {
+    mockGetTicketCreatorAdminUserId.mockResolvedValueOnce(null);
+    mockCreateTicket.mockResolvedValueOnce(ticket());
+
+    await ensureCaseTicket('case-1', 'Title', 'PERSON', 'ali@colaberry.com');
+
+    const callArgs = mockCreateTicket.mock.calls[0][0];
+    expect(callArgs).not.toHaveProperty('assigned_to_type');
+    expect(callArgs).not.toHaveProperty('assigned_to_id');
+  });
+});
+
+describe('syncTicketForCase — case-state to ticket-status mapping', () => {
+  it('maps active-work states (DISCOVERING/ASSESSING/EXECUTING) to in_progress', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'todo' })]);
+    await syncTicketForCase('case-1', 'ASSESSING');
+    expect(mockUpdateTicketStatus).toHaveBeenLastCalledWith(expect.any(String), 'in_progress', 'agent', 'InboxCaseEngine');
+  });
+
+  it('maps needs-Ali-attention states (NEEDS_ALI/AWAITING_APPROVAL/WAITING/FAILED) to in_review', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'in_progress' })]);
+    await syncTicketForCase('case-1', 'NEEDS_ALI');
+    expect(mockUpdateTicketStatus).toHaveBeenLastCalledWith(expect.any(String), 'in_review', 'agent', 'InboxCaseEngine');
+  });
+
+  it('maps RESOLVED to done', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'in_progress' })]);
+    await syncTicketForCase('case-1', 'RESOLVED');
+    // in_progress -> done is a single valid hop
+    expect(mockUpdateTicketStatus).toHaveBeenLastCalledWith(expect.any(String), 'done', 'agent', 'InboxCaseEngine');
+  });
+
+  it('walks multiple hops when the target is not directly adjacent (backlog -> in_review needs backlog->todo->in_progress->in_review)', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'backlog' })]);
+    await syncTicketForCase('case-1', 'NEEDS_ALI'); // target bucket: in_review
+    expect(mockUpdateTicketStatus).toHaveBeenNthCalledWith(1, expect.any(String), 'todo', 'agent', 'InboxCaseEngine');
+    expect(mockUpdateTicketStatus).toHaveBeenNthCalledWith(2, expect.any(String), 'in_progress', 'agent', 'InboxCaseEngine');
+    expect(mockUpdateTicketStatus).toHaveBeenNthCalledWith(3, expect.any(String), 'in_review', 'agent', 'InboxCaseEngine');
+  });
+
+  it('is a no-op when the ticket is already at the target bucket', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'in_progress' })]);
+    await syncTicketForCase('case-1', 'EXECUTING'); // also maps to in_progress
+    expect(mockUpdateTicketStatus).not.toHaveBeenCalled();
+  });
+
+  it('does nothing (no throw) when no ticket exists yet for the case', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([]);
+    await expect(syncTicketForCase('case-1', 'ASSESSING')).resolves.toBeUndefined();
+    expect(mockUpdateTicketStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the ticket is terminal (done) and cannot move further', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'done' })]);
+    await expect(syncTicketForCase('case-1', 'ASSESSING')).resolves.toBeUndefined();
+    expect(mockUpdateTicketStatus).not.toHaveBeenCalled();
+  });
+
+  it('never throws when the underlying update call fails (best-effort)', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'todo' })]);
+    mockUpdateTicketStatus.mockRejectedValueOnce(new Error('invalid transition'));
+    await expect(syncTicketForCase('case-1', 'ASSESSING')).resolves.toBeUndefined();
+  });
+
+  it('picks the most recently created non-terminal ticket when several exist for the same case (e.g. after a reopen)', async () => {
+    const older = ticket({ status: 'done', created_at: new Date('2026-01-01') });
+    const newer = ticket({ status: 'todo', created_at: new Date('2026-06-01') });
+    mockGetTicketsByEntity.mockResolvedValue([older, newer]);
+    await syncTicketForCase('case-1', 'ASSESSING');
+    expect(mockUpdateTicketStatus).toHaveBeenCalledWith(newer.id, 'in_progress', 'agent', 'InboxCaseEngine');
+  });
+
+  // Work Graph auto-recorder wiring (2026-08-23) — Ali, live: "I don't see any
+  // ... work graphs in your examples."
+  describe('Work Graph auto-recorder wiring', () => {
+    it('happy path: calls recordWorkUnitForCaseState with the real ticket id/type and the real CaseState', async () => {
+      const t = ticket({ status: 'todo' });
+      mockGetTicketsByEntity.mockResolvedValue([t]);
+
+      await syncTicketForCase('case-1', 'ASSESSING');
+
+      expect(mockRecordWorkUnitForCaseState).toHaveBeenCalledWith(t.id, 'inbox_case', 'ASSESSING');
+    });
+
+    it('still records the work unit even when the ticket-board BUCKET does not change — the work graph tracks the finer-grained real CaseState, not the coarse 3-bucket ticket status', async () => {
+      const t = ticket({ status: 'in_progress' });
+      mockGetTicketsByEntity.mockResolvedValue([t]);
+
+      await syncTicketForCase('case-1', 'EXECUTING'); // also maps to in_progress — a no-op for updateTicketStatus
+
+      expect(mockUpdateTicketStatus).not.toHaveBeenCalled();
+      expect(mockRecordWorkUnitForCaseState).toHaveBeenCalledWith(t.id, 'inbox_case', 'EXECUTING');
+    });
+
+    it('never called when no ticket exists for the case', async () => {
+      mockGetTicketsByEntity.mockResolvedValue([]);
+
+      await syncTicketForCase('case-1', 'ASSESSING');
+
+      expect(mockRecordWorkUnitForCaseState).not.toHaveBeenCalled();
+    });
+
+    it('failure isolation: recordWorkUnitForCaseState rejecting does not propagate out of syncTicketForCase', async () => {
+      mockGetTicketsByEntity.mockResolvedValue([ticket({ status: 'todo' })]);
+      mockRecordWorkUnitForCaseState.mockRejectedValueOnce(new Error('should never happen — internally isolated, but prove the caller is resilient too'));
+
+      await expect(syncTicketForCase('case-1', 'ASSESSING')).resolves.toBeUndefined();
+    });
+  });
+});
+
+describe('postCaseProgressNote', () => {
+  it('posts a comment to the case ticket', async () => {
+    const t = ticket();
+    mockGetTicketsByEntity.mockResolvedValue([t]);
+    await postCaseProgressNote('case-1', 'Assessment complete.');
+    expect(mockAddTicketComment).toHaveBeenCalledWith(t.id, 'Assessment complete.', 'agent', 'InboxCaseEngine');
+  });
+
+  it('does nothing when no ticket exists', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([]);
+    await postCaseProgressNote('case-1', 'note');
+    expect(mockAddTicketComment).not.toHaveBeenCalled();
+  });
+
+  it('never throws when the underlying comment call fails (best-effort)', async () => {
+    mockGetTicketsByEntity.mockResolvedValue([ticket()]);
+    mockAddTicketComment.mockRejectedValueOnce(new Error('DB unavailable'));
+    await expect(postCaseProgressNote('case-1', 'note')).resolves.toBeUndefined();
+  });
+});

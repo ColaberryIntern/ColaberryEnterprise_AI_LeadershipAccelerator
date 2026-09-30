@@ -278,7 +278,6 @@ Generated automatically by Cory, AI COO · Colaberry Enterprise AI Division
     await transporter.sendMail({
       from: '"Cory - AI COO" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
-      cc: 'alimuwwakkil@gmail.com',
       subject: `[Weekly Report] ${weekLabel}`,
       text: report,
       html: htmlBody,

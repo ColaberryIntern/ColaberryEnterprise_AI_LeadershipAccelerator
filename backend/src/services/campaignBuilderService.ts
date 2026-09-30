@@ -9,6 +9,7 @@ import { importApolloResults } from './apolloService';
 import { Campaign } from '../models';
 import type { SequenceStep } from '../models/FollowUpSequence';
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import { getSetting } from './settingsService';
 
@@ -457,7 +458,7 @@ export async function parseNaturalLanguageCampaign(
   const apiKey = env.openaiApiKey;
   if (!apiKey) throw new Error('OpenAI API key not configured');
 
-  const client = new OpenAI({ apiKey });
+  const client = getInstrumentedOpenAI({ workflow_id: 'campaign_builder' }, { apiKey });
   const model = (await getSetting('ai_model')) || env.aiModel;
 
   const systemPrompt = `You are an expert campaign strategist for Colaberry Enterprise AI Division.

@@ -84,8 +84,8 @@ function trimContext(ctx, maxChars) {
 async function callOpenAI({ apiKey, contextStr, todoTitle }) {
   // Repo node_modules lives at REPO/node_modules. From this file:
   // backend/src/scripts/lib -> ../../../../node_modules
-  const OpenAI = require(path.resolve(__dirname, '../../../../node_modules/openai')).default;
-  const client = new OpenAI({ apiKey });
+  const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './openaiInstrumented'));
+  const client = getInstrumentedOpenAI({ workflow_id: 'contextual_suggestion' }, { apiKey });
   const userMsg = `Todo title: ${todoTitle}\n\n--- Full ticket context ---\n${trimContext(contextStr, MAX_CONTEXT_CHARS)}`;
   const r = await client.chat.completions.create({
     model: MODEL,

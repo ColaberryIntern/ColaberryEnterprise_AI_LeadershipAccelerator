@@ -16,7 +16,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
-const OpenAI = require(path.resolve(__dirname, '../../../node_modules/openai')).default;
+const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './lib/openaiInstrumented'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
 const { buildInternActivity } = require(path.resolve(__dirname, './lib/internActivityTracker'));
 const recorder = require(path.resolve(__dirname, './lib/reportRunRecorder'));
@@ -54,7 +54,7 @@ async function summarizeWithLLM(rows) {
   // Summarize each intern's last 14 days of comments into bullets. Only for
   // people who have ANY comment in the lookback (otherwise nothing to say).
   if (!process.env.OPENAI_API_KEY) return;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = getInstrumentedOpenAI({ workflow_id: 'weekly_intern_report' });
   const needSummary = rows.filter((r) => r.totalComments > 0);
   const concurrency = 5;
   let cursor = 0;
@@ -320,13 +320,13 @@ ${renderInline('GREEN', green)}
     const r = await transport.sendMail({
       from: '"Ali Muwwakkil" <ali@colaberry.com>',
       to: 'ali@colaberry.com',
-      cc: ['alimuwwakkil@gmail.com', 'ram@colaberry.com'],
+      cc: ['ram@colaberry.com'],
       subject, text, html,
       headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false', 'Importance': totals.black > 0 ? 'high' : 'normal', 'X-Priority': totals.black > 0 ? '1' : '3' },
     });
     console.log('[intern-report] email sent:', r.messageId);
     messageIds.push(r.messageId);
-    recipientsSent.push('ali@colaberry.com', 'alimuwwakkil@gmail.com');
+    recipientsSent.push('ali@colaberry.com');
   }
 
   if (!NO_MB && !DRY) {

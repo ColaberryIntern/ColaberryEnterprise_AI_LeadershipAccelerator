@@ -1,0 +1,30 @@
+<!-- @dsCard group="Type" viewport="700x180" name="Mono / data" subtitle="Roboto Mono — code, metrics & tabular data" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 24px 28px; background: var(--surface-page); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: center; }
+  pre { margin: 0; font-family: var(--font-mono); font-size: 14px; line-height: 1.6; background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px 16px; color: var(--text-body); overflow: hidden; }
+  .k { color: var(--blue-600); }
+  .f { color: var(--green-700); }
+  .metrics { display: flex; gap: 28px; }
+  .m .n { font-family: var(--font-mono); font-weight: var(--fw-bold); font-size: 34px; color: var(--text-strong); }
+  .m .l { font-family: var(--font-body); font-size: 13px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <pre><span class="k">SELECT</span> cohort,
+       <span class="f">COUNT</span>(*) AS grads
+<span class="k">FROM</span> outcomes
+<span class="k">GROUP BY</span> cohort;</pre>
+    <div class="metrics">
+      <div class="m"><div class="n">5,000+</div><div class="l">Careers changed</div></div>
+      <div class="m"><div class="n">2012</div><div class="l">Founded</div></div>
+    </div>
+  </div>
+</body>
+</html>

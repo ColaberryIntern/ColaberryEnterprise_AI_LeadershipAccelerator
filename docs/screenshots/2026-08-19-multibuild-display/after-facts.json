@@ -1,0 +1,40 @@
+{
+  "activeBuildsStat": "1",
+  "originChips": [
+    "your tailored plan"
+  ],
+  "sidebarRows": [
+    {
+      "name": "Sponsor Utilisation Dashboard",
+      "tag": null
+    },
+    {
+      "name": "Hair Salon Booking & Paymentsexample",
+      "tag": "example"
+    }
+  ],
+  "storeOwnBuilds": 1,
+  "storeFirstOrigin": "pipeline",
+  "storeFirstTaskCount": 17,
+  "storeFirstListNames": [
+    "Release 0 - Walking skeleton",
+    "Release 1 - Utilisation and alerts"
+  ],
+  "storeFirstTaskTitles": [
+    "Stand up the Command Center and let the platform see your pushes",
+    "Model the sponsor, the seat and the utilisation window",
+    "Ingest the weekly seat-usage export",
+    "Normalise partial weeks and mid-week seat changes"
+  ],
+  "storeFirstListBreakdown": [
+    {
+      "name": "Release 0 - Walking skeleton",
+      "tasks": 9
+    },
+    {
+      "name": "Release 1 - Utilisation and alerts",
+      "tasks": 8
+    }
+  ],
+  "mirrorAttemptsBlocked": 1
+}

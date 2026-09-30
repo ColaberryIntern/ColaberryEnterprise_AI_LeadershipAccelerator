@@ -96,7 +96,6 @@ Colaberry Inc.`;
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: '[Gov Contracts] Reset complete - 5 scrapped, 5 placeholders, 3 new systems live',
     text: stripEmDashes(text),
     html: stripEmDashes(html),

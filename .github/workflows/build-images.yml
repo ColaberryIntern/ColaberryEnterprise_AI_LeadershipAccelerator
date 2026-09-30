@@ -1,0 +1,111 @@
+# Build the three production images in CI and push them to GHCR.
+#
+# WHY THIS EXISTS. Images are currently built ON the production host. The kernel
+# journal shows 344 OOM kills, 75 of them in the first eight days of September, and
+# the Sep 08 cascade opens with "docker-buildx invoked oom-killer" — the build is
+# the largest recurring memory spike on a 15.6GB box that also runs five Postgres
+# instances. An 8GB swapfile now absorbs the pressure; moving the build off the box
+# removes it.
+#
+# NOTHING CONSUMES THESE IMAGES YET. This is phase 1 and is deliberately additive:
+# docker-compose.production.yml still carries its `build:` stanzas, so deploys are
+# completely unchanged by this file. Phase 2 switches compose to `image:` and the
+# deploy to `pull && up -d` — that changes the deploy command CLAUDE.md, the memory
+# files and every concurrent session rely on, so it is coordinated separately.
+#
+# SAFE TO BUILD ELSEWHERE: none of the three Dockerfiles takes an ARG or bakes a
+# secret. nginx/Dockerfile hardcodes `ENV REACT_APP_API_URL=` (empty), so the React
+# bundle is environment-independent and a CI-built image behaves identically to a
+# host-built one. If that ever stops being true, phase 2 stops being safe.
+name: Build images
+
+on:
+  push:
+    branches: [main]
+  # Proves the build still works BEFORE merge, without pushing anything. Without
+  # this, a broken Dockerfile would only ever be discovered on main.
+  pull_request:
+    paths:
+      - 'backend/Dockerfile'
+      - 'nginx/Dockerfile'
+      - 'intelligence/ai_engine/Dockerfile'
+      - '.github/workflows/build-images.yml'
+  workflow_dispatch:
+
+# A second push to main supersedes the first; there is no value in finishing an
+# image nobody will deploy.
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # One broken image should not hide the state of the other two.
+      fail-fast: false
+      matrix:
+        include:
+          # `context` and `file` mirror docker-compose.production.yml exactly.
+          # Both are repo-root relative, which is what build-push-action expects.
+          - service: backend
+            context: .
+            file: backend/Dockerfile
+          - service: intelligence
+            context: ./intelligence/ai_engine
+            file: intelligence/ai_engine/Dockerfile
+          - service: nginx
+            context: .
+            file: nginx/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR rejects uppercase in an image path and this org is "ColaberryIntern",
+      # so the owner is lowercased rather than hardcoded.
+      - name: Resolve image name
+        id: img
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "name=ghcr.io/${owner}/accelerator-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Only main publishes. A pull_request build verifies and throws the result away.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: ${{ github.event_name != 'pull_request' }}
+          # Two tags on purpose: `main` is what a phase-2 rolling deploy would
+          # track, and the commit SHA is what makes a rollback nameable.
+          tags: |
+            ${{ steps.img.outputs.name }}:main
+            ${{ steps.img.outputs.name }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          provenance: false
+
+      - name: Summary
+        run: |
+          {
+            echo "### ${{ matrix.service }}"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              echo "Built and discarded. Pull requests verify the Dockerfile, they do not publish."
+            else
+              echo "Pushed \`${{ steps.img.outputs.name }}:sha-${{ github.sha }}\`"
+              echo ""
+              echo "Not deployed. docker-compose.production.yml still builds from source; see phase 2."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

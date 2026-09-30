@@ -37,7 +37,7 @@ You report monthly:
 
 ### Retention + student lifecycle
 
-For Cohort 1 (kickoff 2026-07-13):
+For Cohort 1 (kickoff 2026-07-27):
 - Weekly progress monitoring per student (paired with SuccessCoachAgent's automated nudges)
 - Identify at-risk students (no GitHub activity X days, no lab submission, no community engagement)
 - Hand at-risk students to AI SuccessCoach for nudge → human follow-up if AI nudge doesn't land in 48hrs
@@ -59,7 +59,7 @@ CB drafts the report formats; you direct what goes in.
 - **2026-06-17 (Wed)** — Subscription tracking system setup confirmed (works against Stripe / CCPP test data)
 - **2026-06-19 (Fri)** — Lifecycle + retention monitoring system live (works against test cohort)
 - **2026-07-10 (Fri)** — Daily enrollment report live (first day post-enrollment-open)
-- **2026-07-13 (Mon)** — Cohort 1 weekly progress reporting starts
+- **2026-07-27 (Mon)** — Cohort 1 weekly progress reporting starts
 
 ---
 

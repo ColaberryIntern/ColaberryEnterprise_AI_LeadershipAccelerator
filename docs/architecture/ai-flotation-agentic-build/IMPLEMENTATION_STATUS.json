@@ -1,0 +1,170 @@
+{
+  "plan": "AI_FLOTATION_AGENTIC_SOFTWARE_BUILD_MASTER_CLAUDE_CODE_PLAN",
+  "checkpoint": "A",
+  "gate": 0,
+  "gate_name": "Discovery + contracts",
+  "status": "awaiting_signoff",
+  "feature_code_written": false,
+  "session": "CC-20260902-m8q4",
+  "date": "2026-09-03",
+  "base_sha": "e99fdb35",
+  "branch": "workstream/ai-flotation-gate0",
+  "worktree_clean_at_start": true,
+  "plan_assumptions_corrected": [
+    {
+      "id": "CORRECTION-1",
+      "plan_ref": "§7, §55",
+      "claim": "no syntheflow symbol in repo; treat as new provider adapter",
+      "reality": "vendor is spelled Synthflow; SYNTHFLOW_API_KEY and three agent ids already configured in backend/src/config/env.ts, alongside services/callbackRequestService.ts",
+      "impact": "Gate 3 is an audit and a reuse decision, not a greenfield integration"
+    },
+    {
+      "id": "CORRECTION-2",
+      "plan_ref": "§24, §25",
+      "claim": "inspect for a payment provider; introduce BillingProvider seam if none",
+      "reality": "PaySimple exists (services/paysimpleService.ts) with hosted one-time payment links and no recurring, subscription, schedule or plan function; services/billing/ holds gateway state and health checks only",
+      "impact": "the BuildPlan subscription model has no provider capable of running it; Gate 7 is blocked"
+    },
+    {
+      "id": "CORRECTION-3",
+      "plan_ref": "§7, §29",
+      "claim": "marketing to delivery conversion exists",
+      "reality": "confirmed; shipped 2026-09-03 in PR #2043 with operator surface in PR #2045, idempotent on organizations.lead_id and delivery_engagements.source_lead_id, proved dry against production",
+      "impact": "Gate 8 largely met; remaining work is importing free project truth"
+    },
+    {
+      "id": "CORRECTION-4",
+      "plan_ref": "§9 Q20, §19, §65",
+      "claim": "unknown which TBI scores are runtime vs documentation",
+      "reality": "modules/delivery/inpact.ts is consumed by deliveryTrustGate.ts, releaseGate.ts, deliveryStoryContract.ts and deliveryOpportunityMap.ts",
+      "impact": "TBI gates releases at runtime; Gate 19 is projection work, and any new score would diverge"
+    },
+    {
+      "id": "CORRECTION-5",
+      "plan_ref": "§41",
+      "claim": "reuse existing chat infrastructure if generic enough",
+      "reality": "ChatConversation is keyed on visitor_id, lead_id, session_id, page_url, trigger_type and has no project dimension",
+      "impact": "delivery-scoped message domain required; reuse would attach client delivery discussion to an expiring visitor session"
+    }
+  ],
+  "live_defects_found": [
+    {
+      "id": "DEFECT-1",
+      "file": "backend/src/controllers/leadIngestionController.ts",
+      "finding": "lead ingest stores the lead and notifies nobody - no email, alert or outbound webhook",
+      "why_it_matters": "the live /start/ page promises the details reach the team that reads them; every gate above assumes an inbound is noticed",
+      "recommended_position": "before Gate 1, not inside Gate 12"
+    }
+  ],
+  "escalations": [
+    {
+      "id": "ESCALATION-1",
+      "subject": "subscription billing has no provider",
+      "boundary": "external dependency / paid provider introduction",
+      "blocks": [
+        "Gate 7"
+      ],
+      "note": "a separate workstream was exploring Stripe as an international rail; reconcile rather than decide twice"
+    },
+    {
+      "id": "ESCALATION-2",
+      "subject": "voice intake ownership",
+      "boundary": "product decision - fourth Synthflow agent vs reuse of the callback agent",
+      "blocks": [
+        "Gate 3"
+      ],
+      "note": "changes who owns the phone number and the consent record"
+    },
+    {
+      "id": "ESCALATION-3",
+      "subject": "repo connection cannot exist without an enrollment",
+      "boundary": "schema change on a live table with a non-null foreign key",
+      "detail": "GitHubConnection.enrollment_id is allowNull:false with an FK to enrollments, and project_id references the student projects table. A commercial client has neither, so a paid DeliveryProject cannot hold a repo connection.",
+      "recommendation": "make enrollment_id nullable and add delivery_project_id; the verification loop, token custody and revocation handling are already built and should not be duplicated",
+      "blocks": [
+        "Gate 9",
+        "Gate 15 delivery-ready gate"
+      ]
+    }
+  ],
+  "reuse_summary": {
+    "agentic_responsibilities_total": 15,
+    "already_exist": 14,
+    "genuinely_new": 1,
+    "the_new_one": "Project AI - the client-facing project-scoped agent"
+  },
+  "artifacts": {
+    "written": [
+      "CURRENT_STATE.md",
+      "REUSE_MAP.md",
+      "CUSTOMER_JOURNEY.md",
+      "FREE_TO_PAID_CONTRACT.md",
+      "AGENTIC_ENGINE_MAP.md",
+      "TBI_INTEGRATION_MAP.md",
+      "REPO_OWNERSHIP_MAP.md",
+      "CRM_ATTRIBUTION_MAP.md",
+      "COMMUNICATION_MAP.md",
+      "BILLING_MAP.md",
+      "VOICE_INTAKE_MAP.md",
+      "CLIENT_VISIBILITY_MAP.md",
+      "SECURITY_THREAT_MODEL.md",
+      "TEST_PLAN.md",
+      "BASELINE_TEST_RESULTS.md",
+      "IMPLEMENTATION_STATUS.json"
+    ],
+    "outstanding": []
+  },
+  "baseline_tests": {
+    "command": "cd backend && npx jest -c jest.ci.config.ts",
+    "status": "complete",
+    "suites_passed": 1033,
+    "suites_failed": 1,
+    "suites_skipped": 3,
+    "suites_total": 1037,
+    "tests_passed": 15943,
+    "tests_skipped": 121,
+    "tests_total": 16064,
+    "duration_seconds": 309.192,
+    "failing_suite": "src/__tests__/services/interviewService.test.ts",
+    "failure_cause": "environmental - @anthropic-ai/sdk declared in backend/package.json but not installed in this worktree; the suite never executed, nothing asserted. CI installs it and passes.",
+    "note": "the CI config is the gate; scoped local runs miss contract suites. Local tsc is unusable - the only resolvable TypeScript is the root-hoisted 4.9.5, which cannot parse @types/d3-dispatch or zod/v4"
+  },
+  "gate_0_complete": true,
+  "next_action": "Gate 0 artifacts complete. Resolve ESCALATION-1 (billing provider), ESCALATION-2 (voice agent ownership) and ESCALATION-3 (repo connection enrollment coupling). Recommended before Gate 1: fix the lead-ingest notification (DEFECT-1). Do not begin Gate 1 until signed off.",
+  "pricing_input": {
+    "supplied_by": "DRI (Ali), 2026-09-03",
+    "note": "recorded as business configuration; Claude did not choose these (plan section 25)",
+    "rejected": "launching with $4,900 as the lowest plan",
+    "tiers": [
+      {
+        "key": "founding",
+        "price_usd": 1995,
+        "scope": "one active build"
+      },
+      {
+        "key": "standard",
+        "price_usd": 2495,
+        "scope": "one active build"
+      },
+      {
+        "key": "accelerate",
+        "price_usd": 4995,
+        "scope": "higher capacity"
+      },
+      {
+        "key": "multi_project",
+        "price_usd": 8995,
+        "scope": "multi-project / high capacity, 8995+"
+      }
+    ],
+    "commercial_test": "does $2,495 of revenue cost $300-$800 to fulfil, or $2,000? The second means the model changes."
+  },
+  "new_requirement": {
+    "name": "Delivery Economics Engine",
+    "source": "DRI, 2026-09-03 - 'Don't guess the economics. Make Refactored measure them project by project.'",
+    "verdict": "EXTEND, not NEW",
+    "existing_foundation": "services/delivery/factoryEconomics.ts - pure, exports computeThroughputRatio, THROUGHPUT_RATIO_VALIDATION='unvalidated', PublicationRefusal, MIN_THROUGHPUT_FOR_INTERPRETATION",
+    "missing": "per-project and per-free-session cost CAPTURE (AI spend, voice minutes, UI generation, preview runtime, PM minutes, rework) - the maths exists, the ledger does not",
+    "constraint": "internal by default; must never enter the client-safe allowlist"
+  }
+}

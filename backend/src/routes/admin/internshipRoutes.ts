@@ -1,0 +1,762 @@
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { requireSection } from '../../middlewares/authMiddleware';
+import InternshipApplication from '../../models/InternshipApplication';
+import { applicationDetail, queue, queueCounts, type QueueBucket } from '../../services/internship/internshipReviewQueue';
+import { decide } from '../../services/internship/internshipDecisionService';
+import { assessApplicant } from '../../services/internship/internshipApplicantAssessment';
+import { internActivity } from '../../services/internship/internshipActivityService';
+import { internshipProjectReview } from '../../services/internship/internshipProjectReview';
+import { authorAndAssignInternshipProject } from '../../services/internship/internshipProjectAuthoring';
+import {
+  internProjectQuestions, startInternProjectBuild, internProjectBuild,
+  assignGeneratedProject, assertNotGeneratedProject,
+} from '../../services/internship/internshipProjectGeneration';
+import { internshipProjectReadiness } from '../../services/internship/internshipProjectReadiness';
+import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
+import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
+import fs from 'fs';
+import path from 'path';
+import { SIGNED_DOC_DIR } from '../../config/upload';
+import { documentsFor, outstandingRequirements, verifyDocument } from '../../services/internship/internshipDocumentService';
+import { activate, activeInternView, buildChecklist } from '../../services/internship/internshipActivationService';
+import { commitConversion, planConversion } from '../../services/internship/internshipConversionService';
+import { internshipKpis, internshipProfileSection } from '../../services/internship/internshipTrackingService';
+
+/**
+ * Admin — AI Internship applications.
+ *
+ * ── THE GATE ───────────────────────────────────────────────────────────────
+ *
+ * Every route is `requireSection('internship')`, which admits owner, mgmt-admin
+ * and **admissions** — the role Dhee holds, so she manages this without needing
+ * `admin`. Two things must agree for that to work, and both are in this change:
+ *
+ *   1. `mgmtSectionGate`'s PATH_SECTION maps `/api/admin/internship` → 'internship'.
+ *      Without that row the gate is deny-by-default and every scoped mgmt token
+ *      403s here while a legacy full admin passes — the exact latent failure the
+ *      case-studies and cert-prep rows in that file were added to fix.
+ *   2. The frontend nav declares the same section, so the page and the API cannot
+ *      disagree about who may see it.
+ *
+ * ── AND WHY THE DECISION ROUTE IS NOT "PATCH state" ────────────────────────
+ *
+ * A generic state-setting endpoint would let a reviewer (or a bug) move an
+ * application anywhere the state machine happens to allow, without a reason code,
+ * without a decision row, and without an email. The verbs here are the decisions
+ * a reviewer actually makes, and each one goes through `decide()`, which cannot
+ * record a rejection without a student-safe reason.
+ */
+const router = Router();
+
+const BUCKETS: QueueBucket[] = [
+  'awaiting_review', 'information_requested', 'waitlisted',
+  'interview_incomplete', 'calls_failed', 'approved_awaiting_documents',
+  'onboarding', 'active_interns', 'converted', 'in_review',
+];
+
+const queueQuerySchema = z.object({
+  bucket: z.enum(BUCKETS as [QueueBucket, ...QueueBucket[]]).default('awaiting_review'),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+const decideSchema = z.object({
+  decision: z.enum([
+    'approve', 'approve_with_conditions', 'reject',
+    'waitlist', 'request_information', 'schedule_human_follow_up',
+  ]),
+  // Optional: a reason is required only for reject / waitlist / request_information
+  // (enforced in decide()). Approving needs none. The dropdown sends '' when no
+  // reason is picked, so coerce that empty string to "absent" before the enum
+  // check — otherwise an approval with no reason fails as an invalid decision.
+  reason_code: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(REASON_CODES as [string, ...string[]]).nullish(),
+  ),
+  student_message: z.string().max(4000).nullish(),
+  reviewer_notes: z.string().max(4000).nullish(),
+  conditions: z.string().max(2000).nullish(),
+}).strict();
+
+/** GET /api/admin/internship/queue */
+router.get('/api/admin/internship/queue', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = queueQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid filters.', issues: parsed.error.issues });
+    return;
+  }
+  try {
+    const [counts, page] = await Promise.all([
+      queueCounts(),
+      queue(parsed.data),
+    ]);
+    res.json({ counts, ...page, bucket: parsed.data.bucket });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_queue_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the queue.' });
+  }
+});
+
+/** GET /api/admin/internship/applications/:id */
+router.get('/api/admin/internship/applications/:id', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const detail = await applicationDetail(String(req.params.id));
+    if (!detail) { res.status(404).json({ error: 'Application not found.' }); return; }
+    res.json(detail);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_detail_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the application.' });
+  }
+});
+
+/**
+ * GET /api/admin/internship/applications/:id/activity
+ * What the intern is doing: training (weeks 1-3 gate), project, cert prep, case
+ * studies. Read-only; keyed off the application's enrollment.
+ */
+router.get('/api/admin/internship/applications/:id/activity', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id), { attributes: ['id', 'enrollment_id'] });
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+    const activity = await internActivity((application as any).enrollment_id);
+    res.json(activity);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_activity_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the intern activity.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/project-review
+ * The "dig into their project" AI review. Body: optional { question }. Generated
+ * on demand so the LLM cost is paid only when a manager asks.
+ */
+router.post('/api/admin/internship/applications/:id/project-review', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id), { attributes: ['id', 'enrollment_id'] });
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+    const question = typeof req.body?.question === 'string' ? req.body.question.slice(0, 500) : undefined;
+    const review = await internshipProjectReview((application as any).enrollment_id, question);
+    res.json(review);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_project_review_route_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not review the project.' });
+  }
+});
+
+/**
+ * GET /api/admin/internship/project-readiness
+ * The manager's roster: every active intern with their first-three-weeks gate,
+ * attendance, and whether they already have a project — so "who is ready for a
+ * project" is answerable at a glance.
+ */
+router.get('/api/admin/internship/project-readiness', requireSection('internship'), async (_req: Request, res: Response) => {
+  try {
+    const rows = await internshipProjectReadiness();
+    res.json({ interns: rows });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_project_readiness_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load project readiness.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/author-project
+ * Author a project (releases + stories) and assign it to the intern. A fresh,
+ * active project is created on their enrollment and the releases/stories are
+ * materialised onto their profile — the manager's project-delivery surface.
+ */
+const authorStorySchema = z.object({
+  title: z.string().min(1).max(300),
+  narrative: z.string().max(4000).nullish(),
+  acceptance: z.array(z.string().max(600)).max(20).nullish(),
+  build: z.string().max(20000).nullish(),
+  blocked_by: z.array(z.string().max(60)).max(40).optional(),
+});
+const authorProjectSchema = z.object({
+  name: z.string().min(1).max(200),
+  industry: z.string().max(120).nullish(),
+  releases: z.array(z.object({
+    key: z.string().min(1).max(40),
+    name: z.string().max(200),
+    stories: z.array(authorStorySchema).max(100),
+  })).min(1).max(20),
+});
+
+router.post('/api/admin/internship/applications/:id/author-project', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id), { attributes: ['id', 'enrollment_id'] });
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+    const parsed = authorProjectSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: 'Invalid project.', issues: parsed.error.issues }); return; }
+    // The manual form is the escape hatch, not a second writer. `importProject`
+    // writes NOTHING to a project that already has a published plan and returns
+    // the existing tree, so without this the reviewer is told their stories were
+    // saved when none were. Refuse loudly instead.
+    await assertNotGeneratedProject((application as any).enrollment_id);
+    const result = await authorAndAssignInternshipProject((application as any).enrollment_id, parsed.data);
+    res.json(result);
+  } catch (err: any) {
+    if (typeof err?.status === 'number' && err.status < 500) {
+      res.status(err.status).json({ error: String(err.message) });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_author_project_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not author the project.' });
+  }
+});
+
+/**
+ * ── GENERATED PROJECTS ─────────────────────────────────────────────────────
+ *
+ * The admin door onto the Student Build Pipeline. Ali, 2026-09-28: "We will
+ * never build projects like this, one story at a time... This is where I need
+ * to put my idea process in here. The same process that already exists for
+ * creating projects."
+ *
+ * Every SBP route is participant-scoped and derives the enrollment from the
+ * student's own JWT, so a reviewer could not run one on an intern's behalf.
+ * These four are that entry, `requireSection('internship')` like the rest of
+ * this file, and they call the pipeline's own stages in the pipeline's own
+ * order. The sequence is: questions -> generate -> build (poll/review) ->
+ * assign.
+ */
+const projectQuestionsSchema = z.object({
+  idea: z.string().min(20).max(6000),
+  size: z.enum(['workflow', 'project', 'autonomous']).optional(),
+  name: z.string().max(200).nullish(),
+}).strict();
+
+const generateProjectSchema = projectQuestionsSchema.extend({
+  industry: z.string().max(120).nullish(),
+  answers: z.array(z.object({
+    id: z.string().max(60),
+    question: z.string().max(1000),
+    answer: z.string().max(6000),
+    angle: z.string().max(60).optional(),
+  })).max(20).optional(),
+  covered: z.array(z.object({
+    angle: z.string().max(60),
+    evidence: z.string().max(2000),
+  })).max(20).optional(),
+}).strict();
+
+const assignProjectSchema = z.object({
+  project_id: z.string().uuid(),
+  /** The hash of the plan the reviewer actually read. */
+  expected_sha256: z.string().regex(/^[0-9a-f]{64}$/).nullish(),
+}).strict();
+
+/** Log + answer, with the service's own status when it set one. */
+function generationFailure(res: Response, event: string, err: any, fallback: string): void {
+  const status = typeof err?.status === 'number' ? err.status : 500;
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: status >= 500 ? 'error' : 'warn', service: 'backend', event,
+    outcome: 'failure', error_class: err?.error_class ?? err?.constructor?.name ?? 'Error',
+    context: { message: err?.message },
+  }));
+  res.status(status).json({ error: status >= 500 ? fallback : String(err?.message ?? fallback) });
+}
+
+/**
+ * POST /api/admin/internship/applications/:id/project/questions
+ * The sharpening interview, for the reviewer. Creates nothing.
+ */
+router.post('/api/admin/internship/applications/:id/project/questions', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = projectQuestionsSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Describe the project first.', issues: parsed.error.issues }); return; }
+  try {
+    res.json(await internProjectQuestions(parsed.data));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_questions_failed', err, 'Could not generate the questions.');
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/project/generate
+ * Creates the project and starts generation, HELD FOR REVIEW. 202: the plan is
+ * not ready when this returns, and the intern cannot see anything yet.
+ */
+router.post('/api/admin/internship/applications/:id/project/generate', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = generateProjectSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid project brief.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await startInternProjectBuild({ applicationId: String(req.params.id), ...parsed.data });
+    res.status(202).json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_generate_failed', err, 'Could not start the generation.');
+  }
+});
+
+/**
+ * GET /api/admin/internship/applications/:id/project/:projectId/build
+ * Poll while it generates, then read what the reviewer is being asked to
+ * approve: the plan, its blocking violations and its advisory ones, split here
+ * rather than in the browser.
+ */
+router.get('/api/admin/internship/applications/:id/project/:projectId/build', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internProjectBuild(String(req.params.projectId)));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_build_failed', err, 'Could not load the generated plan.');
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/project/assign
+ * The reviewer says yes: publish the reviewed plan, materialise the tasks, make
+ * it the intern's active project. `expected_sha256` makes "the plan I read is
+ * the plan that shipped" enforced rather than assumed.
+ */
+router.post('/api/admin/internship/applications/:id/project/assign', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = assignProjectSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await assignGeneratedProject({
+      projectId: parsed.data.project_id,
+      expectedSha: parsed.data.expected_sha256,
+    });
+    res.json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_assign_failed', err, 'Could not assign the project.');
+  }
+});
+
+/**
+ * The review surface, addressed by the PROJECT rather than by an application.
+ *
+ *     "We will never build projects like this, one story at a time. We do not create
+ *      manually. This is where I need to put my idea process in here. The same process
+ *      that already exists for creating projects."  (Ali, 2026-09-29)
+ *
+ * The conversation intake creates a project for a student who may have no internship
+ * application at all, so the four `/applications/:id/project/...` routes above cannot serve
+ * it. These two are the same handlers with the honest scope: `internProjectBuild` and
+ * `assignGeneratedProject` never read `:id` — they take a project id and always have — so
+ * the application in those paths was decorative, and pretending otherwise here would mean
+ * inventing an application to satisfy a URL.
+ *
+ * `requireSection('internship')` deliberately, matching the routes above rather than the
+ * `requireAdmin` of the conversation door. Narrowing to `requireAdmin` would take the
+ * review away from internship-scoped staff who have it today.
+ */
+router.get('/api/admin/internship/projects/:projectId/build', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internProjectBuild(String(req.params.projectId)));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_build_failed', err, 'Could not load the generated plan.');
+  }
+});
+
+router.post('/api/admin/internship/projects/:projectId/assign', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = assignProjectSchema.safeParse({ ...(req.body ?? {}), project_id: String(req.params.projectId) });
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await assignGeneratedProject({
+      projectId: parsed.data.project_id,
+      expectedSha: parsed.data.expected_sha256,
+    });
+    res.json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_assign_failed', err, 'Could not assign the project.');
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/assess
+ * Generate the AI assessment on demand (a reviewer clicks Generate), so the LLM
+ * cost is paid when a human is actually reviewing, not on every queue load.
+ */
+router.post('/api/admin/internship/applications/:id/assess', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const assessment = await assessApplicant(String(req.params.id));
+    res.json(assessment);
+  } catch (err: any) {
+    if (err?.message === 'application_not_found') {
+      res.status(404).json({ error: 'Application not found.' });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_assess_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not generate the assessment.' });
+  }
+});
+
+/** POST /api/admin/internship/applications/:id/decide */
+router.post('/api/admin/internship/applications/:id/decide', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = decideSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid decision.', issues: parsed.error.issues });
+    return;
+  }
+
+  // The reviewer's identity comes from the TOKEN, never the body. A `decided_by`
+  // field in the request would let one admin record a decision under another's
+  // name, in a table whose whole purpose is saying who decided.
+  const decidedBy = (req.admin as any)?.email
+    ?? (req.admin as any)?.sub
+    ?? 'unknown-admin';
+
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id));
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+
+    const result = await decide({
+      application,
+      decision: parsed.data.decision,
+      reasonCode: parsed.data.reason_code ?? '',
+      studentMessage: parsed.data.student_message,
+      reviewerNotes: parsed.data.reviewer_notes,
+      conditions: parsed.data.conditions,
+      decidedBy: String(decidedBy),
+    });
+
+    if (!result.ok) {
+      res.status(400).json({ error: result.error, field: result.field });
+      return;
+    }
+    res.json(result);
+  } catch (err: any) {
+    if (err instanceof InvalidInternshipTransitionError) {
+      res.status(409).json({
+        error: 'That decision is not available from this application\'s current status.',
+        error_class: err.error_class,
+      });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_decide_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, application_id: String(req.params.id) },
+    }));
+    res.status(500).json({ error: 'Could not record that decision.' });
+  }
+});
+
+const verifySchema = z.object({
+  accept: z.boolean(),
+  rejection_reason: z.string().max(2000).nullish(),
+}).strict();
+
+/** GET /api/admin/internship/applications/:id/documents */
+router.get('/api/admin/internship/applications/:id/documents', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const applicationId = String(req.params.id);
+    const [rows, outstanding] = await Promise.all([
+      documentsFor(applicationId),
+      outstandingRequirements(applicationId),
+    ]);
+    res.json({
+      ...outstanding,
+      documents: rows.map((d) => ({
+        id: d.id,
+        document_type: d.document_type,
+        kind: d.kind,
+        revision: d.revision,
+        status: d.status,
+        original_filename: d.original_filename,
+        mime_type: d.mime_type,
+        byte_size: d.byte_size,
+        // The hash, not the file. A reviewer comparing two revisions wants to know
+        // whether they differ, and the first 12 hex characters answer that on sight.
+        checksum_short: d.checksum_sha256 ? d.checksum_sha256.slice(0, 12) : null,
+        document_public_id: d.document_public_id,
+        verified_by: d.verified_by,
+        verified_at: d.verified_at ? new Date(d.verified_at).toISOString() : null,
+        rejection_reason: d.rejection_reason,
+        created_at: new Date(d.created_at).toISOString(),
+      })),
+    });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_admin_documents_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the documents.' });
+  }
+});
+
+/**
+ * GET /api/admin/internship/documents/:documentId/file
+ *
+ * A reviewer has to actually LOOK at a signed page to verify it, so this streams
+ * the stored file. `storage_key` comes from the database and is a UUID filename we
+ * generated, never anything the applicant supplied — and `path.basename` is applied
+ * anyway, so a corrupted row cannot become a path traversal.
+ */
+router.get('/api/admin/internship/documents/:documentId/file', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const InternshipDocument = (await import('../../models/InternshipDocument')).default;
+    const row = await InternshipDocument.findByPk(String(req.params.documentId));
+    if (!row?.storage_key) { res.status(404).json({ error: 'Document not found.' }); return; }
+
+    const safeName = path.basename(row.storage_key);
+    const full = path.join(SIGNED_DOC_DIR, safeName);
+    if (!fs.existsSync(full)) { res.status(404).json({ error: 'File is missing from storage.' }); return; }
+
+    res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    fs.createReadStream(full).pipe(res);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_admin_file_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not open the file.' });
+  }
+});
+
+/** POST /api/admin/internship/documents/:documentId/verify */
+router.post('/api/admin/internship/documents/:documentId/verify', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = verifySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues });
+    return;
+  }
+
+  const reviewerId = String((req.admin as any)?.email ?? (req.admin as any)?.sub ?? 'unknown-admin');
+
+  try {
+    const InternshipDocument = (await import('../../models/InternshipDocument')).default;
+    const doc = await InternshipDocument.findByPk(String(req.params.documentId));
+    if (!doc) { res.status(404).json({ error: 'Document not found.' }); return; }
+
+    const application = await InternshipApplication.findByPk(doc.application_id);
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+
+    const result = await verifyDocument({
+      application,
+      documentId: doc.id,
+      accept: parsed.data.accept,
+      reviewerId,
+      rejectionReason: parsed.data.rejection_reason,
+    });
+
+    if (!result.ok) { res.status(400).json({ error: result.error }); return; }
+    res.json(result);
+  } catch (err: any) {
+    if (err instanceof InvalidInternshipTransitionError) {
+      res.status(409).json({ error: "That is not available from this application’s current status." });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_verify_document_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not record that.' });
+  }
+});
+
+/** GET /api/admin/internship/applications/:id/onboarding */
+router.get('/api/admin/internship/applications/:id/onboarding', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id));
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+    const view = await activeInternView(application);
+    res.json({ state: application.state, ...view });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_admin_onboarding_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load onboarding.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/activate
+ *
+ * The ONLY route that puts someone in the internship cohort. Reviewer-gated, and
+ * it refuses with the outstanding blockers rather than a bare error, so the
+ * reviewer sees WHY — most often an unverified document or an inactive membership.
+ */
+router.post('/api/admin/internship/applications/:id/activate', requireSection('internship'), async (req: Request, res: Response) => {
+  const actorId = String((req.admin as any)?.email ?? (req.admin as any)?.sub ?? 'unknown-admin');
+  try {
+    const application = await InternshipApplication.findByPk(String(req.params.id));
+    if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
+
+    const result = await activate({ application, actor: 'reviewer', actorId });
+
+    if (!result.ok && result.reason === 'blocked') {
+      res.status(409).json({
+        error: 'Not ready to activate yet.',
+        blockers: result.blockers.map((b) => ({ key: b.key, label: b.label, waiting_on: b.waiting_on })),
+      });
+      return;
+    }
+    if (!result.ok) {
+      res.status(409).json({ error: `Cannot activate from ${result.state}.` });
+      return;
+    }
+
+    const checklist = await buildChecklist(application);
+    res.json({ ...result, checklist });
+  } catch (err: any) {
+    if (err instanceof InvalidInternshipTransitionError) {
+      res.status(409).json({ error: 'That is not available from this status.' });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_activate_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, application_id: String(req.params.id) },
+    }));
+    res.status(500).json({ error: 'Could not activate.' });
+  }
+});
+
+// ── Phase 7: tracking, KPIs, and existing-intern conversion ─────────────────
+
+/** GET /api/admin/internship/kpis */
+router.get('/api/admin/internship/kpis', requireSection('internship'), async (_req: Request, res: Response) => {
+  try {
+    res.json({ kpis: await internshipKpis() });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_kpis_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the KPIs.' });
+  }
+});
+
+/** GET /api/admin/internship/profile/:enrollmentId */
+router.get('/api/admin/internship/profile/:enrollmentId', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internshipProfileSection(String(req.params.enrollmentId)));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_profile_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the internship profile.' });
+  }
+});
+
+const internSchema = z.object({
+  email: z.string().email().max(255),
+  full_name: z.string().max(255).nullish(),
+  started_on: z.string().max(20).nullish(),
+  interview_grandfathered: z.boolean().optional(),
+  documents_already_verified: z.boolean().optional(),
+  notes: z.string().max(1000).nullish(),
+}).strict();
+
+const conversionPlanSchema = z.object({
+  interns: z.array(internSchema).min(1).max(200),
+}).strict();
+
+/**
+ * POST /api/admin/internship/conversion/plan
+ *
+ * THE DRY RUN. Writes nothing and sends nothing — `planConversion` contains no
+ * write statement at all, which is the guarantee rather than a flag it honours.
+ */
+router.post('/api/admin/internship/conversion/plan', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = conversionPlanSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid roster.', issues: parsed.error.issues });
+    return;
+  }
+  try {
+    res.json(await planConversion({ interns: parsed.data.interns }));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_conversion_plan_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not build the conversion plan.' });
+  }
+});
+
+/**
+ * POST /api/admin/internship/conversion/commit
+ *
+ * Re-plans from the submitted roster and commits THAT, rather than trusting a plan
+ * posted back by the browser. A plan is a read of the database at a moment in
+ * time; accepting one from a client would let a stale or edited plan decide who
+ * gets added to the cohort.
+ *
+ * `confirm: true` is required so a commit cannot be a mis-click on the dry run.
+ */
+const conversionCommitSchema = conversionPlanSchema.extend({
+  confirm: z.literal(true),
+}).strict();
+
+router.post('/api/admin/internship/conversion/commit', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = conversionCommitSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues });
+    return;
+  }
+  const actorId = String((req.admin as any)?.email ?? (req.admin as any)?.sub ?? 'unknown-admin');
+  try {
+    const plan = await planConversion({ interns: parsed.data.interns });
+    const report = await commitConversion({ plan, actorId });
+    res.json({ plan_summary: plan.summary, ...report });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_conversion_commit_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not commit the conversion.' });
+  }
+});
+
+export default router;

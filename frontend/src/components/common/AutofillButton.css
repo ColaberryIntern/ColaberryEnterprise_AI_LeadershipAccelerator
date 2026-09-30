@@ -1,0 +1,46 @@
+/* Signature auto-fill control — the app's standout "automate this" mark.
+   Warm cherry→amber gradient, twin-spark glyph, springy hover, spinning busy. */
+.af-btn {
+  --af-icon: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: calc(var(--af-icon) + 16px);
+  height: calc(var(--af-icon) + 16px);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FB2832 0%, #F0731C 55%, #E8920C 100%);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(251, 40, 50, .28), 0 1px 2px rgba(26, 26, 26, .12);
+  transition: transform .16s cubic-bezier(.22, 1, .36, 1), box-shadow .16s ease, filter .16s ease;
+  flex: none;
+}
+.af-btn.af-pill {
+  width: auto;
+  border-radius: 999px;
+  padding: 0 14px 0 12px;
+  height: calc(var(--af-icon) + 16px);
+}
+.af-btn .af-glyph { display: inline-flex; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .18)); }
+.af-btn .af-label { font-size: 12.5px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+
+.af-btn:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.06);
+  box-shadow: 0 6px 16px rgba(251, 40, 50, .38), 0 2px 5px rgba(232, 146, 12, .3);
+  filter: saturate(1.08);
+}
+.af-btn:active:not(:disabled) { transform: translateY(0) scale(.97); }
+.af-btn:focus-visible { outline: 2px solid #C20E1E; outline-offset: 2px; }
+.af-btn:disabled { opacity: .45; cursor: default; box-shadow: none; }
+
+/* Busy: the spark spins while it works. */
+.af-btn.busy { cursor: default; }
+.af-btn.busy .af-glyph { animation: af-spin .95s cubic-bezier(.5, .1, .5, .9) infinite; }
+@keyframes af-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .af-btn, .af-btn.busy .af-glyph { transition: none; animation: none; }
+}

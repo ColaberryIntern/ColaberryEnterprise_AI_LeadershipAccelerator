@@ -18,6 +18,8 @@ import {
   listOrphans, listProjectCapabilities, adoptOrphan,
   type OrphanAgent, type CapabilityRef, type AdoptInput,
 } from '../../services/agentOrphanApi';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 const DEFAULT_PROJECT_ID = 'fcce50ef-fe01-471d-a3ff-cd6948d092c2'; // Colaberry Enterprise AI Accelerator
 
@@ -119,26 +121,66 @@ const AgentOrphansPage: React.FC = () => {
     [filteredOrphans, rowStates],
   );
 
-  return (
-    <div className="container-fluid py-4" style={{ maxWidth: 1400 }}>
-      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <div>
-          <h1 className="h4 fw-semibold mb-1">Agent Orphan Adoption</h1>
-          <p className="text-muted small mb-0">
-            Agent files in the codebase that aren&apos;t mapped to a capability yet. Each row shows
-            the import-graph&apos;s best guesses; confirm or pick a different cap.
-          </p>
-        </div>
-        <button className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>
-          <i className="bi bi-arrow-clockwise me-1" />
-          {loading ? 'Loading…' : 'Reload'}
-        </button>
-      </div>
+  // Per-page trust signal (Basecamp todo 10027085963) derived from the live orphan scan.
+  const trust: TrustSignal = useMemo(() => {
+    const scanned = stats?.scanned ?? 0;
+    const open = orphans.length;
+    return {
+      level: 'live',
+      source: 'agent orphans',
+      updatedAt: new Date().toISOString(),
+      summary: `${open} unmapped agent${open === 1 ? '' : 's'} across ${scanned} scanned file${scanned === 1 ? '' : 's'}.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: 'live',
+          evidence: [
+            { label: 'Orphans', value: String(open) },
+            { label: 'Scanned', value: String(scanned) },
+          ],
+        },
+      ],
+    };
+  }, [stats, orphans]);
 
-      <div className="card border-0 shadow-sm mb-3">
-        <div className="card-body py-2 px-3">
+  return (
+    <>
+      <PageHeader
+        title="Agent Orphans"
+        icon="robot-2-line"
+        subtitle="Agent files in the codebase that aren't mapped to a capability yet. Each row shows the import-graph's best guesses; confirm or pick a different cap."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Agent Orphans' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-outline-secondary btn-sm" onClick={load} disabled={loading}>
+            <i className="ri-refresh-line me-1" aria-hidden="true" />
+            {loading ? 'Loading…' : 'Reload'}
+          </button>
+        }
+      >
+        {stats && (
+          <div className="row g-3">
+            <div className="col-6 col-lg-3">
+              <StatCard label="Open orphans" value={orphans.length} icon="robot-2-line" tone="warning" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Scanned" value={stats.scanned} icon="file-search-line" tone="info" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Skipped (D2 declared)" value={stats.declared} icon="checkbox-circle-line" tone="success" />
+            </div>
+            <div className="col-6 col-lg-3">
+              <StatCard label="Skipped (already mapped)" value={stats.alreadyMapped} icon="links-line" tone="neutral" />
+            </div>
+          </div>
+        )}
+      </PageHeader>
+
+      <div className="mb-3">
+        <SectionCard>
           <div className="row g-2 align-items-center">
-            <div className="col-md-5">
+            <div className="col-md-6">
               <label className="form-label small fw-semibold text-muted mb-1" htmlFor="orphan-project-id">Project ID</label>
               <div className="input-group input-group-sm">
                 <input
@@ -157,7 +199,7 @@ const AgentOrphansPage: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="col-md-4">
+            <div className="col-md-6">
               <label className="form-label small fw-semibold text-muted mb-1" htmlFor="orphan-filter">Filter</label>
               <input
                 id="orphan-filter"
@@ -167,17 +209,8 @@ const AgentOrphansPage: React.FC = () => {
                 placeholder="agent name, file path, or cap name…"
               />
             </div>
-            <div className="col-md-3 text-end">
-              {stats && (
-                <div className="small text-muted">
-                  <div>Scanned: <strong className="text-dark">{stats.scanned}</strong></div>
-                  <div>Skipped (D2 declared): <strong className="text-dark">{stats.declared}</strong></div>
-                  <div>Skipped (already mapped): <strong className="text-dark">{stats.alreadyMapped}</strong></div>
-                </div>
-              )}
-            </div>
           </div>
-        </div>
+        </SectionCard>
       </div>
 
       {error && (
@@ -197,15 +230,15 @@ const AgentOrphansPage: React.FC = () => {
           disabled={bulkRunning || eligibleForBulk === 0}
           title="Adopt every visible orphan whose top suggestion has score >= 3 (high confidence: 2+ matches or 1 match + name-stem boost)"
         >
-          <i className="bi bi-stars me-1" />
+          <i className="ri-sparkling-line me-1" aria-hidden="true" />
           {bulkRunning ? 'Adopting…' : `Confirm all high-confidence (${eligibleForBulk})`}
         </button>
       </div>
 
-      <div className="card border-0 shadow-sm">
+      <SectionCard padded={false}>
         <div className="table-responsive">
           <table className="table table-sm align-middle mb-0">
-            <thead className="bg-light">
+            <thead className="table-light">
               <tr>
                 <th style={{ width: '24%' }}>Agent</th>
                 <th style={{ width: '34%' }}>Top suggestion (D3 import graph)</th>
@@ -224,16 +257,16 @@ const AgentOrphansPage: React.FC = () => {
                 return (
                   <tr key={o.agentName} className={adopted ? 'table-success' : undefined}>
                     <td>
-                      <div className="fw-semibold" style={{ fontSize: 13 }}>{o.agentName}</div>
+                      <div className="fw-semibold small">{o.agentName}</div>
                       <div className="text-muted font-monospace" style={{ fontSize: 11 }}>{o.sourcePath}</div>
                     </td>
                     <td>
                       {top ? (
                         <>
-                          <div className="fw-semibold" style={{ fontSize: 13 }}>
+                          <div className="fw-semibold small">
                             {top.capName}
                             {top.nameStemBoost && (
-                              <span className="badge bg-info-subtle text-info ms-2" style={{ fontSize: 10 }}>name match</span>
+                              <span className="ms-2"><StatusBadge label="name match" tone="info" /></span>
                             )}
                           </div>
                           <div className="text-muted" style={{ fontSize: 11 }}>
@@ -242,28 +275,26 @@ const AgentOrphansPage: React.FC = () => {
                           </div>
                         </>
                       ) : (
-                        <span className="text-muted fst-italic" style={{ fontSize: 12 }}>No import-graph signal — pick a cap manually</span>
+                        <span className="text-muted fst-italic small">No import-graph signal — pick a cap manually</span>
                       )}
                     </td>
                     <td className="text-center">
                       {top ? (
-                        <span
-                          className={`badge ${top.score >= 3 ? 'bg-success' : top.score >= 2 ? 'bg-warning text-dark' : 'bg-secondary'}`}
-                          style={{ fontSize: 12 }}
-                        >
-                          {top.score}
-                        </span>
+                        <StatusBadge
+                          label={String(top.score)}
+                          tone={top.score >= 3 ? 'success' : top.score >= 2 ? 'warning' : 'neutral'}
+                        />
                       ) : <span className="text-muted">—</span>}
                     </td>
                     <td className="text-end">
                       {adopted ? (
                         <span className="text-success small">
-                          <i className="bi bi-check-circle-fill me-1" />
+                          <i className="ri-checkbox-circle-fill-line me-1" aria-hidden="true" />
                           {state?.message}: <strong>{state?.adoptedCapName}</strong>
                         </span>
                       ) : state?.status === 'error' ? (
                         <span className="text-danger small">
-                          <i className="bi bi-exclamation-circle me-1" />
+                          <i className="ri-error-warning-line me-1" aria-hidden="true" />
                           {state?.message}
                         </span>
                       ) : (
@@ -304,7 +335,7 @@ const AgentOrphansPage: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </SectionCard>
 
       {loading && (
         <div className="text-center py-4 text-muted">
@@ -312,7 +343,7 @@ const AgentOrphansPage: React.FC = () => {
           Scanning the agent universe… (one DB round-trip + filesystem walk)
         </div>
       )}
-    </div>
+    </>
   );
 };
 

@@ -74,7 +74,7 @@ Ali`;
   const r = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     subject: '[Preview] Gov Bids post v2 - new look with spacing + emojis',
     text, html,
     headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },

@@ -1,0 +1,151 @@
+import { Op } from 'sequelize';
+import { Ticket, TicketActionLink, WorkLedgerEvent } from '../../models';
+import { getEvidenceForTicket } from '../evidence/evidenceService';
+import { formatCentralDateTime } from '../centralDate';
+import { resolveActorDisplayName } from '../actorIdentity/resolveActorDisplayName';
+import { TICKET_LEDGER_HOOK_LIVE_SINCE } from './ticketCreationLedgerHook';
+
+// ProofDesk Milestone 2 (Proof & Ticket Experience), spec section 10.2/10.3. Generates
+// the ticket detail Story tab's 3-line summary: Outcome / Proof / Human action.
+//
+// HARD RULE (spec 10.3, non-negotiable): this function may only assert a claim like
+// "verified" / "deployed" / "sent" / "fixed" when a matching typed evidence or ledger
+// event record actually backs it. With zero linked evidence it must emit an honest,
+// neutral line for every one of the 3 output fields — never invent progress that isn't
+// recorded. Every test in summaryGeneratorService.test.ts that exercises a
+// hasEvidence:false branch asserts outcome/proof/humanAction ALL fail to match
+// /verified|deployed|sent|fixed/i — not just the field the branch happens to be
+// "about" — because a claim word leaking into any one of the 3 lines is the failure
+// mode this rule exists to prevent (a real regression caught in review: the
+// "success reported, no evidence" branch's humanAction used to contain the literal
+// word "verified" and the test only checked outcome, not humanAction — fixed by
+// rewording the string and asserting all 3 fields in that test).
+
+export interface TicketSummary {
+  outcome: string;
+  proof: string;
+  humanAction: string;
+  hasEvidence: boolean;
+}
+
+// Generated prose used to embed a raw, unlabeled UTC timestamp here
+// ("...at 2026-08-12 15:00.") via `.toISOString().slice(0, 16)` — Ali flagged this
+// live as unreadable and, worse, silently wrong-timezone for anyone reading it in
+// Central. Fixed at the source (not just in display formatting) by delegating to the
+// shared centralDate formatter, so every summary this function ever produces is
+// CST/CDT-labeled from the moment it's generated.
+const formatDate = formatCentralDateTime;
+
+function describeIntent(intent: string): string {
+  // work_ledger_events.intent values are dotted machine strings (e.g.
+  // 'ticket.dispatch', 'ticket.status_change') — render them readably without
+  // inventing detail the event doesn't carry.
+  return intent.replace(/^ticket\./, '').replace(/_/g, ' ');
+}
+
+function summarizeArtifactTypes(evidence: Array<{ artifact_type: string }>): string {
+  const counts = new Map<string, number>();
+  for (const e of evidence) counts.set(e.artifact_type, (counts.get(e.artifact_type) ?? 0) + 1);
+  return Array.from(counts.entries())
+    .map(([type, n]) => `${n} ${type}${n === 1 ? '' : 's'}`)
+    .join(', ');
+}
+
+/**
+ * Generate the Outcome/Proof/Human-action summary for a ticket from its linked
+ * work_ledger_events (via ticket_action_links, both primary and related roles) and
+ * evidence_artifacts (via evidence_links). Throws if the ticket does not exist.
+ */
+export async function generateTicketSummary(ticketId: string): Promise<TicketSummary> {
+  const ticket = await Ticket.findByPk(ticketId);
+  if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
+
+  const links = await TicketActionLink.findAll({ where: { ticket_id: ticketId } });
+  const eventIds = links.map((l) => l.event_id);
+  const events =
+    eventIds.length > 0
+      ? await WorkLedgerEvent.findAll({
+          where: { event_id: { [Op.in]: eventIds } },
+          order: [['occurred_at', 'DESC']],
+        })
+      : [];
+
+  const evidence = await getEvidenceForTicket(ticketId);
+  const hasEvidence = evidence.length > 0;
+
+  const successEvents = events.filter((e) => e.result === 'success');
+  const failureEvents = events.filter((e) => e.result === 'failure');
+
+  const proofLine = hasEvidence
+    ? `Proof: ${evidence.length} evidence item${evidence.length === 1 ? '' : 's'} recorded (${summarizeArtifactTypes(evidence)}).`
+    : 'Proof: No proof recorded yet for this ticket.';
+
+  if (successEvents.length > 0 && hasEvidence) {
+    const latest = successEvents[0];
+    const actorName = await resolveActorDisplayName(latest.actor_type, latest.actor_id);
+    return {
+      outcome: `Outcome: ${describeIntent(latest.intent)} completed successfully by ${actorName} at ${formatDate(latest.occurred_at)}.`,
+      proof: proofLine,
+      humanAction: 'Human action: review the linked evidence in the Visual Proof tab; no action required unless a discrepancy is found.',
+      hasEvidence,
+    };
+  }
+
+  if (successEvents.length > 0 && !hasEvidence) {
+    const latest = successEvents[0];
+    const actorName = await resolveActorDisplayName(latest.actor_type, latest.actor_id);
+    return {
+      outcome: `Outcome: ${describeIntent(latest.intent)} was reported successful by ${actorName} at ${formatDate(latest.occurred_at)}, but no evidence has been recorded to confirm it.`,
+      proof: proofLine,
+      humanAction: 'Human action: attach evidence (screenshot, log, or diff) to confirm this outcome.',
+      hasEvidence,
+    };
+  }
+
+  if (failureEvents.length > 0) {
+    const latest = failureEvents[0];
+    // Correction during implementation: the execution contract's DISCOVER notes
+    // claimed this branch embeds actor_id raw too, alongside the two success
+    // branches above. Re-checked against the real pre-existing code here and it does
+    // NOT — this branch never named an actor at all. Left unchanged rather than
+    // adding a new actor reference, since that would be a content change beyond this
+    // run's scope ("fix existing raw-ID leaks," not "add actor attribution to a
+    // message that never had it"). Logged here so the next person doesn't rediscover
+    // the same false claim from execution-contract.md.
+    return {
+      outcome: `Outcome: ${describeIntent(latest.intent)} failed at ${formatDate(latest.occurred_at)} (${latest.reason_code || 'no reason code recorded'}).`,
+      proof: proofLine,
+      humanAction: 'Human action: investigate the failure and re-dispatch or resolve manually.',
+      hasEvidence,
+    };
+  }
+
+  // Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz). Zero linked
+  // events reaches this branch for two structurally different reasons, and
+  // conflating them is exactly the dishonesty the fix exists to remove: (1) the
+  // ticket predates TICKET_LEDGER_HOOK_LIVE_SINCE — the day the Ticket model's
+  // afterCreate hook shipped — and its creation path may simply never have had a
+  // chance to be instrumented; that is not a gap worth investigating, it's an honest
+  // fact about when tracking became reliable. (2) the ticket was created AFTER the
+  // hook went live and still has zero events — with the hook covering every known
+  // Sequelize-model creation path (see ticketCreationLedgerHook.ts's own disclosed
+  // raw-SQL-bypass residual gap), this should be structurally unreachable going
+  // forward, so if it does happen it's a real gap worth flagging, not smoothing over.
+  if (ticket.created_at && new Date(ticket.created_at) < TICKET_LEDGER_HOOK_LIVE_SINCE) {
+    return {
+      outcome:
+        'Outcome: This ticket was created before activity tracking was reliable for this ticket — no ledger record exists from that period.',
+      proof: proofLine,
+      humanAction:
+        'Human action: no automated activity on record — this predates reliable ledger tracking, not necessarily a real gap.',
+      hasEvidence,
+    };
+  }
+
+  return {
+    outcome: 'Outcome: No ledger activity recorded yet for this ticket.',
+    proof: proofLine,
+    humanAction: 'Human action: no automated activity yet — assign or dispatch this ticket to begin work.',
+    hasEvidence,
+  };
+}

@@ -1,5 +1,11 @@
 import Cohort from './Cohort';
 import Enrollment from './Enrollment';
+import Podcast from './Podcast';
+import PodcastView from './PodcastView';
+import TimelineCardComment from './TimelineCardComment';
+import CardSurveyResponse from './CardSurveyResponse';
+import AssessmentAttempt from './AssessmentAttempt';
+import ReflectionEntry from './ReflectionEntry';
 import AdminUser from './AdminUser';
 import Lead from './Lead';
 import AutomationLog from './AutomationLog';
@@ -35,12 +41,14 @@ import UserCurriculumProfile from './UserCurriculumProfile';
 import SessionGate from './SessionGate';
 import MentorConversation from './MentorConversation';
 import SessionChatMessage from './SessionChatMessage';
+import SessionPulse from './SessionPulse';
 import SkillMastery from './SkillMastery';
 import PromptTemplate from './PromptTemplate';
 import SectionConfig from './SectionConfig';
 import ArtifactDefinition from './ArtifactDefinition';
 import VariableStore from './VariableStore';
 import GitHubConnection from './GitHubConnection';
+import StudentGithubActivity from './StudentGithubActivity';
 import SkillDefinition from './SkillDefinition';
 import ProgramBlueprint from './ProgramBlueprint';
 import MiniSection from './MiniSection';
@@ -87,6 +95,8 @@ import AiAgentActivityLog from './AiAgentActivityLog';
 import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
+import AiEvent from './AiEvent';
+import DeadLetterJob from './DeadLetterJob';
 import DatasetRegistry from './DatasetRegistry';
 import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
@@ -110,6 +120,18 @@ import CallbackRequest from './CallbackRequest';
 import DocumentDeliveryLog from './DocumentDeliveryLog';
 import Ticket from './Ticket';
 import TicketActivity from './TicketActivity';
+import WorkContext from './WorkContext';
+import AgentRun from './AgentRun';
+import WorkLedgerEvent from './WorkLedgerEvent';
+import TicketActionLink from './TicketActionLink';
+import EvidenceArtifact from './EvidenceArtifact';
+import EvidenceLink from './EvidenceLink';
+import DecisionRecord from './DecisionRecord';
+import TicketWorkUnit from './TicketWorkUnit';
+import WorkUnitDependency from './WorkUnitDependency';
+import ResourceLease from './ResourceLease';
+import ApprovalRequest from './ApprovalRequest';
+import OutcomeMeasurement from './OutcomeMeasurement';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -145,12 +167,16 @@ import CampaignDeployment from './CampaignDeployment';
 import UnsubscribeEvent from './UnsubscribeEvent';
 import Project from './Project';
 import ProjectArtifact from './ProjectArtifact';
+import ShowcaseArtifact from './ShowcaseArtifact';
+import Artifact from './Artifact';
+import BuildLogDraft from './BuildLogDraft';
 import ProposedAgentAction from './ProposedAgentAction';
 import AgentWriteAudit from './AgentWriteAudit';
 import StrategicInitiative from './StrategicInitiative';
 import RequirementsGenerationJob from './RequirementsGenerationJob';
 import MayaConversationOutcome from './MayaConversationOutcome';
 import MentorIntervention from './MentorIntervention';
+import MentorReviewItem from './MentorReviewItem';
 import SectionExecutionLog from './SectionExecutionLog';
 import HealingPlan from './HealingPlan';
 import ArtifactRelationship from './ArtifactRelationship';
@@ -190,11 +216,16 @@ import LeadSource from './LeadSource';
 import EntryPoint from './EntryPoint';
 import FormDefinition from './FormDefinition';
 import RoutingRule from './RoutingRule';
+import RoutingRuleExecution from './RoutingRuleExecution';
 import RawLeadPayload from './RawLeadPayload';
+import ScholarshipInterview from './ScholarshipInterview';
 
 // Anthropic Intelligence Layer (L1 + L2)
 import AnthropicContentRegistry from './AnthropicContentRegistry';
 import AnthropicChangeEvent from './AnthropicChangeEvent';
+
+// Enrollment Tracking
+import EnrollmentLead from './EnrollmentLead';
 
 // Inbox Chief of Staff models
 import InboxEmail from './InboxEmail';
@@ -206,6 +237,20 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+import CoraReplyLog from './CoraReplyLog';
+import InboxOpportunityScore from './InboxOpportunityScore';
+import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
+import InboxSurfacePreference from './InboxSurfacePreference';
+import InboxDeletedEmail from './InboxDeletedEmail';
+
+// Inbox Intel — Case Resolution Engine models
+import InboxCase from './InboxCase';
+import InboxCaseItem from './InboxCaseItem';
+import InboxIdentityAlias from './InboxIdentityAlias';
+import InboxCommitment from './InboxCommitment';
+import InboxCaseQuestion from './InboxCaseQuestion';
+import InboxCaseAction from './InboxCaseAction';
+import InboxCaseEvent from './InboxCaseEvent';
 
 // --- Universal Lead Ingestion associations ---
 LeadSource.hasMany(EntryPoint, { foreignKey: 'source_id', as: 'entryPoints', onDelete: 'CASCADE' });
@@ -220,6 +265,8 @@ LeadSource.hasMany(Lead, { foreignKey: 'source_id', as: 'leads' });
 Lead.belongsTo(EntryPoint, { foreignKey: 'entry_point_id', as: 'entryPoint', onDelete: 'SET NULL' });
 EntryPoint.hasMany(Lead, { foreignKey: 'entry_point_id', as: 'leads' });
 
+ScholarshipInterview.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead', onDelete: 'CASCADE' });
+Lead.hasMany(ScholarshipInterview, { foreignKey: 'lead_id', as: 'scholarshipInterviews' });
 RawLeadPayload.belongsTo(Lead, { foreignKey: 'resulting_lead_id', as: 'lead', onDelete: 'SET NULL' });
 Lead.hasMany(RawLeadPayload, { foreignKey: 'resulting_lead_id', as: 'rawPayloads' });
 
@@ -230,6 +277,25 @@ InboxEmail.hasMany(InboxReplyDraft, { foreignKey: 'email_id', as: 'drafts' });
 InboxReplyDraft.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
 InboxEmail.hasMany(InboxAuditLog, { foreignKey: 'email_id', as: 'auditLogs' });
 InboxAuditLog.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+// Missed Opportunities Report — false-negative safety net over hidden emails
+InboxEmail.hasMany(InboxOpportunityScore, { foreignKey: 'email_id', as: 'opportunityScores' });
+InboxOpportunityScore.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+InboxEmail.hasMany(InboxFalseNegativeFeedback, { foreignKey: 'email_id', as: 'falseNegativeFeedback' });
+InboxFalseNegativeFeedback.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+
+// --- Inbox Intel — Case Resolution Engine associations ---
+InboxCase.hasMany(InboxCaseItem, { foreignKey: 'case_id', as: 'items' });
+InboxCaseItem.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCaseQuestion, { foreignKey: 'case_id', as: 'questions' });
+InboxCaseQuestion.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCaseAction, { foreignKey: 'case_id', as: 'actions' });
+InboxCaseAction.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCaseItem.hasMany(InboxCaseAction, { foreignKey: 'item_id', as: 'actions' });
+InboxCaseAction.belongsTo(InboxCaseItem, { foreignKey: 'item_id', as: 'item' });
+InboxCase.hasMany(InboxCaseEvent, { foreignKey: 'case_id', as: 'events' });
+InboxCaseEvent.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCommitment, { foreignKey: 'case_id', as: 'commitments' });
+InboxCommitment.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
 
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
@@ -253,6 +319,218 @@ import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
+import ArchitectEvaluation from './ArchitectEvaluation';
+import WeekItemVisibility from './WeekItemVisibility';
+import InterviewRubric from './InterviewRubric';
+import InterviewSession from './InterviewSession';
+import CurriculumCourseLink from './CurriculumCourseLink';
+import StudentTaskList from './StudentTaskList';
+import StudentTask from './StudentTask';
+import StudentPointsEvent from './StudentPointsEvent';
+import FriendReferral from './FriendReferral';
+import SponsorPortalAuditLog from './SponsorPortalAuditLog';
+import OpenHouseEvent from './OpenHouseEvent';
+import OnboardingProfile from './OnboardingProfile';
+import Subscription from './Subscription';
+import AccountCredit from './AccountCredit';
+import Refund from './Refund';
+
+// Knowledge Operations System — KB Unification
+import CoraKbCourse from './CoraKbCourse';
+import CoraKbCohort from './CoraKbCohort';
+import ResponsiblePerson from './ResponsiblePerson';
+import CoraKbEntry from './CoraKbEntry';
+
+// Epic 4 — Community + Gamification
+import CommunityMember from './CommunityMember';
+import CommunityPost from './CommunityPost';
+import CommunityComment from './CommunityComment';
+import CommunityLike from './CommunityLike';
+import CommunityPostReport from './CommunityPostReport';
+import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
+import CommunityPointsEvent from './CommunityPointsEvent';
+import CommunityNotification from './CommunityNotification';
+import CommunityDigestLog from './CommunityDigestLog';
+import CommunityEvent from './CommunityEvent';
+
+// Colaberry Commons — Community Rooms layer (rooms/bookings/rsvp/messages/outbox)
+import CommunityRoom from './CommunityRoom';
+import RoomMembership from './RoomMembership';
+import Friendship from './Friendship'; // portal Contacts rail friend graph
+import RoomBooking from './RoomBooking';
+import RoomBookingAttendee from './RoomBookingAttendee';
+import RoomMessage from './RoomMessage';
+import RoomResource from './RoomResource';
+import RoomOutboxEvent from './RoomOutboxEvent';
+import RoomReport from './RoomReport';
+import RoomPresence from './RoomPresence';
+import ContributionEvent from './ContributionEvent';
+
+// One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
+import Sponsor from './Sponsor';
+import SponsorSeat from './SponsorSeat';
+// Free-trial Organization / Manager layer (dual account + team roster).
+import Organization from './Organization';
+import OrgMember from './OrgMember';
+import OrgCohort from './OrgCohort';
+import Challenge from './Challenge';
+import ChallengeParticipant from './ChallengeParticipant';
+import LeaderboardScore from './LeaderboardScore';
+// Timeline Engine (Classroom rebuild) — universal card + progression models.
+import TimelineCard from './TimelineCard';
+import TimelineCardProgress from './TimelineCardProgress';
+import TimelineEvent from './TimelineEvent';
+import PointsConfig from './PointsConfig';
+import CompetencyDomain from './CompetencyDomain';
+import StudentCompetency from './StudentCompetency';
+import EvidenceRecord from './EvidenceRecord';
+import XpEvent from './XpEvent';
+import BuilderLevel from './BuilderLevel';
+import StudentLevel from './StudentLevel';
+import StudentMilestone from './StudentMilestone';         // Milestone ladder (2026-09-16)
+import StudentCertification from './StudentCertification'; // Milestone ladder (2026-09-16)
+import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
+import ComponentAnalytics from './ComponentAnalytics';
+
+// CAPE — Colaberry Adaptive Path Engine (Phase 0-1: skill ontology + evidence ledger)
+import ArchitectureSkillDefinition from './ArchitectureSkillDefinition';
+import ArchitectureSkillEvidenceBandWeights from './ArchitectureSkillEvidenceBandWeights';
+import StudentSkillEvidence from './StudentSkillEvidence';
+import StudentArchitectureSkill from './StudentArchitectureSkill';
+// CAPE Phase 2: resume/LinkedIn placement + adaptive diagnostic
+import ResumeSkillClaim from './ResumeSkillClaim';
+import DiagnosticAttempt from './DiagnosticAttempt';
+// CAPE Phase 3: curriculum-to-skill mapping
+import CurriculumSkillMap from './CurriculumSkillMap';
+import ArchitectureSkillPrerequisite from './ArchitectureSkillPrerequisite';
+// CAPE Phase 5: Today Plan learner feedback controls
+import TodayPlanFeedback from './TodayPlanFeedback';
+// CAPE Phase 6: Feed Control governance board (rerank caps, pacing knobs, lifecycle mixes)
+import CapeGovernancePolicy from './CapeGovernancePolicy';
+import CapeLifecycleModePolicy from './CapeLifecycleModePolicy';
+// --- Explorer Growth OS (docs/EXPLORER_GROWTH_OS_PLAN.md EPIC 1) ---
+import ExplorerJourneyProfile from './ExplorerJourneyProfile';
+import ExplorerJourneyDecision from './ExplorerJourneyDecision';
+import ExplorerScoreSnapshot from './ExplorerScoreSnapshot';
+import ExplorerExperimentAssignment from './ExplorerExperimentAssignment';
+import ExplorerContentAsset from './ExplorerContentAsset';
+
+// --- Marketing Operations: tracked links and click capture ---
+import TrackedLink from './TrackedLink';
+import LinkClick from './LinkClick';
+
+// --- Marketing Operations: Content OS ---
+import ContentItem from './ContentItem';
+import ChannelAccount from './ChannelAccount';
+import ConnectorCredential from './ConnectorCredential';
+import ContentVariant from './ContentVariant';
+import MediaAsset from './MediaAsset';
+import ContentItemMedia from './ContentItemMedia';
+import ContentTemplate from './ContentTemplate';
+import ContentApprovalRequest from './ContentApprovalRequest';
+import ContentApprovalEvent from './ContentApprovalEvent';
+import BrandGovernanceRule from './BrandGovernanceRule';
+
+// --- Marketing Operations: publishing queue ---
+import PublishingJob from './PublishingJob';
+import ExternalPublication from './ExternalPublication';
+import PlatformDeliveryEvent from './PlatformDeliveryEvent';
+
+// --- Multi-tenant ecosystem foundation ---
+import Tenant from './Tenant';
+import Brand from './Brand';
+import BrandDomain from './BrandDomain';
+import JourneyProgram from './JourneyProgram';
+import JourneyPath from './JourneyPath';
+import OfferFamily from './OfferFamily';
+import BrandOfferPolicy from './BrandOfferPolicy';
+import SenderProfile from './SenderProfile';
+import PlatformIdentity from './PlatformIdentity';
+import PlatformIdentityLink from './PlatformIdentityLink';
+import TenantMembership from './TenantMembership';
+import LeadTenantContext from './LeadTenantContext';
+import CommunicationPreference from './CommunicationPreference';
+import TenantAccessAudit from './TenantAccessAudit';
+// Refactored AI Delivery OS (Gate 1). Imported here so the models register with
+// Sequelize when the index loads — the schema/model parity test walks
+// sequelize.models, so an unregistered model is an invisible one.
+import DeliveryEngagement from './DeliveryEngagement';
+import DeliveryProject from './DeliveryProject';
+// AI Project Factory — imported here so the models self-register at boot, not only when a
+// consumer first imports them.
+import ContractTrack from './ContractTrack';
+import ContractRequirement from './ContractRequirement';
+import ContractProcessDocument from './ContractProcessDocument';
+import ContractProcessReview from './ContractProcessReview';
+import CapstoneReviewApproval from './CapstoneReviewApproval';
+import CohortMembership from './CohortMembership';
+import InternshipApplication from './InternshipApplication';
+import InternshipStatusEvent from './InternshipStatusEvent';
+import InternshipAdministrativeIntake from './InternshipAdministrativeIntake';
+import InternshipCardDismissal from './InternshipCardDismissal';
+import InternshipInterviewSession from './InternshipInterviewSession';
+import InternshipInterviewResponse from './InternshipInterviewResponse';
+import InternshipDecision from './InternshipDecision';
+import InternshipDocument from './InternshipDocument';
+import InternshipRequirementAcknowledgement from './InternshipRequirementAcknowledgement';
+import CareerMentorScope from './CareerMentorScope';
+import DeliveryProjectSourceLink from './DeliveryProjectSourceLink';
+import DeliveryProjectMember from './DeliveryProjectMember';
+import DeliveryClientSigninToken from './DeliveryClientSigninToken';
+import DeliveryCapacityOverride from './DeliveryCapacityOverride';
+import DeliveryStory from './DeliveryStory';
+import DeliveryRelease from './DeliveryRelease';
+import DeliverySignalCandidate from './DeliverySignalCandidate';
+import DeliveryExperienceClaim from './DeliveryExperienceClaim';
+import DeliveryContract from './DeliveryContract';
+import DeliveryDecision from './DeliveryDecision';
+import DeliveryEvent from './DeliveryEvent';
+import BuilderAuthorityProfile from './BuilderAuthorityProfile';
+import DeliveryDiscovery from './DeliveryDiscovery';
+import DeliveryOpportunity from './DeliveryOpportunity';
+import DeliveryAgentDefinition from './DeliveryAgentDefinition';
+import DeliveryAgentTrustRequirement from './DeliveryAgentTrustRequirement';
+import DeliveryEvidence from './DeliveryEvidence';
+import DeliveryClientAcceptance from './DeliveryClientAcceptance';
+import DeliveryChangeRequest from './DeliveryChangeRequest';
+// Memory Graph. Imported here so the models register with Sequelize when the index is
+// loaded, not only when an intelligence service happens to import them directly. The
+// schema/model parity test walks sequelize.models, so an unregistered model is an
+// invisible one -- which is exactly how it caught these two.
+import GraphNode from './GraphNode';
+import GraphEdge from './GraphEdge';
+import GraphEvent from './GraphEvent';
+
+// --- Case Study OS ---
+import CaseStudy from './CaseStudy';
+import CaseStudyRepoCollection from './CaseStudyRepoCollection';
+import CaseStudyRepository from './CaseStudyRepository';
+import CaseStudySnapshot from './CaseStudySnapshot';
+import CaseStudyMetric from './CaseStudyMetric';
+import CaseStudyEvidence from './CaseStudyEvidence';
+import CaseStudyArtifact from './CaseStudyArtifact';
+import CaseStudyPublication from './CaseStudyPublication';
+import CaseStudySyncRun from './CaseStudySyncRun';
+import CaseStudyCollection from './CaseStudyCollection';
+// Story Studio assets. Schema lives in db/ensureCaseStudyStoryAssets.ts, a peer
+// of ensureCaseStudySchema.ts rather than an extension of it — see that file's
+// header for why the ten-table core was left byte-untouched.
+import CaseStudyStoryline from './CaseStudyStoryline';
+import CaseStudyAiDraft from './CaseStudyAiDraft';
+import CaseStudyQuote from './CaseStudyQuote';
+import CaseStudyChart from './CaseStudyChart';
+// Cert Prep (Claude Certified Architect readiness) — see db/ensureCertPrepSchema.ts
+import CertTrack from './CertTrack';
+import CertDomain from './CertDomain';
+import CertQuestion from './CertQuestion';
+import CertQuestionRevision from './CertQuestionRevision';
+import CertSession from './CertSession';
+import ProjectUnderstandingRecord from './ProjectUnderstandingRecord';
+import ProjectDiscoveryCallRequest from './ProjectDiscoveryCallRequest';
+import StoryTruthEnrichmentRecord from './StoryTruthEnrichmentRecord';
+import CertResponse from './CertResponse';
+import CertReadinessSnapshot from './CertReadinessSnapshot';
+import CertEvidenceMapping from './CertEvidenceMapping';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -484,6 +762,10 @@ VariableStore.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_id', as: 'ar
 Enrollment.hasOne(GitHubConnection, { foreignKey: 'enrollment_id', as: 'githubConnection' });
 GitHubConnection.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
+// StudentGithubActivity associations
+Enrollment.hasOne(StudentGithubActivity, { foreignKey: 'enrollment_id', as: 'githubActivity' });
+StudentGithubActivity.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
 // SessionGate -> ArtifactDefinition (bidirectional)
 SessionGate.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 ArtifactDefinition.hasMany(SessionGate, { foreignKey: 'artifact_definition_id', as: 'gates' });
@@ -641,6 +923,70 @@ TicketActivity.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 Ticket.hasMany(Ticket, { foreignKey: 'parent_ticket_id', as: 'subTasks' });
 Ticket.belongsTo(Ticket, { foreignKey: 'parent_ticket_id', as: 'parentTicket' });
 
+// --- ProofDesk Work Ledger associations (Milestone 1 - Foundation, shadow mode) ---
+Ticket.hasMany(WorkContext, { foreignKey: 'ticket_id', as: 'workContexts' });
+WorkContext.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(AgentRun, { foreignKey: 'ticket_id', as: 'agentRuns' });
+AgentRun.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(AgentRun, { foreignKey: 'work_context_id', as: 'agentRuns' });
+AgentRun.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+
+Ticket.hasMany(WorkLedgerEvent, { foreignKey: 'ticket_id', as: 'workLedgerEvents' });
+WorkLedgerEvent.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+AgentRun.hasMany(WorkLedgerEvent, { foreignKey: 'run_id', as: 'events' });
+WorkLedgerEvent.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
+Ticket.hasMany(TicketActionLink, { foreignKey: 'ticket_id', as: 'actionLinks' });
+TicketActionLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(TicketActionLink, { foreignKey: 'event_id', as: 'ticketLinks' });
+TicketActionLink.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- ProofDesk Evidence associations (Milestone 2 - Proof & Ticket Experience) ---
+Ticket.hasMany(EvidenceArtifact, { foreignKey: 'ticket_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(EvidenceArtifact, { foreignKey: 'source_event_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(WorkLedgerEvent, { foreignKey: 'source_event_id', as: 'sourceEvent' });
+
+EvidenceArtifact.hasMany(EvidenceLink, { foreignKey: 'evidence_id', as: 'links' });
+EvidenceLink.belongsTo(EvidenceArtifact, { foreignKey: 'evidence_id', as: 'evidence' });
+Ticket.hasMany(EvidenceLink, { foreignKey: 'ticket_id', as: 'evidenceLinks' });
+EvidenceLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(DecisionRecord, { foreignKey: 'ticket_id', as: 'decisionRecords' });
+DecisionRecord.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+// ProofDesk Work Graph (Milestone 3 - Multi-Agent Work Graph) associations.
+Ticket.hasMany(TicketWorkUnit, { foreignKey: 'ticket_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(TicketWorkUnit, { foreignKey: 'work_context_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+AgentRun.hasMany(TicketWorkUnit, { foreignKey: 'assigned_run_id', as: 'assignedWorkUnits' });
+TicketWorkUnit.belongsTo(AgentRun, { foreignKey: 'assigned_run_id', as: 'assignedRun' });
+
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'work_unit_id', as: 'dependencies' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'depends_on_work_unit_id', as: 'dependents' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'depends_on_work_unit_id', as: 'dependsOnWorkUnit' });
+
+TicketWorkUnit.hasMany(ResourceLease, { foreignKey: 'work_unit_id', as: 'leases' });
+ResourceLease.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+AgentRun.hasMany(ResourceLease, { foreignKey: 'run_id', as: 'leases' });
+ResourceLease.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
+// ProofDesk Governance (Milestone 4 - shadow mode) associations.
+Ticket.hasMany(ApprovalRequest, { foreignKey: 'ticket_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+TicketWorkUnit.hasMany(ApprovalRequest, { foreignKey: 'work_unit_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+AgentRun.hasMany(ApprovalRequest, { foreignKey: 'run_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+WorkLedgerEvent.hasOne(ApprovalRequest, { foreignKey: 'event_id', as: 'approvalRequest' });
+ApprovalRequest.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+// ProofDesk Milestone 5 (Outcomes & Learning)
+Ticket.hasMany(OutcomeMeasurement, { foreignKey: 'ticket_id', as: 'outcomeMeasurements' });
+OutcomeMeasurement.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -674,6 +1020,17 @@ Project.belongsTo(ProgramBlueprint, { foreignKey: 'program_id', as: 'program' })
 
 Project.hasMany(ProjectArtifact, { foreignKey: 'project_id', as: 'projectArtifacts', onDelete: 'CASCADE' });
 ProjectArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+Project.hasMany(ShowcaseArtifact, { foreignKey: 'project_id', as: 'showcaseArtifacts', onDelete: 'CASCADE' });
+ShowcaseArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+Project.hasMany(Artifact, { foreignKey: 'project_id', as: 'artifacts', onDelete: 'CASCADE' });
+Artifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+Project.hasMany(BuildLogDraft, { foreignKey: 'project_id', as: 'buildLogDrafts', onDelete: 'CASCADE' });
+BuildLogDraft.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Artifact.hasOne(BuildLogDraft, { foreignKey: 'source_artifact_id', as: 'buildLogDraft' });
+BuildLogDraft.belongsTo(Artifact, { foreignKey: 'source_artifact_id', as: 'sourceArtifact' });
 
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
@@ -835,6 +1192,31 @@ CampaignDeployment.belongsTo(Campaign, { foreignKey: 'campaign_id', as: 'campaig
 CampaignDeployment.belongsTo(LandingPage, { foreignKey: 'landing_page_id', as: 'landingPage' });
 LandingPage.hasMany(CampaignDeployment, { foreignKey: 'landing_page_id', as: 'deployments' });
 
+// --- Student Task List / Task associations ---
+Project.hasMany(StudentTaskList, { foreignKey: 'project_id', as: 'taskLists', onDelete: 'CASCADE' });
+StudentTaskList.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+StudentTaskList.hasMany(StudentTask, { foreignKey: 'task_list_id', as: 'tasks', onDelete: 'CASCADE' });
+StudentTask.belongsTo(StudentTaskList, { foreignKey: 'task_list_id', as: 'taskList' });
+StudentTask.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'studentTasks' });
+StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
+Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
+StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(FriendReferral, { foreignKey: 'enrollment_id', as: 'friendReferrals', onDelete: 'CASCADE' });
+FriendReferral.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// Self-serve subscriptions (student billing).
+Enrollment.hasMany(Subscription, { foreignKey: 'enrollment_id', as: 'subscriptions', onDelete: 'CASCADE' });
+Subscription.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+// Account credits (Open House $50 deposits → applied to next payment).
+Enrollment.hasMany(AccountCredit, { foreignKey: 'enrollment_id', as: 'accountCredits', onDelete: 'CASCADE' });
+AccountCredit.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+// Refunds (admin-issued PaySimple refunds/voids).
+Enrollment.hasMany(Refund, { foreignKey: 'enrollment_id', as: 'refunds' });
+Refund.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(OnboardingProfile, { foreignKey: 'enrollment_id', as: 'onboardingProfile', onDelete: 'CASCADE' });
+OnboardingProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
 // Capability Agent Map associations
 Capability.hasMany(CapabilityAgentMap, { foreignKey: 'capability_id', as: 'agentMaps' });
 CapabilityAgentMap.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capability' });
@@ -853,8 +1235,61 @@ UIElementFeedback.belongsTo(Capability, { foreignKey: 'capability_id', as: 'capa
 Campaign.belongsTo(Capability, { foreignKey: 'capability_id', as: 'businessProcess' });
 Capability.hasMany(Campaign, { foreignKey: 'capability_id', as: 'campaigns' });
 
+// --- One Class, Many Doors: Sponsorship + Challenge/Leaderboard associations ---
+// Door B: a Sponsor (employer) buys seats; the contact is a Lead.
+Sponsor.belongsTo(Lead, { foreignKey: 'contact_lead_id', as: 'contactLead', onDelete: 'SET NULL' });
+Lead.hasMany(Sponsor, { foreignKey: 'contact_lead_id', as: 'sponsorships' });
+
+Sponsor.hasMany(SponsorSeat, { foreignKey: 'sponsor_id', as: 'seats', onDelete: 'CASCADE' });
+SponsorSeat.belongsTo(Sponsor, { foreignKey: 'sponsor_id', as: 'sponsor' });
+
+// A redeemed seat links to the Enrollment that claimed it (reassignable).
+SponsorSeat.belongsTo(Enrollment, { foreignKey: 'assigned_enrollment_id', as: 'assignedEnrollment', onDelete: 'SET NULL' });
+Enrollment.hasMany(SponsorSeat, { foreignKey: 'assigned_enrollment_id', as: 'sponsorSeats' });
+
+// A Challenge may be scoped to a Sponsor (company leaderboard) or global (null).
+Challenge.belongsTo(Sponsor, { foreignKey: 'sponsor_id', as: 'sponsor', onDelete: 'CASCADE' });
+Sponsor.hasMany(Challenge, { foreignKey: 'sponsor_id', as: 'challenges' });
+
+// Participants: one Enrollment in one Challenge.
+Challenge.hasMany(ChallengeParticipant, { foreignKey: 'challenge_id', as: 'participants', onDelete: 'CASCADE' });
+ChallengeParticipant.belongsTo(Challenge, { foreignKey: 'challenge_id', as: 'challenge' });
+
+Enrollment.hasMany(ChallengeParticipant, { foreignKey: 'enrollment_id', as: 'challengeParticipations' });
+ChallengeParticipant.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// One score row per participant (drives the leaderboard).
+ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participant_id', as: 'score', onDelete: 'CASCADE' });
+LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
+
+// --- Free-trial Organization / Manager associations ---
+// An Organization owns a roster of OrgMembers; each member links (nullable) to
+// the teammate's free student enrollment so metrics roll up over the real ledgers.
+Organization.hasMany(OrgMember, { foreignKey: 'org_id', as: 'members', onDelete: 'CASCADE' });
+OrgMember.belongsTo(Organization, { foreignKey: 'org_id', as: 'organization' });
+
+Organization.belongsTo(Enrollment, { foreignKey: 'owner_enrollment_id', as: 'owner', onDelete: 'CASCADE' });
+Enrollment.hasMany(Organization, { foreignKey: 'owner_enrollment_id', as: 'ownedOrganizations' });
+
+OrgMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment', onDelete: 'SET NULL' });
+Enrollment.hasMany(OrgMember, { foreignKey: 'enrollment_id', as: 'orgMemberships' });
+
+// An Organization is linked to Cohorts many-to-many through org_cohorts. Before
+// this there was NO org<->cohort relationship in the schema at all -- see the
+// header of models/OrgCohort.ts for why this is a join table and not a column.
+// Note this records the COMPANY-level relationship only; per-person placement
+// stays on enrollments.cohort_id.
+Organization.hasMany(OrgCohort, { foreignKey: 'org_id', as: 'cohortLinks', onDelete: 'CASCADE' });
+OrgCohort.belongsTo(Organization, { foreignKey: 'org_id', as: 'organization' });
+Cohort.hasMany(OrgCohort, { foreignKey: 'cohort_id', as: 'orgLinks', onDelete: 'CASCADE' });
+OrgCohort.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
 export {
-  Cohort, Enrollment, AdminUser, Lead, AutomationLog,
+  // Cert Prep (Claude Certified Architect readiness)
+  CertTrack, CertDomain, CertQuestion, CertQuestionRevision,
+  CertSession, CertResponse, CertReadinessSnapshot, CertEvidenceMapping,
+  ProjectUnderstandingRecord, ProjectDiscoveryCallRequest, StoryTruthEnrichmentRecord,
+  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
@@ -868,6 +1303,7 @@ export {
   CurriculumModule, CurriculumLesson, LessonInstance,
   UserCurriculumProfile, SessionGate, MentorConversation,
   SessionChatMessage,
+  SessionPulse,
   SkillMastery,
   PromptTemplate,
   SectionConfig,
@@ -885,6 +1321,8 @@ export {
   ContentGenerationLog,
   AiAgent,
   AiAgentActivityLog,
+  AiEvent,
+  DeadLetterJob,
   CampaignHealth,
   CampaignError,
   AiSystemEvent,
@@ -914,6 +1352,23 @@ export {
   DocumentDeliveryLog,
   Ticket,
   TicketActivity,
+  WorkContext,
+  AgentRun,
+  WorkLedgerEvent,
+  TicketActionLink,
+  EvidenceArtifact,
+  EvidenceLink,
+  DecisionRecord,
+  TicketWorkUnit,
+  ExplorerJourneyProfile,
+  ExplorerJourneyDecision,
+  ExplorerScoreSnapshot,
+  ExplorerExperimentAssignment,
+  ExplorerContentAsset,
+  WorkUnitDependency,
+  ResourceLease,
+  ApprovalRequest,
+  OutcomeMeasurement,
   StudentNavigationEvent,
   Alert,
   AlertEvent,
@@ -949,6 +1404,9 @@ export {
   UnsubscribeEvent,
   Project,
   ProjectArtifact,
+  ShowcaseArtifact,
+  Artifact,
+  BuildLogDraft,
   ProposedAgentAction,
   AgentWriteAudit,
   StrategicInitiative,
@@ -991,11 +1449,25 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  CoraReplyLog,
+  InboxOpportunityScore,
+  InboxFalseNegativeFeedback,
+  InboxSurfacePreference,
+  InboxDeletedEmail,
+  InboxCase,
+  InboxCaseItem,
+  InboxIdentityAlias,
+  InboxCommitment,
+  InboxCaseQuestion,
+  InboxCaseAction,
+  InboxCaseEvent,
   LeadSource,
   EntryPoint,
   FormDefinition,
   RoutingRule,
+  RoutingRuleExecution,
   RawLeadPayload,
+  ScholarshipInterview,
   AiCompany,
   CompanyGoal,
   DepartmentKpi,
@@ -1041,7 +1513,180 @@ export {
   AnthropicChangeEvent,
   // AI Systems Architect Accelerator
   ProjectDna,
+  StudentGithubActivity,
+  ArchitectEvaluation,
+  WeekItemVisibility,
+  InterviewRubric,
+  InterviewSession,
+  // One Class, Many Doors — Sponsorship + Challenge/Leaderboard
+  Sponsor,
+  SponsorSeat,
+  Challenge,
+  ChallengeParticipant,
+  LeaderboardScore,
+  // Free-trial Organization / Manager layer
+  Organization,
+  OrgMember,
+  OrgCohort,
+  // Curriculum + enrollment + Skilljar sync (from main)
+  CurriculumCourseLink,
+  EnrollmentLead,
+  StudentTaskList,
+  StudentTask,
+  // Knowledge Operations System — KB Unification
+  CoraKbCourse,
+  CoraKbCohort,
+  ResponsiblePerson,
+  CoraKbEntry,
+  // Epic 4 — Community + Gamification
+  CommunityMember,
+  CommunityPost,
+  CommunityComment,
+  CommunityLike,
+  CommunityPostReport,
+  CommunityLeaderboardEntry,
+  CommunityPointsEvent,
+  CommunityNotification,
+  CommunityDigestLog,
+  CommunityEvent,
+  // Colaberry Commons — Community Rooms layer
+  CommunityRoom,
+  RoomMembership,
+  RoomBooking,
+  RoomBookingAttendee,
+  RoomMessage,
+  RoomResource,
+  RoomOutboxEvent,
+  RoomReport,
+  RoomPresence,
+  ContributionEvent,
+  StudentPointsEvent,
+  FriendReferral,
+  SponsorPortalAuditLog,
+  OpenHouseEvent,
+  OnboardingProfile,
+  Subscription,
+  AccountCredit,
+  Refund,
+  // Timeline Engine (Classroom rebuild)
+  TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
+  CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
+  // Milestone ladder (docs/POINTS_LADDER_DECISIONS.md)
+  StudentMilestone, StudentCertification,
+  // Experience Builder (Phase 1)
+  ComponentVersion,
+  ComponentAnalytics,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 0-1)
+  ArchitectureSkillDefinition,
+  ArchitectureSkillEvidenceBandWeights,
+  StudentSkillEvidence,
+  StudentArchitectureSkill,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 2: resume placement + diagnostic)
+  ResumeSkillClaim,
+  DiagnosticAttempt,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 3: curriculum-to-skill mapping)
+  CurriculumSkillMap,
+  ArchitectureSkillPrerequisite,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 5: Today Plan learner feedback)
+  TodayPlanFeedback,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 6: Feed Control governance board)
+  CapeGovernancePolicy,
+  CapeLifecycleModePolicy,
+  // Marketing Operations: tracked links and click capture
+  TrackedLink,
+  LinkClick,
+  // Marketing Operations: Content OS
+  ContentItem,
+  ChannelAccount,
+  ConnectorCredential,
+  ContentVariant,
+  MediaAsset,
+  ContentItemMedia,
+  ContentTemplate,
+  ContentApprovalRequest,
+  ContentApprovalEvent,
+  BrandGovernanceRule,
+  // Marketing Operations: publishing queue
+  PublishingJob,
+  ExternalPublication,
+  PlatformDeliveryEvent,
+  // Multi-tenant ecosystem foundation
+  Tenant,
+  Brand,
+  BrandDomain,
+  JourneyProgram,
+  JourneyPath,
+  OfferFamily,
+  BrandOfferPolicy,
+  // Growth Journey OS models: moved to ./growthJourneyModels (T503) and re-exported below.
+  SenderProfile,
+  PlatformIdentity,
+  PlatformIdentityLink,
+  TenantMembership,
+  LeadTenantContext,
+  CommunicationPreference,
+  TenantAccessAudit,
+  // Case Study OS
+  CaseStudy,
+  CaseStudyRepoCollection,
+  CaseStudyRepository,
+  CaseStudySnapshot,
+  CaseStudyMetric,
+  CaseStudyEvidence,
+  CaseStudyArtifact,
+  CaseStudyPublication,
+  CaseStudySyncRun,
+  CaseStudyCollection,
+  CaseStudyStoryline,
+  CaseStudyAiDraft,
+  CaseStudyQuote,
+  CaseStudyChart,
+  // Refactored AI Delivery OS (Gate 1)
+  DeliveryEngagement,
+  DeliveryProject,
+  DeliveryProjectSourceLink,
+  ContractTrack,
+  ContractRequirement,
+  ContractProcessDocument,
+  ContractProcessReview,
+
+  // Living Career Portfolio (Gate 10 — versioned publication)
+  CapstoneReviewApproval,
+  // AI Internship — lifecycle, audit trail, and the secondary cohort
+  // membership that activation grants without touching enrollments.cohort_id.
+  CohortMembership, InternshipApplication, InternshipStatusEvent,
+  InternshipAdministrativeIntake, InternshipCardDismissal,
+  InternshipInterviewSession, InternshipInterviewResponse,
+  InternshipDecision,
+  InternshipDocument,
+  InternshipRequirementAcknowledgement,
+  CareerMentorScope,
+  DeliveryProjectMember,
+  DeliveryClientSigninToken,
+  DeliveryCapacityOverride,
+  DeliveryStory,
+  DeliveryRelease,
+  DeliverySignalCandidate,
+  DeliveryExperienceClaim,
+  DeliveryContract,
+  DeliveryDecision,
+  DeliveryEvent,
+  BuilderAuthorityProfile,
+  DeliveryDiscovery,
+  DeliveryOpportunity,
+  DeliveryAgentDefinition,
+  DeliveryAgentTrustRequirement,
+  DeliveryEvidence,
+  DeliveryClientAcceptance,
+  DeliveryChangeRequest,
+  GraphNode,
+  GraphEdge,
+  GraphEvent,
 };
+
+// --- Enrollment Lead associations ---
+EnrollmentLead.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasOne(EnrollmentLead, { foreignKey: 'enrollment_id', as: 'enrollmentLead' });
 
 // --- AI Company Layer associations ---
 AiCompany.hasMany(CompanyGoal, { foreignKey: 'company_id', as: 'goals' });
@@ -1067,3 +1712,483 @@ SkoolTask.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' }
 
 SkoolResponse.hasMany(SkoolEngagement, { foreignKey: 'response_id', as: 'engagements' });
 SkoolEngagement.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
+
+// --- Classroom Week View associations ---
+Enrollment.hasMany(WeekItemVisibility, { foreignKey: 'enrollment_id', as: 'weekItemVisibilities' });
+WeekItemVisibility.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(InterviewSession, { foreignKey: 'enrollment_id', as: 'interviewSessions' });
+InterviewSession.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+InterviewRubric.hasMany(InterviewSession, { foreignKey: 'rubric_id', as: 'sessions' });
+InterviewSession.belongsTo(InterviewRubric, { foreignKey: 'rubric_id', as: 'rubric' });
+
+// --- Knowledge Operations System associations ---
+CoraKbCourse.hasMany(CoraKbCohort, { foreignKey: 'course_id', as: 'cohorts' });
+CoraKbCohort.belongsTo(CoraKbCourse, { foreignKey: 'course_id', as: 'course' });
+
+CoraKbCourse.hasMany(CoraKbEntry, { foreignKey: 'course_id', as: 'kbEntries' });
+CoraKbEntry.belongsTo(CoraKbCourse, { foreignKey: 'course_id', as: 'course' });
+
+ResponsiblePerson.hasMany(CoraKbEntry, { foreignKey: 'primary_person_id', as: 'primaryEntries' });
+CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 'primaryPerson' });
+
+// --- Community + Gamification associations (Epic 4) ---
+Enrollment.hasOne(CommunityMember, { foreignKey: 'enrollment_id', as: 'communityMember' });
+// Friendships — two FKs to Enrollment (requester + addressee), aliased both ways.
+// The service queries Friendship directly (no includes); these register the graph.
+Enrollment.hasMany(Friendship, { foreignKey: 'requester_id', as: 'sentFriendRequests' });
+Enrollment.hasMany(Friendship, { foreignKey: 'addressee_id', as: 'receivedFriendRequests' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'requester_id', as: 'requester' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'addressee_id', as: 'addressee' });
+CommunityMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Cohort.hasMany(CommunityPost, { foreignKey: 'cohort_id', as: 'communityPosts' });
+CommunityPost.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+CommunityMember.hasMany(CommunityPost, { foreignKey: 'member_id', as: 'posts' });
+CommunityPost.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityPost.hasMany(CommunityComment, { foreignKey: 'post_id', as: 'comments' });
+CommunityComment.belongsTo(CommunityPost, { foreignKey: 'post_id', as: 'post' });
+
+CommunityMember.hasMany(CommunityComment, { foreignKey: 'member_id', as: 'comments' });
+CommunityComment.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityComment.hasMany(CommunityComment, { foreignKey: 'parent_comment_id', as: 'replies' });
+CommunityComment.belongsTo(CommunityComment, { foreignKey: 'parent_comment_id', as: 'parentComment' });
+
+CommunityMember.hasMany(CommunityLike, { foreignKey: 'member_id', as: 'likes' });
+CommunityLike.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityPost.hasMany(CommunityPostReport, { foreignKey: 'post_id', as: 'reports', onDelete: 'CASCADE' });
+CommunityPostReport.belongsTo(CommunityPost, { foreignKey: 'post_id', as: 'post' });
+
+CommunityMember.hasMany(CommunityPostReport, { foreignKey: 'reporter_member_id', as: 'postReports' });
+CommunityPostReport.belongsTo(CommunityMember, { foreignKey: 'reporter_member_id', as: 'reporter' });
+
+CommunityMember.hasMany(CommunityLeaderboardEntry, { foreignKey: 'member_id', as: 'leaderboardEntries' });
+CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityMember.hasMany(CommunityPointsEvent, { foreignKey: 'member_id', as: 'pointsEvents' });
+CommunityPointsEvent.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityMember.hasMany(CommunityNotification, { foreignKey: 'member_id', as: 'notifications' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'actor_member_id', as: 'actor' });
+
+CommunityMember.hasMany(CommunityDigestLog, { foreignKey: 'member_id', as: 'digestLogs' });
+CommunityDigestLog.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
+CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+// --- Colaberry Commons — Community Rooms associations ---
+Cohort.hasMany(CommunityRoom, { foreignKey: 'linked_cohort_id', as: 'communityRooms' });
+CommunityRoom.belongsTo(Cohort, { foreignKey: 'linked_cohort_id', as: 'linkedCohort' });
+
+LiveSession.hasOne(CommunityRoom, { foreignKey: 'linked_live_session_id', as: 'communityRoom' });
+CommunityRoom.belongsTo(LiveSession, { foreignKey: 'linked_live_session_id', as: 'liveSession' });
+
+CommunityRoom.hasMany(RoomMembership, { foreignKey: 'room_id', as: 'memberships', onDelete: 'CASCADE' });
+RoomMembership.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomBooking, { foreignKey: 'room_id', as: 'bookings', onDelete: 'CASCADE' });
+RoomBooking.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+RoomBooking.hasMany(RoomBookingAttendee, { foreignKey: 'booking_id', as: 'attendees', onDelete: 'CASCADE' });
+RoomBookingAttendee.belongsTo(RoomBooking, { foreignKey: 'booking_id', as: 'booking' });
+
+CommunityRoom.hasMany(RoomMessage, { foreignKey: 'room_id', as: 'messages', onDelete: 'CASCADE' });
+RoomMessage.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomResource, { foreignKey: 'room_id', as: 'resources', onDelete: 'CASCADE' });
+RoomResource.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+// --- Timeline Engine associations (Classroom rebuild) ---
+TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });
+TimelineCardProgress.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });
+Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'timelineProgress' });
+TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
+TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- CAPE (Colaberry Adaptive Path Engine) associations — Phase 0-1 ---
+// Additive only: parallel to, and independent of, the XpEvent/EvidenceRecord/
+// StudentCompetency promotion graph above. See ensureCapeSchema.ts.
+Enrollment.hasMany(StudentSkillEvidence, { foreignKey: 'enrollment_id', as: 'capeSkillEvidence' });
+StudentSkillEvidence.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(StudentArchitectureSkill, { foreignKey: 'enrollment_id', as: 'capeArchitectureSkills' });
+StudentArchitectureSkill.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 2 (resume placement + adaptive diagnostic) ---
+// Additive only; parallel to the verified ledger above. See
+// ensureCapePlacementSchema.ts. Neither table is ever joined against
+// student_skill_evidence/student_architecture_skill in application code —
+// capePlacementService.ts reads both independently and writes only
+// placement_score.
+Enrollment.hasMany(ResumeSkillClaim, { foreignKey: 'enrollment_id', as: 'resumeSkillClaims' });
+ResumeSkillClaim.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(DiagnosticAttempt, { foreignKey: 'enrollment_id', as: 'diagnosticAttempts' });
+DiagnosticAttempt.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 3 (curriculum-to-skill mapping) ---
+// A card-scoped curriculum_skill_maps row references the TimelineCard it overrides.
+// Type-scoped and week-scoped rows have card_id:null and are not FK-joined to any
+// card — they resolve by (type_slug) / (week_number) directly, not via association.
+TimelineCard.hasMany(CurriculumSkillMap, { foreignKey: 'card_id', as: 'skillMapOverrides' });
+CurriculumSkillMap.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });
+
+Enrollment.hasMany(TodayPlanFeedback, { foreignKey: 'enrollment_id', as: 'todayPlanFeedback' });
+TodayPlanFeedback.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- Explorer Growth OS associations (EPIC 1) ---
+// Additive only. Nothing outside the explorerGrowth services reads these tables.
+// hasOne (not hasMany) for the profile: exactly one per learner, enforced by the
+// table's PK being enrollment_id itself.
+Enrollment.hasOne(ExplorerJourneyProfile, { foreignKey: 'enrollment_id', as: 'explorerProfile' });
+ExplorerJourneyProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+// The identity bridge: a profile points at the CRM lead it resolved to. Nullable —
+// an unresolved learner is a reportable condition, not an error.
+ExplorerJourneyProfile.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasOne(ExplorerJourneyProfile, { foreignKey: 'lead_id', as: 'explorerProfile' });
+
+Enrollment.hasMany(ExplorerJourneyDecision, { foreignKey: 'enrollment_id', as: 'explorerDecisions' });
+ExplorerJourneyDecision.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(ExplorerScoreSnapshot, { foreignKey: 'enrollment_id', as: 'explorerScoreSnapshots' });
+ExplorerScoreSnapshot.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(ExplorerExperimentAssignment, { foreignKey: 'enrollment_id', as: 'explorerExperimentAssignments' });
+ExplorerExperimentAssignment.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// ExplorerContentAsset intentionally has NO association: it is an INDEX over other
+// systems (network_videos, blog_posts, cohorts, ...) keyed by (source_system,
+// source_id), not a FK-joined entity. Associating it would imply a referential
+// integrity this table deliberately does not have.
+
+// --- Multi-tenant ecosystem associations ---
+// Only the tenancy spine and the lead-context bridge are associated. The tenancy
+// columns added to visitor_sessions, page_events, campaigns and organizations are
+// deliberately NOT associated: those tables are scoped by explicit where-clauses in
+// the service layer, and adding eager-loadable associations would invite an unscoped
+// `include` to leak a foreign tenant's rows through a route that looked innocent.
+Tenant.hasMany(Brand, { foreignKey: 'tenant_id', as: 'brands', onDelete: 'CASCADE' });
+Brand.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+
+Tenant.hasMany(BrandDomain, { foreignKey: 'tenant_id', as: 'domains', onDelete: 'CASCADE' });
+Brand.hasMany(BrandDomain, { foreignKey: 'brand_id', as: 'domains', onDelete: 'CASCADE' });
+BrandDomain.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+BrandDomain.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+
+Brand.hasMany(SenderProfile, { foreignKey: 'brand_id', as: 'senderProfiles', onDelete: 'CASCADE' });
+SenderProfile.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+SenderProfile.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+SenderProfile.belongsTo(BrandDomain, { foreignKey: 'sending_domain_id', as: 'sendingDomain' });
+SenderProfile.belongsTo(BrandDomain, { foreignKey: 'tracking_domain_id', as: 'trackingDomain' });
+
+PlatformIdentity.hasMany(PlatformIdentityLink, {
+  foreignKey: 'platform_identity_id',
+  as: 'links',
+  onDelete: 'CASCADE',
+});
+PlatformIdentityLink.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
+
+PlatformIdentity.hasMany(TenantMembership, {
+  foreignKey: 'platform_identity_id',
+  as: 'memberships',
+  onDelete: 'CASCADE',
+});
+TenantMembership.belongsTo(PlatformIdentity, { foreignKey: 'platform_identity_id', as: 'identity' });
+TenantMembership.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+TenantMembership.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+// The canonical lead keeps its identity; the context rows carry the brand relationships.
+Lead.hasMany(LeadTenantContext, { foreignKey: 'lead_id', as: 'tenantContexts', onDelete: 'CASCADE' });
+LeadTenantContext.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+LeadTenantContext.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+LeadTenantContext.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+Lead.hasMany(CommunicationPreference, {
+  foreignKey: 'lead_id',
+  as: 'communicationPreferences',
+  onDelete: 'CASCADE',
+});
+CommunicationPreference.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+CommunicationPreference.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+CommunicationPreference.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+// --- Marketing Operations: tracked links and clicks ---
+// The click -> link edge IS a real foreign key, so it gets a real association.
+//
+// An earlier draft declared none and justified it as "the high-write tracking-table choice
+// page_events and visitor_sessions already make". That was checked and is false:
+// `PageEvent.ts:65,70` declares real `references` to visitor_sessions and visitors, and
+// `seedQrTracking.ts:32` gives `qr_scan_events.qr_code_id` a `REFERENCES qr_codes(id)` —
+// and qr_scan_events is the exact analogue of link_clicks. The convention is narrower than
+// that draft assumed: the edge to the IMMEDIATE PARENT is constrained and associated, and
+// only CROSS-DOMAIN references are left bare.
+TrackedLink.hasMany(LinkClick, { foreignKey: 'tracked_link_id', as: 'clicks' });
+LinkClick.belongsTo(TrackedLink, { foreignKey: 'tracked_link_id', as: 'trackedLink' });
+
+// --- Marketing Operations: Content OS ---
+// Every edge below is backed by a real FK in ensureContentOsSchema.ts, so every one gets an
+// association. The rule is applied per EDGE: constrain and associate the immediate parent,
+// leave cross-domain references bare and unassociated.
+ChannelAccount.hasMany(ConnectorCredential, { foreignKey: 'channel_account_id', as: 'credentials' });
+ConnectorCredential.belongsTo(ChannelAccount, { foreignKey: 'channel_account_id', as: 'account' });
+
+ContentItem.hasMany(ContentVariant, { foreignKey: 'content_item_id', as: 'variants' });
+ContentVariant.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+
+// A join table has TWO immediate parents, so both edges are constrained and associated.
+ContentItem.hasMany(ContentItemMedia, { foreignKey: 'content_item_id', as: 'mediaLinks' });
+ContentItemMedia.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+MediaAsset.hasMany(ContentItemMedia, { foreignKey: 'media_asset_id', as: 'contentLinks' });
+ContentItemMedia.belongsTo(MediaAsset, { foreignKey: 'media_asset_id', as: 'mediaAsset' });
+
+ContentItem.hasMany(ContentApprovalRequest, { foreignKey: 'content_item_id', as: 'approvalRequests' });
+ContentApprovalRequest.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+
+ContentApprovalRequest.hasMany(ContentApprovalEvent, { foreignKey: 'approval_request_id', as: 'events' });
+ContentApprovalEvent.belongsTo(ContentApprovalRequest, { foreignKey: 'approval_request_id', as: 'approvalRequest' });
+
+// Self-referential: a derivative (crop, resize) points at the original.
+MediaAsset.belongsTo(MediaAsset, { foreignKey: 'derived_from_id', as: 'derivedFrom' });
+MediaAsset.hasMany(MediaAsset, { foreignKey: 'derived_from_id', as: 'derivatives' });
+
+// --- Marketing Operations: publishing queue ---
+// Every edge is backed by a real FK in ensurePublishingSchema.ts.
+ContentItem.hasMany(PublishingJob, { foreignKey: 'content_item_id', as: 'publishingJobs' });
+PublishingJob.belongsTo(ContentItem, { foreignKey: 'content_item_id', as: 'contentItem' });
+ContentVariant.hasMany(PublishingJob, { foreignKey: 'content_variant_id', as: 'publishingJobs' });
+PublishingJob.belongsTo(ContentVariant, { foreignKey: 'content_variant_id', as: 'variant' });
+
+PublishingJob.hasMany(ExternalPublication, { foreignKey: 'publishing_job_id', as: 'publications' });
+ExternalPublication.belongsTo(PublishingJob, { foreignKey: 'publishing_job_id', as: 'job' });
+
+PublishingJob.hasMany(PlatformDeliveryEvent, { foreignKey: 'publishing_job_id', as: 'deliveryEvents' });
+PlatformDeliveryEvent.belongsTo(PublishingJob, { foreignKey: 'publishing_job_id', as: 'job' });
+
+// Deliberately NOT associated in the publishing queue: `publishing_jobs.channel_account_id`
+// (marketing_channel_accounts does not exist yet - T003 is gated on ESC-001), plus tenant_id
+// and brand_id. All bare UUIDs with no FK.
+
+// Deliberately NOT associated in the Content OS: `content_items.campaign_id` /
+// `tenant_id` / `brand_id` / `template_id`, `content_variants.channel_account_id` /
+// `tracked_link_id`, and `content_approval_events.content_item_id` (denormalized for
+// item-scoped audit reads). All bare UUIDs with no FK, all cross-domain.
+
+// Deliberately NOT associated: `tracked_links.campaign_id` / `brand_id` / `tenant_id` and
+// the same denormalized columns on `link_clicks`. Those are bare UUIDs with no FK, exactly
+// as ensureMultiTenantSchema leaves the tenancy columns it adds to tracking tables and as
+// `PageEvent.ts:72` does for `lead_id` ("No `references` here on purpose"). Associating them
+// would assert an integrity the schema does not have. Reporting joins them explicitly.
+
+// --- Case Study OS associations ---
+// Both directions with a named `as` so an eager `include` reads the same way from
+// either end. Only INTRA-Case-Study edges are declared: `project_id`, `tenant_id`,
+// `brand_id`, `github_connection_id`, `evidence_record_id` and
+// `portfolio_artifact_id` are bare UUID columns with no foreign key (see the
+// ensureCaseStudySchema.ts header for why), so associating them to Project,
+// Tenant, Brand, GitHubConnection, EvidenceRecord or PortfolioArtifact would
+// assert a referential integrity the schema deliberately does not have.
+CaseStudy.hasMany(CaseStudyRepoCollection, { foreignKey: 'case_study_id', as: 'repoCollections' });
+CaseStudyRepoCollection.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+// Repositories hang off the COLLECTION, not off the Case Study directly: the
+// collection is what bounds them (max 20) and what dedupes them case-insensitively.
+CaseStudyRepoCollection.hasMany(CaseStudyRepository, { foreignKey: 'collection_id', as: 'repositories' });
+CaseStudyRepository.belongsTo(CaseStudyRepoCollection, { foreignKey: 'collection_id', as: 'collection' });
+
+CaseStudy.hasMany(CaseStudySnapshot, { foreignKey: 'case_study_id', as: 'snapshots' });
+CaseStudySnapshot.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyMetric, { foreignKey: 'case_study_id', as: 'metrics' });
+CaseStudyMetric.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyEvidence, { foreignKey: 'case_study_id', as: 'evidence' });
+CaseStudyEvidence.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyArtifact, { foreignKey: 'case_study_id', as: 'artifacts' });
+CaseStudyArtifact.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudyPublication, { foreignKey: 'case_study_id', as: 'publications' });
+CaseStudyPublication.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+CaseStudy.hasMany(CaseStudySyncRun, { foreignKey: 'case_study_id', as: 'syncRuns' });
+CaseStudySyncRun.belongsTo(CaseStudy, { foreignKey: 'case_study_id', as: 'caseStudy' });
+
+// CaseStudyCollection intentionally has NO association. Despite the name it is a
+// saved editorial FILTER DEFINITION, not a membership list: which Case Studies it
+// contains is evaluated from `filter_config` at read time. An association would
+// imply a foreign key that does not exist and invite an `include` that returns
+// nothing while looking correct.
+// --- Refactored AI Delivery OS (Gate 1) associations ---------------------------------
+//
+// TENANCY BY PARENT. Only DeliveryEngagement and DeliveryProject belong to a Tenant/Brand
+// directly; every child below reaches its tenant by joining back up to DeliveryProject.
+// See docs/architecture/refactored-delivery-os/DATA_OWNERSHIP_MATRIX.md for why the
+// children deliberately carry no tenant_id of their own.
+DeliveryEngagement.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+DeliveryEngagement.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+DeliveryEngagement.belongsTo(Organization, { foreignKey: 'organization_id', as: 'organization' });
+
+DeliveryEngagement.hasMany(DeliveryProject, {
+  foreignKey: 'engagement_id',
+  as: 'projects',
+  onDelete: 'CASCADE',
+});
+DeliveryProject.belongsTo(DeliveryEngagement, { foreignKey: 'engagement_id', as: 'engagement' });
+DeliveryProject.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+DeliveryProject.belongsTo(Brand, { foreignKey: 'brand_id', as: 'brand' });
+
+DeliveryProject.hasMany(DeliveryProjectMember, {
+  foreignKey: 'delivery_project_id',
+  as: 'members',
+  onDelete: 'CASCADE',
+});
+DeliveryProjectMember.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+DeliveryProjectMember.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
+
+DeliveryProject.hasMany(DeliveryContract, {
+  foreignKey: 'delivery_project_id',
+  as: 'contracts',
+  onDelete: 'CASCADE',
+});
+DeliveryContract.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+DeliveryProject.hasMany(DeliveryDecision, {
+  foreignKey: 'delivery_project_id',
+  as: 'decisions',
+  onDelete: 'CASCADE',
+});
+DeliveryDecision.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+// The student-project bridge. `Project` itself gains NOTHING here: no column, no
+// required association, no behaviour change. A student project that is never linked is
+// bit-for-bit what it was before this feature existed (master plan §Gate 1).
+DeliveryProject.hasMany(DeliveryProjectSourceLink, {
+  foreignKey: 'delivery_project_id',
+  as: 'sourceLinks',
+  onDelete: 'CASCADE',
+});
+DeliveryProjectSourceLink.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'deliveryProject',
+});
+DeliveryProjectSourceLink.belongsTo(Project, {
+  foreignKey: 'student_project_id',
+  as: 'studentProject',
+});
+
+// DeliveryEvent has NO associations, deliberately. It is append-only and must outlive
+// what it describes — archiving a project or removing an identity cannot cascade away
+// the record of what happened. Same discipline as TenantAccessAudit.
+
+// Gate 9's Quality OS ledger. Scoped to the project so evidence is reachable, but
+// deliberately NOT cascaded from story or release: `delivery_stories` and
+// `delivery_releases` are not tables yet (Gate 7 shipped stories as pure logic, releases
+// belong to Gate 14), so those columns stay plain UUIDs — the same convention
+// `delivery_execution_runs.story_id` already set.
+DeliveryProject.hasMany(DeliveryEvidence, {
+  foreignKey: 'delivery_project_id',
+  as: 'evidence',
+  onDelete: 'CASCADE',
+});
+DeliveryEvidence.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+// Gate 10's Client Review Room. Acceptances are NOT cascaded away with a project: master
+// plan §24 makes durability the point of the table, and "the project was archived" is not
+// a reason a client's signed acceptance should stop existing. Same reasoning as
+// DeliveryEvent. Change requests cascade, because an unbuilt request against a deleted
+// project is not a record of anything.
+DeliveryProject.hasMany(DeliveryClientAcceptance, {
+  foreignKey: 'delivery_project_id',
+  as: 'clientAcceptances',
+});
+DeliveryClientAcceptance.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+DeliveryProject.hasMany(DeliveryChangeRequest, {
+  foreignKey: 'delivery_project_id',
+  as: 'changeRequests',
+  onDelete: 'CASCADE',
+});
+DeliveryChangeRequest.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+// A builder's authority travels with the identity, not with a project — so this is a
+// one-to-one on PlatformIdentity rather than anything project-scoped.
+PlatformIdentity.hasOne(BuilderAuthorityProfile, {
+  foreignKey: 'platform_identity_id',
+  as: 'builderAuthority',
+});
+BuilderAuthorityProfile.belongsTo(PlatformIdentity, {
+  foreignKey: 'platform_identity_id',
+  as: 'identity',
+});
+
+// Discovery and the Opportunity Map are strict children of DeliveryProject — no
+// tenant_id of their own, scoped by join. An opportunity optionally cites the discovery
+// it came from, so the map can be read back against the understanding it was built on.
+DeliveryProject.hasMany(DeliveryDiscovery, {
+  foreignKey: 'delivery_project_id',
+  as: 'discoveries',
+  onDelete: 'CASCADE',
+});
+DeliveryDiscovery.belongsTo(DeliveryProject, { foreignKey: 'delivery_project_id', as: 'project' });
+
+DeliveryProject.hasMany(DeliveryOpportunity, {
+  foreignKey: 'delivery_project_id',
+  as: 'opportunities',
+  onDelete: 'CASCADE',
+});
+DeliveryOpportunity.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+DeliveryOpportunity.belongsTo(DeliveryDiscovery, {
+  foreignKey: 'discovery_id',
+  as: 'discovery',
+});
+
+// Agent definitions are strict children of DeliveryProject; their six INPACT trust
+// requirements are children of the definition. Cascading from the definition is correct
+// here: a trust requirement has no meaning without the agent it describes, unlike an
+// audit row, which must outlive its subject.
+DeliveryProject.hasMany(DeliveryAgentDefinition, {
+  foreignKey: 'delivery_project_id',
+  as: 'agentDefinitions',
+  onDelete: 'CASCADE',
+});
+DeliveryAgentDefinition.belongsTo(DeliveryProject, {
+  foreignKey: 'delivery_project_id',
+  as: 'project',
+});
+
+DeliveryAgentDefinition.hasMany(DeliveryAgentTrustRequirement, {
+  foreignKey: 'agent_definition_id',
+  as: 'trustRequirements',
+  onDelete: 'CASCADE',
+});
+DeliveryAgentTrustRequirement.belongsTo(DeliveryAgentDefinition, {
+  foreignKey: 'agent_definition_id',
+  as: 'agent',
+});
+
+// Growth Journey OS models (T503): the sibling module this index was split into.
+export * from './growthJourneyModels';

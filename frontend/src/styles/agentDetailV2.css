@@ -1,0 +1,427 @@
+/* Agent Detail V2 (2026-09-11) — Ali: "match this format" for Reese's page,
+ * pasting a full mockup as the spec. Ported closely from that mockup, with
+ * every class prefixed `adv2-` (the mockup's bare names like `.card`,
+ * `.tool`, `.pill` would collide with Bootstrap and the existing
+ * admin-shell.css elsewhere in this portal). Tokens are scoped as CSS
+ * custom properties on `.adv2-page`, not `:root` — this look applies only
+ * inside this page, not portal-wide. See AgentDetailPage.tsx for the
+ * scoping wrapper and AgentOverviewTab.tsx for where this replaced the
+ * Bootstrap/SectionCard-based Overview content.
+ *
+ * Type scale, Checkpoint J (2026-09-11) — Ali, looking at the live page:
+ * "The text is so hard to see... I have to be at 125% to see normal
+ * size." The mockup's own type scale (14px base, 11-13.5px for
+ * labels/hints) was ported verbatim in the first pass; every font-size
+ * bumped ~13-15% here (base 14->16px, the smallest labels 12.5->14px)
+ * to read comfortably at real 100% zoom. The few fixed-width label
+ * columns/sidebar that were sized for the smaller text (.adv2-rows,
+ * .adv2-tool, the sidebar's 340px) widened to match, so labels don't
+ * wrap awkwardly against the larger type.
+ */
+
+.adv2-page {
+  --adv2-paper: #F6F6F2;
+  --adv2-panel: #FFFFFF;
+  --adv2-ink: #1B1E24;
+  --adv2-ink-2: #4B515C;
+  --adv2-ink-3: #8A909B;
+  --adv2-rule: #E4E5E0;
+  --adv2-rule-2: #D3D5CE;
+  --adv2-trust: #0E6B69;
+  --adv2-trust-soft: #E3F1EF;
+  --adv2-ok: #2E7D4F;
+  --adv2-ok-soft: #E4F2E9;
+  --adv2-warn: #A9690E;
+  --adv2-warn-soft: #FBF0DA;
+  --adv2-bad: #B3342D;
+  --adv2-bad-soft: #FBE7E5;
+  /* Track A0 (2026-09-21) — the dark contextual-sidebar color, from the
+   * mockup's own token table (docs/AGENT_DETAIL_REDESIGN_HANDOFF.md):
+   * --nav #102e29. Kept as its own pair, independent of --adv2-trust,
+   * since the sidebar stays dark in BOTH light and dark page mode (it's
+   * chrome, not content) — only --adv2-dark below repaints the page.
+   */
+  --adv2-nav: #102E29;
+  --adv2-nav-2: #163A33;
+  --adv2-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --adv2-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Track C (2026-09-28) — the mockup's own --shadow:0 8px 24px #17352c06
+   * (preview (3).html), a very subtle dark-green-tinted card shadow. .adv2-
+   * card never had one, which reads as flat against the near-identical
+   * --adv2-paper/--adv2-panel tones — Ali: "boxes aren't so close to the
+   * edge" even where a 1px border technically exists. */
+  --adv2-shadow: 0 8px 24px rgba(23, 53, 44, 0.06);
+
+  background: var(--adv2-paper);
+  color: var(--adv2-ink);
+  font: 16px/1.5 var(--adv2-sans);
+  margin: -1.5rem -1.5rem 0;
+  padding-bottom: 1px;
+}
+.adv2-page * { box-sizing: border-box; }
+.adv2-page a { color: inherit; }
+.adv2-page button { font: inherit; cursor: pointer; }
+.adv2-page code, .adv2-page .adv2-mono { font-family: var(--adv2-mono); font-size: 14px; }
+
+/* Track A0 (2026-09-21) — scoped dark mode, session-only (no persistence,
+ * per docs/AGENT_DETAIL_REDESIGN_HANDOFF.md's own note), toggled by
+ * AgentDetailLayout.tsx adding/removing this class. Redefines only the
+ * tokens already declared above — every rule in this file keeps reading
+ * the same var() names, so nothing else needs a dark-mode-specific rule.
+ * Values from the mockup's own dark-mode table.
+ */
+.adv2-page.adv2-dark {
+  --adv2-paper: #10221D;
+  --adv2-panel: #18312A;
+  --adv2-ink: #E0EEE7;
+  --adv2-ink-2: #B7CBC2;
+  --adv2-ink-3: #86988F;
+  --adv2-rule: #2E493E;
+  --adv2-rule-2: #3A5A4D;
+  --adv2-trust: #63D7AD;
+  --adv2-trust-soft: #1E3A31;
+  --adv2-ok: #6FCB8E;
+  --adv2-ok-soft: #1E3A2A;
+  --adv2-warn: #E0B867;
+  --adv2-warn-soft: #3A2E1A;
+  --adv2-bad: #E0857D;
+  --adv2-bad-soft: #3A211E;
+  /* Track C (2026-09-28) — a light shadow reads as invisible against a dark
+   * panel; a real, more opaque black shadow gives cards the same visible
+   * lift dark-mode UIs need. */
+  --adv2-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Header */
+.adv2-head { background: var(--adv2-panel); border-bottom: 1px solid var(--adv2-rule); }
+.adv2-head-in { max-width: 1180px; margin: 0 auto; padding: 19px 28px 0; }
+.adv2-crumb { font-size: 14px; color: var(--adv2-ink-3); }
+.adv2-crumb a { color: var(--adv2-ink-3); text-decoration: none; }
+.adv2-crumb a:hover { color: var(--adv2-ink); }
+.adv2-id { display: flex; align-items: flex-start; gap: 16px; margin-top: 10px; }
+.adv2-avatar { width: 44px; height: 44px; border-radius: 10px; background: var(--adv2-trust); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 19px; flex: none; }
+.adv2-id h1 { font-size: 24px; font-weight: 600; margin: 0; line-height: 1.2; letter-spacing: -0.01em; font-family: var(--adv2-sans); color: var(--adv2-ink); }
+.adv2-id .adv2-sub { color: var(--adv2-ink-2); margin-top: 3px; max-width: 62ch; }
+.adv2-id .adv2-spacer { flex: 1; }
+.adv2-actions { display: flex; gap: 8px; flex: none; margin-top: 4px; }
+.adv2-btn { border: 1px solid var(--adv2-rule-2); background: var(--adv2-panel); border-radius: 7px; padding: 7px 13px; font-weight: 500; color: var(--adv2-ink); }
+.adv2-btn:hover { border-color: var(--adv2-ink-3); }
+.adv2-btn.adv2-danger { color: var(--adv2-bad); }
+.adv2-btn.adv2-primary { background: var(--adv2-trust); color: #fff; border-color: var(--adv2-trust); }
+.adv2-btn.adv2-primary:hover { color: #fff; border-color: var(--adv2-trust); opacity: .92; }
+.adv2-btn:disabled { opacity: .6; cursor: default; }
+.adv2-facts { display: flex; gap: 24px; margin: 16px 0 0; flex-wrap: wrap; font-size: 14.5px; color: var(--adv2-ink-2); }
+.adv2-facts b { font-weight: 500; color: var(--adv2-ink); }
+.adv2-facts a.adv2-link { font-weight: 500; }
+
+/* Track A0 (2026-09-21) — the contextual sidebar/topbar shell that replaces
+ * AdminLayout's global sidebar on this page only (see AdminLayout.tsx's own
+ * `isImmersive` check). `.adv2-shell` is the outer two-column grid;
+ * `.adv2-head`/`.adv2-head-in`/`.adv2-id`/`.adv2-actions` above are now only
+ * used inside `.adv2-shell-content` for the identity/facts block, not for a
+ * page-wide header — the sidebar+topbar replace that role.
+ */
+/* Layout bug fix (2026-09-29, Ali live: content clashing with the left
+ * sidebar and the top edge). This negative margin was written to cancel
+ * AdminLayout's old `container-fluid px-4 py-4` (1.5rem) padding around the
+ * immersive route — but AdminLayout.tsx:215 already gives `/admin/agents/*`
+ * ZERO padding today (`className={isImmersive ? '' : 'container-fluid
+ * px-4 py-4'}`), so this margin had nothing left to cancel and was instead
+ * pulling the whole shell into negative space, clipping it against the true
+ * viewport edges. */
+.adv2-shell { display: grid; grid-template-columns: 210px 1fr; min-height: 100vh; }
+.adv2-sidebar { background: linear-gradient(180deg, var(--adv2-nav), var(--adv2-nav-2)); color: #C9DED5; padding: 28px 18px; display: flex; flex-direction: column; }
+.adv2-sidebar-brand { color: #fff; font-size: 19px; font-weight: 700; letter-spacing: -0.5px; padding: 0 6px; }
+.adv2-sidebar-brand span { color: #6DD7B4; }
+.adv2-sidebar-section-label { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; font-weight: 700; margin: 33px 10px 14px; color: #8FAC9F; }
+.adv2-sidebar-profile { display: flex; gap: 10px; padding: 12px 10px; background: #ffffff09; border: 1px solid #ffffff12; border-radius: 10px; color: #fff; }
+.adv2-sidebar-profile b { font-weight: 600; font-size: 14px; }
+.adv2-sidebar-sub { font-size: 12px; color: #9FBEAF; }
+.adv2-sidebar-nav { display: grid; gap: 6px; margin-top: 22px; }
+/* Sidebar spacing + active-dot fix (2026-09-29, Ali live: "we should have
+ * an active tab that is shown"). The active state's background was already
+ * byte-identical to the mockup's — the real gap was the mockup's own lit
+ * dot marker (`.nav button:before`/`.nav button.active:before`), which this
+ * markup never had at all, so the plain background-only highlight read as
+ * too subtle. Pure CSS :before, no markup change needed. */
+.adv2-sidebar-navbtn { text-align: left; background: transparent; border: 0; color: #B4CEC2; padding: 12px 13px; border-radius: 7px; font-size: 13px; display: flex; align-items: center; gap: 12px; }
+.adv2-sidebar-navbtn:before { content: ''; width: 6px; height: 6px; border: 1px solid #799F8D; border-radius: 50%; flex-shrink: 0; }
+.adv2-sidebar-navbtn:hover { background: #FFFFFF0D; color: #fff; }
+.adv2-sidebar-navbtn.active { background: #FFFFFF12; color: #fff; font-weight: 500; }
+.adv2-sidebar-navbtn.active:before { background: #63D7AD; border-color: #63D7AD; }
+.adv2-sidebar-footer { margin-top: auto; padding-top: 18px; border-top: 1px solid #FFFFFF1F; display: flex; gap: 10px; align-items: center; }
+.adv2-avatar-sm { width: 30px; height: 30px; font-size: 13px; border-radius: 8px; }
+/* Shell spacing fix (2026-09-30, Ali live: "Widen out the left panel and add
+ * space on the left side of the tab so everything is not bunched on the
+ * left side... Add space at the top as well. Dark mode, deactivate,
+ * refresh should not have their upper border touching the top of the
+ * screen."). The sidebar's own width (210px) already matched the mockup
+ * exactly — the real gap was 4 undersized spacing values, corrected here to
+ * the mockup's own real measured CSS (C:\Users\ali_m\Downloads\preview (3).html's
+ * .sidebar/.topbar/.content rules): more sidebar padding, a real topbar
+ * min-height so its button row isn't flush against the viewport edge, and a
+ * genuinely wider content column (1180px -> 1570px) with a bigger side
+ * gutter — the actual cause of "everything bunched on the left." */
+.adv2-topbar { background: var(--adv2-panel); border-bottom: 1px solid var(--adv2-rule); min-height: 70px; padding: 0 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.adv2-topbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.adv2-back-link { text-decoration: none; }
+.adv2-shell-content { max-width: 1570px; margin: 0 auto; padding: 28px 34px 40px; }
+
+@media (max-width: 900px) {
+  .adv2-shell { grid-template-columns: 1fr; }
+  .adv2-sidebar { position: static; }
+  .adv2-sidebar-nav { display: flex; overflow-x: auto; margin-top: 12px; }
+  .adv2-sidebar-navbtn { white-space: nowrap; }
+}
+.adv2-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--adv2-ok); margin-right: 6px; vertical-align: 1px; }
+.adv2-dot.adv2-neutral { background: var(--adv2-ink-3); }
+.adv2-tabs { display: flex; gap: 4px; margin: 16px 0 0 -8px; overflow-x: auto; overflow-y: hidden; }
+.adv2-tab { padding: 9px 10px 12px; border: 0; background: none; color: var(--adv2-ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.adv2-tab:hover { color: var(--adv2-ink); }
+.adv2-tab[aria-selected="true"] { color: var(--adv2-ink); border-bottom-color: var(--adv2-ink); font-weight: 500; }
+
+/* Body */
+.adv2-wrap { max-width: 1570px; margin: 0 auto; padding: 28px 34px 40px; }
+/* Track C (2026-09-28) — real bug: this was `.adv2-wrap.adv2-grid` (a
+ * compound selector requiring BOTH classes on one element), but the only
+ * real usage (AgentOverviewV2.tsx) always puts `adv2-grid` on a SEPARATE,
+ * nested div from `adv2-wrap` — so this rule never matched, and Overview's
+ * Main Column/Sidebar have stacked as plain blocks, not a 2-column grid,
+ * since Track A1 shipped. */
+.adv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 375px; gap: 24px; align-items: start; }
+/* Overview layout fix (2026-09-30, Ali live: "work explained should be in
+ * the top right section of 'Needs Ali' section"). A new, genuinely even
+ * 2-column row — .adv2-grid's own 1fr/375px split is sized for the
+ * sidebar's narrower cards, not this pairing. */
+.adv2-needs-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-bottom: 20px; }
+@media (max-width: 900px) { .adv2-needs-row { grid-template-columns: 1fr; } }
+.adv2-col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.adv2-card { background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 10px; box-shadow: var(--adv2-shadow); }
+.adv2-evidence { background: var(--adv2-paper); padding: 14px; border-radius: 8px; }
+.adv2-card > h2 { font-size: 17px; font-weight: 600; margin: 0; padding: 16px 19px; border-bottom: 1px solid var(--adv2-rule); display: flex; align-items: baseline; gap: 10px; font-family: var(--adv2-sans); color: var(--adv2-ink); }
+.adv2-card > h2 .adv2-hint { font-weight: 400; font-size: 14px; color: var(--adv2-ink-3); }
+.adv2-card > h2 .adv2-right { margin-left: auto; font-weight: 400; font-size: 14px; color: var(--adv2-ink-3); }
+.adv2-card .adv2-body { padding: 16px 19px; }
+.adv2-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 13px; font-weight: 500; line-height: 1.5; }
+.adv2-pill.adv2-trust { background: var(--adv2-trust-soft); color: var(--adv2-trust); }
+.adv2-pill.adv2-ok { background: var(--adv2-ok-soft); color: var(--adv2-ok); }
+.adv2-pill.adv2-warn { background: var(--adv2-warn-soft); color: var(--adv2-warn); }
+.adv2-pill.adv2-bad { background: var(--adv2-bad-soft); color: var(--adv2-bad); }
+.adv2-pill.adv2-neutral { background: #EEEFEA; color: var(--adv2-ink-2); }
+.adv2-pill.adv2-info { background: #E3ECFB; color: #2A5AA8; }
+.adv2-pill.adv2-violet { background: #EEE6FA; color: #6B3FA0; }
+.adv2-pill.adv2-teal { background: #DFF4F1; color: #147A70; }
+/* Agent Detail polish round 3 (2026-09-29) — Ali, live: "explain why things
+   get on the backlog, in progress etc." Work tab's status pill gets this
+   outline treatment so it reads as visually distinct from the solid-fill
+   bucket pill next to it (bucket = why it's actionable, status = where it
+   really is) without requiring a legend to be read every time. Higher
+   selector specificity than a bare tone rule so it reliably overrides
+   background regardless of source order. */
+.adv2-pill.adv2-pill-outline { background: transparent; border: 1px solid currentColor; }
+.adv2-link { color: var(--adv2-trust); text-decoration: none; font-weight: 500; }
+.adv2-link:hover { text-decoration: underline; }
+.adv2-muted { color: var(--adv2-ink-3); }
+
+/* Agent Detail redesign, Track A1 (2026-09-21) — the Overview hero banner +
+ * 4-tile metrics row, matching the mockup's own `.hero`/`.metrics`/`.metric`
+ * shape (`preview (3).html`). The hero itself stays dark in both light and
+ * dark page mode (it's a fixed accent panel, not page content) — same
+ * reasoning as the sidebar's own `--adv2-nav` pair.
+ */
+.adv2-hero { background: linear-gradient(115deg, var(--adv2-nav), var(--adv2-nav-2)); border-radius: 14px; padding: 27px 29px; color: #fff; display: grid; grid-template-columns: 1fr 280px; gap: 25px; }
+.adv2-hero .adv2-eyebrow { font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; font-weight: 700; color: #96D9BD; }
+/* Contrast bug fix (2026-09-29, Ali live: hero sentence unreadable — dark
+ * text on the dark green hero background). This h2 never set its own
+ * `color`, so it was inheriting the hero's white UNTIL a global `h1..h6`
+ * rule (global.css / brand-bridge.css / base.css each set one) matched it
+ * directly — CSS inheritance always loses to any rule that targets the
+ * element itself, however low that rule's specificity, so the global dark
+ * heading color won over the hero's inherited white. `.adv2-hero p` and
+ * `.adv2-hero .adv2-btn` right below already defend against this same
+ * class of override; this heading never did. */
+.adv2-hero h2 { font-size: 24px; line-height: 1.35; margin: 8px 0 12px; letter-spacing: -0.5px; font-weight: 600; color: #fff; }
+.adv2-hero p { color: #BED8CB; font-size: 14px; margin: 0 0 14px; max-width: 62ch; }
+.adv2-hero .adv2-btn { background: #E6F4ED; color: #154E3E; border: 0; }
+.adv2-hero-next { border-left: 1px solid #FFFFFF25; padding-left: 25px; align-self: center; }
+.adv2-hero-next strong { display: block; margin: 9px 0; font-size: 15px; }
+.adv2-hero-next span { font-size: 12.5px; color: #BAD5C7; }
+.adv2-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0; }
+.adv2-metric { background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 10px; padding: 16px 18px; text-align: left; }
+.adv2-metric:hover { border-color: var(--adv2-rule-2); }
+.adv2-metric .adv2-k { font-size: 13.5px; color: var(--adv2-ink-2); }
+.adv2-metric .adv2-v { font-size: 27px; font-weight: 600; letter-spacing: -0.02em; margin: 5px 0; }
+.adv2-metric .adv2-hint { font-size: 12.5px; color: var(--adv2-ink-3); }
+.adv2-explainer { background: var(--adv2-trust-soft); }
+
+/* Agent Detail redesign, Track A1 (2026-09-21) — the Work tab's new
+ * list+detail split, matching the mockup's own `.worklayout` shape.
+ */
+.adv2-worklayout { display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.4fr); gap: 18px; align-items: start; }
+.adv2-case-row { display: block; width: 100%; text-align: left; background: var(--adv2-panel); border: 1px solid var(--adv2-rule); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+.adv2-case-row:hover { border-color: var(--adv2-rule-2); }
+.adv2-case-row.adv2-active { border-color: var(--adv2-trust); box-shadow: inset 3px 0 var(--adv2-trust); }
+/* Honest real-status stepper (2026-09-29) — same visual shape as the
+ * mockup's own .steps/.step/.step.done/.step.current, using real
+ * getTicketStatusLabel() strings, never the mockup's fictional stage
+ * names (see AgentWorkV2Stepper.tsx's own header comment). */
+.adv2-steps { display: flex; margin: 18px 0; gap: 6px; }
+.adv2-step { flex: 1; border-top: 3px solid var(--adv2-rule); padding-top: 9px; font-size: 11px; color: var(--adv2-ink-3); }
+.adv2-step-done { border-color: var(--adv2-ok); color: var(--adv2-ok); }
+.adv2-step-current { border-color: var(--adv2-warn); color: var(--adv2-warn); }
+
+@media (max-width: 900px) {
+  .adv2-hero { grid-template-columns: 1fr; }
+  .adv2-hero-next { border-left: 0; border-top: 1px solid #FFFFFF25; padding: 14px 0 0; }
+  .adv2-metrics { grid-template-columns: repeat(2, 1fr); }
+  .adv2-worklayout { grid-template-columns: 1fr; }
+}
+
+/* Autonomy ladder */
+.adv2-ladder { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 4px 0 19px; position: relative; }
+.adv2-ladder::before { content: ""; position: absolute; left: 13px; right: 13px; top: 12px; height: 2px; background: var(--adv2-rule-2); }
+.adv2-rung { position: relative; padding: 28px 13px 0 0; }
+.adv2-rung::before { content: ""; position: absolute; left: 0; top: 5px; width: 16px; height: 16px; border-radius: 50%; background: var(--adv2-panel); border: 2px solid var(--adv2-rule-2); }
+.adv2-rung .adv2-name { font-weight: 500; color: var(--adv2-ink-3); }
+.adv2-rung .adv2-desc { font-size: 14px; color: var(--adv2-ink-3); margin-top: 2px; max-width: 24ch; }
+.adv2-rung.adv2-done::before { background: var(--adv2-rule-2); }
+.adv2-rung.adv2-here::before { background: var(--adv2-trust); border-color: var(--adv2-trust); box-shadow: 0 0 0 4px var(--adv2-trust-soft); }
+.adv2-rung.adv2-here .adv2-name { color: var(--adv2-trust); }
+.adv2-rung.adv2-here .adv2-desc { color: var(--adv2-ink-2); }
+.adv2-rung.adv2-here .adv2-name::after { content: "Current"; margin-left: 8px; font-size: 12px; font-weight: 500; background: var(--adv2-trust); color: #fff; padding: 1px 6px; border-radius: 999px; vertical-align: 1px; }
+.adv2-ladder-note { background: var(--adv2-trust-soft); border-radius: 8px; padding: 13px 16px; color: var(--adv2-ink-2); font-size: 14.5px; }
+.adv2-ladder-note b { color: var(--adv2-trust); font-weight: 600; }
+
+/* Definition rows */
+.adv2-rows { display: grid; grid-template-columns: 175px 1fr; row-gap: 10px; column-gap: 16px; font-size: 15px; }
+.adv2-rows.adv2-rows-narrow { grid-template-columns: 130px 1fr; }
+.adv2-rows dt { color: var(--adv2-ink-3); margin: 0; }
+.adv2-rows dd { margin: 0; }
+.adv2-gap { color: var(--adv2-ink-3); font-style: italic; }
+
+/* Evidence strip */
+.adv2-strip { display: grid; grid-template-columns: repeat(6, 1fr); border-top: 1px solid var(--adv2-rule); }
+.adv2-stat { padding: 16px 19px; border-right: 1px solid var(--adv2-rule); }
+.adv2-stat:last-child { border-right: 0; }
+.adv2-stat .adv2-v { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
+.adv2-stat .adv2-v small { font-size: 14.5px; font-weight: 400; color: var(--adv2-ink-3); margin-left: 4px; }
+.adv2-stat .adv2-k { font-size: 14px; color: var(--adv2-ink-3); margin-top: 4px; }
+.adv2-stat.adv2-flag .adv2-v { color: var(--adv2-warn); }
+.adv2-callout { margin: 0; padding: 13px 19px; border-top: 1px solid var(--adv2-rule); font-size: 14.5px; color: var(--adv2-ink-2); display: flex; gap: 10px; align-items: flex-start; }
+.adv2-callout .adv2-mark { width: 8px; height: 8px; border-radius: 50%; background: var(--adv2-warn); flex: none; margin-top: 6px; }
+
+/* Tools */
+.adv2-tool { display: grid; grid-template-columns: 260px 1fr; gap: 16px; padding: 16px 19px; border-top: 1px solid var(--adv2-rule); }
+.adv2-tool:first-of-type { border-top: 0; }
+.adv2-tool code { font-weight: 500; color: var(--adv2-ink); }
+.adv2-tool .adv2-what { color: var(--adv2-ink-2); font-size: 14.5px; }
+.adv2-io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 19px; }
+.adv2-io-grid h3 { font-size: 14.5px; font-weight: 600; margin: 0 0 8px; font-family: var(--adv2-sans); color: var(--adv2-ink); }
+.adv2-io-grid ul { margin: 0; padding: 0; list-style: none; font-size: 14.5px; color: var(--adv2-ink-2); }
+.adv2-io-grid li { padding: 6px 0; border-top: 1px solid var(--adv2-rule); }
+.adv2-io-grid li .adv2-src { display: block; font-size: 13px; color: var(--adv2-ink-3); }
+
+/* Track E (2026-09-28) — numbered quadrant badge, matching the mockup's own
+ * .number recipe (a small filled circle preceding a quadrant heading). */
+.adv2-number { display: inline-grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--adv2-trust-soft); color: var(--adv2-trust); font-size: 12px; font-weight: 600; margin-right: 8px; }
+
+/* Track F (2026-09-28) — Talk's chat/composer, matching the mockup's own
+ * .chat/.msg/.bubble/.composer/.chatprompts recipes translated to this
+ * file's --adv2-* tokens. None of these existed before this slice. */
+.adv2-chat { max-height: 540px; overflow-y: auto; padding-right: 8px; }
+.adv2-msg { max-width: 80%; margin-bottom: 18px; }
+.adv2-msg.adv2-user { margin-left: auto; max-width: 75%; }
+.adv2-msg .adv2-who { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--adv2-ink-3); margin-bottom: 6px; }
+.adv2-bubble { padding: 14px 16px; background: var(--adv2-paper); border: 1px solid var(--adv2-rule); border-radius: 0 12px 12px 12px; font-size: 14.5px; }
+/* Chat formatting fix (2026-09-29, Ali live: a numbered-list reply with
+ * **bold** markers rendered as one unbroken wall of literal text). The
+ * bubble now renders real markdown (react-markdown, same library and
+ * line-break-preserving plugin as RecordProse.tsx); these rules normalize
+ * the default browser paragraph/list margins for a compact bubble, not a
+ * full page. */
+.adv2-bubble p { margin: 0 0 8px; }
+.adv2-bubble p:last-child { margin-bottom: 0; }
+.adv2-bubble ul, .adv2-bubble ol { margin: 0 0 8px; padding-left: 22px; }
+.adv2-bubble ul:last-child, .adv2-bubble ol:last-child { margin-bottom: 0; }
+.adv2-bubble li { margin: 3px 0; }
+.adv2-bubble strong { font-weight: 700; }
+.adv2-bubble a { color: inherit; text-decoration: underline; }
+.adv2-msg.adv2-user .adv2-bubble { background: var(--adv2-trust-soft); border-color: var(--adv2-trust); border-radius: 12px 0 12px 12px; }
+.adv2-composer { border: 1px solid var(--adv2-rule); border-radius: 10px; padding: 12px; }
+.adv2-composer textarea { width: 100%; resize: vertical; min-height: 56px; border: 0; background: transparent; color: var(--adv2-ink); outline: 0; font: inherit; }
+.adv2-chatprompts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+
+/* Task row */
+.adv2-task { padding: 16px 19px; display: grid; grid-template-columns: 1fr auto; gap: 19px; align-items: start; }
+.adv2-task h3 { margin: 0; font-size: 16px; font-weight: 600; font-family: var(--adv2-sans); color: var(--adv2-ink); }
+.adv2-task p { margin: 6px 0 0; color: var(--adv2-ink-2); font-size: 14.5px; max-width: 70ch; }
+.adv2-task .adv2-meta { display: flex; gap: 19px; font-size: 14.5px; color: var(--adv2-ink-2); margin-top: 10px; flex-wrap: wrap; }
+.adv2-task .adv2-meta span { color: var(--adv2-ink-3); }
+.adv2-task .adv2-side { text-align: right; font-size: 14.5px; color: var(--adv2-ink-2); }
+.adv2-task .adv2-side .adv2-v { font-size: 22px; font-weight: 600; color: var(--adv2-ink); line-height: 1.1; }
+
+/* Ticket rows (added — real content the mockup didn't show but this page already has) */
+.adv2-ticket-row { display: grid; grid-template-columns: 1fr auto auto; gap: 13px; align-items: center; padding: 13px 19px; border-top: 1px solid var(--adv2-rule); font-size: 14.5px; }
+.adv2-ticket-row:first-of-type { border-top: 0; }
+.adv2-ticket-row .adv2-title { color: var(--adv2-ink); }
+.adv2-ticket-row .adv2-when { color: var(--adv2-ink-3); font-size: 14px; white-space: nowrap; }
+
+/* Chain */
+.adv2-chain { list-style: none; margin: 0; padding: 0; }
+.adv2-chain li { position: relative; padding: 0 0 16px 24px; font-size: 15px; }
+.adv2-chain li::before { content: ""; position: absolute; left: 5px; top: 6px; width: 9px; height: 9px; border-radius: 50%; background: var(--adv2-panel); border: 2px solid var(--adv2-ink-3); }
+.adv2-chain li::after { content: ""; position: absolute; left: 9px; top: 19px; bottom: -2px; width: 1px; background: var(--adv2-rule-2); }
+.adv2-chain li:last-child::after { display: none; }
+.adv2-chain li:first-child::before { background: var(--adv2-trust); border-color: var(--adv2-trust); }
+.adv2-chain li:last-child::before { background: var(--adv2-ink); border-color: var(--adv2-ink); }
+.adv2-chain .adv2-who { font-weight: 500; }
+.adv2-chain .adv2-role { color: var(--adv2-ink-3); font-size: 14px; display: block; }
+
+/* Prompt / charter disclosure */
+.adv2-page details.adv2-disclosure summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--adv2-ink-2); }
+.adv2-page details.adv2-disclosure summary::-webkit-details-marker { display: none; }
+.adv2-page details.adv2-disclosure summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--adv2-ink-3); border-bottom: 1.5px solid var(--adv2-ink-3); transform: rotate(-45deg); transition: transform .15s; }
+.adv2-page details.adv2-disclosure[open] summary::before { transform: rotate(45deg); }
+.adv2-page pre.adv2-prompt { margin: 13px 0 0; padding: 16px; background: #F2F3EE; border-radius: 8px; font: 14px/1.6 var(--adv2-mono); color: var(--adv2-ink-2); white-space: pre-wrap; max-height: 322px; overflow: auto; }
+.adv2-version { display: flex; justify-content: space-between; font-size: 15px; padding-bottom: 13px; margin-bottom: 13px; border-bottom: 1px solid var(--adv2-rule); }
+.adv2-version:last-of-type { border: 0; margin: 0; padding-bottom: 13px; }
+.adv2-version .adv2-mono { color: var(--adv2-ink); }
+
+/* Performance & Settings reflow (Track A2) — progress bar, switch pill, radio row, tier list.
+   None of these existed before this slice; each reuses the existing --adv2-* tokens rather than
+   introducing new hardcoded colors. */
+.adv2-progress { height: 6px; background: var(--adv2-rule); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.adv2-progress span { display: block; height: 100%; background: var(--adv2-ok); }
+.adv2-switch { border: 1px solid var(--adv2-rule); border-radius: 999px; padding: 5px 13px; font-size: 13px; font-weight: 500; background: var(--adv2-ok-soft); color: var(--adv2-ok); }
+.adv2-switch.adv2-off { background: var(--adv2-panel); color: var(--adv2-ink-3); }
+.adv2-radio-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--adv2-rule); }
+.adv2-radio-row:first-of-type { border-top: 0; }
+.adv2-radio-row input[type="radio"] { margin-top: 3px; flex: none; }
+.adv2-radio-row label { font-size: 15px; color: var(--adv2-ink); cursor: pointer; }
+.adv2-radio-row .adv2-radio-hint { display: block; font-size: 13.5px; color: var(--adv2-ink-3); margin-top: 2px; }
+.adv2-tier-list { display: flex; flex-direction: column; gap: 14px; }
+.adv2-tier { padding: 13px 15px; border-radius: 8px; background: var(--adv2-panel); border: 1px solid var(--adv2-rule); }
+.adv2-tier .adv2-pill { margin-bottom: 8px; }
+.adv2-tier ul { margin: 0; padding-left: 18px; font-size: 14.5px; color: var(--adv2-ink-2); }
+.adv2-tier ul li { margin-bottom: 4px; }
+.adv2-tier ul li:last-child { margin-bottom: 0; }
+.adv2-tier .adv2-muted { margin: 0; font-size: 14.5px; }
+
+@media (prefers-reduced-motion: reduce) { .adv2-page * { transition: none !important; } }
+@media (max-width: 980px) {
+  .adv2-grid { grid-template-columns: 1fr; }
+  .adv2-strip { grid-template-columns: repeat(3, 1fr); }
+  .adv2-stat:nth-child(3) { border-right: 0; }
+  .adv2-stat:nth-child(n+4) { border-top: 1px solid var(--adv2-rule); }
+}
+@media (max-width: 640px) {
+  .adv2-head-in, .adv2-wrap { padding-left: 16px; padding-right: 16px; }
+  .adv2-facts { margin-left: 0; }
+  .adv2-ladder { grid-template-columns: 1fr 1fr; }
+  .adv2-ladder::before { display: none; }
+  .adv2-rows { grid-template-columns: 1fr; }
+  .adv2-tool { grid-template-columns: 1fr; }
+  .adv2-io-grid { grid-template-columns: 1fr; }
+  .adv2-task { grid-template-columns: 1fr; }
+  .adv2-task .adv2-side { text-align: left; }
+}

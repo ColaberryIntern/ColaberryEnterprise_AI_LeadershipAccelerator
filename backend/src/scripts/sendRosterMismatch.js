@@ -130,7 +130,6 @@ function htmlEscape(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: `[Roster Reconciliation] ${bcUnmatched.length} BC-only + ${ccppOnly.length} CCPP-only need attention`,
     text: stripEmDashes(text),
     html: stripEmDashes(html),

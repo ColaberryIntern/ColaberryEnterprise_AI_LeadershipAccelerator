@@ -154,7 +154,7 @@ function saveState(state) {
     const introHtml = `<div>
 <p><strong>What this thread is</strong> - every weekday (Mon-Fri) at 10 AM CT, a fresh snapshot of the Launch Readiness Dashboard lands here as a comment, rendered from live Basecamp state. One thread, daily comments, durable history.</p>
 <p>The dashboard tracks the AI Systems Architect Accelerator launch (target ${LAUNCH.targetLaunchDate}). Sections: hero KPIs (days to launch / overall readiness / open task counts / overdue), YOUR TURN ALI next-decision banner, per-area next-human-step grid, feasibility-per-area scoring, escalations, and blocked downstream tasks.</p>
-<p>Tag <code>@CB System</code> on any task for AI execution, drafting, or scheduling help.</p>
+<p>This is an automated, read-only snapshot feed for the team. No action is needed on this thread. For AI help on a specific task, ask CB on that task's own ticket, not here.</p>
 </div>`;
     const subject = 'Launch Readiness Dashboard - daily snapshots (one thread)';
     const parent = await bcPostJson(`https://3.basecampapi.com/3945211/buckets/${PROJECT_ID}/message_boards/${mb.id}/messages.json`, {
@@ -176,10 +176,18 @@ function saveState(state) {
   const att = await bcUploadAttachment(PNG_OUT, filename, 'image/png');
   console.log('  attachable_sgid:', att.attachable_sgid);
 
+  // NOTE: this comment is intentionally informational only. Do NOT include an
+  // "@CB System" call-to-action or task-style language here. This is a
+  // one-way, read-only display thread that several Basecamp-connected agents
+  // watch; phrasing it as an actionable task (or literally mentioning CB) made
+  // them treat each daily snapshot as work to do and post duplicate suggestion
+  // cards, which the inbound-dispatcher then answered (runaway loop 2026-06-17).
+  // Keep this thread inert. For AI help on real work, tag CB on that task's own
+  // ticket, not here.
   const commentHtml = `<div>
 <div><strong>${longDate()}</strong> - daily dashboard snapshot</div>
 <bc-attachment sgid="${att.attachable_sgid}" caption="Launch Readiness Dashboard"></bc-attachment>
-<div><em>Live state pulled at post time. Tag <code>@CB System</code> on any task for AI execution, drafting, or scheduling help.</em></div>
+<div><em>Live state pulled at post time. Automated read-only snapshot for the team - no action needed on this thread.</em></div>
 </div>`;
   const cmt = await bcPostJson(`https://3.basecampapi.com/3945211/buckets/${PROJECT_ID}/recordings/${state.threadId}/comments.json`, {
     content: commentHtml,

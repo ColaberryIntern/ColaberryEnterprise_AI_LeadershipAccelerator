@@ -1,0 +1,13 @@
+/* CPN type. Grove: Bitter headings / Atkinson Hyperlegible body, 17px × 1.333.
+   Vestry: Source Serif 4 / Public Sans, 17px × 1.3. No thin weights anywhere — cheap phones, bad lighting. */
+:root{
+  --font-heading:'Bitter', Georgia, serif;
+  --font-body:'Atkinson Hyperlegible', system-ui, sans-serif;
+  --fw-heading:700; /* @kind font */
+  --fs-caption:14px; --fs-body:17px; --fs-h4:23px; --fs-h3:30px; --fs-h2:40px; --fs-h1:54px;
+}
+[data-variant="vestry"]{
+  --font-heading:'Source Serif 4', Georgia, serif;
+  --font-body:'Public Sans', system-ui, sans-serif;
+  --fs-caption:14px; --fs-body:17px; --fs-h4:22px; --fs-h3:29px; --fs-h2:37px; --fs-h1:49px;
+}

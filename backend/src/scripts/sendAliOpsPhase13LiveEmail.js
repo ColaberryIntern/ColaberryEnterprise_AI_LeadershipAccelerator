@@ -81,7 +81,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - Run My Day live + Today\'s Pulse tile + nightly metrics rollup (Phase 1.3)',
     html: HTML,
     text: TEXT,

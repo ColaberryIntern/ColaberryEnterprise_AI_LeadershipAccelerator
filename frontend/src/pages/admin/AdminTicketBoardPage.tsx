@@ -1,6 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import TicketDetailModal from '../../components/admin/TicketDetailModal';
+import TicketBoardFilterBar from '../../components/admin/tickets/TicketBoardFilterBar';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
+import {
+  buildTicketTypeFilterOptions,
+  getTicketTypeTone,
+  isTicketStale,
+  formatTicketAgeLabel,
+  formatNextCheckLabel,
+  TicketAutoCheck,
+} from '../../utils/ticketTypeMeta';
+import { getTicketCreatorOptions, TicketCreatorOption } from '../../services/ticketCreatorApi';
 
 interface Ticket {
   id: string;
@@ -13,8 +25,20 @@ interface Ticket {
   source: string;
   created_by_type: string;
   created_by_id: string;
+  // Ticket Board UX fixes (2026-08-17) — resolved server-side by
+  // getTicketsForBoard() (backend/src/services/ticketService.ts), reusing the
+  // SAME resolveActorDisplayName() the Story/Technical tabs already use — see
+  // that file's header comment. Optional/nullable so an older, not-yet-
+  // redeployed backend response still renders (falls back to no creator
+  // badge rather than crashing).
+  created_by_display_name?: string | null;
   assigned_to_type: string | null;
   assigned_to_id: string | null;
+  // Ticket Board UX fixes (2026-08-17) — honest "will this be auto-checked
+  // again, and when" signal, resolved server-side from the 6 real registered
+  // ticket-auto-resolver agents' live cron schedules. See
+  // backend/src/services/ticketAutoCheckService.ts.
+  auto_check?: TicketAutoCheck | null;
   parent_ticket_id: string | null;
   entity_type: string | null;
   entity_id: string | null;
@@ -44,34 +68,39 @@ interface Stats {
   byType: Record<string, number>;
 }
 
-const COLUMNS: Array<{ key: keyof BoardData; label: string; color: string }> = [
-  { key: 'backlog', label: 'Backlog', color: 'secondary' },
-  { key: 'todo', label: 'To Do', color: 'info' },
-  { key: 'in_progress', label: 'In Progress', color: 'primary' },
-  { key: 'in_review', label: 'In Review', color: 'warning' },
-  { key: 'done', label: 'Done', color: 'success' },
+type Tone = 'primary' | 'success' | 'danger' | 'warning' | 'info' | 'neutral';
+
+// Board columns. Each column accent maps to a brand chart token in column order,
+// replacing the old Bootstrap color-name strings.
+const COLUMNS: Array<{ key: keyof BoardData; label: string }> = [
+  { key: 'backlog', label: 'Backlog' },
+  { key: 'todo', label: 'To Do' },
+  { key: 'in_progress', label: 'In Progress' },
+  { key: 'in_review', label: 'In Review' },
+  { key: 'done', label: 'Done' },
 ];
 
-const PRIORITY_BADGES: Record<string, string> = {
+const columnColor = (index: number): string => `var(--chart-${(index % 7) + 1})`;
+
+// Priority -> StatusBadge tone (replaces hardcoded bg-* badge classes).
+const PRIORITY_TONE: Record<string, Tone> = {
   critical: 'danger',
   high: 'warning',
   medium: 'info',
-  low: 'secondary',
+  low: 'neutral',
 };
 
-const TYPE_BADGES: Record<string, string> = {
-  task: 'secondary',
-  bug: 'danger',
-  feature: 'success',
-  curriculum: 'info',
-  agent_action: 'primary',
-  strategic: 'warning',
-};
+// Ticket type -> StatusBadge tone/label now lives in utils/ticketTypeMeta.ts — a
+// single source of truth shared with the Type filter dropdown below, instead of a
+// third hardcoded map here. (Previously this table had no entries for
+// 'student_support'/'reese_autonomous_outreach', so those real, ticketed types
+// rendered with the generic neutral fallback — see getTicketTypeTone().)
 
 const SOURCE_ICONS: Record<string, string> = {
-  cory: 'cpu',
-  manual: 'person',
-  system: 'gear',
+  cory: 'cpu-line',
+  manual: 'user-line',
+  system: 'settings-3-line',
+  ai_workforce: 'team-line',
 };
 
 export default function AdminTicketBoardPage() {
@@ -79,10 +108,64 @@ export default function AdminTicketBoardPage() {
   const [board, setBoard] = useState<BoardData | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  // Deep-link support: ?open=<ticketId> (the approval email's link), ?source=,
+  // ?creator= (org chart's per-card ticket-filter button), ?status= all read
+  // synchronously from the URL via lazy useState initializers — the SAME
+  // pattern dateRange below already used for `?range=`. This used to be a
+  // separate useEffect that ran AFTER the mount-time fetchBoard() effect,
+  // which raced two fetches against each other: an unfiltered one (fired
+  // first, before the URL read landed) and the correctly creator-filtered
+  // one (fired after). Nothing cancelled the first request, so whichever
+  // response arrived LAST won — and the unfiltered request, pulling the
+  // entire ticket table, was frequently the slower one over a real network,
+  // silently overwriting the correct filtered board a moment after it first
+  // rendered (Ali, live, 2026-08-23: "it starts off with the selected open
+  // tickets, but then it looks like something resets it"). Reading every
+  // filter from the URL before the FIRST fetchBoard() ever fires removes the
+  // race entirely — there is only ever one request for a deep-linked view.
+  const initialParams = new URLSearchParams(window.location.search);
+  const [selectedTicket, setSelectedTicket] = useState<string | null>(initialParams.get('open'));
   const [filterPriority, setFilterPriority] = useState('');
   const [filterType, setFilterType] = useState('');
-  const [filterSource, setFilterSource] = useState('');
+  const [filterSource, setFilterSource] = useState(initialParams.get('source') || '');
+  const [filterCreator, setFilterCreator] = useState(initialParams.get('creator') || '');
+  // Org Chart v5 (2026-08-21) — the roster TicketBoardFilterBar's Creator
+  // <select> renders as options (agent_name/display_name pairs). Fetched
+  // ONCE on mount via its own effect below, not tied to fetchBoard's
+  // filter-dependent re-fetch cycle — the roster itself doesn't change when
+  // a filter changes. Degrades to an empty list on failure (logged, never a
+  // crash); the select still functions via its synthetic-option fallback
+  // for whatever `filterCreator` value is already set (see
+  // TicketBoardFilterBar's own header comment).
+  const [creatorOptions, setCreatorOptions] = useState<TicketCreatorOption[]>([]);
+  // Ticket Board UX fixes (2026-08-17) — drives the Open/Done stat-card
+  // filters. Client-side only: the board fetch already returns every status
+  // bucket regardless of this value (see fetchBoard below, unchanged), so
+  // "filtering" here means which columns render, not a new backend query.
+  // Ticket Count Sync fix, Task 3 (2026-08-24) — Ali, live, reported 3 times:
+  // an agent's card says "N open tickets," but clicking through showed far
+  // more. `?status=` (matching the "Open" KPI card's own click) narrows which
+  // of the 5 columns render to just the 4 that make up "open"
+  // (backlog+todo+in_progress+in_review, matching OPEN_TICKET_STATUS_FILTER
+  // in liveAgentsService.ts, the same definition the card's own count uses).
+  const initialStatus = initialParams.get('status');
+  const [filterStatus, setFilterStatus] = useState<'' | 'open' | 'done'>(
+    initialStatus === 'open' || initialStatus === 'done' ? initialStatus : '',
+  );
+  // Ticket Board Performance fix (2026-08-18) — the board used to load every
+  // ticket ever created (16,000+ rows, ~500+/week from agent activity alone) on
+  // every page open. Defaults to the last 7 days; an explicit toggle switches to
+  // "All time" and back. Deliberately NOT reset by clearAllFilters/"Clear" below
+  // (see that function's own comment) — it's a view mode, not a dropdown filter.
+  //
+  // Org Chart v7 (2026-08-23) — Ali, live: the per-agent ticket counts on the
+  // org chart (fixed to be date-unrestricted, see orgChartService.ts) don't
+  // match a "recent" 7-day board, so the org chart's ticket-filter button now
+  // deep-links here with `&range=all` to start on the SAME unrestricted view
+  // its own count represents. Plain navigation to this page (no `range`
+  // param) keeps the 7-day default — the 2026-08-18 performance fix stays
+  // intact for the common case.
+  const [dateRange, setDateRange] = useState<'recent' | 'all'>(initialParams.get('range') === 'all' ? 'all' : 'recent');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'medium', type: 'task' });
   const [creating, setCreating] = useState(false);
@@ -93,10 +176,26 @@ export default function AdminTicketBoardPage() {
       if (filterPriority) params.set('priority', filterPriority);
       if (filterType) params.set('type', filterType);
       if (filterSource) params.set('source', filterSource);
+      if (filterCreator) params.set('creator', filterCreator);
+      // Ticket Board Performance fix (2026-08-18) — the actual fix for "takes
+      // forever to load": by default, only ask the server for tickets created in
+      // the last 7 days (backend/src/db/ensureTicketIndexesSchema.ts adds the
+      // supporting idx_tickets_created_at index so this stays fast as the table
+      // grows). 'all' omits the param entirely, matching today's unbounded
+      // behavior exactly.
+      if (dateRange === 'recent') {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        params.set('created_after', sevenDaysAgo.toISOString());
+      }
 
+      // Ticket KPI filter-scoping fix (2026-08-25) — Ali, live, filtering by
+      // Creator: "When we filter down on a list the KPIs should reflect what
+      // the data is showing." The stats fetch now reuses the SAME `params` the
+      // board fetch just built, so the KPI cards and the Kanban columns below
+      // them always describe the same slice of tickets.
       const [boardRes, statsRes] = await Promise.all([
         fetch(`/api/admin/tickets/board?${params}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/tickets/stats', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/admin/tickets/stats?${params}`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const boardData = await boardRes.json();
       const statsData = await statsRes.json();
@@ -107,9 +206,20 @@ export default function AdminTicketBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, filterPriority, filterType, filterSource]);
+  }, [token, filterPriority, filterType, filterSource, filterCreator, dateRange]);
 
   useEffect(() => { fetchBoard(); }, [fetchBoard]);
+
+  // Org Chart v5 (2026-08-21) — roster for the Creator filter's <select>,
+  // fetched once. A failure here is non-critical (matches this file's own
+  // fetchBoard catch-and-log convention just above): the filter itself still
+  // works via its raw-value fallback option, it just won't show friendly
+  // labels until the roster loads.
+  useEffect(() => {
+    getTicketCreatorOptions()
+      .then(setCreatorOptions)
+      .catch((err) => console.error('Failed to fetch ticket creator options:', err));
+  }, []);
 
   const handleDragStart = (e: React.DragEvent, ticketId: string) => {
     e.dataTransfer.setData('ticketId', ticketId);
@@ -152,10 +262,118 @@ export default function AdminTicketBoardPage() {
   };
 
   const getSourceIcon = (source: string) => {
-    if (source.startsWith('cory')) return 'cpu';
-    if (source.startsWith('agent')) return 'robot';
-    return SOURCE_ICONS[source] || 'tag';
+    if (source.startsWith('cory')) return 'cpu-line';
+    if (source.startsWith('agent')) return 'robot-line';
+    return SOURCE_ICONS[source] || 'price-tag-3-line';
   };
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from ticket stats.
+  const trust: TrustSignal = useMemo(() => {
+    const total = stats?.total ?? 0;
+    const open = stats?.open ?? 0;
+    return {
+      level: 'live',
+      source: 'tickets',
+      updatedAt: new Date().toISOString(),
+      summary: `${open} open of ${total} total tickets across the board.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: 'live',
+          evidence: [{ label: 'Open / total', value: `${open}/${total}` }],
+        },
+      ],
+    };
+  }, [stats]);
+
+  // Ticket Board UX fixes (2026-08-17) — clickable stat cards, composing with the
+  // SAME filter state the Priority dropdown already drives (Critical) or a new,
+  // client-side-only filterStatus (Open/Done — see its declaration above). Total
+  // resets every filter, dropdowns included, rather than adding a 5th parallel
+  // "no filter" state. Deliberately does NOT touch dateRange (Ticket Board
+  // Performance fix, 2026-08-18): the 7-day view is a deliberate, explicit choice
+  // via its own toggle, not a "filter" a user would expect "Clear" to blow away —
+  // clearing Priority/Type/Source should never silently dump 16,000+ tickets back
+  // onto the board as a side effect.
+  const noFiltersActive = !filterPriority && !filterType && !filterSource && !filterStatus && !filterCreator;
+  const clearAllFilters = () => {
+    setFilterPriority('');
+    setFilterType('');
+    setFilterSource('');
+    setFilterStatus('');
+    setFilterCreator('');
+  };
+  const toggleOpenFilter = () => setFilterStatus((prev) => (prev === 'open' ? '' : 'open'));
+  const toggleCriticalFilter = () => setFilterPriority((prev) => (prev === 'critical' ? '' : 'critical'));
+  const toggleDoneFilter = () => setFilterStatus((prev) => (prev === 'done' ? '' : 'done'));
+
+  // Ticket Board Performance fix (2026-08-18) — how many tickets exist system-wide
+  // (stats.total, unscoped) vs. how many the current 7-day-filtered board actually
+  // holds (summed from the real board buckets the server just returned) — the gap
+  // is what the honesty banner discloses, so "last 7 days" never reads as "this is
+  // everything." Only meaningful while dateRange === 'recent'; 0 once the toggle
+  // shows everything (board and stats.total then agree).
+  const visibleTicketCount = useMemo(
+    () => (board ? Object.values(board).reduce((sum, list) => sum + list.length, 0) : 0),
+    [board],
+  );
+  const hiddenByDateRange = dateRange === 'recent' ? Math.max((stats?.total ?? 0) - visibleTicketCount, 0) : 0;
+
+  // filterStatus never changes what fetchBoard() requests (every status bucket
+  // is always fetched) — it only changes which columns render, so Open/Done
+  // stay instant, no extra network round trip.
+  const visibleColumns =
+    filterStatus === 'done'
+      ? COLUMNS.filter((c) => c.key === 'done')
+      : filterStatus === 'open'
+        ? COLUMNS.filter((c) => c.key !== 'done')
+        : COLUMNS;
+
+  const kpiRow = (
+    <div className="row g-3">
+      <div className="col-6 col-lg-3">
+        <StatCard
+          label="Total"
+          value={stats?.total ?? 0}
+          icon="ticket-2-line"
+          tone="info"
+          onClick={clearAllFilters}
+          active={noFiltersActive}
+        />
+      </div>
+      <div className="col-6 col-lg-3">
+        <StatCard
+          label="Open"
+          value={stats?.open ?? 0}
+          icon="record-circle-line"
+          tone="primary"
+          onClick={toggleOpenFilter}
+          active={filterStatus === 'open'}
+        />
+      </div>
+      <div className="col-6 col-lg-3">
+        <StatCard
+          label="Critical"
+          value={stats?.byPriority?.critical ?? 0}
+          icon="alarm-warning-line"
+          tone={stats?.byPriority?.critical ? 'danger' : 'neutral'}
+          onClick={toggleCriticalFilter}
+          active={filterPriority === 'critical'}
+        />
+      </div>
+      <div className="col-6 col-lg-3">
+        <StatCard
+          label="Done"
+          value={stats?.byStatus?.done ?? 0}
+          icon="checkbox-circle-line"
+          tone="success"
+          onClick={toggleDoneFilter}
+          active={filterStatus === 'done'}
+        />
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -168,119 +386,162 @@ export default function AdminTicketBoardPage() {
   }
 
   return (
-    <div className="container-fluid px-4 py-3">
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h4 className="fw-bold mb-1" style={{ color: 'var(--color-primary)' }}>Ticket Board</h4>
-          <p className="text-muted small mb-0">
-            {stats ? `${stats.open} open · ${stats.total} total` : ''}
-          </p>
-        </div>
-        <button className="btn btn-sm btn-primary" onClick={() => setShowCreateModal(true)}>
-          + New Ticket
-        </button>
-      </div>
-
-      {/* Stats Row */}
-      {stats && (
-        <div className="row g-2 mb-3">
-          {(['critical', 'high', 'medium', 'low'] as const).map((p) => (
-            <div key={p} className="col-auto">
-              <span className={`badge bg-${PRIORITY_BADGES[p]} bg-opacity-10 text-${PRIORITY_BADGES[p]} border border-${PRIORITY_BADGES[p]} border-opacity-25`}>
-                {p}: {stats.byPriority[p] || 0}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+    <>
+      <PageHeader
+        title="Tickets"
+        icon="ticket-2-line"
+        subtitle="Drag tickets between columns to update their status."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Tickets' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-sm btn-primary" onClick={() => setShowCreateModal(true)}>
+            <i className="ri-add-line" aria-hidden="true" /> New Ticket
+          </button>
+        }
+      >
+        {kpiRow}
+      </PageHeader>
 
       {/* Filters */}
       <div className="d-flex gap-2 mb-3 flex-wrap align-items-center">
-        <select className="form-select form-select-sm" style={{ width: 140 }} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-          <option value="">All Priorities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-        <select className="form-select form-select-sm" style={{ width: 140 }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-          <option value="">All Types</option>
-          <option value="task">Task</option>
-          <option value="bug">Bug</option>
-          <option value="feature">Feature</option>
-          <option value="curriculum">Curriculum</option>
-          <option value="agent_action">Agent Action</option>
-          <option value="strategic">Strategic</option>
-        </select>
-        <select className="form-select form-select-sm" style={{ width: 140 }} value={filterSource} onChange={(e) => setFilterSource(e.target.value)}>
-          <option value="">All Sources</option>
-          <option value="cory">Cory</option>
-          <option value="manual">Manual</option>
-          <option value="system">System</option>
-        </select>
-        <button className="btn btn-sm btn-outline-secondary" onClick={() => { setFilterPriority(''); setFilterType(''); setFilterSource(''); }}>
-          Clear
-        </button>
+        <TicketBoardFilterBar
+          filterPriority={filterPriority}
+          setFilterPriority={setFilterPriority}
+          filterType={filterType}
+          setFilterType={setFilterType}
+          filterSource={filterSource}
+          setFilterSource={setFilterSource}
+          filterCreator={filterCreator}
+          setFilterCreator={setFilterCreator}
+          typeOptions={buildTicketTypeFilterOptions(stats?.byType)}
+          creatorOptions={creatorOptions}
+          onClear={clearAllFilters}
+        />
+        <div className="vr d-none d-md-block mx-1" aria-hidden="true" />
+        {/* Ticket Board Performance fix (2026-08-18) — the "last 7 days" default
+            view toggle. Deliberately styled as its own segmented control, separate
+            from the Priority/Type/Source dropdowns and the "Clear" button, since
+            it's a view mode (what time window am I looking at) rather than a
+            filter (what subset of that window matches). */}
+        <div className="btn-group btn-group-sm" role="group" aria-label="Date range">
+          <button
+            type="button"
+            className={`btn ${dateRange === 'recent' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            aria-pressed={dateRange === 'recent'}
+            onClick={() => setDateRange('recent')}
+          >
+            <i className="ri-calendar-line" aria-hidden="true" /> Last 7 Days
+          </button>
+          <button
+            type="button"
+            className={`btn ${dateRange === 'all' ? 'btn-primary' : 'btn-outline-secondary'}`}
+            aria-pressed={dateRange === 'all'}
+            onClick={() => setDateRange('all')}
+          >
+            All Time
+          </button>
+        </div>
       </div>
 
+      {/* Ticket Board Performance fix (2026-08-18) — honesty banner: the 7-day
+          default is a VIEW, not the whole system. Only rendered when it's
+          actually hiding something, so it never adds noise to a genuinely quiet
+          week. */}
+      {hiddenByDateRange > 0 && (
+        <div className="alert alert-light border d-flex justify-content-between align-items-center py-2 px-3 mb-3 small">
+          <span>
+            <i className="ri-information-line me-1" aria-hidden="true" />
+            Showing tickets from the last 7 days — {hiddenByDateRange.toLocaleString()} older ticket{hiddenByDateRange === 1 ? '' : 's'} hidden.
+          </span>
+          <button type="button" className="btn btn-sm btn-link p-0" onClick={() => setDateRange('all')}>
+            Show all
+          </button>
+        </div>
+      )}
+
       {/* Kanban Board */}
-      <div className="d-flex gap-3 overflow-auto pb-3" style={{ minHeight: 500 }}>
-        {COLUMNS.map(({ key, label, color }) => (
-          <div
-            key={key}
-            className="flex-shrink-0"
-            style={{ width: 280, minWidth: 280 }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => handleDrop(e, key)}
-          >
-            <div className="d-flex align-items-center mb-2">
-              <span className={`badge bg-${color} me-2`}>{board?.[key]?.length || 0}</span>
-              <span className="fw-semibold small">{label}</span>
-            </div>
-            <div className="d-flex flex-column gap-2" style={{ minHeight: 400 }}>
-              {board?.[key]?.map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="card border-0 shadow-sm"
-                  style={{ cursor: 'pointer' }}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, ticket.id)}
-                  onClick={() => setSelectedTicket(ticket.id)}
-                >
-                  <div className="card-body p-2">
-                    <div className="d-flex justify-content-between align-items-start mb-1">
-                      <span className="text-muted" style={{ fontSize: '0.7rem' }}>TK-{ticket.ticket_number}</span>
-                      <span className={`badge bg-${PRIORITY_BADGES[ticket.priority] || 'secondary'}`} style={{ fontSize: '0.65rem' }}>
-                        {ticket.priority}
-                      </span>
-                    </div>
-                    <p className="mb-1 small fw-medium" style={{ lineHeight: 1.3 }}>{ticket.title}</p>
-                    <div className="d-flex gap-1 flex-wrap">
-                      <span className={`badge bg-${TYPE_BADGES[ticket.type] || 'secondary'} bg-opacity-75`} style={{ fontSize: '0.6rem' }}>
-                        {ticket.type}
-                      </span>
-                      {ticket.assigned_to_id && (
-                        <span className="badge bg-light text-dark" style={{ fontSize: '0.6rem' }}>
-                          {ticket.assigned_to_id.length > 20 ? ticket.assigned_to_id.slice(0, 20) + '...' : ticket.assigned_to_id}
-                        </span>
-                      )}
-                      {ticket.source.startsWith('cory') && (
-                        <span className="badge bg-primary bg-opacity-10 text-primary" style={{ fontSize: '0.6rem' }}>Cory</span>
-                      )}
+      <SectionCard padded={false} className="admin-section-card--bare">
+        <div className="d-flex gap-3 overflow-auto p-3" style={{ minHeight: 500 }}>
+          {visibleColumns.map(({ key, label }) => (
+            <div
+              key={key}
+              className="flex-shrink-0"
+              style={{ width: 280, minWidth: 280 }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, key)}
+            >
+              <div
+                className="rounded-top px-3 py-2 text-white fw-bold small d-flex justify-content-between align-items-center"
+                // Each column keeps its OWN stable accent color, keyed off its
+                // fixed position in the full COLUMNS list — not its position in
+                // the currently-visible subset (Ticket Board UX fixes,
+                // 2026-08-17: filtering to just "Done" must not repaint that
+                // column a different color than it always has).
+                style={{ backgroundColor: columnColor(COLUMNS.findIndex((c) => c.key === key)) } as React.CSSProperties}
+              >
+                <span>{label}</span>
+                <StatusBadge label={String(board?.[key]?.length || 0)} tone="neutral" />
+              </div>
+              <div
+                className="rounded-bottom p-2 d-flex flex-column gap-2"
+                style={{ minHeight: 400, background: 'var(--surface-subtle)' }}
+              >
+                {board?.[key]?.map((ticket) => (
+                  <div
+                    key={ticket.id}
+                    className="card border-0 shadow-sm"
+                    style={{ cursor: 'pointer' }}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, ticket.id)}
+                    onClick={() => setSelectedTicket(ticket.id)}
+                  >
+                    <div className="card-body p-2">
+                      <div className="d-flex justify-content-between align-items-start mb-1">
+                        <span className="text-muted" style={{ fontSize: '0.7rem' }}>TK-{ticket.ticket_number}</span>
+                        <StatusBadge label={ticket.priority} tone={PRIORITY_TONE[ticket.priority] || 'neutral'} />
+                      </div>
+                      <p className="mb-1 small fw-medium" style={{ lineHeight: 1.3 }}>{ticket.title}</p>
+                      <div className="d-flex gap-1 flex-wrap align-items-center">
+                        <StatusBadge label={ticket.type} tone={getTicketTypeTone(ticket.type)} />
+                        {isTicketStale(ticket.updated_at, ticket.status) && (
+                          <StatusBadge label="Stale" tone="warning" icon="time-line" />
+                        )}
+                        {ticket.assigned_to_id && (
+                          <StatusBadge
+                            label={ticket.assigned_to_id.length > 20 ? ticket.assigned_to_id.slice(0, 20) + '...' : ticket.assigned_to_id}
+                            tone="neutral"
+                          />
+                        )}
+                        {/* Real, distinct creator identity (Ticket Board UX fixes,
+                            2026-08-17) — replaces the old hardcoded "Cory" badge that
+                            collapsed cory-engine/CoryBrain/bpos_orchestrator into one
+                            indistinguishable label. Gated on source !== 'manual' so a
+                            staff-created ticket doesn't grow a "Human"-labeled badge
+                            that adds no information (see execution-contract.md
+                            Assumption 1). */}
+                        {ticket.source !== 'manual' && ticket.created_by_display_name && (
+                          <StatusBadge label={ticket.created_by_display_name} tone="primary" icon={getSourceIcon(ticket.source)} />
+                        )}
+                        {formatTicketAgeLabel(ticket.created_at, ticket.status) && (
+                          <StatusBadge label={formatTicketAgeLabel(ticket.created_at, ticket.status) as string} tone="neutral" icon="calendar-line" />
+                        )}
+                        {formatNextCheckLabel(ticket.auto_check) && (
+                          <StatusBadge label={formatNextCheckLabel(ticket.auto_check) as string} tone="info" icon="refresh-line" />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              {(!board?.[key] || board[key].length === 0) && (
-                <div className="text-center text-muted small py-4 border border-dashed rounded" style={{ borderStyle: 'dashed' }}>
-                  No tickets
-                </div>
-              )}
+                ))}
+                {(!board?.[key] || board[key].length === 0) && (
+                  <div className="text-center text-muted small py-4 border rounded" style={{ borderStyle: 'dashed' }}>
+                    No tickets
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </SectionCard>
 
       {/* Ticket Detail Modal */}
       {selectedTicket && (
@@ -335,11 +596,17 @@ export default function AdminTicketBoardPage() {
                     </div>
                     <div className="col-6">
                       <label className="form-label small fw-medium">Type</label>
+                      {/* Deliberately human-scoped, not the same list as the board's Type
+                          filter above: a person creating a ticket by hand should only see
+                          types a human would reasonably pick. Agent-only types
+                          (student_support, reese_autonomous_outreach) are intentionally
+                          excluded here. */}
                       <select className="form-select form-select-sm" value={newTicket.type} onChange={(e) => setNewTicket({ ...newTicket, type: e.target.value })}>
                         <option value="task">Task</option>
                         <option value="bug">Bug</option>
                         <option value="feature">Feature</option>
                         <option value="curriculum">Curriculum</option>
+                        <option value="agent_action">Agent Action</option>
                         <option value="strategic">Strategic</option>
                       </select>
                     </div>
@@ -356,6 +623,6 @@ export default function AdminTicketBoardPage() {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }

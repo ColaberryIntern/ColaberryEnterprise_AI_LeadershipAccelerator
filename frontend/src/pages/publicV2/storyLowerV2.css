@@ -1,0 +1,185 @@
+/*
+ * The lower half of a story page: the build rail and the status board.
+ *
+ * The structure is the one Ali approved on the training site on 2026-09-17 and
+ * the tokens are this app's, which is the rule for porting the format between
+ * surfaces: same shape, each site's own dress. Ali, the same day, on the other
+ * two surfaces: "it doesn't have a timeline and bottom format."
+ */
+
+.cbv2-cs-rail {
+  --cbv2-rail-n: 1;
+  position: relative;
+  display: grid;
+  /* one column per step plus one, so the last label can still span two */
+  grid-template-columns: repeat(calc(var(--cbv2-rail-n) + 1), minmax(0, 1fr));
+  grid-template-rows: auto 1.25rem auto;
+  column-gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.cbv2-cs-rail::before {
+  content: "";
+  grid-row: 2;
+  grid-column: 1 / -1;
+  align-self: center;
+  height: 2px;
+  background: var(--border-subtle);
+}
+
+.cbv2-cs-rail__item { display: contents; }
+
+.cbv2-cs-rail__dot {
+  grid-row: 2;
+  grid-column: var(--cbv2-rail-i);
+  justify-self: start;
+  align-self: center;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--accent-strong, var(--brand-primary));
+  box-shadow: 0 0 0 3px var(--surface-page);
+}
+
+.cbv2-cs-rail__label {
+  grid-column: var(--cbv2-rail-i) / span 2;
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  padding-right: var(--space-4);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.cbv2-cs-rail__item[data-side="up"] .cbv2-cs-rail__label {
+  grid-row: 1;
+  align-self: end;
+  padding-bottom: var(--space-2);
+}
+
+.cbv2-cs-rail__item[data-side="down"] .cbv2-cs-rail__label {
+  grid-row: 3;
+  padding-top: var(--space-2);
+}
+
+.cbv2-cs-rail__label time {
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong, var(--brand-primary));
+}
+
+.cbv2-cs-rail__notes {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  max-width: 72ch;
+  color: var(--text-muted);
+}
+
+.cbv2-cs-rail__notes strong { color: var(--text-strong); }
+
+/* Narrow: the same steps as compact rows; no rail, nothing to overflow. */
+@media (max-width: 899px) {
+  .cbv2-cs-rail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    gap: var(--space-3);
+  }
+
+  .cbv2-cs-rail::before { display: none; }
+
+  .cbv2-cs-rail__item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-3);
+    align-items: start;
+  }
+
+  .cbv2-cs-rail__dot {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: start;
+    margin-top: 0.35rem;
+  }
+
+  .cbv2-cs-rail__label,
+  .cbv2-cs-rail__item[data-side="up"] .cbv2-cs-rail__label,
+  .cbv2-cs-rail__item[data-side="down"] .cbv2-cs-rail__label {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0;
+    align-self: start;
+  }
+}
+
+/* What happened next: one column per status, labels only, details folded. */
+.cbv2-cs-next {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--space-4) var(--space-8);
+}
+
+.cbv2-cs-next__group {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.cbv2-cs-next__term {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold, 700);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cbv2-cs-next__list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.cbv2-cs-next__list li {
+  position: relative;
+  padding-left: var(--space-5);
+}
+
+.cbv2-cs-next__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: var(--radius-pill, 999px);
+  border: var(--border-2) solid var(--accent-strong, var(--brand-primary));
+}
+
+/* Shipped is the filled dot; every other status keeps the outline, and every
+   one of them says its own word above the column. */
+.cbv2-cs-next__group[data-roadmap-status="shipped"] .cbv2-cs-next__list li::before {
+  background: var(--accent-strong, var(--brand-primary));
+}
+
+/* The measurement narrative reads across two columns on a wide screen, so one
+   paragraph does not stand a screen tall beside empty space. Same rule as the
+   training site and the shell. */
+@media (min-width: 1100px) {
+  [data-section="measurement"] .cbv2-cs-arch__prose {
+    max-width: none;
+    column-count: 2;
+    column-gap: var(--space-10, 2.5rem);
+  }
+}

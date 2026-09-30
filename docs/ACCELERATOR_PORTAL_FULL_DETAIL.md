@@ -74,7 +74,7 @@ The mental model: the portal is not the runtime that builds your app. **Claude C
 - Production VPS: `95.216.199.47` running Docker Compose.
 - Compose stack: `postgres`, `backend`, `intelligence`, `nginx` (which serves the multi-stage built frontend).
 - Production URL: `enterprise.colaberry.ai`.
-- Two parallel dev stacks (`accelerator-dev-*` and `accelerator-dev2-*`) for staging.
+- One dev stack (`accelerator-dev-*`, port 9999) for staging.
 - No CI/CD: deploys are manual SSH + `docker compose up -d --build`.
 - Backend startup runs `sequelize.sync({ alter: true })` against ~170+ models — slow (~3-5 min) and the reason the portal sometimes returns 502s right after a deploy.
 

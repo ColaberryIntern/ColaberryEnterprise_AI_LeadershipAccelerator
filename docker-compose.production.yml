@@ -1,4 +1,4 @@
-version: "3.8"
+name: colaberry-accelerator
 
 services:
   postgres:
@@ -20,12 +20,28 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accelerator}"]
+      # -d is REQUIRED. Without it libpq defaults the database to the USERNAME,
+      # so this probed a database called "accelerator" that has never existed.
+      # pg_isready still reported "accepting connections" (the postmaster answers
+      # either way), so the healthcheck passed while Postgres logged a FATAL every
+      # 5 seconds: 16,960 a day, 53% of everything it logged. Measured 2026-09-10.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-accelerator} -d ${DB_NAME:-accelerator_prod}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   backend:
+    # Registry image built by .github/workflows/build-images.yml on every push to
+    # main. `build:` is deliberately KEPT alongside it: with both present, Compose
+    # names the locally-built image the same thing, so `up -d --build` behaves
+    # exactly as it always has, while `pull && up -d` now works too. That makes this
+    # change additive and reversible rather than a cutover.
+    #
+    # The package is PUBLIC because the repository is, so the prod host needs no
+    # registry credential to pull it. Verified 2026-09-10: an anonymous client can
+    # fetch the manifest (HTTP 200). Nothing secret is baked in — .dockerignore
+    # excludes .env, .env.local and .env.production.
+    image: ghcr.io/colaberryintern/accelerator-backend:main
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -45,6 +61,32 @@ services:
       PREVIEW_CPU_LIMIT: "0.5"
       PREVIEW_MEM_LIMIT: "512m"
       PREVIEW_PROXY_HOST: host.docker.internal
+      # Synthflow voice AI — powers Maya proactive calls AND the inbound
+      # "call me now" callback (POST /api/v1/request-callback). Values resolve
+      # from the host .env (also loaded via env_file above); declared explicitly
+      # here so the voice wiring is visible and guaranteed on the backend service.
+      # ENABLE_VOICE_CALLS defaults false — a real dial also requires test mode OFF.
+      SYNTHFLOW_API_KEY: ${SYNTHFLOW_API_KEY:-}
+      SYNTHFLOW_WELCOME_AGENT_ID: ${SYNTHFLOW_WELCOME_AGENT_ID:-}
+      SYNTHFLOW_INTEREST_AGENT_ID: ${SYNTHFLOW_INTEREST_AGENT_ID:-}
+      SYNTHFLOW_CALLBACK_AGENT_ID: ${SYNTHFLOW_CALLBACK_AGENT_ID:-}
+      ENABLE_VOICE_CALLS: ${ENABLE_VOICE_CALLS:-false}
+      # Service-to-service token training.colaberry.com uses for /api/v1/* calls.
+      ENTERPRISE_CRM_TOKEN: ${ENTERPRISE_CRM_TOKEN:-}
+      # AI News Flash intelligence pipeline — the daily generator behind the
+      # intelligence-pipeline curriculum feed. These two knobs resolve from the
+      # host .env (also via env_file) but are declared explicitly so the cadence
+      # is visible and version-controlled. MAX_PER_RUN bounds cards per daily run
+      # AND per boot catch-up (~1 gpt-4o-mini call each, pennies/day) — 3 = a
+      # livelier feed, ~90-card rolling window with the 30-day prune.
+      # CATCHUP_STALE_HOURS is the boot backfill window (< the 24h cron so a
+      # missed day recovers on restart).
+      # NOTE: the cost gate AI_NEWS_INGEST_ENABLED is deliberately NOT re-declared
+      # here — it stays carried by env_file only. An explicit `${...:-false}`
+      # fallback would OVERRIDE the host .env `true` and silently disable
+      # ingestion if compose ever ran from a dir whose .env lacked the key.
+      AI_NEWS_MAX_PER_RUN: ${AI_NEWS_MAX_PER_RUN:-3}
+      AI_NEWS_CATCHUP_STALE_HOURS: ${AI_NEWS_CATCHUP_STALE_HOURS:-20}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -59,10 +101,15 @@ services:
       # the host. Accepted per directives/per-user-project-previews.md sign-off.
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/preview-stacks:/var/preview-stacks
+      # CB System Command dashboard reads the host-side dispatcher/handler state
+      # + logs (written by the cron scripts outside the container), read-only.
+      - /opt/colaberry-accelerator/tmp/ops-engine:/app/host-ops-engine:ro
+      - /var/log:/app/host-logs:ro
     expose:
       - "3001"
 
   intelligence:
+    image: ghcr.io/colaberryintern/accelerator-intelligence:main
     build:
       context: ./intelligence/ai_engine
       dockerfile: Dockerfile
@@ -83,6 +130,7 @@ services:
       - "5000"
 
   nginx:
+    image: ghcr.io/colaberryintern/accelerator-nginx:main
     build:
       context: .
       dockerfile: nginx/Dockerfile

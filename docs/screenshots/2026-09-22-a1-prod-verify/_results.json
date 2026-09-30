@@ -1,0 +1,72 @@
+{
+  "defaultTab": "Overview",
+  "metricTiles": [
+    {
+      "label": "Owned cases",
+      "value": "38"
+    },
+    {
+      "label": "Needs your decision",
+      "value": "0"
+    },
+    {
+      "label": "Ready for your review",
+      "value": "0"
+    },
+    {
+      "label": "Completed (30d)",
+      "value": "6"
+    }
+  ],
+  "sectionsPresent": {
+    "Trust Contract": true,
+    "Trust evidence": true,
+    "Work explained": false,
+    "Scheduled work": true,
+    "Capabilities & Automations": true,
+    "Ticket activity": true,
+    "Identity": true,
+    "Role charter": true,
+    "Reports to": true,
+    "Employee facts": true,
+    "Persona and prompt": true
+  },
+  "overviewAbsenceLadder": {
+    "Assess": false,
+    "Handoff": false,
+    "Verify": false,
+    "Complete": true
+  },
+  "overviewAbsenceWaitingSplit": {
+    "waiting on Ali": false,
+    "waiting on staff": false,
+    "waiting on student": false,
+    "Waiting on a person": false,
+    "Waiting on Ali": false,
+    "Waiting on staff": false,
+    "Waiting on student": false
+  },
+  "worklayoutPresent": true,
+  "workAbsenceLadder": {
+    "Assess": false,
+    "Handoff": false,
+    "Verify": false,
+    "Complete": false
+  },
+  "workAbsenceWaitingSplit": {
+    "waiting on Ali": false,
+    "waiting on staff": false,
+    "waiting on student": false,
+    "Waiting on a person": false,
+    "Waiting on Ali": false,
+    "Waiting on staff": false,
+    "Waiting on student": false
+  },
+  "workDetailPanelVisible": true,
+  "backToAdminLink": {
+    "text": "← Back to Admin",
+    "href": "/admin/workforce"
+  },
+  "darkModeActive": true,
+  "consoleErrors": []
+}

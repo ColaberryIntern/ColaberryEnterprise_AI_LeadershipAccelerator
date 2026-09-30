@@ -182,7 +182,7 @@ ${cards}
   const r2 = await transport.sendMail({
     from: '"Claude Code (on behalf of Ali)" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     subject: '[Preview V3] Gov Bids post - 10-day filter + workflow-ordered buttons',
     text: 'V3 preview of the gov bids MB post. Live message updated. See HTML for inline screenshot.',
     html: emailHtml,

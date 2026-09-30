@@ -1,6 +1,7 @@
-import { Op } from 'sequelize';
+import { Op, literal } from 'sequelize';
 import { BehavioralSignal, IntentScore, Visitor } from '../models';
 import { logAgentExecution } from './governanceService';
+import { botExclusionSql, isBotUserAgent, notAutomatedSessionSql } from './visitorBotDetection';
 
 /**
  * Time-decay half-life in days. A signal loses half its weight every 7 days.
@@ -46,6 +47,18 @@ export async function computeIntentScore(visitorId: string): Promise<IntentScore
   const startTime = Date.now();
   const visitor = await Visitor.findByPk(visitorId);
   if (!visitor) return null;
+
+  // A crawler is not a lead. Every one of the twenty automated sessions on the
+  // live dashboard on 2026-09-04 carried a score of 100 "Very High" — the crawl
+  // was walking hundreds of pages, which is exactly what the model rewards — and
+  // those scores feed the high-intent list and the behavioural trigger campaigns.
+  // So the pollution was not cosmetic: it was queueing outreach at machines.
+  //
+  // Declining to score is the right move rather than scoring and filtering later:
+  // an unwritten row cannot leak into a consumer that forgot to filter.
+  if (isBotUserAgent((visitor as any).user_agent)) {
+    return null;
+  }
 
   const now = new Date();
 
@@ -188,8 +201,28 @@ export async function getHighIntentVisitors(
   threshold = 45,
   limit = 50
 ): Promise<IntentScore[]> {
+  // Historical rows written before bots were excluded from scoring are still in
+  // the table, so the read filters as well as the write. Belt and braces on
+  // purpose: this list is what a human acts on.
   return IntentScore.findAll({
-    where: { score: { [Op.gte]: threshold } },
+    where: {
+      score: { [Op.gte]: threshold },
+      [Op.and]: [
+        literal(
+          `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "IntentScore"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+        ),
+        // The user-agent rule alone was not enough here, and this list is where
+        // it mattered most. 42 of 619 intent rows are backed by a crawler that
+        // presents a clean browser string — and because the model rewards volume,
+        // those crawlers score 100 and sit at the TOP of the list, which is the
+        // only part of it anyone reads. A visitor with any session that looks
+        // automated is excluded outright.
+        literal(
+          `NOT EXISTS (SELECT 1 FROM "visitor_sessions" avs WHERE avs."visitor_id" = "IntentScore"."visitor_id" ` +
+            `AND NOT (${notAutomatedSessionSql('avs."pageview_count"', 'avs."duration_seconds"')}))`
+        ),
+      ],
+    },
     order: [['score', 'DESC']],
     limit,
     include: [
@@ -211,8 +244,23 @@ export async function getIntentScoreForVisitor(visitorId: string): Promise<Inten
  * Get intent level distribution (how many visitors at each level).
  */
 export async function getIntentDistribution(): Promise<Record<string, number>> {
+  // Filtered exactly like getHighIntentVisitors. If the distribution counted
+  // crawlers while the list beside it did not, the chart and the table under it
+  // would describe different populations — and the crawlers all score 100, so
+  // the "very high" bar would be the one most inflated.
   const scores = await IntentScore.findAll({
     attributes: ['intent_level'],
+    where: {
+      [Op.and]: [
+        literal(
+          `EXISTS (SELECT 1 FROM "visitors" bv WHERE bv."id" = "IntentScore"."visitor_id" AND ${botExclusionSql('bv."user_agent"')})`
+        ),
+        literal(
+          `NOT EXISTS (SELECT 1 FROM "visitor_sessions" avs WHERE avs."visitor_id" = "IntentScore"."visitor_id" ` +
+            `AND NOT (${notAutomatedSessionSql('avs."pageview_count"', 'avs."duration_seconds"')}))`
+        ),
+      ],
+    },
   });
 
   const distribution: Record<string, number> = {

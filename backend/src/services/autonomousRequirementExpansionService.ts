@@ -88,8 +88,12 @@ export async function runExpansionCycle(): Promise<ExpansionCycleResult> {
         attributes: ['capability_id', 'mode_override'],
       });
       for (const c of linkedCampaigns) {
-        if ((c as any).mode_override && (c as any).capability_id) {
-          campaignModeMap.set((c as any).capability_id, (c as any).mode_override);
+        // Typed reads, no cast. These were `(c as any)` because Campaign's class body did
+        // not `declare` either column, so the model would not expose them — the cast was a
+        // workaround for that defect, and it disabled type checking on the whole expression.
+        // Both are now declared, so this compiles through the model.
+        if (c.mode_override && c.capability_id) {
+          campaignModeMap.set(c.capability_id, c.mode_override);
         }
       }
     } catch {}

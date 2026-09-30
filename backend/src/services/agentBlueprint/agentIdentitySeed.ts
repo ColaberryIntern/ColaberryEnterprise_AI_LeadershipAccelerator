@@ -1,0 +1,406 @@
+import crypto from 'crypto';
+import AdminUser from '../../models/AdminUser';
+import Enrollment from '../../models/Enrollment';
+import CommunityMember, { type CommunityMemberRole } from '../../models/CommunityMember';
+import AiAgent from '../../models/AiAgent';
+import Cohort from '../../models/Cohort';
+import { getLegacyCreatorIds } from './legacyCreatorAliases';
+import { isGenericFallbackLabel } from '../../scripts/lib/agentTicketStandardChecks';
+
+// Reese Phase 3 (Agent Blueprint) — the AdminUser/Enrollment/CommunityMember/AiAgent
+// identity-linkage core, extracted from Reese Phase 1's reeseIdentitySeed.ts so the
+// NEXT platform agent doesn't re-derive this shape from scratch. Reese is the first
+// caller of this generic module (see backend/src/services/reese/reeseIdentitySeed.ts),
+// refactored to delegate here with zero behavior change — every exported Reese
+// function name/signature is unchanged, only the implementation moved.
+//
+// Rows created by seedAgentIdentity():
+//   1. AdminUser      — the agent's real staff account (role configurable, default
+//                        'ai_staff'; is_ai_operated: true), the SAME model real human
+//                        staff use, not a special-cased fake account.
+//   2. Enrollment     — required FK target for CommunityMember. cohort_id is left
+//                        null — Enrollment.cohort_id is nullable by design ("free/
+//                        guest accounts can exist without a cohort" per Enrollment.ts's
+//                        own comment). payment_status/payment_method are required
+//                        NOT NULL columns with a closed literal union — the config's
+//                        enrollmentDefaults must supply honest placeholders for a
+//                        non-transactional staff row.
+//   3. CommunityMember — gives the agent a presence row the People panel's
+//                        derivePresence() can read from.
+//
+// Idempotency: every step is findOrCreate keyed on a value unique to the agent
+// (agent_name / email). Running this twice must not create duplicate rows.
+//
+// Optional pilot-cohort allowlist gate (pilotCohortGate: true): stores a
+// config.pilot_cohort_ids array on the existing AiAgent.config JSONB column (zero new
+// schema) for any agent that will eventually gate a proactive/autonomous capability
+// on an eligible population — mirrors Reese Phase 1's own T013 data-only seed (nothing
+// enforces this by itself; the calling agent's own eligibility service reads it, see
+// reeseEligibilityService.ts for the worked pattern). Off by default — most agents
+// built from this module will be reactive-only and never need it.
+
+export interface AgentIdentityConfig {
+  agentName: string;
+  email: string;
+  displayName: string;
+  /** AdminUser.role. Default 'ai_staff'. */
+  role?: string;
+  /** CommunityMember.role. Default 'mentor'. */
+  communityRole?: CommunityMemberRole;
+  /** Honest placeholder defaults for the required Enrollment columns (matches Enrollment.ts's own literal unions). */
+  enrollmentDefaults: {
+    company: string;
+    payment_status: 'paid' | 'pending' | 'pending_invoice' | 'failed';
+    payment_method: 'credit_card' | 'ach' | 'invoice';
+    payment_mode: 'test' | 'live';
+    enrollment_type: 'standard' | 'explorer';
+    portal_enabled: boolean;
+  };
+  /** Off by default — opt in only if this agent will gate a proactive capability on an eligible population. */
+  pilotCohortGate?: boolean;
+  /**
+   * Raw `created_by_id`/`assigned_to_id` strings this process used to stamp on
+   * tickets BEFORE it had a real AdminUser identity (e.g. 'cory-engine'). Omitted or
+   * empty for a net-new agent with no such history (e.g. Reese). Self-heals into
+   * `AiAgent.config.legacy_creator_ids` — additive only, never removes an alias a
+   * human may have added by hand. See legacyCreatorAliases.ts for the read side.
+   */
+  legacyCreatorIds?: string[];
+  /**
+   * Agent Ticket Standard — "every ticket must have a home" (Ali, live,
+   * 2026-08-18) — AI Leadership case. The real human (an `org_members.id` on
+   * the "Colaberry" org) this agent reports to DIRECTLY. Provide exactly one
+   * of `reportsToOrgMemberId` or `reportsToAgentName` (enforced at runtime in
+   * seedAgentIdentity(), not just by convention) — this agent cannot be both a
+   * direct human report AND an AI Staff agent reporting through another one.
+   */
+  reportsToOrgMemberId?: string;
+  /**
+   * AI Leadership / AI Staff hierarchy (Ali, live, 2026-08-19) — AI Staff
+   * case. The `agent_name` of the AI Leadership agent this agent reports
+   * through (e.g. 'CoryBrain', 'workforce_intelligence_engine') — resolved to
+   * that agent's real `ai_agents.id` at seed time. Provide exactly one of
+   * `reportsToOrgMemberId` or `reportsToAgentName`. The target agent must
+   * already be registered (its AiAgent row must exist) when this seed runs —
+   * seedTicketCreatorIdentities() seeds AI Leadership entries first for
+   * exactly this reason.
+   */
+  reportsToAgentName?: string;
+}
+
+export interface AgentIdentityIds {
+  adminUserId: string;
+  enrollmentId: string;
+  communityMemberId: string;
+  aiAgentId: string;
+}
+
+export interface AgentIdentityPreview {
+  agentName: string;
+  email: string;
+  aiAgent: { exists: boolean; id: string | null };
+  enrollment: { wouldCreate: boolean; id: string | null };
+  communityMember: { wouldCreate: boolean; id: string | null };
+  adminUser: { wouldCreate: boolean; id: string | null; wouldLinkAgentId: boolean };
+  pilotCohortGate: { requested: boolean; wouldPopulate: boolean; existingCohortIds: string[] };
+}
+
+// Memoized lookups keyed by email — one process-lifetime cache entry per agent, not
+// a single global slot, so this module supports more than one agent identity in the
+// same running process. Reese's own getReeseEnrollmentId()/getReeseAdminUserId()
+// wrap these with REESE_EMAIL baked in (see reeseIdentitySeed.ts) — same caching
+// contract as before the extraction: cached after the first successful lookup,
+// stable for the process lifetime since these rows are findOrCreate'd once at boot
+// and never re-created.
+const enrollmentIdCache = new Map<string, string | null>();
+const adminUserIdCache = new Map<string, string | null>();
+const agentIdCache = new Map<string, string | null>();
+
+export async function getAgentEnrollmentId(email: string): Promise<string | null> {
+  if (enrollmentIdCache.has(email)) return enrollmentIdCache.get(email)!;
+  const enrollment = await Enrollment.findOne({ where: { email } });
+  const id = enrollment ? enrollment.id : null;
+  enrollmentIdCache.set(email, id);
+  return id;
+}
+
+export async function getAgentAdminUserId(email: string): Promise<string | null> {
+  if (adminUserIdCache.has(email)) return adminUserIdCache.get(email)!;
+  const admin = await AdminUser.findOne({ where: { email } });
+  const id = admin ? admin.id : null;
+  adminUserIdCache.set(email, id);
+  return id;
+}
+
+/** Cost-tracking fix (2026-08-27) — Ali, live: "isn't [cost] part of it?" Real,
+ * instrumented LLM calls for Reese (67 in 30 days, $0.02, 58,908 tokens per
+ * `ai_events`) were invisible to every per-agent cost query because her call
+ * sites tag `workflow_id` but never `agent_id`. This resolves the real
+ * `AiAgent.id` via the same `AdminUser.agent_id` FK `agentDetailService.ts`
+ * already reads, so a caller can pass a real id into
+ * `getInstrumentedOpenAI({ agent_id: ... })` instead of leaving it null. */
+export async function getAgentId(email: string): Promise<string | null> {
+  if (agentIdCache.has(email)) return agentIdCache.get(email)!;
+  const admin = await AdminUser.findOne({ where: { email } });
+  const id = admin?.agent_id ?? null;
+  agentIdCache.set(email, id);
+  return id;
+}
+
+/** Test-only: clears one agent's memoized ids (all three caches) so tests can simulate a fresh process. */
+export function __resetAgentIdentityCacheForTests(email: string): void {
+  enrollmentIdCache.delete(email);
+  adminUserIdCache.delete(email);
+  agentIdCache.delete(email);
+}
+
+export async function seedAgentIdentity(config: AgentIdentityConfig): Promise<AgentIdentityIds> {
+  // Agent Ticket Standard, hardened to a real registration-time gate
+  // (Ali, live, 2026-08-19 — "harden the agent building process"). Every
+  // check below throws BEFORE any row is written, and every throw here is
+  // caught per-entry by seedTicketCreatorIdentities()'s own try/catch (see
+  // its own header comment) — one bad agent's registration fails loudly and
+  // visibly in the boot log without blocking every other agent's identity
+  // seed or crashing boot itself, matching this file's existing fail-open-
+  // per-entry, fail-loud-per-error posture. A mis-registered agent that
+  // fails here never gets its reports_to chain set, so it is separately,
+  // independently blocked from creating tickets at all by
+  // enforceReportsToGate() in ticketCreatorReportsToResolver.ts — two
+  // enforcement layers, not one.
+
+  // Structural enforcement, not just documentation: exactly one of
+  // reportsToOrgMemberId (AI Leadership, direct-to-human) or
+  // reportsToAgentName (AI Staff, through another agent) must be provided —
+  // matching this file's existing "REQUIRED, not optional" posture for the
+  // Agent Ticket Standard.
+  const hasHumanTarget = !!config.reportsToOrgMemberId;
+  const hasAgentTarget = !!config.reportsToAgentName;
+  if (hasHumanTarget === hasAgentTarget) {
+    throw new Error(
+      `[${config.agentName}] must provide exactly one of reportsToOrgMemberId or ` +
+        `reportsToAgentName, got ${hasHumanTarget ? 'both' : 'neither'}.`,
+    );
+  }
+
+  // Agent Ticket Standard Step 2 (display identity) — hardened here, not just
+  // checked after the fact by validateAgentTicketStandard.ts. A generic/
+  // collapsed displayName ('Cory', 'Agent', 'System', ...) is exactly the bug
+  // class PR #1559 fixed for cory-engine/CoryBrain; refusing it at
+  // registration time means it can never ship again, not just get caught on
+  // a manually-run audit later.
+  if (isGenericFallbackLabel(config.displayName)) {
+    throw new Error(
+      `[${config.agentName}] displayName '${config.displayName}' is a generic/collapsed fallback label ` +
+        `(one of: ${['Cory', 'Agent', 'System', 'Human', 'Ai Staff', 'On Demand'].join(', ')}, or empty) — ` +
+        'a real, distinguishing display identity is required (Agent Ticket Standard Step 2).',
+    );
+  }
+
+  const aiAgent = await AiAgent.findOne({ where: { agent_name: config.agentName } });
+  if (!aiAgent) {
+    // Should not happen in normal boot order (the AGENT_REGISTRY entry is expected to
+    // be seeded first by seedAgentRegistry()), but fail loudly rather than silently
+    // creating an orphaned identity with no linked AiAgent row.
+    throw new Error(
+      `[${config.agentName}] seedAgentIdentity() ran before the '${config.agentName}' AiAgent registry row existed. ` +
+      'Call this after the AGENT_REGISTRY findOrCreate loop in seedAgentRegistry().'
+    );
+  }
+
+  // Agent Ticket Standard Step 4 (tools_granted) — hardened here too. By the
+  // time seedAgentIdentity() runs, seedAgentRegistry()'s own AGENT_REGISTRY
+  // findOrCreate loop has already set AiAgent.tools_granted for every entry
+  // that declares it (seedAgentRegistry() calls seedReeseIdentity()/
+  // seedTicketCreatorIdentities() AFTER that loop — see its own function
+  // body). A ticket-creating agent with no declared tools_granted is exactly
+  // the "boilerplate/aspirational capability list" gap Step 4 exists to
+  // catch — refuse registration rather than let it ship silently.
+  const declaredTools = aiAgent.tools_granted;
+  if (!Array.isArray(declaredTools) || declaredTools.length === 0) {
+    throw new Error(
+      `[${config.agentName}] AiAgent.tools_granted is missing or empty — every ticket-creating agent must ` +
+        'declare its real capabilities in AGENT_REGISTRY before seedAgentIdentity() will register it ' +
+        '(Agent Ticket Standard Step 4).',
+    );
+  }
+
+  const [enrollment] = await Enrollment.findOrCreate({
+    where: { email: config.email },
+    defaults: {
+      full_name: config.displayName,
+      email: config.email,
+      company: config.enrollmentDefaults.company,
+      payment_status: config.enrollmentDefaults.payment_status,
+      payment_method: config.enrollmentDefaults.payment_method,
+      payment_mode: config.enrollmentDefaults.payment_mode,
+      status: 'active',
+      tier: 'member',
+      cohort_id: null,
+      enrollment_type: config.enrollmentDefaults.enrollment_type,
+      portal_enabled: config.enrollmentDefaults.portal_enabled,
+    },
+  });
+
+  const [communityMember] = await CommunityMember.findOrCreate({
+    where: { enrollment_id: enrollment.id },
+    defaults: {
+      enrollment_id: enrollment.id,
+      display_name: config.displayName,
+      role: config.communityRole || 'mentor',
+      last_active_at: new Date(),
+    },
+  });
+
+  const [adminUser, adminCreated] = await AdminUser.findOrCreate({
+    where: { email: config.email },
+    defaults: {
+      email: config.email,
+      // The agent never logs in interactively (no autonomous-account-takeover
+      // surface to protect) — a random, never-persisted-anywhere-else,
+      // unusable-as-a-real-password hash, matching the "real account, not a fake"
+      // framing while giving nothing crackable/reusable.
+      password_hash: crypto.randomBytes(32).toString('hex'),
+      role: config.role || 'ai_staff',
+      display_name: config.displayName,
+      is_ai_operated: true,
+      agent_id: aiAgent.id,
+    },
+  });
+  // Self-heal: if the AdminUser row already existed (e.g. created before the AiAgent
+  // row existed on an earlier boot) but isn't linked yet, link it now.
+  if (!adminCreated && !adminUser.agent_id) {
+    await adminUser.update({ agent_id: aiAgent.id, is_ai_operated: true });
+  }
+
+  if (config.pilotCohortGate) {
+    // `any` justified: AiAgent.config is itself typed Record<string, any> on the
+    // model (a deliberately untyped JSONB bag shared by ~130 agent entries) — this
+    // cast reads/writes one known key on that already-untyped structure, not a new
+    // type-safety hole. Never overwrites an already-set allowlist (e.g. an admin's
+    // deliberate choice made after this ran once) — only fills it in when empty.
+    const existingPilotCohortIds = (aiAgent.config as any)?.pilot_cohort_ids;
+    if (!Array.isArray(existingPilotCohortIds) || existingPilotCohortIds.length === 0) {
+      const pilotCohort = await Cohort.findOne({
+        where: { status: 'open' },
+        order: [['start_date', 'DESC']],
+      });
+      if (pilotCohort) {
+        await aiAgent.update({
+          config: { ...(aiAgent.config || {}), pilot_cohort_ids: [pilotCohort.id] },
+        } as any);
+      }
+    }
+  }
+
+  // Agent Ticket Standard — self-heal only when null, same shape as the
+  // pilot-cohort/legacy-alias blocks above: fills reports_to_org_member_id the
+  // first time it's missing, never overwrites a value already set (whether by
+  // an earlier boot of this same seed or a deliberate manual change afterward
+  // — matches the `enabled`-flag precedent this file's own header comment
+  // documents: "findOrCreate() only honors a field at first-row creation").
+  // This is what actually populates the field in a database that already has
+  // this agent's AiAgent row from before this change shipped — no separate
+  // one-off data-migration script needed, since seedTicketCreatorIdentities()
+  // (and reeseIdentitySeed.ts's own seed call) already run every boot.
+  // Kept for historical/audit value only as of 2026-08-19 — reports_to_type/
+  // reports_to_id below are what the resolver actually reads now.
+  if (config.reportsToOrgMemberId && !aiAgent.reports_to_org_member_id) {
+    await aiAgent.update({ reports_to_org_member_id: config.reportsToOrgMemberId } as any);
+  }
+
+  // AI Leadership / AI Staff hierarchy (2026-08-19) — same self-heal-only-when-null
+  // shape. AI Leadership (reportsToOrgMemberId set): reports_to_type='human',
+  // reports_to_id=that org_member id directly, no lookup needed. AI Staff
+  // (reportsToAgentName set): resolve the target's real ai_agents.id fresh
+  // every boot (never cached) since the target's own row must already exist by
+  // the time this runs (see AgentIdentityConfig's reportsToAgentName doc) —
+  // fail loudly rather than silently leaving this agent unreportable if the
+  // target is missing (a real registration-order bug, not something to paper
+  // over with a null).
+  if (!aiAgent.reports_to_type || !aiAgent.reports_to_id) {
+    if (config.reportsToOrgMemberId) {
+      await aiAgent.update({
+        reports_to_type: 'human',
+        reports_to_id: config.reportsToOrgMemberId,
+      } as any);
+    } else if (config.reportsToAgentName) {
+      const targetAgent = await AiAgent.findOne({ where: { agent_name: config.reportsToAgentName } });
+      if (!targetAgent) {
+        throw new Error(
+          `[${config.agentName}] reportsToAgentName='${config.reportsToAgentName}' does not resolve to ` +
+            'a registered AiAgent — the target AI Leadership agent must be seeded before this one.',
+        );
+      }
+      await aiAgent.update({
+        reports_to_type: 'agent',
+        reports_to_id: targetAgent.id,
+      } as any);
+    }
+  }
+
+  if (config.legacyCreatorIds && config.legacyCreatorIds.length > 0) {
+    // Additive self-heal, same shape as the pilot-cohort block above: merge in any
+    // alias not already present, never remove one a human (or an earlier boot) added.
+    const existingAliases = getLegacyCreatorIds(aiAgent);
+    const merged = Array.from(new Set([...existingAliases, ...config.legacyCreatorIds]));
+    if (merged.length !== existingAliases.length) {
+      await aiAgent.update({
+        config: { ...(aiAgent.config || {}), legacy_creator_ids: merged },
+      } as any);
+    }
+  }
+
+  return {
+    adminUserId: adminUser.id,
+    enrollmentId: enrollment.id,
+    communityMemberId: communityMember.id,
+    aiAgentId: aiAgent.id,
+  };
+}
+
+/**
+ * Read-only preview of what seedAgentIdentity(config) WOULD create, for a hypothetical
+ * new agent, with ZERO real writes. Structurally zero-write by design: this function
+ * only ever calls `.findOne` on the four models — it never imports or calls
+ * `findOrCreate`, `create`, or `update`, so there is no code path here that can
+ * accidentally persist anything, even under a future editing mistake. This is the
+ * dry-run pattern used by the worked-example walkthrough (see
+ * .loop-architect/runs/20260810-reese-phase3-agent-blueprint/worked-example-walkthrough.md)
+ * — mirrors the honest-dry-run contract already proven in
+ * reese/reeseAutonomousOutreachService.ts's `dryRun` parameter, adapted here as a
+ * dedicated read-only function rather than a boolean flag on the writing function,
+ * since identity-seed has no per-candidate cap/pacing state a boolean flag would need
+ * to simulate.
+ */
+export async function previewAgentIdentity(config: AgentIdentityConfig): Promise<AgentIdentityPreview> {
+  const aiAgent = await AiAgent.findOne({ where: { agent_name: config.agentName } });
+  const enrollment = await Enrollment.findOne({ where: { email: config.email } });
+  const communityMember = enrollment
+    ? await CommunityMember.findOne({ where: { enrollment_id: enrollment.id } })
+    : null;
+  const adminUser = await AdminUser.findOne({ where: { email: config.email } });
+
+  let existingCohortIds: string[] = [];
+  if (aiAgent) {
+    const raw = (aiAgent.config as any)?.pilot_cohort_ids;
+    existingCohortIds = Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
+  }
+
+  return {
+    agentName: config.agentName,
+    email: config.email,
+    aiAgent: { exists: !!aiAgent, id: aiAgent ? aiAgent.id : null },
+    enrollment: { wouldCreate: !enrollment, id: enrollment ? enrollment.id : null },
+    communityMember: { wouldCreate: !communityMember, id: communityMember ? communityMember.id : null },
+    adminUser: {
+      wouldCreate: !adminUser,
+      id: adminUser ? adminUser.id : null,
+      wouldLinkAgentId: !!adminUser && !adminUser.agent_id && !!aiAgent,
+    },
+    pilotCohortGate: {
+      requested: !!config.pilotCohortGate,
+      wouldPopulate: !!config.pilotCohortGate && existingCohortIds.length === 0,
+      existingCohortIds,
+    },
+  };
+}

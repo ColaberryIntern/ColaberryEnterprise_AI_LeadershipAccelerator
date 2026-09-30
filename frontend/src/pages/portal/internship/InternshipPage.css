@@ -1,0 +1,707 @@
+/* AI Internship application page.
+ *
+ * Scoped entirely under .ip-root so nothing here can leak into the rest of the
+ * portal, matching the .pp-root convention PathPage uses.
+ */
+
+.ip-root {
+  /* Wide enough for the flow column plus the requirements rail. PortalShell's
+     .te-main already supplies the side gutter, so this adds none of its own. */
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 0 64px;
+}
+
+/* The two-column split, reusing PortalShell's shared .te-grid / .te-side so the
+   proportions and the 1300px collapse match Today and Classroom exactly. */
+.ip-flow {
+  min-width: 0;   /* lets the intake field grid shrink and wrap in the column */
+}
+.ip-flow > .ip-card:last-child,
+.ip-flow > form.ip-card:last-child {
+  margin-bottom: 0;
+}
+/* The requirements card sits in the rail; it keeps the page's card styling. */
+.ip-railcard {
+  margin-bottom: 0;
+}
+@media (max-width: 1300px) {
+  /* Once the rail drops below the flow, give it a little air above. */
+  .ip-layout .te-side { margin-top: 4px; }
+}
+
+.ip-head h1 {
+  font-size: 28px;
+  margin: 0 0 8px;
+  color: var(--strong, #111827);
+}
+
+.ip-lede {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted, #4b5563);
+  margin: 0 0 24px;
+  max-width: 60ch;
+}
+
+.ip-card {
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.ip-card h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+  color: var(--strong, #111827);
+}
+
+.ip-sub { margin-top: 0; margin-bottom: 18px; }
+.ip-muted { color: var(--muted, #6b7280); font-size: 13.5px; line-height: 1.55; }
+.ip-next { margin-top: 14px; }
+
+.ip-list {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted, #4b5563);
+}
+.ip-list strong { color: var(--strong, #111827); }
+
+/* The "we will never ask for your key" notice. Deliberately loud — a student
+   conditioned by other platforms will go looking for the field. */
+.ip-warn {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(180, 83, 9, 0.08);
+  border: 1px solid rgba(180, 83, 9, 0.22);
+  color: #92400e;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.ip-alert {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(185, 28, 28, 0.08);
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  color: #991b1b;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.ip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ip-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ip-field--wide { grid-column: 1 / -1; }
+
+.ip-field > span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--strong, #374151);
+}
+
+.ip-field input,
+.ip-field select,
+.ip-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--card, #fff);
+  color: var(--strong, #111827);
+}
+
+.ip-field input:focus-visible,
+.ip-field select:focus-visible,
+.ip-field textarea:focus-visible,
+.ip-check input:focus-visible,
+.ip-choice:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+.ip-fieldset {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 20px 0 0;
+}
+
+.ip-fieldset legend {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 6px;
+  color: var(--strong, #374151);
+}
+
+.ip-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted, #4b5563);
+  padding: 7px 0;
+  cursor: pointer;
+}
+
+/* Big enough to hit on a phone, and aligned to the first line of its label
+   rather than floating in the middle of a three-line consent. */
+.ip-check input {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.ip-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.ip-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* The two channels are given identical visual weight on purpose: "channel choice
+   must not affect approval scoring", and a design that makes one look like the
+   real option and the other like a fallback would steer people regardless. */
+.ip-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  padding: 18px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 10px;
+  background: var(--card, #fff);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.ip-choice strong { font-size: 14.5px; color: var(--strong, #111827); }
+.ip-choice span { font-size: 13px; color: var(--muted, #6b7280); line-height: 1.5; }
+
+.ip-choice:hover { border-color: #7c3aed; background: rgba(124, 58, 237, 0.03); }
+
+.ip-choice.is-chosen {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ip-choice { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .ip-grid,
+  .ip-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ip-card { padding: 18px; }
+  .ip-root { padding: 16px 12px 48px; }
+}
+
+/* ── The interview (Phase 3) ────────────────────────────────────────────────
+ * Scoped under .ip-root like everything else on this page.
+ */
+
+.ip-progress { margin: 0 0 20px; }
+
+.ip-progress__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.12);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+/* The lighter band: answers in hand (confirmed + captured on the call). It sits
+   under the solid confirmed band, so the gap between them is what is still to
+   confirm from the call. */
+.ip-progress__captured {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: rgba(124, 58, 237, 0.32);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
+.ip-progress__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: #7c3aed;
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
+/* The bar is decoration; the count beside it is the real signal. Removing the
+   animation for reduced-motion users costs nothing because of that. */
+@media (prefers-reduced-motion: reduce) {
+  .ip-progress__fill,
+  .ip-progress__captured { transition: none; }
+}
+
+.ip-q__section {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6d28d9;
+  margin: 0 0 8px;
+}
+
+.ip-q__prompt {
+  display: block;
+  font-size: 16.5px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--strong, #111827);
+  margin: 0 0 14px;
+}
+
+.ip-q__text,
+.ip-q__select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 8px;
+  font-size: 14.5px;
+  font-family: inherit;
+  line-height: 1.55;
+  background: var(--card, #fff);
+  color: var(--strong, #111827);
+}
+
+.ip-q__text:focus-visible,
+.ip-q__select:focus-visible,
+.ip-toggle:focus-visible,
+.ip-skip:focus-visible,
+.ip-editlink:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+.ip-q__yesno { display: flex; gap: 10px; }
+
+/* Both options get identical weight. Styling "Yes" as the primary action would be
+   steering the answer to a question we are asking in order to find out. */
+.ip-toggle {
+  flex: 1 1 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 8px;
+  background: var(--card, #fff);
+  font-size: 14.5px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--strong, #374151);
+  cursor: pointer;
+}
+
+.ip-toggle.is-on {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.08);
+  color: #6d28d9;
+}
+
+.ip-skip {
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.ip-q__saved { margin: 14px 0 0; }
+.ip-note { margin-top: 14px; }
+
+.ip-callrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.ip-or { padding-bottom: 10px; }
+.ip-field--inline { flex: 0 1 220px; }
+
+.ip-booked p { font-size: 14px; margin: 0 0 12px; color: var(--strong, #111827); }
+
+.ip-warn--sm {
+  font-size: 12.5px;
+  margin-top: 18px;
+  padding: 10px 12px;
+}
+
+/* ── Summary review ────────────────────────────────────────────────────────── */
+
+.ip-confirm {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px solid rgba(124, 58, 237, 0.24);
+  margin-bottom: 22px;
+}
+
+.ip-confirm p { font-size: 13.5px; line-height: 1.55; margin: 0 0 12px; }
+
+.ip-sumsec { margin-bottom: 24px; }
+
+.ip-sumsec h3 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #6b7280);
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+
+.ip-sumline { padding: 12px 0; border-bottom: 1px solid var(--line, #f3f4f6); }
+
+/* An unconfirmed answer is visually marked because it is the one thing on this
+   screen the applicant MUST look at — it came from a machine reading their call. */
+.ip-sumline.is-unconfirmed {
+  border-left: 3px solid #7c3aed;
+  padding-left: 12px;
+  background: rgba(124, 58, 237, 0.03);
+}
+
+.ip-sumline__q {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--strong, #374151);
+  margin: 0 0 6px;
+}
+
+.ip-sumline__a {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--strong, #111827);
+  margin: 0 0 8px;
+  white-space: pre-wrap;   /* their line breaks are theirs */
+}
+
+.ip-sumline__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.ip-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted, #6b7280);
+}
+
+.ip-tag--warn { background: rgba(124, 58, 237, 0.12); color: #6d28d9; }
+
+.ip-editlink {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 12.5px;
+  color: #6d28d9;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+}
+
+.ip-sumline__edit textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d1d5db);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+
+.ip-actions--submit {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line, #e5e7eb);
+}
+
+@media (max-width: 640px) {
+  .ip-callrow { flex-direction: column; align-items: stretch; }
+  .ip-or { padding: 0; text-align: center; }
+  .ip-q__yesno { flex-direction: column; }
+}
+
+/* ── Offer-letter package (Phase 5) ─────────────────────────────────────────── */
+
+.ip-steps {
+  margin: 0 0 22px;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--muted, #4b5563);
+}
+.ip-steps strong { color: var(--strong, #111827); }
+
+.ip-doc {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+/* A correction request is the one state the student MUST notice, so it is marked
+   rather than left to be inferred from a line of text further down. */
+.ip-doc.is-correction {
+  border-color: rgba(180, 83, 9, 0.4);
+  background: rgba(180, 83, 9, 0.04);
+}
+
+.ip-doc.is-verified {
+  border-color: rgba(21, 128, 61, 0.3);
+  background: rgba(21, 128, 61, 0.03);
+}
+
+.ip-doc__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ip-doc__title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--strong, #111827);
+  margin: 0 0 4px;
+}
+
+.ip-doc__why { margin: 0 0 4px; }
+.ip-doc__id { margin: 0; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ip-doc__status { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; flex: none; }
+
+.ip-doc__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ip-doc__hint { font-size: 12px; }
+
+.ip-alert--soft {
+  background: rgba(180, 83, 9, 0.08);
+  border-color: rgba(180, 83, 9, 0.25);
+  color: #92400e;
+  font-size: 13px;
+  margin: 10px 0 0;
+}
+
+@media (max-width: 640px) {
+  .ip-doc__head { flex-direction: column; }
+  .ip-doc__status { align-items: flex-start; flex-direction: row; }
+  .ip-doc__actions { flex-direction: column; align-items: stretch; }
+}
+
+/* ── Onboarding checklist (Phase 6) ─────────────────────────────────────────── */
+
+.ip-checklist { list-style: none; margin: 0; padding: 0; }
+
+.ip-cl {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line, #f3f4f6);
+}
+
+.ip-cl__mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line, #d1d5db);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: transparent;
+  margin-top: 1px;
+}
+
+.ip-cl.is-done .ip-cl__mark {
+  border-color: #15803d;
+  background: rgba(21, 128, 61, 0.1);
+  color: #15803d;
+}
+
+.ip-cl__body { min-width: 0; flex: 1 1 auto; }
+
+.ip-cl__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--strong, #111827);
+  margin: 0 0 3px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ip-cl.is-done .ip-cl__label { color: var(--muted, #6b7280); }
+
+.ip-cl__detail { margin: 0; font-size: 13px; }
+.ip-cl__waiting { margin: 4px 0 0; font-size: 12.5px; font-style: italic; }
+.ip-cl__hint { font-size: 12px; }
+
+.ip-cl__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ip-terms {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line, #e5e7eb);
+  font-size: 13.5px;
+}
+
+.ip-terms dt { font-weight: 600; color: var(--strong, #374151); }
+.ip-terms dd { margin: 0; color: var(--muted, #4b5563); }
+
+@media (max-width: 640px) {
+  .ip-cl__actions { flex-direction: column; align-items: stretch; }
+  .ip-terms { grid-template-columns: 1fr; gap: 2px 0; }
+  .ip-terms dd { margin-bottom: 8px; }
+}
+
+/* ── The phone-call overlay ────────────────────────────────────────────────
+   Blocks the page while a call is live, then acknowledges the outcome. It is a
+   soft block: every state that waits also offers a way back to answering online.
+   Fixed to the viewport so it covers the whole portal, not just the card. */
+.ip-callover {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.55);
+  backdrop-filter: blur(3px);
+}
+.ip-callover__card {
+  background: var(--card, #fff);
+  color: var(--strong, #111827);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  width: min(440px, 100%);
+  padding: 32px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.ip-callover__card h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  color: var(--strong, #111827);
+}
+.ip-callover__card p {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--muted, #4b5563);
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.ip-callover__card .ip-skip { margin-top: 6px; }
+.ip-callover__card .te-btn { margin-top: 8px; }
+
+/* Three dots that breathe while the call is live. */
+.ip-callpulse { display: flex; gap: 9px; height: 18px; align-items: center; }
+.ip-callpulse span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--berry, #b31b34);
+  animation: ip-callpulse 1.2s ease-in-out infinite;
+}
+.ip-callpulse span:nth-child(2) { animation-delay: 0.18s; }
+.ip-callpulse span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes ip-callpulse {
+  0%, 100% { transform: scale(0.7); opacity: 0.45; }
+  50%      { transform: scale(1);   opacity: 1; }
+}
+
+/* The completion check. */
+.ip-callmark {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--good, #2e7d5b);
+}
+.ip-callmark--part { background: var(--watch, #a8690f); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ip-callpulse span { animation: none; opacity: 0.9; }
+}
+
+/* After a phone call: the "N answers from your call" banner, and the per-question
+   "from your call" cue on each pre-filled question. */
+.ip-captured-banner {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(46, 125, 91, 0.08);
+  border: 1px solid rgba(46, 125, 91, 0.24);
+  color: var(--strong, #14532d);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.ip-captured-banner strong { color: var(--good, #2e7d5b); }
+
+.ip-q__fromcall {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--good, #2e7d5b);
+}

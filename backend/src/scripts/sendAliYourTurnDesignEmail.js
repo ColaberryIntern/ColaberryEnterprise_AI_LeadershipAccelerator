@@ -158,7 +158,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - "Your Turn" digest + @CB suggest_prompt + cascade design (preview attached)',
     html: HTML,
     text: TEXT,

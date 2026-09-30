@@ -1,0 +1,55 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Feedback & status" subtitle="Progress · Skeleton · Switch · Toast" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 26px; background: var(--surface-page); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+  const { Progress, Skeleton, Switch, Toast } = window.ColaberryDesignSystem_098454;
+  function Demo() {
+    return (
+      <div className="grid">
+        <div>
+          <div className="lbl">Progress</div>
+          <div className="stack">
+            <Progress label="Course progress" value={68} showValue />
+            <Progress tone="green" value={40} />
+            <Progress tone="blue" indeterminate />
+          </div>
+          <div className="lbl" style={{ marginTop: 24 }}>Switch</div>
+          <div className="row"><Switch label="Email me" defaultChecked /><Switch label="SMS" /></div>
+        </div>
+        <div>
+          <div className="lbl">Skeleton</div>
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <Skeleton variant="circle" width={48} height={48} />
+            <div style={{ flex: 1 }}>
+              <Skeleton variant="text" width="80%" />
+              <Skeleton variant="text" width="55%" />
+              <Skeleton variant="text" width="65%" />
+            </div>
+          </div>
+          <div className="lbl" style={{ marginTop: 24 }}>Toast</div>
+          <Toast static variant="success" title="Application sent">We'll be in touch within a day.</Toast>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script>
+</body>
+</html>

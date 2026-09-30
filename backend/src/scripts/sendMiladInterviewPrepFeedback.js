@@ -179,7 +179,7 @@ ${SIG_TEXT}`;
     ticketId: todo.id,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'eng.miladgerami@gmail.com',
-    bcc: ['alimuwwakkil@gmail.com'],
+    bcc: [],
     replyTo: 'ali@colaberry.com',
     subject: 'Re: Monday interview prep - read Sun + Mon AM',
     html: HTML,

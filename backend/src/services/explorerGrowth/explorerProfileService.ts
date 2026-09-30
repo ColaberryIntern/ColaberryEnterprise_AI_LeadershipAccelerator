@@ -1,0 +1,370 @@
+import { ExplorerJourneyProfile, ExplorerScoreSnapshot } from '../../models';
+import { env } from '../../config/env';
+import { isExplorerFeatureEnabled } from '../../config/explorerGrowthFlags';
+import { readLearnerSignals } from './explorerSignalReader';
+import { scoreLearner } from './explorerScoringService';
+import { classify } from './explorerStateMachine';
+import { getExplorerEventState } from './explorerEventStateService';
+import { hasFullCurriculumAccess } from '../access/contentEntitlement';
+import { isStaffEnrollment } from '../access/staffAccess';
+import { Cohort, Enrollment } from '../../models';
+import { getSubscription, activeCompEnrollmentIds } from '../subscriptionService';
+import { redactForLogs } from '../../utils/piiRedaction';
+import { repairAllExplorerBridges } from './explorerIdentityBridge';
+import type {
+  ExplorerAffinity,
+  ExplorerContactability,
+} from '../../types/explorerGrowth';
+
+/**
+ * What the nightly discovery pass did, reported alongside the batch result.
+ *
+ * Carried on the return value rather than left in the log stream so a caller —
+ * and the cron's own instrumentation record — can tell "scored 152 of 152
+ * because that is everyone" apart from "scored 152 because discovery fell over
+ * and 60 learners were never created". Those look identical in a BatchResult.
+ */
+export type BridgeOutcome =
+  | { ran: true; scanned: number; resolved: number }
+  | { ran: false; error: string };
+
+/**
+ * Explorer Growth OS — profile recompute. Plan §7, §8; EPIC 3 T005.
+ *
+ * Composes the epic: read signals → score → classify → persist. Writes
+ * `explorer_journey_profiles` (current state) and one
+ * `explorer_score_snapshots` row per learner per day (point-in-time history).
+ *
+ * IDEMPOTENCY IS THE WHOLE POINT (CLAUDE.md, non-negotiable). Scores are
+ * recomputed WHOLESALE, never incremented, so running twice with the same
+ * `asOf` produces byte-identical output. That is what makes shadow mode
+ * trustworthy: if a recompute could drift on re-run, no comparison against a
+ * holdout would mean anything.
+ *
+ * THIS SERVICE NEVER SENDS ANYTHING. It scores and classifies. The Journey
+ * Governor that acts on a state is EPIC 4, gated by its own separate flag.
+ *
+ * AFFINITY AND CONTACTABILITY ARE INJECTED, not fetched here, and default to
+ * empty. Their services (T002, T003) are not built yet. Empty is CORRECT rather
+ * than a placeholder: with no affinity data, INTERNSHIP_READY simply does not
+ * fire, which is the honest outcome. When T002/T003 land they pass their real
+ * values in and nothing about this file changes.
+ */
+
+export interface RecomputeOptions {
+  asOf?: Date;
+  /** Compute and return without writing. Used to preview a change safely. */
+  dryRun?: boolean;
+  affinities?: ExplorerAffinity[];
+  contactability?: ExplorerContactability;
+}
+
+export interface RecomputeResult {
+  enrollment_id: string;
+  written: boolean;
+  e_score: number;
+  i_score: number;
+  f_score: number;
+  primary_state: string;
+  overlays: string[];
+}
+
+/**
+ * Entitlement for the CONVERTED rule.
+ *
+ * Uses `hasFullCurriculumAccess` DIRECTLY, assembling cohort, staff status and
+ * comp state the same way `isFreePreviewTier` does.
+ *
+ * IT MUST NOT USE `resolveContentPageAccess`. That helper looks like the right
+ * thing - it returns `{ isStaff, hasFullAccess }` and does this assembly for you
+ * - but it FAILS OPEN by design, returning `hasFullAccess: true` when the
+ * content gate flag is off, when the enrollment is missing, and on ANY error.
+ * That is correct for its real job: it is a UI gate, and if the check breaks it
+ * should show the lesson rather than lock a paying student out of content they
+ * bought.
+ *
+ * As a CONVERSION predicate, failing open means "assume they paid". Using it
+ * here marked ALL 153 production Explorers as CONVERTED - and CONVERTED is
+ * terminal, so every free user would have been permanently excluded from the
+ * campaign this system exists to run. Verified on production 2026-08-22.
+ *
+ * This function fails CLOSED, and unlike the previous version that claim is
+ * true: each half is independently caught, and a failure yields `false`.
+ */
+async function resolveEntitlement(
+  enrollmentId: string,
+): Promise<{ hasFullCurriculumAccess: boolean; hasActiveNonCompSubscription: boolean }> {
+  let fullAccess = false;
+  let hasActiveNonCompSubscription = false;
+
+  try {
+    const enrollment = await Enrollment.findByPk(enrollmentId, {
+      attributes: ['id', 'payment_status', 'cohort_id', 'access_starts_at'],
+    });
+    if (enrollment) {
+      const cohortId = (enrollment as any).cohort_id;
+      const cohort = cohortId
+        ? await Cohort.findByPk(cohortId, { attributes: ['id', 'cohort_type'] })
+        : null;
+      const [isStaff, compIds] = await Promise.all([
+        isStaffEnrollment(enrollmentId),
+        activeCompEnrollmentIds([enrollmentId]),
+      ]);
+      fullAccess = hasFullCurriculumAccess(enrollment as any, cohort as any, {
+        isStaff,
+        hasActiveComp: compIds.has(enrollmentId),
+      });
+    }
+    // A missing enrollment leaves fullAccess false: no record is not evidence
+    // of purchase.
+  } catch (err: any) {
+    console.warn(
+      redactForLogs(
+        JSON.stringify({
+          event: 'explorer.entitlement_read_failed',
+          service: 'explorer-growth',
+          level: 'warn',
+          outcome: 'failure',
+          error_class: err?.name || 'EntitlementError',
+          enrollment_id: enrollmentId,
+        }),
+      ),
+    );
+  }
+
+  try {
+    const view = await getSubscription(enrollmentId);
+    const sub = (view as any)?.subscription;
+    // "Active AND non-comp". A comped subscription is not a conversion - it is
+    // exactly the population EPIC 4 still needs to convert.
+    hasActiveNonCompSubscription =
+      !!sub && sub.status === 'active' && sub.plan !== 'comp';
+  } catch (err: any) {
+    console.warn(
+      redactForLogs(
+        JSON.stringify({
+          event: 'explorer.subscription_read_failed',
+          service: 'explorer-growth',
+          level: 'warn',
+          outcome: 'failure',
+          error_class: err?.name || 'SubscriptionError',
+          enrollment_id: enrollmentId,
+        }),
+      ),
+    );
+  }
+
+  return { hasFullCurriculumAccess: fullAccess, hasActiveNonCompSubscription };
+}
+
+/** YYYY-MM-DD in UTC. The snapshot's daily key. */
+function asOfDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Recompute one learner. Idempotent for a fixed `asOf`. */
+export async function recomputeExplorerProfile(
+  enrollmentId: string,
+  options: RecomputeOptions = {},
+): Promise<RecomputeResult> {
+  const asOf = options.asOf ?? new Date();
+
+  const profile = await ExplorerJourneyProfile.findByPk(enrollmentId);
+  if (!profile) {
+    throw new Error(`no explorer_journey_profiles row for ${enrollmentId}`);
+  }
+
+  const readout = await readLearnerSignals(enrollmentId, { asOf });
+  const scores = scoreLearner(readout);
+  const entitlement = await resolveEntitlement(enrollmentId);
+  // EPIC 7 — live event state, fetched HERE so `classify` stays pure. Keyed on
+  // the learner's email because that is what the Eventbrite registration record
+  // carries; it fails soft to "nothing known" so a CCPP blip cannot invent or
+  // remove an overlay.
+  const eventState = await getExplorerEventState((profile as any).email_normalized ?? null);
+
+  const result = classify({
+    eventState,
+    previousProfile: {
+      primary_state: profile.primary_state,
+      state_entered_at: profile.state_entered_at,
+    },
+    scores,
+    readout,
+    affinities: options.affinities ?? [],
+    entitlement,
+    // The 72h activation clock measures from when the Explorer enrolled. The
+    // profile row's own created_at is the EPIC 1 backfill date, not the
+    // enrollment date, so it must not be used here.
+    enrollment: { createdAt: profile.created_at },
+    asOf,
+  });
+
+  const daysSinceActivity = readout.lastEngagementAt
+    ? Math.floor((asOf.getTime() - readout.lastEngagementAt.getTime()) / 86_400_000)
+    : null;
+
+  if (options.dryRun) {
+    return {
+      enrollment_id: enrollmentId,
+      written: false,
+      e_score: scores.e,
+      i_score: scores.i,
+      f_score: scores.f,
+      primary_state: result.primary_state,
+      overlays: result.overlays,
+    };
+  }
+
+  // Column-scoped update, NOT a whole-row replace: `lead_id` is EPIC 1's
+  // identity bridge and `last_contacted_at` belongs to EPIC 4. Overwriting the
+  // row wholesale would silently drop both.
+  await profile.update({
+    primary_state: result.primary_state,
+    overlays: result.overlays,
+    e_score: Math.round(scores.e),
+    i_score: Math.round(scores.i),
+    f_score: Math.round(scores.f),
+    affinities: options.affinities ?? [],
+    contactability: options.contactability ?? {},
+    signal_summary: {
+      recentIntentTier: readout.recentIntentTier,
+      highestIntentTier: readout.highestIntentTier,
+      engagement: scores.bands.engagement,
+    },
+    days_since_last_activity: daysSinceActivity,
+    state_entered_at: result.state_entered_at,
+    scores_computed_at: asOf,
+  });
+
+  // One snapshot per learner per day. The EPIC 1 UNIQUE index on
+  // (enrollment_id, as_of_date) is the real guarantee; this upsert makes a
+  // second run of the same day update rather than throw.
+  const as_of_date = asOfDate(asOf);
+  const existing = await ExplorerScoreSnapshot.findOne({
+    where: { enrollment_id: enrollmentId, as_of_date },
+  });
+  const snapshot = {
+    e_score: Math.round(scores.e),
+    i_score: Math.round(scores.i),
+    f_score: Math.round(scores.f),
+    primary_state: result.primary_state,
+    overlays: result.overlays,
+  };
+  if (existing) {
+    await existing.update(snapshot);
+  } else {
+    await ExplorerScoreSnapshot.create({
+      enrollment_id: enrollmentId,
+      as_of_date,
+      ...snapshot,
+    } as never);
+  }
+
+  return {
+    enrollment_id: enrollmentId,
+    written: true,
+    e_score: scores.e,
+    i_score: scores.i,
+    f_score: scores.f,
+    primary_state: result.primary_state,
+    overlays: result.overlays,
+  };
+}
+
+export interface BatchResult {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  errors: Array<{ enrollment_id: string; error: string }>;
+}
+
+/**
+ * Recompute every Explorer that has a profile row.
+ *
+ * One learner's failure NEVER aborts the batch — a single bad row must not
+ * leave 152 others stale. Failures are collected and reported.
+ */
+export async function recomputeAllExplorers(
+  options: RecomputeOptions & { limit?: number } = {},
+): Promise<BatchResult> {
+  const rows = await ExplorerJourneyProfile.findAll({
+    attributes: ['enrollment_id'],
+    ...(options.limit ? { limit: options.limit } : {}),
+  });
+
+  const out: BatchResult = { attempted: rows.length, succeeded: 0, failed: 0, errors: [] };
+
+  for (const row of rows) {
+    const id = (row as any).enrollment_id as string;
+    try {
+      await recomputeExplorerProfile(id, options);
+      out.succeeded += 1;
+    } catch (err: any) {
+      out.failed += 1;
+      out.errors.push({ enrollment_id: id, error: err?.message ?? 'unknown' });
+    }
+  }
+  return out;
+}
+
+/**
+ * Flag-gated entry point for the cron (T006).
+ *
+ * Read through `isExplorerFeatureEnabled` so BOTH the master flag and
+ * `journeyIntelligence` must be on — a direct sub-flag read would let this run
+ * with the master switch off, and a guard test scans backend source for exactly
+ * that. The operator script calls `recomputeAllExplorers` directly instead,
+ * because a human running it deliberately is its own authorisation.
+ *
+ * DISCOVERY RUNS FIRST, AND THAT ORDERING IS THE POINT.
+ * `recomputeAllExplorers` iterates `explorer_journey_profiles`, so it can only
+ * ever refresh learners who ALREADY have a profile row — and
+ * `recomputeExplorerProfile` throws rather than creating a missing one. Without
+ * a discovery step the scored population silently freezes at whoever happened
+ * to have a row when the bridge was last run by hand, and every subsequent
+ * signup is invisible to the engine forever. Measured on production
+ * 2026-09-07, before this fix: 212 active Explorers, 152 with a profile,
+ * **60 (28%) unreachable by the nightly job** and growing with every signup.
+ * The batch would still have reported `succeeded: 152, failed: 0` — a green
+ * result over a population missing more than a quarter of its members.
+ *
+ * `repairAllExplorerBridges` is the discovery step and already does exactly
+ * this job: it loads active Explorers, dedupes multiple enrollments per email
+ * through `pickBestEnrollment`, and upserts the profile row. It is idempotent,
+ * so running it nightly ahead of the recompute costs one pass and cannot
+ * duplicate anything.
+ *
+ * A BRIDGE FAILURE MUST NOT COST US THE RECOMPUTE. If discovery throws we log
+ * and score the population we already have: refreshing 152 known learners beats
+ * refreshing none because 1 new learner could not be resolved.
+ */
+export async function runScheduledRecompute(
+  options: RecomputeOptions = {},
+): Promise<(BatchResult & { bridge: BridgeOutcome }) | { skipped: true }> {
+  if (!isExplorerFeatureEnabled('journeyIntelligence', env.explorerGrowth)) {
+    return { skipped: true };
+  }
+
+  let bridge: BridgeOutcome;
+  try {
+    const report = await repairAllExplorerBridges();
+    bridge = { ran: true, scanned: report.scanned, resolved: report.resolved };
+  } catch (err: any) {
+    bridge = { ran: false, error: err?.message ?? 'unknown' };
+    console.error(
+      redactForLogs(
+        JSON.stringify({
+          event: 'explorer.recompute.discovery_failed',
+          service: 'explorer-growth',
+          error_class: 'BridgeRepairFailed',
+          outcome: 'partial',
+          message: bridge.error,
+        }),
+      ),
+    );
+  }
+
+  const result = await recomputeAllExplorers(options);
+  return { ...result, bridge };
+}

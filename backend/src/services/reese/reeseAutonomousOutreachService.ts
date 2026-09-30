@@ -1,0 +1,390 @@
+import crypto from 'crypto';
+import { Op } from 'sequelize';
+import ReeseOutreach from '../../models/ReeseOutreach';
+import type { ReeseOutreachSignalType } from '../../models/ReeseOutreach';
+import { createTicket } from '../ticketService';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
+import { getReeseAdminUserId, getReeseAgentId } from './reeseIdentitySeed';
+import { isEligibleForAutonomousOutreach } from './reeseEligibilityService';
+import {
+  getPilotCohortStudentEnrollmentIds,
+  evaluateInactivitySignal,
+  evaluateBehaviorAnomalySignal,
+} from './reeseSignalService';
+import { generateOutreachMessage } from './reeseOutreachMessageService';
+import { initiateDm } from './reeseInitiateDmService';
+import { resolveStudentDisplayName } from './resolveStudentDisplayName';
+import { createOutreachChecklistInstance } from './outreachChecklist';
+import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
+import { createWorkUnit, updateWorkUnitStatus } from '../workGraph/workGraphService';
+
+// Reese Phase 2 (Autonomous Outreach) — the decision + orchestration sweep.
+// Named, non-negotiable constants (see execution-contract.md — logged there as
+// assumptions, not buried only in code):
+export const CADENCE_DAYS = 7;
+export const FOLLOW_UP_DAYS = 7;
+export const DAILY_SEND_CAP = 12; // combined ceiling — shared with reeseOutreachFollowUpService.ts
+export const RISK_TIER = 'R3';
+
+const GOALS: Record<ReeseOutreachSignalType, string> = {
+  inactivity: 'Confirm the student is unblocked and re-engaged with the curriculum within 7 days.',
+  behavior_anomaly: 'Confirm the student is not stuck on the flagged lesson and has a clear next step within 7 days.',
+};
+
+export interface SweepDecision {
+  enrollmentId: string;
+  signalType?: ReeseOutreachSignalType;
+  action: 'sent' | 'skipped';
+  reason: string;
+}
+
+export interface SweepResult {
+  dryRun: boolean;
+  evaluated: number;
+  sent: number;
+  skipped: number;
+  decisions: SweepDecision[];
+}
+
+/**
+ * Combined daily-send ceiling shared with reeseOutreachFollowUpService.ts:
+ * counts ReeseOutreach rows whose `last_contacted_at` falls on today's UTC
+ * date, regardless of whether that contact was a new thread (this file) or a
+ * follow-up (reeseOutreachFollowUpService.ts) — both set `last_contacted_at`
+ * on every real send, so this one query is a true ceiling on TOTAL autonomous
+ * sends, not just new-thread sends.
+ */
+export async function countAutonomousSendsToday(): Promise<number> {
+  const startOfDayUtc = new Date();
+  startOfDayUtc.setUTCHours(0, 0, 0, 0);
+  return ReeseOutreach.count({ where: { last_contacted_at: { [Op.gte]: startOfDayUtc } } });
+}
+
+async function hasOpenOutreachForSignal(enrollmentId: string, signalType: ReeseOutreachSignalType): Promise<boolean> {
+  const existing = await ReeseOutreach.findOne({
+    where: { enrollment_id: enrollmentId, signal_type: signalType, status: 'active' },
+  });
+  return Boolean(existing);
+}
+
+/** Cadence check is per-student, across ALL signal types/tickets — not
+ * per-signal. This is what keeps a student from getting two different
+ * messages in the same week even if two different signals fire for them. */
+async function wasContactedWithinCadence(enrollmentId: string): Promise<boolean> {
+  const cutoff = new Date(Date.now() - CADENCE_DAYS * 24 * 60 * 60 * 1000);
+  const recent = await ReeseOutreach.findOne({
+    where: { enrollment_id: enrollmentId, last_contacted_at: { [Op.gte]: cutoff } },
+  });
+  return Boolean(recent);
+}
+
+async function sendNewOutreach(
+  enrollmentId: string,
+  signalType: ReeseOutreachSignalType,
+  signalSnapshot: Record<string, any>,
+  dryRun: boolean,
+): Promise<SweepDecision> {
+  const goal = GOALS[signalType];
+
+  if (dryRun) {
+    return { enrollmentId, signalType, action: 'sent', reason: 'dry_run_would_send' };
+  }
+
+  const reeseAdminUserId = await getReeseAdminUserId();
+  if (!reeseAdminUserId) {
+    return { enrollmentId, signalType, action: 'skipped', reason: 'reese_identity_not_seeded' };
+  }
+
+  const message = await generateOutreachMessage({
+    enrollmentId,
+    signalType,
+    signalSnapshot,
+    goal,
+    isFollowUp: false,
+    attemptNumber: 1,
+  });
+
+  // Composite entity_id (not just the bare enrollment id) — see
+  // execution-contract.md's plan-audit cycle-2 finding: createTicket()'s own
+  // dedup is keyed on (entity_type, entity_id, type) with no signal_type
+  // awareness, so a bare enrollment id would let a second, DIFFERENT signal
+  // silently collide onto the first signal's still-open ticket. entity_id is
+  // STRING(255) (Ticket.ts), not a strict UUID column, so this is safe.
+  //
+  // title/description use the student's real name, never the raw enrollmentId
+  // (Ali's live feedback: "reporting the id of the user is not helpful") —
+  // entity_id/metadata below still carry the UUID for systems that need it.
+  const studentName = await resolveStudentDisplayName(enrollmentId);
+  const ticket = await createTicket({
+    title: `Reese autonomous outreach — ${signalType} (${studentName})`,
+    description:
+      `Reese is proactively reaching out to ${studentName}. ` +
+      `Signal: ${signalType}. Goal: ${goal}`,
+    type: 'reese_autonomous_outreach',
+    status: 'in_progress',
+    created_by_type: 'ai_staff',
+    created_by_id: reeseAdminUserId,
+    assigned_to_type: 'ai_staff',
+    assigned_to_id: reeseAdminUserId,
+    entity_type: 'reese_outreach_signal',
+    entity_id: `${enrollmentId}:${signalType}`,
+    metadata: { signal_type: signalType, signal_snapshot: signalSnapshot, goal, reason: signalType },
+  });
+
+  // risk_tier isn't part of CreateTicketData's typed contract (a Milestone-1
+  // shipped interface this run deliberately does not modify) — same pattern
+  // as other ProofDesk-specific fields, set via a direct follow-up update.
+  // No `any` needed: risk_tier is a real declared attribute on the Ticket
+  // instance createTicket() returns, just not part of its narrower create-time
+  // input type.
+  await ticket.update({ risk_tier: RISK_TIER });
+
+  // Workspace mission, Phase 2 slice 2 (2026-09-21) — the same real, persisted
+  // work unit pattern slice 1 proved on Reese's reply path, extended to her
+  // outreach send. Fail-open, own try/catch (this function has no pre-existing
+  // outer catch to lean on, unlike the reply path): a work-unit-creation
+  // failure must never block a real outreach send.
+  let workUnitId: string | null = null;
+  try {
+    const workUnit = await createWorkUnit(ticket.id, {
+      title: `Outreach to ${studentName} (${signalType})`,
+      requiredCapability: 'student_support.outreach',
+      riskTier: RISK_TIER,
+      status: 'in_progress',
+      approvalPolicy: 'auto',
+    });
+    workUnitId = workUnit.id;
+    await (workUnit as any).update({ assigned_agent_name: 'Reese' });
+  } catch (e: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'reeseAutonomousOutreachService', event: 'work_unit_create_failed',
+      ticket_id: ticket.id, error_class: e?.name || 'Error', message: String(e?.message || e),
+    }));
+  }
+
+  // Governance — evaluated BEFORE the real send, matching
+  // agentActionAuthorizationBridge.ts's own documented design intent
+  // ("authorization is evaluated BEFORE the real action runs — the
+  // conventional 'gate ahead of the action'") and the canonical caller
+  // pattern in ticketAgentDispatcher.ts. Ordering fix (2026-09-07): this call
+  // used to run AFTER initiateDm() below, a real, previously-flagged instance
+  // of the anti-pattern the mission text calls out by name ("do not preserve
+  // an unsafe pattern where the message is sent first and governance is
+  // logged afterward").
+  const eventId = crypto.randomUUID();
+  const authResult = await authorizeTicketDispatch({
+    eventId,
+    ticketId: ticket.id,
+    agentName: 'Reese',
+    action: 'reese_autonomous_outreach',
+    riskTier: RISK_TIER,
+    // Real-enforcement scoping, Phase 1 (2026-09-20) — the exact real params
+    // initiateDm() itself takes, so a held action can be replayed verbatim
+    // later (see approvalRequestReplayService.ts) rather than re-derived.
+    preparedAction: { studentEnrollmentId: enrollmentId, content: message },
+  });
+
+  // Real-enforcement scoping, Phase 2 (2026-09-20) — `allowed` is the real,
+  // mode-aware signal (unconditionally true in shadow mode; see
+  // agentActionAuthorizationBridge.ts's own header for the allowed-vs-verdict
+  // distinction). A held action returns here, BEFORE initiateDm() and every
+  // downstream side effect below it — deliberately, so a held send is never
+  // recorded as a real contact: ReeseOutreach.create() (below) sets
+  // last_contacted_at/status:'active' and feeds wasContactedWithinCadence()'s
+  // real cadence-blocking logic, both of which would be dishonest and would
+  // incorrectly suppress a legitimate future contact attempt if stamped for
+  // an action that was never actually sent. The ticket itself (already
+  // created above, status: 'in_progress') is correctly left as-is — the real
+  // ApprovalRequest row Phase 1 already created is what makes the hold
+  // visible and actionable, not a new ticket status.
+  if (!authResult.allowed) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'info', service: 'reeseAutonomousOutreachService',
+      event: 'outreach_held_for_approval', outcome: 'partial', correlation_id: eventId,
+      context: { ticket_id: ticket.id, enrollment_id: enrollmentId, signal_type: signalType, reason: authResult.reason },
+    }));
+    // Workspace mission, Phase 2 slice 2 — the real, correct existing status
+    // value for exactly this case, same as the reply path's own precedent.
+    if (workUnitId) await updateWorkUnitStatus(workUnitId, 'blocked');
+    return { enrollmentId, signalType, action: 'skipped', reason: 'held_for_approval' };
+  }
+
+  // Workspace mission, Phase 2 slice 2 — everything from here on is wrapped so
+  // a thrown error can mark the work unit 'failed' before propagating exactly
+  // as it always has. This function had no pre-existing outer catch (unlike
+  // the reply path); this local try/catch adds the SAME failed-terminal-state
+  // honesty without changing what the caller (runReeseAutonomousOutreachSweep's
+  // per-signal loop) observes on error — the original error still propagates
+  // unchanged, this only adds a fail-open bookkeeping step ahead of it.
+  try {
+    const dm = await initiateDm(enrollmentId, message);
+
+    // Phase 2 (2026-09-18) — R13's own finding: this send never wrote to the
+    // real Work Ledger her replies already use. Fail-open, after the real send
+    // (see reeseWorkLedgerEvents.ts's own header) — a ledger-write failure must
+    // never be mistaken for the send having failed.
+    await emitReeseLedgerEvent({
+      ticketId: ticket.id,
+      workUnitId,
+      traceId: eventId,
+      actorType: 'ai_staff',
+      actorId: reeseAdminUserId,
+      intent: 'reese.autonomous_outreach',
+      domain: 'student_support',
+      actionClass: 'dm_message',
+      targetType: 'ticket',
+      targetId: ticket.id,
+      riskTier: RISK_TIER,
+      idempotencyKey: `reese-outreach-send:${dm.messageId}`,
+      result: 'success',
+      sourceRecordType: 'room_message',
+      sourceRecordId: dm.messageId,
+    });
+
+    // GOALS scorecard fix (Ali: "improve the 3.8/5 Trust score for Reese") —
+    // record this real send under Reese's OWN AiAgent.id so
+    // agentGoalsDimensionsService.ts's observability/availability/solid
+    // dimensions have real data to compute from instead of their zero-row
+    // fallback constants. See agentActivityLogService.ts's header for why this
+    // was missing. Fail-open (logAgentActivity never throws) — a bookkeeping
+    // failure here must never be mistaken for the real send having failed.
+    const reeseAgentId = await getReeseAgentId();
+    if (reeseAgentId) {
+      await logAgentActivity({
+        agentId: reeseAgentId,
+        action: 'reese_autonomous_outreach',
+        result: 'success',
+        reason: `${signalType}_signal_fired`,
+        traceId: eventId,
+        details: { ticket_id: ticket.id, signal_type: signalType },
+      });
+    }
+
+    const nextFollowUpDueAt = new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000);
+    await ReeseOutreach.create({
+      enrollment_id: enrollmentId,
+      ticket_id: ticket.id,
+      signal_type: signalType,
+      signal_snapshot: signalSnapshot,
+      goal,
+      status: 'active',
+      attempt_count: 1,
+      last_contacted_at: new Date(),
+      next_follow_up_due_at: nextFollowUpDueAt,
+      risk_tier: RISK_TIER,
+    });
+
+    // Reese Agentic AI Employee mission, Capability 6 — a real, persisted
+    // Outreach checklist per send, linked to this send's real ticket.
+    // Observational only (Ali's explicit choice, 2026-09-07): computed and
+    // persisted after the real send already happened, never gating it — see
+    // outreachChecklist.ts's own header for why. Fail-open: a checklist
+    // bookkeeping failure must never surface as an autonomous-outreach defect.
+    try {
+      await createOutreachChecklistInstance(ticket.id, signalType, goal, message, nextFollowUpDueAt);
+    } catch (e: any) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'reeseAutonomousOutreachService', event: 'outreach_checklist_instance_failed',
+        ticket_id: ticket.id, error_class: e?.name || 'Error', message: String(e?.message || e),
+      }));
+    }
+
+    if (workUnitId) await updateWorkUnitStatus(workUnitId, 'done');
+    return { enrollmentId, signalType, action: 'sent', reason: `${signalType}_signal_fired` };
+  } catch (e: any) {
+    if (workUnitId) {
+      try {
+        await updateWorkUnitStatus(workUnitId, 'failed');
+      } catch (updateErr: any) {
+        console.warn(JSON.stringify({
+          level: 'warn', service: 'reeseAutonomousOutreachService', event: 'work_unit_status_update_failed',
+          ticket_id: ticket.id, error_class: updateErr?.name || 'Error', message: String(updateErr?.message || updateErr),
+        }));
+      }
+    }
+    throw e;
+  }
+}
+
+/**
+ * The scheduled sweep. Evaluates every active pilot-cohort student against
+ * both real signals; sends at most one new autonomous outreach per eligible,
+ * non-duplicate, non-cadence-capped signal, up to the shared daily cap.
+ *
+ * `dryRun: true` runs the ENTIRE eligibility/signal/decision pipeline and
+ * returns the exact decisions that would be made, but skips every real write
+ * (`initiateDm()`, `createTicket()`, `authorizeTicketDispatch()`,
+ * `ReeseOutreach.create()`) — this is the mechanism T009's honest production
+ * verification uses.
+ */
+export async function runReeseAutonomousOutreachSweep(dryRun = false): Promise<SweepResult> {
+  const decisions: SweepDecision[] = [];
+  // Real count in BOTH modes (not just real sends) so a dry-run report is
+  // honest about what the daily cap would actually do — otherwise every
+  // eligible candidate beyond the real remaining slots would be reported as
+  // "would send" even though the real cap would have skipped them. Mirrors
+  // reeseOutreachFollowUpService.ts's identical fix for the same reason.
+  let sentCount = await countAutonomousSendsToday();
+
+  const enrollmentIds = await getPilotCohortStudentEnrollmentIds();
+
+  for (const enrollmentId of enrollmentIds) {
+    // Re-checked here even though getPilotCohortStudentEnrollmentIds() already
+    // filters by cohort/status — this is the "no bypass path" guarantee: every
+    // real call to initiateDm() is preceded by its own, independent gate check,
+    // not just an upstream list filter that could drift out of sync.
+    const eligibility = await isEligibleForAutonomousOutreach(enrollmentId);
+    if (!eligibility.eligible) {
+      decisions.push({ enrollmentId, action: 'skipped', reason: eligibility.reason });
+      continue;
+    }
+
+    const inactivity = await evaluateInactivitySignal(enrollmentId);
+    const anomaly = await evaluateBehaviorAnomalySignal(enrollmentId);
+
+    const signals: Array<{ type: ReeseOutreachSignalType; snapshot: Record<string, any> }> = [];
+    if (inactivity) signals.push({ type: 'inactivity', snapshot: inactivity });
+    if (anomaly) signals.push({ type: 'behavior_anomaly', snapshot: anomaly });
+
+    if (signals.length === 0) {
+      decisions.push({ enrollmentId, action: 'skipped', reason: 'no_signal' });
+      continue;
+    }
+
+    for (const signal of signals) {
+      if (await hasOpenOutreachForSignal(enrollmentId, signal.type)) {
+        decisions.push({ enrollmentId, signalType: signal.type, action: 'skipped', reason: 'duplicate_open_outreach' });
+        continue;
+      }
+      // Checked fresh per signal, inside the loop: if a first signal for this
+      // student was just sent this same sweep, this will now see it and skip
+      // any second signal for the same student — the cadence cap doubling as
+      // an at-most-one-message-per-student-per-run guarantee, with no extra
+      // special-case code needed.
+      if (await wasContactedWithinCadence(enrollmentId)) {
+        decisions.push({ enrollmentId, signalType: signal.type, action: 'skipped', reason: 'cadence_cap_active' });
+        continue;
+      }
+      if (sentCount >= DAILY_SEND_CAP) {
+        decisions.push({ enrollmentId, signalType: signal.type, action: 'skipped', reason: 'daily_cap_reached' });
+        continue;
+      }
+
+      const decision = await sendNewOutreach(enrollmentId, signal.type, signal.snapshot, dryRun);
+      decisions.push(decision);
+      // Incremented in BOTH modes: a dry-run "would send" still consumes a
+      // simulated slot so later candidates in the SAME dry-run pass are
+      // correctly reported as capped once the real remaining slots run out.
+      if (decision.action === 'sent') sentCount += 1;
+    }
+  }
+
+  return {
+    dryRun,
+    evaluated: enrollmentIds.length,
+    sent: decisions.filter((d) => d.action === 'sent').length,
+    skipped: decisions.filter((d) => d.action === 'skipped').length,
+    decisions,
+  };
+}

@@ -73,7 +73,7 @@ export default function PreviewPanel({ miniSections, lessonTitle, lessonId, exte
   if (miniSections.length === 0) {
     return (
       <div className="text-center py-4">
-        <i className="bi bi-eye-slash" style={{ fontSize: compact ? 24 : 32, color: 'var(--color-text-light)' }}></i>
+        <i className="bi bi-eye-slash" style={{ fontSize: compact ? 24 : 32, color: 'var(--text-muted)' }}></i>
         <p className="text-muted small mt-2">No mini-sections to preview.</p>
       </div>
     );
@@ -175,7 +175,7 @@ export default function PreviewPanel({ miniSections, lessonTitle, lessonId, exte
             <div key={section.key} className="border rounded" style={{ fontSize: compact ? 10 : 12 }}>
               <div
                 className="d-flex align-items-center gap-1 px-2 py-1"
-                style={{ cursor: 'pointer', backgroundColor: expandedSection === section.key ? 'var(--color-bg-alt, #f7fafc)' : 'transparent' }}
+                style={{ cursor: 'pointer', backgroundColor: expandedSection === section.key ? 'var(--neutral-50)' : 'transparent' }}
                 onClick={() => toggleSection(section.key)}
               >
                 <i className={`bi ${section.icon}`} style={{ fontSize: compact ? 11 : 14 }}></i>
@@ -185,7 +185,7 @@ export default function PreviewPanel({ miniSections, lessonTitle, lessonId, exte
                 </span>
               </div>
               {expandedSection === section.key && (
-                <div className="px-2 pb-2" style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+                <div className="px-2 pb-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   <div className="mt-1" style={{ transform: compact ? 'scale(0.85)' : 'scale(0.9)', transformOrigin: 'top left', maxWidth: compact ? '118%' : '111%' }}>
                     {renderSection(section.key, content, lessonId)}
                   </div>

@@ -1,0 +1,34 @@
+/* ============================================================
+   Colaberry — Fonts
+   Brand spec: Roboto (display + body). Roboto Mono added for
+   code / data figures (fitting a data-analytics school).
+   Quicksand is used ONLY for the "olaberry" logotype.
+
+   NOTE ON HOSTING: these are loaded from the Google Fonts CDN.
+   For a fully self-hosted bundle, drop the .woff2 files into
+   assets/fonts/ and replace the @import below with local
+   @font-face rules. Roboto & Roboto Mono are Apache-2.0;
+   Quicksand is OFL-1.1 (see assets/fonts/LICENSES.md).
+   ============================================================ */
+/*
+ * REMOVED 2026-08-13. This @import pulled Roboto, Roboto Mono and Quicksand from
+ * fonts.googleapis.com on every page of the app, before any consent was given.
+ * Removing the <link> from index.html was not enough on its own -- this import
+ * kept the request alive, which the request sweep caught.
+ *
+ * The same families are now declared from local woff2 in src/fonts/fonts.css,
+ * imported first in index.tsx. The note above about moving them local is done.
+ */
+
+/* ============================================================
+   ICON FONT — RemixIcon (Apache-2.0, ~3,000 icons).
+   The brand's standard icon set. Loaded here so every page that
+   links styles.css gets it automatically. Use:
+     <span class="cb-i"><i class="ri-rocket-line"></i></span>
+   Names: ri-{name}-line (default, matches our soft 2px style) or
+   ri-{name}-fill. Browse at remixicon.com.
+   ============================================================ */
+/* Loaded via a <link> in public/index.html instead of @import. An external
+   @import here sits behind main.css in the request chain: the browser cannot
+   discover it until main.css has fully downloaded, adding a serial round-trip
+   to first paint. The <link> downloads in parallel. */

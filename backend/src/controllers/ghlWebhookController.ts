@@ -7,21 +7,23 @@ import { generateMessage } from '../services/aiMessageService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
 import { checkLeadSendable } from '../services/communicationSafetyService';
 import { detectStopKeyword, processOptOut } from '../services/unsubscribeEnforcementService';
+import { redactForLogs } from '../utils/piiRedaction';
+import { recordReplyClassification } from '../services/growthJourney/replyClassificationHook';
 
 export async function handleGhlSmsReply(req: Request, res: Response): Promise<void> {
   try {
     // Log full payload for debugging GHL variable mapping
-    console.log(`[GHL Webhook] Raw payload:`, JSON.stringify(req.body, null, 2));
+    console.log(`[GHL Webhook] Raw payload:`, redactForLogs(JSON.stringify(req.body, null, 2)));
 
     const { contactId, phone, message, campaignTag } = req.body;
 
     if (!contactId || !message) {
-      console.warn(`[GHL Webhook] Missing fields — contactId: "${contactId || ''}", message: "${message || ''}", keys: ${Object.keys(req.body).join(', ')}`);
+      console.warn(`[GHL Webhook] Missing fields — contactId: "${contactId || ''}", message: "${redactForLogs(message) || ''}", keys: ${Object.keys(req.body).join(', ')}`);
       res.status(400).json({ error: 'contactId and message are required' });
       return;
     }
 
-    console.log(`[GHL Webhook] SMS reply from ${contactId}: ${message.substring(0, 100)}`);
+    console.log(`[GHL Webhook] SMS reply from ${contactId}: ${redactForLogs(message).substring(0, 100)}`);
 
     // Find lead by ghl_contact_id
     const lead = await Lead.findOne({ where: { ghl_contact_id: contactId } });
@@ -51,6 +53,9 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
     if (detectStopKeyword(message)) {
       console.log(`[GHL Webhook] STOP keyword detected from lead ${lead.id}`);
       await processOptOut(lead.id, 'sms', message, 'stop_keyword');
+      // Growth Journey OS (Phase 2): record the reply's classification — AFTER the
+      // opt-out is processed, fire-and-forget, master-gated, cannot change this response.
+      recordReplyClassification({ leadId: lead.id, body: message, channel: 'sms', campaignId });
       res.status(200).json({ received: true, matched: true, lead_id: lead.id, opted_out: true });
       return;
     }
@@ -92,6 +97,10 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
       contactId,
       `📩 SMS Reply Received:\n${message}`
     ).catch(() => {});
+
+    // Growth Journey OS (Phase 2): record the reply's classification. After the STOP
+    // check, alongside the existing bookkeeping — fire-and-forget, master-gated.
+    recordReplyClassification({ leadId: lead.id, body: message, channel: 'sms', campaignId });
 
     // Log inbound SMS to unified communication log
     logCommunication({
@@ -211,7 +220,7 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
       // Non-fatal — the inbound SMS is still logged even if we can't auto-reply
     }
 
-    console.log(`[GHL Webhook] Reply processed for lead ${lead.id} (${lead.name})`);
+    console.log(`[GHL Webhook] Reply processed for lead ${lead.id} (${redactForLogs(lead.name)})`);
     res.status(200).json({
       received: true,
       matched: true,

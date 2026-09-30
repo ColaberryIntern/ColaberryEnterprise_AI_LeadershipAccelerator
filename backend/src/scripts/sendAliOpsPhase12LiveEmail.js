@@ -106,7 +106,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - Approval Workspace live (Decide button on every task, BC writeback, Approve+next walk)',
     html: HTML,
     text: TEXT,

@@ -1,7 +1,7 @@
 # Team Lead Job Descriptions — Training Program Launch
 
 **Drafted:** 2026-05-30 (CC-20260530-execute)
-**Use case:** post on LinkedIn / Indeed / direct outreach for the 41-day training program launch (cohort kickoff 2026-07-13).
+**Use case:** post on LinkedIn / Indeed / direct outreach for the 41-day training program launch (cohort kickoff 2026-07-27).
 
 All four roles are **contract / fractional for the launch sprint** (May 30 → Jul 10). Strong performers convert to permanent post-launch.
 
@@ -36,7 +36,7 @@ You own every public-facing and student-facing surface of the new training progr
 
 ### Why this is interesting
 
-You'll be building the public face of a category-defining program in the Anthropic Partner Network. Your work goes live on `enterprise.colaberry.com` on Jul 10 and serves the Founding Cohort starting Jul 13. The platform you build extends into Cohort 2 (Oct), Cohort 3 (Jan), and beyond.
+You'll be building the public face of a category-defining program in the Anthropic Partner Network. Your work goes live on `enterprise.colaberry.com` on Jul 10 and serves the Founding Cohort starting Jul 27. The platform you build extends into Cohort 2 (Nov) and beyond.
 
 ### Compensation
 
@@ -152,7 +152,7 @@ The Founding Cohort fills or it doesn't. Your job: make sure it does.
 
 ### Why this is interesting
 
-It's a focused 6-week sprint with a clear target: 25 Founding Cohort seats by Jul 10. Strong performance → ongoing role with Cohort 2 (Oct), Cohort 3 (Jan), and the enterprise sales motion that follows.
+It's a focused 6-week sprint with a clear target: 25 Founding Cohort seats by Jul 10. Strong performance → ongoing role with Cohort 2 (Nov) and the enterprise sales motion that follows.
 
 ### Compensation
 

@@ -77,9 +77,11 @@ Every script, worker, webhook handler, and side-effecting service must be safe t
 
 No `console.log` of unstructured strings in production paths. Use the project's structured-log helper if available, otherwise emit JSON with `timestamp`, `level`, `service`, `event`, `outcome`, `correlation_id`, `duration_ms`, and a `context` object.
 
-### 3k. PROGRESS.md is a hard gate
+### 3k. The progress log is a hard gate
 
-Every commit that touches `backend/`, `frontend/`, `scripts/`, `nginx/`, or `directives/` must also touch `PROGRESS.md`. Format and rules are in CLAUDE.md "Logging, Reporting & Progress Tracking" section.
+Every commit that touches `backend/`, `frontend/`, `scripts/`, `nginx/`, `directives/`, or `docs/` must also touch **this session's log**, `docs/sessions/CC-<YYYYMMDD>-<id>.md`. Format and rules are in CLAUDE.md "Logging, Reporting & Progress Tracking" section.
+
+Since 2026-08-23 the log is one file per session. The root `PROGRESS.md` is a sealed archive — read it for history, never append to it. `docs/sessions/` itself is exempt from the gate: the log is not work that needs its own log.
 
 ## 4. The CB System engine (you will work alongside it)
 

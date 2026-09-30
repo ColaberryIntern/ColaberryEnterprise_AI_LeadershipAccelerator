@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campaign Brief · Open House Marketing Hub</title>
+<link rel="icon" href="../assets/logo/export/favicon-32.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../assets/hub.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><img src="../assets/logo/colaberry-horizontal.png" alt="Colaberry"></div>
+    <a class="nav home" href="../index.html"><span class="cb-i"><i class="ri-arrow-left-line"></i></span> Marketing Hub</a>
+    <div class="navsec">On this page</div>
+    <a class="nav" href="#goal"><span class="cb-i"><i class="ri-focus-3-line"></i></span> Goal and funnel</a>
+    <a class="nav" href="#audiences"><span class="cb-i"><i class="ri-group-line"></i></span> Audiences at a glance</a>
+    <a class="nav" href="#offer"><span class="cb-i"><i class="ri-price-tag-3-line"></i></span> Offer and dates</a>
+    <a class="nav" href="#message"><span class="cb-i"><i class="ri-chat-quote-line"></i></span> Message in one line</a>
+    <a class="nav" href="#channels"><span class="cb-i"><i class="ri-broadcast-line"></i></span> Channels</a>
+    <a class="nav" href="#metrics"><span class="cb-i"><i class="ri-bar-chart-2-line"></i></span> Success metrics</a>
+    <a class="nav" href="#risks"><span class="cb-i"><i class="ri-error-warning-line"></i></span> Risks and flags</a>
+  </aside>
+  <main class="content">
+    <div class="hero cherry">
+      <p class="crumbs"><a href="../index.html">Marketing Hub</a> / Campaign Brief</p>
+      <p class="eyebrow">Strategy · the north star</p>
+      <h1>Campaign Brief</h1>
+      <p>The one-page strategy for the AI Systems Architect Accelerator Open House. One goal, one funnel, three audiences. Everything in this kit ladders back to this page.</p>
+      <div class="meta"><span class="pill">Open House Jul 16</span><span class="pill">Founding Cohort</span></div>
+    </div>
+    <div class="actionbar">
+      <a class="btn btn-ghost" href="../../index.html"><span class="cb-i"><i class="ri-stack-line"></i></span> Knowledge Base</a> <a class="btn btn-ghost" href="../index.html"><span class="cb-i"><i class="ri-home-4-line"></i></span> Hub</a>
+      <div class="spacer"></div>
+      <a class="btn btn-ghost" href="campaign-brief.html" download><span class="cb-i"><i class="ri-download-2-line"></i></span> Download this doc</a>
+      <a class="btn btn-primary" href="#" onclick="window.print();return false;"><span class="cb-i"><i class="ri-printer-line"></i></span> Print / PDF</a>
+    </div>
+    <div class="wrap">
+
+      <!-- GOAL + FUNNEL -->
+      <section class="section" id="goal">
+        <h2><span class="cb-i"><i class="ri-focus-3-line"></i></span> Goal and the single funnel</h2>
+        <p class="sub">One objective drives every post, email, and asset. We generate free Open House registrations, then convert attendees into Founding Cohort enrollment.</p>
+
+        <div class="grid cols-2">
+          <div class="card accent-top">
+            <h4>The goal</h4>
+            <p class="prose">Generate <strong>free Open House registrations</strong> for Thursday, July 16, 2026, then convert attendees into <strong>Founding Cohort</strong> enrollment for the Cohort 1 kickoff on Thursday, July 23, 2026. The Open House precedes the cohort it feeds by one week.</p>
+          </div>
+          <div class="card">
+            <h4>The program</h4>
+            <p class="prose">AI Systems Architect Accelerator, powered by Anthropic and Claude Code. A 12-week, implementation-focused program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder. Learn with Claude. Build through Colaberry. Deploy in the real world.</p>
+          </div>
+        </div>
+
+        <div class="diagram">
+          <div class="cap"><span class="cb-i"><i class="ri-flow-chart"></i></span> The single funnel, from awareness to enrollment</div>
+          <pre class="mermaid">
+flowchart TD
+  A["Awareness<br/>LinkedIn, X, Instagram, Email"] --> B["Free Open House registration<br/>OpenHouseModal to /api/leads"]
+  B --> C["Open House<br/>Thursday, July 16, 2026"]
+  C --> D["Founding Cohort enrollment<br/>price revealed at the Open House"]
+  D --> E["Cohort 1 kickoff<br/>Thursday, July 23, 2026"]
+  style A fill:#EAF2F6,stroke:#367895
+  style B fill:#F1F9EA,stroke:#5BA63C
+  style C fill:#FFF0F1,stroke:#FB2832
+  style D fill:#FCF1DD,stroke:#E8920C
+  style E fill:#F1F1F0,stroke:#6B6B6B
+          </pre>
+        </div>
+
+        <div class="callout info">
+          <span class="cb-i"><i class="ri-information-line"></i></span>
+          <div>
+            <p class="ttl">One funnel, two conversions</p>
+            <p class="body">Conversion 1 is the free registration. Conversion 2 is enrollment at the Open House. Pricing is held until the Open House, so every outbound message sells the free seat, not the price.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- AUDIENCES -->
+      <section class="section" id="audiences">
+        <h2><span class="cb-i"><i class="ri-group-line"></i></span> Audiences at a glance</h2>
+        <p class="sub">Three audiences, three approved primary messages. On organic social these are content angles we broadcast. They become true audience segments only for paid and retargeting.</p>
+
+        <div class="grid cols-3">
+          <div class="card accent-top">
+            <h4><span class="cb-i" style="color:var(--blue-600)"><i class="ri-medal-line"></i></span> Alumni</h4>
+            <p class="prose">"You've already invested in your future. Now learn how to build with AI."</p>
+            <p style="margin-top:10px"><span class="badge info">Primary on LinkedIn</span></p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="cb-i" style="color:var(--green-600)"><i class="ri-restart-line"></i></span> Dropouts</h4>
+            <p class="prose">"Your journey doesn't have to end here. Here's a new opportunity built for today's AI economy."</p>
+            <p style="margin-top:10px"><span class="badge neutral">Re-engagement angle</span></p>
+          </div>
+          <div class="card accent-top">
+            <h4><span class="cb-i" style="color:var(--red-500)"><i class="ri-compass-3-line"></i></span> Prospects</h4>
+            <p class="prose">"Most people are consuming AI. Very few are learning how to build with it."</p>
+            <p style="margin-top:10px"><span class="badge neutral">Broad awareness</span></p>
+          </div>
+        </div>
+
+        <div class="callout info">
+          <span class="cb-i"><i class="ri-mail-send-line"></i></span>
+          <div>
+            <p class="ttl">How the segments power the engine</p>
+            <p class="body">The Accelerator runs a native, prompt-based campaign engine. Each segment campaign has its own ai_system_prompt, and posts and emails are generated at send time. Baked-in rules: no price, no em-dashes, drive to the Open House.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- OFFER + DATES -->
+      <section class="section" id="offer">
+        <h2><span class="cb-i"><i class="ri-price-tag-3-line"></i></span> The offer and dates</h2>
+        <p class="sub">The locked numbers behind the campaign. Pricing appears here because this is a reference doc, and it is clearly labeled as revealed at the Open House.</p>
+
+        <div class="stats">
+          <div class="stat info"><div class="n">Jul 16</div><div class="l">Open House (free), Thursday, July 16, 2026</div></div>
+          <div class="stat good"><div class="n">Jul 23</div><div class="l">Cohort 1 kickoff, Thursday, July 23, 2026</div></div>
+          <div class="stat"><div class="n">40</div><div class="l">Founding seats (cap)</div></div>
+          <div class="stat"><div class="n">12 wks</div><div class="l">Implementation-focused program, 4 phases</div></div>
+        </div>
+
+        <h3 class="h">Pricing (reference only, revealed at the Open House)</h3>
+        <div class="grid cols-2">
+          <div class="card">
+            <h4>Founding rate</h4>
+            <p class="prose"><strong>$149/mo</strong> founding annual rate. <strong>$199/mo</strong> monthly. <span class="badge approval">revealed at the Open House</span></p>
+            <p class="prose" style="margin-top:8px;color:var(--text-muted)">Keep price out of awareness and outbound copy: social posts, captions, the calendar, sequences, and email subject and body. This brief may state it because it is a reference doc.</p>
+          </div>
+          <div class="card">
+            <h4>Student-paid third-party costs</h4>
+            <p class="prose">Disclosed before enrollment. Not covered by Colaberry. Paid directly to the providers because students build and deploy on real, live AI tools:</p>
+            <ul class="prose">
+              <li>Anthropic subscription for Claude Code, about $20/mo.</li>
+              <li>LLM API usage, most projects under $10/mo.</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3 class="h">The 12-week journey</h3>
+        <div class="steps">
+          <div class="step"><div><h4>Weeks 1 to 3, Build Your AI Foundation</h4><p>Get grounded in building with Claude and the core workflow.</p></div></div>
+          <div class="step"><div><h4>Weeks 4 to 6, Create Your AI Team</h4><p>Move from single prompts to coordinated AI agents.</p></div></div>
+          <div class="step"><div><h4>Weeks 7 to 9, Connect AI To The Real World</h4><p>Wire your system into real tools, data, and deployment.</p></div></div>
+          <div class="step"><div><h4>Weeks 10 to 12, Design AI That Scales</h4><p>Harden, scale, and earn the Anthropic Architect certification.</p></div></div>
+        </div>
+
+        <div class="callout success">
+          <span class="cb-i"><i class="ri-shield-check-line"></i></span>
+          <div>
+            <p class="ttl">Brand proof point you can use</p>
+            <p class="body">5,000+ careers since 2012. Warm, inclusive, and proven since 2012. This is approved and may appear in copy.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- MESSAGE -->
+      <section class="section" id="message">
+        <h2><span class="cb-i"><i class="ri-chat-quote-line"></i></span> Message in one line</h2>
+        <p class="sub">If a reader takes one idea from the campaign, this is it. Everything else supports this single line.</p>
+
+        <div class="card accent-top" style="text-align:center;padding:30px 26px">
+          <p class="lead" style="margin:0 auto;font-size:21px;font-weight:800;color:var(--text-strong)">Most people are consuming AI. Very few are learning how to build with it. In 12 weeks, you become a builder.</p>
+          <p class="prose" style="margin:14px auto 0;color:var(--text-muted)">Positioning: Learn With Claude. Build Through Colaberry. Deploy In The Real World.</p>
+        </div>
+
+        <div class="dodont" style="margin-top:18px">
+          <div class="col do">
+            <h4><span class="cb-i"><i class="ri-check-line"></i></span> Do</h4>
+            <ul>
+              <li>Lead with proof and speak to "you".</li>
+              <li>Sell the free seat and the transformation from user to builder.</li>
+              <li>Keep voice warm, credible, and sentence case.</li>
+              <li>Always drive to the Open House.</li>
+            </ul>
+          </div>
+          <div class="col dont">
+            <h4><span class="cb-i"><i class="ri-close-line"></i></span> Don't</h4>
+            <ul>
+              <li>Name a price in any outbound or awareness copy.</li>
+              <li>Use emoji or em-dash characters.</li>
+              <li>Use the 25-seat number. It is superseded.</li>
+              <li>Reference the stale 6/21 date anywhere.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- CHANNELS -->
+      <section class="section" id="channels">
+        <h2><span class="cb-i"><i class="ri-broadcast-line"></i></span> Channels</h2>
+        <p class="sub">Three earned-and-social channels plus the owned email channel. The approved 5-email sequence runs in parallel with social.</p>
+
+        <div class="grid cols-2">
+          <div class="card">
+            <h4><span class="chchip ch-li"><i class="ri-linkedin-fill"></i> LinkedIn</span></h4>
+            <p class="prose">Primary channel. Built for alumni and working professionals. Carries the heaviest credibility and proof.</p>
+          </div>
+          <div class="card">
+            <h4><span class="chchip ch-x"><i class="ri-twitter-x-fill"></i> X</span></h4>
+            <p class="prose">Punchy and short. Tight hooks that lead people to register for the free seat.</p>
+          </div>
+          <div class="card">
+            <h4><span class="chchip ch-ig"><i class="ri-instagram-line"></i> Instagram</span></h4>
+            <p class="prose">Visual. Carousels and stories that show the journey and the build.</p>
+          </div>
+          <div class="card">
+            <h4><span class="chchip ch-em"><i class="ri-mail-line"></i> Email</span></h4>
+            <p class="prose">The parallel owned channel. The approved 5-email sequence that mirrors the social beats.</p>
+          </div>
+        </div>
+
+        <h3 class="h">The 5-beat sequence</h3>
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr><th>Beat</th><th>Theme</th><th>CTA</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td>The Shift Is Already Happening</td><td>Reserve Your Free Seat</td></tr>
+              <tr><td class="num">2</td><td>From AI User To AI Builder</td><td>Register For The Open House</td></tr>
+              <tr><td class="num">3</td><td>See What You'll Build</td><td>Reserve Your Seat</td></tr>
+              <tr><td class="num">4</td><td>Meet The Founding Cohort</td><td>Register Before Seats Fill</td></tr>
+              <tr><td class="num">5</td><td>Final Reminder</td><td>Add To Calendar</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="h">Suggested calendar, all pre-Open-House</h3>
+        <div class="cal">
+          <div class="dow">Sun</div><div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div><div class="dow">Thu</div><div class="dow">Fri</div><div class="dow">Sat</div>
+          <div class="day empty"></div>
+          <div class="day empty"></div>
+          <div class="day empty"></div>
+          <div class="day"><span class="dn">1</span></div>
+          <div class="day"><span class="dn">2</span><span class="ev b1">Optional teaser</span></div>
+          <div class="day"><span class="dn">3</span></div>
+          <div class="day empty"></div>
+
+          <div class="day empty"></div>
+          <div class="day"><span class="dn">6</span></div>
+          <div class="day"><span class="dn">7</span><span class="ev b1">Beat 1 launch</span></div>
+          <div class="day"><span class="dn">8</span></div>
+          <div class="day"><span class="dn">9</span><span class="ev b2">Beat 2</span></div>
+          <div class="day"><span class="dn">10</span></div>
+          <div class="day empty"></div>
+
+          <div class="day empty"></div>
+          <div class="day"><span class="dn">13</span><span class="ev b3">Beat 3 carousel</span></div>
+          <div class="day"><span class="dn">14</span></div>
+          <div class="day"><span class="dn">15</span><span class="ev b4">Beat 4 / 40 seats</span></div>
+          <div class="day is-key"><span class="dn">16</span><span class="ev b5">Beat 5</span><span class="ev oh">Open House</span></div>
+          <div class="day"><span class="dn">17</span></div>
+          <div class="day empty"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--blue-600)"></i> Beat 1</span>
+          <span><i style="background:var(--green-600)"></i> Beat 2</span>
+          <span><i style="background:var(--blue-500)"></i> Beat 3</span>
+          <span><i style="background:var(--amber-500)"></i> Beat 4</span>
+          <span><i style="background:var(--red-500)"></i> Beat 5</span>
+          <span><i style="background:var(--neutral-900)"></i> Open House</span>
+        </div>
+        <p class="prose" style="color:var(--text-muted)">Calendar is suggested and adjustable. All beats run before the Open House on July 16.</p>
+      </section>
+
+      <hr class="div">
+
+      <!-- METRICS -->
+      <section class="section" id="metrics">
+        <h2><span class="cb-i"><i class="ri-bar-chart-2-line"></i></span> Success metrics</h2>
+        <p class="sub">How we know the campaign worked. Registrations return through the OpenHouseModal to /api/leads as open_house_ leads, with links carrying UTM and campaign_id for attribution.</p>
+
+        <div class="grid cols-3">
+          <div class="card accent-top">
+            <h4>Top of funnel</h4>
+            <p class="prose">Free Open House registrations. The primary number this campaign exists to grow.</p>
+          </div>
+          <div class="card accent-top">
+            <h4>Mid funnel</h4>
+            <p class="prose">Open House attendance, the share of registrants who show up live on July 16.</p>
+          </div>
+          <div class="card accent-top">
+            <h4>Bottom of funnel</h4>
+            <p class="prose">Founding Cohort enrollments toward the 40-seat cap, captured at the Open House.</p>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="cap">KPI target shape across the funnel (illustrative targets, pending Ali sign-off)</div>
+          <div class="chart-box"><canvas id="kpiChart"></canvas></div>
+        </div>
+
+        <div class="callout approval">
+          <span class="cb-i"><i class="ri-draft-line"></i></span>
+          <div>
+            <p class="ttl">Numeric targets need approval</p>
+            <p class="body">The chart shows the expected funnel shape, not committed numbers. Set and lock the exact registration, attendance, and enrollment targets with Ali before reporting against them. Marked [NEEDS APPROVAL].</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="div">
+
+      <!-- RISKS -->
+      <section class="section" id="risks">
+        <h2><span class="cb-i"><i class="ri-error-warning-line"></i></span> Risks and flags</h2>
+        <p class="sub">The watch-outs that can break this campaign. Clear these before assets ship.</p>
+
+        <div class="callout danger">
+          <span class="cb-i"><i class="ri-price-tag-line"></i></span>
+          <div>
+            <p class="ttl">Pricing must stay out of outbound</p>
+            <p class="body">No price in social posts, captions, the calendar, sequences, or email subject and body. Price is revealed at the Open House. Reference docs like this brief may state it, clearly labeled.</p>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <span class="cb-i"><i class="ri-numbers-line"></i></span>
+          <div>
+            <p class="ttl">Seat count: use 40, not 25</p>
+            <p class="body">An earlier email draft said 25 founding seats. That is superseded. If a seat count appears anywhere, it must be 40.</p>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <span class="cb-i"><i class="ri-calendar-close-line"></i></span>
+          <div>
+            <p class="ttl">Kill the stale 6/21 date</p>
+            <p class="body">Any reference to a 6/21 date is stale. The Open House is Thursday, July 16, 2026. Scrub 6/21 from every asset before launch.</p>
+          </div>
+        </div>
+
+        <div class="callout approval">
+          <span class="cb-i"><i class="ri-link"></i></span>
+          <div>
+            <p class="ttl">Open items pending approval</p>
+            <p class="body">These render as tokens until confirmed. Never invent values:</p>
+            <ul class="prose" style="margin:8px 0 0">
+              <li><strong>[reg link]</strong> = Open House registration URL, from BC 9946499609.</li>
+              <li><strong>[time + TZ]</strong> = exact Open House start time and timezone.</li>
+              <li>Refund and cancellation terms are drafted and pending Ali.</li>
+              <li>KPI numeric targets are pending Ali.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <div class="foot">
+        Campaign Brief, AI Systems Architect Accelerator Open House. Grounded in the approved strategy, Basecamp 9946499631, and Ali-confirmed facts, 2026-06-25. Draft only, for internal alignment. Items marked [NEEDS APPROVAL] are not final. Pricing shown here is reference only and is revealed at the Open House.
+      </div>
+    </div>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="../assets/hub.js"></script>
+<script>
+(function () {
+  var canvas = document.getElementById('kpiChart');
+  if (!canvas || !window.Chart) return;
+  var css = getComputedStyle(document.documentElement);
+  var c1 = css.getPropertyValue('--chart-1').trim() || '#367895';
+  var c2 = css.getPropertyValue('--chart-2').trim() || '#FB2832';
+  var c3 = css.getPropertyValue('--chart-3').trim() || '#5BA63C';
+  var grid = css.getPropertyValue('--border-subtle').trim() || '#E4E4E3';
+  var ink = css.getPropertyValue('--text-muted').trim() || '#6B6B6B';
+  new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: ['Open House registrations', 'Open House attendance', 'Founding Cohort enrollments'],
+      datasets: [{
+        label: 'Target index (illustrative funnel shape)',
+        data: [100, 55, 30],
+        backgroundColor: [c1, c2, c3],
+        borderRadius: 6,
+        maxBarThickness: 90
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function (ctx) { return ctx.parsed.y + ' (relative index, targets pending approval)'; } } }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: grid }, ticks: { color: ink }, title: { display: true, text: 'Relative target index', color: ink } },
+        x: { grid: { display: false }, ticks: { color: ink } }
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

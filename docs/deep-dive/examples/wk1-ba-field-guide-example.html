@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Business Analysis Field Guide — Riverside Grill Online Ordering</title>
+<!-- EXAMPLE FIELD GUIDE — the artifact a student's Claude Code builds in Week 1.
+     Self-contained, offline. Each document exports as styled HTML (primary), PDF (print),
+     and Excel/CSV (tabular docs). Colaberry-branded, searchable, with an offline Ask assistant. -->
+<script type="application/json" id="deepdive-metadata">
+{ "guide_type":"Business Analysis Field Guide", "curriculum_type":"deep_dive", "week":1,
+  "discipline":"Business Analysis", "example":"Riverside Grill — Online Ordering",
+  "generated_by":"Claude Code", "generated_date":"2026-07-18", "version":"1.0.0", "build_number":"BA-0001" }
+</script>
+<style>
+  :root{
+    --navy:#1a365d; --navy-2:#2b6cb0; --red:#e53e3e; --green:#38a169; --teal:#2c7a7b; --amber:#c05621;
+    --bg:#ffffff; --bg-alt:#f7fafc; --bg-soft:#eef2f7; --panel:#ffffff;
+    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --shadow:0 1px 3px rgba(16,24,40,.07);
+    --brand:#1a365d; --brand-soft:#e8eef6; --brand-ink:#1a365d;
+    --radius:12px; --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1622; --bg-alt:#0b111b; --bg-soft:#1b2637; --panel:#141d2b;
+    --text:#e2e8f0; --muted:#94a3b8; --border:#26344a; --shadow:0 1px 3px rgba(0,0,0,.4);
+    --brand:#63b3ed; --brand-soft:#17263b; --brand-ink:#90cdf4; --navy-2:#63b3ed;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--text);background:var(--bg-alt);line-height:1.6;font-size:15px}
+  h1,h2,h3,h4{color:var(--brand-ink);line-height:1.25;font-weight:700;margin:0 0 .5rem}
+  h2{font-size:1.5rem} h3{font-size:1.12rem;margin-top:1.3rem} h4{font-size:.95rem;margin-top:1rem}
+  p{margin:.5rem 0} a{color:var(--navy-2);text-decoration:none} a:hover{text-decoration:underline}
+  code{background:var(--bg-soft);padding:.08rem .35rem;border-radius:5px;font-size:.86em}
+  .muted{color:var(--muted)} .small{font-size:.85rem}
+
+  .top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:.8rem;padding:.6rem 1.1rem;
+    background:var(--panel);border-bottom:1px solid var(--border)}
+  .top .logo{height:26px;width:auto}
+  :root[data-theme="dark"] .top .logo{background:#fff;padding:2px 6px;border-radius:6px}
+  .top .ttl{font-weight:700;color:var(--brand-ink);font-size:.95rem;white-space:nowrap}
+  .top .ttl small{display:block;color:var(--muted);font-weight:500;font-size:.72rem}
+  .top .sp{flex:1}
+  .search{position:relative}
+  .search input{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:9px;
+    padding:.45rem .7rem .45rem 2rem;font-size:.88rem;width:min(320px,42vw);font-family:inherit}
+  .search svg{position:absolute;left:.6rem;top:50%;transform:translateY(-50%);color:var(--muted)}
+  .tbtn{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;height:36px;padding:0 .7rem;
+    display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.82rem;font-weight:600}
+  .tbtn:hover{border-color:var(--navy-2);color:var(--navy-2)} .tbtn svg{width:15px;height:15px}
+  .tbtn.primary{background:var(--brand);border-color:var(--brand);color:#fff} :root[data-theme="dark"] .tbtn.primary{color:#0f1622}
+  .navtoggle{display:none}
+
+  .app{display:flex;max-width:1240px;margin:0 auto;align-items:flex-start}
+  .side{position:sticky;top:49px;flex:0 0 236px;height:calc(100vh - 49px);overflow-y:auto;padding:1rem .6rem;
+    border-right:1px solid var(--border);background:var(--panel)}
+  .side .grp{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin:1rem .6rem .35rem}
+  .side a{display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.4rem .65rem;border-radius:8px;color:var(--text);font-size:.88rem;font-weight:500}
+  .side a:hover{background:var(--bg-soft);text-decoration:none}
+  .side a.active{background:var(--brand-soft);color:var(--brand-ink);font-weight:700}
+  .side a .dot{font-size:.58rem;color:var(--muted);letter-spacing:.02em}
+
+  main{flex:1;min-width:0;max-width:860px;margin:0 auto;padding:1.6rem 2rem 5rem}
+  section[data-nav]{scroll-margin-top:66px;padding:1.2rem 0;border-top:1px solid var(--border)}
+  section[data-nav]:first-child{border-top:none}
+  .eyebrow{display:inline-block;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;
+    color:var(--navy-2);background:var(--brand-soft);padding:.2rem .55rem;border-radius:999px;margin-bottom:.5rem}
+  .lead{font-size:1.05rem;color:var(--text)}
+
+  .doc{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.4rem;box-shadow:var(--shadow);margin:.6rem 0}
+  .dochead{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.3rem}
+  .dochead h2{margin:0} .dl{color:var(--muted);font-size:.78rem;margin-top:.15rem}
+  .dlgroup{display:flex;gap:.35rem;flex-wrap:wrap}
+  .dlbtn{border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:8px;padding:.32rem .6rem;
+    font-size:.75rem;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap}
+  .dlbtn:hover{border-color:var(--navy-2);color:var(--navy-2)} .dlbtn svg{width:13px;height:13px}
+  .dlbtn.primary{background:var(--brand);border-color:var(--brand);color:#fff} :root[data-theme="dark"] .dlbtn.primary{color:#0f1622}
+  .dlbtn.primary:hover{filter:brightness(1.06);color:#fff} :root[data-theme="dark"] .dlbtn.primary:hover{color:#0f1622}
+  .dlbtn.ok{border-color:var(--green);color:var(--green);background:var(--panel)}
+
+  table{width:100%;border-collapse:collapse;font-size:.88rem;margin:.5rem 0}
+  th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--border);vertical-align:top}
+  thead th{background:var(--bg-soft);color:var(--brand-ink);font-weight:700;font-size:.74rem;text-transform:uppercase;letter-spacing:.03em}
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin:.5rem 0}
+  .pri{display:inline-block;font-size:.68rem;font-weight:800;padding:.08rem .45rem;border-radius:999px}
+  .pri.must{background:rgba(229,62,62,.13);color:var(--red)} .pri.should{background:rgba(192,86,33,.14);color:var(--amber)}
+  .pri.could{background:rgba(44,122,123,.14);color:var(--teal)} .pri.wont{background:var(--bg-soft);color:var(--muted)}
+
+  ul,ol{margin:.4rem 0;padding-left:1.2rem} li{margin:.28rem 0}
+  .kv{display:flex;justify-content:space-between;gap:1rem;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.9rem}
+  .kv:last-child{border-bottom:none} .kv .k{color:var(--muted)}
+  .callout{border-left:4px solid var(--navy-2);background:var(--brand-soft);padding:.7rem 1rem;border-radius:0 10px 10px 0;margin:.7rem 0}
+  .gwt{background:var(--bg-soft);border:1px solid var(--border);border-radius:9px;padding:.6rem .8rem;margin:.4rem 0;font-size:.9rem}
+  .gwt b{color:var(--brand-ink)}
+  .persona{border:1px solid var(--border);border-radius:11px;padding:.9rem 1.1rem;margin:.5rem 0;background:var(--panel)}
+  .persona .who{font-weight:700;color:var(--brand-ink)} .persona .role{color:var(--muted);font-size:.82rem}
+  .flow{display:flex;flex-wrap:wrap;gap:.4rem;margin:.5rem 0}
+  .flow .s{flex:1 1 100px;background:var(--bg-soft);border:1px solid var(--border);border-radius:9px;padding:.5rem;text-align:center;font-size:.82rem;font-weight:600}
+  /* Power BI-style charts + Mermaid-style diagrams — fixed colors so they render identically on screen and in exports */
+  .viz{background:#f8fafd;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin:12px 0;color:#2d3748}
+  .viz .vt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#718096;font-weight:700;margin-bottom:10px}
+  .viz-kpis{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px}
+  .vk{flex:1 1 118px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#fff}
+  .vk .n{font-size:23px;font-weight:800;line-height:1;color:#2b6cb0} .vk.red .n{color:#c53030} .vk.green .n{color:#2f855a} .vk.teal .n{color:#2c7a7b} .vk.amber .n{color:#b45309}
+  .vk .l{font-size:11px;color:#718096;margin-top:5px}
+  .chartrow{display:flex;flex-wrap:wrap;gap:16px} .chartrow .cc{flex:1 1 230px;min-width:210px}
+  .chartrow .cc .ct{font-size:12px;font-weight:700;color:#1a365d;margin-bottom:4px}
+  mark{background:#fde68a;color:#1a202c;border-radius:3px}
+
+  .askscrim{position:fixed;inset:0;background:rgba(16,24,40,.4);z-index:40;display:none} .askscrim.show{display:block}
+  .ask{position:fixed;right:0;top:0;height:100vh;width:min(420px,100vw);background:var(--panel);z-index:41;
+    transform:translateX(100%);transition:transform .22s;display:flex;flex-direction:column;box-shadow:-8px 0 24px rgba(16,24,40,.2)}
+  .ask.show{transform:none}
+  .ask .ah{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;border-bottom:1px solid var(--border)}
+  .ask .ah b{color:var(--brand-ink)} .ask .ah .sp{flex:1}
+  .ask .log{flex:1;overflow-y:auto;padding:.9rem}
+  .msg{margin:.5rem 0;max-width:92%} .msg .b{padding:.55rem .8rem;border-radius:12px;font-size:.9rem}
+  .msg.u{margin-left:auto} .msg.u .b{background:var(--brand);color:#fff;border-bottom-right-radius:4px} :root[data-theme="dark"] .msg.u .b{color:#0f1622}
+  .msg.a .b{background:var(--bg-soft);border:1px solid var(--border);border-bottom-left-radius:4px}
+  .msg.a .src{font-size:.72rem;color:var(--muted);margin-top:.3rem}
+  .chips{display:flex;flex-wrap:wrap;gap:.35rem;padding:.5rem .9rem}
+  .chip{border:1px solid var(--border);background:var(--bg);border-radius:999px;padding:.28rem .6rem;font-size:.76rem;cursor:pointer;color:var(--navy-2)}
+  .chip:hover{background:var(--brand-soft)}
+  .askform{display:flex;gap:.5rem;padding:.7rem .9rem;border-top:1px solid var(--border)}
+  .askform input{flex:1;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:9px;padding:.5rem .7rem;font-family:inherit;font-size:.9rem}
+  .askform button{border:none;background:var(--brand);color:#fff;border-radius:9px;padding:0 .9rem;font-weight:700;cursor:pointer} :root[data-theme="dark"] .askform button{color:#0f1622}
+
+  .foot{max-width:860px;margin:1.5rem auto 0;padding:1rem 2rem;color:var(--muted);font-size:.82rem;border-top:1px solid var(--border)}
+
+  @media (max-width:900px){
+    .side{position:fixed;left:0;top:49px;transform:translateX(-100%);transition:transform .2s;z-index:29;box-shadow:var(--shadow)}
+    .side.open{transform:none} .navtoggle{display:inline-flex} main{padding:1.2rem 1.1rem 4rem} .top .ttl small{display:none}
+  }
+  @media print{
+    .top,.side,.navtoggle,.ask,.askscrim,.dlgroup,.search,.tbtn{display:none!important} .app{display:block} main{max-width:none;padding:0} section[data-nav]{page-break-inside:avoid}
+    /* Save one document as PDF: hide every other section */
+    body.printing-one section[data-nav]:not(.print-target){display:none!important}
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <button class="tbtn navtoggle" id="navToggle" aria-label="Menu">☰</button>
+  <img class="logo" src="data:image/png;base64,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" alt="Colaberry">
+  <span class="ttl">Business Analysis Field Guide<small>Riverside Grill · Online Ordering</small></span>
+  <span class="sp"></span>
+  <span class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="search" type="search" placeholder="Search the guide…" aria-label="Search"></span>
+  <button class="tbtn" id="themeBtn" title="Light / dark">🌙</button>
+  <button class="tbtn" id="exportBtn" title="Print / PDF (whole guide)">⎙</button>
+  <button class="tbtn primary" id="askBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5A8.4 8.4 0 0 1 4 15l-2 5 5-2a8.4 8.4 0 0 0 5.5 1.5"/><path d="M8 10h8M8 13h5"/></svg>Ask</button>
+</div>
+
+<div class="app">
+  <nav class="side" id="side">
+    <div class="grp">Learn</div>
+    <a href="#overview"><span>Overview</span></a>
+    <a href="#twenty"><span>The 20% to know</span></a>
+    <div class="grp">Documents</div>
+    <a href="#brd"><span>1 · BRD</span><span class="dot">html·pdf·xls</span></a>
+    <a href="#vision"><span>2 · Vision &amp; Business Case</span><span class="dot">html·pdf·xls</span></a>
+    <a href="#stories"><span>3 · User Stories</span><span class="dot">html·pdf·xls</span></a>
+    <a href="#acceptance"><span>4 · Acceptance Criteria</span><span class="dot">html·pdf</span></a>
+    <a href="#usecases"><span>5 · Use Cases</span><span class="dot">html·pdf</span></a>
+    <a href="#personas"><span>6 · Personas</span><span class="dot">html·pdf</span></a>
+    <a href="#stakeholders"><span>7 · Stakeholder Matrix</span><span class="dot">html·pdf·xls</span></a>
+    <a href="#states"><span>8 · Current &amp; Future State</span><span class="dot">html·pdf</span></a>
+    <a href="#rtm"><span>9 · Traceability (RTM)</span><span class="dot">html·pdf·xls</span></a>
+    <a href="#exec"><span>Executive Summary</span><span class="dot">html·pdf</span></a>
+    <div class="grp">Reference</div>
+    <a href="#glossary"><span>Glossary</span></a>
+  </nav>
+
+  <main id="content">
+
+    <section data-nav id="overview">
+      <span class="eyebrow">Business Analysis · Field Guide</span>
+      <h2>Riverside Grill: online ordering, done right</h2>
+      <p class="lead">Riverside Grill runs 8 locations and loses roughly <strong>30% of every third-party order to delivery-app commissions</strong>. This Field Guide works the discipline of Business Analysis end to end for a direct online-ordering initiative — the same nine documents an AI Solution Architect must be able to direct, evaluate, and approve.</p>
+      <div class="callout"><strong>How to use this guide.</strong> Read the two learning sections, then open each document. Every document is <strong>searchable</strong>, exports as <strong>HTML, PDF, and (for tables) Excel/CSV</strong>, and can be queried with the <strong>Ask</strong> assistant (top right) — try "what are the non-functional requirements?"</div>
+    </section>
+
+    <section data-nav id="twenty">
+      <h2>The 20% you need to direct BA</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Concept</th><th>What good looks like</th></tr></thead>
+        <tbody>
+          <tr><td>Functional vs non-functional</td><td>Functional = what it does; non-functional = how well (speed, security) with a number</td></tr>
+          <tr><td>User story</td><td>"As a &lt;role&gt;, I want &lt;goal&gt;, so that &lt;benefit&gt;" — real role, real benefit</td></tr>
+          <tr><td>Acceptance criteria</td><td>Given / When / Then — objectively checkable</td></tr>
+          <tr><td>MoSCoW</td><td>Must / Should / Could / Won't — not everything is a Must</td></tr>
+          <tr><td>Traceability</td><td>Every requirement links back to a business need — no orphans</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section data-nav id="brd" data-doc="Business Requirements Document" data-csv>
+      <div class="doc">
+        <div class="dochead"><div><h2>1 · Business Requirements Document</h2><div class="dl">BRD-001 · v1.0 · Owner: Product Sponsor · 2026-07-18</div></div><div class="dlgroup"></div></div>
+        <h3>1. Purpose &amp; background</h3>
+        <p>Riverside Grill (8 locations, ~$4M annual revenue) currently takes online orders only through third-party delivery apps that charge 25–30% commission. In 2025 the chain paid an estimated <strong>$360K in commissions</strong> on ~$1.2M of third-party volume and holds none of that customer data. This initiative delivers a <strong>direct, branded online-ordering experience</strong> for pickup and in-house delivery.</p>
+        <h3>2. Business objectives</h3>
+        <ul><li>Reduce third-party commission cost by moving repeat customers to direct ordering.</li><li>Own first-party customer and order data for marketing and operations.</li><li>Increase repeat-order rate through a fast reorder experience.</li></ul>
+        <h3>3. Scope</h3>
+        <div class="kv"><span class="k">In scope</span><span>Web + mobile ordering (pickup &amp; own-delivery), menu management, payments, order status, basic order history</span></div>
+        <div class="kv"><span class="k">Out of scope</span><span>Loyalty/points program (Phase 2), replacing the in-store POS, catering &amp; large-group orders, third-party marketplace listings</span></div>
+        <h3>4. Business requirements</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>ID</th><th>Requirement</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr><td>BR-1</td><td>A customer can place a pickup order from any location's live menu and pay online.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>BR-2</td><td>A returning customer can reorder a previous order in one action.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>BR-3</td><td>The system takes card payment and issues a confirmation with an ETA.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>BR-4</td><td>A customer can track order status (received → preparing → ready).</td><td><span class="pri should">Should</span></td></tr>
+            <tr><td>BR-5</td><td>A store manager can mark items out of stock so they disappear from the menu.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>BR-6</td><td>The system supports the restaurant's own delivery with an address &amp; delivery fee.</td><td><span class="pri should">Should</span></td></tr>
+            <tr><td>BR-7</td><td>A customer can save a default location and payment method.</td><td><span class="pri could">Could</span></td></tr>
+            <tr><td>BR-8</td><td>Loyalty points on direct orders.</td><td><span class="pri wont">Won't (Phase 2)</span></td></tr>
+          </tbody>
+        </table></div>
+        <h3>5. Non-functional requirements</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>ID</th><th>Quality</th><th>Target</th></tr></thead>
+          <tbody>
+            <tr><td>NFR-1</td><td>Performance</td><td>Menu loads in &lt; 2s; checkout completes in &lt; 3s for 95% of orders</td></tr>
+            <tr><td>NFR-2</td><td>Availability</td><td>99.5% uptime during business hours (10:00–22:00 local)</td></tr>
+            <tr><td>NFR-3</td><td>Security</td><td>PCI-DSS SAQ-A compliant; no card data stored on Riverside systems</td></tr>
+            <tr><td>NFR-4</td><td>Accessibility</td><td>WCAG 2.1 AA on the ordering flow</td></tr>
+            <tr><td>NFR-5</td><td>Scalability</td><td>Handle a 5× order spike on Friday/Saturday evenings without degradation</td></tr>
+          </tbody>
+        </table></div>
+        <h3>6. Success criteria</h3>
+        <ul><li>≥ 35% of online orders are direct (not third-party) within 6 months.</li><li>Commission spend reduced by ≥ $120K in year one.</li><li>Reorder used on ≥ 25% of returning-customer orders.</li></ul>
+        <h3>7. Assumptions &amp; constraints</h3>
+        <ul><li>Assumption: each location already has tablets/printers to receive orders.</li><li>Constraint: payments go through the existing processor (Stripe); no new processor.</li><li>Constraint: launch before the November holiday season.</li></ul>
+      </div>
+    </section>
+
+    <section data-nav id="vision" data-doc="Vision and Business Case" data-csv>
+      <div class="doc">
+        <div class="dochead"><div><h2>2 · Vision &amp; Business Case</h2><div class="dl">BC-001 · v1.0</div></div><div class="dlgroup"></div></div>
+        <h3>Vision</h3>
+        <p class="callout">For Riverside Grill customers who want their favorite meal without app fees or phone tag, the Riverside Ordering experience is a fast, branded online order flow that remembers their last meal — unlike third-party apps, it keeps prices fair and the relationship direct.</p>
+        <h3>The cost of doing nothing</h3>
+        <div class="table-wrap"><table><thead><tr><th>Item</th><th>Today</th></tr></thead><tbody>
+          <tr><td>Third-party online volume</td><td>~$1.2M / year</td></tr>
+          <tr><td>Average commission</td><td>28%</td></tr>
+          <tr><td>Annual commission paid</td><td>~$336K</td></tr>
+          <tr><td>Customer data retained</td><td>None</td></tr>
+        </tbody></table></div>
+        <h3>Business case</h3>
+        <ul><li><strong>Build/subscription cost:</strong> ~$90K year one (platform + integration + support).</li><li><strong>Projected shift to direct:</strong> 35% of online volume by month 6.</li><li><strong>Year-one commission avoided:</strong> ~$120K–$140K.</li><li><strong>Payback:</strong> under 9 months; net positive thereafter, plus owned customer data.</li></ul>
+        <div class="viz">
+          <div class="vt">Business case · year-one economics</div>
+          <div class="viz-kpis">
+            <div class="vk red"><div class="n">$336K</div><div class="l">Commission paid / yr</div></div>
+            <div class="vk green"><div class="n">$130K</div><div class="l">Yr-1 avoided</div></div>
+            <div class="vk teal"><div class="n">&lt;9 mo</div><div class="l">Payback</div></div>
+            <div class="vk"><div class="n">35%</div><div class="l">Direct-order target</div></div>
+          </div>
+          <div class="chartrow">
+            <div class="cc"><div class="ct">Year-one economics ($K)</div>
+              <svg viewBox="0 0 300 150" width="100%" role="img" aria-label="Bar chart of year-one economics">
+                <line x1="8" y1="120" x2="292" y2="120" stroke="#cbd5e0" stroke-width="1"/>
+                <rect x="24" y="10" width="48" height="110" rx="3" fill="#c53030"/><text x="48" y="7" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="800" fill="#2d3748">336</text><text x="48" y="134" text-anchor="middle" font-family="Segoe UI,Arial" font-size="9" fill="#718096">Commission</text>
+                <rect x="94" y="77" width="48" height="43" rx="3" fill="#2f855a"/><text x="118" y="73" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="800" fill="#2d3748">130</text><text x="118" y="134" text-anchor="middle" font-family="Segoe UI,Arial" font-size="9" fill="#718096">Avoided</text>
+                <rect x="164" y="90" width="48" height="30" rx="3" fill="#94a3b8"/><text x="188" y="86" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="800" fill="#2d3748">90</text><text x="188" y="134" text-anchor="middle" font-family="Segoe UI,Arial" font-size="9" fill="#718096">Build cost</text>
+                <rect x="234" y="107" width="48" height="13" rx="3" fill="#2c7a7b"/><text x="258" y="103" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="800" fill="#2d3748">40</text><text x="258" y="134" text-anchor="middle" font-family="Segoe UI,Arial" font-size="9" fill="#718096">Net yr-1</text>
+              </svg>
+            </div>
+            <div class="cc"><div class="ct">Target online order mix</div>
+              <svg viewBox="0 0 240 130" width="100%" style="max-width:260px" role="img" aria-label="Donut chart: 35 percent direct orders">
+                <g transform="translate(62,64)">
+                  <circle r="44" fill="none" stroke="#e2e8f0" stroke-width="18"/>
+                  <circle r="44" fill="none" stroke="#2f855a" stroke-width="18" stroke-dasharray="96.8 276.5" transform="rotate(-90)"/>
+                  <text y="-1" text-anchor="middle" font-family="Segoe UI,Arial" font-size="20" font-weight="800" fill="#1a365d">35%</text>
+                  <text y="15" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" fill="#718096">direct</text>
+                </g>
+                <g font-family="Segoe UI,Arial" font-size="10.5" fill="#4a5568">
+                  <rect x="140" y="46" width="11" height="11" rx="2" fill="#2f855a"/><text x="156" y="55">Direct 35%</text>
+                  <rect x="140" y="66" width="11" height="11" rx="2" fill="#e2e8f0"/><text x="156" y="75">3rd-party 65%</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <h3>Options considered</h3>
+        <div class="table-wrap"><table><thead><tr><th>Option</th><th>Verdict</th></tr></thead><tbody>
+          <tr><td>Do nothing (stay third-party only)</td><td>Rejected — bleeds ~$336K/yr, no data</td></tr>
+          <tr><td>Negotiate lower commissions</td><td>Rejected — marginal, still no data</td></tr>
+          <tr><td>Build direct online ordering</td><td>Recommended — payback &lt; 9 mo, owns the customer</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <section data-nav id="stories" data-doc="User Stories" data-csv>
+      <div class="doc">
+        <div class="dochead"><div><h2>3 · User Stories</h2><div class="dl">US-001…008 · MoSCoW-prioritized</div></div><div class="dlgroup"></div></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>ID</th><th>Story</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr><td>US-1</td><td>As a hungry customer, I want to browse a location's live menu, so that I can order what's actually available.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>US-2</td><td>As a returning customer, I want to reorder my last meal in one tap, so that I check out in under 30 seconds.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>US-3</td><td>As a customer, I want to pay by card online, so that pickup is contactless.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>US-4</td><td>As a customer, I want an ETA and status updates, so that I arrive when my food is ready.</td><td><span class="pri should">Should</span></td></tr>
+            <tr><td>US-5</td><td>As a store manager, I want to 86 an item, so that customers can't order what we're out of.</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>US-6</td><td>As a customer in the delivery zone, I want my order delivered, so that I don't have to drive.</td><td><span class="pri should">Should</span></td></tr>
+            <tr><td>US-7</td><td>As a frequent customer, I want a saved default store and card, so that ordering is faster.</td><td><span class="pri could">Could</span></td></tr>
+            <tr><td>US-8</td><td>As a customer, I want to earn loyalty points, so that I come back.</td><td><span class="pri wont">Won't (Phase 2)</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section data-nav id="acceptance" data-doc="Acceptance Criteria">
+      <div class="doc">
+        <div class="dochead"><div><h2>4 · Acceptance Criteria</h2><div class="dl">Given / When / Then</div></div><div class="dlgroup"></div></div>
+        <h4>US-2 · Reorder last meal</h4>
+        <div class="gwt"><b>Given</b> I am signed in and have at least one past order,<br><b>When</b> I tap "Reorder" on my last order,<br><b>Then</b> my cart is filled with those items at current prices and I reach the payment screen in ≤ 2 taps; out-of-stock items are flagged and removed with a notice.</div>
+        <h4>US-3 · Pay by card</h4>
+        <div class="gwt"><b>Given</b> a cart with at least one item,<br><b>When</b> I submit valid card details,<br><b>Then</b> the order is charged, I receive a confirmation number and ETA, and no card number is stored on Riverside systems (tokenized via the processor).</div>
+        <h4>US-5 · 86 an item</h4>
+        <div class="gwt"><b>Given</b> I am a store manager on the admin view,<br><b>When</b> I mark an item out of stock,<br><b>Then</b> the item is hidden from that location's menu within 60 seconds and any in-progress carts show it as unavailable at checkout.</div>
+      </div>
+    </section>
+
+    <section data-nav id="usecases" data-doc="Use Cases">
+      <div class="doc">
+        <div class="dochead"><div><h2>5 · Use Cases</h2><div class="dl">Main + alternate paths</div></div><div class="dlgroup"></div></div>
+        <h3>UC-1 · Place a pickup order</h3>
+        <p class="small muted">Actor: Customer · Goal: order food for pickup and pay</p>
+        <div class="flow"><div class="s">Select location</div><div class="s">Browse menu</div><div class="s">Add to cart</div><div class="s">Pay</div><div class="s">Get ETA</div></div>
+        <p><b>Alternate — item unavailable:</b> if an item is 86'd after it's in the cart, checkout flags it, removes it, and asks the customer to confirm the updated total.</p>
+        <p><b>Alternate — payment declined:</b> the order is not placed; the customer is prompted to retry or use another card; the cart is preserved.</p>
+        <h3>UC-2 · Track order status</h3>
+        <p class="small muted">Actor: Customer · Goal: know when to arrive</p>
+        <div class="flow"><div class="s">Order received</div><div class="s">Preparing</div><div class="s">Ready</div></div>
+        <p><b>Alternate — kitchen delay:</b> manager pushes a revised ETA; customer is notified.</p>
+      </div>
+    </section>
+
+    <section data-nav id="personas" data-doc="Personas">
+      <div class="doc">
+        <div class="dochead"><div><h2>6 · Personas</h2><div class="dl">Goals &amp; frustrations</div></div><div class="dlgroup"></div></div>
+        <div class="persona"><div class="who">Maria · the regular</div><div class="role">Orders the same lunch 2–3× a week</div><p><b>Goals:</b> order in under a minute; skip the app fees. <b>Frustrations:</b> re-entering her order every time; third-party apps upcharge the menu.</p></div>
+        <div class="persona"><div class="who">Devon · the first-timer</div><div class="role">Found Riverside on a map search</div><p><b>Goals:</b> see what's good, order without making an account. <b>Frustrations:</b> forced sign-ups; unclear pickup time.</p></div>
+        <div class="persona"><div class="who">Priya · the store manager</div><div class="role">Runs the busiest location</div><p><b>Goals:</b> stop taking phone orders during a rush; hide sold-out items instantly. <b>Frustrations:</b> orders on four different tablets; no way to pause the menu.</p></div>
+      </div>
+    </section>
+
+    <section data-nav id="stakeholders" data-doc="Stakeholder Matrix" data-csv>
+      <div class="doc">
+        <div class="dochead"><div><h2>7 · Stakeholder Matrix</h2><div class="dl">Interest × influence</div></div><div class="dlgroup"></div></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Stakeholder</th><th>Interest</th><th>Influence</th><th>Engagement</th></tr></thead>
+          <tbody>
+            <tr><td>Owner / CEO</td><td>High</td><td>High</td><td>Manage closely — approves scope &amp; budget</td></tr>
+            <tr><td>Store managers</td><td>High</td><td>Medium</td><td>Keep involved — daily users of admin</td></tr>
+            <tr><td>Customers</td><td>High</td><td>Low</td><td>Keep informed — usability testing</td></tr>
+            <tr><td>Kitchen staff</td><td>Medium</td><td>Low</td><td>Keep informed — order-ticket flow</td></tr>
+            <tr><td>Payment processor</td><td>Low</td><td>Medium</td><td>Keep satisfied — PCI &amp; integration</td></tr>
+            <tr><td>Marketing</td><td>Medium</td><td>Medium</td><td>Keep involved — owns the customer data</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section data-nav id="states" data-doc="Current and Future State">
+      <div class="doc">
+        <div class="dochead"><div><h2>8 · Current &amp; Future State</h2><div class="dl">As-is vs to-be</div></div><div class="dlgroup"></div></div>
+        <div class="viz"><div class="vt">Process · current (as-is)</div>
+          <svg viewBox="0 0 560 84" width="100%" style="max-width:560px" role="img" aria-label="Current-state process flow">
+            <defs><marker id="ac1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#94a3b8"/></marker></defs>
+            <rect x="8" y="24" width="96" height="40" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="56" y="48" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#1a365d">Customer</text>
+            <line x1="104" y1="44" x2="150" y2="44" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac1)"/>
+            <rect x="152" y="24" width="150" height="40" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="227" y="42" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#1a365d">3rd-party app</text><text x="227" y="56" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="700" fill="#c53030">takes 28% fee</text>
+            <line x1="302" y1="44" x2="348" y2="44" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac1)"/>
+            <rect x="350" y="24" width="90" height="40" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="395" y="48" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#1a365d">Kitchen</text>
+            <rect x="452" y="24" width="100" height="40" rx="8" fill="#fff5f5" stroke="#c53030" stroke-width="1.3" stroke-dasharray="4 3"/><text x="502" y="42" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="700" fill="#c53030">No customer</text><text x="502" y="55" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="700" fill="#c53030">data</text>
+          </svg>
+        </div>
+        <div class="viz"><div class="vt">Process · future (to-be)</div>
+          <svg viewBox="0 0 620 150" width="100%" style="max-width:620px" role="img" aria-label="Future-state process flow with delivery decision">
+            <defs><marker id="ac2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#94a3b8"/></marker></defs>
+            <rect x="8" y="56" width="92" height="38" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="54" y="79" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#1a365d">Customer</text>
+            <line x1="100" y1="75" x2="128" y2="75" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac2)"/>
+            <rect x="130" y="56" width="112" height="38" rx="8" fill="#fff" stroke="#38a169" stroke-width="1.6"/><text x="186" y="79" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#1a365d">Riverside site</text>
+            <line x1="242" y1="75" x2="260" y2="75" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac2)"/>
+            <polygon points="305,50 350,75 305,100 260,75" fill="#fff7ed" stroke="#c05621" stroke-width="1.5"/><text x="305" y="79" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" font-weight="600" fill="#9a3412">In zone?</text>
+            <path d="M338,60 C366,48 372,40 388,36" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac2)"/><text x="356" y="44" font-family="Segoe UI,Arial" font-size="9" font-weight="700" fill="#2f855a">Yes</text>
+            <rect x="392" y="18" width="104" height="34" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="444" y="39" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#1a365d">Own delivery</text>
+            <path d="M338,90 C366,102 372,110 388,114" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac2)"/><text x="356" y="112" font-family="Segoe UI,Arial" font-size="9" font-weight="700" fill="#c05621">No</text>
+            <rect x="392" y="98" width="104" height="34" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="444" y="119" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#1a365d">Pickup</text>
+            <path d="M496,35 C520,42 524,58 528,66" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac2)"/>
+            <path d="M496,115 C520,108 524,92 528,84" fill="none" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#ac2)"/>
+            <rect x="512" y="56" width="98" height="38" rx="8" fill="#fff" stroke="#38a169" stroke-width="1.6"/><text x="561" y="72" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#1a365d">Kitchen +</text><text x="561" y="86" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="700" fill="#2f855a">owns data</text>
+          </svg>
+        </div>
+        <div class="callout"><b>Pain removed:</b> the 28% commission and the data blind-spot. <b>New capability:</b> reorder, live 86'ing, and status tracking the third-party flow never offered.</div>
+      </div>
+    </section>
+
+    <section data-nav id="rtm" data-doc="Requirements Traceability Matrix" data-csv>
+      <div class="doc">
+        <div class="dochead"><div><h2>9 · Requirements Traceability Matrix</h2><div class="dl">Need → requirement → story → test</div></div><div class="dlgroup"></div></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Business need</th><th>Req.</th><th>Story</th><th>Acceptance</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr><td>Cut commission cost</td><td>BR-1</td><td>US-1</td><td>Menu + pickup + pay</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>Increase repeat orders</td><td>BR-2</td><td>US-2</td><td>Reorder ≤ 2 taps</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>Contactless payment</td><td>BR-3</td><td>US-3</td><td>Charge + tokenize</td><td><span class="pri must">Must</span></td></tr>
+            <tr><td>Reduce wrong-time pickups</td><td>BR-4</td><td>US-4</td><td>Status updates</td><td><span class="pri should">Should</span></td></tr>
+            <tr><td>Stop selling sold-out items</td><td>BR-5</td><td>US-5</td><td>86 within 60s</td><td><span class="pri must">Must</span></td></tr>
+          </tbody>
+        </table></div>
+        <p class="small muted">No orphan requirements: every BR maps to a need, a story, and an acceptance check.</p>
+      </div>
+    </section>
+
+    <section data-nav id="exec" data-doc="Executive Summary">
+      <div class="doc">
+        <div class="dochead"><div><h2>Executive Summary</h2><div class="dl">One page</div></div><div class="dlgroup"></div></div>
+        <p>Riverside Grill pays ~$336K/year in third-party commissions and owns none of its customer data. A direct online-ordering experience (pickup + own-delivery, reorder, live menu, card payment) is projected to shift 35% of online volume direct within six months, avoiding ~$120K–$140K in year-one commissions with payback under nine months — while giving Riverside its customer relationship back.</p>
+        <p><b>Recommended:</b> proceed to solution architecture (Week 2). <b>Must-haves:</b> live menu + pickup, one-tap reorder, card payment, and manager 86'ing. <b>Deferred:</b> loyalty (Phase 2).</p>
+        <div class="callout"><b>Architect's note.</b> Requirements are specific, testable, prioritized (MoSCoW), and traced. Non-functionals carry real targets (2s menu, 99.5% uptime, PCI SAQ-A, WCAG 2.1 AA). Ready for sign-off.</div>
+      </div>
+    </section>
+
+    <section data-nav id="glossary">
+      <h2>Glossary</h2>
+      <div class="table-wrap"><table><tbody>
+        <tr><td><b>BRD</b></td><td>Business Requirements Document — the need, scope, success criteria.</td></tr>
+        <tr><td><b>MoSCoW</b></td><td>Must / Should / Could / Won't prioritization.</td></tr>
+        <tr><td><b>NFR</b></td><td>Non-functional requirement — a quality target (speed, uptime, security).</td></tr>
+        <tr><td><b>RTM</b></td><td>Requirements Traceability Matrix — links each requirement to a need.</td></tr>
+        <tr><td><b>86</b></td><td>Restaurant term for marking an item unavailable / sold out.</td></tr>
+        <tr><td><b>PCI-DSS SAQ-A</b></td><td>The card-security level when a merchant never touches card data (tokenized by the processor).</td></tr>
+      </tbody></table></div>
+    </section>
+
+  </main>
+</div>
+
+<div class="foot">Business Analysis Field Guide · Riverside Grill example · generated by Claude Code · Colaberry Enterprise AI Leadership Accelerator · <code>guide_type: deep_dive / week 1</code></div>
+
+<div class="askscrim" id="askscrim"></div>
+<aside class="ask" id="ask" aria-label="Ask assistant">
+  <div class="ah"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--navy-2)" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5A8.4 8.4 0 0 1 4 15l-2 5 5-2a8.4 8.4 0 0 0 5.5 1.5"/></svg><b>Ask this guide</b><span class="sp"></span><button class="tbtn" id="askClose" aria-label="Close">✕</button></div>
+  <div class="log" id="asklog">
+    <div class="msg a"><div class="b">Hi — ask me anything about this Business Analysis Field Guide. I answer only from what's in this guide.</div></div>
+  </div>
+  <div class="chips" id="chips"></div>
+  <form class="askform" id="askform"><input id="askinput" type="text" placeholder="e.g. What are the non-functional requirements?" autocomplete="off"><button type="submit">Ask</button></form>
+</aside>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  function theme(t){root.setAttribute('data-theme',t);document.getElementById('themeBtn').textContent=(t==='dark'?'☀️':'🌙');try{localStorage.setItem('fg-theme',t);}catch(e){}}
+  var s=null;try{s=localStorage.getItem('fg-theme');}catch(e){} if(!s)s=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light'; theme(s);
+  document.getElementById('themeBtn').onclick=function(){theme(root.getAttribute('data-theme')==='dark'?'light':'dark');};
+  document.getElementById('exportBtn').onclick=function(){window.print();};
+  var side=document.getElementById('side');
+  document.getElementById('navToggle').onclick=function(){side.classList.toggle('open');};
+  side.addEventListener('click',function(e){if(e.target.closest('a'))side.classList.remove('open');});
+
+  var links={};document.querySelectorAll('.side a[href^="#"]').forEach(function(a){links[a.getAttribute('href').slice(1)]=a;});
+  var obs=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){for(var k in links)links[k].classList.remove('active');var a=links[en.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-45% 0px -50% 0px'});
+  document.querySelectorAll('section[data-nav]').forEach(function(x){obs.observe(x);});
+
+  // ---- Downloads: HTML (primary), PDF (print), Excel/CSV (tables) ----
+  function logoSrc(){var l=document.querySelector('.top .logo');return l?l.getAttribute('src'):'';}
+  var DOC_CSS = "*{box-sizing:border-box}"
+    +"body{font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;color:#2d3748;line-height:1.62;margin:0;background:#fff;font-size:14px}"
+    +".cover{border-top:7px solid #1a365d;background:linear-gradient(180deg,#f3f7fc,#ffffff);padding:34px 44px 26px;border-bottom:1px solid #e2e8f0}"
+    +".cover .brandrow{display:flex;align-items:center;justify-content:space-between} .cover img{height:30px}"
+    +".cover .cls{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#c05621;font-weight:800}"
+    +".cover .eyebrow{display:inline-block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;color:#2b6cb0;margin-top:20px}"
+    +".cover h1{font-size:30px;color:#1a365d;margin:8px 0 4px;letter-spacing:-.6px;line-height:1.12}"
+    +".cover .sub{color:#4a5568;font-size:15px}"
+    +".cover .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}"
+    +".cover .chip{background:#fff;border:1px solid #dbe4f0;border-radius:999px;padding:5px 13px;font-size:12px;color:#2d3748} .cover .chip b{color:#1a365d;font-weight:700}"
+    +".body{padding:24px 44px 6px;max-width:900px}"
+    +"h2,h3,h4{color:#1a365d;line-height:1.25}"
+    +"h3{font-size:16.5px;margin:24px 0 8px;padding-bottom:6px;border-bottom:2px solid #e8eef6}"
+    +"h4{font-size:13px;color:#2b6cb0;margin:18px 0 4px;text-transform:uppercase;letter-spacing:.04em}"
+    +"p{margin:9px 0}"
+    +".table-wrap{border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;margin:12px 0}"
+    +"table{width:100%;border-collapse:collapse;font-size:12.5px}"
+    +"thead th{background:#1a365d;color:#fff;text-transform:uppercase;font-size:10.5px;letter-spacing:.04em;padding:9px 12px;text-align:left}"
+    +"tbody td{border-bottom:1px solid #edf1f6;padding:9px 12px;vertical-align:top} tbody tr:nth-child(even){background:#f8fafd} tbody tr:last-child td{border-bottom:none}"
+    +"ul,ol{padding-left:20px;margin:8px 0} li{margin:4px 0}"
+    +".kv{display:flex;justify-content:space-between;gap:20px;border-bottom:1px solid #edf1f6;padding:7px 0} .kv .k{color:#718096;font-weight:600}"
+    +".callout{border-left:4px solid #2b6cb0;background:#eef4fb;padding:12px 16px;border-radius:0 9px 9px 0;margin:12px 0}"
+    +".gwt{background:#f6f9fd;border:1px solid #e2e8f0;border-left:4px solid #38a169;border-radius:8px;padding:11px 14px;margin:8px 0} .gwt b{color:#1a365d}"
+    +".persona{border:1px solid #e2e8f0;border-radius:11px;padding:14px 16px;margin:10px 0;background:#fbfcfe}"
+    +".persona .who{font-weight:800;color:#1a365d;font-size:15px} .persona .role{color:#718096;font-size:12px;margin-bottom:4px}"
+    +".pri{display:inline-block;font-weight:800;font-size:10.5px;padding:2px 9px;border-radius:999px}"
+    +".pri.must{background:#fdeaea;color:#c53030} .pri.should{background:#fbefe3;color:#b45309} .pri.could{background:#e6f2f2;color:#2c7a7b} .pri.wont{background:#edf1f6;color:#718096}"
+    +".flow{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0} .flow .s{flex:1 1 110px;background:#f0f5fb;border:1px solid #dbe4f0;border-radius:9px;padding:10px;text-align:center;font-size:12px;font-weight:600;color:#1a365d}"
+    +".signoff{margin:26px 44px;padding:18px 22px;border:1px solid #e2e8f0;border-radius:11px;background:#f8fafd}"
+    +".signoff .h{font-weight:800;color:#1a365d;font-size:13px;text-transform:uppercase;letter-spacing:.05em}"
+    +".signoff .row{display:flex;gap:26px;flex-wrap:wrap;margin-top:14px} .signoff .f{flex:1 1 180px;font-size:12px;color:#4a5568}"
+    +".signoff .f .lbl{font-size:10.5px;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:24px} .signoff .f .line{border-bottom:1.5px solid #cbd5e0;margin-bottom:5px}"
+    +".docfoot{margin-top:20px;padding:14px 44px;border-top:2px solid #1a365d;color:#718096;font-size:11px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}"
+    +"@page{margin:15mm}"
+    +".viz{background:#f8fafd;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin:14px 0}.viz .vt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#718096;font-weight:700;margin-bottom:10px}.viz-kpis{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px}.vk{flex:1 1 118px;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;background:#fff}.vk .n{font-size:23px;font-weight:800;line-height:1;color:#2b6cb0}.vk.red .n{color:#c53030}.vk.green .n{color:#2f855a}.vk.teal .n{color:#2c7a7b}.vk .l{font-size:11px;color:#718096;margin-top:5px}.chartrow{display:flex;flex-wrap:wrap;gap:16px}.chartrow .cc{flex:1 1 230px;min-width:210px}.chartrow .cc .ct{font-size:12px;font-weight:700;color:#1a365d;margin-bottom:4px}"
+    +"@media print{.cover{padding-left:0;padding-right:0} .body,.signoff,.docfoot{padding-left:0;padding-right:0;margin-left:0;margin-right:0} h3,table,.callout,.gwt,.persona,.signoff,.viz{page-break-inside:avoid}}";
+  function standaloneHtml(sec,name){
+    var clone=sec.querySelector('.doc').cloneNode(true);
+    clone.querySelectorAll('.dochead').forEach(function(x){x.remove();});
+    var d='2026-07-18';
+    return '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+name+' — Riverside Grill</title><style>'+DOC_CSS+'</style></head><body>'
+      +'<div class="cover"><div class="brandrow"><img src="'+logoSrc()+'" alt="Colaberry"><span class="cls">Confidential · Draft</span></div>'
+      +'<div class="eyebrow">Business Analysis · Field Guide</div><h1>'+name+'</h1>'
+      +'<div class="sub">Riverside Grill · Direct Online Ordering Initiative</div>'
+      +'<div class="chips"><span class="chip"><b>Version</b> 1.0</span><span class="chip"><b>Owner</b> Product Sponsor</span><span class="chip"><b>Status</b> Draft for review</span><span class="chip"><b>Date</b> '+d+'</span><span class="chip"><b>Prepared by</b> Claude Code</span></div></div>'
+      +'<div class="body">'+clone.innerHTML+'</div>'
+      +'<div class="signoff"><div class="h">Sign-off</div><div class="row">'
+      +'<div class="f"><div class="lbl">Prepared by</div><div class="line"></div>Claude Code — AI draft</div>'
+      +'<div class="f"><div class="lbl">Reviewed by (Architect)</div><div class="line"></div>&nbsp;</div>'
+      +'<div class="f"><div class="lbl">Approved by</div><div class="line"></div>&nbsp;</div></div></div>'
+      +'<div class="docfoot"><span>Riverside Grill · '+name+'</span><span>Colaberry Enterprise AI Leadership Accelerator · generated by Claude Code</span></div></body></html>';
+  }
+  function csvFrom(sec){
+    var t=sec.querySelector('table'); if(!t)return '';
+    var rows=[]; t.querySelectorAll('tr').forEach(function(r){var cells=[];r.querySelectorAll('th,td').forEach(function(td){var v=td.textContent.replace(/\s+/g,' ').trim().replace(/"/g,'""');cells.push('"'+v+'"');});rows.push(cells.join(','));});
+    return rows.join('\r\n');
+  }
+  function download(name,ext,mime,text){var blob=new Blob([text],{type:mime});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=name+'.'+ext;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},400);}
+  function printDoc(sec,name){
+    var html=standaloneHtml(sec,name);
+    var ifr=document.createElement('iframe'); ifr.setAttribute('aria-hidden','true');
+    ifr.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0';
+    document.body.appendChild(ifr);
+    var doc=ifr.contentWindow.document; doc.open(); doc.write(html); doc.close();
+    var fired=false; function go(){ if(fired)return; fired=true; try{ifr.contentWindow.focus();ifr.contentWindow.print();}catch(e){} setTimeout(function(){if(ifr.parentNode)ifr.parentNode.removeChild(ifr);},1500); }
+    ifr.onload=function(){setTimeout(go,250);}; setTimeout(go,700);
+  }
+  function slug(s){return s.replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'');}
+  function flash(b,txt){var t=b.innerHTML;b.classList.add('ok');b.textContent=txt;setTimeout(function(){b.innerHTML=t;b.classList.remove('ok');},1500);}
+  var ICON={html:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3l-2 18M16 3l2 18M4 8h16M3 16h16"/></svg>',
+            pdf:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15H6z"/><path d="M9 13h6M9 17h4"/></svg>',
+            csv:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 4v16"/></svg>'};
+  document.querySelectorAll('section[data-doc]').forEach(function(sec){
+    var g=sec.querySelector('.dlgroup'), name=sec.getAttribute('data-doc'), hasCsv=sec.hasAttribute('data-csv');
+    function mk(fmt,label,cls){var b=document.createElement('button');b.className='dlbtn'+(cls?' '+cls:'');b.innerHTML=ICON[fmt]+' '+label;g.appendChild(b);return b;}
+    mk('html','HTML','primary').onclick=function(){download(slug(name),'html','text/html;charset=utf-8',standaloneHtml(sec,name));flash(this,'Saved ✓');};
+    mk('pdf','PDF').onclick=function(){printDoc(sec,name);flash(this,'Opening PDF…');};
+    if(hasCsv)mk('csv','Excel').onclick=function(){var c=csvFrom(sec);if(c)download(slug(name),'csv','text/csv;charset=utf-8',c);flash(this,'Saved ✓');};
+  });
+
+  var box=document.getElementById('search'), content=document.getElementById('content');
+  function clearMarks(){content.querySelectorAll('mark').forEach(function(m){var t=document.createTextNode(m.textContent);m.parentNode.replaceChild(t,m);});}
+  function find(node,rx){if(node.nodeType===3){var m=node.data.match(rx);if(m){var sp=document.createElement('mark');sp.textContent=m[0];var af=node.splitText(m.index);af.data=af.data.slice(m[0].length);node.parentNode.insertBefore(sp,af);return sp;}}else if(node.nodeType===1&&!/^(SCRIPT|STYLE|MARK|SVG)$/.test(node.tagName)){for(var i=0;i<node.childNodes.length;i++){var r=find(node.childNodes[i],rx);if(r)return r;}}return null;}
+  var tt;box.oninput=function(){clearTimeout(tt);tt=setTimeout(function(){clearMarks();var q=box.value.trim();if(q.length<2)return;var rx=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');var f=find(content,rx);if(f)f.scrollIntoView({behavior:'smooth',block:'center'});},200);};
+
+  var KB=[
+    {q:['non-functional','nfr','performance','uptime','security','pci','accessibility','wcag','speed'],a:'Non-functional requirements (NFRs): menu loads < 2s and checkout < 3s for 95% of orders; 99.5% uptime during business hours; PCI-DSS SAQ-A (no card data stored); WCAG 2.1 AA on the ordering flow; handle a 5× weekend spike.',s:'BRD → Non-functional requirements'},
+    {q:['roi','cost','commission','business case','savings','payback','money'],a:'Riverside pays ~$336K/year in third-party commissions. Building direct ordering costs ~$90K year one and is projected to avoid ~$120K–$140K in year-one commissions — payback under 9 months, plus owned customer data.',s:'Vision & Business Case'},
+    {q:['stakeholder','who cares','decides','owner','manager'],a:'Key stakeholders: Owner/CEO (manage closely — approves scope), store managers (keep involved — daily admin users), customers (keep informed — usability), kitchen staff, payment processor (PCI), and marketing (owns the data).',s:'Stakeholder Matrix'},
+    {q:['mvp','must','scope','priority','moscow','smallest'],a:'The MVP (Must-haves) is: browse a live menu and place a pickup order (BR-1/US-1), one-tap reorder (BR-2/US-2), card payment with confirmation (BR-3/US-3), and manager 86-ing of sold-out items (BR-5/US-5). Loyalty is explicitly a Won’t (Phase 2).',s:'BRD → Scope & priorities'},
+    {q:['reorder','last meal','one tap'],a:'Reorder (US-2): Given a past order, when the customer taps Reorder, then the cart fills at current prices and they reach payment in ≤ 2 taps; out-of-stock items are flagged and removed.',s:'Acceptance Criteria · US-2'},
+    {q:['persona','user','customer','maria','devon','priya'],a:'Three personas: Maria (the regular — wants to order in under a minute), Devon (first-timer — wants to order without a forced sign-up), and Priya (store manager — wants to stop phone orders and 86 items instantly).',s:'Personas'},
+    {q:['traceability','rtm','orphan','trace'],a:'The RTM links every business need → requirement (BR) → user story (US) → acceptance check. No orphan requirements: each BR maps to a need, a story, and a test.',s:'Requirements Traceability Matrix'},
+    {q:['out of scope','not','won\'t','wont','excluded','loyalty'],a:'Out of scope: the loyalty/points program (Phase 2), replacing the in-store POS, catering / large-group orders, and third-party marketplace listings.',s:'BRD → Scope'},
+    {q:['current','future','as-is','to-be','pain','process'],a:'Current state: customers use third-party apps that take 28% and leave no data. Future state: customers order direct, Riverside keeps the margin and the data, and gains reorder + live 86-ing + status tracking.',s:'Current & Future State'},
+    {q:['use case','payment declined','unavailable','alternate','unhappy'],a:'Use cases cover the unhappy paths: if an item is 86-ed after it’s in the cart, checkout removes it and re-confirms the total; if payment is declined, the order isn’t placed and the cart is preserved for retry.',s:'Use Cases'}
+  ];
+  function answer(query){var toks=query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);var best=null,score=0;
+    KB.forEach(function(e){var sc=0;e.q.forEach(function(k){toks.forEach(function(t){if(k.indexOf(t)>=0||t.indexOf(k)>=0)sc++;});});if(sc>score){score=sc;best=e;}});return score>0?best:null;}
+  var log=document.getElementById('asklog');
+  function add(role,html,src){var m=document.createElement('div');m.className='msg '+role;m.innerHTML='<div class="b">'+html+(src?'<div class="src">Source: '+src+'</div>':'')+'</div>';log.appendChild(m);log.scrollTop=log.scrollHeight;}
+  function ask(q){add('u',q.replace(/</g,'&lt;'));var r=answer(q);setTimeout(function(){r?add('a',r.a,r.s):add('a','I can only answer from this guide. Try asking about the non-functional requirements, the ROI, the stakeholders, the MVP, or reorder.');},180);}
+  var chips=['What are the non-functional requirements?','What\'s the ROI?','Who are the stakeholders?','What\'s the MVP?','What\'s out of scope?'];
+  var chipbox=document.getElementById('chips');
+  chips.forEach(function(c){var b=document.createElement('button');b.className='chip';b.textContent=c;b.onclick=function(){ask(c);};chipbox.appendChild(b);});
+  var ask1=document.getElementById('ask'),scrim=document.getElementById('askscrim');
+  document.getElementById('askBtn').onclick=function(){ask1.classList.add('show');scrim.classList.add('show');document.getElementById('askinput').focus();};
+  function closeAsk(){ask1.classList.remove('show');scrim.classList.remove('show');}
+  document.getElementById('askClose').onclick=closeAsk; scrim.onclick=closeAsk;
+  document.getElementById('askform').onsubmit=function(e){e.preventDefault();var v=document.getElementById('askinput').value.trim();if(!v)return;ask(v);document.getElementById('askinput').value='';};
+})();
+</script>
+</body>
+</html>

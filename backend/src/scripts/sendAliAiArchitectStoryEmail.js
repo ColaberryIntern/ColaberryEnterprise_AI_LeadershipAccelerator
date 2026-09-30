@@ -138,7 +138,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Ali - the visual story of how the rollout works (4 people, 6 scenarios, security + governance explained)',
     text: TEXT, html: EMAIL,

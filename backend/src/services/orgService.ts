@@ -1,0 +1,806 @@
+// Free-trial Organization / Manager layer. A manager registers free → gets a
+// management org AND their own free student enrollment (dual account) → invites
+// teammates (free member accounts, tagged with a team/department) → reads
+// aggregated metrics for the org over the EXISTING student ledgers.
+//
+// Idempotency: registerManager and inviteMembers are keyed on email (via
+// createFreeAccount's email idempotency + the org_members (org_id, email) unique
+// index), so re-running either lands the same state with no duplicate rows and
+// no duplicate invite emails. Failure-first: metric reads degrade a section to
+// null/empty rather than failing the whole request; invite email sends are
+// best-effort and never fail the invite.
+
+import crypto from 'crypto';
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../config/database';
+import { Organization, OrgMember, Enrollment, Lead } from '../models';
+import {
+  resolveAccountType,
+  grantsTrainingEnrollment,
+  type OrgAccountType,
+} from './orgAccountType';
+import { createFreeAccount } from './freeSignupService';
+import { sendOrgInviteEmail, sendOrgWelcomeEmail } from './emailService';
+import { assertMemberInOrg } from '../middlewares/orgAuth';
+import { computeBand } from './progression/bandLadder';
+
+const INVITE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const LEVEL_RANKS = 9; // student_level ranks 0..8
+
+// ── Pure helpers ─────────────────────────────────────────────────────────────
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Lower-case, trim, de-dupe, and keep only syntactically valid emails. */
+export function normalizeEmails(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const seen = new Set<string>();
+  for (const e of list) {
+    const clean = String(e || '').toLowerCase().trim();
+    if (clean && EMAIL_RE.test(clean)) seen.add(clean);
+  }
+  return Array.from(seen);
+}
+
+/** Derive a human display name from an email local-part (invited members have no
+ *  name yet, and createFreeAccount requires a non-empty full_name). */
+export function displayNameFromEmail(email: string): string {
+  const local = String(email || '').split('@')[0] || 'Teammate';
+  return local
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim() || 'Teammate';
+}
+
+/** Run a parameterized SELECT and return the raw rows. Guards empty id-lists so
+ *  `IN (:ids)` never renders an invalid `IN ()`. */
+async function selectRows<T = any>(sql: string, replacements: Record<string, unknown>): Promise<T[]> {
+  return sequelize.query(sql, { replacements, type: QueryTypes.SELECT }) as Promise<T[]>;
+}
+
+/** The enrollment ids on an org's roster (members that have a linked enrollment). */
+async function orgEnrollmentIds(orgId: string): Promise<string[]> {
+  const members = await OrgMember.findAll({ where: { org_id: orgId }, attributes: ['enrollment_id'] });
+  return members.map((m) => m.enrollment_id).filter((id): id is string => !!id);
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface RegisterManagerInput {
+  name: string;
+  company?: string | null;
+  email: string;
+  /**
+   * Where they came in. Hostname, full URL, or referrer — `normalizeEntrySite`
+   * accepts any of them, because which form the front end happens to send must
+   * not change the account a person gets.
+   *
+   * Optional, and its absence is the OLD behaviour: an unmapped site resolves to
+   * `management_account`, which is what every existing row was backfilled to.
+   */
+  entrySite?: string | null;
+  /** Explicit override, for an internal caller creating an account directly. */
+  accountType?: string | null;
+}
+
+export interface RegisterManagerResult {
+  /**
+   * NULLABLE, and the null case is a consulting account.
+   *
+   * A consulting client has no training enrollment, so there is no student
+   * session to hand back. Returning a JWT anyway would mean minting a portal
+   * session for an account that has no portal presence — the exact conflation
+   * this change exists to end.
+   */
+  jwt: string | null;
+  organization: { id: string; name: string; owner_enrollment_id: string | null; organization_type: string };
+  /** Null for consulting accounts, which are deliberately not enrolled. */
+  enrollment: { id: string; full_name: string; email: string; tier: string } | null;
+  /** Always present. Every business account is a lead (see step 4). */
+  lead_id: number | null;
+}
+
+export interface OrgOverview {
+  member_count: number;
+  level_distribution: Array<{ rank: number; count: number }>;
+  avg_readiness: number;
+  builder_xp_by_week: Array<{ week: string; xp: number }>;
+  evidence_this_week: number;
+  attendance_rate: number; // 0..1
+  evaluations_passed_this_month: number;
+  level_ups_last_30d: number;
+}
+
+export interface RosterMember {
+  enrollment_id: string;
+  name: string;
+  team: string | null;
+  level: string;
+  rank: number;
+  /**
+   * The canonical rung name the student sees in their own HUD ("AI Enabled II",
+   * "AI Builder I"). Managers were reading the raw `level` slug ("junior_builder",
+   * "rank 1/8") until 2026-09-16 — a vocabulary no student surface uses.
+   */
+  band_rung: string;
+  readiness: number; // 0..100
+  builder_xp_week: number;
+  streak: number;
+  total_points: number; // canonical points-economy total (student_points_events)
+}
+
+export interface MemberDetail {
+  enrollment_id: string;
+  name: string;
+  team: string | null;
+  engagement: unknown | null;
+  skill_xp: unknown | null;
+  readiness: unknown | null;
+  promotion: { level: string; rank: number; next_level: string | null; gaps: string[] } | null;
+  /** Canonical rung name (see RosterMember.band_rung); computed after promotion + engagement load. */
+  band_rung: string | null;
+  skill_genome: unknown | null;
+  section_progress: unknown | null;
+  evidence_by_source: Array<{ source_type: string; count: number }>;
+  evaluations: Array<{ week_number: number; overall_score: number | null; progress_summary: string | null; evaluated_at: string }>;
+  project_count: number;
+}
+
+export interface FeedItem {
+  who: string;
+  kind: 'promotion' | 'evidence' | 'evaluation' | 'artifact' | 'streak';
+  text: string;
+  when: string; // ISO
+  enrollment_id: string;
+}
+
+// ── Register a manager (dual account) ────────────────────────────────────────
+
+/**
+ * Find-or-create an organization that has NO owner enrollment.
+ *
+ * `Organization.findOrCreate({ where: { owner_enrollment_id: null } })` cannot
+ * work: Postgres treats NULLs as distinct, so the lookup matches nothing and
+ * every repeat submit inserts another row. The manager's roster email is the
+ * stable identity when there is no enrollment to key on.
+ *
+ * Returns the same `[instance, created]` shape as findOrCreate so the caller
+ * reads identically in both branches — and `created` still gates the welcome
+ * email, so a re-registration does not re-send.
+ */
+async function findOrCreateConsultingOrg(
+  email: string,
+  orgName: string,
+  accountType: OrgAccountType,
+): Promise<[InstanceType<typeof Organization>, boolean]> {
+  const existingMember = await OrgMember.findOne({
+    where: { email, role: 'manager' },
+    attributes: ['org_id'],
+  });
+
+  if (existingMember) {
+    const org = await Organization.findByPk((existingMember as any).org_id);
+    if (org) return [org, false];
+  }
+
+  const created = await Organization.create({
+    owner_enrollment_id: null,
+    name: orgName,
+    organization_type: accountType,
+  } as any);
+  return [created, true];
+}
+
+export async function registerManager(input: RegisterManagerInput): Promise<RegisterManagerResult> {
+  const name = (input.name || '').trim();
+  const email = (input.email || '').toLowerCase().trim();
+  if (!name || !email) throw new Error('name and email are required');
+
+  // 0) Which of the three accounts is this? The entry site decides.
+  const resolved = resolveAccountType({ accountType: input.accountType, entrySite: input.entrySite });
+  const accountType = resolved.accountType;
+
+  // 1) The manager's own free student enrollment — EXCEPT for consulting.
+  //
+  // A consulting client came to have something built. Enrolling them as a
+  // student put them on learner rosters, in learner counts, and in the nurture
+  // the Explorer engine runs. That is what happened to the AI Flotation
+  // registrations, and it is the mistake this branch exists to stop.
+  //
+  // The organization can legitimately have no owner enrollment: ESC-1 relaxed
+  // `owner_enrollment_id` to nullable in 2026-08 for exactly this shape, and
+  // kept the unique index — Postgres treats NULLs as distinct, so any number of
+  // enrollment-less client organizations coexist.
+  const free = grantsTrainingEnrollment(accountType)
+    ? await createFreeAccount({ full_name: name, email })
+    : null;
+  const ownerEnrollmentId = free?.enrollment.id ?? null;
+  const orgName = (input.company || '').trim() || name;
+
+  // 2) Find-or-create the org (idempotent on owner_enrollment_id).
+  //
+  // `orgCreated` is captured, not discarded: it is the ONLY honest signal that
+  // this registration actually created a business account rather than replaying
+  // an existing one, and it gates the welcome email below. Re-registering with
+  // the same email must not re-send.
+  //
+  // CONSULTING ACCOUNTS KEY ON EMAIL, NOT ON THE NULL ENROLLMENT. Because
+  // Postgres treats NULLs as distinct, `where: { owner_enrollment_id: null }`
+  // matches nothing and every repeat submit would insert another organization.
+  // The manager's email is the stable identity when there is no enrollment.
+  const [organization, orgCreated] = ownerEnrollmentId
+    ? await Organization.findOrCreate({
+        where: { owner_enrollment_id: ownerEnrollmentId },
+        defaults: {
+          owner_enrollment_id: ownerEnrollmentId,
+          name: orgName,
+          organization_type: accountType,
+        } as any,
+      })
+    : await findOrCreateConsultingOrg(email, orgName, accountType);
+
+  // Backfill the type on an organization that predates it, without ever
+  // overwriting one that is already set — a re-registration from a different
+  // entry site must not silently reclassify an existing account.
+  if (!organization.organization_type) {
+    await organization.update({ organization_type: accountType });
+  }
+
+  // 3) Find-or-create the manager's roster row (idempotent on (org_id, email)).
+  await OrgMember.findOrCreate({
+    where: { org_id: organization.id, email },
+    defaults: {
+      org_id: organization.id,
+      enrollment_id: ownerEnrollmentId,
+      email,
+      role: 'manager',
+      invite_status: 'active',
+      joined_at: new Date(),
+    } as any,
+  });
+
+  // 4) Link the lead, if one exists for this email.
+  //
+  // Registration and lead capture are two independent calls from the signup
+  // page, and the second one is SKIPPABLE -- the "skip" button goes straight to
+  // the workspace, so an account could exist with no lead attached and nothing
+  // joining the two but a matching email string. Resolving it here means the
+  // link is recorded whenever a lead is findable, including the common case
+  // where the person already had a lead row from an earlier contact form.
+  //
+  // Deliberately best-effort: a failure to link must never fail registration,
+  // because the account and its roster are the load-bearing side effects and the
+  // lead reference is metadata. Idempotent -- it only writes when the column is
+  // still empty, so re-registering never overwrites an existing link.
+  if (!organization.lead_id) {
+    try {
+      // CREATE one when none exists. Linking-only is why five of six business
+      // accounts had no lead: registration and lead capture are separate calls
+      // and the capture step is skippable, so an account could exist with
+      // nothing joining it to the CRM but a matching email string.
+      //
+      // DELIBERATELY NOT `leadService.createLead`. That helper calls
+      // `tryEnrollInWarmCampaign` on every path, so routing registrations
+      // through it would silently enrol every new business account into lead
+      // nurture — real emails, to someone who just signed up and is already
+      // getting the welcome. "Everyone is a lead" is a CRM statement, not a
+      // licence to start a campaign.
+      const existing = await Lead.findOne({ where: { email }, attributes: ['id'] });
+      const lead =
+        existing ??
+        (await Lead.create({
+          name,
+          email,
+          company: (input.company || '').trim() || null,
+          source: resolved.host || 'business_registration',
+          status: 'new',
+          notes: `Auto-created at ${accountType} account registration`,
+        } as any));
+      await organization.update({ lead_id: (lead as unknown as { id: number }).id });
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'warn',
+          service: 'backend',
+          event: 'org_lead_link_failed',
+          outcome: 'partial',
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          context: { org_id: organization.id },
+        }),
+      );
+    }
+  }
+
+  // 5) Welcome the person who just created the account.
+  //
+  // Registration used to send NOTHING -- a company signed up on the public site
+  // and heard only silence, while their invited teammates did get an email.
+  //
+  // IDEMPOTENT via `orgCreated`: registerManager is find-or-create and is called
+  // again on every repeat submit, so gating on "did this call actually create the
+  // organization" is what stops a duplicate welcome. This is the CLAUDE.md
+  // idempotency rule applied to a side effect that leaves the system: same input,
+  // same end state, no second email.
+  //
+  // BEST-EFFORT: a failed send must never fail registration. The account, its
+  // roster and the session are the load-bearing outcomes; the email is a
+  // courtesy. Failure is logged as a structured event rather than swallowed, so
+  // a silently broken mailer is visible in the logs instead of invisible.
+  if (orgCreated) {
+    try {
+      await sendOrgWelcomeEmail({
+        to: email,
+        fullName: name,
+        orgName: organization.name,
+        // registerManager falls back to the PERSON'S name when no company was
+        // typed, so "did they supply a company" is a question about the input,
+        // not about whether the stored name is non-empty.
+        hasRealCompanyName: Boolean((input.company || '').trim()),
+      });
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          service: 'backend',
+          event: 'org_welcome_email_sent',
+          outcome: 'success',
+          context: { org_id: organization.id },
+        }),
+      );
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          service: 'backend',
+          event: 'org_welcome_email_failed',
+          outcome: 'partial',
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          context: { org_id: organization.id, message: err instanceof Error ? err.message : String(err) },
+        }),
+      );
+    }
+  }
+
+  return {
+    // Null for consulting: no training enrollment means no student session, and
+    // minting one anyway would hand a portal token to an account with no portal
+    // presence.
+    jwt: free?.jwt ?? null,
+    organization: {
+      id: organization.id,
+      name: organization.name,
+      // `ownerEnrollmentId`, not `organization.owner_enrollment_id`. The column became
+      // nullable in 2026-08 so a client company can exist without an enrollment (ESC-1).
+      // A training or management registration through THIS path always has one — it is
+      // the key findOrCreate just matched on — and a consulting one deliberately has
+      // none. Returning the local keeps that distinction honest rather than reading back
+      // a value the consulting branch never wrote.
+      owner_enrollment_id: ownerEnrollmentId,
+      organization_type: organization.organization_type ?? accountType,
+    },
+    enrollment: free?.enrollment ?? null,
+    lead_id: (organization.lead_id as number | null) ?? null,
+  };
+}
+
+// ── Invite teammates (free member accounts) ──────────────────────────────────
+
+export interface InviteMembersInput {
+  emails: unknown;
+  team?: string | null;
+}
+
+export async function inviteMembers(
+  orgId: string,
+  managerEnrollmentId: string,
+  input: InviteMembersInput,
+): Promise<OrgMember[]> {
+  const emails = normalizeEmails(input.emails);
+  const team = typeof input.team === 'string' && input.team.trim() ? input.team.trim().slice(0, 120) : null;
+  const organization = await Organization.findByPk(orgId);
+  const results: OrgMember[] = [];
+
+  for (const email of emails) {
+    // 1) Free member account (idempotent by email).
+    const free = await createFreeAccount({ full_name: displayNameFromEmail(email), email });
+    const enrollmentId = free.enrollment.id;
+
+    // 2) Roster row (idempotent on (org_id, email)).
+    const [member, created] = await OrgMember.findOrCreate({
+      where: { org_id: orgId, email },
+      defaults: {
+        org_id: orgId,
+        enrollment_id: enrollmentId,
+        email,
+        team,
+        role: 'member',
+        invite_status: 'invited',
+        invited_by: managerEnrollmentId,
+      } as any,
+    });
+
+    // Reconcile a pre-existing row that never got its enrollment linked (still
+    // idempotent — same end state on re-run). Never downgrade an active member.
+    const patch: Record<string, unknown> = {};
+    if (!member.enrollment_id && enrollmentId) patch.enrollment_id = enrollmentId;
+    if (team && member.team !== team) patch.team = team;
+    if (Object.keys(patch).length) await member.update(patch);
+
+    // 3) Best-effort invite email — only on first creation (no re-send storms),
+    //    and never fatal to the invite.
+    if (created) {
+      try {
+        const token = crypto.randomUUID();
+        const enr = await Enrollment.findByPk(enrollmentId);
+        if (enr) {
+          await (enr as any).update({
+            portal_token: token,
+            portal_token_expires_at: new Date(Date.now() + INVITE_TOKEN_TTL_MS),
+          });
+          await sendOrgInviteEmail({
+            to: email,
+            fullName: (enr as any).full_name || displayNameFromEmail(email),
+            orgName: organization?.name || 'your team',
+            token,
+          });
+        }
+      } catch (err: any) {
+        console.warn('[Org] invite email skipped (non-fatal):', err?.message);
+      }
+    } else {
+      /*
+       * The member row already existed, so no invite email is sent.
+       *
+       * That is the correct idempotent behaviour -- re-submitting the invite
+       * form must not spam someone who was already invited -- but it was
+       * completely SILENT, which made it indistinguishable from a broken mailer
+       * to anyone asking "why didn't my teammate get an email?". Now it says so.
+       *
+       * Deliberately NOT changed to re-send: making a repeat invite fire another
+       * email would trade a confusing silence for a worse defect, since the
+       * invite form can be submitted repeatedly. If a genuine "resend invite"
+       * action is wanted, it should be its own explicit endpoint.
+       */
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          service: 'backend',
+          event: 'org_invite_email_skipped_existing_member',
+          outcome: 'success',
+          context: { org_id: orgId, reason: 'member already on roster; no duplicate invite sent' },
+        }),
+      );
+    }
+
+    results.push(member);
+  }
+
+  return results;
+}
+
+// ── Aggregated overview ──────────────────────────────────────────────────────
+
+export async function getOverview(orgId: string): Promise<OrgOverview> {
+  const ids = await orgEnrollmentIds(orgId);
+  const empty: OrgOverview = {
+    member_count: ids.length,
+    level_distribution: Array.from({ length: LEVEL_RANKS }, (_, rank) => ({ rank, count: 0 })),
+    avg_readiness: 0,
+    builder_xp_by_week: [],
+    evidence_this_week: 0,
+    attendance_rate: 0,
+    evaluations_passed_this_month: 0,
+    level_ups_last_30d: 0,
+  };
+  if (ids.length === 0) return empty;
+
+  const [levels, readiness, xpWeeks, evidence, attendance, evals, levelUps] = await Promise.all([
+    selectRows<{ rank: number; count: number }>(
+      `SELECT rank, COUNT(*)::int AS count FROM student_level WHERE enrollment_id IN (:ids) GROUP BY rank`,
+      { ids },
+    ),
+    selectRows<{ avg: number | null }>(
+      `SELECT AVG(architect_readiness) AS avg FROM student_level WHERE enrollment_id IN (:ids)`,
+      { ids },
+    ),
+    selectRows<{ week: string; xp: number }>(
+      `SELECT to_char(created_at, 'IYYY-IW') AS week, COALESCE(SUM(amount),0)::int AS xp
+         FROM xp_events
+        WHERE stream='builder' AND enrollment_id IN (:ids) AND created_at >= NOW() - INTERVAL '8 weeks'
+        GROUP BY 1 ORDER BY 1`,
+      { ids },
+    ),
+    selectRows<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM evidence_records
+        WHERE enrollment_id IN (:ids) AND created_at >= NOW() - INTERVAL '7 days'`,
+      { ids },
+    ),
+    selectRows<{ present: number; total: number }>(
+      `SELECT COUNT(*) FILTER (WHERE status='present')::int AS present, COUNT(*)::int AS total
+         FROM attendance_records WHERE enrollment_id IN (:ids)`,
+      { ids },
+    ),
+    selectRows<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM runtime_assessment_attempts
+        WHERE enrollment_id IN (:ids) AND kind='evaluation' AND passed=true
+          AND submitted_at >= date_trunc('month', NOW())`,
+      { ids },
+    ),
+    selectRows<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM student_level
+        WHERE enrollment_id IN (:ids) AND promoted_at >= NOW() - INTERVAL '30 days'`,
+      { ids },
+    ),
+  ]);
+
+  const dist = empty.level_distribution.map((d) => ({ ...d }));
+  for (const row of levels) {
+    const r = Number(row.rank);
+    if (r >= 0 && r < LEVEL_RANKS) dist[r].count = Number(row.count);
+  }
+  const att = attendance[0] || { present: 0, total: 0 };
+
+  return {
+    member_count: ids.length,
+    level_distribution: dist,
+    avg_readiness: Math.round(Number(readiness[0]?.avg ?? 0)),
+    builder_xp_by_week: xpWeeks.map((w) => ({ week: w.week, xp: Number(w.xp) })),
+    evidence_this_week: Number(evidence[0]?.count ?? 0),
+    attendance_rate: att.total > 0 ? Number((att.present / att.total).toFixed(3)) : 0,
+    evaluations_passed_this_month: Number(evals[0]?.count ?? 0),
+    level_ups_last_30d: Number(levelUps[0]?.count ?? 0),
+  };
+}
+
+// ── Roster ───────────────────────────────────────────────────────────────────
+
+export async function getRoster(orgId: string): Promise<RosterMember[]> {
+  const members = await OrgMember.findAll({
+    where: { org_id: orgId },
+    include: [{ model: Enrollment, as: 'enrollment', required: false }],
+    order: [['created_at', 'ASC']],
+  });
+
+  const ids = members.map((m) => m.enrollment_id).filter((id): id is string => !!id);
+  if (ids.length === 0) {
+    return members.map((m) => ({
+      enrollment_id: m.enrollment_id || '',
+      name: m.email,
+      team: m.team,
+      level: 'builder',
+      rank: 0,
+      band_rung: computeBand({ pointsTotal: 0, builderLevelSlug: 'builder', builderRank: 0 }).rungName,
+      readiness: 0,
+      builder_xp_week: 0,
+      streak: 0,
+      total_points: 0,
+    }));
+  }
+
+  const [levels, xp, streaks, points] = await Promise.all([
+    selectRows<{ enrollment_id: string; level_slug: string; rank: number; architect_readiness: number }>(
+      `SELECT enrollment_id, level_slug, rank, architect_readiness FROM student_level WHERE enrollment_id IN (:ids)`,
+      { ids },
+    ),
+    selectRows<{ enrollment_id: string; xp: number }>(
+      `SELECT enrollment_id, COALESCE(SUM(amount),0)::int AS xp FROM xp_events
+        WHERE stream='builder' AND enrollment_id IN (:ids) AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY enrollment_id`,
+      { ids },
+    ),
+    selectRows<{ enrollment_id: string; streak: number }>(
+      `SELECT enrollment_id, COUNT(*)::int AS streak FROM student_points_events
+        WHERE event_type='daily_streak' AND enrollment_id IN (:ids) GROUP BY enrollment_id`,
+      { ids },
+    ),
+    // Canonical points-economy total (same ledger the HUD's "N pts" badge sums),
+    // all streams and all time — this is a person's ACTIVE standing, distinct
+    // from the builder-only weekly velocity above.
+    selectRows<{ enrollment_id: string; total: number }>(
+      `SELECT enrollment_id, COALESCE(SUM(points),0)::int AS total FROM student_points_events
+        WHERE enrollment_id IN (:ids) GROUP BY enrollment_id`,
+      { ids },
+    ),
+  ]);
+
+  const levelMap = new Map(levels.map((l) => [l.enrollment_id, l]));
+  const xpMap = new Map(xp.map((x) => [x.enrollment_id, Number(x.xp)]));
+  const streakMap = new Map(streaks.map((s) => [s.enrollment_id, Number(s.streak)]));
+  const pointsMap = new Map(points.map((p) => [p.enrollment_id, Number(p.total)]));
+
+  return members.map((m) => {
+    const enr: any = (m as any).enrollment;
+    const lvl = m.enrollment_id ? levelMap.get(m.enrollment_id) : undefined;
+    const totalPoints = m.enrollment_id ? (pointsMap.get(m.enrollment_id) ?? 0) : 0;
+    return {
+      enrollment_id: m.enrollment_id || '',
+      name: enr?.full_name || m.email,
+      team: m.team,
+      level: lvl?.level_slug || 'builder',
+      rank: Number(lvl?.rank ?? 0),
+      // Same pure computeBand the student's own HUD runs, over the same inputs.
+      band_rung: computeBand({
+        pointsTotal: totalPoints,
+        builderLevelSlug: lvl?.level_slug ?? 'builder',
+        builderRank: Number(lvl?.rank ?? 0),
+      }).rungName,
+      // 0..1 in the column, 0..100 on the screen. Same bug and same fix as
+      // `pointsDrilldownService`; this is the roster fallback the drilldown uses
+      // when the points drill-down degrades, so fixing only one still leaves a
+      // path that renders 58% as 1%.
+      readiness: Math.round(Number(lvl?.architect_readiness ?? 0) * 100),
+      builder_xp_week: m.enrollment_id ? (xpMap.get(m.enrollment_id) ?? 0) : 0,
+      streak: m.enrollment_id ? (streakMap.get(m.enrollment_id) ?? 0) : 0,
+      total_points: totalPoints,
+    };
+  });
+}
+
+// ── Per-member drill-down (reuses existing per-student services) ─────────────
+
+export async function getMemberDetail(orgId: string, enrollmentId: string): Promise<MemberDetail> {
+  const member = await assertMemberInOrg(orgId, enrollmentId); // throws 404 if not in org
+  const enr: any = await Enrollment.findByPk(enrollmentId);
+
+  const detail: MemberDetail = {
+    enrollment_id: enrollmentId,
+    name: enr?.full_name || member.email,
+    team: member.team,
+    engagement: null,
+    skill_xp: null,
+    readiness: null,
+    promotion: null,
+    band_rung: null,
+    skill_genome: null,
+    section_progress: null,
+    evidence_by_source: [],
+    evaluations: [],
+    project_count: 0,
+  };
+
+  // Engagement / skill_xp / readiness (points drill-down).
+  try {
+    const { getPointsDrilldown } = await import('./pointsDrilldownService');
+    const dd = await getPointsDrilldown(enrollmentId);
+    detail.engagement = dd.engagement;
+    detail.skill_xp = dd.skill_xp;
+    detail.readiness = dd.readiness;
+  } catch (err: any) { console.warn('[Org] drilldown degraded:', err?.message); }
+
+  // Promotion status (gaps to next level).
+  try {
+    const { getPromotionStatus } = await import('./progression/promotionService');
+    const st = await getPromotionStatus(enrollmentId);
+    detail.promotion = { level: st.level, rank: st.rank, next_level: st.next_level, gaps: st.gaps };
+  } catch (err: any) { console.warn('[Org] promotion degraded:', err?.message); }
+
+  // The rung the student sees in their own HUD, from the same pure function. If
+  // the promotion read degraded, this falls back to the points-only rung rather
+  // than to nothing, so the header never shows a raw slug.
+  detail.band_rung = computeBand({
+    pointsTotal: Number((detail.engagement as { total?: number } | null)?.total ?? 0),
+    builderLevelSlug: detail.promotion?.level ?? 'builder',
+    builderRank: detail.promotion?.rank ?? 0,
+  }).rungName;
+
+  // Skill genome.
+  try {
+    const { getSkillGenome } = await import('./skillGenomeService');
+    detail.skill_genome = await getSkillGenome(enrollmentId);
+  } catch (err: any) { console.warn('[Org] genome degraded:', err?.message); }
+
+  // Pre/post assessment growth — needs the student's latest (program, week).
+  try {
+    const latest = await selectRows<{ program_id: string; week: number }>(
+      `SELECT program_id, week FROM runtime_assessment_attempts
+        WHERE enrollment_id = :id AND program_id IS NOT NULL AND week IS NOT NULL
+        ORDER BY submitted_at DESC NULLS LAST LIMIT 1`,
+      { id: enrollmentId },
+    );
+    if (latest[0]) {
+      const { getSectionProgress } = await import('./runtime/assessmentService');
+      detail.section_progress = await getSectionProgress(enrollmentId, latest[0].program_id, latest[0].week);
+    }
+  } catch (err: any) { console.warn('[Org] section progress degraded:', err?.message); }
+
+  // Evidence counts by source_type.
+  try {
+    detail.evidence_by_source = await selectRows<{ source_type: string; count: number }>(
+      `SELECT source_type, COUNT(*)::int AS count FROM evidence_records
+        WHERE enrollment_id = :id GROUP BY source_type ORDER BY count DESC`,
+      { id: enrollmentId },
+    );
+  } catch (err: any) { console.warn('[Org] evidence degraded:', err?.message); }
+
+  // Weekly architect evaluations.
+  try {
+    const rows = await selectRows<{ week_number: number; overall_score: number | null; progress_summary: string | null; evaluated_at: Date }>(
+      `SELECT week_number, overall_score, progress_summary, evaluated_at FROM architect_evaluations
+        WHERE enrollment_id = :id ORDER BY week_number DESC LIMIT 12`,
+      { id: enrollmentId },
+    );
+    detail.evaluations = rows.map((r) => ({
+      week_number: Number(r.week_number),
+      overall_score: r.overall_score == null ? null : Number(r.overall_score),
+      progress_summary: r.progress_summary ?? null,
+      evaluated_at: new Date(r.evaluated_at).toISOString(),
+    }));
+  } catch (err: any) { console.warn('[Org] evaluations degraded:', err?.message); }
+
+  // Projects.
+  try {
+    const rows = await selectRows<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM projects WHERE enrollment_id = :id`,
+      { id: enrollmentId },
+    );
+    detail.project_count = Number(rows[0]?.count ?? 0);
+  } catch (err: any) { console.warn('[Org] projects degraded:', err?.message); }
+
+  return detail;
+}
+
+// ── Activity feed ─────────────────────────────────────────────────────────────
+
+export async function getFeed(orgId: string): Promise<FeedItem[]> {
+  const members = await OrgMember.findAll({
+    where: { org_id: orgId },
+    include: [{ model: Enrollment, as: 'enrollment', required: false }],
+  });
+  const ids = members.map((m) => m.enrollment_id).filter((id): id is string => !!id);
+  if (ids.length === 0) return [];
+
+  const nameFor = new Map<string, string>();
+  for (const m of members) {
+    if (m.enrollment_id) nameFor.set(m.enrollment_id, (m as any).enrollment?.full_name || m.email);
+  }
+  const who = (id: string) => nameFor.get(id) || 'A teammate';
+
+  const [promotions, evidence, evaluations, artifacts, streaks] = await Promise.all([
+    selectRows<{ enrollment_id: string; level_slug: string; promoted_at: Date }>(
+      `SELECT enrollment_id, level_slug, promoted_at FROM student_level
+        WHERE enrollment_id IN (:ids) AND promoted_at IS NOT NULL ORDER BY promoted_at DESC LIMIT 15`,
+      { ids },
+    ),
+    selectRows<{ enrollment_id: string; source_type: string; created_at: Date }>(
+      `SELECT enrollment_id, source_type, created_at FROM evidence_records
+        WHERE enrollment_id IN (:ids) ORDER BY created_at DESC LIMIT 15`,
+      { ids },
+    ),
+    selectRows<{ enrollment_id: string; submitted_at: Date }>(
+      `SELECT enrollment_id, submitted_at FROM runtime_assessment_attempts
+        WHERE enrollment_id IN (:ids) AND kind='evaluation' AND passed=true AND submitted_at IS NOT NULL
+        ORDER BY submitted_at DESC LIMIT 15`,
+      { ids },
+    ),
+    selectRows<{ enrollment_id: string; title: string; kind: string; created_at: Date }>(
+      `SELECT enrollment_id, title, kind, created_at FROM runtime_portfolio_artifacts
+        WHERE enrollment_id IN (:ids) ORDER BY created_at DESC LIMIT 15`,
+      { ids },
+    ),
+    selectRows<{ enrollment_id: string; created_at: Date }>(
+      `SELECT enrollment_id, created_at FROM student_points_events
+        WHERE enrollment_id IN (:ids) AND event_type='daily_streak' ORDER BY created_at DESC LIMIT 15`,
+      { ids },
+    ),
+  ]);
+
+  const items: FeedItem[] = [];
+  for (const p of promotions) {
+    items.push({ who: who(p.enrollment_id), kind: 'promotion', text: `was promoted to ${p.level_slug}`, when: new Date(p.promoted_at).toISOString(), enrollment_id: p.enrollment_id });
+  }
+  for (const e of evidence) {
+    items.push({ who: who(e.enrollment_id), kind: 'evidence', text: `shipped ${e.source_type.replace(/_/g, ' ')} evidence`, when: new Date(e.created_at).toISOString(), enrollment_id: e.enrollment_id });
+  }
+  for (const ev of evaluations) {
+    items.push({ who: who(ev.enrollment_id), kind: 'evaluation', text: `passed a weekly evaluation`, when: new Date(ev.submitted_at).toISOString(), enrollment_id: ev.enrollment_id });
+  }
+  for (const a of artifacts) {
+    items.push({ who: who(a.enrollment_id), kind: 'artifact', text: `published "${a.title}"`, when: new Date(a.created_at).toISOString(), enrollment_id: a.enrollment_id });
+  }
+  for (const s of streaks) {
+    items.push({ who: who(s.enrollment_id), kind: 'streak', text: `kept their daily streak going`, when: new Date(s.created_at).toISOString(), enrollment_id: s.enrollment_id });
+  }
+
+  return items
+    .sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime())
+    .slice(0, 15);
+}

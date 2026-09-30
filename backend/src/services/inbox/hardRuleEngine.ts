@@ -42,6 +42,123 @@ interface NormalizedEmail {
 }
 
 /**
+ * Matches Basecamp's notification sender across domains. Basecamp 3 ("the new
+ * Basecamp") sends from notifications@app.basecamp.com; 3.basecamp.com is the
+ * legacy Basecamp Classic host. Match any basecamp.com subdomain so a future
+ * sender host keeps working, anchored on @/./start so look-alikes
+ * (e.g. notbasecamp.com) never match.
+ *
+ * Pinned 2026-06-29: the prior /3\.basecamp\.com/ check matched ONLY the legacy
+ * host, so every real @mention/assignment from app.basecamp.com fell through to
+ * the List-Unsubscribe rule and was auto-archived — Ali never saw Ram's SAM.gov
+ * @mentions for a week. The 2026-06-24 fix and its tests both used the wrong
+ * domain, so the tests stayed green while production stayed broken.
+ */
+export function isBasecampSender(fromAddress: string | null | undefined): boolean {
+  // Require an @, allow any subdomain chain, and forbid a trailing domain label
+  // so "basecamp.com.evil.io" / "x@notbasecamp.com" do not match.
+  return /@(?:[\w-]+\.)*basecamp\.com(?![\w.-])/i.test((fromAddress || '').trim());
+}
+
+/**
+ * True when the sender is Slack itself (workspace invites, account details,
+ * "new messages from X in <workspace>" digests). Slack rotates per-message
+ * no-reply-<token>@slack.com addresses for invites, so an exact-address VIP
+ * entry cannot cover it; the domain is the stable identity. Same look-alike
+ * guard as isBasecampSender.
+ */
+export function isSlackSender(fromAddress: string | null | undefined): boolean {
+  return /@(?:[\w-]+\.)*slack\.com(?![\w.-])/i.test((fromAddress || '').trim());
+}
+
+/**
+ * True when the sender is one of the K-12 platforms the kids' schools use.
+ * ParentSquare mints a per-message donotreply+<uuid>@parentsquare.com sender
+ * and Wylie ISD sends from do.not.reply@wylieisd.net, so both trip the noreply
+ * rule (section 5) and were archived — 66 of them in the 90 days to 2026-09-28,
+ * including two password resets Ali was actively waiting on. A rotating +<uuid>
+ * local part cannot be covered by an address-level VIP row; the domain is the
+ * stable identity. Same look-alike guard as isBasecampSender.
+ *
+ * Deliberately NOT a generic *.k12.*.us / Schoology / ClassDojo / PowerSchool
+ * list: only domains that have actually mailed Ali belong here. Add one when
+ * its mail shows up, not in anticipation.
+ */
+export function isSchoolNotificationSender(fromAddress: string | null | undefined): boolean {
+  return /@(?:[\w-]+\.)*(?:parentsquare\.com|wylieisd\.net)(?![\w.-])/i.test((fromAddress || '').trim());
+}
+
+/**
+ * True when the subject marks this as account-security mail the recipient
+ * asked for seconds ago: a password reset, a verification / one-time code, or
+ * a magic sign-in link. These are always user-initiated, always time-limited,
+ * and essentially always sent from a noreply address carrying List-Unsubscribe
+ * — the exact combination sections 4 and 5 archive. In the 90 days to
+ * 2026-09-28 that swallowed 103 of them, including eight Hetzner verification
+ * codes (the production VPS provider) and Ceipal password-reset OTPs.
+ *
+ * Subject-only on purpose, for the same reason the name check in section 2 is
+ * subject-only: a body-text match over-fires on any newsletter that happens to
+ * explain how to reset a password. Patterns are anchored on the phrasings that
+ * actually appeared in Ali's mail rather than a generic /verify/ substring, so
+ * "Verify your subscription preferences" style marketing does not qualify.
+ */
+export function isAccountSecurityMail(subject: string | null | undefined): boolean {
+  const s = (subject || '').trim();
+  if (!s) return false;
+  return (
+    /(?:reset|forgot|change)\b.{0,24}\bpassword|\bpassword\b.{0,24}\breset/i.test(s) ||
+    /verification code|security code|access code|login code|one[-\s]?time (?:code|password|pin)|\botp\b/i.test(s) ||
+    /magic link|sign[-\s]?in link|\b2fa\b|two[-\s]?factor/i.test(s) ||
+    /verify your\b.{0,30}\b(?:email|account|identity|address)|confirm your (?:email|account|identity)/i.test(s)
+  );
+}
+
+/**
+ * True when a Basecamp notification is a person directly tagging or assigning
+ * Ali — an @mention or a to-do assignment — rather than project-management
+ * noise. Basecamp encodes both directly in the subject:
+ *   "<Name> @mentioned you in <thing>"      (someone tagged Ali)
+ *   "<Name> assigned you: <to-do title>"    (someone assigned Ali a to-do)
+ * These are a person asking Ali to act and must reach the inbox. Everything
+ * else from Basecamp is automation: recurring check-in prompts ("What are you
+ * working on today?", "Post links of Tasks worked on today") and status pings
+ * ("<Name> completed a to-do") deliberately do NOT match.
+ */
+export function isBasecampDirectMention(email: { from_address: string; subject: string | null }): boolean {
+  if (!isBasecampSender(email.from_address)) return false;
+  return /@mentioned you|assigned you/i.test(email.subject || '');
+}
+
+/**
+ * True when a Basecamp *comment* notification (a "Re: ..." thread reply) is
+ * directly addressed to Ali by name, even without a formal @mention — e.g.
+ * "Hi Ali, can you review this?" or a line that opens with "Ali,". These are
+ * someone asking Ali to act and must reach the inbox.
+ *
+ * We must NOT route every subscribed-thread comment to the inbox: most are
+ * intern/teammate status updates Ali merely follows (re-flooding the inbox is
+ * exactly what the COS exists to prevent), and Basecamp stamps "...sent to Ali
+ * Muwwakkil, ..." into the footer of EVERY email — so a bare "Ali" substring is
+ * not a signal. We anchor strictly on a greeting verb + "Ali", a line opening
+ * with "Ali,"/"Ali:", or an inline "@Ali", none of which the footer satisfies.
+ * Formal @mentions/assignments are handled by isBasecampDirectMention (subject).
+ */
+export function isBasecampDirectComment(email: {
+  from_address: string;
+  subject: string | null;
+  body_text: string | null;
+}): boolean {
+  if (!isBasecampSender(email.from_address)) return false;
+  if (!/\bre:/i.test(email.subject || '')) return false; // comment replies only
+  const body = email.body_text || '';
+  const greetingToAli = /\b(hi|hello|hey|dear|thanks|thank you|good (?:morning|afternoon|evening))[,!\s]+ali\b/i;
+  const lineLeadingAli = /(^|\n)\s*ali\s*[,:]/i;
+  const inlineAtMention = /@ali\b/i;
+  return greetingToAli.test(body) || lineLeadingAli.test(body) || inlineAtMention.test(body);
+}
+
+/**
  * Deterministic classification engine. Evaluates hard-coded rules and
  * user-defined rules in strict priority order. No LLM, no external calls.
  */
@@ -76,11 +193,134 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
-  // --- 0b. System Alert Emails → AUTOMATION ---
+  // --- 0b. Cora support inbox → route to Cora auto-reply agent ---
+  // Emails delivered to support@colaberry.com are forwarded to Ali's Gmail.
+  // We detect them by checking To/Cc/Delivered-To/X-Original-To headers ONLY.
+  // Classified AUTOMATION so they're archived after Cora sends the reply.
+  // The inboxStateManager dispatches to coraAgentService before archiving.
+  //
+  // 2026-07-14 mail-loop incident (BC #10095332194): this used to also
+  // substring-match support@colaberry.com against a blob of EVERY header
+  // joined together. Cora's own outgoing replies carry
+  // `From: Cora (Colaberry Enterprise AI) <support@colaberry.com>` — that
+  // header alone satisfied the old check, so once her reply landed back in
+  // the synced mailbox (see inboxSyncService's Sent-folder exclusion fix),
+  // she matched her own rule and replied to herself, forever. Fixed by (a)
+  // checking only the headers that legitimately indicate delivery TO
+  // support@ (never From/Reply-To/anything else), and (b) an explicit guard
+  // that a message FROM Cora's own sending address can never match.
+  const coraSupportAddress = (process.env.CORA_SUPPORT_ADDRESS || 'support@colaberry.com').toLowerCase();
+  const toAddrs = (email.to_addresses || []).map((a: any) =>
+    (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase()
+  );
+  const ccAddrs2 = (email.cc_addresses || []).map((a: any) =>
+    (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase()
+  );
+  const deliveredToHeader = String(
+    headers['delivered-to'] ?? headers['Delivered-To'] ?? ''
+  ).toLowerCase();
+  const originalToHeader = String(
+    headers['x-original-to'] ?? headers['X-Original-To'] ?? ''
+  ).toLowerCase();
+  const isFromCoraHerself = fromLower === coraSupportAddress;
+  const isCoraInquiry =
+    !isFromCoraHerself &&
+    (toAddrs.includes(coraSupportAddress) ||
+      ccAddrs2.includes(coraSupportAddress) ||
+      deliveredToHeader.includes(coraSupportAddress) ||
+      originalToHeader.includes(coraSupportAddress));
+
+  if (isFromCoraHerself) {
+    console.log(`${LOG_PREFIX} Skipping self-sent Cora message ${email.id} (from=${coraSupportAddress}) — loop guard`);
+  }
+
+  if (isCoraInquiry) {
+    const reason = `Cora support inquiry — recipient is ${coraSupportAddress}`;
+    console.log(`${LOG_PREFIX} Cora inquiry: ${reason}`);
+    return {
+      matched: true,
+      state: 'AUTOMATION',
+      rule_id: 'cora_0c',
+      reason: reason + fwdSuffix,
+      classified_by: 'hard_rule',
+      forwarded_from_hotmail: forwardedFromHotmail,
+    };
+  }
+
+  // --- 0c. System Alert Emails → AUTOMATION ---
   if (fromLower.includes('ali@colaberry.com') && /^\[alert\]/i.test(email.subject || '')) {
     const reason = 'System-generated alert email (self-sent [Alert])';
     console.log(`${LOG_PREFIX} System alert: ${reason}`);
     return { matched: true, state: 'AUTOMATION', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0d. Basecamp @mention / to-do assignment → INBOX ---
+  // When someone tags Ali (@mention) or assigns him a to-do in Basecamp, that
+  // is a person asking him to act — it must reach the inbox. Without this rule
+  // the email skips the name check (Basecamp is an auto-notification sender,
+  // see section 2) and then falls into the List-Unsubscribe rule below →
+  // AUTOMATION → auto-archived, so Ali never sees the tag. Caught 2026-06-24
+  // after week-1/2/3 todo mentions were silently routed to automation.
+  if (isBasecampDirectMention(email)) {
+    const reason = 'Basecamp @mention / to-do assignment directed at Ali';
+    console.log(`${LOG_PREFIX} Basecamp direct action: ${reason}`);
+    return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0e. Basecamp comment reply that addresses Ali by name → INBOX ---
+  // A thread comment that greets/addresses Ali directly ("Hi Ali, ...") is
+  // someone asking him to act, even without a formal @mention. Subscribed-thread
+  // status updates that do NOT address Ali stay automation (see helper for the
+  // anti-flood reasoning and why the BC footer does not trigger this).
+  if (isBasecampDirectComment(email)) {
+    const reason = 'Basecamp comment directly addresses Ali by name';
+    console.log(`${LOG_PREFIX} Basecamp direct comment: ${reason}`);
+    return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0f. Slack workspace mail → INBOX ---
+  // Slack carries a List-Unsubscribe header, so every invite, account notice
+  // and "new messages in <workspace>" digest fell into the List-Unsubscribe
+  // rule below and was auto-archived. Ali never saw the NuOrg workspace invite
+  // or the first messages from Shilpa and Luda (2026-09-16). Slack mail is a
+  // person or a workspace asking him to act; it stays in the inbox. This sits
+  // ahead of the VIP check on purpose: a VIP row would also route it to the
+  // inbox, but VIP rows feed the vipInboxWatcher alert path, and a text for
+  // every Slack digest is not wanted.
+  if (isSlackSender(email.from_address)) {
+    const reason = 'Slack workspace notification (invite, account, or new messages)';
+    console.log(`${LOG_PREFIX} Slack: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'slack_0f', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0g. Account-security mail (reset / code / magic link) → INBOX ---
+  // A password reset or one-time code is worthless the moment it is hidden:
+  // it is user-initiated, expires in minutes, and blocks whatever Ali was
+  // doing. Every one of these arrives from a noreply address, usually with a
+  // List-Unsubscribe header, so sections 4 and 5 archived them wholesale —
+  // 103 in the 90 days to 2026-09-28, including the ParentSquare reset Ali was
+  // waiting on and eight Hetzner codes for the production VPS account. This
+  // sits ahead of the VIP check and the LLM because neither helped: the LLM
+  // independently tagged Ceipal's "Reset Password OTP" as automation.
+  if (isAccountSecurityMail(email.subject)) {
+    const reason = 'Account-security mail (password reset, verification code, or magic link)';
+    console.log(`${LOG_PREFIX} Account security: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'account_security_0g', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0h. K-12 school platform mail → INBOX ---
+  // Whether the kids' school reached Ali was previously decided by accident:
+  // section 3's keyword list matched a ParentSquare daily digest only when the
+  // words "pta" or "field trip" happened to land in that day's body, so the
+  // Sep 24 and Sep 25 digests reached the inbox while the Sep 15 and Sep 16
+  // ones — same sender, same kind of message — were archived. An absence
+  // notification and the weekly grade updates were archived too. School mail
+  // runs 1-3 messages a day, which is not enough volume to be worth filtering
+  // against the cost of silently dropping one.
+  if (isSchoolNotificationSender(email.from_address)) {
+    const reason = 'K-12 school platform notification (ParentSquare / Wylie ISD)';
+    console.log(`${LOG_PREFIX} School: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'school_0h', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 1. VIP Check ---
@@ -114,7 +354,7 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   // — known correspondents keep the legacy behavior, first-time senders fall
   // through to the LLM (which has its own first-time-sender penalty).
   const AUTO_NOTIFICATION_SENDERS =
-    /@(3\.basecamp\.com|tc\.rocketmortgage\.com|zoom\.us|dart\.org|opentable\.com|substack\.com|lyftmail\.com|nextdoor\.com|otter\.ai|mailchimp\.com|sendgrid\.net|amazonses\.com)$/i;
+    /@((?:[\w-]+\.)*basecamp\.com|tc\.rocketmortgage\.com|zoom\.us|dart\.org|opentable\.com|substack\.com|lyftmail\.com|nextdoor\.com|otter\.ai|mailchimp\.com|sendgrid\.net|amazonses\.com)$/i;
   const isAutoNotificationSender = AUTO_NOTIFICATION_SENDERS.test(email.from_address);
   const namePattern = /ali\s+muwwakkil/i;
   if (!isAutoNotificationSender && namePattern.test(email.subject)) {
@@ -131,9 +371,15 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   // 'school' was removed — Ali runs Colaberry's data school, so every internal
   // school-related email was triggering this. The remaining keywords are
   // unambiguously kid/family-related.
+  // A multi-word keyword tolerates any separator between its words: schools
+  // write "Parent/Teacher Conference" at least as often as "parent teacher",
+  // and the old literal-space match missed every slashed and hyphenated form.
   const priorityKeywords = ['daycare', 'sports league', 'parent teacher', 'pta', 'field trip'];
   for (const keyword of priorityKeywords) {
-    const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedKeyword = keyword
+      .split(' ')
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('[\\s/_-]+');
     const wordBoundaryRegex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
     if (wordBoundaryRegex.test(email.subject) || wordBoundaryRegex.test(email.body_text || '')) {
       const reason = `Contains priority keyword: ${keyword}`;

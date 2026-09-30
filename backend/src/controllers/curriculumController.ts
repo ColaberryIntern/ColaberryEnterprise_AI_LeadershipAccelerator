@@ -15,9 +15,11 @@ import {
   saveTaskProgress,
   gradeArtifacts,
   getOrchestrationContext,
+  saveSurveyResponse,
 } from '../services/curriculumService';
 import { exportProjectArchitectData } from '../services/projectArchitectService';
 import { getSkillGenome, getSkillGaps } from '../services/skillGenomeService';
+import { QuizProgressSchema, SurveyResponseSchema } from '../schemas/assessmentSchemas';
 
 /* ------------------------------------------------------------------ */
 /*  Participant endpoints                                              */
@@ -110,7 +112,24 @@ export async function handleGetSkillGaps(req: Request, res: Response, next: Next
 
 export async function handleSaveQuizProgress(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await saveQuizProgress(req.participant!.sub, req.params.lessonId as string, req.body);
+    const parsed = QuizProgressSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid quiz progress data', details: parsed.error.flatten() });
+      return;
+    }
+    const result = await saveQuizProgress(req.participant!.sub, req.params.lessonId as string, parsed.data);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+export async function handleSaveSurveyResponse(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = SurveyResponseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid survey response', details: parsed.error.flatten() });
+      return;
+    }
+    const result = await saveSurveyResponse(req.participant!.sub, req.params.lessonId as string, parsed.data);
     res.json(result);
   } catch (err) { next(err); }
 }

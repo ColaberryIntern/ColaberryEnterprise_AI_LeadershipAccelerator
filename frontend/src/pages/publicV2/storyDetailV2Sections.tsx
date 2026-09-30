@@ -1,0 +1,298 @@
+import React from 'react';
+import { StoryBuildRail, StoryRoadmapBoard } from './StoryLowerV2';
+import { StoryBuilder, StoryClosing, StoryDecisions, builderCoversContributors } from './storyPeopleV2';
+import { Metric } from '../../components/publicV2/Claim';
+import StoryArchitectureBand from './StoryArchitectureBand';
+import CaseStudyArtifacts from '../../components/caseStudy/CaseStudyArtifacts';
+import StoryMeasurementBand from './StoryMeasurementBand';
+import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
+import { BUILT_BY_LABELS, REPO_ROLE_LABELS } from '../../config/caseStudySurfaces';
+import StoryMediaCarousel from './StoryMediaCarousel';
+import StorySituation from './StorySituation';
+import {
+  anonymousContributorNote,
+  contributorLabel,
+  evidenceContextRows,
+  formatPublishedDate,
+  withheldRepositoryNote,
+} from './storyDetailV2Model';
+import { carouselSlides, unshownArtifacts } from './storyMediaModel';
+import type {
+  CaseStudySectionKey,
+  PublicCaseStudyContributor,
+  PublicCaseStudyDetail,
+  PublicCaseStudyMetric,
+  PublicCaseStudyRepository,
+} from '../../services/caseStudyPublicTypes';
+
+/**
+ * storyDetailV2Sections - what each section of `/stories/:slug` renders.
+ *
+ * WHY IT IS PAGE-LOCAL. `caseStudyStyleContract.test.ts` asserts the exact ten
+ * filenames in `components/caseStudy/`, so a component added there fails a test
+ * belonging to another task. These blocks also have no second consumer yet: an
+ * index card has no contributors list and no provenance list. If a second
+ * surface ever needs them, moving a file is a smaller change than un-inventing a
+ * premature abstraction.
+ *
+ * THE PROVENANCE LIST IS THE POINT OF THIS FILE - it is the one section spec
+ * section 23 names that `components/caseStudy/` does not ship.
+ */
+
+/* ------------------------------------------------------------ hero metrics --- */
+
+export interface StoryHeroMetricsProps {
+  /** Already filtered by `heroMetricsFor`: every one carries evidence context. */
+  metrics: readonly PublicCaseStudyMetric[];
+}
+
+/**
+ * The headline figures, each with the context that makes it readable.
+ *
+ * The caller has already dropped any figure with no baseline, sample,
+ * methodology or limitation (spec section 23). This renders the context it was
+ * given rather than deciding again, but it renders ALL of it - a figure whose
+ * context row was dropped for space is back to being a bare number.
+ */
+export function StoryHeroMetrics({
+  metrics,
+}: StoryHeroMetricsProps): React.ReactElement | null {
+  if (metrics.length === 0) return null;
+
+  return (
+    <ul className="cbv2-story__metrics">
+      {metrics.map((metric, index) => {
+        const rows = evidenceContextRows(metric);
+        return (
+          <li
+            className="cbv2-story__metric"
+            key={`${metric.label}-${index}`}
+            data-verification-class={metric.verificationClass}
+          >
+            <Metric
+              value={metric.valueDisplay}
+              label={metric.label}
+              evidence={metric.verificationClass}
+              badgeHidden
+            />
+            <CaseStudyVerificationBadge
+              verificationClass={metric.verificationClass}
+              verificationMethod={metric.verificationMethod}
+            />
+            {rows.length > 0 ? (
+              <dl className="cbv2-story__metric-context">
+                {rows.map((row) => (
+                  <div key={row.term}>
+                    <dt className="cbv2-story__term">{row.term}</dt>
+                    <dd className="cbv2-story__value">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+            {metric.limitations.length > 0 ? (
+              <div>
+                <span className="cbv2-story__term">Limitations</span>
+                <ul className="cbv2-story__limits">
+                  {metric.limitations.map((limitation) => (
+                    <li key={limitation}>{limitation}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* ------------------------------------------------------------ contributors --- */
+
+/**
+ * Who built it, according to consent. A contributor who did not consent to be
+ * named is not in this array at all - they arrive as `anonymousCount` - so
+ * crediting people honestly never costs anybody their privacy, and the count
+ * keeps the credit list from implying a smaller team than the one that worked.
+ */
+export function StoryContributors({
+  contributors,
+  anonymousCount,
+}: {
+  contributors: readonly PublicCaseStudyContributor[];
+  anonymousCount: number;
+}): React.ReactElement | null {
+  const note = anonymousContributorNote(anonymousCount);
+  if (contributors.length === 0 && !note) return null;
+
+  return (
+    <div className="cbv2-story__block">
+      {contributors.length > 0 ? (
+        <ul className="cbv2-story__people">
+          {contributors.map((contributor, index) => (
+            <li
+              className="cbv2-story__person"
+              key={`${contributorLabel(contributor)}-${index}`}
+              data-display-mode={contributor.displayMode}
+            >
+              <span className="cbv2-story__person-name">{contributorLabel(contributor)}</span>
+              {contributor.displayMode === 'named' ? (
+                <span className="cbv2-story__person-role">{contributor.role}</span>
+              ) : null}
+              <span className="cbv2-cs-tag">{BUILT_BY_LABELS[contributor.kind]}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {note ? <p className="cbv2-story__note">{note}</p> : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ repositories --- */
+
+/**
+ * Repositories and provenance.
+ *
+ * Every entry here is a repository a reader may actually open: the projection
+ * required it to be public AND consented AND to carry a parseable http(s) URL
+ * before it was given a shape at all, and a repository that failed any of the
+ * three was DROPPED - it survives only as one increment of `withheldCount`.
+ * Nothing is re-checked here, because `PublicCaseStudyRepository` has no owner,
+ * no visibility flag and no url-for-a-withheld-repository to re-check.
+ *
+ * `lastCommitDate` is usually null on purpose: the snapshot knows when WE last
+ * read the repository, which is not when it was last committed to.
+ */
+export function StoryRepositories({
+  repositories,
+  withheldCount,
+}: {
+  repositories: readonly PublicCaseStudyRepository[];
+  withheldCount: number;
+}): React.ReactElement | null {
+  const note = withheldRepositoryNote(withheldCount);
+  if (repositories.length === 0 && !note) return null;
+
+  return (
+    <div className="cbv2-story__block" data-story-zone="repositories">
+      {repositories.length > 0 ? (
+        <ul className="cbv2-story__repos">
+          {repositories.map((repository, index) => (
+            <li
+              className="cbv2-story__repo"
+              key={`${repository.label}-${index}`}
+              data-repo-role={repository.role}
+            >
+              <a
+                className="cbv2-story__repo-link"
+                href={repository.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {repository.label}
+                {/* A list of links all named after a folder is unusable out of
+                    context, and the new-tab behaviour has to be announced. */}
+                <span className="cbv2-cs-sr-only"> repository (opens in a new tab)</span>
+              </a>
+              <span className="cbv2-cs-tag">{REPO_ROLE_LABELS[repository.role]}</span>
+              {/* A repository only reaches this list by being public AND
+                  consented, so saying so is reading the wire back, not a claim
+                  this file is making. It is the indicator a reader scanning for
+                  "can I actually open the source" is looking for. */}
+              <span className="cbv2-cs-tag cbv2-story__repo-visibility">Public</span>
+              {repository.lastCommitDate ? (
+                <span className="cbv2-story__repo-date">
+                  <span className="cbv2-cs-sr-only">Last commit: </span>
+                  <time dateTime={repository.lastCommitDate}>
+                    {formatPublishedDate(repository.lastCommitDate)}
+                  </time>
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {note ? <p className="cbv2-story__note">{note}</p> : null}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- dispatcher --- */
+
+/**
+ * One section's body. The page decided WHICH sections exist and in what order;
+ * this decides only what goes inside one of them, so the two questions stay in
+ * different files. Every branch reaches for a shipped `components/caseStudy/`
+ * component where one exists.
+ */
+export function StorySectionBody({
+  sectionKey,
+  record,
+  placedHrefs = [],
+}: {
+  sectionKey: CaseStudySectionKey;
+  record: PublicCaseStudyDetail;
+  /** Pictures the page already showed between sections. Default: none. */
+  placedHrefs?: readonly string[];
+}): React.ReactElement | null {
+  switch (sectionKey) {
+    case 'situation':
+      // The narrative plus `constraints` and `goals` - two fields that have
+      // always been authored and gated and were never projected. Page-local for
+      // the same reason everything here is.
+      return <StorySituation situation={record.situation} />;
+    case 'build':
+      // The rail, not the Studio's dated list: same steps, a tenth of the height.
+      return <StoryBuildRail entries={record.timeline} />;
+    case 'architecture':
+      // Prose, drawing, then the verified inventory folded; the reasoning
+      // lives with the markup in `StoryArchitectureBand`.
+      return (
+        <StoryArchitectureBand
+          architecture={record.architecture}
+          diagramFolded={Boolean(record.visualStory?.workflow)}
+        />
+      );
+    case 'measurement':
+      // Prose, then the metric cards, folded when the visual story band already
+      // shows the figures; the reasoning lives with the markup in `StoryMeasurementBand`.
+      return <StoryMeasurementBand measurement={record.measurement} visualStory={record.visualStory} />;
+    case 'roadmap':
+      // The status board, not the Studio's list; the details fold under it.
+      return <StoryRoadmapBoard items={record.roadmap} />;
+    case 'contributors':
+      // Stands down when the builder card is already the credit (storyPeopleV2).
+      if (builderCoversContributors(record)) return null;
+      return <StoryContributors contributors={record.contributors} anonymousCount={record.anonymousContributorCount} />;
+    case 'decisions': return <StoryDecisions decisions={record.decisions} />;
+    case 'builder': return <StoryBuilder builder={record.builder} />;
+    case 'closing': return <StoryClosing closing={record.closing} />;
+    case 'artifacts': {
+      // Every picture once (`unshownArtifacts`); nothing left, no band.
+      const slides = carouselSlides(record.artifacts, placedHrefs);
+      const listed = unshownArtifacts(record.artifacts, [...placedHrefs, ...slides.map((s) => s.href)]);
+      if (slides.length === 0 && listed.length === 0) return null;
+      return (
+        <div data-story-zone="artifacts">
+          <StoryMediaCarousel slides={slides} />
+          {/* `headingLevel={3}` closes the h2 -> h4 skip this band used to
+              carry. The component's default is still 4 for every other caller. */}
+          <CaseStudyArtifacts
+            artifacts={listed}
+            requestHref={record.cta.href}
+            headingLevel={3}
+          />
+        </div>
+      );
+    }
+    case 'repositories':
+      return (
+        <StoryRepositories
+          repositories={record.repositories}
+          withheldCount={record.privateRepositoryCount}
+        />
+      );
+    default:
+      return null;
+  }
+}

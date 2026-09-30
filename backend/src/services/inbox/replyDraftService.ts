@@ -3,6 +3,7 @@
  * Drafts are stored in the inbox_reply_drafts table for human review before sending.
  */
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import InboxEmail from '../../models/InboxEmail';
 import InboxClassification from '../../models/InboxClassification';
 import InboxStyleProfile from '../../models/InboxStyleProfile';
@@ -69,7 +70,16 @@ Rules:
 2. Be substantively helpful, not just an acknowledgment
 3. Maintain appropriate warmth and professionalism
 4. Be concise — Ali prefers directness
-5. If a meeting/call is appropriate, suggest specific times`;
+5. If a meeting/call is appropriate, suggest specific times
+
+Respond ONLY with a JSON object in this exact shape — no markdown, no prose, no code fences:
+{"subject":"<reply subject line>","body":"<full reply body>"}
+
+Subject rules:
+- Write a subject that reflects the actual content of the reply, not just the original subject
+- If the original subject is already specific and accurate, you may use "Re: <original subject>"
+- If the original subject is generic (e.g. "Hello", "Question", "Inquiry"), write a descriptive subject that captures what this reply is about
+- Keep subjects under 60 characters`;
 
   const bodyText = email.body_text
     ? email.body_text.substring(0, 3000)
@@ -77,19 +87,21 @@ Rules:
 
   const userMessage = `Reply to this email:\n\nFrom: ${email.from_name || ''} <${email.from_address}>\nSubject: ${email.subject}\n\n${bodyText}`;
 
-  // 5. Call Claude API
+  // 5. Call OpenAI API — expect JSON response with subject + body
   let draftBody: string;
+  let draftSubject: string;
   let generationFailed = false;
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = getInstrumentedOpenAI({ workflow_id: 'inbox_reply' });
 
     console.log(`${LOG_PREFIX} Generating draft for email ${emailId} (category=${category})`);
 
     const response = await client.chat.completions.create({
       model: 'gpt-4o-mini',
-      max_tokens: 1000,
+      max_tokens: 1200,
       temperature: 0.3,
+      response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
@@ -101,10 +113,15 @@ Rules:
       throw new Error('No content in OpenAI response');
     }
 
-    draftBody = content;
+    const parsed = JSON.parse(content) as { subject?: string; body?: string };
+    if (!parsed.body) throw new Error('Missing body in OpenAI JSON response');
+
+    draftBody = parsed.body;
+    draftSubject = parsed.subject?.trim() || `Re: ${email.subject}`;
   } catch (error: any) {
     console.error(`${LOG_PREFIX} OpenAI API failed for email ${emailId}: ${error.message}`);
     draftBody = '[Draft generation failed — please compose manually]';
+    draftSubject = `Re: ${email.subject}`;
     generationFailed = true;
   }
 
@@ -113,7 +130,7 @@ Rules:
     email_id: emailId,
     thread_id: email.provider_thread_id || null,
     draft_body: draftBody,
-    draft_subject: `Re: ${email.subject}`,
+    draft_subject: draftSubject,
     reply_to_address: email.from_address,
     status: 'pending_approval',
     reply_mode: 1,
@@ -282,23 +299,31 @@ async function sendReplyViaMsGraph(
   draft: InboxReplyDraft,
   replyBody: string
 ): Promise<void> {
-  // Lazy import to avoid circular dependency issues
-  const { isConfigured, getGraphClient } = await import('./msGraphService');
-
-  if (!isConfigured()) {
-    throw new Error('MS Graph not configured — cannot send Hotmail reply');
-  }
-
-  const client = getGraphClient();
   const messageId = email.provider_message_id;
 
-  console.log(`${LOG_PREFIX} Sending reply via MS Graph for message ${messageId}`);
+  // Two Graph clients exist and production is provisioned for only one of them.
+  // msGraphService is the confidential client (needs CLIENT_SECRET + TENANT_ID,
+  // neither of which prod has), so hard-wiring to it made every Hotmail reply
+  // fail with a flat "MS Graph not configured" — the same wiring mismatch that
+  // silently disabled Hotmail auto-archive. Prefer whichever is configured.
+  const confidential = await import('./msGraphService');
+  if (confidential.isConfigured()) {
+    console.log(`${LOG_PREFIX} Sending reply via MS Graph (confidential client) for message ${messageId}`);
+    await confidential.getGraphClient().api(`/me/messages/${messageId}/reply`).post({ comment: replyBody });
+    return;
+  }
 
-  await client
-    .api(`/me/messages/${messageId}/reply`)
-    .post({
-      comment: replyBody,
-    });
+  const publicClient = await import('./graphMailService');
+  if (publicClient.isConfigured()) {
+    console.log(`${LOG_PREFIX} Sending reply via MS Graph (public client) for message ${messageId}`);
+    await publicClient.replyToMessage(messageId, replyBody);
+    return;
+  }
+
+  const present = ['MS_GRAPH_CLIENT_ID', 'MS_GRAPH_CLIENT_SECRET', 'MS_GRAPH_TENANT_ID', 'MS_GRAPH_REFRESH_TOKEN']
+    .map((v) => `${v}=${process.env[v] ? 'set' : 'MISSING'}`)
+    .join(' ');
+  throw new Error(`No configured MS Graph client — cannot send Hotmail reply. ${present}`);
 }
 
 /**

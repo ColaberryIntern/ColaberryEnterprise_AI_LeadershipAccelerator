@@ -2,8 +2,44 @@ import { Op } from 'sequelize';
 import { env } from '../config/env';
 import Lead from '../models/Lead';
 import { syncNewLeadToGhl } from './ghlService';
+import { redactForLogs } from '../utils/piiRedaction';
+import { classifyError } from '../utils/errorClassifier';
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every apolloService import — some
+// callers (e.g. apolloKillSwitch.test.ts) deliberately import this module
+// without a DB connection available.
+async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
+  try {
+    const { emitAiEvent } = await import('./aiEventService');
+    await emitAiEvent(params);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'backend', event: 'emit_failure_event_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { event_type: params.event_type, message: err?.message },
+    }));
+  }
+}
 
 const APOLLO_BASE_URL = 'https://api.apollo.io';
+
+// ---------------------------------------------------------------------------
+// Credit kill switch
+// ---------------------------------------------------------------------------
+// Every Apollo endpoint (search / people-match enrich / phone-reveal) consumes
+// paid credits. To stop unattended credit drain (the scheduled lead-gen agents
+// call these every 6h and daily), all outbound Apollo calls are gated behind
+// APOLLO_ENABLED. Default OFF: unless APOLLO_ENABLED=true is set in the env, each
+// entry point short-circuits with a safe empty/null result and logs once, so
+// schedulers and importers keep running without spending a single credit.
+// See CC-20260710-a9f2 (Apollo credit-leak audit).
+
+function apolloDisabled(label: string): boolean {
+  if (env.apolloEnabled) return false;
+  console.warn(`[Apollo] ${label} skipped — Apollo disabled (set APOLLO_ENABLED=true to enable). No credits spent.`);
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 // Retry helper for external API calls
@@ -34,6 +70,13 @@ async function fetchWithRetry(
         console.warn(`[${label}] Network error on attempt ${attempt + 1}/${retries + 1}: ${err.message}. Retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
       } else {
+        emitFailureEvent({
+          event_type: 'apollo_request_failed',
+          outcome: 'failure',
+          external_system: 'apollo',
+          error_class: classifyError(err),
+          metadata: { label, retries, message: String(err?.message || '').slice(0, 200) },
+        });
         throw new Error(`[${label}] Failed after ${retries + 1} attempts: ${err.message}`);
       }
     }
@@ -78,6 +121,10 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
   page: number;
   per_page: number;
 }> {
+  if (apolloDisabled('searchPeople')) {
+    return { people: [], total: 0, page: params.page || 1, per_page: params.per_page || 25 };
+  }
+
   const apiKey = env.apolloApiKey;
   if (!apiKey) throw new Error('Apollo API key not configured');
 
@@ -149,6 +196,8 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
 const PHONE_REVEAL_WEBHOOK_URL = 'https://enterprise.colaberry.ai/api/webhook/apollo/phone-reveal';
 
 async function enrichPersonById(apiKey: string, personId: string, revealPhone = true): Promise<ApolloPersonResult | null> {
+  if (apolloDisabled('enrichPersonById')) return null;
+
   const payload: any = { id: personId };
   if (revealPhone) {
     payload.reveal_phone_number = true;
@@ -187,6 +236,8 @@ async function enrichPersonById(apiKey: string, personId: string, revealPhone = 
 }
 
 export async function enrichPerson(email: string): Promise<ApolloPersonResult | null> {
+  if (apolloDisabled('enrichPerson')) return null;
+
   const apiKey = env.apolloApiKey;
   if (!apiKey) throw new Error('Apollo API key not configured');
 
@@ -247,7 +298,7 @@ export async function importApolloResults(
       // Skip leads without phone numbers (required for voice outreach)
       const hasPhone = person.phone_numbers?.some((p) => p.raw_number?.trim());
       if (requirePhone && !hasPhone) {
-        console.log(`[Apollo] Skipping ${person.email} — no phone number`);
+        console.log(`[Apollo] Skipping ${redactForLogs(person.email)} — no phone number`);
         skippedNoPhone++;
         continue;
       }
@@ -306,20 +357,20 @@ export async function importApolloResults(
 
       // Auto-sync to GHL (fire-and-forget)
       syncNewLeadToGhl(lead).catch((err) =>
-        console.error(`[Apollo] GHL sync error ${person.email}: ${err.message}`)
+        console.error(`[Apollo] GHL sync error ${redactForLogs(person.email)}: ${err.message}`)
       );
 
       // Request async phone reveal if lead has no phone and has apollo_id
       if (!phone && person.id && apiKey) {
         requestPhoneReveal(apiKey, person.id).catch((err) =>
-          console.warn(`[Apollo] Phone reveal request failed for ${person.email}: ${err.message}`)
+          console.warn(`[Apollo] Phone reveal request failed for ${redactForLogs(person.email)}: ${err.message}`)
         );
       }
 
       imported++;
       leads.push(lead);
     } catch (err: any) {
-      console.error(`[Apollo] Failed to import ${person.email}:`, err.message);
+      console.error(`[Apollo] Failed to import ${redactForLogs(person.email)}:`, err.message);
       errors++;
     }
   }
@@ -398,6 +449,8 @@ export function calculateColdLeadScore(
 
 /** Request async phone number reveal from Apollo — result delivered via webhook */
 export async function requestPhoneReveal(apiKey: string, personId: string): Promise<void> {
+  if (apolloDisabled('requestPhoneReveal')) return;
+
   const response = await fetchWithRetry(`${APOLLO_BASE_URL}/v1/people/match`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
@@ -417,6 +470,10 @@ export async function requestPhoneReveal(apiKey: string, personId: string): Prom
 }
 
 export async function getApolloQuota(): Promise<{ available: boolean; message: string }> {
+  if (!env.apolloEnabled) {
+    return { available: false, message: 'Apollo disabled (APOLLO_ENABLED not set)' };
+  }
+
   const apiKey = env.apolloApiKey;
   if (!apiKey) return { available: false, message: 'Apollo API key not configured' };
 

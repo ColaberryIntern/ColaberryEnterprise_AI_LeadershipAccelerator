@@ -3,10 +3,12 @@
 // then updates the Lead record and AdmissionsMemory with the extracted info.
 
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import { Lead } from '../models';
 import AdmissionsMemory from '../models/AdmissionsMemory';
 import AdmissionsActionLog from '../models/AdmissionsActionLog';
+import { redactForLogs } from '../utils/piiRedaction';
 
 let openaiClient: OpenAI | null = null;
 
@@ -14,7 +16,7 @@ function getClient(): OpenAI {
   if (!openaiClient) {
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = new OpenAI({ apiKey });
+    openaiClient = getInstrumentedOpenAI({ workflow_id: 'call_transcript' }, { apiKey });
   }
   return openaiClient;
 }
@@ -190,7 +192,7 @@ Rules:
       call_summary: parsed.call_summary || undefined,
     };
   } catch {
-    console.warn('[TranscriptProcessor] Failed to parse AI response:', text.substring(0, 200));
+    console.warn('[TranscriptProcessor] Failed to parse AI response:', redactForLogs(text).substring(0, 200));
     return {};
   }
 }

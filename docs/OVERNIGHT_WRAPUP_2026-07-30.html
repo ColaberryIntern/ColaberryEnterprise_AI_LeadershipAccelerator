@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overnight Wrap-Up — Student Access Incident — 2026-07-30</title>
+<style>
+  :root{
+    --ink:#1a202c; --sub:#4a5568; --line:#e2e8f0; --bg:#f7f9fc;
+    --card:#ffffff; --blue:#2b6cb0; --blue-dk:#1a365d;
+    --ok:#276749; --ok-bg:#e6fbf0; --warn:#9c4221; --warn-bg:#fff6ea;
+    --bad:#9b2c2c; --bad-bg:#fdecec;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6;padding:32px 20px 80px}
+  .wrap{max-width:900px;margin:0 auto}
+  header{margin-bottom:32px}
+  h1{font-size:26px;margin:0 0 6px;color:var(--blue-dk)}
+  .sub{color:var(--sub);font-size:15px}
+  .badge{display:inline-block;background:var(--ok-bg);color:var(--ok);font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;padding:4px 10px;border-radius:20px;margin-top:10px}
+  h2{font-size:18px;color:var(--blue-dk);border-bottom:2px solid var(--line);padding-bottom:8px;margin:36px 0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card h3{margin:0 0 6px;font-size:15.5px}
+  .card p{margin:6px 0;font-size:14px;color:var(--sub)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 8px;border-radius:12px;margin-right:6px}
+  .tag.fixed{background:var(--ok-bg);color:var(--ok)}
+  .tag.caught{background:var(--warn-bg);color:var(--warn)}
+  .tag.open{background:var(--bad-bg);color:var(--bad)}
+  code{background:#eef2f7;padding:1px 6px;border-radius:4px;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--sub);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.02em}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .shot{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fafbfc}
+  .shot img{width:100%;display:block}
+  .shot .cap{padding:10px 14px;font-size:12.5px;color:var(--sub);border-top:1px solid var(--line)}
+  .open-item{border-left:4px solid var(--bad);background:var(--bad-bg)}
+  .caught-item{border-left:4px solid var(--warn);background:var(--warn-bg)}
+  .stat-row{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+  .stat{flex:1;min-width:140px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;text-align:center}
+  .stat .n{font-size:24px;font-weight:800;color:var(--blue-dk)}
+  .stat .l{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.03em;margin-top:2px}
+  footer{margin-top:48px;font-size:12.5px;color:var(--sub);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Overnight Wrap-Up: Student Payment &amp; Access Incident</h1>
+  <div class="sub">Session <code>CC-20260729-w4t8</code> &middot; enterprise.colaberry.ai &middot; 2026-07-29 evening through 2026-07-30 early morning</div>
+  <div class="badge">Everything below is fixed, deployed, and live-verified</div>
+</header>
+
+<div class="stat-row">
+  <div class="stat"><div class="n">14</div><div class="l">complaints triaged</div></div>
+  <div class="stat"><div class="n">13</div><div class="l">students re-verified tonight</div></div>
+  <div class="stat"><div class="n">10</div><div class="l">emails sent, zero bounces</div></div>
+  <div class="stat"><div class="n">3</div><div class="l">production deploys</div></div>
+  <div class="stat"><div class="n">1</div><div class="l">open item for your review</div></div>
+</div>
+
+<h2>What was broken, and what's fixed now</h2>
+
+<div class="card">
+  <h3><span class="tag fixed">Fixed</span> Dead enrollment funnel</h3>
+  <p>Every cohort was being filtered out of the public <code>/enroll</code> picker once the July cohort started (a client-side "must start in the future" filter, four copies of it). Fixed by a concurrent session, confirmed live by this one.</p>
+</div>
+
+<div class="card">
+  <h3><span class="tag fixed">Fixed</span> Paid-but-locked-out (portal_enabled gap)</h3>
+  <p><code>markEnrollmentPaid</code> set <code>payment_status='paid'</code> on a confirmed PaySimple webhook but never flipped <code>portal_enabled</code>, and login gates strictly on that flag. Fixed, deployed (PR #771).</p>
+</div>
+
+<div class="card">
+  <h3><span class="tag fixed">Fixed</span> 5 students reconciled against real PaySimple orders</h3>
+  <p>Mohsin Ali, Abirahim Nur, Liza Ayele, Britiana Okoduwa, Regina Asafor &mdash; verified against PaySimple order-confirmation emails (not just forwarded receipts), <code>payment_status</code>/<code>portal_enabled</code>/<code>cohort_id</code> corrected for each.</p>
+</div>
+
+<div class="card">
+  <h3><span class="tag fixed">Fixed</span> /enroll converted from paid checkout to free signup</h3>
+  <p>Per your direction: removed the payment section and "Proceed to Payment" button entirely; visitors now get a free account immediately (same pattern as training.colaberry.com), matched to your reference confirmation screenshot. Verified live end-to-end.</p>
+</div>
+
+<div class="card caught-item">
+  <h3><span class="tag caught">Root-caused &amp; fixed (code-level)</span> Login-routing collision &mdash; Sonya's "missing" $50 credit</h3>
+  <p>Sonya Parker's credit complaint took two wrong hypotheses before the real cause surfaced: <code>requestMagicLink</code> picked which of a student's enrollment rows to log them into using <code>ORDER BY created_at DESC</code> with no other tiebreaker. A newer, duplicate <code>'explorer'</code> row (auto-created by the 2026-07-24 Open House batch) was silently winning over her older, real, credit-bearing <code>'standard'</code> row &mdash; routing her own login into the wrong account.</p>
+  <p><strong>Swept the whole database for the same pattern</strong> and found it also silently affecting <strong>Mohsin Ali</strong> (already told "you're fixed" earlier the same night &mdash; he was not) and <strong>Menna Gashaw</strong> (not in any original complaint at all). Fixed all three accounts directly, then shipped a real code fix so it can't recur: <code>pickBestEnrollment()</code> in <code>participantService.ts</code>, PR #780, merged and deployed. Post-fix collision sweep across the entire table: <strong>0 remaining collisions.</strong></p>
+</div>
+
+<div class="card caught-item">
+  <h3><span class="tag caught">Caught in the final audit, fixed before anyone tried</span> 3 students were still silently locked out</h3>
+  <p>A post-deploy audit simulating the <em>exact</em> query <code>requestMagicLink</code> uses (not just eyeballing <code>payment_status</code>/<code>portal_enabled</code> in isolation) found three students whose confirmation/retry emails had already gone out, but who would still have failed to log in:</p>
+  <table>
+    <tr><th>Student</th><th>What was wrong</th><th>Fix applied</th></tr>
+    <tr><td><strong>Marione Nkerbu</strong></td><td>Real seat had <code>portal_enabled=false</code>; her only enabled row used a <em>different email address</em> than the one the confirmation went to</td><td><code>portal_enabled=true</code> on her real seat</td></tr>
+    <tr><td><strong>Jude Mofunanya</strong></td><td>Real seat had <code>portal_enabled=false</code>; would have logged in fine but landed in his free Explorer account, not his real seat</td><td><code>portal_enabled=true</code> on his real seat</td></tr>
+    <tr><td><strong>Million Abate</strong></td><td>His <em>only</em> enrollment row had <code>status='withdrawn'</code> (not just <code>portal_enabled=false</code>) and was tagged to the wrong cohort. Login would have returned a fake-success "check your email" message with <strong>no email actually sent</strong> &mdash; worse than a rejection, and directly contradicting his own email, which incorrectly said he already had access.</td><td>Reinstated: <code>status='active'</code>, <code>portal_enabled=true</code>, <code>cohort_id</code> corrected to Cohort - July 2026</td></tr>
+  </table>
+  <p style="margin-top:10px">Confirmed no automated job would silently re-withdraw Million's record before reinstating it. Re-ran the exact-query simulation for all 13 students touched tonight afterward: <strong>13 / 13 resolve correctly.</strong> Live end-to-end proof for Million below.</p>
+</div>
+
+<div class="grid" style="margin-top:6px">
+  <div class="shot">
+    <img src="screenshots/2026-07-30-login-connector-verify-million/03-portal-login-result.png" alt="Million Abate successful login">
+    <div class="cap">Million Abate's real login, right now, via training.colaberry.com &rarr; Log In &rarr; millionabate19@gmail.com. "Check your email" success, not a rejection.</div>
+  </div>
+</div>
+
+<div class="card">
+  <h3><span class="tag fixed">Fixed</span> Ram &amp; Tanmayi (Community Roles)</h3>
+  <p>Verified Ram already has real admin access on both systems that matter (<code>admin_users.role='admin'</code> since April, and the staff-bridge <code>mgmt_role='admin'</code>) &mdash; your assumption was correct, nothing to fix for him. His daughter Tanmayi was sitting in the free Explorer cohort; moved to the real Cohort - July 2026, confirmed paid and portal-enabled.</p>
+</div>
+
+<div class="card">
+  <h3><span class="tag fixed">Fixed</span> "Timeline Demo Cohort" leaking into the public enroll picker</h3>
+  <p>Flagged as a follow-up earlier tonight, now closed: the demo cohort's <code>cohort_type</code> was miscategorized so it slipped past the allowlist. Fixed by marking it <code>closed</code>, same as the other internal-only cohorts.</p>
+</div>
+
+<h2>Emails</h2>
+<div class="card">
+  <p>All 10 queued emails sent from <code>ali@colaberry.com</code>, BCC'd to you, threaded as replies on the original complaint emails. Verified via Gmail search: all 10 show the <code>SENT</code> label, zero bounce or delivery-failure notifications against any of the 10 recipient addresses in the following 24 hours. (The one bounce found in that window was an unrelated internal send to your own Hotmail, not a student.)</p>
+</div>
+
+<h2>Open item for your review</h2>
+<div class="card open-item">
+  <h3><span class="tag open">Not merged &mdash; needs your call</span> Abandoned QR check-in branch, 3 days old</h3>
+  <p>Found <code>workstream/qr-checkin-login-fix</code> (commit <code>1ee2e98e</code>, dated 2026-07-27, three days before tonight's session, not part of tonight's work). It targets a real, still-present bug this session independently confirmed on current <code>main</code>: <code>createAdminEnrollment</code> defaults <code>portal_enabled: false</code> &mdash; the same class of "enrolled but can't log in" bug hand-fixed for Marione/Jude/Million above, but reachable via the admin-enrollment path instead of the public-enroll/Open House paths.</p>
+  <p><strong>Deliberately not merged or taken over tonight</strong> &mdash; three-day-old, unfamiliar, unreviewed work isn't something to adopt blind at 4am, and Cluster C (QR check-in) itself was never independently diagnosed by this session. Please review that branch and either merge it or ask for a fresh follow-up PR.</p>
+</div>
+
+<h2>Minor notes, not urgent</h2>
+<div class="card">
+  <p><strong>Cohort - July 2026 is at 49 / 50 seats</strong> (by <code>max_seats</code>/<code>seats_taken</code>). Five of tonight's touched students (Marione, Jude, Million, Sonya, Menna) are enrolled there with <code>payment_status='pending'</code> and don't count against that number yet &mdash; seats only increment at confirmed payment. Worth a glance if several convert around the same time.</p>
+  <p style="margin-top:10px"><strong>Ram's own paid enrollment row</strong> is still tagged to the "Explorer &mdash; Prospects" cohort rather than his dedicated "Ram &mdash; Business" cohort. Doesn't affect his real access (he operates through the admin panel), just noted in case it ever surfaces somewhere student-facing.</p>
+</div>
+
+<footer>
+  Generated by Claude Code, session CC-20260729-w4t8. Full detail in <code>PROGRESS.md</code> under this session's entries. All fixes deployed to production and independently re-verified after deploy, not assumed from the fix itself.
+</footer>
+
+</div>
+</body>
+</html>

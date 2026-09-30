@@ -91,13 +91,13 @@ export default function ExecutionContextPanel({ context, onOpenWorkspace, onDism
             <div style={{ fontSize: 12, color: '#1e293b' }}>
               {summary.lessonTitle && (
                 <div className="d-flex align-items-center gap-1 mb-1">
-                  <i className="bi bi-book" style={{ color: '#6366f1', fontSize: 11 }}></i>
+                  <i className="bi bi-book" style={{ color: '#FB2832', fontSize: 11 }}></i>
                   <span>{summary.lessonTitle}</span>
                 </div>
               )}
               {summary.taskTitle && (
                 <div className="d-flex align-items-center gap-1 mb-1">
-                  <i className="bi bi-rocket" style={{ color: '#8b5cf6', fontSize: 11 }}></i>
+                  <i className="bi bi-rocket" style={{ color: '#367895', fontSize: 11 }}></i>
                   <span>{summary.taskTitle}</span>
                 </div>
               )}

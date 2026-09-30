@@ -225,7 +225,6 @@ ${groupBlock('STRATEGIC', groups.STRATEGIC || [])}
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: `[Decision Queue] ${totalCount} outstanding decisions - ${immediateCount} immediate, ${jun6Count} by Jun 6`,
     text: stripEmDashes(text),
     html: stripEmDashes(html),

@@ -1,0 +1,50 @@
+{
+  "findings": [
+    {
+      "tab": "overview",
+      "isLogin": false,
+      "stillLoading": false,
+      "errored": false,
+      "chars": 1212
+    },
+    {
+      "tab": "journey",
+      "isLogin": false,
+      "stillLoading": false,
+      "errored": false,
+      "chars": 5102
+    },
+    {
+      "tab": "decisions",
+      "isLogin": false,
+      "stillLoading": false,
+      "errored": false,
+      "chars": 4824
+    },
+    {
+      "tab": "shadow",
+      "isLogin": false,
+      "stillLoading": false,
+      "errored": false,
+      "chars": 4675
+    },
+    {
+      "tab": "content",
+      "isLogin": false,
+      "stillLoading": false,
+      "errored": false,
+      "chars": 2221
+    },
+    {
+      "tab": "settings",
+      "isLogin": false,
+      "stillLoading": false,
+      "errored": false,
+      "chars": 1486
+    }
+  ],
+  "whyOpened": true,
+  "whyChars": 865,
+  "pageErrors": [],
+  "consoleErrors": []
+}

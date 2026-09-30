@@ -1,0 +1,233 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import CaseStudyCTA from '../../components/caseStudy/CaseStudyCTA';
+import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVerificationBadge';
+import { heroFacts, heroMetricsFor, visibleSections } from './storyDetailV2Model';
+import StoryHeroActions from './StoryHeroActions';
+import StoryContextStrip from './StoryContextStrip';
+import StoryVisualStory from './StoryVisualStory';
+import { StoryHeroFigure } from './StoryHeroFigure';
+import StorySectionList from './StorySectionList';
+import { storyIndicators } from './storyIndicatorModel';
+import { evidenceMaturity } from './storyMaturityModel';
+import { placeStoryFigures } from './storyFigurePlacement';
+import { coverFor } from './storyCover';
+import { visualStoryFor } from './storyVisualModel';
+import type {
+  PublicCaseStudyDetail,
+  PublicSurfaceView,
+} from '../../services/caseStudyPublicTypes';
+/* The page's own two stylesheets, imported HERE as well as in `StoryDetailV2`.
+   Not redundant: this component is the thing that draws the markup, and it is
+   now mounted from a second place - the admin Story Studio's PREVIEW tab, which
+   never loads `PublicLayoutV2` and never renders `StoryDetailV2`. A side-effect
+   CSS import is idempotent in webpack, so declaring the dependency where the
+   markup lives costs nothing and stops the admin preview's styling from resting
+   on which OTHER module happened to pull these in. */
+import './storyDetailV2.css';
+import './storyMediaV2.css';
+
+/**
+ * StoryDetailArticle - the rendered body of one published project record.
+ *
+ * WHY IT IS A SEPARATE COMPONENT, AND WHAT THAT SEAM IS FOR.
+ *
+ * This markup used to be the `ready` branch of `StoryDetailV2`, which also owns
+ * the fetch, the four load states, the tracking effect and the SEO head. The
+ * admin Story Studio's PREVIEW tab has to show an operator THE PAGE, not a
+ * payload - and it already holds the projection in hand, fetched from
+ * `GET /api/admin/case-studies/:id/preview`, which returns exactly the shape
+ * `/stories/:slug` receives.
+ *
+ * THE ALTERNATIVE WAS A SECOND RENDERER, AND IT IS THE WHOLE REASON THIS FILE
+ * EXISTS. A preview drawn by its own code drifts from the page it claims to
+ * preview, silently, one commit at a time - and the moment it drifts, an
+ * operator approves something that is not what ships. There is one renderer.
+ * The public route and the admin preview are two callers of it.
+ *
+ * IT TAKES DATA, NEVER A SLUG. No fetching, no routing, no effects: everything
+ * it needs arrives as props, which is what lets the admin hand it an
+ * already-fetched projection for a surface that is not even published.
+ *
+ * THE THREE HANDLERS ARE OPTIONAL, AND THEIR ABSENCE IS THE READ-ONLY GUARANTEE.
+ * `onStoryClick` is the delegated tracking observer, `onShare` copies the
+ * canonical URL and emits a share event. The public page passes both. The admin
+ * preview passes NEITHER, so rendering a record in the Story Studio emits no
+ * analytics row and touches no clipboard - it cannot, because the code that
+ * would do it is not wired in. That is a stronger property than a flag, because
+ * there is no flag to get wrong.
+ */
+
+export type StoryShareState = 'idle' | 'copied' | 'failed';
+
+export interface StoryDetailArticleProps {
+  /** The public projection. Identical shape on the public route and in preview. */
+  record: PublicCaseStudyDetail;
+  /** The surface profile: band order, hidden set, attribution floor, framing copy. */
+  surface: PublicSurfaceView;
+  /** Delegated click observer. Omitted means nothing is tracked. */
+  onStoryClick?: (event: React.MouseEvent<HTMLElement>) => void;
+  /** Copy-link handler. Omitted means the control renders and does nothing. */
+  onShare?: () => void;
+  shareState?: StoryShareState;
+}
+
+export function StoryDetailArticle({
+  record,
+  surface,
+  onStoryClick,
+  onShare,
+  shareState = 'idle',
+}: StoryDetailArticleProps): React.ReactElement {
+  const sections = visibleSections(record, surface);
+  const metrics = heroMetricsFor(record);
+  const facts = heroFacts(record);
+  const indicators = storyIndicators(record, sections);
+  /* Pictures are placed BETWEEN sections, from the sections that actually
+     survived `visibleSections`, so a figure can never follow a heading this
+     record does not print. `placedHrefs` then goes down to the artifacts band,
+     which subtracts them from its carousel - the same picture appearing inline
+     and again in a track ten centimetres below reads as a rendering fault.
+     The COVER is subtracted for the same reason: the masthead has already spent
+     it, so it must not also open the body. Null keeps the single-column hero
+     exactly as it was, so a record with no picture is unaffected.
+
+     ONLY WHEN THE MASTHEAD ACTUALLY SHOWED IT. With a walkthrough that has its
+     own poster, `StoryHeroFigure` renders the player and the cover is never
+     drawn; subtracting it anyway sent the record's strongest picture to a small
+     card at the foot of the page while the weaker one opened the body. That
+     was reviewed as "the screenshots arrive too late". The poster fallback
+     case still counts as shown, because then the cover IS the poster.
+
+     AND WHEN THE POSTER IS THE COVER, IT IS SHOWN. Ali, 2026-09-18, once every
+     record's cover became a picked thumbnail that is also the video's poster:
+     "do not use the picture a 3rd time inside the case study ... if the old
+     picture was already being used, then only use it once." So a cover that is
+     the poster counts as the masthead's, and whatever the masthead showed joins
+     `placedHrefs`, which the artifacts band subtracts: every picture once. */
+  const cover = coverFor(record);
+  const video = record.walkthroughVideo;
+  const hasPlayer = Boolean(video?.url && video.posterUrl);
+  const coverIsPoster = Boolean(cover && hasPlayer && video?.posterUrl === cover.src);
+  const mastheadHref = cover && (!hasPlayer || coverIsPoster) ? cover.src : null;
+  const placed = placeStoryFigures(record.artifacts, sections, mastheadHref);
+  const figures = mastheadHref
+    ? { ...placed, placedHrefs: [...placed.placedHrefs, mastheadHref] }
+    : placed;
+  const maturity = evidenceMaturity(record);
+  /* The visual story, when the server sent one for this surface. Its outcome
+     cards are the same headline metrics the strip would print, at display
+     size with baseline and badge; printing them twice within one screen would
+     read as a rendering fault, so the strip gets none when the band has some.
+     `maturity` is untouched: it is non-null only when there are no metrics at
+     all, and a record with cards has metrics. */
+  const visual = visualStoryFor(record);
+  const stripMetrics = visual && visual.outcomeCards.length > 0 ? [] : metrics;
+
+  return (
+    /* The click handler is an observer on a container, the pattern
+       `StoriesV2` already uses on its results list. No eslint-disable
+       comment: the production config does not load every plugin, and a
+       disable for a rule it never enabled is itself a build failure. */
+    <article className="cbv2-story" onClick={onStoryClick} data-testid="story-article">
+      <section className="cbv2-pagehero" aria-labelledby="cbv2-story-title">
+        <div
+          className={`cbv2-wrap cbv2-story__hero${cover ? ' cbv2-story__hero--cover' : ''}`}
+        >
+          {/* The masthead's words, wrapped so the hero grid has exactly two
+              children. Spanning the cover across the copy's rows instead does
+              not work: with no `grid-template-rows` the explicit grid has a
+              single line, so `grid-row: 1 / -1` collapses to row 1 and the
+              image's height becomes that row's height - which pushed the title
+              some 600px below the breadcrumb. Two children, two columns. */}
+          <div className="cbv2-story__hero-copy">
+            <p className="cbv2-story__crumb">
+              <Link to="/proof">All published projects</Link>
+            </p>
+            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{surface.hero.eyebrow}</p>
+            <h1 id="cbv2-story-title">{record.title}</h1>
+            {record.standfirst ? (
+              <p className="cbv2-pagehero__lede">{record.standfirst}</p>
+            ) : null}
+
+            <CaseStudyVerificationBadge
+              className="cbv2-story__badge"
+              verificationClass={record.verificationClass}
+              verificationMethod={record.verificationMethod}
+            />
+
+            {/* The counts, the facts grid and the headline figures used to stack
+                here. They are one band down now, on light ground - see
+                `StoryContextStrip`. The masthead was measured at 1142px and
+                2201px and is the heaviest thing on the page, so the format's
+                rule for it is subtract, never add. */}
+
+            {/* The surface's offer, and the repository when the projection was
+                willing to publish one. Both are real destinations; the copy-link
+                control keeps its own row below, with its own live region. */}
+            <div className="cbv2-story__actions">
+              <StoryHeroActions cta={record.cta} repositories={record.repositories} />
+            </div>
+
+            <div className="cbv2-story__share">
+              <button
+                type="button"
+                className="cbv2-btn cbv2-btn--ghost cbv2-btn--sm"
+                onClick={onShare}
+                data-testid="story-share"
+              >
+                Copy link
+              </button>
+              <span className="cbv2-story__share-state" aria-live="polite">
+                {shareState === 'copied' ? 'Link copied.' : null}
+                {shareState === 'failed'
+                  ? 'This browser would not let us copy. The address is in the address bar.'
+                  : null}
+              </span>
+            </div>
+          </div>
+
+          {/* The masthead's picture slot, LAST in source order and second in the
+              grid. A reader on a phone gets the title, the standfirst and the
+              offer before it, which is the order that answers "what is this"
+              fastest; at desktop widths CSS lifts it into the masthead's empty
+              right half, where it costs no vertical space at all.
+
+              WHEN THERE IS A WALKTHROUGH, THE SLOT IS THE PLAYER. Ali: "shouldn't
+              the video be in the hero section?" - and the alternative shipped
+              worse. A band under the masthead meant the record opened with TWO
+              visuals doing the same job, the cover and then the video, and the
+              reader had to scroll past a picture of the product to reach a film
+              of it. The poster falls back to the cover image, so a record with a
+              walkthrough looks exactly as it did until somebody presses play. */}
+          <StoryHeroFigure
+            video={record.walkthroughVideo}
+            cover={cover}
+            figuresBelow={metrics.length > 0 || (record.measurement?.metrics?.length ?? 0) > 0}
+          />
+        </div>
+      </section>
+
+      <StoryContextStrip
+        indicators={indicators}
+        facts={facts}
+        metrics={stripMetrics}
+        maturity={maturity}
+      />
+
+      {visual ? <StoryVisualStory story={visual} /> : null}
+
+      <StorySectionList record={record} sections={sections} figures={figures} />
+
+      {sections.includes('cta') ? (
+        <section className="cbv2-rv cbv2-section cbv2-section--inverse" data-section="cta">
+          <div className="cbv2-wrap cbv2-wrap--narrow cbv2-story__cta" data-story-zone="cta">
+            <CaseStudyCTA cta={record.cta} headingLevel={2} />
+          </div>
+        </section>
+      ) : null}
+    </article>
+  );
+}
+
+export default StoryDetailArticle;

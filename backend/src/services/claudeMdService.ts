@@ -12,6 +12,9 @@ import { getProjectByEnrollment } from './projectService';
 import { getConnection, readFileFromRepo, writeFileToRepo } from './githubService';
 import { getRequirementsStatus } from './requirementsMatchingService';
 import { calculateProgress } from './projectProgressService';
+import { spliceManagedBlock } from './sbp/managedBlock';
+import { isWritableConnection, writeAccessOf } from './sbp/repoConnect/connectionAccess';
+import { legacyWriteMode, LegacyWriteRefused } from './legacyWritePolicy';
 
 // ---------------------------------------------------------------------------
 // 1. Generate CLAUDE.md content from database state
@@ -216,15 +219,68 @@ export async function getClaudeMdFromRepo(enrollmentId: string): Promise<string 
 // 4. Push CLAUDE.md + PROJECT_STATE.json to participant's repo
 // ---------------------------------------------------------------------------
 
+/**
+ * Push the CLAUDE.md managed block and PROJECT_STATE.json into the student's repo.
+ *
+ * TWO GUARANTEES THIS DID NOT USED TO CARRY, both of which cost a student work:
+ *
+ *  1. **CLAUDE.md is spliced, never replaced.** This wrote `generateClaudeMd()`
+ *     over the whole file. The SBP writer had already installed a managed block
+ *     in that same file, and students keep their own conventions above it — so
+ *     one `autoSync` through here deleted the block AND everything they had
+ *     written. It now reads their file and splices, exactly as `sbp/repoWriter`
+ *     does, leaving every line outside the markers as found. A failed read
+ *     splices against null, which APPENDS rather than clobbering a file we could
+ *     not see.
+ *
+ *  2. **It asks whether we may write at all, before writing.** There was no
+ *     access check, so on a pull-only repo this queued a `PUT` GitHub was always
+ *     going to refuse, logged the 403 as a generic failure, and did it again on
+ *     the next sync forever. `isWritableConnection` is the same predicate the SBP
+ *     publisher asks; sharing it means this path inherits the hardening in that
+ *     module instead of drifting from it.
+ *
+ * `skipped` is additive — existing callers read `claudeMd`/`projectState` and are
+ * unaffected.
+ */
 export async function pushClaudeMdToRepo(enrollmentId: string): Promise<{
   claudeMd: boolean;
   projectState: boolean;
+  skipped?: 'no_write_access';
 }> {
-  const results = { claudeMd: false, projectState: false };
+  const results: { claudeMd: boolean; projectState: boolean; skipped?: 'no_write_access' } = {
+    claudeMd: false,
+    projectState: false,
+  };
+
+  // Access FIRST — before anything leaves the process.
+  const connection = await getConnection(enrollmentId);
+  if (!isWritableConnection(connection)) {
+    results.skipped = 'no_write_access';
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'claude-md-sync',
+      event: 'claude_md_push_skipped',
+      outcome: 'success',
+      context: {
+        enrollment_id: enrollmentId,
+        write_access: writeAccessOf(connection) ?? 'unrecorded',
+        note: 'platform has no push access on this repo — nothing was attempted',
+      },
+    }));
+    return results;
+  }
 
   try {
+    if (legacyWriteMode('CLAUDE.md') !== 'managed_block') {
+      throw new LegacyWriteRefused('AllowlistViolation', 'CLAUDE.md is not spliceable under the legacy write policy');
+    }
     const claudeMdContent = await generateClaudeMd(enrollmentId);
-    await writeFileToRepo(enrollmentId, 'CLAUDE.md', claudeMdContent, 'Update CLAUDE.md — sync project state');
+    // Their file. We own the delimited block inside it and nothing else.
+    const existing = await readFileFromRepo(enrollmentId, 'CLAUDE.md');
+    const merged = spliceManagedBlock(existing, claudeMdContent);
+    await writeFileToRepo(enrollmentId, 'CLAUDE.md', merged, 'Update CLAUDE.md — sync project state');
     results.claudeMd = true;
   } catch (err) {
     console.error('[ClaudeMd] Failed to push CLAUDE.md:', (err as Error).message);

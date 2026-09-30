@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-07-30T02:40:36.670Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "01-enroll-page-loaded.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\OneDrive\\Business\\Colaberry Novedea\\AI Projects\\Colaberry Enterprise AI Leadership Accelerator\\docs\\screenshots\\2026-07-30-enrollment-fix-verify\\01-enroll-page-loaded.png",
+      "note": "Initial /enroll load"
+    },
+    {
+      "file": "02-cohort-selected.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "C:\\Users\\ali_m\\OneDrive\\Business\\Colaberry Novedea\\AI Projects\\Colaberry Enterprise AI Leadership Accelerator\\docs\\screenshots\\2026-07-30-enrollment-fix-verify\\02-cohort-selected.png",
+      "note": "Cohort selected from the (now populated) dropdown"
+    }
+  ]
+}

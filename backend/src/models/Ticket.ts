@@ -1,12 +1,71 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import { ticketCreationLedgerHook } from '../services/workLedger/ticketCreationLedgerHook';
+import { setDefaultTicketDueDate } from './ticketDueDateDefaultHook';
 
 export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
 export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_action' | 'strategic'
   | 'strategic_initiative' | 'ai_optimization' | 'agent_restructure' | 'agent_creation' | 'workflow_redesign' | 'system_automation'
-  | 'company_directive' | 'workforce_decision' | 'bpos_execution';
-export type TicketActorType = 'human' | 'cory' | 'agent';
+  | 'company_directive' | 'workforce_decision' | 'bpos_execution'
+  // Reese Phase 1 — a real student DM conversation with the Reese AI staff mentor,
+  // ProofDesk-linked. See backend/src/services/reese/.
+  | 'student_support'
+  // Reese Phase 2 — an autonomous (Reese-initiated, not student-initiated)
+  // outreach thread for one student on one detected risk signal. See
+  // backend/src/services/reese/reeseAutonomousOutreachService.ts. Distinct
+  // from 'student_support' (which is reactive-only) so ticket-board filtering
+  // and dedup never conflate the two conversation kinds.
+  | 'reese_autonomous_outreach'
+  // Inbox Intel Case Resolution Engine — one ticket per case (see
+  // services/inboxCase/caseTicketService.ts::ensureCaseTicket). Was written
+  // via a `type: 'inbox_case' as any` cast (found 2026-08-23 while auditing a
+  // real production ticket for the Decisions-tab gap fix) — a real,
+  // high-volume production value that had silently bypassed this union AND
+  // evidenceExpectationService.ts's classifier entirely, ever since it
+  // shipped. Fixed by giving it a real union member so the compiler and this
+  // module's own anti-vacuity test both enforce it going forward.
+  | 'inbox_case'
+  // Reese Agentic AI Employee mission, Checkpoint B (2026-09-04) — the real
+  // ProofDesk incident a manager-confirmed metric reliability declaration
+  // links to. See managerReliabilityIntentService.ts's
+  // applyConfirmedReliabilityChange(). Distinct from every other type so
+  // reliability-incident history stays queryable on its own.
+  | 'data_reliability_incident'
+  // Dara v2 (Curriculum AI Employee) Phase 3 (2026-09-17) — a real student DM
+  // conversation with Dara, ProofDesk-linked. Mirrors 'student_support'
+  // exactly in shape but kept as its own type deliberately: 'student_support'
+  // is Reese's own reactive-mentoring conversation type, and reusing it for a
+  // different AI employee's DMs would conflate two distinct relationships in
+  // any filter/dedup/evidence query keyed on type. See
+  // backend/src/services/curriculum/daraTicketLinkService.ts.
+  | 'curriculum_support'
+  // Dara v2 Phase 4 (2026-09-17) — a mandatory, standalone handoff: Dara
+  // determined a student question is outside her real scope and is handing
+  // it off (today: always to her own reports_to human, Swati — no other AI
+  // employee has a matching capability yet, per Phase 1's discovery). "Never
+  // off-ledger": every real escalation gets its OWN ticket here, not just a
+  // comment on the ongoing 'curriculum_support' conversation ticket, so it is
+  // independently visible/trackable/assignable regardless of what happens to
+  // the conversation itself. See backend/src/services/curriculum/daraHandoffService.ts.
+  | 'agent_handoff'
+  // Growth Journey OS Phase 4 (T404) - the human task behind a
+  // growth_journey_handoffs row: created only by the flag-gated assignment
+  // step with a policy assignee, deduped by createTicket() on
+  // (entity_type='growth_journey_handoff', entity_id=<handoff id>, type).
+  | 'growth_journey_handoff';
+export type TicketActorType = 'human' | 'cory' | 'agent'
+  // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
+  // autonomous background agents ('agent') so ticket activity attributed to Reese
+  // reads as a first-class staff actor.
+  | 'ai_staff'
+  // Agent Ticket Standard — "every ticket must have a home" (2026-08-18). The real
+  // human (an org_members row) a ticket's resolved-from-agent assignee actually is.
+  // Distinct from the existing, already-ambiguous 'human' type (which
+  // resolveActorDisplayName.ts's own header comment documents as meaning EITHER an
+  // AdminUser id (staff creating a ticket via the admin UI) OR an Enrollment id (a
+  // student's own DM message) — never overload that further with a third meaning).
+  | 'org_member';
 
 interface TicketAttributes {
   id?: string;
@@ -34,6 +93,19 @@ interface TicketAttributes {
   completed_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
+  // --- ProofDesk Work Ledger fields (Milestone 1 - Foundation, additive/nullable) ---
+  phase?: string | null;
+  work_intent?: string | null;
+  domain?: string | null;
+  risk_tier?: string | null;
+  proof_readiness?: string | null;
+  environment?: string | null;
+  verification_status?: string | null;
+  outcome_status?: string | null;
+  owner_department?: string | null;
+  orchestrator_run_id?: string | null;
+  summary_current?: string | null;
+  last_meaningful_activity_at?: Date | null;
 }
 
 class Ticket extends Model<TicketAttributes> implements TicketAttributes {
@@ -62,6 +134,18 @@ class Ticket extends Model<TicketAttributes> implements TicketAttributes {
   declare completed_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
+  declare phase: string | null;
+  declare work_intent: string | null;
+  declare domain: string | null;
+  declare risk_tier: string | null;
+  declare proof_readiness: string | null;
+  declare environment: string | null;
+  declare verification_status: string | null;
+  declare outcome_status: string | null;
+  declare owner_department: string | null;
+  declare orchestrator_run_id: string | null;
+  declare summary_current: string | null;
+  declare last_meaningful_activity_at: Date | null;
 }
 
 Ticket.init(
@@ -173,11 +257,89 @@ Ticket.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // --- ProofDesk Work Ledger fields (Milestone 1 - Foundation, additive/nullable) ---
+    phase: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    work_intent: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    domain: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    risk_tier: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    proof_readiness: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    environment: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    verification_status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    outcome_status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    owner_department: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    orchestrator_run_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    summary_current: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    last_meaningful_activity_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
     tableName: 'tickets',
     timestamps: false,
+    // Ticket Board Honesty fix (2026-08-16, session CC-20260816-q4mz) — the structural
+    // fix for ~90% of tickets having no work_ledger_events coverage. At least 3 real
+    // creation paths (services/company/ticketOrchestrator.ts's createTrackedTicket()
+    // family, and its own fallback bypass in routes/projectRoutes.ts) call
+    // Ticket.create() directly, skipping ticketService.ts's createTicket() — the only
+    // place a ledger event was being emitted. A model-level afterCreate hook is the one
+    // choke point every creation path passes through regardless of which service wrote
+    // it, so no future service wrapper can silently reintroduce this bug. Mirrors
+    // TimelineCard.ts's capeSkillMappingHook precedent exactly (dynamic import inside
+    // the hook to avoid a circular dependency with the service it calls — this file
+    // would otherwise import workLedger/*, which imports ../../models, which imports
+    // this file; defense-in-depth try/catch inside the hook itself so a ledger failure
+    // can never abort the ticket create it's attached to). See
+    // services/workLedger/ticketCreationLedgerHook.ts for the full rationale, the
+    // idempotency-key contract with ticketService.createTicket()'s own emit call, and
+    // the disclosed raw-SQL-bypass residual gap.
+    //
+    // Ticket due-date validation gap fix (2026-09-28) — same reasoning, same
+    // mechanism, a different real gap: Ali, "Tickets should not be allowed to be
+    // created with no due date. That's how ghost tickets and looking up to 500
+    // open tickets happens." Confirmed only 2 of ~32 real ticket-creation call
+    // sites ever set due_date; a beforeValidate hook (models/ticketDueDateDefaultHook.ts)
+    // is the one choke point every one of them passes through, computing a real
+    // default from the ticket's own priority rather than leaving it null. Never
+    // overwrites an explicitly-set due_date.
+    hooks: {
+      beforeValidate: setDefaultTicketDueDate,
+      afterCreate: ticketCreationLedgerHook,
+    },
     indexes: [
       { fields: ['status'] },
       { fields: ['priority', 'status'] },
@@ -185,6 +347,12 @@ Ticket.init(
       { fields: ['parent_ticket_id'] },
       { fields: ['entity_type', 'entity_id'] },
       { fields: ['assigned_to_id'] },
+      // Workforce OS perf fix (2026-08-18) — documentation-only entry; the actual
+      // runtime index is created by ensureTicketCreatorIndexSchema.ts's raw SQL at
+      // boot (this repo never calls sequelize.sync() at boot). EXPLAIN ANALYZE
+      // confirmed every per-agent ticket-count query (liveAgentsService.ts,
+      // agentDetailService.ts) was doing a full Seq Scan on this column.
+      { fields: ['created_by_id'] },
     ],
   }
 );

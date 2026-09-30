@@ -109,7 +109,7 @@ ${SIG_TEXT}`;
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'dlahme@colaberry.com',
     cc: ['ram@colaberry.com'],
-    bcc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Re: Open for Advertising - RE Magazine - M4 V12 (QR now tracks scans; sends Sarah V12)',
     html: HTML,

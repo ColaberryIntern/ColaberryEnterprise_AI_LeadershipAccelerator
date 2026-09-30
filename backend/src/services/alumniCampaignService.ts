@@ -264,7 +264,7 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
       created_by: createdBy,
     });
   } else {
-    await (championCampaign as any).update({ sequence_id: championSeq.id, status: 'active' });
+    await (championCampaign as any).update({ sequence_id: championSeq.id });
   }
 
   // 4. Create Re-Engagement campaign (idempotent — skip if exists)
@@ -293,7 +293,7 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
       created_by: createdBy,
     });
   } else {
-    await (reengageCampaign as any).update({ sequence_id: reengageSeq.id, status: 'active' });
+    await (reengageCampaign as any).update({ sequence_id: reengageSeq.id });
   }
 
   // 5. Cross-link: champion → re-engagement
@@ -362,9 +362,16 @@ export async function seedAlumniCampaigns(createdBy: string): Promise<SeedResult
     );
   }
 
-  // 9. Activate campaigns — then initialize ramp which enrolls only phase 1 batch
-  await (championCampaign as any).update({ status: 'active', started_at: new Date() });
-  await (reengageCampaign as any).update({ status: 'active', started_at: new Date() });
+  // 9. Activate campaigns — then initialize ramp which enrolls only phase 1 batch.
+  // Respect an operator's explicit pause: never auto-reactivate a paused campaign
+  // on restart. Newly-created campaigns are not 'paused', so first-time seeding still
+  // activates them. See CC-20260710-a9f2 (campaign reactivation-on-boot fix).
+  if ((championCampaign as any).status !== 'paused') {
+    await (championCampaign as any).update({ status: 'active', started_at: new Date() });
+  }
+  if ((reengageCampaign as any).status !== 'paused') {
+    await (reengageCampaign as any).update({ status: 'active', started_at: new Date() });
+  }
 
   // 10. Initialize ramp for champion campaign only.
   // This will activate phase 1 leads (e.g. 15 for alumni) from the 'enrolled' pool

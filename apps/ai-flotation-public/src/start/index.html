@@ -1,0 +1,1200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Start a project — AI Flotation</title>
+    <meta name="description" content="Tell us about the workflow that is costing you time. The first conversation is about the work, not about AI." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
+      <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="19" height="19" viewBox="0 0 120 120" aria-hidden="true">
+            <path class="mark-hull" d="M16 54 H104 L93 86 A60 60 0 0 1 27 86 Z"></path>
+            <circle class="mark-float" cx="60" cy="30" r="15"></circle>
+          </svg>
+          AI Flotation
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/what-we-build/">What We Build</a>
+          <a href="/approach/">How It Works</a>
+          <a href="/trust-before-intelligence/">Trust</a>
+          <a href="/delivery-standard/">Delivery Standard</a>
+          <a href="/pricing/">Membership</a>
+          <a href="/results/">Results</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client Login</a>
+          <a class="btn btn-primary" href="/start/" aria-current="page">Start a Project</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Start a project</p>
+          <h1 style="margin-top:.7rem">Start with the idea. We will ask who you are afterwards.</h1>
+          <p class="sub" style="margin-top:1rem">
+            Describe the work in your own words. Project AI reads it and asks you about the work
+            itself, here, in the next few seconds &mdash; not with a deck, and not next week.
+          </p>
+        </div>
+      </section>
+
+      <section class="band" style="border-top:1px solid var(--line)">
+        <div class="wrap">
+          <!--
+            PROGRESSIVE, NOT SHORTER.
+
+            This was five required fields and a consent box, asked before the visitor had
+            been shown anything. Seven people reached it in the site's first four days and
+            none of them completed it.
+
+            The work is the same work; the ORDER changed. Someone describes the thing they
+            care about first, and only then is asked who they are - which is the point at
+            which giving an email buys them something rather than costing them something.
+
+            Two properties this must keep, both of which are easy to lose in a two-step form:
+
+            1. WITHOUT JAVASCRIPT IT IS STILL ONE WORKING FORM. `.step-2` is hidden by the
+               script on load, not by a stylesheet. If the script never runs, every field is
+               visible and submitting still works - it degrades to exactly the form it
+               replaced, rather than to a dead first step.
+
+            2. NOTHING TYPED IS LOST. The idea arrives from the homepage in the query string
+               and is placed here; moving between steps never clears a field, because the
+               fields never leave the DOM.
+          -->
+          <form class="intake" id="intake" data-form="workflow_intake" novalidate>
+            <div class="step step-1">
+              <h2 style="font-size:1.2rem"><label for="message">What do you want to build?</label></h2>
+              <p class="step-hint">An idea, a workflow that costs you every morning, or a system you already have.</p>
+              <textarea id="message" name="message" rows="6" required
+                        placeholder="Our dispatchers rebuild the same spreadsheet every morning and nobody can say why a job was refused."></textarea>
+              <button class="step-next" type="button" id="to-step-2" data-cta="Continue">Continue</button>
+            </div>
+
+            <div class="step step-2">
+              <!--
+                NOT "where should we send our reply".
+
+                That heading described a flow that no longer exists, and it contradicted the
+                note further down this page saying nothing lands in your inbox. Since
+                submitting now opens a conversation here, there is no reply to send - the
+                answer arrives on this page within seconds.
+
+                The email is still worth asking for, but for the true reason: it is who we
+                are talking to, and it is how a person could pick this up later.
+              -->
+              <h2 style="font-size:1.2rem">Who are we talking to?</h2>
+              <p class="step-hint">
+                Project AI picks up straight after this, right here. Your details are so we
+                know who we are building for, and so a person can follow up later.
+              </p>
+
+              <label for="email">Work email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required />
+
+              <label for="name">Your name</label>
+              <input id="name" name="name" type="text" autocomplete="name" />
+
+              <label for="company">Company</label>
+              <input id="company" name="company" type="text" autocomplete="organization" />
+
+              <label for="role">Your role</label>
+              <input id="role" name="role" type="text" autocomplete="organization-title" />
+
+              <div class="consent">
+                <input id="consent" name="consent_contact" type="checkbox" />
+                <label for="consent">I agree to be contacted by AI Flotation about this enquiry.</label>
+              </div>
+
+              <button type="submit" data-cta="Send this to AI Flotation">Send this to AI Flotation</button>
+              <div id="status" role="status" aria-live="polite"></div>
+            </div>
+          </form>
+
+          <!--
+            The second door. Section 14 of the build plan asks for several ways to start;
+            this is the one that actually works today, so it is the only one shown.
+
+            It posts to the SAME ingest endpoint as the form above, with a different entry
+            slug. That matters: the public site cannot reach /api/v1/request-callback,
+            which is guarded by a service token, and putting that token in a page would let
+            anyone make our number dial strangers. A routing rule turns this lead into a
+            call instead - no new public surface, and the consent, dedup and safety checks
+            all still apply server-side.
+          -->
+          <div class="callme" id="callme-block">
+            <h2 style="font-size:1.2rem">Or have our AI call you now</h2>
+            <p class="step-hint">
+              An AI assistant rings you straight away and asks about the work. It says it is an
+              AI when you pick up. Usually about five minutes.
+            </p>
+
+            <form class="intake" id="callme" data-form="call_me_now" novalidate>
+              <label for="cm-phone">Phone number</label>
+              <input id="cm-phone" name="phone" type="tel" autocomplete="tel" required
+                     placeholder="+1 555 0100" />
+
+              <label for="cm-name">Your name</label>
+              <input id="cm-name" name="name" type="text" autocomplete="name" required />
+
+              <label for="cm-email">Work email</label>
+              <input id="cm-email" name="email" type="email" autocomplete="email" required />
+
+              <div class="consent">
+                <input id="cm-consent" name="consent_contact" type="checkbox" />
+                <label for="cm-consent">
+                  I agree to be called now by an AI assistant on this number, and understand the
+                  call may be recorded and transcribed so AI Flotation can act on what I say.
+                </label>
+              </div>
+
+              <button type="submit" data-cta="Call me now">Call me now</button>
+              <div id="cm-status" role="status" aria-live="polite"></div>
+            </form>
+          </div>
+
+          <!--
+            THE WRITE-UP, ON THE PAGE THEY ARE ALREADY ON.
+
+            No email and no login. The person who asked to be called is still here while
+            their phone rings, so what the conversation produced appears in front of them
+            rather than in an inbox nobody promised to fill.
+
+            Hidden until there is something to say. An empty panel that appears the moment
+            the form is submitted would be a promise made before anything has happened.
+          -->
+          <!--
+            THE INTERVIEW, RIGHT HERE.
+
+            Section 14's first door is "Chat with Project AI". Submitting the form does not end
+            the conversation, it starts one: what they typed becomes the first thing said, and
+            Project AI answers it.
+
+            Hidden until there is a conversation, because an empty chat box beside a form is a
+            second thing to fill in, and the point of section 15 is not asking for two.
+          -->
+          <section id="interview" class="interview" hidden>
+            <p class="eyebrow">Project AI</p>
+            <div id="interview-log" class="interview-log" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+            <form id="interview-form" class="interview-form">
+              <label class="sr-only" for="interview-input">Your reply</label>
+              <textarea id="interview-input" rows="2" placeholder="Type your reply..." required></textarea>
+              <button type="submit" id="interview-send" data-cta="Send">Send</button>
+            </form>
+
+            <p class="note interview-note">
+              This is a conversation, not a form. Say as much or as little as you like &mdash; when
+              there is enough to work with, your write-up appears below.
+            </p>
+          </section>
+
+          <section id="preview" class="preview" hidden aria-live="polite">
+            <p class="preview-status" id="preview-status"></p>
+
+            <div id="preview-body" hidden>
+              <!--
+                THE SCOPE LEADS. What we heard sits underneath, collapsed.
+
+                The first version of this panel led with four counts and a list of things
+                the person had just said. Tested on a real submission it returned
+                "PRIMARY USERS 0 - AI OPPORTUNITIES 0 - HUMAN DECISION POINTS 0", which
+                reads as broken software at the exact moment somebody is deciding whether we
+                can build software. And even without the zeros it told them only what they
+                already knew.
+
+                What earns a monthly commitment is the part they could not write themselves:
+                what we would build, in what order, what runs without them, and where they
+                still decide.
+              -->
+              <!--
+                A RAIL, NOT AN ENDLESS SCROLL.
+
+                This is nine or ten sections of someone's project. Read as one column it is a
+                wall, and the part worth paying for - the design, the release plan - sits
+                below the fold with nothing announcing it. The rail is built from the sections
+                that actually have content, so it never advertises an empty one.
+              -->
+              <div class="scope-shell">
+                <aside class="scope-rail">
+                  <p class="scope-rail-title">Project scope</p>
+                  <nav id="scope-nav"></nav>
+                </aside>
+
+                <div class="scope-main">
+              <p class="eyebrow">Your project, scoped</p>
+              <h2 class="preview-title" id="preview-title"></h2>
+
+              <section id="sc-summary">
+                <p class="scope-summary" id="scope-summary"></p>
+                <dl class="preview-counts" id="preview-counts"></dl>
+              </section>
+
+              <!--
+                THEIR APP, ON THEIR PHONE.
+
+                This sits high on purpose. The scope argues; this demonstrates. A prospect
+                holding up a phone during the conversation and seeing their own product is
+                the moment the rest of the page is trying to earn.
+
+                Hidden until there is something to scan - an empty gallery would promise a
+                demonstration we did not manage to produce.
+              -->
+              <!--
+                Their workflow, with the part that stops being theirs marked.
+
+                Server-generated SVG rather than a diagram library: this site ships no
+                JavaScript at all, and vendoring two megabytes to draw a short sequence
+                would be the most expensive box ever rendered.
+              -->
+              <section id="workflow" class="workflow" hidden>
+                <h3 class="preview-h3">Your workflow today</h3>
+                <p class="scope-lead">The steps you described, and the ones that would stop landing on a person.</p>
+                <div class="workflow-svg" id="workflow-svg"></div>
+              </section>
+
+              <section id="prototypes" class="prototypes" hidden>
+                <h3 class="preview-h3">Your site, designed</h3>
+                <p class="scope-lead">
+                  One page, built from what you just told us &mdash; on a desktop and on a phone.
+                  A concept, not a working product. Scan the code to open it on yours.
+                </p>
+                <div class="proto-grid" id="proto-grid"></div>
+              </section>
+
+              <div id="scope-sections"></div>
+
+              <section id="sc-open" hidden>
+                <h3 class="preview-h3">Open questions</h3>
+                <p class="scope-lead">Asked rather than assumed. Each one changes what gets built.</p>
+                <ul class="preview-open" id="preview-open"></ul>
+              </section>
+
+              <!--
+                Their own words, promoted out of a collapsed <details>.
+
+                It was hidden behind a summary element, which is the wrong instinct: it is the
+                evidence that we listened, and it is what a person checks BEFORE they check the
+                plan. Nothing that earns trust should need a click to find.
+              -->
+              <section id="sc-heard" hidden>
+                <h3 class="preview-h3">What we heard</h3>
+                <p class="scope-lead">Your words, kept verbatim, so you can check we listened before you check the plan.</p>
+                <ul class="scope-quotes" id="preview-items"></ul>
+              </section>
+
+              <!--
+                §16 forbids merging assumptions into facts. A scope with no split shown is
+                quietly doing exactly that, however carefully the extractor kept them apart.
+              -->
+              <section id="sc-trust" hidden>
+                <h3 class="preview-h3">What we know, and what we guessed</h3>
+                <p class="scope-lead">
+                  Where the conversation did not go, this says so rather than filling the gap.
+                </p>
+                <dl class="trust-grid" id="trust-grid"></dl>
+                <div id="trust-missing-wrap" hidden>
+                  <p class="scope-lead trust-missing-lead">Never discussed, so nothing was invented for them:</p>
+                  <p id="trust-missing"></p>
+                </div>
+              </section>
+
+              <p class="note preview-note">
+                A scope, not a quote. Anything marked <span class="tag tag-inferred">we inferred this</span>
+                is our reading rather than something you said &mdash; tell us and we will correct it.
+              </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <p class="note" style="max-width:40rem;margin-top:1.5rem">
+            <b>What happens next.</b> What you describe gets written up and appears on this
+            page &mdash; from the conversation above, or straight after the call. You do not
+            need to go anywhere or wait for an email. Nothing automated lands in your inbox,
+            because no automated email is sent; if someone from AI Flotation follows up, that
+            will be a person writing to you.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Company</p>
+            <a href="/about/">About</a>
+            <a href="/delivery-standard/">Delivery standard</a>
+            <a href="/results/">Results</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Work</p>
+            <a href="/what-we-build/">What we build</a>
+            <a href="/approach/">How it works</a>
+            <a href="/trust-before-intelligence/">Trust Before Intelligence</a>
+            <a href="/pricing/">Build membership</a>
+            <a href="/start/">Start a project</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Clients</p>
+            <a href="{{brand.platformApiBase}}/client/projects">Client login</a>
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+          </div>
+        </div>
+        <p class="fine">AI Flotation &middot; {{brand.publicUrl}}</p>
+      </div>
+    </footer>
+
+    <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+    <script>
+      /*
+       * The intake contract is UNCHANGED from the skeleton app: same entry
+       * (`workflow_intake`), same field names, same endpoint, same tracking events. Only the
+       * framing around it moved. Changing any of those would silently break attribution,
+       * because the server matches on the entry and source slugs.
+       */
+      (function () {
+        var API = '{{brand.platformApiBase}}';
+        var form = document.getElementById('intake');
+
+        /*
+         * The two-step behaviour lives here, in script, ON PURPOSE.
+         *
+         * Hiding step 2 in the stylesheet would mean a visitor whose JavaScript never runs
+         * sees a first step with a Continue button that does nothing - a dead end produced
+         * by the very code meant to improve the form. Hidden from here instead, so no
+         * script means no steps: one plain form with every field visible, exactly the form
+         * this replaced.
+         */
+        var stepTwo = document.querySelector('.step-2');
+        var toStepTwo = document.getElementById('to-step-2');
+        var idea = document.getElementById('message');
+
+        // Carried from the homepage so the first thing somebody typed survives the click.
+        try {
+          var handed = new URLSearchParams(window.location.search).get('idea');
+          if (handed && idea && !idea.value) idea.value = handed;
+        } catch (e) { /* no URLSearchParams: the field is simply empty, which is fine */ }
+
+        if (stepTwo && toStepTwo && idea) {
+          var reveal = function () {
+            stepTwo.hidden = false;
+            toStepTwo.hidden = true;
+            var email = document.getElementById('email');
+            if (email) email.focus();
+          };
+
+          // Someone arriving with an idea already written has answered step 1 before the
+          // page loaded. Making them press Continue to confirm their own sentence back to
+          // themselves is a step that earns nothing.
+          if (idea.value.trim()) reveal();
+          else stepTwo.hidden = true;
+
+          toStepTwo.addEventListener('click', function () {
+            if (!idea.value.trim()) {
+              idea.setAttribute('aria-invalid', 'true');
+              idea.focus();
+              return;
+            }
+            idea.removeAttribute('aria-invalid');
+            reveal();
+          });
+        }
+        var status = document.getElementById('status');
+        var button = form.querySelector('button');
+        var sending = false;
+
+        if (window.rfxTrack) window.rfxTrack('form_start', { form: 'workflow_intake' });
+
+        function fail(message) {
+          status.textContent = message;
+          status.setAttribute('data-state', 'error');
+        }
+
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          // Double-submit guard. `disabled` alone loses the race if a submit is already in
+          // flight when a second one fires, so the flag is authoritative.
+          if (sending) return;
+
+          // Validated here rather than relying on the browser, so the message lands in the
+          // same live region as every other outcome and a screen reader hears one voice.
+          if (!form.checkValidity()) {
+            var firstInvalid = form.querySelector(':invalid');
+            fail('Please complete every field with a valid work email.');
+            if (firstInvalid && firstInvalid.focus) firstInvalid.focus();
+            return;
+          }
+
+          sending = true;
+          button.disabled = true;
+          status.textContent = 'Sending…';
+          status.removeAttribute('data-state');
+
+          var payload = {};
+          new FormData(form).forEach(function (value, key) { payload[key] = value; });
+          payload.consent_contact = form.querySelector('#consent').checked;
+          // Attribution the server cannot infer from the request alone.
+          payload.page_url = window.location.href;
+          try {
+            payload.visitor_fingerprint = localStorage.getItem('rfx_fp') || undefined;
+          } catch (e) { /* blocked storage: ingest still works, just unlinked */ }
+
+          fetch(API + '/api/leads/ingest?source={{brand.sourceSlug}}&entry=workflow_intake', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+            .then(function (res) {
+              return res.json()
+                .catch(function () { return {}; })
+                .then(function (b) { return { ok: res.ok, body: b }; });
+            })
+            .then(function (result) {
+              if (!result.ok) {
+                throw new Error(result.body && result.body.error ? result.body.error : 'We could not send that just now.');
+              }
+              if (window.rfxTrack) window.rfxTrack('form_submit', { form: 'workflow_intake' });
+
+              // The form is the START of the conversation, not the end of it. What they
+              // typed becomes the first thing said, and Project AI replies to it here.
+              var idea = payload.message || '';
+              // The wire format is snake_case. The service's TypeScript type says
+              // `rawPayloadId`, the controller serialises `raw_payload_id`, and reading the
+              // type instead of the actual response is what broke this the first time -
+              // silently, because an undefined id just took the other branch. Both are
+              // accepted so a future rename cannot break it again from either side.
+              var payloadId = (result.body && (result.body.raw_payload_id || result.body.rawPayloadId)) || null;
+              if (payloadId && idea.trim()) {
+                status.textContent = 'Got it. Project AI is reading that now \u2014 see below.';
+                status.setAttribute('data-state', 'ok');
+                startInterview(payloadId, idea.trim());
+              } else {
+                // No id, or nothing typed: fall back to the old honest ending rather than
+                // opening a conversation that cannot be continued.
+                status.textContent = 'Thank you \u2014 we have your details and the team will be in touch.';
+                status.setAttribute('data-state', 'ok');
+              }
+              form.reset();
+            })
+            .catch(function (err) {
+              // Recoverable by design: the button comes back and the answers are still in
+              // the fields, because retyping five fields after a network blip is the point
+              // at which somebody gives up.
+              fail((err && err.message ? err.message : 'Something went wrong.') + ' Your answers are still here — please try again.');
+            })
+            .finally(function () {
+              sending = false;
+              button.disabled = false;
+            });
+        });
+
+        /*
+         * THE WRITE-UP, POLLED.
+         *
+         * A call takes minutes and the write-up runs after it ends, so this waits - but it
+         * waits a BOUNDED number of times. A page that polls forever is still costing the
+         * server something an hour after the person closed the tab, and it never gets to say
+         * "this did not work", which is the one thing a stuck viewer needs to hear.
+         *
+         * The interval widens as it goes: fast while the call might already be over, slow
+         * once it clearly is not. Twenty attempts on this curve covers about fifteen minutes,
+         * comfortably past a long conversation.
+         */
+        var PREVIEW_MAX_ATTEMPTS = 20;
+        var previewTimer = null;
+
+        function previewDelay(attempt) {
+          if (attempt < 5) return 5000;
+          if (attempt < 12) return 20000;
+          return 60000;
+        }
+
+        function startPreview(token) {
+          if (!token || previewTimer) return;
+          try { localStorage.setItem('flotation_preview_token', token); } catch (e) { /* private mode */ }
+          pollPreview(token, 0);
+        }
+
+        /*
+         * The other form, asking for the write-up to start.
+         *
+         * "Call me now" lives in its own IIFE - deliberately, since the two forms share
+         * nothing but the API base. That meant it could not see `startPreview`, and calling
+         * it threw on EVERY call request; the throw was caught by the handler meant for a
+         * failed submission, so a visitor whose call was already being placed was told to
+         * try again. This is the one thing the two scopes now share, and it is one-way.
+         */
+        document.addEventListener('flotation:preview-token', function (e) {
+          var token = e && e.detail && e.detail.token;
+          if (token) startPreview(token);
+        });
+
+        function pollPreview(token, attempt) {
+          if (attempt >= PREVIEW_MAX_ATTEMPTS) {
+            showPreviewStatus('We are still working on your write-up. Reload this page to check again.');
+            return;
+          }
+
+          fetch(API + '/api/flotation/preview/' + encodeURIComponent(token))
+            .then(function (res) { return res.json().catch(function () { return {}; }); })
+            .then(function (data) {
+              if (data.status === 'ready') return renderPreview(data);
+              if (data.status === 'failed') return showPreviewStatus(data.message || 'We could not write that up.');
+              // pending, not_found, or anything unexpected: keep waiting quietly. A
+              // not_found here usually means the lead row is still being written, and
+              // shouting about it would alarm someone whose call is going fine.
+              showPreviewStatus(data.message || 'We are writing up your conversation. This page updates on its own.');
+              previewTimer = window.setTimeout(function () {
+                previewTimer = null;
+                pollPreview(token, attempt + 1);
+              }, previewDelay(attempt));
+            })
+            .catch(function () {
+              previewTimer = window.setTimeout(function () {
+                previewTimer = null;
+                pollPreview(token, attempt + 1);
+              }, previewDelay(attempt));
+            });
+        }
+
+        function showPreviewStatus(text) {
+          var section = document.getElementById('preview');
+          var el = document.getElementById('preview-status');
+          if (!section || !el) return;
+          section.hidden = false;
+          el.textContent = text;
+        }
+
+        function fillList(id, wrapId, values) {
+          var ul = document.getElementById(id);
+          if (!ul) return;
+          ul.textContent = '';
+          values.forEach(function (v) {
+            var li = document.createElement('li');
+            li.textContent = v;
+            ul.appendChild(li);
+          });
+          if (wrapId) {
+            var wrap = document.getElementById(wrapId);
+            if (wrap) wrap.hidden = values.length === 0;
+          }
+        }
+
+        /*
+         * The two design frames are browser windows, not thumbnails.
+         *
+         * Each iframe is sized to a REAL viewport and the whole frame is scaled to fit the
+         * column it landed in. Letting the iframe simply be the column's width instead would
+         * reflow the design into a width no visitor will ever use, and then label the narrow
+         * one "phone" - which is not a phone view, it is a squeezed desktop.
+         *
+         * The iframe is viewport-tall rather than document-tall for a second reason: the
+         * design scrolls INSIDE it, so the design's own navigation has somewhere to go.
+         */
+        var DESIGN_VIEWS = [
+          { kind: 'desktop', w: 1280, h: 900, label: 'Desktop — 1280 × 900' },
+          { kind: 'phone', w: 390, h: 844, label: 'Phone — 390 × 844' },
+        ];
+
+        function fitDesignFrame(frame) {
+          var box = frame.querySelector('.design-box');
+          var iframe = box && box.querySelector('.design-iframe');
+
+          // Width zero means the panel around it is still hidden. Scaling by zero would
+          // collapse the frame permanently, so wait to be called again with a real width.
+          if (!iframe || !box.clientWidth) return;
+
+          var w = parseFloat(frame.getAttribute('data-w'));
+          var h = parseFloat(frame.getAttribute('data-h'));
+          var scale = Math.min(1, box.clientWidth / w);
+
+          iframe.style.width = w + 'px';
+          iframe.style.height = h + 'px';
+          iframe.style.transform = 'scale(' + scale + ')';
+          box.style.height = h * scale + 'px';
+
+          // The placeholder height only exists to stop the box flashing flat before the
+          // first fit. Once it has a real height, holding a floor under it leaves a strip
+          // of empty white below a small render.
+          box.style.minHeight = '0';
+        }
+
+        /*
+         * Observed rather than called at one chosen moment.
+         *
+         * The frames are built while the preview panel is still hidden, so a single call at
+         * build time measures a width of zero. An observer fires when the box actually gets
+         * a size - when the panel is revealed, when the window changes, whenever - which is
+         * the difference between a design frame and a 1px line.
+         */
+        function watchDesignFrame(frame) {
+          if (window.ResizeObserver) {
+            new ResizeObserver(function () { fitDesignFrame(frame); }).observe(frame.querySelector('.design-box'));
+          }
+          window.addEventListener('resize', function () { fitDesignFrame(frame); });
+          fitDesignFrame(frame);
+        }
+
+        /*
+         * How much of this is theirs, and how much is ours.
+         *
+         * The scope reads as authoritative and should not, on its own. §16 forbids merging
+         * assumptions into facts; a page that never shows the split is quietly doing exactly
+         * that, however carefully the extractor kept them apart. Hidden entirely when the
+         * numbers are missing rather than rendered as zeros - a wall of noughts reads as
+         * broken software at the moment somebody is deciding whether we can build software.
+         */
+        function renderTrust(confidence, readiness) {
+          var wrap = document.getElementById('sc-trust');
+          var grid = document.getElementById('trust-grid');
+          if (!confidence) {
+            wrap.hidden = true;
+            return;
+          }
+
+          var cells = [
+            ['Things you told us', confidence.facts, 'facts, from your own words'],
+            ['Things we inferred', confidence.inferred, 'marked as assumptions'],
+            ['Topics covered', confidence.dimensions_covered + ' / 20', ''],
+          ];
+          if (readiness) {
+            cells.push([
+              'Ready to show',
+              readiness.presentable ? 'Yes' : 'Not yet',
+              readiness.sections_with_content + ' of 18 sections have content',
+            ]);
+          }
+
+          grid.textContent = '';
+          cells.forEach(function (cell) {
+            var box = document.createElement('div');
+            box.className = 'trust';
+
+            var dt = document.createElement('dt');
+            dt.textContent = cell[0];
+
+            var dd = document.createElement('dd');
+            dd.appendChild(document.createTextNode(String(cell[1])));
+            if (cell[2]) {
+              var small = document.createElement('small');
+              small.textContent = cell[2];
+              dd.appendChild(small);
+            }
+
+            box.appendChild(dt);
+            box.appendChild(dd);
+            grid.appendChild(box);
+          });
+
+          var missing = (confidence.dimensions_missing || []).slice();
+          var missingWrap = document.getElementById('trust-missing-wrap');
+          var missingEl = document.getElementById('trust-missing');
+          missingEl.textContent = '';
+          missing.forEach(function (name) {
+            var chip = document.createElement('span');
+            chip.className = 'chip chip-open';
+            chip.textContent = String(name).replace(/_/g, ' ');
+            missingEl.appendChild(chip);
+            missingEl.appendChild(document.createTextNode(' '));
+          });
+          missingWrap.hidden = missing.length === 0;
+
+          wrap.hidden = false;
+        }
+
+        /*
+         * The rail, built from the sections that actually rendered.
+         *
+         * Never from a fixed list: a scope assembled from a short conversation drops its
+         * empty sections, and a rail advertising a section that is not there is a link that
+         * does nothing - the exact defect the generated designs get refused for.
+         */
+        function buildScopeRail() {
+          var nav = document.getElementById('scope-nav');
+          if (!nav) return;
+          nav.textContent = '';
+
+          var sections = [].slice.call(document.querySelectorAll('.scope-main section[id]'));
+          var links = [];
+
+          sections.forEach(function (section) {
+            if (section.hidden) return;
+            var heading = section.querySelector('h3, .scope-rail-label');
+            var label = section.id === 'sc-summary' ? 'In one paragraph' : heading && heading.textContent;
+            if (!label) return;
+
+            var a = document.createElement('a');
+            a.href = '#' + section.id;
+            a.textContent = label;
+            nav.appendChild(a);
+            links.push({ a: a, id: section.id });
+          });
+
+          if (!window.IntersectionObserver || !links.length) return;
+
+          var seen = {};
+          var spy = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (e) { seen[e.target.id] = e.isIntersecting; });
+              var current = links.filter(function (l) { return seen[l.id]; })[0];
+              links.forEach(function (l) { l.a.classList.toggle('on', current && l === current); });
+            },
+            { rootMargin: '-10% 0px -70% 0px' },
+          );
+          sections.forEach(function (s) { if (!s.hidden) spy.observe(s); });
+        }
+
+        function renderPreview(data) {
+          var section = document.getElementById('preview');
+          var body = document.getElementById('preview-body');
+          var statusEl = document.getElementById('preview-status');
+          if (!section || !body) return;
+
+          section.hidden = false;
+          if (statusEl) statusEl.textContent = '';
+
+          var scope = data.scope || null;
+          var summary = data.summary || {};
+
+          document.getElementById('preview-title').textContent =
+            (scope && scope.title) || summary.title || 'Your project';
+
+          var summaryEl = document.getElementById('scope-summary');
+          summaryEl.textContent = (scope && scope.summary) || '';
+          summaryEl.hidden = !summaryEl.textContent;
+
+          /*
+           * Figures come from the scope, which has already dropped every zero. A count of
+           * nothing is not an honest gap on this screen, it is a broken-looking number in
+           * front of somebody deciding whether we can build software.
+           */
+          var dl = document.getElementById('preview-counts');
+          dl.textContent = '';
+          var figures = (scope && scope.figures) || [];
+          figures.forEach(function (f) {
+            // Label and number travel together in one cell. As bare dt/dd grid items they
+            // landed in separate columns and the strip read as a sparse list, not a count.
+            var cell = document.createElement('div');
+            cell.className = 'figure';
+
+            var dt = document.createElement('dt');
+            dt.textContent = f.label;
+            var dd = document.createElement('dd');
+            dd.textContent = String(f.value);
+
+            cell.appendChild(dt);
+            cell.appendChild(dd);
+            dl.appendChild(cell);
+          });
+          dl.hidden = figures.length === 0;
+
+          /*
+           * The prototypes. Rendered before the scope sections because this is the part a
+           * person reaches for first: the QR turns a document into a demonstration.
+           *
+           * The QR arrives as an SVG string from the server rather than being drawn here,
+           * which keeps the page dependency-free - the whole site ships no libraries.
+           */
+          // The diagram. `workflow_svg` is our own generated markup, never model text, so
+          // inlining it is safe - and it inherits the page's theme through the CSS custom
+          // properties it references.
+          var wfWrap = document.getElementById('workflow');
+          var wfSvg = document.getElementById('workflow-svg');
+          var svg = (scope && scope.workflow_svg) || '';
+          wfSvg.innerHTML = svg;
+          wfWrap.hidden = !svg;
+
+          var protoWrap = document.getElementById('prototypes');
+          var grid = document.getElementById('proto-grid');
+          var protos = data.prototypes || [];
+          grid.textContent = '';
+
+          /*
+           * Two views of ONE design, plus one code.
+           *
+           * The same document at two widths is what responsive means; generating a separate
+           * phone file would let the two drift, and a phone view that disagrees with the
+           * desktop view is worse than not showing one.
+           *
+           * srcdoc rather than pointing the frame at the served URL: we already hold the
+           * markup, and framing our own sandboxed cross-origin page is a fight with no
+           * benefit. `sandbox` on the iframe keeps it inert either way.
+           *
+           * The server hands us a copy carrying `<base href="about:srcdoc">` (see
+           * `forSrcdoc`). Without it, every `href="#section"` in the design resolves against
+           * OUR url and clicking the design's own nav loads this whole page inside the design
+           * frame.
+           */
+          var design = protos[0];
+          if (design) {
+            var views = document.createElement('div');
+            views.className = 'design-views';
+
+            DESIGN_VIEWS.forEach(function (view) {
+              var frame = document.createElement('div');
+              frame.className = 'design-frame design-' + view.kind;
+              frame.setAttribute('data-w', String(view.w));
+              frame.setAttribute('data-h', String(view.h));
+
+              var label = document.createElement('p');
+              label.className = 'design-label';
+              label.textContent = view.label;
+
+              // The box clips; the iframe inside it is the one that scrolls. If the box
+              // scrolled it would swallow the gesture the design needs.
+              var box = document.createElement('div');
+              box.className = 'design-box';
+
+              var iframe = document.createElement('iframe');
+              iframe.className = 'design-iframe';
+              iframe.setAttribute('sandbox', '');
+              iframe.setAttribute('title', design.title + ' - ' + view.kind + ' view');
+              iframe.srcdoc = design.html;
+
+              box.appendChild(iframe);
+              frame.appendChild(label);
+              frame.appendChild(box);
+              views.appendChild(frame);
+            });
+
+            grid.appendChild(views);
+            DESIGN_VIEWS.forEach(function (view) {
+              watchDesignFrame(views.querySelector('.design-' + view.kind));
+            });
+
+            var aside = document.createElement('div');
+            aside.className = 'design-aside';
+
+            var qr = document.createElement('div');
+            qr.className = 'proto-qr';
+            qr.innerHTML = design.qr_svg;
+
+            var why = document.createElement('p');
+            why.className = 'proto-why';
+            why.textContent = design.rationale;
+
+            var open = document.createElement('a');
+            open.className = 'proto-open';
+            open.href = design.url;
+            open.target = '_blank';
+            open.rel = 'noopener';
+            open.textContent = 'Open it full size';
+
+            aside.appendChild(qr);
+            aside.appendChild(why);
+            aside.appendChild(open);
+            grid.appendChild(aside);
+          }
+
+          protoWrap.hidden = protos.length === 0;
+
+          // The scope itself: what we would build, in what order, what runs itself. Each one
+          // is a real <section> with an id, because the rail has to be able to reach it.
+          var wrap = document.getElementById('scope-sections');
+          wrap.textContent = '';
+          ((scope && scope.sections) || []).forEach(function (sec) {
+            var section = document.createElement('section');
+            section.id = 'sc-' + String(sec.key).replace(/_/g, '-');
+
+            var h = document.createElement('h3');
+            h.className = 'preview-h3';
+            h.textContent = sec.title;
+
+            var lead = document.createElement('p');
+            lead.className = 'scope-lead';
+            lead.textContent = sec.lead;
+
+            var ul = document.createElement('ul');
+            ul.className = 'preview-items';
+            sec.items.forEach(function (item) {
+              var li = document.createElement('li');
+              li.textContent = item;
+              ul.appendChild(li);
+            });
+
+            section.appendChild(h);
+            section.appendChild(lead);
+            section.appendChild(ul);
+            wrap.appendChild(section);
+          });
+
+          fillList('preview-open', 'sc-open', (scope && scope.open_questions) || data.still_open || []);
+
+          // Their own words, verbatim. Evidence that we listened, and the thing a person
+          // checks before they check the plan - so it is a section, not a disclosure widget.
+          var items = document.getElementById('preview-items');
+          items.textContent = '';
+          (data.items || []).forEach(function (item) {
+            var li = document.createElement('li');
+            li.textContent = item.value;
+            if (item.inferred) {
+              var tag = document.createElement('span');
+              tag.className = 'tag tag-inferred';
+              tag.textContent = 'we inferred this';
+              li.appendChild(document.createTextNode(' '));
+              li.appendChild(tag);
+            }
+            items.appendChild(li);
+          });
+          document.getElementById('sc-heard').hidden = (data.items || []).length === 0;
+
+          renderTrust(data.confidence, data.readiness);
+          buildScopeRail();
+
+          body.hidden = false;
+          if (window.rfxTrack) {
+            window.rfxTrack('preview_ready', { sections: ((scope && scope.sections) || []).length });
+          }
+        }
+
+        /*
+         * THE INTERVIEW CLIENT.
+         *
+         * Turns are held here and sent up each time. That keeps the server stateless for
+         * something explicitly temporary, and a reload does not lose the thread. The
+         * trade-off is written down in the controller: what someone could forge is their own
+         * account of their own business, and it extracts to `source_message` provenance,
+         * never `client_confirmed`, so it cannot become a governed requirement without them
+         * confirming it on screen first.
+         */
+        var interviewTurns = [];
+        var interviewToken = null;
+        var interviewBusy = false;
+
+        function interviewEl(id) { return document.getElementById(id); }
+
+        function appendTurn(role, text) {
+          var log = interviewEl('interview-log');
+          if (!log) return;
+          var row = document.createElement('div');
+          row.className = 'turn turn-' + role;
+          var who = document.createElement('span');
+          who.className = 'turn-who';
+          who.textContent = role === 'user' ? 'You' : 'Project AI';
+          var body = document.createElement('p');
+          body.className = 'turn-text';
+          body.textContent = text;
+          row.appendChild(who);
+          row.appendChild(body);
+          log.appendChild(row);
+          log.scrollTop = log.scrollHeight;
+        }
+
+        function setInterviewBusy(busy) {
+          interviewBusy = busy;
+          var send = interviewEl('interview-send');
+          var input = interviewEl('interview-input');
+          if (send) { send.disabled = busy; send.textContent = busy ? 'Thinking...' : 'Send'; }
+          if (input) input.disabled = busy;
+        }
+
+        function endInterview(understanding) {
+          var form = interviewEl('interview-form');
+          if (form) form.hidden = true;
+          var note = document.querySelector('.interview-note');
+          if (note) {
+            note.textContent = understanding === 'failed'
+              // Say what actually happens. Nothing automated retries this.
+              ? 'I could not write that up automatically. Someone from AI Flotation will pick it up.'
+              : 'Writing up what you told me...';
+          }
+          if (understanding !== 'failed' && interviewToken) startPreview(interviewToken);
+        }
+
+        function sendInterview() {
+          if (!interviewToken || interviewBusy) return;
+          setInterviewBusy(true);
+
+          fetch(API + '/api/flotation/interview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: interviewToken, turns: interviewTurns }),
+          })
+            .then(function (res) { return res.json().catch(function () { return {}; }); })
+            .then(function (data) {
+              if (!data || !data.message) throw new Error('no reply');
+              interviewTurns.push({ role: 'assistant', text: data.message });
+              appendTurn('assistant', data.message);
+              if (data.done) endInterview(data.understanding);
+            })
+            .catch(function () {
+              appendTurn('assistant', 'Sorry, I lost my connection there. Say that again and I will pick it up.');
+            })
+            .finally(function () { setInterviewBusy(false); });
+        }
+
+        function startInterview(token, firstMessage) {
+          interviewToken = token;
+          interviewTurns = [{ role: 'user', text: firstMessage }];
+          try { localStorage.setItem('flotation_preview_token', token); } catch (e) { /* private mode */ }
+
+          var section = interviewEl('interview');
+          if (section) section.hidden = false;
+          appendTurn('user', firstMessage);
+          sendInterview();
+          if (section && section.scrollIntoView) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        (function wireInterviewForm() {
+          var form = interviewEl('interview-form');
+          if (!form) return;
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var input = interviewEl('interview-input');
+            var text = (input.value || '').trim();
+            if (!text || interviewBusy) return;
+            interviewTurns.push({ role: 'user', text: text });
+            appendTurn('user', text);
+            input.value = '';
+            sendInterview();
+          });
+        })();
+
+        // Someone who reloads the page mid-call should not lose their write-up, and
+        // someone opening it on a second device has no localStorage to lose it from - so a
+        // ?token= link works too. That link is shareable rather than secret, which is
+        // already true of the underlying id and is why nothing more sensitive may ever
+        // travel through this surface.
+        (function resumePreview() {
+          var fromUrl = null;
+          try {
+            fromUrl = new URLSearchParams(window.location.search).get('token');
+          } catch (e) { /* very old browser: fall through to storage */ }
+
+          var saved = null;
+          try { saved = localStorage.getItem('flotation_preview_token'); } catch (e) { /* private mode */ }
+
+          var token = fromUrl || saved;
+          if (!token) return;
+          if (fromUrl) { try { localStorage.setItem('flotation_preview_token', fromUrl); } catch (e) {} }
+          pollPreview(token, 0);
+        })();
+      })();
+
+      /*
+       * "Call me now".
+       *
+       * Same endpoint, same attribution, different entry slug - which is the only thing
+       * that distinguishes it server-side, where a routing rule turns this lead into an
+       * actual call. Kept in its own IIFE rather than folded into the intake handler
+       * above: they share nothing but the API base, and one function serving two forms is
+       * how a change to one silently breaks the other.
+       */
+      (function () {
+        var API = '{{brand.platformApiBase}}';
+        var form = document.getElementById('callme');
+        if (!form) return;
+        var status = document.getElementById('cm-status');
+        var button = form.querySelector('button[type=submit]');
+        var sending = false;
+
+        function fail(message) {
+          status.textContent = message;
+          status.setAttribute('data-state', 'error');
+        }
+
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          if (sending) return;
+
+          if (!form.checkValidity()) {
+            fail('Please add a name, a work email and the number to ring.');
+            var firstInvalid = form.querySelector(':invalid');
+            if (firstInvalid && firstInvalid.focus) firstInvalid.focus();
+            return;
+          }
+          // Consent is checked separately from validity: a call to somebody who did not
+          // agree to be called is the one failure here that is not merely annoying.
+          if (!document.getElementById('cm-consent').checked) {
+            fail('Please agree to be called before we ring you.');
+            return;
+          }
+
+          sending = true;
+          button.disabled = true;
+          status.textContent = 'Asking our AI assistant to ring you…';
+          status.removeAttribute('data-state');
+
+          var payload = {};
+          new FormData(form).forEach(function (value, key) { payload[key] = value; });
+          payload.consent_contact = true;
+          payload.page_url = window.location.href;
+          try {
+            payload.visitor_fingerprint = localStorage.getItem('rfx_fp') || undefined;
+          } catch (e) { /* blocked storage: ingest still works, just unlinked */ }
+
+          fetch(API + '/api/leads/ingest?source={{brand.sourceSlug}}&entry=call_me_now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+            .then(function (res) {
+              return res.json()
+                .catch(function () { return {}; })
+                .then(function (b) { return { ok: res.ok, body: b }; });
+            })
+            .then(function (result) {
+              if (!result.ok) {
+                throw new Error(result.body && result.body.error ? result.body.error : 'We could not request that call just now.');
+              }
+              if (window.rfxTrack) window.rfxTrack('form_submit', { form: 'call_me_now' });
+              // Deliberately hedged. The call is placed server-side after this responds,
+              // and it can still be refused there - by the safety gate, or because voice
+              // is unavailable. Promising a ringing phone we cannot guarantee is the
+              // failure mode this whole site is built to avoid.
+              status.textContent = 'Asked. Your phone should ring shortly — if it does not, we still have your details and will be in touch.';
+              status.setAttribute('data-state', 'ok');
+              form.reset();
+              // Same snake_case wire format as the written form above.
+              //
+              // `startPreview` lives in the OTHER IIFE, so calling it from here threw
+              // "startPreview is not defined" on every single call request. The throw landed
+              // in the .catch below, which exists for a FAILED submission - so a visitor
+              // whose call was already on its way was told "please try again", and a second
+              // press meant a second lead and a second phone call.
+              //
+              // An event rather than a shared global: the two forms were deliberately kept
+              // in separate scopes, and this keeps them there while letting one tell the
+              // other that a token exists.
+              var callPayloadId = (result.body && (result.body.raw_payload_id || result.body.rawPayloadId)) || null;
+              if (callPayloadId) {
+                try {
+                  document.dispatchEvent(
+                    new CustomEvent('flotation:preview-token', { detail: { token: callPayloadId } }),
+                  );
+                } catch (e) {
+                  // The write-up is a bonus on this path; the call is the promise. Never let
+                  // this cost the visitor a correct success message.
+                  if (window.console && console.warn) console.warn('[callme] preview kick-off failed', e);
+                }
+              }
+            })
+            .catch(function (err) {
+              // Only reachable for a submission that actually failed: everything after the
+              // success message is now guarded, so a bug in the write-up hand-off can no
+              // longer be reported to a visitor as a failed request.
+              fail((err && err.message ? err.message : 'Something went wrong.') + ' Your details are still here — please try again.');
+            })
+            .finally(function () {
+              sending = false;
+              button.disabled = false;
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,99 @@
+/* Portfolio review queue. Uses the portal's Design E tokens so light/dark and the
+   palette come for free; no new colour constants. */
+.cr-wrap { max-width: 940px; padding: 4px 0 40px; }
+.cr-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.cr-crumb { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--cherry-text); }
+.cr-h1 { font-size: 28px; font-weight: 700; color: var(--strong); margin: 6px 0 0; letter-spacing: -.01em; }
+.cr-sub { color: var(--muted); font-size: 15px; margin: 6px 0 0; max-width: 640px; }
+.cr-muted { color: var(--muted); }
+.cr-mono { font-family: var(--mono, monospace); font-size: 12.5px; }
+
+.cr-banner { border-radius: 10px; padding: 11px 15px; font-size: 14px; margin-bottom: 14px; }
+.cr-banner.ok { background: var(--sunken); color: var(--leaf-text); border: 1px solid var(--leaf-text); }
+.cr-banner.err { background: var(--sunken); color: var(--cherry-text); border: 1px solid var(--cherry-text); }
+
+.cr-empty { background: var(--surface); border: 1px solid var(--border-sub); border-radius: 14px; padding: 30px; color: var(--body); }
+.cr-empty p { margin: 0 0 6px; }
+
+.cr-card { background: var(--surface); border: 1px solid var(--border-sub); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow-md); margin-bottom: 14px; }
+.cr-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.cr-name { font-size: 16px; font-weight: 700; color: var(--strong); }
+.cr-meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.cr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.cr-btn { appearance: none; border: 1px solid var(--border); background: var(--sunken); color: var(--body);
+  border-radius: 9px; padding: 8px 15px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; }
+.cr-btn:hover { border-color: var(--muted); }
+.cr-btn:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.cr-btn[disabled] { opacity: .55; cursor: not-allowed; }
+.cr-btn.ghost { background: var(--surface); }
+.cr-btn.ok { background: var(--leaf); border-color: var(--leaf); color: #fff; }
+.cr-btn.warn { background: var(--surface); border-color: var(--amber); color: var(--amber-deep); }
+.cr-btn.no { background: var(--surface); border-color: var(--cherry-text); color: var(--cherry-text); }
+
+.cr-decide { border-top: 1px solid var(--border-sub); margin-top: 16px; padding-top: 16px; }
+.cr-label { display: block; font-size: 13px; font-weight: 600; color: var(--strong); margin-bottom: 6px; }
+.cr-notes { width: 100%; min-height: 84px; border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px;
+  font: inherit; font-size: 14px; background: var(--surface); color: var(--body); margin-bottom: 12px; resize: vertical; }
+.cr-notes:focus-visible { outline: 2px solid var(--berry); outline-offset: 1px; }
+.cr-note { font-size: 13px; color: var(--muted); font-style: italic; margin: 12px 0 0; }
+
+/* Inline record preview. The reviewer must see what they are approving, and the public
+   page cannot show it: everything in the queue is unpublished, so /p/:slug 404s. */
+.cr-preview { border-top: 1px solid var(--border-sub); margin-top: 16px; padding-top: 16px; }
+.cr-preview-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+.cr-json {
+  background: var(--sunken); border: 1px solid var(--border-sub); border-radius: 10px;
+  padding: 14px 16px; margin: 0; max-height: 420px; overflow: auto;
+  font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; line-height: 1.55; color: var(--body);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+/* ── styled record preview ────────────────────────────────────────────── */
+.rp { font-size: 14.5px; }
+.rp-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--border-sub); }
+.rp-name { font-size: 20px; font-weight: 700; color: var(--strong); letter-spacing: -.01em; }
+.rp-headline { color: var(--berry); font-weight: 600; margin-top: 2px; }
+.rp-meta { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.rp-links { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.rp-links a { color: var(--berry); font-weight: 600; font-size: 13px; text-decoration: none; border: 1px solid var(--border-sub); border-radius: 999px; padding: 4px 12px; }
+.rp-links a:hover { border-color: var(--berry); }
+.rp-cert { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--leaf-text); border: 1px solid var(--leaf-text); border-radius: 999px; padding: 3px 10px; }
+
+.rp-bookend { font-size: 15px; line-height: 1.65; color: var(--body); font-style: italic; margin: 16px 0; padding-left: 14px; border-left: 3px solid var(--border); }
+
+.rp-band { margin-top: 20px; }
+.rp-band-h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+.rp-project { font-size: 16px; font-weight: 700; color: var(--strong); }
+.rp-body { font-size: 14px; line-height: 1.6; color: var(--body); margin: 6px 0 0; }
+.rp-metric { font-size: 13px; font-weight: 700; color: var(--leaf-text); margin: 8px 0 0; }
+.rp-muted { color: var(--muted); }
+.rp-mono { font-family: var(--mono, ui-monospace, monospace); font-size: 12px; }
+
+.rp-details { margin-top: 10px; }
+.rp-details summary { cursor: pointer; font-size: 13px; color: var(--berry); }
+.rp-pre { background: var(--surface); border: 1px solid var(--border-sub); border-radius: 8px; padding: 12px; margin-top: 8px; overflow-x: auto; font-family: var(--mono, monospace); font-size: 12px; line-height: 1.5; }
+
+.rp-comps, .rp-arts, .rp-posts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.rp-comp-label { font-weight: 600; color: var(--strong); }
+.rp-arts li, .rp-posts li { border: 1px solid var(--border-sub); border-radius: 10px; padding: 11px 13px; background: var(--surface); }
+.rp-art-top, .rp-post-top { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+.rp-week { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--berry); border: 1px solid var(--border-sub); border-radius: 999px; padding: 2px 8px; }
+.rp-art-title, .rp-post-h { font-weight: 700; color: var(--strong); }
+.rp-post-h { margin-top: 6px; }
+.rp-art-meta { font-size: 12.5px; margin-top: 5px; }
+.rp-ritual { font-size: 12px; color: var(--muted); }
+.rp-sample, .rp-unshared { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--amber-deep); border: 1px solid var(--amber); border-radius: 999px; padding: 2px 7px; }
+
+/* ── Portfolio pages queue (the person-level page) ────────────────────────── */
+.cr-group { margin-bottom: 28px; }
+.cr-h2 { font-size: 14px; letter-spacing: .06em; text-transform: uppercase;
+         opacity: .7; margin: 0 0 12px; font-weight: 700; }
+.cr-name { font-weight: 700; font-size: 16px; }
+.cr-mono { font-family: var(--mono, ui-monospace, monospace); font-size: 13px; }
+
+/* The page under review, rendered exactly as the public page renders it. */
+.cr-preview {
+  margin: 14px 0 4px; border: 1px solid var(--border-subtle); border-radius: 12px;
+  background: var(--surface, rgba(255,255,255,.02)); overflow: hidden;
+}

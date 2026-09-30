@@ -1,10 +1,34 @@
 import { env } from '../config/env';
+import { normalizePhone } from '../utils/phone';
 import { getTestOverrides } from './settingsService';
+import { isKillSwitchActive } from './launchSafety';
+import { redactForLogs } from '../utils/piiRedaction';
+import { classifyError } from '../utils/errorClassifier';
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every synthflowService import.
+async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
+  try {
+    const { emitAiEvent } = await import('./aiEventService');
+    await emitAiEvent(params);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'backend', event: 'emit_failure_event_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { event_type: params.event_type, message: err?.message },
+    }));
+  }
+}
 
 interface VoiceCallParams {
   name: string;
   phone: string;
-  callType: 'welcome' | 'interest';
+  callType: 'welcome' | 'interest' | 'callback' | 'internship_interview' | 'project_discovery';
+  /**
+   * Which brand is calling. Absent means the Colaberry bootcamp agents, which is what
+   * every existing caller means and why this is optional rather than required.
+   */
+  brandSlug?: string;
   /** Dynamic prompt/instructions for the AI agent on this specific call */
   prompt?: string;
   /** Structured context passed as customer variables to the AI agent */
@@ -29,7 +53,103 @@ interface SynthflowResponse {
   error?: string;
 }
 
+/**
+ * Which Synthflow agent should speak on this call.
+ *
+ * The agent carries its own knowledge base server-side, so this choice decides what the
+ * person on the phone is told about — and by whom.
+ *
+ * ## The other brands never fall back
+ *
+ * Every Colaberry route here degrades to a neighbouring agent when its slot is unset, which
+ * is reasonable while those agents all speak for the same business. AI Flotation and
+ * OpportunityLift do not: their caller answering the phone to a Colaberry bootcamp agent is
+ * worse than no call at all, and it is the exact outcome giving them their own agents was
+ * meant to prevent.
+ *
+ * OpportunityLift is the sharper case. A scholarship applicant reaching the generic callback
+ * agent would be answered by the bootcamp's saved training-site script - a person asking a
+ * charity for help, spoken to as a sales lead. So an unconfigured slot returns empty and the
+ * caller skips deterministically rather than dialling with somebody else's voice.
+ */
+export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback' | 'internship_interview' | 'project_discovery'; brandSlug?: string }): string {
+  /*
+   * Project discovery. FIRST, for the same reason the internship slot is first:
+   * a student expecting to be asked about the system they are building must never
+   * reach an agent carrying a sales script. This is an architecture interview, and
+   * a saved lead-capture prompt would drift from application truth the moment
+   * either changed.
+   *
+   * NO FALLBACK, deliberately - not even to the AI Flotation shell. That shell is
+   * safe to borrow because its saved prompt is literally `{prompt}`, but borrowing
+   * it here would put a student's project call on AI Flotation's caller ID, and a
+   * student who did not ask to hear from a delivery company would be right to
+   * treat that as a cold call. Unset returns '' and the caller offers chat.
+   */
+  if (params.callType === 'project_discovery') return env.synthflowProjectDiscoveryAgentId;
+  // AI Internship interview. FIRST, so an applicant expecting a qualification
+  // interview can never reach an agent carrying a bootcamp sales script.
+  //
+  // WHEN ITS OWN SLOT IS UNSET IT BORROWS THE AI FLOTATION SHELL, which is the
+  // decision Ali took on 2026-09-09 ("use the agent we already have, we will carry
+  // that into production for now") — and it is safe for exactly the reason the
+  // OpportunityLift branch below already relies on: the AI Flotation agent's saved
+  // prompt is literally `{prompt}`, so it has no opinions of its own and whatever
+  // we send at call time IS the call. Borrowing a shell is not borrowing a voice.
+  //
+  // What it must NEVER fall through to is `synthflowCallbackAgentId` or
+  // `synthflowInterestAgentId`: those carry saved bootcamp/training-site scripts,
+  // so an internship applicant would be sold a bootcamp seat by an agent that
+  // never heard of the internship. That is the defect this whole function's
+  // comments exist to prevent, and it stays prevented.
+  //
+  // If BOTH slots are empty the call is skipped with `no_agent_id` rather than
+  // dialling an unscripted agent.
+  if (params.callType === 'internship_interview' || params.brandSlug === 'colaberry-internship') {
+    return env.synthflowInternshipAgentId || env.synthflowAiFlotationAgentId;
+  }
+  if (params.brandSlug === 'ai-flotation') return env.synthflowAiFlotationAgentId;
+
+  // OpportunityLift. Its own slot when configured, otherwise it BORROWS THE AI
+  // FLOTATION SHELL - and the distinction between those two fallbacks is the whole
+  // point of this branch.
+  //
+  // The Colaberry agents below carry their own saved scripts. Falling through to one
+  // of those would answer a scholarship applicant as the bootcamp's callback line: a
+  // person asking a charity for help, spoken to as a sales lead. That was the defect,
+  // and it stays fixed - CPN never reaches them.
+  //
+  // The AI Flotation agent is different in kind. Its saved prompt is literally
+  // `{prompt}`, so it has no opinions of its own and whatever we send at call time
+  // IS the call. Borrowing a shell is not borrowing a voice. That is the architecture
+  // voiceCallPrompt.ts describes: "one agent and one phone number can serve several
+  // brands, the instructions can change without touching a vendor dashboard."
+  //
+  // Ali, 2026-09-08, asked for this explicitly while phone-number provisioning is
+  // blocked, and it is safe precisely because the shell holds no script. The cost is
+  // real and not hidden: the CALLER ID is AI Flotation's number, so the prompt opens
+  // by saying who it is calling for and /scholarships/ warns that the number may not
+  // look like ours. Set SYNTHFLOW_CPN_AGENT_ID to take that cost away.
+  if (params.brandSlug === 'cpn') {
+    return env.synthflowCpnAgentId || env.synthflowAiFlotationAgentId;
+  }
+
+  // 'callback' (inbound "call me now") uses its own dedicated agent so it never
+  // conflates with Maya's proactive interest calls. Falls back to the interest
+  // agent when the callback slot is unset so the feature works with minimal config.
+  if (params.callType === 'welcome') return env.synthflowWelcomeAgentId;
+  if (params.callType === 'callback') return env.synthflowCallbackAgentId || env.synthflowInterestAgentId;
+  return env.synthflowInterestAgentId;
+}
+
 export async function triggerVoiceCall(params: VoiceCallParams): Promise<SynthflowResponse> {
+  // SECURITY (TBI audit P0-2): the global kill switch must actually stop outbound voice calls,
+  // not merely flip a DB flag. Check it first so an emergency stop is effective.
+  if (await isKillSwitchActive()) {
+    console.warn('[Synthflow] BLOCKED by kill switch — not initiating voice call.');
+    return { success: true, data: { skipped: true, reason: 'kill_switch_active' } };
+  }
+
   if (!env.enableVoiceCalls) {
     console.log('[Synthflow] Voice calls disabled via ENABLE_VOICE_CALLS. Skipping.');
     return { success: true, data: { skipped: true, reason: 'feature_disabled' } };
@@ -45,13 +165,34 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { skipped: true, reason: 'no_api_key' } };
   }
 
-  const agentId = params.callType === 'welcome'
-    ? env.synthflowWelcomeAgentId
-    : env.synthflowInterestAgentId;
+  const agentId = resolveAgentId({ callType: params.callType, brandSlug: params.brandSlug });
 
   if (!agentId) {
     console.warn(`[Synthflow] No agent ID configured for ${params.callType}. Skipping.`);
     return { success: true, data: { skipped: true, reason: 'no_agent_id' } };
+  }
+
+  // The shell agent's saved prompt is only `{prompt}`. The instructions therefore arrive
+  // at call time, and without them the agent is not neutral - it is unscripted, on a
+  // number the person may associate with a different business. Refusing to dial is the
+  // safe outcome; a silent no-op is better than an improvised call.
+  //
+  // THIS USED TO NAME ONE BRAND, AND THE RATIONALE ABOVE NAMES NONE.
+  //
+  // The check read `brandSlug === 'ai-flotation'`, which was every brand wired to voice
+  // at the time it was written. Any other brand arriving here without a prompt would
+  // have dialled a stranger with an empty instruction block - precisely the outcome the
+  // paragraph above calls unacceptable, forbidden for one brand and permitted for
+  // everyone else. Nothing had routed a second brand to voice yet, so it had never
+  // fired: it was a trap armed for whoever came next, which was CPN.
+  //
+  // Now any branded call must carry its own instructions, and a brand without them is
+  // skipped with a reason - a visible no-op rather than an improvised call.
+  if (params.brandSlug && !(params.prompt || '').trim()) {
+    console.warn(
+      `[Synthflow] ${params.brandSlug} call has no prompt. Refusing to dial an unscripted agent.`
+    );
+    return { success: true, data: { skipped: true, reason: 'no_prompt' } };
   }
 
   // Check global test mode — redirect phone if enabled
@@ -59,12 +200,28 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   try {
     const test = await getTestOverrides();
     if (test.enabled && test.phone) {
-      console.log(`[Synthflow] TEST MODE: redirecting call from ${params.phone} to ${test.phone}`);
+      console.log(`[Synthflow] TEST MODE: redirecting call from ${redactForLogs(params.phone)} to ${redactForLogs(test.phone)}`);
       actualPhone = test.phone;
     }
   } catch {
     // If settings DB fails, don't block the call
   }
+
+  // Normalize to E.164 before it leaves for Synthflow. Synthflow forwards the
+  // number to Twilio as-is, only prepending a bare '+' if there is none — so a
+  // 10-digit US number typed on the form ('6825975784') went out as
+  // '+6825975784', which Twilio reads as country code +682 (Cook Islands) and
+  // rejects with 32205 "No International Permission". A US internship applicant's
+  // interview call therefore never connected. normalizePhone turns that into
+  // '+16825975784'; an already-'+'-prefixed number is left as it is.
+  const dialPhone = normalizePhone(actualPhone);
+  if (!dialPhone) {
+    // Fewer than 7 digits, or otherwise unusable. Dialing it would burn a call on
+    // a guaranteed telephony error, so skip with a reason the caller can surface.
+    console.warn(`[Synthflow] Phone ${redactForLogs(actualPhone)} is not a dialable number. Skipping.`);
+    return { success: true, data: { skipped: true, reason: 'invalid_phone' } };
+  }
+  actualPhone = dialPhone;
 
   // Build custom_variables array per Synthflow V2 API docs
   const customVariables: { key: string; value: string }[] = [];
@@ -90,12 +247,24 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     name: params.name,
   };
 
-  if (customVariables.length > 0) {
-    requestBody.custom_variables = customVariables;
+  // Tell Synthflow where to post completion, per call. Relying on the agent's dashboard
+  // setting left every AI Flotation call at `sent` forever - three out of three, no
+  // transcript, no completion, nothing extracted - because nobody had set it there.
+  if (env.synthflowWebhookUrl) {
+    requestBody.external_webhook_url = env.synthflowWebhookUrl;
   }
 
   if (params.prompt) {
+    // Sent BOTH ways on purpose. The agent's saved prompt embeds `{prompt}`, which
+    // Synthflow fills from custom_variables - so the variable is what actually reaches the
+    // conversation. The top-level field is kept because existing callers already rely on
+    // it and removing it would change their behaviour silently.
     requestBody.prompt = params.prompt;
+    customVariables.push({ key: 'prompt', value: params.prompt });
+  }
+
+  if (customVariables.length > 0) {
+    requestBody.custom_variables = customVariables;
   }
 
   try {
@@ -106,12 +275,20 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
         'Authorization': `Bearer ${env.synthflowApiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(15000),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('[Synthflow] API error:', response.status, data);
+      console.error('[Synthflow] API error:', response.status, redactForLogs(JSON.stringify(data)));
+      emitFailureEvent({
+        event_type: 'synthflow_call_failed',
+        outcome: 'failure',
+        external_system: 'synthflow',
+        error_class: classifyError({ status: response.status, message: JSON.stringify(data) }),
+        metadata: { message: redactForLogs(JSON.stringify(data)).slice(0, 200) },
+      });
       return { success: false, error: JSON.stringify(data) };
     }
 
@@ -119,12 +296,76 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     const d = data as Record<string, any>;
     const callId = d.call_id || d.id || d._id || d.data?.call_id || d.data?.id || null;
     if (!callId) {
-      console.warn('[Synthflow] call_id is null after extraction. Full response:', JSON.stringify(d));
+      console.warn('[Synthflow] call_id is null after extraction. Full response:', redactForLogs(JSON.stringify(d)));
     }
-    console.log(`[Synthflow] ${params.callType} call initiated for ${params.name}. call_id: ${callId}. Response keys: ${Object.keys(d).join(',')}`);
+    console.log(`[Synthflow] ${params.callType} call initiated for ${redactForLogs(params.name)}. call_id: ${callId}. Response keys: ${Object.keys(d).join(',')}`);
     return { success: true, data: { ...d, call_id: callId } };
   } catch (error: any) {
     console.error('[Synthflow] Request failed:', error.message);
+    emitFailureEvent({
+      event_type: 'synthflow_call_failed',
+      outcome: 'failure',
+      external_system: 'synthflow',
+      error_class: classifyError(error),
+      metadata: { message: String(error?.message || '').slice(0, 200) },
+    });
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * One completed call's outcome, read back from Synthflow's own record.
+ *
+ * WHY THIS EXISTS. Completion normally arrives on the call-complete webhook, which
+ * Synthflow posts from a URL configured per agent in its dashboard. When that is
+ * not configured for an agent — as it was not for the internship interviewer — the
+ * call still happens and the transcript still exists at Synthflow, but our webhook
+ * never fires and the interview is stuck 'in_progress' with nothing extracted.
+ * Reading the call back over the API lets us reconcile that without depending on a
+ * delivery we do not control.
+ */
+export interface SynthflowCallRecord {
+  status: string;              // 'completed' | 'no-answer' | 'failed' | 'in-progress' | …
+  transcript: string;
+  disposition: string | null;
+  durationSeconds: number | null;
+  recordingUrl: string | null;
+  endedReason: string | null;
+}
+
+/** Terminal states — a call in one of these will not change again. */
+export function isTerminalCallStatus(status?: string | null): boolean {
+  const s = (status || '').toLowerCase();
+  return s === 'completed' || s === 'failed' || s === 'no-answer' || s === 'busy' || s === 'canceled' || s === 'cancelled';
+}
+
+/**
+ * Fetch one call from Synthflow. Returns null when voice is off, the key is
+ * missing, the id is unknown, or the request fails — every one of which the caller
+ * must treat as "cannot reconcile right now", never as "the call did not happen".
+ */
+export async function fetchSynthflowCall(callId: string): Promise<SynthflowCallRecord | null> {
+  if (!callId || !env.synthflowApiKey) return null;
+  try {
+    const response = await fetch(`https://api.synthflow.ai/v2/calls/${encodeURIComponent(callId)}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${env.synthflowApiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as any;
+    const call = data?.response?.calls?.[0];
+    if (!call) return null;
+    const rawDuration = call.duration ?? call.telephony_duration ?? null;
+    return {
+      status: String(call.status ?? ''),
+      transcript: String(call.transcript ?? ''),
+      disposition: call.disposition ?? call.end_call_reason ?? null,
+      durationSeconds: typeof rawDuration === 'number' ? Math.round(rawDuration) : null,
+      recordingUrl: call.recording_url ?? null,
+      endedReason: call.end_call_reason ?? null,
+    };
+  } catch {
+    return null;
   }
 }

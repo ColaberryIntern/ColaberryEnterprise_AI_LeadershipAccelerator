@@ -379,7 +379,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: ['ram@colaberry.com', 'karun@colaberry.com', 'ali@colaberry.com'],
-    bcc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    bcc: ['ali_muwwakkil@hotmail.com'],
     replyTo: 'ali@colaberry.com',
     subject: 'Ram / Karun / Ali - Alden\'s playbook mapped to our stack + the 2 questions Ram flagged (90-day plan inside)',
     text, html: HTML,

@@ -1,0 +1,578 @@
+/**
+ * sbpApi — the client for the Student Build Pipeline.
+ *
+ * Replaces the browser-side `createProjectFromAnswers`, which generated a fixed
+ * ten-task template behind a 7-second timer and never contacted the server. The
+ * student's answers now reach a real generator, and what comes back is a real
+ * plan the traceability gate has passed.
+ *
+ * Every call is best-effort at the transport layer but NEVER silently: a failure
+ * returns a typed result the caller must handle. The old sync layer swallowed
+ * everything in a bare `catch {}`, which is how a 100%-failing import went
+ * unnoticed for months.
+ */
+import portalApi from '../utils/portalApi';
+
+export type BuildStatus =
+  | 'captured' | 'generating' | 'gate_failed' | 'drafted'
+  | 'published' | 'awaiting_repo' | 'failed';
+
+export interface GateViolation { rule: string; message: string; subject?: string }
+
+export interface BuildPlanSummary {
+  version: number;
+  sha256: string;
+  status: string;
+  requirements: number;
+  releases: Array<{ key: string; name: string; week_start: number; week_end: number; stories: number }>;
+  stories: Array<{ id: string; title: string; release: string; fulfills: string[] }>;
+}
+
+export interface BuildState {
+  project_id: string;
+  status: BuildStatus;
+  correlation_id: string | null;
+  /**
+   * `blocking` and `advisory` are split server-side (see sbpRoutes'
+   * BuildStateResponse). Both are optional here so an older backend mid-deploy
+   * simply yields nothing rather than the client tripping on a missing key.
+   *
+   * Do NOT show `violations` to a student as "why your build was refused": it
+   * is mostly advisory quality warnings, and doing exactly that is how someone
+   * blocked on an uncovered must-have got told about a redundant story instead.
+   */
+  gate: {
+    ok: boolean;
+    violations: GateViolation[];
+    blocking?: GateViolation[];
+    advisory?: GateViolation[];
+  } | null;
+  /**
+   * True once the plan is materialized into the portal's own tasks — the only
+   * signal that means "the student can actually see this". Optional for the
+   * same mid-deploy reason; `isDelivered` below falls back to the status.
+   */
+  delivered?: boolean;
+  plan: BuildPlanSummary | null;
+  /** Present when status is 'failed': why generation stopped. */
+  error?: { error_class: string; message: string };
+}
+
+/**
+ * Did the plan actually reach the portal?
+ *
+ * `drafted` is the trap this helper exists to close. It reads like a success —
+ * the plan generated, the gate passed, the row is in the database — and it is
+ * not: nothing has been written to `student_tasks`, so the student sees the
+ * browser's fallback build. Only `published` and `awaiting_repo` mean delivered.
+ */
+export function isDelivered(state: BuildState): boolean {
+  if (typeof state.delivered === 'boolean') return state.delivered;
+  return state.status === 'published' || state.status === 'awaiting_repo';
+}
+
+/** The violations a student must act on, never the advisory ones. */
+export function blockingReasons(state: BuildState): GateViolation[] {
+  const gate = state.gate;
+  if (!gate) return [];
+  if (Array.isArray(gate.blocking)) return gate.blocking;
+  return [];
+}
+
+export interface StartBuildAnswers {
+  project_id: string;
+  idea: string;
+  name?: string;
+  size?: 'workflow' | 'project' | 'autonomous';
+  users?: string;
+  data_sources?: string;
+  done_definition?: string;
+  /**
+   * The generated interview and the student's replies. The server persists
+   * these to `build_intake.answers` and folds them into the brief as Q/A
+   * pairs, so the requirements are shaped by what this student actually said
+   * rather than by three fixed fields.
+   */
+  answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  /** Carried through from the intake result so the truth store files them. */
+  covered?: CoveredAngle[];
+  target_weeks?: number;
+}
+
+// Failure classification lives in its own module so it can be tested without
+// dragging axios in. Re-exported here because every caller already imports the
+// API surface from this file.
+export type { SbpFailureKind, SbpError } from './sbpFailure';
+export { classifyError, describeFailure } from './sbpFailure';
+import { classifyError, type SbpError } from './sbpFailure';
+
+const toError = classifyError;
+
+/** One interview question, generated from the student's own idea. */
+export interface IntakeQuestion {
+  id: string;
+  question: string;
+  /** Why we're asking — shown under the field so the question isn't a black box. */
+  why: string;
+  placeholder: string;
+  /**
+   * 2-4 pickable example answers in the student's own domain. Optional because
+   * an older cached response has none — the UI must not assume they exist.
+   */
+  suggestions?: string[];
+  /**
+   * The angle this question came from. Sent back with the answer so the
+   * server files it against a truth dimension by lookup rather than by
+   * guessing from the wording. Optional: an older cached response has none.
+   */
+  angle?: string;
+}
+
+/** An angle the description already answered, with the student's own phrase. */
+export interface CoveredAngle {
+  angle: string;
+  evidence: string;
+}
+
+export interface IntakeQuestionsResult {
+  questions: IntakeQuestion[];
+  /**
+   * What was NOT asked, and why. The receipt for a short interview: a student
+   * who wrote three paragraphs and got two questions can see the other eight
+   * quoted back. Optional because an older server omits it.
+   */
+  covered?: CoveredAngle[];
+  /**
+   * false when the model failed and the server substituted its generic set.
+   * The UI must not claim these were tailored when this is false.
+   */
+  generated: boolean;
+  model: string | null;
+  attempts: number;
+}
+
+/**
+ * Ask the server for interview questions shaped by this specific idea.
+ *
+ * Runs pre-project: it creates nothing, so it can be called while the student
+ * is still in the wizard. The server never throws for this route — a model
+ * outage comes back as `generated:false` with a usable generic set — so a
+ * failure here means the request itself did not land.
+ */
+export async function fetchIntakeQuestions(input: {
+  idea: string;
+  size?: 'workflow' | 'project' | 'autonomous';
+  name?: string;
+}): Promise<{ ok: true; result: IntakeQuestionsResult } | { ok: false; error: SbpError }> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/intake/questions', input);
+    return { ok: true, result: res.data };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * One statement the server understood, grouped by how much a person can trust
+ * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.
+ *
+ *   needsConfirmation  we heard it, nobody has agreed we heard it right
+ *   fromBuild          a story's own work showed it; nobody has agreed yet
+ *   inferences         nothing was said; the system worked it out
+ *   openQuestions      it was asked and not answered
+ *   unknowns           recorded as unknown, deliberately, and that is allowed
+ *   confirmed          already corrected or agreed
+ */
+export type ReviewGroup = 'confirmed' | 'needsConfirmation' | 'fromBuild' | 'inferences' | 'openQuestions' | 'unknowns';
+
+export interface ReviewItem {
+  index: number;
+  dimension: string;
+  /** The dimension as a person would say it, e.g. "What good looks like". */
+  label: string;
+  value: string;
+  group: ReviewGroup;
+  quote: string | null;
+}
+
+/**
+ * What the server will record if the student confirms. Computed by the same
+ * code that stores it, so this is a preview of the write, not a second opinion.
+ */
+export interface IntakePreview {
+  review: {
+    items: ReviewItem[];
+    counts: Record<ReviewGroup, number>;
+    /** Only these block. Everything else is informational. */
+    contradictions: string[];
+    blocksPlanning: boolean;
+  };
+  /** Still unanswered, in plain words, so the gaps are visible before confirm. */
+  unanswered: string[];
+  /** Angles the description already answered, quoted back as a receipt. */
+  covered: CoveredAngle[];
+  /** Answers the server could not file by angle. Reported, never guessed. */
+  unmapped: number;
+  /**
+   * Whether "have an AI call me" can be offered, and the exact consent words
+   * to show if so. Optional: an older server omits it, and the wizard then
+   * offers nothing, which is the safe reading.
+   */
+  callOffer?: CallOffer;
+}
+
+export interface CallOffer {
+  /** True only when every switch a call needs is on. Otherwise show no option. */
+  available: boolean;
+  /** The words the student agrees to. Shown verbatim; stored verbatim. */
+  consentText: string;
+  consentVersion: string;
+}
+
+/** What the student asked for on the review step, sent after the build starts. */
+export interface DiscoveryCallRequest {
+  phone: string;
+  consent: true;
+  consent_version: string;
+  name?: string;
+}
+
+/**
+ * Why a call was not placed, in the server's words. The UI maps these to
+ * plain language; it never invents a reason the server did not give.
+ */
+export type DiscoveryCallReason =
+  | 'no_consent' | 'no_phone' | 'nothing_to_ask' | 'no_agent_configured' | 'no_intake_yet'
+  | 'cooling_down' | 'consent_text_stale' | 'consent_not_recorded' | 'dial_skipped' | 'dial_failed';
+
+export type DiscoveryCallOutcome =
+  | { placed: true; requestId: string; angles: string[]; callId: string | null }
+  | { placed: false; reason: DiscoveryCallReason; requestId: string | null };
+
+/**
+ * Ask for the call. Runs AFTER startBuild, because the call continues an
+ * interview and the server refuses to open one: there is no truth to continue
+ * from until the build has stored it. The server decides; this reports.
+ */
+export async function requestDiscoveryCall(projectId: string, body: DiscoveryCallRequest): Promise<
+  { ok: true; outcome: DiscoveryCallOutcome } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.post(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/call`, body);
+    return { ok: true, outcome: res.data as DiscoveryCallOutcome };
+  } catch (err: any) {
+    // 422 is a decision, not a transport failure: the consent words were
+    // stale. Report it as an outcome so the UI can say so.
+    if (err?.response?.status === 422 && err.response.data?.reason) {
+      return { ok: true, outcome: { placed: false, reason: err.response.data.reason, requestId: null } };
+    }
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * Show the student what the server understood, BEFORE it is stored.
+ *
+ * Runs pre-project and touches no database: the truth row is written by
+ * `startBuild`, and writing it earlier would leave a row behind for a student
+ * who goes back and changes an answer. A failure here is a failure to reach
+ * the server, never a refusal; the wizard falls back to echoing the raw
+ * answers so nobody is stranded on the review step.
+ */
+export async function previewIntake(input: {
+  idea: string;
+  answers: Array<{ id: string; question: string; answer: string; angle?: string }>;
+  covered?: CoveredAngle[];
+}): Promise<{ ok: true; preview: IntakePreview } | { ok: false; error: SbpError }> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/intake/preview', input);
+    return { ok: true, preview: res.data as IntakePreview };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * The stored truth, read back after a build exists. Same two halves as the
+ * pre-Confirm preview, plus the revision. Null when the intake never ran, so
+ * a caller can tell "nothing recorded" from "recorded nothing".
+ */
+export interface IntakeReviewRecord {
+  project_id: string;
+  revision: number;
+  items: ReviewItem[];
+  counts: Record<ReviewGroup, number>;
+  contradictions: string[];
+  blocksPlanning: boolean;
+  unanswered: string[];
+}
+
+export async function getIntakeReview(projectId: string): Promise<
+  { ok: true; review: IntakeReviewRecord | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/review`);
+    return { ok: true, review: res.data as IntakeReviewRecord };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, review: null };
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/**
+ * What a case study could be built from, in four sections that stay apart,
+ * with the project's computed rung. Read-only: the shape carries
+ * `publishable: false` and nothing on the student side can change that.
+ */
+export type CaseStudyMaturity =
+  | 'story_hypothesis' | 'build_record' | 'capability_demonstration' | 'operational_result' | 'impact_case_study';
+
+export interface CaseStudyFoundation {
+  project_id: string;
+  maturity: CaseStudyMaturity;
+  ladder: CaseStudyMaturity[];
+  maturityReason: string;
+  nextRungNeeds: string | null;
+  truthRevision: number | null;
+  hypothesisCoverage: { filled: number; total: number };
+  buildEvidence: {
+    facts: Array<{ dimension: string; label: string; value: string; evidence: string }>;
+    stories: Array<{ storyId: string; outcome: string; added: number; questions: number; refused: number }>;
+    verifiedStories: number;
+  };
+  demonstrationEvidence: Array<{ storyId: string; kind: string; ref: string; note: string | null }>;
+  outcomeEvidence: { items: never[]; why: string; heldMeasurementEvents: number };
+  openQuestions: number;
+  publicationPreference: 'undecided';
+  publishable: false;
+  limitations: string[];
+}
+
+export async function getCaseStudyFoundation(projectId: string): Promise<
+  { ok: true; foundation: CaseStudyFoundation | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/intake/${encodeURIComponent(projectId)}/case-study-foundation`);
+    return { ok: true, foundation: res.data as CaseStudyFoundation };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, foundation: null };
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/** Start a build. Resolves as soon as the intake is durable; generation continues. */
+export async function startBuild(answers: StartBuildAnswers): Promise<
+  { ok: true; correlationId: string } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/builds', answers);
+    return { ok: true, correlationId: res.data?.correlationId };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/** Re-run a failed generation from the answers already on the server. */
+export async function retryBuild(projectId: string): Promise<{ ok: true } | { ok: false; error: SbpError }> {
+  try {
+    await portalApi.post(`/api/portal/sbp/builds/${encodeURIComponent(projectId)}/retry`, {});
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/** Current state of a build. Null when there is no build for this project. */
+export async function getBuildState(projectId: string): Promise<
+  { ok: true; state: BuildState | null } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(`/api/portal/sbp/builds/${encodeURIComponent(projectId)}`);
+    return { ok: true, state: res.data as BuildState };
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { ok: true, state: null };
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/** Promote the reviewed draft and write its documents into the workspace repo. */
+export async function publishBuild(projectId: string, expectedSha256?: string): Promise<
+  { ok: true; commitSha: string | null; filesWritten: number; status: BuildStatus }
+  | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.post(
+      `/api/portal/sbp/builds/${encodeURIComponent(projectId)}/publish`,
+      expectedSha256 ? { expected_sha256: expectedSha256 } : {},
+    );
+    return { ok: true, commitSha: res.data?.commitSha ?? null, filesWritten: res.data?.filesWritten ?? 0, status: res.data?.status };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/** What a student sends to add a story to a published build. */
+export interface AddStoryInput {
+  title: string;
+  narrative: string;
+  /** 3 to 7 lines; exactly one must start with "Trust". */
+  acceptance: string[];
+  /** r1 or later. r0 is the walking skeleton and is closed. */
+  release: string;
+  /** The sha of the plan the student is looking at. The server refuses a stale one. */
+  expected_sha256: string;
+}
+
+export interface AddStoryResult {
+  story_id: string;
+  requirement_id: string;
+  /** The sha of the NEW plan. Send this next time. */
+  plan_sha256: string;
+  planVersion: number;
+  status: BuildStatus;
+  commitSha: string | null;
+}
+
+/**
+ * A refusal, as the server states it. `error_class` is the rule that fired
+ * (NoTrustLine, UnknownRelease, HashMismatch, GateBlocked, ...) so the form can
+ * say which line to fix rather than "invalid". `details` carries the gate
+ * violations when there are any.
+ */
+export interface AddStoryRefusal {
+  status: number;
+  error_class: string | null;
+  message: string;
+  details: unknown;
+}
+
+/** Add one story to a published build. Never throws. */
+export async function addStory(projectId: string, input: AddStoryInput): Promise<
+  { ok: true; result: AddStoryResult } | { ok: false; refusal: AddStoryRefusal }
+> {
+  try {
+    const res = await portalApi.post(`/api/portal/sbp/builds/${encodeURIComponent(projectId)}/stories`, input);
+    return { ok: true, result: res.data as AddStoryResult };
+  } catch (err: any) {
+    const data = err?.response?.data ?? {};
+    return {
+      ok: false,
+      refusal: {
+        status: Number(err?.response?.status ?? 0),
+        error_class: typeof data.error_class === 'string' ? data.error_class : null,
+        message: typeof data.error === 'string' ? data.error : toError(err).message,
+        details: data.details ?? null,
+      },
+    };
+  }
+}
+
+/** The assembled Claude Code prompt for one story. */
+export async function getStoryPrompt(projectId: string, storyId: string, notes?: string): Promise<
+  { ok: true; prompt: string; hasRepo: boolean; pathsVerified: boolean } | { ok: false; error: SbpError }
+> {
+  try {
+    const res = await portalApi.get(
+      `/api/portal/sbp/builds/${encodeURIComponent(projectId)}/stories/${encodeURIComponent(storyId)}/prompt`,
+      { params: notes ? { notes } : undefined },
+    );
+    return {
+      ok: true,
+      prompt: res.data?.prompt ?? '',
+      hasRepo: Boolean(res.data?.has_repo),
+      pathsVerified: Boolean(res.data?.paths_verified),
+    };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}
+
+/** Statuses where nothing further will change without another action. */
+export const TERMINAL_STATUSES: BuildStatus[] = ['drafted', 'gate_failed', 'published', 'awaiting_repo', 'failed'];
+export const isTerminal = (s: BuildStatus): boolean => TERMINAL_STATUSES.includes(s);
+
+/**
+ * Poll until the build reaches a terminal state.
+ *
+ * Bounded on both axes: a fixed interval and a hard deadline, because a poll
+ * that never gives up is how a student ends up watching a spinner forever — the
+ * exact failure the old 7-second timer disguised. On timeout the caller is told
+ * it timed out, not that it failed: the build may still be running server-side
+ * and the state endpoint remains readable.
+ */
+export async function pollBuild(
+  projectId: string,
+  opts: {
+    onUpdate?: (state: BuildState) => void;
+    intervalMs?: number;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+  } = {},
+): Promise<{ ok: true; state: BuildState } | { ok: false; error: SbpError; timedOut?: boolean }> {
+  const interval = opts.intervalMs ?? 5_000;
+  const deadline = Date.now() + (opts.timeoutMs ?? 25 * 60_000);
+
+  while (Date.now() < deadline) {
+    if (opts.signal?.aborted) {
+      return { ok: false, error: { status: null, kind: 'timeout', message: 'Cancelled.' } };
+    }
+    const result = await getBuildState(projectId);
+    if (!result.ok) return { ok: false, error: result.error };
+    if (result.state) {
+      opts.onUpdate?.(result.state);
+      if (isTerminal(result.state.status)) return { ok: true, state: result.state };
+    }
+    await new Promise((r) => setTimeout(r, interval));
+  }
+
+  return {
+    ok: false,
+    timedOut: true,
+    error: {
+      status: null,
+      kind: 'timeout',
+      message: 'Your build is taking longer than expected. It may still be running — reopen this page to check.',
+    },
+  };
+}
+
+/**
+ * Resolve the backend project UUID a NEW build should be generated into.
+ *
+ * The localStorage store keys projects by a client id (`p1786…`), but every SBP
+ * endpoint is scoped to a real `projects.id`. This bridges the two.
+ *
+ * IT NO LONGER READS THE ACTIVE PROJECT. It used to: `GET /api/portal/projects/
+ * active` first, and build into whatever came back. That is what made a second
+ * build land inside the first one — the whole pipeline ran against the existing
+ * row, overwriting its intake, superseding its plan and rewriting its tasks in
+ * place (both plans number their stories STORY-001 upward, and (project_id,
+ * story_id) is the identity key). A student reported it on 2026-08-19 as a new
+ * build that "merged with" their old one; the DRI hit the same thing days
+ * earlier and it looked like the new project had deleted the old.
+ *
+ * The decision now belongs to the server, which is the only place that can see
+ * whether a project has ever been built into and the only place that can make
+ * the check atomic against a second, concurrent click. See
+ * `resolveProjectForNewBuild` in backend/src/services/projectService.ts. This
+ * function's job is reduced to asking for one and reporting failure honestly.
+ *
+ * `created` is now always true from the caller's point of view — a project id
+ * came back that is safe to build into. The server may have recycled an empty
+ * row underneath, which it reports as `reused` for telemetry; the client must
+ * not branch on it.
+ */
+export async function resolveBackendProjectId(): Promise<
+  { ok: true; projectId: string; created: boolean; reused: boolean } | { ok: false; error: SbpError }
+> {
+  try {
+    const created = await portalApi.post('/api/portal/projects', {});
+    const id = created?.data?.id;
+    if (typeof id !== 'string' || !id) {
+      return { ok: false, error: { status: null, kind: 'server_error', message: 'Could not create a project for this build.' } };
+    }
+    return { ok: true, projectId: id, created: true, reused: created?.data?.reused === true };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
+}

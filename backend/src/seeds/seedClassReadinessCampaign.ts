@@ -152,9 +152,10 @@ export async function seedClassReadinessCampaign() {
     } as any);
     console.log('[Seed] Created class readiness campaign. ID:', campaign.id);
   } else {
+    // Create-only status: link sequence + refresh description, but never clobber
+    // an operator's pause on restart (CC-20260710-a9f2).
     await campaign.update({
       sequence_id: sequence.id,
-      status: 'active',
       description: 'Auto-enrolled after payment confirmation. T-minus onboarding sequence (T-14 → T-0) relative to cohort_start_date. Email + SMS for critical steps.',
     });
     console.log('[Seed] Updated class readiness campaign. ID:', campaign.id);

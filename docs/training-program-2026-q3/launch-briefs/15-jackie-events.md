@@ -48,7 +48,7 @@ CB can pull together a first scan of public events; you curate + execute.
 
 ### Cohort communication
 
-Once Cohort 1 launches (2026-07-13), Jackie + SuccessCoachAgent share student communication duty:
+Once Cohort 1 launches (2026-07-27), Jackie + SuccessCoachAgent share student communication duty:
 - AI SuccessCoachAgent: progress, completion, attendance nudges (3 updates/week target)
 - Jackie: events, social moments, milestone announcements, in-person logistics
 

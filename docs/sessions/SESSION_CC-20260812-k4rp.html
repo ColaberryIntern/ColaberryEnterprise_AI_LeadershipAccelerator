@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260812-k4rp — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 12, 2026 at 2:51 PM</div>
+    <div><span class="sid">CC-20260812-k4rp</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**PaySimple webhook: fix the signature check that was rejecting 100% of real deliveries (uppercase vs lowercase hex)**</h2>
+          <span class="badge">2026-08-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Investigating why Arinze Ohagwu&#39;s payment never linked (see the entry above) turned up a live outage: **every** PaySimple webhook was being rejected `400` with `[Webhook] PaySimple signature verification failed` — 11 deliveries between 17:12 and 18:51 UTC on 2026-08-12, all from PaySimple&#39;s `54.186.163.123`, zero successes. Ruled out the obvious causes with evidence: the signature header IS present (0 &quot;no signature header&quot; warnings), the secret IS configured (64 chars, and hashing the value across 5 `.env` backups to 2026-07-21 proved it **unchanged** — the 2026-08-10 21:56 `.env` edit only added `GITHUB_TOKEN` and two `SBP_*` keys). PaySimple exposes no webhook-config API (probed 11 candidate routes, all 404 / &quot;route does not exist&quot;), so I captured a real delivery off the internal docker bridge with `tcpdump` (read-only, no deploy) and tested it. **The digest was byte-identical to ours apart from letter case:** PaySimple sends `5F0738DD23FE...` while Node&#39;s `digest(&#39;hex&#39;)` returns `5f0738dd23fe...`, and `verifyWebhookSignature` compared the digest TEXT via `timingSafeEqual` (`&#39;5F&#39;` = 0x35,0x46 vs `&#39;5f&#39;` = 0x35,0x66), so it could never match. Fixed by comparing the raw 32 digest BYTES instead of the hex string, decoding the header as hex (either case) or base64 via a new `decodeDigest()` that returns null on a malformed header rather than comparing a truncated buffer. This is the **third** distinct cause of &quot;every PaySimple webhook is rejected&quot;, after the `JSON.stringify(req.body)` raw-body bug (2026-07-30) and the `express.raw` Content-Type matcher (2026-07-31), which is why the fix is now encoding-agnostic rather than matching one more exact format.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">proven against the real captured delivery before writing any code — 445-byte body, received `5F0738DD23FE5E19D28E1722F44FF6E8A6CD8CB39B18DD58450AF2B4ED75D233`, our HMAC over the same bytes with the configured secret `5f0738dd23fe5e19d28e1722f44ff6e8a6cd8cb39b18dd58450af2b4ed75d233`: exact-byte match **false**, case-insensitive match **true**, base64 match **false**. So the secret and the raw-body handling were already correct and case was the entire defect. 6 new unit tests; the load-bearing one asserts the UPPERCASE digest verifies, and it **fails against the unfixed code** (baseline run of the new tests against the old service: 4 failed / 18 passed; with the fix: 1 failed / 21 passed, the 1 being a pre-existing unrelated `findCustomerByEmail` fixture failure). Negative cases kept: right-length-but-not-hex, too-short, empty, wrong payload, and wrong secret all still reject. Full backend jest with normalized comparison of the failing-suite sets: **28 failing suites both with and without the change, zero regressions, zero newly-passing** (an intermediate run showed 29 — a timing-sensitive suite, not this change). `tsc --noEmit`: 15 errors with and without, none in `paysimpleService.ts`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The existing test suite is exactly why this shipped.** `verifies valid HMAC signature` built its fixture with `digest(&#39;hex&#39;)`, i.e. lowercase, so it exercised a format PaySimple never sends and passed against broken code. A test that generates its own input in the wrong format proves nothing about the real integration; the new uppercase test is the one that would have caught it. **Not fixed here:** why Valentine Obiora (08-03) and ammar albazzaz (08-04) were missed — successful webhook activations sit on either side of them, so those look like individual missed deliveries rather than this total failure, and the container logs for those dates were lost to a redeploy before the investigation. **Also worth flagging:** PaySimple retries hard. The delivery I captured was an event first created **2026-08-01**, still being retried 11 days later, so once this is deployed the backlog should drain on its own; the reconciler is idempotent and `usedPids` prevents any double-link if both paths fire. Separately confirmed while investigating: across **all 16** payments the app has ever linked, **0** landed on the customer id we stored at checkout, so the reconciler&#39;s customer-id match path has never once worked in production — which makes the checkout-window path in the companion PR the only mechanism currently capable of linking a payment.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Healed 3 unlinked $199 memberships and closed the two gaps that let them sit unnoticed**</h2>
+          <span class="badge">2026-08-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Taiwo reported one student (Arinze Ohagwu) whose PaySimple payment was missing from the enterprise dashboard. Confirmed and root-caused, then found two more with the same signature. **The defect:** PaySimple&#39;s *hosted* payment page mints its **own** customer record for the payer, so the charge&#39;s `CustomerId` is not the one our app pre-created at checkout — Arinze&#39;s checkout created customer `43728423`, his settled $199 (payment `155621427`) landed on `43728431`, minted by the hosted page 4 minutes later. Activation normally comes from the webhook matching `order_external_id` → `subscriptions.payment_ref`, which works (13 subscriptions activated fine); when a delivery is missed, `appPaymentReconcileService` is the safety net — and it could never heal these, for two reasons. (1) It drew candidates from `enrollments.paysimple_customer_id`, but `startCheckout` wrote the customer id **only onto the subscription row**, so 62 of 86 pending checkouts were invisible to it (the candidate query saw **8** rows where the corrected one sees **31**). (2) Even reading the subscription&#39;s id would not have matched, because the charge carries the hosted page&#39;s customer, not ours. Fixes: `startCheckout` now reuses a customer id we already stored (enrollment, then prior subscription) before minting a new one — `findCustomerByEmail` can only ever return null because PaySimple ignores its own `?email=` filter (probed live: **200 rows returned, 0 with a matching email**), which had turned `findOrCreateCustomer` into create-every-time and gave Arinze&#39;s four attempts four duplicate customers — and mirrors that id onto the enrollment (best-effort; the payment link is already valid, so bookkeeping must never fail a live checkout). `reconcileAppPayments` gains a second match path, `matchesAppCheckout`, for the hosted-customer case.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` — **15 errors with the change, 15 on an unmodified `origin/main` baseline, none in either changed file** (the 15 are pre-existing: `axios`/`playwright` are imported but absent from `package.json`). Full backend jest: **28 failed suites / 41 failed tests both with and without the change** (same pre-existing missing-module failures), **7253 passing with vs 7239 baseline — +14, exactly the tests added**, 0 regressions. New scope-guard tests assert the safety-critical negatives: a same-amount charge from a different payer, an amount we never asked for (bootcamp $250), a charge outside the window, and a person with no app-originated checkout are all **rejected**. New checkout tests cover customer reuse, the enrollment mirror, and that checkout still returns `ok` when the mirror write throws. The corrected candidate SQL was executed read-only against the live prod schema before shipping (31 candidates / 24 with pending checkouts). Data heal ran on prod through the normal `activateByRef` path: all 3 now `paid` / `standard` / `member`, routed into &quot;Cohort - July 2026&quot;, subscriptions `active` with payment ids linked and billing anchored to the real payment date (Arinze 2026-08-11 → 2026-09-11); his 3 duplicate checkouts canceled. A re-run of the detection sweep afterwards returned **0 remaining, $0.00**.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Scope doctrine preserved and deliberately reasoned about.** Revenue counts only app-originated payments, and the standing rule forbids matching PaySimple charges by amount/email — that rule exists because an earlier amount-matching ledger over-counted $6,664 against a true $3,038. The new path B does **not** relax it: the thing that brings a payment into scope is still **our own pending subscription row** (our app recorded that it started that checkout, for that exact amount, minutes earlier); the payer email only decides *which* of our pending checkouts a charge belongs to, and never qualifies a payment on its own. Both the file header and the tests state this explicitly so it is not misread later as a regression to email matching. **Revenue impact:** the dashboard was understating by **$398** — Arinze ($199, `payment_status` still `pending`) and ammar albazzaz ($199, marked paid but `amount_paid` NULL, which fails the `amount_paid &gt; 0` filter in `revenuePaymentsService`); Valentine Obiora&#39;s $199 was already counted and only needed the payment id linked. **Only Arinze suffered real customer harm** — he paid on 08/10 and was still an Explorer being prompted to subscribe two days later, which is why he retried checkout three times. He was charged exactly **once**; there is no double-billing to refund. **What is not fixed:** the missed webhook deliveries themselves. Container logs for 08/10-08/11 were lost to a redeploy before this investigation, so the cause of the missed callbacks is unproven — the reconciler now heals them within 20 minutes either way, but if the miss rate is climbing, that is a separate investigation and this change would mask it. Worth adding a metric on `linkedByCheckoutWindow`, which is now counted separately in the summary precisely so a rising number is visible.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260812-k4rp</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

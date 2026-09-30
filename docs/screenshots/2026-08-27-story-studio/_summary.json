@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-08-27T13:23:09.644Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "00-record-loaded.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "01-truth.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "02-sources.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "03-story.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "04-visuals.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "05-surfaces.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "06-preview.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "07-publish.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "08-public-story.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    },
+    {
+      "file": "09-throwaway-gate-refusal.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false
+    }
+  ]
+}

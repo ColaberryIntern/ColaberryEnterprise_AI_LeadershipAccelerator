@@ -1,16 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { createInvoiceSchema, createInvoiceRequestSchema } from '../schemas/enrollmentSchema';
+import { createInvoiceSchema, createInvoiceRequestSchema, createFreeAccountSchema } from '../schemas/enrollmentSchema';
 import { createEnrollmentInvoice } from '../services/paysimpleService';
 import {
   validateCohortAvailability,
   createPendingEnrollment,
   createInvoiceEnrollment,
+  createExplorerEnrollment,
   getEnrollmentByInvoiceId,
 } from '../services/enrollmentService';
 import { listOpenCohorts } from '../services/cohortService';
 import { Cohort } from '../models';
 import { sendInvoiceRequestConfirmation } from '../services/emailService';
+import {
+  captureSignupConsent,
+  SIGNUP_CONSENT_TEXT,
+} from '../services/consent/captureSignupConsent';
 
 export async function handleListOpenCohorts(
   _req: Request,
@@ -32,6 +37,22 @@ export async function handleCreateInvoice(
 ): Promise<void> {
   try {
     const data = createInvoiceSchema.parse(req.body);
+
+    // Same capture on the paid enrolment path. Someone buying a course has not
+    // thereby asked for marketing email - that is a separate choice, and this
+    // records it only when they actually make it.
+    await captureSignupConsent({
+      email: data.email,
+      marketingOptIn: (data as any).marketing_opt_in,
+      source: 'enrollment_form',
+      consentText: SIGNUP_CONSENT_TEXT,
+      ipAddress: req.ip ?? null,
+      // `req.get` is an Express helper, not part of the bare request shape.
+      // Calling it unguarded threw on a hand-rolled req in an existing test, and
+      // the controller's catch turned that into a silent failure to respond -
+      // consent capture must never be able to break a signup that way.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
+    });
 
     // Validate cohort availability
     const cohort = await validateCohortAvailability(data.cohort_id);
@@ -108,6 +129,74 @@ export async function handleCreateInvoiceRequest(
     res.status(201).json({
       message: 'Your seat is reserved. A confirmation email with payment instructions has been sent.',
       enrollmentId: enrollment.id,
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      res.status(400).json({
+        error: 'Validation failed',
+        details: error.issues.map((issue) => ({
+          field: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+      return;
+    }
+    next(error);
+  }
+}
+
+// POST /api/create-free-account — public, /enroll page's free-signup path.
+// Reuses createExplorerEnrollment (same idempotent-by-email, auto-placed-in-
+// Explorer-cohort, magic-link-welcome-email behavior as the Open House flow),
+// just with a distinguishable source label and no service-token requirement
+// since this is a first-party call from our own frontend, not a partner site.
+export async function handleCreateFreeAccount(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = createFreeAccountSchema.parse(req.body);
+    const { enrollment, created } = await createExplorerEnrollment({
+      name: data.full_name,
+      email: data.email,
+      company: data.company,
+      title: data.title,
+      company_size: data.company_size,
+      phone: data.phone,
+      source: 'Free signup (/enroll)',
+      utm_source: typeof req.body.utm_source === 'string' ? req.body.utm_source : undefined,
+      utm_campaign: typeof req.body.utm_campaign === 'string' ? req.body.utm_campaign : undefined,
+      page_url: typeof req.body.page_url === 'string' ? req.body.page_url : undefined,
+    });
+
+    // Capture marketing consent if they ticked the box. AWAITED but never
+    // allowed to fail the signup: captureSignupConsent is swallow-safe, and a
+    // person must get their account regardless. An unticked box records
+    // nothing - it is not a revocation.
+    await captureSignupConsent({
+      email: data.email,
+      marketingOptIn: (data as any).marketing_opt_in,
+      source: 'free_signup',
+      consentText: SIGNUP_CONSENT_TEXT,
+      ipAddress: req.ip ?? null,
+      // `req.get` is an Express helper, not part of the bare request shape.
+      // Calling it unguarded threw on a hand-rolled req in an existing test, and
+      // the controller's catch turned that into a silent failure to respond -
+      // consent capture must never be able to break a signup that way.
+      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
+    });
+
+    console.log(
+      `[Enrollment] Free account ${created ? 'created' : 'already existed'} for ${data.email}`
+    );
+
+    res.status(created ? 201 : 200).json({
+      message: created
+        ? 'Your free account is ready. Check your email for your sign-in link.'
+        : 'You already have a free account. Check your email for your sign-in link.',
+      enrollmentId: enrollment.id,
+      created,
     });
   } catch (error) {
     if (error instanceof ZodError) {

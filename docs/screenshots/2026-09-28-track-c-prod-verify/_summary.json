@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-09-28T14:42:17.915Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "01-overview-default-light.png",
+      "purpose": "Overview default tab, light mode"
+    },
+    {
+      "file": "02-overview-dark.png",
+      "purpose": "Overview default tab, dark mode, shadow check"
+    },
+    {
+      "file": "03-work-tab-default-all.png",
+      "purpose": "Work tab fresh nav, default bucket plus ticket rows"
+    },
+    {
+      "file": "04-work-detail-panel.png",
+      "purpose": "Work case detail panel, border and background check"
+    },
+    {
+      "file": "05-live-status-padding.png",
+      "purpose": "Live Status tab padding spot-check"
+    },
+    {
+      "file": "05-talk-padding.png",
+      "purpose": "Talk tab padding spot-check"
+    }
+  ]
+}

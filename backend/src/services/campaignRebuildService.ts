@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 import { getSetting } from './settingsService';
 import { Campaign, FollowUpSequence } from '../models';
@@ -14,7 +15,7 @@ function getClient(): OpenAI {
   if (!openaiClient) {
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = new OpenAI({ apiKey, timeout: 90_000 });
+    openaiClient = getInstrumentedOpenAI({ workflow_id: 'campaign_rebuild' }, { apiKey, timeout: 90_000 });
   }
   return openaiClient;
 }

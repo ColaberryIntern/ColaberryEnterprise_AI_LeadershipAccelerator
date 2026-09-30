@@ -123,7 +123,7 @@ const bcSummary = `<div style="font-size:13px;color:#475569">AI Operations Comma
   const result = await sendWithBcAttach({
     ticketId: 9953889114, // AI_ProjectArchitect rollout Overview
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - AI Ops Command Center architecture brief (15 deliverables, 2-week MVP, 4 decisions needed)',
     html: EMAIL_HTML,
     text: EMAIL_TEXT,

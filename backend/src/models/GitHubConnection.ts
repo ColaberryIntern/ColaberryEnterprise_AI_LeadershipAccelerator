@@ -4,10 +4,13 @@ import { sequelize } from '../config/database';
 export interface GitHubConnectionAttributes {
   id?: string;
   enrollment_id: string;
+  /** The project this repo belongs to. One repo per PROJECT (SBP-GH-v1 FR-037). */
+  project_id?: string | null;
   repo_url?: string;
   repo_owner?: string;
   repo_name?: string;
   access_token_encrypted?: string;
+  webhook_secret?: string | null;
   last_checked_at?: Date;
   status_json?: any;
   file_tree_json?: any;
@@ -49,10 +52,12 @@ export interface GitHubConnectionAttributes {
 class GitHubConnection extends Model<GitHubConnectionAttributes> implements GitHubConnectionAttributes {
   declare id: string;
   declare enrollment_id: string;
+  declare project_id: string | null;
   declare repo_url: string;
   declare repo_owner: string;
   declare repo_name: string;
   declare access_token_encrypted: string;
+  declare webhook_secret: string | null;
   declare last_checked_at: Date;
   declare status_json: any;
   declare file_tree_json: any;
@@ -73,8 +78,15 @@ GitHubConnection.init(
     enrollment_id: {
       type: DataTypes.UUID,
       allowNull: false,
-      unique: true,
       references: { model: 'enrollments', key: 'id' },
+    },
+    // Nullable while legacy enrollment-keyed rows exist; the partial unique
+    // index (project_id) WHERE project_id IS NOT NULL is created in
+    // db/ensureWorkspaceRepoSchema.ts.
+    project_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'projects', key: 'id' },
     },
     repo_url: {
       type: DataTypes.STRING(500),
@@ -90,6 +102,19 @@ GitHubConnection.init(
     },
     access_token_encrypted: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    /**
+     * Per-repo webhook signing secret. NULL for connections that predate
+     * student-registered hooks — those verify against the shared
+     * GITHUB_WEBHOOK_SECRET instead (see webhookSecretService.resolveWebhookSecret).
+     *
+     * NEVER logged and never included in a project/task DTO. It reaches a
+     * student only through the authenticated workspace panel, because the
+     * student is the one who has to paste it into GitHub.
+     */
+    webhook_secret: {
+      type: DataTypes.STRING(120),
       allowNull: true,
     },
     last_checked_at: {

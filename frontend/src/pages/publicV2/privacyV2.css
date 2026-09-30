@@ -1,0 +1,38 @@
+/* ============================================================================
+   privacyV2.css -- data notice.
+   Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+.cbv2-prose {
+  max-width: 68ch;
+  margin: var(--space-4) 0 0;
+  color: var(--text-body, var(--text-muted));
+  line-height: 1.7;
+}
+
+.cbv2-list {
+  max-width: 68ch;
+  margin: var(--space-5) 0 0;
+  padding-left: var(--space-5);
+  display: grid;
+  gap: var(--space-4);
+  color: var(--text-body, var(--text-muted));
+  line-height: 1.7;
+}
+.cbv2-list strong { color: var(--text-strong); }
+
+/* The storage keys are literal identifiers a reader will look for in devtools,
+   so they are set in mono and must not wrap mid-token. */
+.cbv2-list--mono {
+  list-style: none;
+  padding-left: 0;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-body-sm);
+}
+.cbv2-list--mono li {
+  overflow-wrap: normal;
+  white-space: nowrap;
+  overflow-x: auto;
+  color: var(--text-strong);
+}

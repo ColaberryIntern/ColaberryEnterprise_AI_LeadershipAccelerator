@@ -1,0 +1,70 @@
+{
+ "slug": "the-next-call-needs-a-time-and-a-place-in-the-queue",
+ "output": "cora-call-scheduling-walkthrough.mp4",
+ "slides": [
+  {
+   "kind": "title",
+   "seconds": 9,
+   "title": "The Next Call Needs a Time. And a Place in the Queue.",
+   "subtitle": "Cora Recap Engine, an operational AI system",
+   "caption": "When a call ends without a result, an admissions team's calling system plans the next one. Each planned call needs a time the lead can take it, and a place among hundreds of others."
+  },
+  {
+   "kind": "title",
+   "seconds": 10,
+   "title": "Two questions before any call.",
+   "subtitle": "When may it go? Where does it sit?",
+   "caption": "On 10 September 2026 one five-minute window held 14 launch jobs against a cap of four, which is why the choice of a slot matters as much as the choice of a time."
+  },
+  {
+   "kind": "screenshot",
+   "seconds": 12,
+   "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-schedule-calling-windows.png",
+   "caption": "The eligibility rule the product states, on a keyless local copy at the pinned commit with invented rows: new leads every day, cold leads Monday to Friday, both 8 to 22, in the caller's local timezone."
+  },
+  {
+   "kind": "title",
+   "seconds": 10,
+   "title": "One shared grid.",
+   "subtitle": "75-second slots, four to a five-minute slot.",
+   "caption": "Campaign entries, voicemail retries and calls moved out of hours take their time from one shared grid. Since 10 September the allocator takes a database lock first, so two schedulers cannot both read the same free slot and fill it twice."
+  },
+  {
+   "kind": "screenshot",
+   "seconds": 12,
+   "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-schedule-slot-grid-sql.png",
+   "caption": "Six calls 75 seconds apart on that grid, and a callback the lead asked for sitting off it. Callbacks are written at an exact time, with no lock and no occupancy check."
+  },
+  {
+   "kind": "cards",
+   "seconds": 12,
+   "rows": [
+    ["11 of 1,064", "five-minute windows since the lock started more than four launch jobs"],
+    ["5,247 of 5,450", "launch jobs in 30 days took their slot from the shared grid"],
+    ["0 of 19", "callback requests since 24 August became a call"]
+   ],
+   "accent_index": 2,
+   "caption": "Read from the platform's own tables on 19 September 2026. The periods before and after are not a controlled comparison, and the platform stores no reason for a cancellation."
+  },
+  {
+   "kind": "title",
+   "seconds": 11,
+   "title": "Checked again before it leaves.",
+   "subtitle": "Pauses, five guards, the calling window.",
+   "caption": "A system pause holds the call, five guards can cancel it, and in live mode it must fall inside its campaign's window, in the zone the call platform reported on the lead's last call."
+  },
+  {
+   "kind": "screenshot",
+   "seconds": 12,
+   "path": "C:/Users/ali_m/Downloads/acc-case-study-visual-wt/frontend/public/site-v2/shot-cora-schedule-contact-deferred.png",
+   "caption": "A call that could not go yet: the row cancelled, and a new row at Monday 11 AM Central, the lead's window start plus an hour. There is no link between the two rows, and no reason recorded."
+  },
+  {
+   "kind": "title",
+   "seconds": 11,
+   "title": "Where the plan still slips.",
+   "subtitle": "The calls a lead asks for.",
+   "caption": "The callbacks leads ask for skip the grid, their spoken times are read on the UTC clock rather than the lead's, a guard has cancelled every one of them since 24 August 2026, and the rebalancer can move calls earlier than planned."
+  }
+ ]
+}

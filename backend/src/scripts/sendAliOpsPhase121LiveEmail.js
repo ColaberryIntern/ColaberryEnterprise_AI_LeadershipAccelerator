@@ -86,7 +86,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: 'Ali - workspace fixed: loads fast + leads with steps + tools/skills/agents/workflows',
     html: HTML,
     text: TEXT,

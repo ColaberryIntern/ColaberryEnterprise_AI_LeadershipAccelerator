@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-07-30T03:44:37.319Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "01-enroll-free-signup.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "docs\\screenshots\\2026-07-30-free-signup-verify\\01-enroll-free-signup.png"
+    },
+    {
+      "file": "02-signup-result.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "docs\\screenshots\\2026-07-30-free-signup-verify\\02-signup-result.png"
+    }
+  ]
+}

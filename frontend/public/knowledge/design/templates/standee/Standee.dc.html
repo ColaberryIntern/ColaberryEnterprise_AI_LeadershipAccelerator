@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Event · Standee" description="Roll-up banner / standee (33×80in proportions) — bold, readable from a distance. Print-ready." -->
+<helmet>
+<script src="./ds-base.js"></script>
+<style>
+  @media print { @page { size: portrait; margin: 0; } body{background:#fff!important;} .st-stage{padding:0!important;} .st{box-shadow:none!important;} }
+</style>
+</helmet>
+<div class="st-stage" style="background:var(--surface-subtle);min-height:100vh;display:grid;place-items:start center;padding:32px 16px;font-family:var(--font-body)">
+  <div class="st" data-export="colaberry-standee" data-export-w="1290" style="width:430px;max-width:100%;aspect-ratio:33/80;background:var(--surface-card);box-shadow:var(--shadow-lg);overflow:hidden;display:flex;flex-direction:column;position:relative">
+
+    <!-- Top brand band -->
+    <div style="background:linear-gradient(150deg,var(--red-500),var(--red-700));color:#fff;padding:48px 40px 56px;text-align:center;position:relative">
+      <div style="position:absolute;bottom:-40px;left:0;right:0;height:80px;background:inherit;clip-path:polygon(0 0,100% 0,100% 45%,0 100%)"></div>
+      <img src="../../assets/logo/colaberry-horizontal-white.png" alt="Colaberry" style="height:34px">
+      <p style="font-family:var(--font-mono);font-size:13px;letter-spacing:.16em;text-transform:uppercase;opacity:.9;margin:22px 0 0">School of Data Science &amp; Analytics</p>
+    </div>
+
+    <!-- Body -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:60px 40px 0;position:relative">
+      <span style="display:inline-block;background:var(--green-50);color:var(--green-700);font-weight:700;font-size:14px;padding:8px 18px;border-radius:var(--radius-pill)">Now enrolling · 40 seats</span>
+
+      <h1 style="font-family:var(--font-display);font-weight:900;font-size:48px;line-height:1.0;letter-spacing:-.025em;color:var(--text-strong);margin:30px 0 0;text-wrap:balance">Future-proof your career in data &amp; AI</h1>
+
+      <p style="font-size:18px;line-height:1.55;color:var(--text-muted);margin:26px 0 0;max-width:26ch">Bring your idea. Leave in 12 weeks with a deployed AI system, a portfolio, and the Anthropic Architect certification.</p>
+
+      <!-- Stats -->
+      <div style="display:flex;gap:30px;margin-top:48px">
+        <div><div style="font-family:var(--font-display);font-weight:900;font-size:40px;color:var(--red-500);line-height:1">5,000+</div><div style="font-size:13px;color:var(--text-muted);margin-top:6px">Careers changed</div></div>
+        <div><div style="font-family:var(--font-display);font-weight:900;font-size:40px;color:var(--green-600);line-height:1">12 wks</div><div style="font-size:13px;color:var(--text-muted);margin-top:6px">To job-ready</div></div>
+      </div>
+
+      <!-- Icon trio -->
+      <div style="display:flex;gap:18px;margin-top:50px">
+        <span class="cb-icon-tile" style="--tile:58px;background:var(--blue-500)"><span class="cb-i"><i class="ri-tools-line"></i></span></span>
+        <span class="cb-icon-tile" style="--tile:58px;background:var(--green-600)"><span class="cb-i"><i class="ri-team-line"></i></span></span>
+        <span class="cb-icon-tile" style="--tile:58px;background:var(--red-500)"><span class="cb-i"><i class="ri-rocket-line"></i></span></span>
+      </div>
+    </div>
+
+    <!-- Bottom CTA band -->
+    <div style="background:var(--neutral-900);color:#fff;padding:40px;text-align:center;margin-top:48px">
+      <div style="font-family:var(--font-display);font-weight:900;font-size:26px;letter-spacing:-.01em">Scan or visit to apply</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin-top:20px">
+        <span style="width:84px;height:84px;background:#fff;border-radius:var(--radius-md);display:grid;place-items:center;color:var(--neutral-900)"><span class="cb-i" style="font-size:52px"><i class="ri-qr-code-line"></i></span></span>
+        <div style="text-align:left">
+          <div style="font-family:var(--font-mono);font-size:16px;color:var(--green-400)">training.colaberry.com</div>
+          <div style="font-size:13px;color:var(--neutral-400);margin-top:4px">Powered by Anthropic + Claude Code</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,406 @@
+---
+name: certprep-rubric-sweep
+description: Keep the CCAR-F question bank at the highest standard - every item at its rubric ceiling, the BANK passing every whole-bank check, every item triaged by a blind read, and approval always under a named human. Covers the sweep, generation, position and length balancing, export, the bank audit and the triage. Run it as a standing quality check.
+---
+
+# certprep-rubric-sweep
+
+A standing check that the certification question bank is at the highest standard,
+and the machinery to get it there.
+
+> Score every question against the item rubric. Improve the ones that miss, one at
+> a time, until they meet all six dimensions. Replace the ones that cannot be
+> improved. End with a bank where every question matches the published exam shape
+> and a named human has approved each one.
+
+## The one thing to understand before running this
+
+**6/6 is a statement about SHAPE, not about correctness.**
+
+The rubric measures whether an item looks like a real exam item: it opens with an
+observed situation, the stem and options are at reference length, the options are
+articulated approaches rather than labels, there are four of them, and every wrong
+option is explained. Those are all measurable and the sweep can fix them.
+
+The rubric **cannot** tell whether the answer key is right, whether the question is
+fair, whether the distractors are genuinely wrong, or whether the item tests the
+objective it claims. A question with a wrong answer key can score 6/6.
+
+So a 6/6 bank is a bank that *resembles the exam*. It is not a bank that is
+*correct*. That distinction is why approval is a separate flag, why it records a
+real person, and why this skill never approves as a side effect of improving.
+
+This bank was once approved wholesale by a fixture account. Those 93 revisions
+were retired for precisely this reason. Do not recreate that.
+
+**Two other things the item rubric cannot see, and what covers them:**
+
+- **Properties of the bank, not of any item.** 150 generated items once went
+  live with the key at A in 144 of them; every per-item gate passed. The
+  whole-bank rubric (`certBankRubric.ts`) measures answer-position share, the
+  one-letter mock score, per-domain skew, the length cue, letter labels, mixed
+  punctuation, ceiling rate, duplicate stems, scenario spread, objective floor,
+  mocks supported and approval. It runs in CI, in the admin Question Bank
+  scorecard, and automatically at the end of every script that changes the bank.
+- **Whether the key is right.** The triage (`reviewQuestion`) answers each
+  question BLIND first - stem and options only, no key - and a reader who picks
+  a different option is the finding. Only when the blind read agrees does the
+  argue-against step run, and an argument the blind read did not share is
+  recorded at low. The report to the reviewer leads with the disputes.
+
+## The toolset
+
+Every script defaults to a dry run, mints NEW revisions rather than editing in
+place, refuses `--approve-as` without `--write`, and (where it changes the bank)
+runs the whole-bank audit on the live database when it finishes. All run inside
+the backend container as `node dist/scripts/<name>.js`.
+
+| Script | Job |
+|---|---|
+| `sweepCertQuestionRubric` | Score every item; improve the ones below their ceiling; approve at ceiling. |
+| `growCertQuestionBank` | Write new items by objective and scenario to a target size (`--to 300 --count 25`), allocated by mock demand; rubric ceiling, blind-read triage, answer placement and the length step all at birth. |
+| `rebalanceCertAnswerPositions` | Move each key to the position the item factory's hash gives it. |
+| `balanceCertOptionLengths` | Generated items only: extend the longest wrong option where the key is longest, one item in three excepted by hash. |
+| `planAuthoredOptionLengths` + `applyCertOptionPatches` | The same pass for authored items: patches by option text, applied to the per-domain files, then a re-seed with `--revise --approve-as`. |
+| `exportGeneratedCertItems` | Write the generated half back to `data/certBlueprints/items/generated.ts` so the repo is the source of truth for all 300. |
+| `auditCertBank` | The whole-bank rubric, standalone, exit 1 on a hard failure. |
+| `verifyCertBankDrift` | The database holds what this build authored, and every item is servable. |
+| `triageCertQuestions` | Blind read, then argue-against, one stored verdict per item; `--report-only --send --to <email>` mails the reading list. |
+| `seedCertPrepContent` | Authored items from the repo into the database; `--revise` mints where the text changed; `--approve-as` approves ONLY what the run minted. |
+
+## How it runs
+
+Phases, in order. Do not skip the dry run.
+
+| Phase | What happens |
+|---|---|
+| **1. Measure** | `node dist/scripts/sweepCertQuestionRubric.js` — dry run over the whole bank. Prints the current score of every question and what it would do. Writes nothing. |
+| **2. Small write** | `--limit 3 --write` — improve three questions for real. Read the drafts it produced before going further. A hundred and fifty model calls is not the place to discover a bad prompt. |
+| **3. Full sweep** | `--write` — the whole bank. Sequential, one question at a time, resumable. |
+| **4. Verify** | `node dist/scripts/verifyCertBankDrift.js` — confirms the database holds what the build authored and reports which items are servable, stale or unapproved. |
+| **5. Approve** | `--write --approve-as <a real person's email>` — only after a human has read the results. |
+
+### The per-question loop
+
+```
+score → 6/6?  → done, skip
+      → improve → re-score → better? keep : discard
+      → repeat until 6/6 or the improvement stalls
+      → stalled → REPLACE with a fresh item for the same objective
+      → still stalled → leave it, report it, approve nothing for it
+```
+
+**The rubric is the judge and the model does not get a vote.** Every candidate is
+scored by `scoreItem`, which is pure and deterministic. A candidate that does not
+score higher is discarded, not passed along with a hopeful note. That is what makes
+the loop safe to run unattended: it cannot drift downhill.
+
+**A candidate that changes the answer is refused before its score is even read.**
+`checkInvariants` rejects a rewrite that changed the option count, the number of
+correct answers, a correct key that is not among the options, an empty stem or
+option, or a wrong option left without an explanation. Those are exactly the
+changes the rubric would not notice, because it has no opinion about which option
+is right.
+
+## Flags
+
+| Flag | Effect |
+|---|---|
+| *(none)* | Dry run over the whole bank. Changes nothing. **This is the default and it is deliberate.** |
+| `--write` | Persist improvements as NEW DRAFT revisions. Never edits in place. |
+| `--limit N` | Process only the first N questions. Use it on every first run of a change. |
+| `--key K` | Process one question. Use it when debugging a specific failure. |
+| `--max-rounds N` | Improvement attempts per question before declaring a stall. Default 3. |
+| `--approve-as <email>` | Approve the 6/6 items as that named person. **Refuses without `--write`.** |
+
+## Rules that are not negotiable
+
+- **Dry run first, always.** The script defaults to it; do not add a flag that
+  changes that default.
+- **Never pass a `.test`, `.invalid`, `.example` or `.local` address to
+  `--approve-as`.** The admin queue renders those in red as "approved by a fixture
+  account — no human has read this item", which is honest, and it is not a
+  shortcut to take deliberately.
+- **Never approve an item the run did not bring to 6/6.** The script already
+  refuses; do not work around it.
+- **Every improvement is a new revision.** Nothing is edited in place, so a
+  response already recorded keeps meaning what it meant.
+- **Report the stalls.** A sweep that says "150/150" while quietly leaving four
+  questions unfixed is the failure this whole rubric exists to prevent.
+
+## After a run
+
+1. State the before and after distribution, not just the headline.
+2. Name every stalled question and why it stalled.
+3. Say plainly how many were approved and by whom.
+4. Quote the whole-bank audit the script printed. If it did not print one, run
+   `auditCertBank` and quote that. A run that leaves the bank failing a hard
+   check is not finished.
+5. If anything was written to production, run the drift verifier and quote it.
+6. **Read the output, not the summary.** Every defect in the hardening log below
+   was found by reading what a clean count had already blessed. Sample the
+   actual text that was written, compare it with what was there before, and
+   measure the property you asked for on the output itself.
+7. Log the run where the tree you are in keeps its session log (`docs/sessions/`
+   on a tree tracking main; check `scripts/generateSessionChangelog.js` before
+   writing to `PROGRESS.md`).
+
+## Hardening log
+
+Weaknesses found by running it, and what was done. Add to this every time.
+
+- *(2026-09-09, v1)* Built. Improver refuses candidates that change the answer
+  shape; sweep is dry-run by default; `--approve-as` refuses without `--write`.
+- *(2026-09-09)* **CI caught a type error a local typecheck had reported clean.**
+  The candidate's `rationale` is `string | null` and `DraftRevisionInput.rationale`
+  is a required `string`. The local run had been killed by a timeout before
+  writing anything, and a **0-line output file was read as 0 errors**. Two fixes:
+  `checkInvariants` now refuses a candidate with no rationale — the rubric scores
+  whether wrong options are explained, so a rewrite that drops it is not an
+  improvement — and the sweep guards the write site rather than casting, so a
+  relaxed invariant reports a skipped item instead of writing a revision with an
+  empty explanation. **Verify with a sentinel** (`echo "__TSC_EXIT=$?__"` appended
+  to the output) so a truncated run cannot look like a passing one.
+- *(2026-09-09)* `/tmp` is shared across concurrent Claude sessions on this
+  machine; an output file came back holding a different session's test run. Write
+  run artifacts to the session scratchpad, never a bare `/tmp` name.
+- *(2026-09-10)* **The first live run died instantly: `column "track_id" does not
+  exist`.** `track_id` and `scenario_family` live on `cert_questions`, the
+  identity, not on `cert_question_revisions`. Nothing caught it before production:
+  `tsc` cannot see inside a SQL string, the unit tests mocked the query away, and
+  CI has no database. Fixed with the join, and the query is now exported as
+  `BANK_QUERY` with a test that checks **every `r.` and `q.` column against the
+  CREATE TABLE statements in `ensureCertPrepSchema.ts`** — the file the database
+  is actually built from. Mutation-checked: reintroducing `r.track_id` turns it
+  red. The sweep also now excludes retired identities, because a question somebody
+  deliberately withdrew should not be improved and offered back for approval.
+- *(2026-09-10)* **The first completed run spent a model call on a question no
+  rewrite can ever fix.** `CCARF-A2` is multi-select by design; `option_count` is
+  defined as four options AND single select, and `checkInvariants` forbids
+  changing how many answers are correct. Aiming at a flat 6/6 would re-spend on it
+  every run and report a structural property of the item as a failure. Added
+  `unachievableDimensions` / `achievableScore`: the sweep now targets what each
+  item CAN reach and says so in the log (`ceiling 5/6: option_count cannot
+  change`). **A target an item cannot reach is not a standard, it is a bug in the
+  check.** Mutation-checked.
+- *(2026-09-10)* **The run ended by losing its own cost telemetry.**
+  `ConnectionManager.getConnection was called after the connection manager was
+  closed` — `getInstrumentedOpenAI` writes `ai_events` rows asynchronously and the
+  script closed sequelize out from under the last write. The output was correct,
+  which is what makes it easy to miss: the only casualty was the accounting for
+  the most expensive part of the job. The script now settles telemetry before
+  closing the connection.
+- *(2026-09-10)* **Scoring the whole bank read-only, before spending anything,
+  showed the sweep was about to rewrite 18 questions that are already correct.**
+  Distribution across all 150: 129 at 6/6, 21 at 5/6, 132 at their ceiling, 18
+  below it — and those 18 are exactly the scenario-framing false negatives already
+  documented in `ccarRubric.ts`. Their only missing dimension is scenario framing,
+  so the sole way a candidate could score higher is by inserting a phrase from the
+  marker list: **changing text that is already right to satisfy a proxy.** The
+  list was a comment, so nothing could act on it; it is now
+  `SCENARIO_FALSE_NEGATIVES`, and `unachievableDimensions` reads it. **Score the
+  bank read-only first — it costs nothing and it tells you what the run would
+  actually do.**
+- *(2026-09-10)* **The full 150-question run came back clean, and the summary
+  line overstated it.** `RESULT: 150/150 at 6/6` — while 21 questions were at 5/6,
+  correctly capped at their ceiling. The ceiling change had made the count fold
+  every skipped item in as a six. **A run that reports better than reality is
+  worse than one that reports nothing, because it ends the investigation.** Now
+  reported as two numbers with the label each one measures: how many reached the
+  top of the rubric, and how many are as good as they are permitted to get. A test
+  pins both, including one asserting the old wording cannot return. Note what
+  happened here: a tool built to catch checks that overstate, overstating.
+- *(2026-09-10)* **The approval step would have approved 129 while announcing
+  150.** It filtered on `after === 6` where the log line above it printed the
+  ceiling count, so the 21 capped items would have been silently left unapproved
+  — leaving the bank short of the exact thing that was asked for, and saying
+  otherwise. Caught by reading the code before running it, not by running it. The
+  ceiling is now stored on each outcome rather than re-derived in two places,
+  because the summary and the approval disagreed precisely because each guessed
+  separately. **Before a run that writes, read what it will actually select.**
+- *(2026-09-11)* **The first GENERATED batch scored 6/6 and read as mediocre.**
+  Six of eight written, and the one I read had an unmeasured observation
+  ("occasionally fails"), options at the seven-word floor, a "disable the feature"
+  distractor nobody would pick, and a key that fixed a FAILED call when the stem
+  described an INACCURATE one. The rubric measures shape, and the model found the
+  cheapest shape that passes. Three changes: the prompt now aims at the reference
+  MEDIAN rather than the floor and requires a measurement in the stem;
+  `triageQuestion` runs as a second gate after the rubric, discarding on a
+  high-severity concern; and a rubric discard now names the dimension it missed,
+  because "5/6, discarded" twice told me nothing about which of three fixes to
+  make. **A shape gate alone will be satisfied minimally. Pair it with a
+  reviewer that argues against the answer.**
+- *(2026-09-11)* **With both gates on, the regenerated batch was genuinely better
+  and 3 of 8 were still discarded on `scenario_framing` alone.** Those stems opened
+  with observations in words the detector does not carry. For GENERATED text the
+  right fix is to tell the model to open the way the published items open
+  ("Monitoring shows ...", "Engineers report ...", then the number) — that is
+  writing to the target shape, not editing already-correct text to satisfy a
+  proxy, which is the line drawn on 2026-09-08 and still holds. Prompt v3.
+  **Operational: batch generation through `docker exec` on prod has OOM'd near
+  34 items. Drive `--to 300` in `--count 25` chunks; the script recomputes from
+  the database each run, so every chunk is resumable and none is big enough to
+  take the container down.**
+- *(2026-09-11)* **The first scaled chunk wrote 25 questions clean, and every one
+  was S1.** The `--to` plan filled the thinnest DOMAIN and picked the FIRST
+  scenario fitting it, so 40 D1 questions were headed into one world while S5 -
+  already the thinnest scenario - never got touched. S1 went 34 to 59 in one
+  chunk; S4 and S5 sat at 19. The exam draws four scenarios of six at random, and
+  a student who lands the thin one is measured against a shallower pool. Now
+  picks the thinnest fitting scenario, with the count kept current inside a
+  chunk so 25 picks spread rather than all landing on whichever was thinnest at
+  the start. **Read what a run wrote, not just how many.**
+- *(2026-09-11)* **Retiring six drafts exposed that the sweep's approve step could
+  un-retire them.** Each became a question whose latest revision is retired, and
+  the approval filter selected on score alone - `--approve-as` would have
+  approved them straight back under a human's name. Retirement now means BOTH
+  the revision status and the identity's `is_retired`, and the sweep skips any
+  key whose latest revision is retired and says how many it skipped.
+- *(2026-09-11)* **Chunk 3 wrote four good questions that were dead on arrival.**
+  The generator built its taken-key set from live identities only, so the keys
+  of six drafts retired that morning read as free, and four new questions landed
+  as revision 2 under identities marked `is_retired`. Serving, the sweep and the
+  generator's own count all exclude retired identities. The count said 25
+  written; the bank was four short of that. **A question key is permanent:
+  retiring it withdraws the content, not the name.** Taken keys now come from
+  every identity. The four were revived (identity live, old revision still
+  retired).
+- *(2026-09-11)* **"11 passed" and "jest exit 1" in the same run.** The scripts
+  fired `main()` on import, so a test importing a pure helper also started a
+  generation run, which failed without a database and set the process exit
+  code. Every test passed and CI would have gone red on a suite with no failing
+  test. All three scripts now guard on `require.main === module`.
+- *(2026-09-11)* **144 of the 150 generated questions had the correct answer at A.**
+  A student answering A throughout would have scored 96% on that half. It got
+  past every gate because the rubric measures shape, triage measures
+  defensibility, and neither looks at WHERE the key sits. The authored bank never
+  had the problem because `item()` places the key from a hash of the question
+  key; the generator bypassed the factory and inherited the model's habit of
+  writing the right answer first. Caught the instant the items were exported into
+  the repo, by the same position guard that found 110-of-150-at-B in the
+  authored bank weeks earlier. **Anything that writes a question must go through
+  `assignAnswerPosition`.** The generator now does; `rebalanceCertAnswerPositions`
+  mints reordered revisions for what was already written, idempotently. The
+  length tell (correct-is-longest 61%, +1.2 words) is real but milder and is
+  next.
+- *(2026-09-11)* **Every per-question gate can pass and the bank can still be
+  broken.** 144-at-A was not a defect in any question; it was a defect in the
+  bank, and nothing ran against the bank. There is now a whole-bank rubric
+  (`certBankRubric.ts`: position share, one-letter mock score, per-domain skew,
+  length cue, ceiling rate, duplicate stems, scenario spread, objective floor,
+  mocks supported, all approved) and it runs in THREE places from one
+  definition: CI against the repo, the admin Question Bank panel as a
+  scorecard, and automatically at the end of every script that changes the
+  bank (grow, sweep, rebalance, balance). **A bank-level check that runs in
+  only one of those places is the gap that let 144-at-A into production.**
+  Every check prints its measurement and its threshold, and a failing check
+  names the script that fixes it.
+- *(2026-09-11)* **The correct option was the longest in 112 of 150 generated
+  items — by six characters at the median.** Invisible on any one item, 75% to
+  a student who reads none. "The key must never be longest" would be its own
+  tell (chance is 25%), so `lengthPlan` keeps the key longest in one item in
+  three by a salted hash of the key — salted so it does not travel with the
+  answer position — and `lengthenDistractor` adds detail to the longest WRONG
+  option in the rest, refused unless it lands inside bounds, breaks no
+  invariant and costs no rubric dimension, then re-triaged because a longer
+  distractor can become an arguable one. The generator runs the same step at
+  birth; `balanceCertOptionLengths` backfills. Authored items are never
+  touched by the script: their text lives in the repo.
+- *(2026-09-11)* **Four of the first twenty-three lengthened options came back
+  as "D. Allocate ..." and were minted that way.** Asked to rewrite option D,
+  the model recites the list. Rendered, the student sees "D. D. Allocate",
+  which marks the option as the one that was edited: a new tell introduced by
+  the tool that removes an old one. It passed the bounds check (the label is
+  three characters), the invariants (nothing empty), the rubric (shape) and
+  the triage (correctness). **Every text a model returns needs a check for
+  the model's habits, not just for the property you asked for.** Now: the
+  lengthener strips the label before measuring; `checkInvariants` refuses any
+  option that begins with its own letter, which covers the improver and the
+  generator too; the bank audit has a hard `option_labels` check; and the
+  balancer strips and re-mints what was already written, without a model
+  call. Also found on the same read: the triage-medium rate on lengthened
+  items looked alarming (19 of 23 against 15% at generation) until both
+  versions were re-triaged side by side: the same concern on the same
+  untouched option, before and after. **Compare against the baseline before
+  believing a rate.**
+- *(2026-09-14)* **The triage flagged 53 of the first 100 items, every one
+  medium, every one hedged.** Asked to argue against the key and then judge
+  whether the argument wins, gpt-4o-mini reported "could be seen as" and "a
+  valid alternative" - the form the prompt says loses - on half the bank. A
+  reviewer judging its own argument is not independent of it, and a reading
+  list that is half the bank is no reading order. v3 starts with a different
+  kind of evidence: the reviewer answers the question BLIND, seeing only what
+  a candidate sees. A different answer is the finding (high,
+  `answer_disputed`); an argument the blind read did not share drops to low.
+  Over all 300: **25 blind disputes, 137 lows, 137 clean** - against 53
+  mediums per 100 before. The report then had to change too: it had listed
+  every flagged row in key order under "163 of 300 need your judgement", the
+  highs not even first. **Independent evidence beats self-judged evidence, and
+  a report is only as good as what it puts first.**
+- *(2026-09-11)* **`seedCertPrepContent --approve-as` approved every draft in
+  the table, not the ones it had just minted.** Found while planning the
+  authored-half length pass, which ends with a re-seed: production holds 149
+  superseded drafts (each replaced by a later approved revision, hidden from
+  the queue), and the next `--revise --approve-as ali@colaberry.com` would
+  have stamped all of them with his name. A reviewer's name on a revision
+  they never saw is a false audit trail. Approval is now scoped to what the
+  run minted, and the run says so when that is nothing. **A flag that acts on
+  "everything in state X" is a footgun the moment state X has history.**
+- *(2026-09-11)* **The authored half measured 58% correct-is-longest by
+  characters, 37% by words.** The rubric comment quoted the 37; the audit
+  measures characters. Under the ceiling, but the half a student meets first.
+  The database balancer skips authored items by design (their text is in the
+  repo), so the same pass now has a second front end: `planAuthoredOptionLengths`
+  emits patches addressed by option TEXT (the repo letter and the database
+  letter differ, because `item()` re-letters as it places the key), and
+  `applyCertOptionPatches` refuses anything it cannot place exactly once.
+  Both scripts share `lib/certLengthPass`, so "balanced" means one thing.
+- *(2026-09-11)* **A concurrent deploy recreated the backend container fifty
+  seconds into the authored planner's first run, and the run left nothing
+  behind.** The planner collected every patch in memory and printed them at
+  the end, to a file inside the container. Another session's
+  `docker compose up -d backend` replaced the container; the process, its
+  memory and its `/tmp` went with it. Fifty-five model calls, zero output.
+  **A long run must leave its work behind as it goes, on the host.** The
+  planner now streams one JSON patch per line the moment it exists, prints
+  `resume with: --skip N` on exit, and its usage says to redirect on the host;
+  the applier reads the stream and collapses exact repeats from a resumed run.
+  Same lesson as the deploy race in memory, from the other side: you cannot
+  stop another session recreating the container, so assume it will.
+- *(2026-09-12)* **Asked to lengthen one wrong option, the model rewrote it.**
+  The authored run produced 45 patches that passed the bounds check, the
+  invariants, the rubric and the adversarial triage - and kept a median of
+  **40% of the author's content words**. 11 of 45 changed the opening word,
+  which is grammar rather than style: the four options answer the stem as a
+  set, so "That redacted values are replaced" became "Ensure redacted values
+  are replaced" and stopped completing the question it answers. 15 of 45
+  added a full stop their three siblings did not have - the letter-label
+  defect again, in punctuation, marking the option an editor touched. Caught
+  by reading the diff, not by any gate. **Every gate measured a property of
+  the result; none measured whether the result was still the author's
+  sentence.** `extensionProblem` now requires the opening word, the trailing
+  punctuation and 70% of the content words to survive, the prompt asks for an
+  extension in those words, and the bank audit gains a hard
+  `option_punctuation` check. The 45 patches were thrown away unapplied.
+  The same measurement over production's 70 balancer edits: median 50%
+  retention, 44 of 70 with a changed opening word - left alone deliberately,
+  because those options were model-written to begin with, every one was
+  re-triaged, and no author's voice was at stake.
+- *(2026-09-14)* **The extension contract worked, and the re-run still had to
+  be read.** Under it the 47 authored patches kept 100% of the author's words,
+  the opening word and the punctuation - measured, not assumed. Reading them
+  anyway found three additions that disparaged their own option: "even if it
+  risks errors", "even if the plans add little value", "regardless of its
+  current state or quality". The prompt already forbade exactly that wording.
+  **A rule the prompt states and nothing measures is a preference, not a
+  rule** - the third time this session that a stated instruction was ignored
+  and no gate noticed. `selfDefeatingPhrase` now rejects concessive
+  constructions the original did not already use. Deliberately concessive
+  constructions only, never negative words: half the bank's distractors
+  diagnose a failure, so "causing delays" is the option's content and "even if
+  it causes delays" is a hint to skip it.
+- *(2026-09-10)* **Do not write source containing backslashes through a shell
+  heredoc.** Building the schema parser that way put a literal CR and a real
+  newline where `` and `
+` were meant, producing an unterminated regex. Use
+  the Edit tool, or build the escapes with `chr()`.

@@ -1,0 +1,236 @@
+# Platform page redesign — build spec
+
+Working notes for porting Ali's `colaberryplatform.html` prototype into
+`PlatformV2.tsx`. Written 2026-08-20, session CC-20260807-h2r6.
+
+This exists so the build starts from verified facts. Two claims in the prototype
+were already wrong when checked against source, and both would have shipped on a
+page whose entire argument is *"every number has receipts."*
+
+---
+
+## VERIFIED — safe to ship as written
+
+**The evidence-band weighting formula.** `services/cape/capeSeeders.ts` lines
+63-66:
+
+```
+claim_weight: 0.2
+knowledge_weight: 0.25
+application_weight: 0.35
+judgment_weight: 0.2
+```
+
+Matches the prototype exactly, and application genuinely carries the heaviest
+weight — so "application carries the most weight because building is the thing
+that transfers" is true, not marketing.
+
+**Nuance to keep in the copy:** these are DEFAULTS.
+`capeEvidenceBandWeightsService` supports patching them with versioning (its
+test patches to `0.25/0.25/0.3/0.2`). Write them as the default model, never as
+immutable constants.
+
+**The four bands exist** as named concepts: claim, knowledge, application,
+judgment. Confirmed by the weight columns and `capeCardEnrichmentService`.
+
+---
+
+## CORRECTED — the prototype is wrong, do not ship as drawn
+
+### 1. Competency count
+
+Prototype says **ten**. `capeSeeders.ts` line 4 says **"the 11 existing
+promotion competencies."** Ali's call (2026-08-20): use the real ones.
+
+### 2. Competency NAMES — the more serious one
+
+The prototype's radar invents its categories. Real slugs found in source:
+
+```
+prompt_engineering    context_engineering   architecture
+testing               deployment            github
+leadership            documentation         security
+communication         claude_code           agentic_loops
+```
+
+The prototype's radar shows: LLM Core, Prompting, RAG, Vectors, Agents & MCP,
+Eval & Guardrails, System Design, Context Eng., Governance, Deploy & Ops.
+
+**RAG, Vectors, LLM Core and Eval & Guardrails are not tracked competencies.**
+Meanwhile testing, github, documentation, security, communication and leadership
+— which ARE tracked — are missing from the radar entirely.
+
+**Why the "Sample data" pill does not cover this.** Sample VALUES on real
+categories are exactly what that pill is for. Invented CATEGORIES tell a buyer
+the platform measures something it does not. That is a capability claim wearing
+a sample badge, and it is the failure mode this page claims immunity from.
+
+**Decision:** radar uses the real competency names, geometry adjusted to match.
+Confirmed by Ali, option 1.
+
+---
+
+## STILL UNVERIFIED — check before writing these sections
+
+- **Nine ranks** (section 2 roster, section 4 promotion gate). A text search
+  returned `architect_*` noise rather than a clean ladder; needs a targeted read
+  of the promotion-gate config, not a grep.
+- **"At least three acceptance criteria per story", one always covering trust**
+  (section 3, stage 05).
+- **Verification "ignores bot-authored commits"**, and requires BOTH all
+  criteria satisfied AND a commit naming the story (section 3, stage 08). The
+  story-trailer mechanism itself is confirmed from earlier work this session.
+- **The drill-down reaching evidence records** — org → dept → person →
+  competency → evidence. This decides whether "five clicks from the executive
+  dashboard to the line of code" is publishable at all. It is section 4's entire
+  argument.
+- ~~Promotion requiring human approval from Engineer upward~~ — **RESOLVED, AND
+  THE PROTOTYPE IS WRONG. See below.**
+
+---
+
+## CORRECTED (2) — the approval gate is AI, not human
+
+`services/progression/promotionService.ts` implements the gate as
+**`requires_ai_approval`**, called through an `aiApprover(enrollmentId, slug)`
+hook. Its own header comment reads:
+
+> "AI approval hook. Phase 2 default is permissive"
+
+So the gate is (a) an **AI** approval, not a human one, and (b) **permissive by
+default** until an approver is wired.
+
+The prototype claims, in section 4, that every level above Senior Developer
+"also needs a human-reviewed approval", and section 7 is built on
+*"humans remain accountable."*
+
+**Neither can ship as written.** What IS true and worth saying: promotion never
+passes on points alone — there is a separate approval step beyond the evidence
+minimums. Whether a human sits in it is a product decision, not something the
+marketing page gets to assert.
+
+**This needs Ali's answer before section 7 is written**, because section 7's
+entire headline is the human-accountability claim.
+
+### The competency list, corrected twice
+
+Ships as: prompt_engineering, context_engineering, architecture, testing,
+**debugging**, deployment, github, communication, leadership, security,
+documentation — from `services/progression/seeders.ts`, which seeds exactly 11.
+
+The first shipped version ended with "Claude Code", picked up from a different
+source in the search. It is not a promotion competency. Corrected in the follow
+-up commit.
+
+---
+
+## PORT RULES
+
+Agreed with Ali before starting:
+
+1. **Replace the current hero** with the prototype's. Its OS diagram becomes
+   section 1's visual.
+2. **No Google Fonts.** The prototype links Roboto and Roboto Mono; use
+   `--font-display` / `--font-mono` as every other page does. A duplicate icon
+   font was removed from this site days ago for the same reason.
+3. **Drop the prototype's header and footer.** The site has its own.
+4. **Namespace everything.** The prototype uses `.card`, `.tile`, `.app`,
+   `.flow`, `.pill`, `.two`, `.stg`, `.src` — all generic enough to collide with
+   existing styles. `.cbv2-goal`, defined twice across two files, already
+   reshaped an unrelated section once in this workstream.
+5. **12-week roadmap moves to `/program`**, not deleted. `/platform` keeps only
+   the condensed AI Aware → AI Organization ladder.
+6. **"From idea to shipped" becomes the full treatment here**; the home page
+   version shrinks to a teaser that links to it. One canonical telling.
+
+---
+
+## SECTION MAP
+
+| # | Section | Blocked on |
+|---|---|---|
+| 1 | Hero + OS diagram | — |
+| 2 | One platform, two experiences | rank ladder |
+| 3 | Idea → shipped build pipeline | AC minimum, bot-commit filter |
+| 4 | Every number has receipts | **drill-down depth** |
+| 5 | The AI Architect experience | real competency names (resolved) |
+| 6 | Capability grows because work ships | — (formula verified) |
+| 7 | Human + AI governance | human-approval gate |
+| 8 | AI Aware → AI Organization ladder | — |
+| 9 | Open the platform CTA | — |
+
+Sections 1, 6, 8 and 9 are unblocked and can be built first.
+
+---
+
+## CORRECTED (3) — RETRACTED. The drill-down IS live. Section 4 ships.
+
+**An earlier version of this section said the executive drill-down was a
+front-end-only mockup and recommended dropping section 4. That was WRONG, and
+how it went wrong is worth keeping.**
+
+`ManagementPreviewPage.tsx` (`/try`) really is static — zero `fetch(`, zero
+`useEffect`, a hardcoded roster — and its header comment says:
+
+> "Live data needs the Phase-2 manager/org rollup endpoints (none exist yet)."
+
+**That comment is stale.** It described the state when `/try` was written. The
+real manager surface shipped afterwards and nobody updated it. I checked the
+wrong surface, then trusted its comment instead of the route table.
+
+**The endpoints exist**, in `routes/participantRoutes.ts` lines 243-247, authed
+behind `requireParticipant + requireOrgManager`:
+
+```
+GET  /api/portal/org/overview
+GET  /api/portal/org/members
+GET  /api/portal/org/members/:enrollmentId    <- the drill-down
+GET  /api/portal/org/feed
+POST /api/portal/org/invites
+```
+
+`/portal/company` -> `pages/portal/company/CompanyPage.tsx`, whose header reads
+"the REAL, authed manager surface... Fetches the live org rollup, roster, and
+feed; a row click drills into the per-student detail."
+
+**Lesson for the rest of this build: verify against the route table and the
+type, never against a neighbouring file's prose.** A stale comment is exactly
+as convincing as a true one.
+
+### What the real payloads support
+
+`OrgOverview`: `member_count`, `level_distribution` (its own type comment says
+"Counts across the 9-level Builder ladder, ranks 0..8 (always length 9)" -- an
+independent confirmation of the nine ranks), `avg_readiness`,
+`builder_xp_by_week`, `evidence_this_week`, `attendance_rate`,
+`evaluations_passed_this_month`, `level_ups_last_30d`.
+
+`OrgMemberDetail`: `team`, `engagement`, `skill_xp`, `readiness`, `promotion`,
+`skill_genome`, `section_progress`, `evidence_by_source`, `evaluations`,
+`project_count`.
+
+Every number in the prototype's leadership panel has a real field behind it.
+**"AI readiness you can click into" is TRUE.**
+
+### Two prototype claims that still do NOT survive
+
+1. **"Five clicks to the line of code" -- NO.** The drill-down ends at
+   `evidence_by_source`, which is counts BY SOURCE TYPE
+   (`OrgEvidenceBySource[]`), not individual evidence records.
+   `CompanyMemberDrilldown.tsx` renders `.slice(0, 5)` of them as label/count
+   pairs. There is no path from the manager view to a commit.
+2. **"Readiness by department" -- NO.** `OrgMemberDetail.team` is
+   `string | null`, a flat optional label. There is no department tier, no org
+   hierarchy above the roster, and no department field on the participant or
+   enrollment models.
+
+**Section 4 ships as: one org, one roster, one person, their real signals --
+live and authed -- stopping honestly at evidence counts.** Section 2's
+leadership column is sound apart from "by department", which must go.
+
+### Knock-on
+
+Claims registry `surface.free.workspace` cites `ManagementPreviewPage.tsx,
+routed at /try`. That is the free PREVIEW surface, correctly labelled sample.
+The paid/authed surface is `/portal/company`. Both statements in that claim
+hold; no change needed.

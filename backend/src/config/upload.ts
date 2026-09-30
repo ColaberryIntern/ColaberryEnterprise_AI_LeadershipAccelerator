@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 
@@ -17,6 +18,10 @@ const ALLOWED_MIMES: Record<string, string> = {
   'text/plain': '.txt',
   'text/markdown': '.md',
   'text/csv': '.csv',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
 };
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -39,7 +44,7 @@ function fileFilter(
   if (ALLOWED_MIMES[file.mimetype]) {
     cb(null, true);
   } else {
-    cb(new Error('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV'));
+    cb(new Error('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, PNG, JPG, GIF, WEBP'));
   }
 }
 
@@ -50,3 +55,368 @@ export const strategyPrepUpload = multer({
 });
 
 export { UPLOAD_DIR };
+
+// ── Build Artifact(s) Lab — documents PLUS the recordings the labs now ask for ─
+//
+// The build labs used to ask for a document about the work. Weeks 5 and 7 now ask
+// for the work itself plus a short screen recording proving it ran — an Inspector
+// session answering a real call, three subagents handling one task. The blueprint
+// asked for a demo in 10 of the 12 weeks all along; nobody could submit one,
+// because this endpoint reused `strategyPrepUpload`, whose list is documents only.
+// Across all 65 build artifacts ever submitted there is not one media file.
+//
+// A SEPARATE CONFIG RATHER THAN A WIDER SHARED ONE. `strategyPrepUpload` also
+// serves strategy-prep and the admin accelerator routes. Adding video there would
+// quietly let 100MB uploads into two surfaces that never asked for them, which is
+// how an allowlist stops meaning anything.
+//
+// THE CAP IS 100MB BECAUSE GITHUB'S IS. Step 7 of each rebuilt lab tells the
+// student to commit the recording to their own repo, so a file this endpoint
+// accepts but GitHub rejects would be a trap of our own making. Anything larger
+// gets the same advice the lab gives: shorten it or compress it.
+const BUILD_ARTIFACT_MIMES: Record<string, string> = {
+  ...ALLOWED_MIMES,
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/wav': '.wav',
+  'application/zip': '.zip',
+};
+
+// Browsers are unreliable about media mime types — a .mov often arrives as
+// application/octet-stream, and .md as an empty string. The extension is the
+// fallback so a correct file is never rejected for a header we cannot control.
+const BUILD_ARTIFACT_EXT_FALLBACK = new Set(
+  [...Object.values(BUILD_ARTIFACT_MIMES)],
+);
+
+const MAX_BUILD_ARTIFACT_SIZE = 100 * 1024 * 1024; // 100MB — GitHub's own file limit
+
+const buildArtifactStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, UPLOAD_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || BUILD_ARTIFACT_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+
+function buildArtifactFilter(
+  _req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback,
+): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (BUILD_ARTIFACT_MIMES[file.mimetype] || BUILD_ARTIFACT_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Accepted: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, images, MP4, MOV, WEBM, MP3, M4A, WAV, ZIP'));
+}
+
+export const buildArtifactUpload = multer({
+  storage: buildArtifactStorage,
+  fileFilter: buildArtifactFilter,
+  limits: { fileSize: MAX_BUILD_ARTIFACT_SIZE },
+});
+
+// ── Certificate uploads (Anthropic Skills Course) — images + PDF only ─────────
+const CERT_DIR = process.env.CERT_UPLOAD_DIR || path.resolve('/app/uploads/certificates');
+try { fs.mkdirSync(CERT_DIR, { recursive: true }); } catch { /* created lazily on first write otherwise */ }
+
+const CERT_MIMES: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+};
+const MAX_CERT_SIZE = 15 * 1024 * 1024; // 15MB
+
+const certStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, CERT_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || CERT_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+function certFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  if (CERT_MIMES[file.mimetype]) cb(null, true);
+  else cb(new Error('Upload your certificate as a PDF or an image (PNG, JPG, or WEBP).'));
+}
+export const certificateUpload = multer({
+  storage: certStorage,
+  fileFilter: certFilter,
+  limits: { fileSize: MAX_CERT_SIZE },
+});
+
+export { CERT_DIR };
+
+// ── Deep Dive "Field Guide" uploads — a single self-contained .html artifact ──
+// The student builds it in their own Claude Code and uploads it. It is stored in
+// the DB (PortfolioArtifact), NOT on disk, so it survives container restarts and
+// can be rendered back — so we use MEMORY storage and read the buffer in the
+// service. Accept text/html by mime OR extension (some browsers send
+// application/octet-stream for a local .html).
+const MAX_FIELD_GUIDE_SIZE = 5 * 1024 * 1024; // 5MB
+function fieldGuideFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const name = (file.originalname || '').toLowerCase();
+  const ok = file.mimetype === 'text/html' || /\.html?$/.test(name);
+  if (ok) cb(null, true);
+  else cb(new Error('Upload the .html Field Guide that Claude Code built for you.'));
+}
+export const fieldGuideUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: fieldGuideFilter,
+  limits: { fileSize: MAX_FIELD_GUIDE_SIZE },
+});
+export { MAX_FIELD_GUIDE_SIZE };
+
+// ── Community media uploads — small images from a student's local computer ────
+// Disk storage on the persistent `uploads` volume (survives deploys); served
+// back by a public GET route keyed on the opaque UUID filename.
+const COMMUNITY_MEDIA_DIR = process.env.COMMUNITY_MEDIA_DIR || path.resolve('/app/uploads/community');
+try { fs.mkdirSync(COMMUNITY_MEDIA_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const COMMUNITY_MEDIA_MIMES: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const MAX_COMMUNITY_MEDIA_SIZE = 8 * 1024 * 1024; // 8MB — "not so big" images
+
+const communityMediaStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, COMMUNITY_MEDIA_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || COMMUNITY_MEDIA_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+function communityMediaFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  if (COMMUNITY_MEDIA_MIMES[file.mimetype]) cb(null, true);
+  else cb(new Error('Upload an image — PNG, JPG, WEBP, or GIF.'));
+}
+export const communityMediaUpload = multer({
+  storage: communityMediaStorage,
+  fileFilter: communityMediaFilter,
+  limits: { fileSize: MAX_COMMUNITY_MEDIA_SIZE },
+});
+export { COMMUNITY_MEDIA_DIR, MAX_COMMUNITY_MEDIA_SIZE };
+
+// ── Agent attachments (the read_attachments tool) — what a student hands to
+// Cory or Reese so the agent can look at it ─────────────────────────────────
+// Deliberately its own instance and directory rather than reusing
+// communityMediaUpload: these files are shipped to a third-party vision model,
+// so what is accepted here must be decided by that fact alone. Sharing the
+// community uploader would mean a future moderation or format change over
+// there silently changes what an agent can see.
+//
+// MEMORY storage, not disk: the service hashes the bytes to dedupe before it
+// decides on a filename, so it needs the buffer in hand. It writes the file
+// itself, only for genuinely new content.
+const AGENT_ATTACHMENT_DIR = process.env.AGENT_ATTACHMENT_DIR || path.resolve('/app/uploads/agent-attachments');
+try { fs.mkdirSync(AGENT_ATTACHMENT_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const AGENT_ATTACHMENT_MIMES: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'application/pdf': '.pdf',
+};
+// 10MB: comfortably above a 4K screenshot, well below what would make a
+// vision call slow or expensive.
+const MAX_AGENT_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+function agentAttachmentFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  if (AGENT_ATTACHMENT_MIMES[file.mimetype]) cb(null, true);
+  else cb(new Error('Attach an image (PNG, JPG, WEBP, GIF) or a PDF.'));
+}
+export const agentAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: agentAttachmentFilter,
+  limits: { fileSize: MAX_AGENT_ATTACHMENT_SIZE },
+});
+export { AGENT_ATTACHMENT_DIR, AGENT_ATTACHMENT_MIMES, MAX_AGENT_ATTACHMENT_SIZE };
+
+// ── Room Resource uploads (Docs & Files) — documents attached to a Community
+// Room, one of its bookings, or the Global Library ──────────────────────────
+// Disk storage on the persistent `uploads` volume (survives deploys), same as
+// communityMediaUpload. Video is deliberately NOT supported here — it's
+// link-only (paste a Vimeo/YouTube/Drive/Meet URL via resource_type:
+// 'recording'), matching the org's existing ColaberryTV pattern.
+const ROOM_RESOURCE_DIR = process.env.ROOM_RESOURCE_DIR || path.resolve('/app/uploads/room-resources');
+try { fs.mkdirSync(ROOM_RESOURCE_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const ROOM_RESOURCE_MIMES: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-excel': '.xls',
+  'application/rtf': '.rtf',
+  'text/rtf': '.rtf',
+  'text/plain': '.txt',
+  'text/markdown': '.md',
+  'text/csv': '.csv',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+};
+// Browsers frequently report application/octet-stream for .md/.txt (and
+// sometimes .csv) on Windows, so accept by extension too — a bare MIME check
+// would reject a plain CLAUDE.md upload, which is exactly what this feature
+// needs to support (see fieldGuideUpload's identical dual-check precedent).
+const ROOM_RESOURCE_EXT_FALLBACK = new Set([
+  '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+  '.rtf', '.txt', '.md', '.csv', '.png', '.jpg', '.jpeg', '.webp',
+]);
+const MAX_ROOM_RESOURCE_SIZE = 50 * 1024 * 1024; // 50MB — matches strategyPrepUpload
+
+const roomResourceStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, ROOM_RESOURCE_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ROOM_RESOURCE_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+function roomResourceFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ROOM_RESOURCE_MIMES[file.mimetype] || ROOM_RESOURCE_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, PNG, JPG, WEBP'));
+}
+export const roomResourceUpload = multer({
+  storage: roomResourceStorage,
+  fileFilter: roomResourceFilter,
+  limits: { fileSize: MAX_ROOM_RESOURCE_SIZE },
+});
+export { ROOM_RESOURCE_DIR, MAX_ROOM_RESOURCE_SIZE };
+
+// ── Room Recording storage — Session Recordings, hosted on our own disk ────
+// Deliberately separate from ROOM_RESOURCE_DIR: recordings are far larger
+// (a 2-hour class can be a multi-hundred-MB video) and get here via the
+// server-side Drive ingestion pipeline (sessionRecordingService), never via
+// a browser multipart upload — so there's no multer instance below, just the
+// shared directory + size cap the ingestion service writes into and the
+// download route reads from.
+const ROOM_RECORDING_DIR = process.env.ROOM_RECORDING_DIR || path.resolve('/app/uploads/room-recordings');
+try { fs.mkdirSync(ROOM_RECORDING_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const MAX_ROOM_RECORDING_SIZE = Number(process.env.MAX_ROOM_RECORDING_SIZE_BYTES) || 4 * 1024 * 1024 * 1024; // 4GB
+
+export { ROOM_RECORDING_DIR, MAX_ROOM_RECORDING_SIZE };
+
+// ── Signed internship documents — the offer-letter package coming back ────────
+//
+// ITS OWN INSTANCE AND ITS OWN DIRECTORY, deliberately, for the reason
+// buildArtifactUpload above already documents: `strategyPrepUpload` serves
+// strategy-prep and the admin accelerator routes, and widening it here would
+// quietly change what those two surfaces accept. That is how an allowlist stops
+// meaning anything.
+//
+// NARROWER than the others on purpose. A signed offer letter is a PDF or a clear
+// scan, and nothing else: no .docx (a signature in a Word file is not a signature),
+// no zip (we cannot verify what is inside one), no video. A student who exports the
+// wrong format gets a message telling them exactly what to send, which is a better
+// outcome than us storing something a reviewer then cannot accept.
+const SIGNED_DOC_DIR = process.env.INTERNSHIP_DOC_DIR || path.resolve('/app/uploads/internship-docs');
+try { fs.mkdirSync(SIGNED_DOC_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const SIGNED_DOC_MIMES: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/heic': '.heic',
+};
+// 25MB: a phone photo of four signed pages, with room to spare. Well under
+// anything that would make a reviewer wait.
+const MAX_SIGNED_DOC_SIZE = 25 * 1024 * 1024;
+
+// Browsers and phones are unreliable about mime types — an iPhone scan often
+// arrives as application/octet-stream — so the extension is the fallback, exactly
+// as fieldGuideUpload and roomResourceUpload already do. A correct file must never
+// be rejected for a header we do not control.
+const SIGNED_DOC_EXT_FALLBACK = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic']);
+
+const signedDocStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, SIGNED_DOC_DIR); },
+  filename: (_req, file, cb) => {
+    // Opaque UUID, never the applicant's own filename: their name and the document
+    // type must not be guessable from a path, and a filename from their machine is
+    // untrusted input we would otherwise be writing to disk.
+    const ext = path.extname(file.originalname).toLowerCase() || SIGNED_DOC_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+
+function signedDocFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (SIGNED_DOC_MIMES[file.mimetype] || SIGNED_DOC_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Upload your signed document as a PDF, or a clear photo or scan (PNG, JPG, WEBP, HEIC).'));
+}
+
+export const signedDocumentUpload = multer({
+  storage: signedDocStorage,
+  fileFilter: signedDocFilter,
+  limits: { fileSize: MAX_SIGNED_DOC_SIZE, files: 1 },
+});
+
+export { SIGNED_DOC_DIR, MAX_SIGNED_DOC_SIZE };
+
+// ── Project intake documents — text in, nothing kept ───────────────────────────
+//
+//     "Also I should be able to add documents to this process that can be analyzed
+//      before submitting the next question and can be used when creating the
+//      requirements."  (Ali, 2026-09-29)
+//
+// MEMORY storage, unlike every other upload in this file, and that is the design
+// rather than an oversight. The intake wants the TEXT: it is extracted once on
+// arrival, travels with the conversation from then on, and the file itself has no
+// later reader. Writing it to disk would make this the owner of an upload directory
+// nothing ever reads from, and of a retention question nobody asked for.
+//
+// NO IMAGES, unlike `strategyPrepUpload` whose allowlist this otherwise mirrors.
+// `officeparser` extracts no text from a PNG, so accepting one would take the
+// upload, succeed, and attach an empty document — a silent no-op wearing a success
+// message. Better to refuse it and say why.
+const INTAKE_DOC_MIMES: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-excel': '.xls',
+  'application/rtf': '.rtf',
+  'text/rtf': '.rtf',
+  'text/plain': '.txt',
+  'text/markdown': '.md',
+  'text/csv': '.csv',
+};
+
+// A brief, a spec or a deck. 15MB is a generous ceiling for a document that is about
+// to be reduced to at most 20k characters of text anyway.
+const MAX_INTAKE_DOC_SIZE = 15 * 1024 * 1024;
+
+// Browsers mislabel .md as text/plain and .csv as application/vnd.ms-excel, and a
+// download from some systems arrives as application/octet-stream. The extension is
+// the fallback, exactly as signedDocumentUpload already does, because a correct file
+// must not be refused for a header we do not control.
+const INTAKE_DOC_EXT_FALLBACK = new Set([
+  '.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.rtf', '.txt', '.md', '.csv',
+]);
+
+function intakeDocFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (INTAKE_DOC_MIMES[file.mimetype] || INTAKE_DOC_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Attach a document I can read text from: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown or CSV.'));
+}
+
+export const intakeDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: intakeDocFilter,
+  limits: { fileSize: MAX_INTAKE_DOC_SIZE, files: 1 },
+});
+
+export { MAX_INTAKE_DOC_SIZE };

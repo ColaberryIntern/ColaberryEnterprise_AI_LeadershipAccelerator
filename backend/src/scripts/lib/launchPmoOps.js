@@ -26,8 +26,22 @@ function getToken() {
 
 const H = () => ({ Authorization: `Bearer ${getToken()}`, 'User-Agent': 'Colaberry LaunchPMO (ali@colaberry.com)', Accept: 'application/json', 'Content-Type': 'application/json' });
 
+// Basecamp throttles aggressively (HTTP 429) and occasionally 503s. Retry those
+// with capped exponential backoff, honoring Retry-After when present. Max 5
+// attempts; other statuses pass straight through to the caller's error handling.
+async function rawFetch(url, opts, attempt = 0) {
+  const r = await fetch(url, opts);
+  if ((r.status === 429 || r.status === 503) && attempt < 5) {
+    const ra = parseInt(r.headers.get('Retry-After') || '', 10);
+    const waitMs = Number.isFinite(ra) ? ra * 1000 : Math.min(8000, 500 * 2 ** attempt);
+    await new Promise((res) => setTimeout(res, waitMs));
+    return rawFetch(url, opts, attempt + 1);
+  }
+  return r;
+}
+
 async function bcGet(p) {
-  const r = await fetch(p.startsWith('http') ? p : `${BASE}${p}`, { headers: H() });
+  const r = await rawFetch(p.startsWith('http') ? p : `${BASE}${p}`, { headers: H() });
   if (!r.ok) throw new Error(`GET ${p} -> ${r.status}`);
   return r.json();
 }
@@ -35,7 +49,7 @@ async function bcGetAll(p) {
   let next = p.startsWith('http') ? p : `${BASE}${p}`;
   const out = [];
   while (next) {
-    const r = await fetch(next, { headers: H() });
+    const r = await rawFetch(next, { headers: H() });
     if (!r.ok) break;
     const body = await r.json();
     if (!Array.isArray(body)) break;
@@ -47,12 +61,12 @@ async function bcGetAll(p) {
   return out;
 }
 async function bcPost(p, body) {
-  const r = await fetch(p.startsWith('http') ? p : `${BASE}${p}`, { method: 'POST', headers: H(), body: JSON.stringify(body) });
+  const r = await rawFetch(p.startsWith('http') ? p : `${BASE}${p}`, { method: 'POST', headers: H(), body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`POST ${p} -> ${r.status} ${await r.text()}`);
   return r.json();
 }
 async function bcPut(p, body) {
-  const r = await fetch(p.startsWith('http') ? p : `${BASE}${p}`, { method: 'PUT', headers: H(), body: JSON.stringify(body) });
+  const r = await rawFetch(p.startsWith('http') ? p : `${BASE}${p}`, { method: 'PUT', headers: H(), body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`PUT ${p} -> ${r.status} ${await r.text()}`);
   // 204 No Content (Basecamp's response for status-changes like trash) has no body.
   if (r.status === 204) return { status: 204 };
@@ -114,6 +128,29 @@ async function createTodolist({ projectId = LAUNCH.projectId, name, description 
     return match;
   }
   return bcPost(`/buckets/${projectId}/todosets/${dock.todoset.id}/todolists.json`, { name, description: description || '' });
+}
+
+// =============================================================================
+// Todolist groups (sub-sections within a list). A group IS a todolist, so
+// createTodo works against a group's id unchanged (listId = group.id).
+// =============================================================================
+async function listTodoGroups({ projectId = LAUNCH.projectId, listId }) {
+  return bcGetAll(`/buckets/${projectId}/todolists/${listId}/groups.json`);
+}
+
+async function createTodoGroup({ projectId = LAUNCH.projectId, listId, name }) {
+  const existing = await listTodoGroups({ projectId, listId });
+  const match = (existing || []).find((g) => g.name === name);
+  if (match) return match;
+  return bcPost(`/buckets/${projectId}/todolists/${listId}/groups.json`, { name });
+}
+
+// =============================================================================
+// Trash a recording (todo, group, etc). Basecamp returns 204 No Content.
+// Idempotent: re-trashing an already-trashed recording is a no-op upstream.
+// =============================================================================
+async function trashTodo({ projectId = LAUNCH.projectId, recordingId }) {
+  return bcPut(`/buckets/${projectId}/recordings/${recordingId}/status/trashed.json`, {});
 }
 
 // =============================================================================
@@ -230,6 +267,7 @@ module.exports = {
   bcGet, bcGetAll, bcPost, bcPut,
   getDock,
   createTodolist, createTodo, postMessage,
+  listTodoGroups, createTodoGroup, trashTodo,
   addPeopleToProject, createScheduleEntry,
   uploadToVault, createVaultFolder, uploadAttachment,
   updateTodo,

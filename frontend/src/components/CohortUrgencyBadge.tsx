@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { computeUrgency, UrgencyResult } from '../services/cohortUrgencyService';
-import { Cohort } from '../models/Cohort';
 import api from '../utils/api';
+import { selectNextCohort } from '../utils/cohortSelection';
 
 interface CohortUrgencyBadgeProps {
   /** Pass directly if cohort data is already loaded (e.g. EnrollPage) */
@@ -26,13 +26,8 @@ function CohortUrgencyBadge({ startDate, seatsRemaining, className = '' }: Cohor
 
     api.get('/api/cohorts')
       .then((res) => {
-        const today = new Date().toISOString().split('T')[0];
-        const open = (res.data.cohorts || [])
-          .filter((c: Cohort) => c.seats_taken < c.max_seats && c.start_date >= today)
-          .sort((a: Cohort, b: Cohort) => a.start_date.localeCompare(b.start_date));
-
-        if (open.length > 0) {
-          const next = open[0];
+        const next = selectNextCohort(res.data.cohorts);
+        if (next) {
           setUrgency(computeUrgency(next.start_date, next.max_seats - next.seats_taken));
         }
       })

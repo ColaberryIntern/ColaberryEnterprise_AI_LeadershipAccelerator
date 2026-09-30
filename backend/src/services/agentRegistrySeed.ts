@@ -1,21 +1,66 @@
 import AiAgent from '../models/AiAgent';
-import type { AiAgentType, AiAgentTriggerType, AiAgentCategory } from '../models/AiAgent';
 import { Op } from 'sequelize';
+import { seedReeseIdentity } from './reese/reeseIdentitySeed';
+import { seedTicketCreatorIdentities } from './agentBlueprint/ticketCreatorIdentitySeed';
+import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
+import { seedDaraIdentity } from './curriculum/daraIdentitySeed';
+import { DARA_PERSONA_BLOCK } from './curriculum/daraPersona';
+import { repointCurriculumLegacyBehaviors } from './curriculum/repointLegacyBehaviors';
+import { recordPersonaVersionChangeIfNeeded } from './agentPersonaVersionHistoryService';
+import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './agentAutonomyReclassificationService';
+import { GROWTH_JOURNEY_AGENT_ENTRIES } from './agentRegistry/growthJourneyAgents';
 
-interface AgentSeedEntry {
-  agent_name: string;
-  agent_type: AiAgentType;
-  module: string;
-  source_file: string;
-  trigger_type: AiAgentTriggerType;
-  schedule: string;
-  category: AiAgentCategory;
-  description: string;
-  config?: Record<string, any>;
-}
+import type { AgentSeedEntry } from './agentRegistry/agentSeedTypes';
 
 const AGENT_REGISTRY: AgentSeedEntry[] = [
   // --- schedulerService.ts cron jobs ---
+  {
+    agent_name: 'ExplorerContentSync',
+    agent_type: 'scheduled_processor',
+    module: 'runContentSync',
+    source_file: 'backend/src/services/explorerGrowth/content/runContentSync.ts',
+    trigger_type: 'cron',
+    schedule: '50 2 * * *',
+    category: 'behavioral',
+    description:
+      'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute and an hour before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
+  },
+  {
+    agent_name: 'ExplorerGovernorDecide',
+    agent_type: 'scheduled_processor',
+    module: 'runGovernor',
+    source_file: 'backend/src/services/explorerGrowth/governor/runGovernor.ts',
+    trigger_type: 'cron',
+    schedule: '50 3 * * *',
+    category: 'behavioral',
+    description:
+      'Explorer Growth OS Journey Governor. Decides one action per Explorer per day across section 9.1 priority tiers, writing explorer_journey_decisions with the chosen action AND every suppressed candidate with its reason. DECIDES AND RECORDS ONLY - enqueues nothing and sends nothing; every row is executed:false and execution is a separate epic. Runs 30 minutes after ExplorerProfileRecompute because it reads the scores that job writes. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_GOVERNOR_ENABLED are on.',
+  },
+  {
+    agent_name: 'ExplorerProfileRecompute',
+    agent_type: 'scheduled_processor',
+    module: 'explorerProfileService',
+    source_file: 'backend/src/services/explorerGrowth/explorerProfileService.ts',
+    trigger_type: 'cron',
+    schedule: '20 3 * * *',
+    // 'behavioral' rather than a new category: this scores learner behaviour,
+    // and AiAgentCategory is a closed union - adding a member would widen a
+    // contract several admin surfaces read from.
+    category: 'behavioral',
+    description:
+      'Explorer Growth OS journey intelligence. Recomputes E/I/F scores, affinities, contactability and journey state for every Explorer, writing explorer_journey_profiles plus one explorer_score_snapshots row per learner per day. SCORES AND CLASSIFIES ONLY - decides nothing and sends nothing; the Journey Governor is a separate agent. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on. Recompute is idempotent: two runs with the same as-of time produce identical scores.',
+  },
+  {
+    agent_name: 'ProgressionLadderSweep',
+    agent_type: 'scheduled_processor',
+    module: 'milestoneSweep',
+    source_file: 'backend/src/services/progression/milestoneSweep.ts',
+    trigger_type: 'cron',
+    schedule: '40 3 * * *',
+    category: 'behavioral',
+    description:
+      'Build-ladder safety net (docs/POINTS_LADDER_DECISIONS.md). Re-evaluates every scored student against their program milestones (curriculum complete, verified projects, staff-approved certification) so a milestone that became true without an event firing is reflected by morning. With MILESTONE_LADDER_ENABLED off it runs the legacy evidence evaluator instead. Idempotent: milestones latch and ranks never lower, so a second pass changes nothing. One student at a time; a failing row is logged and skipped, never retried inside the pass.',
+  },
   {
     agent_name: 'ScheduledActionsProcessor',
     agent_type: 'scheduled_processor',
@@ -26,6 +71,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'outbound',
     description:
       'Processes pending ScheduledEmail records across all channels (email, voice, SMS). Applies AI content generation at send time, handles test mode overrides, and enforces pacing/rate limits per campaign.',
+  },
+  {
+    agent_name: 'ApprovalRequestTimeoutSweep',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/workLedger/approvalRequestTimeoutJob.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'governance_ops',
+    description:
+      'Real-enforcement scoping, Phase 1 (2026-09-20). Auto-approves any ApprovalRequest still pending past its real review window, so a held agent action is never stuck indefinitely with nobody reviewing it. Calls the same approveApprovalRequest() the admin UI uses, inheriting its replay + idempotency guard.',
   },
   {
     agent_name: 'NoShowDetector',
@@ -83,6 +139,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Evaluates behavioral trigger rules and automatically enrolls qualifying leads in behavior-triggered campaigns. Creates CampaignLead records and queues initial outreach actions.',
   },
   {
+    agent_name: 'MandrillOpenClickPoll',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/mandrillEngagementPoll.ts',
+    trigger_type: 'cron',
+    schedule: '5,35 * * * *',
+    category: 'outbound',
+    description:
+      'Mandrill open/click poll, the backstop for webhooks the school system consumes first. Every 30 minutes asks Mandrill for campaign-tagged mail (X-MC-Tags campaign-sequence) over a two-day window at the API cap of 1,000, attributes each open and click to the SENT EMAIL WHOSE SUBJECT MATCHES (never the most recent send - 40% of rows were mis-pinned before 2026-09-11), and records unmatched opens against the lead with no campaign. Dedup on (lead, outcome, subject, day). Registered here on 2026-09-11 so its runs, errors and misses are visible to cron-health alerting; until then it ran untracked.',
+  },
+  {
     agent_name: 'PageEventCleanup',
     agent_type: 'maintenance',
     module: 'schedulerService',
@@ -92,6 +159,39 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'maintenance',
     description:
       'Data retention: deletes PageEvent records older than 90 days to manage database size.',
+  },
+  {
+    // BC #10099862873 P1: previously ran untracked, invisible to cron health alerting.
+    agent_name: 'PreviewStackReaper',
+    agent_type: 'maintenance',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/previewStackReaper.ts',
+    trigger_type: 'cron',
+    schedule: '*/5 * * * *',
+    category: 'maintenance',
+    description: 'Stops preview Docker stacks untouched for 30+ minutes to free resources.',
+  },
+  {
+    // BC #10099862873 P1: previously ran untracked, invisible to cron health alerting.
+    agent_name: 'StaleActionRecovery',
+    agent_type: 'maintenance',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/schedulerService.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'maintenance',
+    description: 'Recovers ScheduledAction rows stuck in "processing" past their max age.',
+  },
+  {
+    // BC #10099862873 P1: previously ran untracked, invisible to cron health alerting.
+    agent_name: 'AutonomousIngestInsights',
+    agent_type: 'insight_computer',
+    module: 'schedulerService',
+    source_file: 'backend/src/jobs/autonomousIngestInsights.ts',
+    trigger_type: 'cron',
+    schedule: '0 */6 * * *',
+    category: 'autonomous',
+    description: 'Regenerates autonomous suggestion cards from ingest data. Never auto-applies.',
   },
   {
     agent_name: 'ChatMessageCleanup',
@@ -125,6 +225,65 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'outbound',
     description:
       'Checks if email digest is enabled. Compiles and sends daily/weekly digest emails at the configured hour and day to admin recipients.',
+  },
+  {
+    agent_name: 'AiNewsRefresh',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/intel/aiNewsIngestionService.ts',
+    trigger_type: 'cron',
+    schedule: '15 3 * * *',
+    category: 'accelerator',
+    description:
+      'AI News Flash intelligence pipeline. Daily 03:15 CT: fetches free AI-lab RSS feeds, dedup-upserts the library, materializes up to AI_NEWS_MAX_PER_RUN news cards (cost-gated by AI_NEWS_INGEST_ENABLED), then prunes generated cards older than 30 days. A boot catch-up recovers a run missed by a redeploy. Registering it here gives the cron run-history + failure tracking via instrumentCronJob.',
+  },
+  // Intelligence pipelines — the 9 generators beyond AI News Flash. Daily 03:45 CT
+  // via the shared Intel cron loop; each cost-gated by its own <SLUG>_INGEST_ENABLED
+  // flag (default OFF → ships dark) and tracked per-source via instrumentCronJob.
+  {
+    agent_name: 'Intel_ai_research_digest', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_research_digest.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Research Digest pipeline (arXiv API + Papers with Code RSS). Daily 03:45 CT; cost-gated by AI_RESEARCH_DIGEST_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_architecture_breakdown', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_architecture_breakdown.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Architecture Breakdown pipeline (Netflix/AWS/Uber engineering blog RSS). Daily 03:45 CT; cost-gated by AI_ARCHITECTURE_BREAKDOWN_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_build_breakdown', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/build_breakdown.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Build Breakdown pipeline (GitHub Blog + dev.to AI RSS). Daily 03:45 CT; cost-gated by BUILD_BREAKDOWN_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_tool_of_the_day', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_tool_of_the_day.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Tool of the Day pipeline (curated tool seed + LLM profile). Daily 03:45 CT; cost-gated by AI_TOOL_OF_THE_DAY_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_quote_of_the_day', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_quote_of_the_day.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Quote of the Day pipeline (curated quote seed + LLM). Daily 03:45 CT; cost-gated by AI_QUOTE_OF_THE_DAY_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_claude_code_technique', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/claude_code_technique.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Claude Code Technique pipeline (curated technique seed + LLM). Daily 03:45 CT; cost-gated by CLAUDE_CODE_TECHNIQUE_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_mcp_server_spotlight', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/mcp_server_spotlight.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'MCP Server Spotlight pipeline (MCP registry README + curated fallback). Daily 03:45 CT; cost-gated by MCP_SERVER_SPOTLIGHT_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_video_stream', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/aiVideoStreamSource.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Video Stream pipeline (YouTube Data API; needs YOUTUBE_API_KEY, degrades to no-op if absent). Daily 03:45 CT; cost-gated by AI_VIDEO_STREAM_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_market_intelligence', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/marketIntelligenceSource.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Market Intelligence pipeline (Opportunity Pulse REST; needs OPPORTUNITY_PULSE_URL, degrades to no-op if absent). Daily 03:45 CT; cost-gated by MARKET_INTELLIGENCE_INGEST_ENABLED (default off).',
   },
   {
     agent_name: 'SessionReminders',
@@ -1626,6 +1785,15 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
   },
 
   // --- Department Strategy Architect agents (16) ---
+  // Agent Ticket Standard audit (2026-08-18, session CC-20260818-a7d2): all 16 share one
+  // engine (strategyArchitectAgent.ts / departmentInitiativeEngine.ts), re-verified against
+  // that engine's real exported functions for tools_granted (never boilerplate/aspirational —
+  // directive Step 4). Each description now also states why no recurring resolver is
+  // registered (directive Step 6): `Initiative.status` (the model backing every one of these
+  // 16 agents' tickets) has zero write paths anywhere in this codebase today — nothing, human
+  // or automated, ever transitions it away from 'planned' — so there is no live signal to
+  // build an honest resolver against yet. A time-based/elapsed-age fallback is permanently
+  // banned in this repo, so these tickets stay open rather than being force-closed.
   {
     agent_name: 'ExecutiveStrategyArchitect',
     agent_type: 'dept_strategy_architect',
@@ -1634,7 +1802,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '0 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Executive Office. Evaluates organizational health, identifies cross-department alignment opportunities, and generates executive-level initiatives.',
+    description: 'Strategic planning agent for Executive Office. Evaluates organizational health, identifies cross-department alignment opportunities, and generates executive-level initiatives. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'executive', agent_name: 'ExecutiveStrategyArchitect' },
   },
   {
@@ -1645,7 +1814,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '2 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Governance & Compliance. Monitors compliance posture, identifies risk patterns, and ensures policy adherence across departments.',
+    description: 'Strategic planning agent for Governance & Compliance. Monitors compliance posture, identifies risk patterns, and ensures policy adherence across departments. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'governance', agent_name: 'GovernanceStrategyArchitect' },
   },
   {
@@ -1656,7 +1826,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '4 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Strategy & Analytics. Drives data-driven planning, forecasting accuracy, and strategic initiative pipeline.',
+    description: 'Strategic planning agent for Strategy & Analytics. Drives data-driven planning, forecasting accuracy, and strategic initiative pipeline. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'strategy', agent_name: 'StrategyFuturesArchitect' },
   },
   {
@@ -1667,7 +1838,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '6 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Finance. Optimizes cost structures, revenue forecasting accuracy, and scholarship allocation efficiency.',
+    description: 'Strategic planning agent for Finance. Optimizes cost structures, revenue forecasting accuracy, and scholarship allocation efficiency. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'finance', agent_name: 'FinanceIntelligenceArchitect' },
   },
   {
@@ -1678,7 +1850,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '8 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Operations. Drives workflow optimization, quality assurance improvements, and process automation.',
+    description: 'Strategic planning agent for Operations. Drives workflow optimization, quality assurance improvements, and process automation. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'operations', agent_name: 'OperationsOptimizationArchitect' },
   },
   {
@@ -1689,7 +1862,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '10 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Orchestration. Coordinates agent fleet performance, decision simulation, and system-wide optimization.',
+    description: 'Strategic planning agent for Orchestration. Coordinates agent fleet performance, decision simulation, and system-wide optimization. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'orchestration', agent_name: 'OrchestrationEcosystemArchitect' },
   },
   {
@@ -1700,7 +1874,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '12 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Intelligence & AI Ops. Identifies anomaly patterns, generates strategic insights, and improves autonomous operations.',
+    description: 'Strategic planning agent for Intelligence & AI Ops. Identifies anomaly patterns, generates strategic insights, and improves autonomous operations. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'intelligence', agent_name: 'InsightArchitect' },
   },
   {
@@ -1711,7 +1886,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '14 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Partnerships. Identifies expansion opportunities, strengthens corporate relationships, and develops institutional alliances.',
+    description: 'Strategic planning agent for Partnerships. Identifies expansion opportunities, strengthens corporate relationships, and develops institutional alliances. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'partnerships', agent_name: 'PartnershipExpansionArchitect' },
   },
   {
@@ -1722,7 +1898,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '16 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Growth. Designs growth experiments, scans for expansion opportunities, and drives partnership development.',
+    description: 'Strategic planning agent for Growth. Designs growth experiments, scans for expansion opportunities, and drives partnership development. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'growth', agent_name: 'GrowthExperimentArchitect' },
   },
   {
@@ -1733,7 +1910,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '18 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Marketing. Optimizes lead generation, content strategy, campaign performance, and brand positioning.',
+    description: 'Strategic planning agent for Marketing. Optimizes lead generation, content strategy, campaign performance, and brand positioning. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'marketing', agent_name: 'MarketingAutomationArchitect' },
   },
   {
@@ -1744,7 +1922,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '20 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Admissions. Improves enrollment pipeline, student recruitment efficiency, and conversion optimization.',
+    description: 'Strategic planning agent for Admissions. Improves enrollment pipeline, student recruitment efficiency, and conversion optimization. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'admissions', agent_name: 'AdmissionsConversionArchitect' },
   },
   {
@@ -1755,7 +1934,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '22 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Infrastructure. Monitors system health, security posture, AI model performance, and reliability improvements.',
+    description: 'Strategic planning agent for Infrastructure. Monitors system health, security posture, AI model performance, and reliability improvements. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'infrastructure', agent_name: 'InfrastructureEvolutionArchitect' },
   },
   {
@@ -1766,7 +1946,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '24 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Platform. Drives UX optimization, deployment improvements, and performance monitoring enhancements.',
+    description: 'Strategic planning agent for Platform. Drives UX optimization, deployment improvements, and performance monitoring enhancements. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'platform', agent_name: 'PlatformInnovationArchitect' },
   },
   {
@@ -1777,7 +1958,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '26 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Education. Innovates curriculum design, content generation methods, and learning outcome measurement.',
+    description: 'Strategic planning agent for Education. Innovates curriculum design, content generation methods, and learning outcome measurement. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'education', agent_name: 'LearningInnovationArchitect' },
   },
   {
@@ -1788,7 +1970,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '28 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Student Success. Improves retention, mentoring programs, learning outcomes, and student experience.',
+    description: 'Strategic planning agent for Student Success. Improves retention, mentoring programs, learning outcomes, and student experience. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'student_success', agent_name: 'StudentSuccessArchitect' },
   },
   {
@@ -1799,7 +1982,8 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     trigger_type: 'cron',
     schedule: '30 */6 * * *',
     category: 'dept_strategy',
-    description: 'Strategic planning agent for Alumni Relations. Strengthens post-graduation engagement, referral programs, and community building.',
+    description: 'Strategic planning agent for Alumni Relations. Strengthens post-graduation engagement, referral programs, and community building. No recurring resolver registered yet: Initiative.status has no write path in this codebase today, so tickets stay open until a genuine terminal-state signal exists (never time-based auto-close).',
+    tools_granted: ['evaluate_department_health', 'identify_strategic_opportunities', 'create_strategic_initiative', 'generate_initiative_tickets', 'llm_strategy_analysis'],
     config: { department_slug: 'alumni', agent_name: 'AlumniNetworkArchitect' },
   },
 
@@ -1883,6 +2067,22 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     schedule: '5,15,25,35,45,55 * * * *',
     category: 'security_ops',
     description: 'Monitors agent fleet for anomalies: stuck agents (running >15min), error spikes (>5/hr), and execution duration outliers (>3x average). Every 10 minutes.',
+    // Registration-time hardening (2026-08-19) — added retroactively: this was
+    // the one real registered ticket-creating agent found missing
+    // tools_granted entirely during the Agent Ticket Standard hardening pass
+    // (Step 4). Matches its real, current behavior in
+    // agentBehaviorMonitorAgent.ts exactly — the 3 detect_* capabilities are
+    // its 3 anomaly checks, create_security_alerts is its DepartmentEvent
+    // writes, create_tickets is its stuck-agent ticket creation. Never
+    // boilerplate/aspirational (directive Step 4) — verified against the
+    // function body, not assumed.
+    tools_granted: [
+      'detect_stuck_agents',
+      'detect_agent_error_spikes',
+      'detect_agent_duration_anomalies',
+      'create_security_alerts',
+      'create_tickets',
+    ],
   },
   {
     agent_name: 'AdmissionsKnowledgeSyncAgent',
@@ -1987,12 +2187,915 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description: 'Classifies unrouted leads into offer pipelines (accelerator/advisory/custom_build/enterprise). Runs every 6 hours.',
     config: {},
   },
+  {
+    agent_name: 'PortfolioGitHubSyncAgent',
+    agent_type: 'github_automation',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/githubIntegrationService.ts',
+    trigger_type: 'cron',
+    schedule: '15 2 * * *',
+    category: 'accelerator',
+    description:
+      'Daily batch sync of GitHub activity for all active enrolled students. Fetches commits_last_7d, open_prs, total_stars, and contribution_graph_json for every enrollment with a connected repository. Per-student failures are isolated — one failure does not abort others. Webhook-triggered syncs handle real-time push events; this job is the fallback.',
+  },
+
+  // --- AI Workforce directors (orgRegistry.ts) — one tool + one action each,
+  // gated by workforceAgentRuntime.ts's hard kill-switch/safe-mode/enabled
+  // check (see docs/trust-audit/2026-07-30-ai-workforce-activation.md). Ship
+  // enabled: true — each is individually toggleable via the admin dashboard
+  // or ai_agents.enabled without a redeploy, and the global kill switch stops
+  // all of them at once. ---
+  {
+    agent_name: 'WorkforceStudentSuccessDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '0 6 * * *',
+    category: 'workforce_director',
+    description: 'Marcus Bell. Reads the daily at-risk-student signal and flags the top one as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCurriculumDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '10 6 * * *',
+    category: 'workforce_director',
+    description: 'Dr. Elena Vasquez. Reads the daily curriculum-quality signal and flags the top gap as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCareerDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '20 6 * * *',
+    category: 'workforce_director',
+    description: 'Jordan Ellis. Reads the daily employment-readiness signal and flags the gap as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCertificationDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '30 6 * * *',
+    category: 'workforce_director',
+    description: 'Nadia Farouk. Reads the daily certification pass-probability signal and flags the risk as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceFinanceDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '40 6 * * *',
+    category: 'workforce_director',
+    description: 'Grace Okoro. Reads the daily unpaid-tuition signal and flags collections as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceOperationsDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'workforce_director',
+    description: 'Ravi Kapoor. Reads the attendance signal and flags a WorkforceTask when it drops below threshold. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCommunityDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '50 6 * * *',
+    category: 'workforce_director',
+    description: 'Diego Morales. Reads the portfolio-sharing signal and flags a WorkforceTask when artifacts lag active students. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceTechnologyDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '7,22,37,52 * * * *',
+    category: 'workforce_director',
+    description: 'Alex Kim. Reads the ai_agents registry for the worst unhealthy agent and flags it as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceResearchDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '0 7 * * 0',
+    category: 'workforce_director',
+    description: 'Dr. Kenji Watanabe. Weekly digest of the top 3 ranked school signals, sent as one WorkforceMessage to Curriculum. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceMarketingDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'workforce_director',
+    description: 'Sofia Lindqvist. Manual-trigger only. Drafts ONE content idea (one gpt-4o-mini call) grounded in the top ranked signal and queues it in proposed_agent_actions for human review — never posts or sends.',
+    enabled: true,
+  },
+
+  // --- BC #10099862873 P1 item 1: previously ran untracked in aiOpsScheduler.ts,
+  // invisible to cronHealthAlertService.ts's error-rate/missed-run alerting ---
+  {
+    agent_name: 'AutonomousRequirementExpansion',
+    agent_type: 'action_planner',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/autonomousRequirementExpansionService.ts',
+    trigger_type: 'cron',
+    schedule: '3,18,33,48 * * * *',
+    category: 'autonomous',
+    description: 'Expands autonomous requirement discovery cycles.',
+  },
+  {
+    agent_name: 'ProposalCleanupService',
+    agent_type: 'maintenance',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/proposalCleanupService.ts',
+    trigger_type: 'cron',
+    schedule: '0 2 * * *',
+    category: 'governance_ops',
+    description: 'Expires stale governance proposals past their review window.',
+  },
+  {
+    agent_name: 'CoryEvolutionCycle',
+    agent_type: 'strategic_cycle',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/cory/coryBrain.ts',
+    trigger_type: 'cron',
+    schedule: '20 */6 * * *',
+    category: 'executive',
+    description: 'Cory self-evolution cycle — reviews and tunes its own strategic cycle behavior.',
+  },
+  {
+    agent_name: 'DailyExecutiveBriefing',
+    agent_type: 'executive_briefing',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/executiveBriefingService.ts',
+    trigger_type: 'cron',
+    schedule: '45 6 * * *',
+    category: 'executive',
+    description: 'Generates and sends the daily executive briefing email.',
+  },
+  {
+    agent_name: 'WeeklyStrategicBriefing',
+    agent_type: 'executive_briefing',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/executiveBriefingService.ts',
+    trigger_type: 'cron',
+    schedule: '45 6 * * 1',
+    category: 'executive',
+    description: 'Generates and sends the weekly strategic briefing email.',
+  },
+  {
+    agent_name: 'ExecutiveAwarenessEveningDigest',
+    agent_type: 'digest',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/executiveBriefingService.ts',
+    trigger_type: 'cron',
+    schedule: '0 18 * * *',
+    category: 'executive',
+    description: 'Evening executive awareness digest.',
+  },
+  {
+    agent_name: 'StrategicMetricCapture',
+    agent_type: 'strategic_intelligence',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/strategic-intelligence/strategicStateStore.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'strategic',
+    description: 'Captures a periodic strategic-state snapshot for trend/anomaly analysis.',
+  },
+  {
+    agent_name: 'StrategicTrendAnalysis',
+    agent_type: 'trend_detection',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/strategic-intelligence/anomalyDetectionEngine.ts',
+    trigger_type: 'cron',
+    schedule: '5,35 * * * *',
+    category: 'strategic',
+    description: 'Detects and emits strategic trend anomalies.',
+  },
+  {
+    agent_name: 'StrategicRecommendationCycle',
+    agent_type: 'strategic_intelligence',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/strategic-intelligence/recommendationEngine.ts',
+    trigger_type: 'cron',
+    schedule: '10,40 * * * *',
+    category: 'strategic',
+    description: 'Full strategic inference + recommendation cycle (metrics, trends, anomalies, inferences, recommendations).',
+  },
+  {
+    agent_name: 'CampaignTrafficEnforcement',
+    agent_type: 'maintenance',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/campaignLinkService.ts',
+    trigger_type: 'cron',
+    schedule: '0 */2 * * *',
+    category: 'operations',
+    description: 'Flags unregistered campaign traffic for review.',
+  },
+  {
+    agent_name: 'IntelligenceRetentionCycle',
+    agent_type: 'memory',
+    module: 'aiOpsScheduler',
+    source_file: 'backend/src/services/cory/intelligenceRetention.ts',
+    trigger_type: 'cron',
+    schedule: '15 3 * * *',
+    category: 'memory',
+    description: 'Daily intelligence-data retention cleanup cycle.',
+  },
+
+  // --- Reese Phase 1: real staff AI mentor identity ---
+  {
+    agent_name: 'Reese',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/',
+    // Reactive only in Phase 1 — replies exist purely as a response to an
+    // inbound student DM, never on a schedule. See reeseReplyService.ts (T009).
+    trigger_type: 'event_driven',
+    schedule: '',
+    category: 'student_success',
+    description:
+      'Reese — the student\'s dedicated AI Systems Architect mentor, reachable via ' +
+      'a real, persistent direct-message thread (same DM system as the rest of the ' +
+      'portal). Phase 1 is 100% reactive: Reese only ever replies to an inbound ' +
+      'student message, never initiates contact. Every exchange is backed by a ' +
+      'real ProofDesk ticket. See docs/CORY_PERSONA_SPEC.md for the locked voice ' +
+      'rules this persona is built from.',
+    config: { pilot_cohort_ids: [] },
+    enabled: true,
+    system_prompt: REESE_PERSONA_BLOCK,
+    // Honest, non-aspirational — reflects exactly what the code lets Reese do.
+    // Checkpoint E (2026-09-06) added her first 2 genuinely LLM-invoked tools
+    // (reeseTools.ts) — real function-calling, not just a system-prompt fact.
+    tools_granted: ['respond_to_dm', 'read_learner_context', 'read_student_success_snapshot', 'assess_student_health'],
+    persona_version: '2026-08-06',
+  },
+  // --- AI Employee Consolidation Program, Employee #1: Curriculum, Learning
+  // & Certification (Dara) --- Built to Reese Employee Standard 2.0.
+  // `enabled: false` per the program's governance checklist (mirrors
+  // build-platform-agent/SKILL.md's own rule: "new agents seed with
+  // AiAgent.enabled: false by default") — a human enables this row only
+  // after Phase 5 shadow validation and Phase 6 production verification, not
+  // automatically at seed time. `tools_granted` matches
+  // TOOL_CAPABILITY_DESIGN_v1.md's B3.2 design exactly — running the real
+  // classifier (agentCapabilityClassifier.ts) against this array resolves to
+  // `act_audited` (verified by an independent plan audit before this was
+  // written, not asserted).
+  {
+    agent_name: 'Dara',
+    agent_type: 'ai_employee',
+    module: 'curriculum',
+    source_file: 'backend/src/services/curriculum/',
+    trigger_type: 'event_driven',
+    schedule: '',
+    category: 'curriculum',
+    description:
+      'Dara — the Curriculum, Learning & Certification Lead: owns the integrity, ' +
+      'quality, and certification-readiness of what Colaberry teaches. First release ' +
+      'absorbed 4 real, dormant legacy behaviors (2 daily gap/readiness flags, a ' +
+      'read-only curriculum integrity scan, video-link health monitoring), all ' +
+      'deterministic, no LLM call. Dara v2 (2026-09-17) added a real student-facing ' +
+      'DM surface for curriculum/certification questions, LLM-backed and cost-' +
+      'attributed to her own agent_id, with mandatory ticket-backed handoff to a ' +
+      'human for anything outside her scope — never off-ledger, never a guessed ' +
+      'answer. Reports directly to Swati Raman. See ' +
+      'docs/architecture/ai-workforce-management/employees/curriculum/ for the full ' +
+      'charter, personality profile, and accountability contract (all approved by Ali).',
+    config: {},
+    enabled: false,
+    system_prompt: DARA_PERSONA_BLOCK,
+    tools_granted: [
+      'flag_curriculum_content_gaps', 'flag_certification_readiness', 'scan_curriculum_integrity', 'monitor_curriculum_video_health',
+      // Dara v2 Phase 3/4 (2026-09-17) — real, LLM-backed student DM capability
+      // and its mandatory human-handoff mechanism (daraReplyService.ts,
+      // daraTools.ts, daraHandoffService.ts).
+      'respond_to_curriculum_dm', 'escalate_to_human',
+    ],
+    persona_version: '2026-09-17',
+  },
+  // --- DaraPresenceHeartbeat: Dara's own real, tracked always-online cron ---
+  // Same real mechanism as ReesePresenceHeartbeat above (generalized,
+  // agentBlueprint/agentPresenceHeartbeat.ts) — registered from day one
+  // (unlike ReesePresenceHeartbeat, which ran untracked for months before
+  // this program found and closed that exact gap, per REESE_STANDARD_AUDIT.md
+  // gap 10 and build-platform-agent/SKILL.md's own worked example).
+  {
+    agent_name: 'DaraPresenceHeartbeat',
+    agent_type: 'ai_employee',
+    module: 'curriculum',
+    source_file: 'backend/src/services/curriculum/daraPresenceHeartbeat.ts',
+    trigger_type: 'cron',
+    schedule: '*/1 * * * *',
+    category: 'curriculum',
+    description:
+      'Touches only Dara\'s own CommunityMember.last_active_at every minute, the ' +
+      'same generic mechanism Reese\'s own heartbeat uses ' +
+      '(agentBlueprint/agentPresenceHeartbeat.ts), so the People panel reads Dara ' +
+      'as online with no new real-time infrastructure. No LLM call, no message ' +
+      'sent, no ticket.',
+    enabled: true,
+  },
+  // --- CurriculumVideoLinkHealth: absorbed by Dara (behavior, not identity) ---
+  // Was a real, already-running cron (schedulerService.ts, env-gated by
+  // CURRICULUM_VIDEO_HEALTH_ENABLED) with NO AGENT_REGISTRY row at all — no
+  // kill switch, no run_count, invisible to cronHealthAlertService. Same
+  // precedent as ReesePresenceHeartbeat above: register the tracking row,
+  // change zero real behavior. `parent_agent_id` set to Dara's id by
+  // repointCurriculumLegacyBehaviors() (curriculum/repointLegacyBehaviors.ts),
+  // called after this row is created.
+  {
+    agent_name: 'CurriculumVideoLinkHealth',
+    agent_type: 'ai_employee',
+    module: 'curriculum',
+    source_file: 'backend/src/services/curriculumHealth/videoLinkHealthService.ts',
+    trigger_type: 'cron',
+    schedule: '20 6 * * *',
+    category: 'curriculum',
+    description:
+      'Real YouTube Data API check of curriculum videos — flags breakage via ' +
+      'alertService.ts, never edits a curriculum card directly. Env-gated OFF by ' +
+      'default (CURRICULUM_VIDEO_HEALTH_ENABLED); registering this row changes no ' +
+      'behavior, it only gives the existing cron a kill switch and observability.',
+    enabled: true,
+  },
+  // --- SBP GitHub: repository-invitation sweep ---
+  // Registered rather than left untracked for two reasons. It gives an operator
+  // a pause switch from Admin > Agents with no redeploy; and, more importantly,
+  // cronHealthAlertService's missed-run detector only evaluates agents that are
+  // in this registry AND enabled — an untracked cron that silently stops
+  // producing zero signal anywhere, which is precisely the failure this job
+  // exists to end.
+  {
+    agent_name: 'GithubInvitationSweep',
+    agent_type: 'access_control',
+    module: 'sbp',
+    source_file: 'backend/src/services/sbp/repoConnect/repoInvitations.ts',
+    trigger_type: 'cron',
+    schedule: '7 * * * *',
+    category: 'student_success',
+    description:
+      'Accepts the GitHub collaborator invitations students send us — the ONLY ' +
+      'way the platform ever gains push access to a student repo. Written and ' +
+      'tested long before it was scheduled: on 2026-08-23, 28 connections had a ' +
+      'repo and platform_can_push was true for exactly ONE, and only because a ' +
+      'human accepted that invitation by hand. GitHub expires an invitation ' +
+      'after 7 days and an expired one is unrecoverable without the student ' +
+      'sending a new one, so this runs hourly — an empty queue costs one API ' +
+      'request, a missed window costs a student their portfolio sync. Never ' +
+      'solicits an invitation, never patches an expired one (that returns a ' +
+      'lying 204 and destroys the evidence), and re-reads permissions.push ' +
+      'rather than trusting a status code.',
+    enabled: true,
+  },
+  // --- Reese Phase 1: presence heartbeat (closing the gap the Phase 2 comment
+  // below has flagged since 2026-08-16) ---
+  // schedulerService.ts's startScheduler() has called
+  // instrumentCronJob('ReesePresenceHeartbeat', ...) every minute since Phase 1
+  // shipped, but with no matching AiAgent row, instrumentCronJob() takes its
+  // "agent not in registry, run untracked" branch on every single run: no
+  // enabled/paused gate, no run_count/error_count, no AiAgentActivityLog row,
+  // invisible to cronHealthAlertService's missed-run alerting and to Admin >
+  // Agents. The cron code itself needed zero changes — instrumentCronJob() was
+  // always looking this row up by name; it just never existed. Ali, reviewing
+  // the Reese agent family for exactly this kind of ungoverned-agent risk
+  // (2026-09-04): register it, leave Phase 2's two crons and the supersession
+  // resolver below exactly as they are — each already has its own real,
+  // independent kill switch.
+  {
+    agent_name: 'ReesePresenceHeartbeat',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reesePresenceHeartbeat.ts',
+    trigger_type: 'cron',
+    schedule: '*/1 * * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 1 — touches only Reese\'s own CommunityMember.last_active_at ' +
+      'every minute, the same cadence a real student\'s browser uses, so the ' +
+      'People panel\'s existing presence logic reads Reese as online with no ' +
+      'new real-time infrastructure. No LLM call, no message sent, no ticket ' +
+      'created — a presence signal only.',
+    enabled: true,
+  },
+  // --- Reese Phase 2: Autonomous Outreach (the two new scheduled crons) ---
+  // Registered here (not left to run "untracked", the gap Phase 1's own
+  // ReesePresenceHeartbeat cron has today) specifically so
+  // schedulerService.ts's instrumentCronJob() enabled/paused gate actually
+  // applies to them — this is the run's real rollback/kill-switch mechanism:
+  // an admin can pause either job from Admin > Agents (enabled:false or
+  // status:'paused') with no redeploy. See execution-contract.md.
+  {
+    agent_name: 'ReeseAutonomousOutreachSweep',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reeseAutonomousOutreachService.ts',
+    trigger_type: 'cron',
+    schedule: '0 15 * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 2 — daily scan of the approved pilot cohort for two real ' +
+      'risk signals (inactivity/low-completion, behavior anomaly). On a real, ' +
+      'non-duplicate, non-cadence-capped hit, sends one real autonomous DM and ' +
+      'opens a ProofDesk ticket with the real reason/goal. Hard caps: 7-day ' +
+      'per-student cadence, 12/day combined ceiling shared with the follow-up ' +
+      'job below, R3 governance tagging (shadow-mode, log-only).',
+    enabled: true,
+  },
+  {
+    agent_name: 'ReeseOutreachFollowUps',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reeseOutreachFollowUpService.ts',
+    trigger_type: 'cron',
+    schedule: '0 16 * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 2 — daily sweep of open autonomous-outreach threads. Closes ' +
+      'with real evidence when the signal clears or the student replies; sends ' +
+      'one more unique follow-up if under the 3-attempt cap; escalates to human ' +
+      'review (never a 4th message, never a silent auto-close) once the cap is ' +
+      'reached.',
+    enabled: true,
+  },
+  // --- Reese ticket auto-resolve (2026-08-16): student_support supersession ---
+  // `student_support` tickets (one per DM room, created by reeseTicketLinkService.ts
+  // on every inbound student message) have NO ReeseOutreach-style closure mechanism
+  // at all — nothing has ever advanced or closed one once opened. The one real,
+  // non-time-based signal available: a room's OLDER student_support ticket is
+  // provably superseded once a STRICTLY NEWER ticket exists for the same room (see
+  // intelligence/autonomy/reeseStudentSupportSupersessionRules.ts and this run's
+  // execution-contract.md for the full DISCOVER trail). Seeded `enabled:false` —
+  // held until the reviewed historical bulk-clear (2 tickets, 2026-08-16) succeeds
+  // in production, matching today's established hold-until-reviewed gate for every
+  // other autoresolve cron shipped this session.
+  {
+    agent_name: 'ReeseStudentSupportSupersessionResolver',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/intelligence/autonomy/reeseStudentSupportSupersessionResolver.ts',
+    trigger_type: 'cron',
+    schedule: '0 17 * * *',
+    category: 'student_success',
+    description:
+      'Reese — daily sweep of open student_support (DM conversation) tickets. ' +
+      'Closes a ticket ONLY when a strictly newer student_support ticket now exists ' +
+      'for the same room (a real, structural, non-time-based fact — never "N hours ' +
+      'with no reply"); every other open ticket, including the newest ticket in any ' +
+      'multi-ticket room, is left untouched.',
+    enabled: false,
+  },
+
+  // ─── Agent Registration Stage 1 — ticket-creator identities ────────────────
+  // Identity-only registrations for real, high-volume ticket-creator processes
+  // that had no backing AiAgent/AdminUser row before this. Each row exists so
+  // resolveActorDisplayName() (backend/src/services/actorIdentity/
+  // resolveActorDisplayName.ts) can resolve the process's real created_by_id
+  // string to a real display name — nothing else. These are NOT the same rows
+  // as the scheduler run-tracking entries above with different names for the
+  // same underlying cron (e.g. 'AutonomousEngine' tracks run_count/status for
+  // the 10-min cron; 'cory-engine' below is the separate identity that cron's
+  // OWN ticket-creation code stamps onto every ticket it makes). See
+  // agentBlueprint/ticketCreatorIdentitySeed.ts for the AdminUser/Enrollment/
+  // CommunityMember identity wiring, and .loop-architect/runs/
+  // 20260813-agent-registration-stage1/execution-contract.md for the full
+  // 31-pair production cross-reference this registration set was derived from.
+  {
+    agent_name: 'cory-engine',
+    agent_type: 'ticket_creator_identity',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/autonomousEngine.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'executive',
+    description:
+      'Ticket-creator identity for the COO autonomous operations loop (the ' +
+      '"AutonomousEngine" cron, every 10 min — see that separate registry row ' +
+      'for run-tracking). Every ticket this loop opens is stamped ' +
+      "created_by_type='cory', created_by_id='cory-engine'; this row exists so " +
+      'those tickets resolve to a real display name instead of the raw string. ' +
+      "Colaberry's single highest-volume ticket creator.",
+    // Agent Quality Cleanup, Item 5 — re-verified against autonomousEngine.ts's
+    // real runAutonomousCycle() 8-step pipeline: discoverProblems() (via
+    // ProblemDiscoveryAgent), IntelligenceDecision.create(), createTicket(),
+    // and executeAction() (ExecutionAgent, transactional mutation of
+    // ai_agents.config/status/error_count for low-risk safe actions only).
+    tools_granted: [
+      'detect_problems',
+      'create_intelligence_decisions',
+      'create_tickets',
+      'auto_execute_safe_actions',
+    ],
+  },
+  {
+    agent_name: 'CoryBrain',
+    agent_type: 'ticket_creator_identity',
+    module: 'cory',
+    source_file: 'backend/src/services/cory/coryInitiatives.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'executive',
+    description:
+      'Ticket-creator identity for strategic-initiative tickets ' +
+      "(createStrategicInitiative()). Fires from both the AICOOStrategicCycle " +
+      "cron (every 30 min) and the CoryEvolutionCycle cron (every 6h) — see " +
+      "those separate registry rows for run-tracking. Every initiative + " +
+      "subtask ticket is stamped created_by_type='cory', " +
+      "created_by_id='CoryBrain'; this row exists so those tickets resolve to " +
+      "a real display name instead of the raw string.",
+    // Agent Quality Cleanup, Item 5 — re-verified against coryBrain.ts's
+    // generateStrategicActions() (creates AgentTask rows),
+    // coryInitiatives.ts's createStrategicInitiative() (creates
+    // StrategicInitiative rows + tickets), and proposeNewAgent() (creates
+    // AgentCreationProposal rows for admin approval — never auto-creates an
+    // agent itself).
+    tools_granted: [
+      'create_agent_tasks',
+      'create_strategic_initiatives',
+      'propose_new_agents',
+    ],
+  },
+  {
+    agent_name: 'InboxCaseEngine',
+    agent_type: 'ticket_creator_identity',
+    module: 'inboxCase',
+    source_file: 'backend/src/services/inboxCase/caseTicketService.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Inbox Intel Case Resolution Engine — ' +
+      'bridges every inbox case into the tickets board (one ticket per case, ' +
+      'walked through backlog -> todo -> in_progress -> in_review -> done as ' +
+      "the case progresses). Event-driven on case open/reopen, not cron. " +
+      "Every case ticket is stamped created_by_type='agent', " +
+      "created_by_id='InboxCaseEngine'; this row exists so those tickets " +
+      'resolve to a real display name instead of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // caseTicketService.ts's real exports: ensureCaseTicket() (creates,
+    // deduped via createTicket()'s entity dedup), syncTicketForCase() (walks
+    // the ticket through the board's real state machine as the case
+    // progresses), postCaseProgressNote() (narrative comments on the ticket).
+    tools_granted: [
+      'create_case_tickets',
+      'sync_case_ticket_status',
+      'post_case_progress_notes',
+    ],
+  },
+  ...GROWTH_JOURNEY_AGENT_ENTRIES,
+  {
+    agent_name: 'GrowthJourneyHandoffs',
+    agent_type: 'ticket_creator_identity',
+    module: 'growthJourney',
+    source_file: 'backend/src/services/growthJourney/handoffs/handoffService.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Growth Journey OS handoff writer ' +
+      '(Phase 4, T404). A deferred decision becomes a ranked, evidence-complete ' +
+      'growth_journey_handoffs row; when the journeyHandoffs flag is on, a ' +
+      'queue_assignee policy names a person, the kill switch is off and the ' +
+      'queue has capacity, the assignment step creates the human task as a ' +
+      "tickets row stamped created_by_type='ai_staff' with this identity's " +
+      'admin user. Event-driven (a decision, a reply route, a routing rule), ' +
+      'never cron. Notifies nobody: a ticket is a row on a board.',
+    // The file's real exports: materializeHandoffs() (decision -> rows, one
+    // open per subject per brand), rankQueue() (urgent first, then expected
+    // value, then age), assignHandoff() (the gated tickets write).
+    tools_granted: ['materializeHandoffs', 'rankQueue', 'assignHandoff'],
+  },
+  {
+    agent_name: 'workforce_intelligence_engine',
+    agent_type: 'ticket_creator_identity',
+    module: 'company',
+    source_file: 'backend/src/services/company/workforceIntelligenceEngine.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Workforce Intelligence Engine ' +
+      '(runWorkforceAnalysis()) — analyzes the agent fleet\'s run/error counts ' +
+      'and opens a workforce-decision ticket per insight, deterministic rules, ' +
+      "no LLM. Fires from the WorkforceIntelligence cron (every 6h — see that " +
+      "separate registry row for run-tracking). Every ticket is stamped " +
+      "created_by_type='agent', created_by_id='workforce_intelligence_engine'; " +
+      'this row exists so those tickets resolve to a real display name instead ' +
+      'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // workforceIntelligenceEngine.ts's real runWorkforceAnalysis(): queries
+    // ai_agents fleet stats (run_count/error_count) directly via SQL, and
+    // creates workforce-decision tickets through createWorkforceTicket()
+    // (now dedup'd — Item 2 of this same cleanup — while a finding for the
+    // same agent/condition stays open).
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'create_workforce_tickets',
+    ],
+  },
+  {
+    agent_name: 'WorkforceTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'company',
+    source_file: 'backend/src/services/company/workforceTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '15 */6 * * *',
+    category: 'operations',
+    description:
+      'Re-checks every OPEN workforce_decision ticket workforce_intelligence_engine ' +
+      "created against live ai_agents data and closes it (status 'done') with a real, " +
+      'numbers-grounded evidence comment once the error-rate condition it was opened ' +
+      'under has genuinely cleared. Deterministic re-derivation of the exact same ' +
+      "threshold (>20% error rate, >=10 errors) the ticket was created under -- no LLM, " +
+      'no human-approval step (matches the alert type: a mechanically re-checkable ' +
+      'metric, not a judgment call). Explicit in every close comment that this reflects ' +
+      'the CURRENTLY OBSERVED metric, not a verified root-cause fix. Runs 15 minutes ' +
+      "after each WorkforceIntelligence analysis pass (see that row's schedule).",
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'close_workforce_tickets_on_recovery',
+    ],
+  },
+  {
+    agent_name: 'CoryEngineTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/coryEngineTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '25 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md §3b requires: the 6,843-ticket historical
+    // backlog must be cleared through the reviewed --plan/--apply CLI sequence first,
+    // and ONLY THEN is this flipped to enabled:true (a single documented production
+    // UPDATE, no redeploy needed — same admin-toggle mechanism already used elsewhere
+    // in this file) so the cron carries the recurring re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN cory-engine ticket (autonomousEngine.ts / ' +
+      'runAutonomousCycle()) against the SAME detection logic that created it -- ' +
+      'detectAgentFailures()/detectConversionDrops() from ProblemDiscoveryAgent.ts -- ' +
+      "and closes it (status 'done') with a real, numbers-grounded evidence comment " +
+      'only when that specific condition no longer holds. error_spike tickets are ' +
+      "classified but never auto-closed (detectErrorSpikes()'s SQL references a column " +
+      'that does not exist in production, so a live re-check can never be trusted for ' +
+      'that condition-type -- left untouched by design, not force-closed). ' +
+      'Deterministic re-derivation, no LLM, no time-based fallback of any kind. ' +
+      'Explicit in every close comment that this reflects the CURRENTLY OBSERVED ' +
+      'condition, not a verified root-cause fix.',
+    tools_granted: [
+      'query_agent_fleet_stats',
+      'query_lead_conversion_metrics',
+      'close_cory_engine_tickets_on_recovery',
+    ],
+  },
+  {
+    agent_name: 'CoryBrainInitiativeTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/corybrainInitiativeTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '40 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the 1,323-ticket historical
+    // backlog (of 1,348 total CoryBrain tickets stuck in `backlog`) must be cleared
+    // through the reviewed --plan/--apply CLI sequence first, and ONLY THEN is this
+    // flipped to enabled:true (a single documented production UPDATE, no redeploy
+    // needed — same admin-toggle mechanism already used for
+    // CoryEngineTicketAutoResolver above) so the cron carries the recurring re-check
+    // going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN CoryBrain ticket (a strategic initiative\'s own parent ' +
+      'ticket, or one of its subtasks -- coryInitiatives.ts / createStrategicInitiative()) ' +
+      'against the CURRENT live status of the strategic_initiatives row it is linked to ' +
+      '(parent tickets via the initiative\'s own ticket_id, subtasks via ' +
+      'metadata.initiative_id), and syncs the ticket to match (\'done\' if the initiative ' +
+      'is completed, \'cancelled\' if cancelled) once that has genuinely happened. This is ' +
+      'a reconciliation/sync fix, not a new decision engine -- it never decides whether an ' +
+      'initiative itself should be approved/rejected/completed, only propagates an ' +
+      'already-established fact from that already-fixed mechanism onto the dependent ' +
+      'ticket. Deterministic re-derivation, no LLM, no time-based fallback of any kind. ' +
+      'A ticket whose linked initiative is still proposed/approved/in_progress, or has no ' +
+      'matching initiative row at all, is left untouched and reported, never force-closed.',
+    tools_granted: [
+      'query_strategic_initiative_status',
+      'close_corybrain_tickets_on_initiative_terminal_state',
+    ],
+  },
+  {
+    agent_name: 'InboxCaseSourceCompletionResolver',
+    agent_type: 'self_healing',
+    module: 'intelligence',
+    source_file: 'backend/src/intelligence/autonomy/inboxCaseSourceCompletionResolver.ts',
+    trigger_type: 'cron',
+    schedule: '19 * * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the historical backlog (627
+    // InboxCaseEngine tickets stuck in_progress/in_review at DISCOVER time, none linked
+    // to an already-RESOLVED case -- confirmed NOT a sync gap) must be cleared through
+    // the reviewed --plan/--apply CLI sequence first, and ONLY THEN is this flipped to
+    // enabled:true (a single documented production UPDATE, no redeploy needed -- same
+    // admin-toggle mechanism already used for CoryEngineTicketAutoResolver/
+    // CoryBrainInitiativeTicketAutoResolver above) so the cron carries the recurring
+    // re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every InboxCaseEngine case not yet in a terminal state against two ' +
+      'things: (1) the live Basecamp completion status of any undispositioned ' +
+      "basecamp_todo case item (via ops_bc_todos, the existing AI Ops Command Center's " +
+      "read-mirror -- 'completed' dispositions the item RESOLVED, 'trashed' dispositions " +
+      "it NO_ACTION, 'active' or no live signal leaves it untouched), mirroring " +
+      "caseAutoSyncService.ts's existing disposeItemsDeletedAtSource() pattern for a " +
+      'structurally identical but distinct source category; and (2) the real, ' +
+      'unmodified evaluateClosureGuard()/closeCase() (caseClosureService.ts) across ' +
+      'every non-terminal case, so any case already closeable for ANY reason -- not ' +
+      'just this signal -- that nothing has ever autonomously invoked closeCase() on ' +
+      'also closes. Never decides a case is done beyond re-deriving a real, live, ' +
+      'already-established fact or re-checking the existing closure authority -- no new ' +
+      'judgment logic, no time-based fallback of any kind. A case with a genuinely ' +
+      'still-active basecamp_todo, an undispositioned email/sent_email item (no ' +
+      'reliable live re-check exists for those today), or any other real open blocker ' +
+      'is left untouched and reported, never force-closed.',
+    tools_granted: [
+      'query_basecamp_todo_completion_status',
+      'close_inboxcase_cases_on_source_completion_or_existing_guard_pass',
+    ],
+  },
+  {
+    agent_name: 'bpos_orchestrator',
+    agent_type: 'ticket_creator_identity',
+    module: 'company',
+    source_file: 'backend/src/services/company/ticketOrchestrator.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'operations',
+    description:
+      'Ticket-creator identity for the Universal Ticket Creation Layer\'s BPOS ' +
+      '(business-process) execution tickets (createBPOSTicket() and the ' +
+      'direct-Ticket.create() bypass in projectRoutes.ts\'s execution-ticket ' +
+      "route). Event-driven on build actions, not cron. Every BPOS ticket is " +
+      "stamped created_by_type='cory', created_by_id='bpos_orchestrator'; " +
+      'this row exists so those tickets resolve to a real display name instead ' +
+      'of the raw string.',
+    // Agent Quality Cleanup, Item 5 — re-verified against
+    // ticketOrchestrator.ts's real exports: createBPOSTicket() (creates/
+    // transitions [BPOS] tickets tracking build stages),
+    // updateTicketStatus() (the same status-transition primitive every
+    // ticket-creator shares), and addTicketOutput() (attaches real build
+    // outputs to a ticket's activity feed — a capability unique to this
+    // agent among the 5).
+    tools_granted: [
+      'create_bpos_tickets',
+      'transition_bpos_ticket_status',
+      'attach_build_outputs',
+    ],
+  },
+  {
+    agent_name: 'BposCapabilityTicketAutoResolver',
+    agent_type: 'self_healing',
+    module: 'company',
+    source_file: 'backend/src/services/company/bposCapabilityTicketAutoResolver.ts',
+    trigger_type: 'cron',
+    schedule: '55 */6 * * *',
+    category: 'operations',
+    // Seeded DISABLED on purpose — findOrCreate() only honors `enabled` at first row
+    // creation (see seedAgentRegistry() below), so this is the real hold-until-reviewed
+    // gate this run's execution-contract.md requires: the historical backlog (11
+    // bpos_execution tickets stuck in_progress since 2026-04-24..2026-04-30 at DISCOVER
+    // time) must be cleared through the reviewed --plan/--apply CLI sequence first, and
+    // ONLY THEN is this flipped to enabled:true (a single documented production UPDATE,
+    // no redeploy needed — same admin-toggle mechanism already used for
+    // CoryEngineTicketAutoResolver/CoryBrainInitiativeTicketAutoResolver/
+    // InboxCaseSourceCompletionResolver above) so the cron carries the recurring
+    // re-check going forward.
+    enabled: false,
+    description:
+      'Re-checks every OPEN bpos_execution ticket (created by the bpos_orchestrator ' +
+      'ticket-creator identity above) against the CURRENT live state of the Capability ' +
+      'row it references (entity_id), and closes it once a real, human-asserted signal ' +
+      'exists: user_status:\'verified\' (Capability.ts\'s own documented "user clicked ' +
+      'Mark Verified" contract) closes to \'done\'; the capability row no longer ' +
+      'existing at all (a real hard delete -- capabilities has no soft-delete column) ' +
+      'closes to \'cancelled\'. This exists because the only mechanism that used to ' +
+      'close these tickets -- projectRoutes.ts\'s POST /api/portal/project/' +
+      'execution-ticket route\'s action:\'complete\'/\'fail\' -- has had its sole ' +
+      'frontend caller (the AI Project Builder) deliberately deleted (2026-07-18, ' +
+      'commit 13f8f0e5, "backend untouched, per Ali"), so no ticket of this type can ' +
+      'ever be told it finished through that path again. Deterministic re-derivation, ' +
+      'no LLM, no time-based fallback of any kind -- a capability still ' +
+      'user_status:\'in_progress\' (no human has confirmed its build complete) is left ' +
+      'untouched and reported, never force-closed on elapsed time.',
+    tools_granted: [
+      'query_capability_verification_status',
+      'close_bpos_tickets_on_capability_verified_or_deleted',
+    ],
+  },
+  {
+    agent_name: 'MarketingPublishingWorker',
+    agent_type: 'scheduled_processor',
+    module: 'publishing',
+    source_file: 'backend/src/services/publishing/publishingWorker.ts',
+    trigger_type: 'cron',
+    schedule: '* * * * *',
+    category: 'outbound',
+    // Seeded DISABLED on purpose (the hold-until-reviewed gate other cron resolvers use):
+    // findOrCreate() honours `enabled` only at first creation, so this ships off and is
+    // turned on by one documented production UPDATE once the queue has been watched on
+    // dev. Even when on, every provider currently resolves to the Handoff adapter - the
+    // tick produces packages for a person and never posts to a network - and the global
+    // kill switch halts it before any claim.
+    enabled: false,
+    description:
+      'Takes due rows off publishing_jobs (T005 queue) and hands each to its provider ' +
+      'adapter: DryRun in dev, Handoff for every provider without an approved app and a ' +
+      'connected account, which today is all of them. Records a platform_delivery_events ' +
+      'trail and an external_publications row per receipt, classifies failures as ' +
+      'permanent (dead-letter, no retry) or transient (exponential backoff with jitter), ' +
+      'and reconciles the content item to published / partially_published / ' +
+      'publish_failed. Checks launchSafety.isKillSwitchActive() before claiming and again ' +
+      'before every external action. No LLM.',
+  },
 ];
 
 /**
  * Seed the full agent registry (129 agents). Idempotent — uses findOrCreate
  * and updates existing rows with registry metadata.
  */
+/**
+ * Agents deliberately taken out of service, with the reason. The cron
+ * registration in aiOpsScheduler.ts is removed separately; this keeps the
+ * AiAgent row disabled so health alerting does not fire on a job nobody
+ * intends to run. Value is the reason, surfaced in the boot log.
+ */
+export const RETIRED_AGENTS: Record<string, string> = {
+  // Detected stalled students, missing artifacts and gating checkpoints, but an
+  // exhaustive search of the build found NOTHING reading its output. Had been
+  // silently disabled for five months with no student-facing impact, because
+  // the agent has no side effects (no writes, no sends).
+  StudentProgressMonitor: 'retired 2026-08-15 — nothing consumed its output',
+  // Was registered twice under one agent_name with two different runners and
+  // two different schedules, so it ran on both while a single governance row
+  // covered them ambiguously. The manual admin trigger in companyRoutes.ts is
+  // left working, so the cycle can still be run on demand.
+  CompanyStrategicCycle: 'retired 2026-08-15 — duplicate registration; run manually via companyRoutes',
+};
+
+/**
+ * Hold every retired agent disabled, whether or not it appears in
+ * AGENT_REGISTRY — CompanyStrategicCycle, for one, was never seeded there, so a
+ * check inside the seed loop would silently skip it.
+ *
+ * Removing the cron registration alone is NOT enough: the AiAgent row would stay
+ * `enabled` with `trigger_type: 'cron'`, and cronHealthAlertService selects on
+ * exactly that pair — it would raise a severity-5 "missed runs" alert forever
+ * about a job we retired on purpose. Runs every boot so it cannot drift back on.
+ */
+async function enforceRetiredAgents(): Promise<void> {
+  for (const [agentName, reason] of Object.entries(RETIRED_AGENTS)) {
+    try {
+      const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+      if (!agent) continue; // never registered here — nothing to hold down
+      if (!agent.enabled) continue; // already retired; stay quiet on every boot
+      await agent.update({ enabled: false, status: 'paused' });
+      console.warn(`[AI Ops] RETIRED: Disabled ${agentName} — ${reason}`);
+    } catch (err: any) {
+      // One bad row must not abort seeding for everything else.
+      console.error(`[AI Ops] Failed to enforce retirement for ${agentName}: ${err.message}`);
+    }
+  }
+}
+
 export async function seedAgentRegistry(): Promise<void> {
   for (const entry of AGENT_REGISTRY) {
     const [agent, created] = await AiAgent.findOrCreate({
@@ -2001,6 +3104,16 @@ export async function seedAgentRegistry(): Promise<void> {
     });
 
     if (!created) {
+      // Trust Contract Phase 1 (2026-08-26) — capture the real version change
+      // BEFORE it's applied below, while `agent.persona_version` still holds
+      // the pre-update value. No-ops (the common case) when the registry
+      // entry's version matches what's already stored.
+      await recordPersonaVersionChangeIfNeeded(agent.id, agent.persona_version, entry);
+      // Fleet-wide autonomy-level auto-classification, Phase 4 — same
+      // capture-before-update posture, for the same reason: diffing against
+      // the pre-update tools_granted, not a value this same call already
+      // overwrote.
+      const previousToolsGranted = agent.tools_granted ?? null;
       // Update registry fields on existing agents (preserves status, config, run stats)
       await agent.update({
         agent_type: entry.agent_type,
@@ -2012,9 +3125,24 @@ export async function seedAgentRegistry(): Promise<void> {
         description: entry.description,
         // Only set config if it wasn't customized (still empty)
         ...(Object.keys(agent.config || {}).length === 0 && entry.config ? { config: entry.config } : {}),
+        // Registry-defined identity metadata — refreshed like the other
+        // definitional fields above, not treated as user-customized runtime
+        // state (unlike config/status/run stats).
+        ...(entry.system_prompt !== undefined ? { system_prompt: entry.system_prompt } : {}),
+        ...(entry.tools_granted !== undefined ? { tools_granted: entry.tools_granted } : {}),
+        ...(entry.persona_version !== undefined ? { persona_version: entry.persona_version } : {}),
       });
+      await maybeReclassifyAutonomyLevel(agent, previousToolsGranted, entry.tools_granted);
     } else {
       console.log(`[AI Ops] Registered agent: ${entry.agent_name}`);
+      // Trust Contract Phase 1 — the first version this table has ever seen
+      // for a brand-new agent. previousVersion is null (nothing to diff
+      // against, not stored via findOrCreate's own comparison).
+      await recordPersonaVersionChangeIfNeeded(agent.id, null, entry);
+      // Fleet-wide autonomy-level auto-classification, Phase 4 — a brand-new
+      // agent is classified immediately, never left at the old ambiguous
+      // "untouched default, null source" limbo.
+      await classifyNewAgentAutonomyLevel(agent, entry.tools_granted);
     }
 
     // Safety: Force-disable agents that bypass safety pipelines
@@ -2023,10 +3151,50 @@ export async function seedAgentRegistry(): Promise<void> {
       await agent.update({ enabled: false, status: 'paused' });
       console.warn(`[AI Ops] SAFETY: Disabled ${entry.agent_name} — must use suggestion-only mode`);
     }
+
   }
+
+  await enforceRetiredAgents();
 
   // Assign agent_group to existing agents for super-agent aggregation
   await assignAgentGroups();
+
+  // Reese Phase 1 — create/link the real staff identity (AdminUser, Enrollment,
+  // CommunityMember) now that the 'Reese' AiAgent row above definitely exists.
+  // Failure here must never break the rest of boot (same fail-open posture as
+  // every ensure*Schema() call site) — log and continue.
+  try {
+    await seedReeseIdentity();
+  } catch (err: any) {
+    console.warn('[AI Ops] Reese identity seed failed:', err?.message);
+  }
+
+  // AI Employee Consolidation Program, Employee #1 (Dara) — same fail-open
+  // posture: her identity-seed failure must never block boot or any other
+  // agent's identity seed.
+  try {
+    await seedDaraIdentity();
+  } catch (err: any) {
+    console.warn('[AI Ops] Dara identity seed failed:', err?.message);
+  }
+
+  // Same fail-open posture — re-pointing the 4 absorbed legacy rows onto
+  // Dara's identity must never block boot. Runs after seedDaraIdentity() so
+  // her AiAgent id definitely exists.
+  try {
+    await repointCurriculumLegacyBehaviors();
+  } catch (err: any) {
+    console.warn('[AI Ops] repointCurriculumLegacyBehaviors failed:', err?.message);
+  }
+
+  // Agent Registration Stage 1 — identity-only registrations for the 5
+  // ticket-creator processes registered above. Same fail-open posture: one
+  // agent's identity-seed failure must never block another's or boot.
+  try {
+    await seedTicketCreatorIdentities();
+  } catch (err: any) {
+    console.warn('[AI Ops] Ticket-creator identity seed failed:', err?.message);
+  }
 }
 
 // ─── Agent Group Assignment ────────────────────────────────────────────────
@@ -2035,7 +3203,7 @@ export async function seedAgentRegistry(): Promise<void> {
 
 const AGENT_GROUP_MAP: Record<string, string[]> = {
   campaign_ops: [
-    'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent',
+    'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent', 'MandrillOpenClickPoll',
     'CampaignSelfHealingAgent', 'ContentOptimizationAgent', 'ConversationOptimizationAgent',
   ],
   lead_intelligence: [

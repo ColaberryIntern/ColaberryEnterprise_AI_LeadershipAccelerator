@@ -1,4 +1,4 @@
-import { DataTypes, Model } from 'sequelize';
+import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../config/database';
 
 export interface RoutingAction {
@@ -14,11 +14,16 @@ interface RoutingRuleAttributes {
   actions: RoutingAction[];
   continue_on_match: boolean;
   is_active: boolean;
+  /** Bumped by the admin controller when conditions or actions change (T226). */
+  version?: number;
   created_at?: Date;
   updated_at?: Date;
 }
 
-class RoutingRule extends Model<RoutingRuleAttributes> implements RoutingRuleAttributes {
+/** What a caller must supply to create a rule: the database mints the id, the version and the timestamps. */
+export type RoutingRuleCreationAttributes = Optional<RoutingRuleAttributes, 'id' | 'version' | 'created_at' | 'updated_at'>;
+
+class RoutingRule extends Model<RoutingRuleAttributes, RoutingRuleCreationAttributes> implements RoutingRuleAttributes {
   declare id: string;
   declare name: string;
   declare priority: number;
@@ -26,6 +31,7 @@ class RoutingRule extends Model<RoutingRuleAttributes> implements RoutingRuleAtt
   declare actions: RoutingAction[];
   declare continue_on_match: boolean;
   declare is_active: boolean;
+  declare version: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -65,6 +71,11 @@ RoutingRule.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+    },
+    version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
     },
     created_at: {
       type: DataTypes.DATE,

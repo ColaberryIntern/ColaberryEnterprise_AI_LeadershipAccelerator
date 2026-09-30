@@ -1,0 +1,124 @@
+/* Refactored.ai site styles.
+ *
+ * The design system is imported, not duplicated. Anything below is page furniture that
+ * only this site has — the hero, the awards strip, the employee cards. If a pattern here
+ * ever appears on a second brand it belongs in the system instead.
+ */
+@import url("./design/styles.css");
+
+/* Hero --------------------------------------------------------------------- */
+.hero { padding-block: var(--space-2xl) var(--space-xl); }
+.hero h1 { margin-top: var(--space-xs); max-width: 20ch; }
+.hero .sub { margin-top: var(--space-s); font-size: var(--step-1); color: var(--fg-muted); max-width: 54ch; }
+.hero .btn-row { margin-top: var(--space-l); }
+
+/* The product composition beside the hero. Built from real interface language rather
+   than a screenshot, so it cannot go stale against a UI that ships weekly - and clearly
+   labelled, because presenting mock numbers as production data is the one thing a page
+   like this must never do. */
+.console {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.console-bar {
+  max-width: none;   /* component chrome, not prose - see .no-measure in base.css */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-sunk);
+  color: var(--fg-faint);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.console-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-s);
+  align-items: center;
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+.console-row:last-child { border-bottom: 0; }
+.console-who { color: var(--fg); }
+.console-what { color: var(--fg-muted); font-family: var(--font-sans); font-size: 0.86rem; }
+
+.hero-grid { display: grid; gap: var(--space-l); align-items: start; }
+@media (min-width: 62rem) { .hero-grid { grid-template-columns: 1.05fr 0.95fr; } }
+
+/* Awards ------------------------------------------------------------------- */
+.awards { display: grid; gap: var(--space-s); grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.award { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-s); background: var(--bg-elevated); }
+.award p { max-width: none; }
+.award .who { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.award .what { margin-top: var(--space-3xs); font-size: 0.94rem; }
+
+/* Numbered sequences. Used ONLY where order carries meaning. */
+.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; gap: var(--space-m); }
+.steps > li { counter-increment: s; position: relative; padding-left: 3rem; max-width: var(--measure); }
+.steps > li::before {
+  content: counter(s);
+  position: absolute; left: 0; top: 0;
+  width: 2rem; height: 2rem;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+.steps h3 { font-size: var(--step-1); }
+
+/* Story blocks: trigger -> action -> boundary -> human -> output */
+.story { display: grid; gap: var(--space-2xs); }
+.story dt { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-faint); }
+.story dd { margin: 0; max-width: var(--measure); }
+
+/* Employee cards ----------------------------------------------------------- */
+.who-card { display: grid; gap: var(--space-2xs); }
+.who-card p { max-width: none; }
+.who-card .name { font-family: var(--font-mono); font-size: var(--step-1); font-weight: 600; }
+.who-card .role { color: var(--accent); font-size: 0.86rem; font-family: var(--font-mono); }
+.who-card dl { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem var(--space-s); margin: var(--space-2xs) 0 0; font-size: 0.9rem; }
+.who-card dt { color: var(--fg-faint); font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; align-self: center; }
+.who-card dd { margin: 0; }
+
+/* Role tabs ---------------------------------------------------------------- */
+.tabs { display: flex; flex-wrap: wrap; gap: var(--space-3xs); border-bottom: 1px solid var(--line); }
+.tabs [role="tab"] {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  padding: 0.6rem 0.9rem;
+  min-height: var(--tap);
+  cursor: pointer;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.tabs [role="tab"][aria-selected="true"] {
+  color: var(--accent);
+  background: var(--bg-elevated);
+  border-color: var(--line);
+  margin-bottom: -1px;
+}
+.tabs [role="tab"]:hover { color: var(--fg); }
+[role="tabpanel"] { padding-top: var(--space-m); }
+[role="tabpanel"][hidden] { display: none; }
+
+/* Callout ------------------------------------------------------------------ */
+.note {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: var(--space-m);
+}

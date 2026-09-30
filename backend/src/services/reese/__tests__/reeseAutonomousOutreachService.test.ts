@@ -1,0 +1,504 @@
+/**
+ * Reese Phase 2 — the decision + orchestration sweep. Covers every named,
+ * non-negotiable boundary from execution-contract.md: pilot-cohort gating,
+ * duplicate-prevention, cadence cap, cross-signal-type separation, the shared
+ * daily cap, governance tagging on every real send, and the dryRun contract.
+ */
+jest.mock('../../../models/ReeseOutreach', () => ({
+  count: jest.fn(),
+  findOne: jest.fn(),
+  create: jest.fn(),
+}));
+jest.mock('../../ticketService', () => ({ createTicket: jest.fn() }));
+jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
+jest.mock('../reeseIdentitySeed', () => ({ getReeseAdminUserId: jest.fn(), getReeseAgentId: jest.fn() }));
+jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
+jest.mock('../reeseEligibilityService', () => ({ isEligibleForAutonomousOutreach: jest.fn() }));
+jest.mock('../reeseSignalService', () => ({
+  getPilotCohortStudentEnrollmentIds: jest.fn(),
+  evaluateInactivitySignal: jest.fn(),
+  evaluateBehaviorAnomalySignal: jest.fn(),
+}));
+jest.mock('../reeseOutreachMessageService', () => ({ generateOutreachMessage: jest.fn() }));
+jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
+jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
+jest.mock('../outreachChecklist', () => ({ createOutreachChecklistInstance: jest.fn() }));
+jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
+jest.mock('../../workGraph/workGraphService', () => ({ createWorkUnit: jest.fn(), updateWorkUnitStatus: jest.fn() }));
+
+import ReeseOutreach from '../../../models/ReeseOutreach';
+import { createTicket } from '../../ticketService';
+import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
+import { getReeseAdminUserId, getReeseAgentId } from '../reeseIdentitySeed';
+import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
+import { isEligibleForAutonomousOutreach } from '../reeseEligibilityService';
+import {
+  getPilotCohortStudentEnrollmentIds,
+  evaluateInactivitySignal,
+  evaluateBehaviorAnomalySignal,
+} from '../reeseSignalService';
+import { generateOutreachMessage } from '../reeseOutreachMessageService';
+import { initiateDm } from '../reeseInitiateDmService';
+import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
+import { createOutreachChecklistInstance } from '../outreachChecklist';
+import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
+import { createWorkUnit, updateWorkUnitStatus } from '../../workGraph/workGraphService';
+import { runReeseAutonomousOutreachSweep, countAutonomousSendsToday, DAILY_SEND_CAP } from '../reeseAutonomousOutreachService';
+
+const mockReeseOutreachCount = ReeseOutreach.count as unknown as jest.Mock;
+const mockReeseOutreachFindOne = ReeseOutreach.findOne as unknown as jest.Mock;
+const mockReeseOutreachCreate = ReeseOutreach.create as unknown as jest.Mock;
+const mockCreateTicket = createTicket as unknown as jest.Mock;
+const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
+const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
+const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
+const mockLogAgentActivity = logAgentActivity as unknown as jest.Mock;
+const mockIsEligible = isEligibleForAutonomousOutreach as unknown as jest.Mock;
+const mockGetPilotCohortStudentIds = getPilotCohortStudentEnrollmentIds as unknown as jest.Mock;
+const mockEvaluateInactivity = evaluateInactivitySignal as unknown as jest.Mock;
+const mockEvaluateAnomaly = evaluateBehaviorAnomalySignal as unknown as jest.Mock;
+const mockGenerateMessage = generateOutreachMessage as unknown as jest.Mock;
+const mockInitiateDm = initiateDm as unknown as jest.Mock;
+const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
+const mockCreateOutreachChecklistInstance = createOutreachChecklistInstance as unknown as jest.Mock;
+const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
+const mockCreateWorkUnit = createWorkUnit as unknown as jest.Mock;
+const mockUpdateWorkUnitStatus = updateWorkUnitStatus as unknown as jest.Mock;
+
+const STUDENT_ID = 'd6a4b017-6716-4673-96b5-ab3074b70191'; // real-shaped UUID — the exact defect Ali flagged live
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const TICKET = { id: 'ticket-1', update: jest.fn().mockResolvedValue(undefined) };
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockReeseOutreachCount.mockResolvedValue(0);
+  mockReeseOutreachFindOne.mockResolvedValue(null); // no existing open outreach, no recent contact, by default
+  mockReeseOutreachCreate.mockResolvedValue({ id: 'outreach-1' });
+  mockCreateTicket.mockResolvedValue({ ...TICKET, update: jest.fn().mockResolvedValue(undefined) });
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok', allowed: true });
+  mockGetReeseAdminUserId.mockResolvedValue('reese-admin-1');
+  mockGetReeseAgentId.mockResolvedValue('reese-agent-1');
+  mockLogAgentActivity.mockResolvedValue(undefined);
+  mockIsEligible.mockResolvedValue({ eligible: true, reason: 'in_pilot_cohort_and_active' });
+  mockGetPilotCohortStudentIds.mockResolvedValue([STUDENT_ID]);
+  mockEvaluateInactivity.mockResolvedValue(null);
+  mockEvaluateAnomaly.mockResolvedValue(null);
+  mockGenerateMessage.mockResolvedValue('Real, unique outreach message.');
+  mockInitiateDm.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
+  mockResolveStudentDisplayName.mockResolvedValue('Jordan Rivera');
+  mockCreateOutreachChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
+  mockCreateWorkUnit.mockResolvedValue({ id: 'wu-1', update: jest.fn().mockResolvedValue(undefined) });
+  mockUpdateWorkUnitStatus.mockResolvedValue(undefined);
+});
+
+describe('runReeseAutonomousOutreachSweep — happy path', () => {
+  it('eligible student + real inactivity signal -> ticket created, DM sent, governance tagged R3, ReeseOutreach row created', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['No activity in 9 days'] });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockCreateTicket).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'reese_autonomous_outreach',
+        entity_type: 'reese_outreach_signal',
+        entity_id: `${STUDENT_ID}:inactivity`,
+        metadata: expect.objectContaining({
+          signal_type: 'inactivity',
+          signal_snapshot: expect.objectContaining({ daysSinceActive: 9 }),
+        }),
+      }),
+    );
+    expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'Real, unique outreach message.');
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1', riskTier: 'R3', action: 'reese_autonomous_outreach',
+        // Real-enforcement scoping, Phase 1 (2026-09-20) — the exact real
+        // params passed to initiateDm() above, so a held action can be
+        // replayed verbatim later.
+        preparedAction: { studentEnrollmentId: STUDENT_ID, content: 'Real, unique outreach message.' },
+      }),
+    );
+    expect(mockReeseOutreachCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ enrollment_id: STUDENT_ID, signal_type: 'inactivity', status: 'active', attempt_count: 1 }),
+    );
+  });
+
+  // Phase 2 (2026-09-18) — R13's own finding: this send never wrote to the
+  // real Work Ledger her replies already use.
+  it('emits a real work-ledger event for the send, after the real DM went out', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['No activity in 9 days'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1',
+        workUnitId: 'wu-1', // Workspace mission, Phase 2 slice 2
+        actorType: 'ai_staff',
+        actorId: 'reese-admin-1',
+        intent: 'reese.autonomous_outreach',
+        domain: 'student_support',
+        actionClass: 'dm_message',
+        riskTier: 'R3',
+        result: 'success',
+        sourceRecordType: 'room_message',
+        sourceRecordId: 'msg-1',
+      }),
+    );
+    const initiateDmOrder = mockInitiateDm.mock.invocationCallOrder[0];
+    const emitOrder = mockEmitReeseLedgerEvent.mock.invocationCallOrder[0];
+    expect(emitOrder).toBeGreaterThan(initiateDmOrder);
+  });
+
+  it('never sends a fixed/templated string — the message passed to initiateDm is whatever generateOutreachMessage produced', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 10, completionPct: 3, totalCards: 2, reasons: ['x'] });
+    mockGenerateMessage.mockResolvedValue('A completely different, specifically-generated message this time.');
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'A completely different, specifically-generated message this time.');
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — GOALS scorecard activity logging (Ali: "improve the 3.8/5 Trust score for Reese")', () => {
+  it('happy path: a real send logs a real AiAgentActivityLog row under Reese\'s OWN agent id, not the cron sweep\'s sibling row', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockGetReeseAgentId).toHaveBeenCalled();
+    expect(mockLogAgentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'reese-agent-1',
+        action: 'reese_autonomous_outreach',
+        result: 'success',
+        reason: 'inactivity_signal_fired',
+      }),
+    );
+  });
+
+  it('boundary: no resolvable Reese agent id skips the log call rather than throwing', async () => {
+    mockGetReeseAgentId.mockResolvedValue(null);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockLogAgentActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — human-readable ticket text (Ali\'s live feedback: "reporting the id of the user is not helpful")', () => {
+  it('happy path: ticket title/description contain the resolved student name, never the raw enrollment UUID', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockResolveStudentDisplayName).toHaveBeenCalledWith(STUDENT_ID);
+    const call = mockCreateTicket.mock.calls[0][0];
+    expect(call.title).toContain('Jordan Rivera');
+    expect(call.description).toContain('Jordan Rivera');
+    expect(call.title).not.toMatch(UUID_PATTERN);
+    expect(call.description).not.toMatch(UUID_PATTERN);
+    // entity_id/metadata still carry the real UUID — only human-facing text changed.
+    expect(call.entity_id).toBe(`${STUDENT_ID}:inactivity`);
+    expect(call.metadata.signal_snapshot).toBeDefined();
+  });
+
+  it('failure path: an unresolvable enrollment falls back to a generic, non-UUID phrase rather than throwing or printing the raw id', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockResolveStudentDisplayName.mockResolvedValue('a student'); // resolveStudentDisplayName's own fallback
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    const call = mockCreateTicket.mock.calls[0][0];
+    expect(call.title).toContain('a student');
+    expect(call.title).not.toMatch(UUID_PATTERN);
+    expect(call.description).not.toMatch(UUID_PATTERN);
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — the required boundaries', () => {
+  it('OUT-of-cohort student with an identical signal -> not eligible, no ticket, no message', async () => {
+    mockIsEligible.mockResolvedValue({ eligible: false, reason: 'not_in_pilot_cohort' });
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(0);
+    expect(mockCreateTicket).not.toHaveBeenCalled();
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    expect(result.decisions[0]).toEqual({ enrollmentId: STUDENT_ID, action: 'skipped', reason: 'not_in_pilot_cohort' });
+  });
+
+  it('duplicate-prevention: an already-open outreach for the SAME signal type -> no second ticket/message', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockReeseOutreachFindOne.mockResolvedValue({ id: 'existing-outreach' }); // hasOpenOutreachForSignal -> true
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(0);
+    expect(mockCreateTicket).not.toHaveBeenCalled();
+    expect(result.decisions.some((d) => d.reason === 'duplicate_open_outreach')).toBe(true);
+  });
+
+  it('cross-signal-type separation: a DIFFERENT signal firing for a student who already has an open ticket for the FIRST signal type still gets evaluated as its own case (not silently absorbed) — duplicate check is scoped per signal_type', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockEvaluateAnomaly.mockResolvedValue({ idleCount: 5, lessonId: 'l1', lessonTitle: 'Lesson', windowHours: 24 });
+    // Only the inactivity signal has an existing open row; behavior_anomaly does not.
+    mockReeseOutreachFindOne.mockImplementation(async (opts: any) => {
+      if (opts?.where?.signal_type === 'inactivity') return { id: 'existing-inactivity-outreach' };
+      return null; // no open row, no recent-cadence row for behavior_anomaly's own check
+    });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    const inactivityDecision = result.decisions.find((d) => d.signalType === 'inactivity');
+    expect(inactivityDecision?.action).toBe('skipped');
+    expect(inactivityDecision?.reason).toBe('duplicate_open_outreach');
+    // The behavior_anomaly signal is a distinct case — it gets its own ticket
+    // with a composite entity_id, not silently merged into the inactivity ticket.
+    expect(mockCreateTicket).toHaveBeenCalledWith(
+      expect.objectContaining({ entity_id: `${STUDENT_ID}:behavior_anomaly` }),
+    );
+  });
+
+  it('cadence cap: student was contacted within the last 7 days -> skipped, no send, even with a fresh signal', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockReeseOutreachFindOne.mockImplementation(async (opts: any) => {
+      // hasOpenOutreachForSignal check (status:'active') -> none; but the
+      // cadence check (last_contacted_at within window) -> a hit.
+      if (opts?.where?.status === 'active') return null;
+      return { id: 'recent-contact-row' };
+    });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(0);
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    expect(result.decisions.some((d) => d.reason === 'cadence_cap_active')).toBe(true);
+  });
+
+  it('daily cap: 12 already sent today -> remaining candidates skipped, logged, cap never exceeded', async () => {
+    mockReeseOutreachCount.mockResolvedValue(DAILY_SEND_CAP); // already at the ceiling before this run
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(0);
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    expect(result.decisions.some((d) => d.reason === 'daily_cap_reached')).toBe(true);
+  });
+
+  it('daily cap boundary: exactly 1 slot remaining -> exactly 1 send happens, the rest are skipped', async () => {
+    mockReeseOutreachCount.mockResolvedValue(DAILY_SEND_CAP - 1);
+    mockGetPilotCohortStudentIds.mockResolvedValue(['s1', 's2']);
+    mockIsEligible.mockResolvedValue({ eligible: true, reason: 'in_pilot_cohort_and_active' });
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockInitiateDm).toHaveBeenCalledTimes(1);
+    expect(result.decisions.some((d) => d.reason === 'daily_cap_reached')).toBe(true);
+  });
+
+  it('governance call fires for every real send with riskTier R3 and NEVER blocks in shadow mode, regardless of verdict — allowed:true is the real, unconditional shadow-mode value even on a would_block verdict', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_block', reason: 'high_risk_tier', allowed: true });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    // The send still fully completed even though the shadow verdict was would_block —
+    // verdict stays mode-independent; allowed (real, mode-aware) is what gates.
+    expect(result.sent).toBe(1);
+    expect(mockInitiateDm).toHaveBeenCalled();
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(expect.objectContaining({ riskTier: 'R3' }));
+  });
+
+  it('ordering fix (2026-09-07): governance is evaluated BEFORE the real send, never after — the anti-pattern the mission text flags by name', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalled();
+    expect(mockInitiateDm).toHaveBeenCalled();
+    const authorizeCallOrder = mockAuthorizeTicketDispatch.mock.invocationCallOrder[0];
+    const sendCallOrder = mockInitiateDm.mock.invocationCallOrder[0];
+    expect(authorizeCallOrder).toBeLessThan(sendCallOrder);
+  });
+
+  it('Capability 6: creates a real, observational Outreach checklist instance keyed on the real ticket id, computed AFTER the real send', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockCreateOutreachChecklistInstance).toHaveBeenCalledWith(
+      'ticket-1', 'inactivity', expect.any(String), 'Real, unique outreach message.', expect.any(Date),
+    );
+    const sendCallOrder = mockInitiateDm.mock.invocationCallOrder[0];
+    const checklistCallOrder = mockCreateOutreachChecklistInstance.mock.invocationCallOrder[0];
+    expect(sendCallOrder).toBeLessThan(checklistCallOrder); // observational only — never computed before the send
+  });
+
+  it('fail-open: an Outreach checklist bookkeeping failure never breaks a real send that already succeeded', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockCreateOutreachChecklistInstance.mockRejectedValue(new Error('DB write failed'));
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockInitiateDm).toHaveBeenCalled();
+  });
+
+  it('no signal fires for an eligible student -> skipped, no send, no error', async () => {
+    const result = await runReeseAutonomousOutreachSweep(false);
+    expect(result.sent).toBe(0);
+    expect(result.decisions.some((d) => d.reason === 'no_signal')).toBe(true);
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — Real-enforcement Phase 2 (respects authorizeTicketDispatch().allowed)', () => {
+  it('shadow-mode no-op proof: allowed:true (the real, current, unconditional shadow-mode value) leaves the send byte-for-byte unchanged — DM sent, ticket created, ReeseOutreach row created', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: true });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockCreateTicket).toHaveBeenCalled();
+    expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'Real, unique outreach message.');
+    expect(mockReeseOutreachCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ enrollment_id: STUDENT_ID, status: 'active', last_contacted_at: expect.any(Date) }),
+    );
+  });
+
+  it('a held action (allowed:false) never sends, never records a false contact, and honestly reports skipped/held_for_approval', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: false });
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    // A held action must never be recorded as a real contact — it would both be
+    // dishonest and would incorrectly suppress a legitimate future contact attempt
+    // via wasContactedWithinCadence().
+    expect(mockReeseOutreachCreate).not.toHaveBeenCalled();
+    expect(mockEmitReeseLedgerEvent).not.toHaveBeenCalled();
+    expect(mockLogAgentActivity).not.toHaveBeenCalled();
+    expect(mockCreateOutreachChecklistInstance).not.toHaveBeenCalled();
+    expect(result.decisions[0]).toEqual(
+      expect.objectContaining({ enrollmentId: STUDENT_ID, action: 'skipped', reason: 'held_for_approval' }),
+    );
+    // Workspace mission, Phase 2 slice 2: a held outreach transitions the real
+    // work unit to 'blocked' — never 'done' or 'failed'.
+    expect(mockUpdateWorkUnitStatus).toHaveBeenCalledWith('wu-1', 'blocked');
+    expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalledWith('wu-1', 'done');
+    expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalledWith('wu-1', 'failed');
+    // The ticket itself is still created (authorization runs after ticket creation,
+    // matching the existing ordering) — only the send and its downstream bookkeeping
+    // are held.
+    expect(mockCreateTicket).toHaveBeenCalled();
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — dryRun', () => {
+  it('dryRun:true reports the same decisions with ZERO real writes/sends', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(true);
+
+    expect(result.dryRun).toBe(true);
+    expect(result.sent).toBe(1);
+    expect(mockCreateTicket).not.toHaveBeenCalled();
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
+    expect(mockReeseOutreachCreate).not.toHaveBeenCalled();
+  });
+
+  it('dryRun:true is honest about the daily cap — a candidate beyond the real remaining slots is reported as "would skip", not "would send"', async () => {
+    // Real count already at the ceiling before this dry run — a genuine
+    // production-verification scenario (see T009): the sweep must not
+    // over-report "would send" for candidates the real cap would reject.
+    mockReeseOutreachCount.mockResolvedValue(DAILY_SEND_CAP);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(true);
+
+    expect(result.dryRun).toBe(true);
+    expect(result.sent).toBe(0);
+    expect(result.decisions.some((d) => d.reason === 'daily_cap_reached')).toBe(true);
+    expect(mockCreateTicket).not.toHaveBeenCalled();
+  });
+
+  it('dryRun:true correctly simulates the cap running out mid-pass across multiple candidates', async () => {
+    mockReeseOutreachCount.mockResolvedValue(DAILY_SEND_CAP - 1); // exactly 1 real slot left
+    mockGetPilotCohortStudentIds.mockResolvedValue(['s1', 's2']);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    const result = await runReeseAutonomousOutreachSweep(true);
+
+    expect(result.sent).toBe(1); // only the first candidate consumes the last real slot
+    expect(result.decisions.some((d) => d.reason === 'daily_cap_reached')).toBe(true);
+    expect(mockInitiateDm).not.toHaveBeenCalled(); // still zero real sends — this is dryRun
+  });
+});
+
+describe('countAutonomousSendsToday', () => {
+  it('counts ReeseOutreach rows contacted today (shared ceiling with follow-up sends)', async () => {
+    mockReeseOutreachCount.mockResolvedValue(4);
+    const count = await countAutonomousSendsToday();
+    expect(count).toBe(4);
+    expect(mockReeseOutreachCount).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ last_contacted_at: expect.anything() }) }),
+    );
+  });
+});
+
+describe('runReeseAutonomousOutreachSweep — Workspace mission, Phase 2 slice 2 (real, persisted TicketWorkUnit lifecycle for outreach)', () => {
+  it('happy path: a real work unit is created for the send, assigned to Reese, and transitions to \'done\' after a successful send', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    const mockWorkUnitUpdate = jest.fn().mockResolvedValue(undefined);
+    mockCreateWorkUnit.mockResolvedValue({ id: 'wu-42', update: mockWorkUnitUpdate });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockCreateWorkUnit).toHaveBeenCalledWith('ticket-1', expect.objectContaining({
+      title: 'Outreach to Jordan Rivera (inactivity)',
+      requiredCapability: 'student_support.outreach',
+      riskTier: 'R3',
+      status: 'in_progress',
+      approvalPolicy: 'auto',
+    }));
+    expect(mockWorkUnitUpdate).toHaveBeenCalledWith({ assigned_agent_name: 'Reese' });
+    expect(mockUpdateWorkUnitStatus).toHaveBeenCalledWith('wu-42', 'done');
+  });
+
+  it('a thrown error after the work unit was created (e.g. the DM send fails) transitions the work unit to \'failed\', and the original error still propagates unchanged', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockInitiateDm.mockRejectedValue(new Error('DM service down'));
+
+    // Pre-existing behavior, unchanged by this task: sendNewOutreach() has no
+    // outer catch of its own, so a thrown error still propagates all the way
+    // out of the sweep — this task only adds a fail-open bookkeeping step
+    // ahead of that same propagation, never a new swallow.
+    await expect(runReeseAutonomousOutreachSweep(false)).rejects.toThrow('DM service down');
+
+    expect(mockUpdateWorkUnitStatus).toHaveBeenCalledWith('wu-1', 'failed');
+  });
+
+  it('boundary: a work-unit-creation failure never blocks the real send — fail-open, and no status transition is attempted for a work unit that was never created', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockCreateWorkUnit.mockRejectedValue(new Error('DB write failed'));
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(mockInitiateDm).toHaveBeenCalled();
+    expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalled();
+  });
+});

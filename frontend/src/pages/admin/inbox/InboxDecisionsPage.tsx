@@ -141,14 +141,14 @@ export default function InboxDecisionsPage() {
     const isForwarded = email.provider === 'gmail_colaberry' &&
       (email.from_address?.includes('hotmail.com') || email.from_address?.includes('outlook.com') ||
        email.subject?.includes('Fwd:') || email.headers?.['x-forwarded-to']);
-    if (isForwarded) return <span className="badge" style={{ backgroundColor: '#0078d4', color: 'white' }}>hotmail (fwd)</span>;
+    if (isForwarded) return <span className="badge" style={{ backgroundColor: 'var(--status-info)', color: 'white' } as React.CSSProperties}>hotmail (fwd)</span>;
     const colors: Record<string, { bg: string; label: string }> = {
-      gmail_colaberry: { bg: '#ea4335', label: 'Colaberry' },
-      gmail_personal: { bg: '#34a853', label: 'Personal' },
-      hotmail: { bg: '#0078d4', label: 'Hotmail' },
+      gmail_colaberry: { bg: 'var(--red-500)', label: 'Colaberry' },
+      gmail_personal: { bg: 'var(--status-success)', label: 'Personal' },
+      hotmail: { bg: 'var(--status-info)', label: 'Hotmail' },
     };
-    const p = colors[email.provider] || { bg: '#6c757d', label: email.provider };
-    return <span className="badge" style={{ backgroundColor: p.bg, color: 'white' }}>{p.label}</span>;
+    const p = colors[email.provider] || { bg: 'var(--text-muted)', label: email.provider };
+    return <span className="badge" style={{ backgroundColor: p.bg, color: 'white' } as React.CSSProperties}>{p.label}</span>;
   };
 
   return (

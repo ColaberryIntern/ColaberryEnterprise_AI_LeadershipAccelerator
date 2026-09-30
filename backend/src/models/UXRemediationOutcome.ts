@@ -101,7 +101,18 @@ UXRemediationOutcome.init(
       { fields: ['cluster_signature'] },
       { fields: ['cluster_type'] },
       // Hot path: regressionProneFixDetector queries by (project, signature, recent).
-      { fields: ['project_id', 'cluster_signature', 'observed_at'] },
+      // Explicit name: the auto-generated name
+      // (ux_remediation_outcomes_project_id_cluster_signature_observed_at) is 64
+      // chars, 1 over Postgres's 63-char identifier limit, so Postgres truncated it
+      // on creation. Sequelize then looked for the full 64-char name on every
+      // sync({ alter: true }), never found it, and tried to re-CREATE it — failing
+      // with "already exists" and aborting auto-migration each boot. Pinning the
+      // name to the existing (truncated) 63-char index makes sync find it. No DB
+      // migration needed; the name already matches what is on disk in every env.
+      {
+        name: 'ux_remediation_outcomes_project_id_cluster_signature_observed_a',
+        fields: ['project_id', 'cluster_signature', 'observed_at'],
+      },
     ],
   }
 );

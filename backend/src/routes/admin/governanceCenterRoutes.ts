@@ -23,6 +23,44 @@ import {
 const router = Router();
 const BASE = '/api/admin/governance-center';
 
+/** What a schedule edit actually did to the running scheduler. */
+interface AppliedScheduleChange {
+  /** true when the change is live now; false means it needs a restart to take effect. */
+  live: boolean;
+  action: 'started' | 'stopped' | 'rescheduled' | 'unchanged' | 'failed';
+  detail?: string;
+}
+
+/**
+ * Push a persisted schedule edit into the running scheduler and report what
+ * happened, so the caller can tell "saved and live" from "saved only".
+ *
+ * Never throws: the row is already committed by this point, and failing the
+ * request would wrongly suggest the edit did not save. A reload failure
+ * degrades to `live: false`, which is the honest answer — restart required.
+ */
+async function applyScheduleChange(agentName: string): Promise<AppliedScheduleChange> {
+  try {
+    const { reloadAIOpsSchedules } = await import('../../services/aiOpsScheduler');
+    const result = await reloadAIOpsSchedules();
+
+    if (result.started.includes(agentName)) return { live: true, action: 'started' };
+    if (result.stopped.includes(agentName)) return { live: true, action: 'stopped' };
+    if (result.rescheduled.includes(agentName)) return { live: true, action: 'rescheduled' };
+
+    // Reconciled cleanly but this agent needed no change — e.g. toggling a field
+    // that does not affect scheduling, or re-saving an identical value.
+    return { live: true, action: 'unchanged' };
+  } catch (err: any) {
+    console.error(`[GovernanceCenter] Schedule saved but reload failed for ${agentName}: ${err.message}`);
+    return {
+      live: false,
+      action: 'failed',
+      detail: 'Saved to the database, but the running scheduler could not be reloaded. A backend restart is required for this change to take effect.',
+    };
+  }
+}
+
 // ─── Global Governance Config ────────────────────────────────────────────────
 
 router.get(`${BASE}/config`, requireAdmin, async (_req: Request, res: Response) => {
@@ -127,7 +165,14 @@ router.patch(`${BASE}/schedules/:agentName`, requireAdmin, async (req: Request, 
 
     await row.update(updates);
     invalidateGovernanceCache();
-    res.json(row);
+
+    // Apply to the RUNNING scheduler. Without this the row changes, the caller
+    // gets a 200, and the job carries on as before until the next deploy —
+    // which is how StudentProgressMonitor stayed disabled for five months while
+    // the UI showed the toggle as applied.
+    const applied = await applyScheduleChange(String(agentName));
+
+    res.json({ ...row.toJSON(), applied });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -151,7 +196,10 @@ router.post(`${BASE}/schedules/:agentName/reset`, requireAdmin, async (req: Requ
     } as any);
 
     invalidateGovernanceCache();
-    res.json(row);
+
+    const applied = await applyScheduleChange(String(agentName));
+
+    res.json({ ...row.toJSON(), applied });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

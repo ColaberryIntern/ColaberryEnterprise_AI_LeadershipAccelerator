@@ -229,7 +229,7 @@ Ali`;
   const r = await sendWithBcAttach({
     ticketId: 9953889114,
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com', 'ali_muwwakkil@hotmail.com'],
+    cc: ['ali_muwwakkil@hotmail.com'],
     subject: `Ali - Contextual Suggestion v2 worked example on "${todo.title.slice(0, 60)}" (your critique addressed)`,
     html: teaserHtml,
     text: teaserText,

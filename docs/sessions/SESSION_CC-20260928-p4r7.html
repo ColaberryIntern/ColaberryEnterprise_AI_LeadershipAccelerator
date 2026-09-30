@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260928-p4r7 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Monday, September 28, 2026 at 1:05 PM</div>
+    <div><span class="sid">CC-20260928-p4r7</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Inbox COS: route account-security and K-12 school mail to INBOX</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Added two hard rules to `backend/src/services/inbox/hardRuleEngine.ts`, both placed ahead of the List-Unsubscribe (section 4) and noreply (section 5) rules that were archiving the mail. `0g account_security_0g` routes password resets, verification/one-time codes and magic sign-in links to INBOX for any sender, matching on subject only. `0h school_0h` routes `parentsquare.com` and `wylieisd.net` to INBOX. Also fixed section 3&#39;s keyword builder so a multi-word priority keyword tolerates any separator — &quot;Parent/Teacher&quot; and &quot;parent-teacher&quot; previously did not match `parent teacher`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`hardRuleEngine.test.ts` 67/67 pass (31 new). Each of the three changes proved by mutation, failing tests named, not counted — neutralising `isAccountSecurityMail` failed 11 (the 9 subject cases plus `routes the password reset Ali was waiting on to the inbox` and `routes a Hetzner verification code to the inbox`); neutralising `isSchoolNotificationSender` failed 5 (incl. `routes an absence notification and a grade update to the inbox` and `beats the List-Unsubscribe and noreply rules that archived these`); reverting the keyword separator failed 2 (`Parent/Teacher` and `parent-teacher`). Mutations reverted by edit, never by `git checkout`. Backend `tsc --noEmit` clean with a pinned TypeScript 5.9.3 (the hoisted 4.9.5 cannot parse this tree). Full `src/services/inbox` suite: 947/949 pass; the 2 failures are in `autoArchiveFalseSuccess.test.ts` and `autoArchiveGraphClient.test.ts` and were confirmed pre-existing by running both against pristine `origin/main` with my changes removed — identical 2 failures, and neither suite references the changed code.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Every test subject and sender is copied from a real archived row in `inbox_emails`, not invented. Test assertions run through `evaluateHardRules`, not just the helpers, because the defect was one of rule ORDER — the helpers would have matched all along. School mail is routed wholesale rather than filtered by message type: it runs 1-3 messages a day, which is not enough volume to justify the cost of silently dropping one. The school rule lists only the two domains that have actually sent mail; no speculative K-12 platforms. Deployed to production the same day (see the deploy record below); the rules only affect mail classified after that point.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Deploy to production and verify the live behaviour</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">PR #2804 merged (approved, all 8 checks green), then `backend` deployed from `origin/main` at `cfe8698d` via `DEPLOY_MODE=registry … bash scripts/deploy-prod.sh backend`. No raw `compose up`. The host tree was clean at `d5561f1b` beforehand and fast-forwarded; the stale lock from the 15:06 deploy was confirmed dead (no `deploy-prod.sh` or `compose up` process) before starting. The deploy also carried PRs #2805 and #2806 from other tabs, which were already merged to main.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Registry mode confirmed the published image digest equals `sha-cfe8698d…`; container recreated and answering after 5s; marker `account_security_0g` present in `backend:/app/dist/services/inbox/hardRuleEngine.js` — and confirmed **absent** (`grep -c` = 0) in the running build beforehand, so the marker actually proves the swap. The deploy script prints &quot;Not proved: the surface itself&quot;, so behaviour was then checked directly: a script run inside the production container against the **deployed** `dist` evaluated 8 real cases through `evaluateHardRules` — the ParentSquare reset, a Hetzner code, a Ceipal OTP, the keyword-free Sep 16 digest, an absence notification and the angle-bracketed district sender all returned INBOX with the expected `rule_id`; both controls (unrelated noreply marketing, look-alike `notparentsquare.com`) correctly stayed AUTOMATION. All 8 as expected.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deployed during business hours at Ali&#39;s explicit instruction, against the standing after-hours rule.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260928-p4r7.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

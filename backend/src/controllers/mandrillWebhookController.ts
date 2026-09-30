@@ -9,6 +9,12 @@ import { logCommunication } from '../services/communicationLogService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
 import { processOptOut } from '../services/unsubscribeEnforcementService';
 import ScheduledEmail from '../models/ScheduledEmail';
+import { handleTicketReplyEmail } from '../services/workforce/ticketReplyService';
+import { resolveExplorerReplyRouting } from '../services/explorerGrowth/explorerInboundRouter';
+import { recordReplyClassification } from '../services/growthJourney/replyClassificationHook';
+import { recordReplyHandoff } from '../services/growthJourney/replyHandoffHook';
+import { redactForLogs } from '../utils/piiRedaction';
+import { sendInboundAutoReply } from '../services/inbound/inboundAutoReply';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -53,7 +59,12 @@ function verifyMandrillSignature(
     .update(signedData)
     .digest('base64');
 
-  return hash === expectedSignature;
+  // Constant-time comparison — a plain === leaks timing information proportional to how
+  // many leading bytes match, a real (if narrow) side channel for a signature check.
+  const hashBuf = Buffer.from(hash);
+  const expectedBuf = Buffer.from(expectedSignature || '');
+  if (hashBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(hashBuf, expectedBuf);
 }
 
 /** Handle Mandrill webhook events (open, click, bounce, unsub) */
@@ -76,16 +87,23 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
       return;
     }
 
-    // Signature verification — log mismatch but don't block
-    // (Cloudflare/proxy can alter headers, causing false rejections)
+    // Signature verification — REJECT on mismatch when a webhook key is configured.
+    // (Inbound Mandrill events can trigger AI voice calls / automation, so a forged
+    // payload is an action-injection risk — accepting unsigned events is unsafe.)
+    // To avoid false rejections behind a proxy that rewrites Host/URL, set the exact
+    // public URL via MANDRILL_WEBHOOK_URL so the signed-data reconstruction is stable.
     const webhookKey = env.mandrillWebhookKey || '';
     if (webhookKey) {
       const signature = req.headers['x-mandrill-signature'] as string || '';
       const webhookUrl = env.mandrillWebhookUrl || `${req.protocol}://${req.get('host')}${req.originalUrl}`;
       const isValid = verifyMandrillSignature(webhookKey, webhookUrl, req.body, signature);
       if (!isValid) {
-        console.warn(`[MandrillWebhook] Signature mismatch (non-blocking) — url: ${webhookUrl}`);
-        // Continue processing — don't reject. Mandrill webhooks are critical for tracking.
+        console.warn(
+          `[MandrillWebhook] Signature mismatch — rejecting. url: ${webhookUrl}. ` +
+          `If this is a false rejection behind a proxy, set MANDRILL_WEBHOOK_URL to the exact public webhook URL.`
+        );
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
       }
     }
 
@@ -111,11 +129,27 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
       if (!scheduledEmailId) {
         // Log what we're skipping for debugging
         if (event.event === 'open' || event.event === 'click') {
-          console.log(`[MandrillWebhook] Skipping ${event.event} for ${event.msg?.email || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
+          console.log(`[MandrillWebhook] Skipping ${event.event} for ${redactForLogs(event.msg?.email) || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
         }
         skipped++;
         continue;
       }
+
+      // Ecosystem context, restored from the metadata the scheduler attached at send.
+      //
+      // Read defensively and stored alongside the existing fields rather than replacing
+      // them: messages sent before the scheduler started attaching these keys are still
+      // in flight and still generating opens and clicks weeks later. Those events carry
+      // only the old metadata shape and must keep resolving exactly as they do today,
+      // so absence is normal and never an error.
+      //
+      // Without this a delivery event is a bare message id, and there is no way to
+      // report open or bounce rates per brand, which is half of what per-brand sending
+      // is for.
+      const tenantId = typeof metadata.tenant_id === 'string' ? metadata.tenant_id : null;
+      const brandId = typeof metadata.brand_id === 'string' ? metadata.brand_id : null;
+      const senderProfileId =
+        typeof metadata.sender_profile_id === 'string' ? metadata.sender_profile_id : null;
 
       await recordWebhookOutcome(scheduledEmailId, outcome, {
         mandrill_event: event.event,
@@ -123,7 +157,53 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
         ip: event.ip,
         user_agent: event.user_agent,
         url: event.url, // For click events
+        ...(tenantId ? { tenant_id: tenantId } : {}),
+        ...(brandId ? { brand_id: brandId } : {}),
+        ...(senderProfileId ? { sender_profile_id: senderProfileId } : {}),
       });
+
+      // D2 FIX — suppress a hard-bounced address globally.
+      //
+      // Before this, a hard bounce wrote an InteractionOutcome and nothing else.
+      // checkLeadSendable (communicationSafetyService.ts:106) blocks on
+      // Lead.status IN ('unsubscribed','dnd','bounced'), but NOTHING in the
+      // codebase ever wrote 'bounced' — so that branch was unreachable and a
+      // hard-bounced address stayed globally sendable. campaignLifecycleService
+      // exits the lead from the campaign it bounced on, which meant re-enrolling
+      // them anywhere else resumed mail to a dead address. That is a real
+      // deliverability and reputation problem, not a tidiness one.
+      //
+      // hard_bounce and reject only. A reject means the address is on the
+      // provider's suppression list, which is at least as permanent as a hard
+      // bounce. soft_bounce is deliberately excluded — it is transient (full
+      // mailbox, temporary server issue) and suppressing on it would silently
+      // discard recoverable recipients.
+      if (event.event === 'hard_bounce' || event.event === 'reject') {
+        try {
+          const scheduledEmail = await ScheduledEmail.findByPk(scheduledEmailId, {
+            attributes: ['id', 'lead_id'],
+          });
+          if (scheduledEmail) {
+            const lead = await Lead.findByPk(scheduledEmail.lead_id, {
+              attributes: ['id', 'status'],
+            });
+            // Never downgrade a stronger, user-expressed suppression. An
+            // unsubscribe or DND is a decision the person made; 'bounced' is a
+            // mechanical fact, and overwriting the former with the latter would
+            // lose the reason we must never contact them again.
+            if (lead && lead.status !== 'unsubscribed' && lead.status !== 'dnd') {
+              await Lead.update({ status: 'bounced' }, { where: { id: lead.id } });
+              console.log(
+                `[MandrillWebhook] Lead ${lead.id} marked bounced via ${event.event}`,
+              );
+            }
+          }
+        } catch (bounceErr: any) {
+          // Never fail the webhook over this — Mandrill retries on non-200 and a
+          // retry storm is worse than a delayed suppression.
+          console.warn('[MandrillWebhook] Bounce suppression failed:', bounceErr.message);
+        }
+      }
 
       // Process opt-out for unsub/spam events
       if (outcome === 'unsubscribed') {
@@ -173,10 +253,40 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       return;
     }
 
-    // Signature verification — skip for inbound since Mandrill's route validation
-    // test does not include the correct signature. Inbound emails are already
-    // authenticated by Mandrill's MX routing (only Mandrill can deliver to our
-    // inbound domain). The outbound webhook retains strict signature checking.
+    // Signature verification — REJECT the whole request on mismatch when a webhook key is
+    // configured, matching the outbound handler's convention (handleMandrillWebhook above).
+    // Previously this only rejected the ticket-<id>@ reply path; the Lead-reply path below —
+    // which can trigger an AI-generated auto-reply send, an auto-unsubscribe, and a voice
+    // call to Ali — accepted unverified inbound events. The Mandrill URL-verification
+    // HEAD/ping (no `mandrill_events` body) already short-circuits above this point, so
+    // promoting to a full-request reject doesn't reintroduce the false-positive that
+    // originally motivated scoping enforcement down to just the ticket path.
+    // NOTE: env.mandrillWebhookUrl is hardcoded in production to the OUTBOUND tracking-events
+    // URL (.../api/webhook/mandrill) — reusing it here would make every real inbound
+    // signature fail, since Mandrill signs against the exact URL it posted to. Derive this
+    // route's own URL instead (append '/inbound' to the outbound base when the override is
+    // set; otherwise reconstruct per-request exactly like the outbound handler's fallback).
+    const webhookKey = env.mandrillWebhookKey || '';
+    if (webhookKey) {
+      const signature = req.headers['x-mandrill-signature'] as string || '';
+      const inboundWebhookUrl = env.mandrillWebhookUrl
+        ? `${env.mandrillWebhookUrl}/inbound`
+        : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      const isValid = verifyMandrillSignature(webhookKey, inboundWebhookUrl, req.body, signature);
+      if (!isValid) {
+        console.warn(
+          `[MandrillInbound] Signature mismatch — rejecting. url: ${inboundWebhookUrl}. ` +
+          `If this is a false rejection behind a proxy, verify MANDRILL_WEBHOOK_URL matches the exact public inbound URL.`
+        );
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
+      }
+    } else {
+      // No webhook key configured — auth degrades to sender-email (+ reply-token on the
+      // ticket path) only. Loud on purpose: production is confirmed to have the key set, so
+      // this firing there means the config regressed, not routine dev behavior.
+      console.warn('[MandrillInbound] MANDRILL_WEBHOOK_KEY not configured — inbound signature verification is disabled');
+    }
 
     let processed = 0;
     let skipped = 0;
@@ -197,6 +307,27 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       if (!fromEmail) { skipped++; continue; }
 
       console.log(`[MandrillInbound] Email reply from ${fromEmail}: ${subject}`);
+
+      // AI Workforce ticket-approval replies: routed via a ticket-<id>-<token>@ subaddress
+      // on the Mandrill-inbound domain, so the ticket ID is read directly off the recipient
+      // address — no thread/Message-ID correlation needed, and no dependency on the Lead
+      // pipeline below at all. The token is a per-ticket random value only ever transmitted
+      // in the actual approval email (never rendered in the dashboard UI) — required in
+      // addition to the sender allowlist so knowing a ticket's UUID alone (visible to any
+      // admin who can browse the Tickets board, a broader set than who may approve) isn't
+      // enough to construct a working reply address.
+      const toLocalPart = String(msg.email || '').split('@')[0] || '';
+      const ticketMatch = toLocalPart.match(/^ticket-([0-9a-f-]{36})-([0-9a-f]{8})$/i);
+      if (ticketMatch) {
+        try {
+          const result = await handleTicketReplyEmail({ ticketId: ticketMatch[1], replyToken: ticketMatch[2], fromEmail, rawBody: body });
+          console.log(`[MandrillInbound] Ticket reply for ${ticketMatch[1]}: ${result.reason}`);
+        } catch (err: any) {
+          console.error(`[MandrillInbound] Ticket reply handling failed for ${ticketMatch[1]}:`, err.message);
+        }
+        processed++;
+        continue;
+      }
 
       // Find lead by email
       const lead = await Lead.findOne({ where: { email: fromEmail } });
@@ -296,89 +427,93 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         console.warn(`[MandrillInbound] Failed to resume simulation:`, simErr.message);
       }
 
-      console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${lead.name})`);
+      console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${redactForLogs(lead.name)})`);
 
       // Auto-detect unsubscribe keywords — broad matching anywhere in message body
       const bodyLower = body.toLowerCase().trim();
       const unsubExactKeywords = ['unsubscribe', 'stop', 'remove me', 'opt out', 'opt-out', 'take me off', 'no more emails', 'stop emailing', 'don\'t email', 'dont email', 'don\'t contact', 'dont contact'];
       const isUnsubscribe = unsubExactKeywords.some(kw => bodyLower.includes(kw));
       if (isUnsubscribe) {
-        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${(lead as any).name}): "${bodyLower.substring(0, 80)}"`);
+        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${redactForLogs((lead as any).name)}): "${redactForLogs(bodyLower).substring(0, 80)}"`);
         await processOptOut(lead.id, 'email', `Inbound email opt-out: "${bodyLower.substring(0, 100)}"`, 'inbound_reply');
+        // Growth Journey OS (Phase 2): record the reply's classification — AFTER the
+        // opt-out is processed, fire-and-forget, master-gated, cannot change this response.
+        recordReplyClassification({ leadId: lead.id, body, channel: 'email', campaignId, providerMessageId: msg.headers?.['Message-Id'] ?? null });
         // Do NOT auto-reply to someone who asked to unsubscribe
         console.log(`[MandrillInbound] Skipping auto-reply — lead requested unsubscribe`);
         res.status(200).json({ status: 'unsubscribed' });
         return;
       }
 
+      // Explorer Growth OS — divert Explorer replies BEFORE the auto-reply
+      // below (plan §15.5, §21.3: "Explorer campaigns must NOT use the
+      // bypassing auto-reply path").
+      //
+      // WHAT THAT PATH BYPASSES: the block below calls generateMessage and
+      // hands the result straight to nodemailer. It never passes through
+      // messageValidatorService, so none of the validator's guards apply —
+      // including the Explorer fact guard, whose entire job is to stop a
+      // generated message asserting a date or price nobody resolved. An
+      // Explorer reply answered here would be answered by an unvalidated
+      // generator.
+      //
+      // ADDITIVE: resolveExplorerReplyRouting returns NOT_HANDLED unless the
+      // flag is on AND the sender is a known Explorer. Every existing campaign
+      // takes exactly the path it took before, which the tests assert directly.
+      // Growth Journey OS (Phase 2): record the reply's classification. Placed after the
+      // opt-out check, before the Explorer router — fire-and-forget, master-gated, and it
+      // cannot change anything below.
+      recordReplyClassification({ leadId: lead.id, body, channel: 'email', campaignId, providerMessageId: msg.headers?.['Message-Id'] ?? null });
+
+      let explorerHandled = false;
+      try {
+        const routing = await resolveExplorerReplyRouting(lead.id, body);
+        if (routing.handled) {
+          explorerHandled = routing.suppressAutoReply;
+          console.log(
+            JSON.stringify({
+              level: 'info',
+              service: 'explorer-growth',
+              event: 'explorer_reply_routed',
+              outcome: 'success',
+              lead_id: lead.id,
+              reply_class: routing.classification?.class ?? null,
+              route: routing.classification?.route ?? null,
+              source: routing.classification?.source ?? null,
+            }),
+          );
+          // Growth Journey OS (Phase 4, T404): a HUMAN_TASK route becomes a handoff row
+          // in the queue the class names. Fire-and-forget, flag-gated inside, never
+          // throws; it changes nothing above or below - the route was already logged.
+          void recordReplyHandoff({ leadId: lead.id, replyClass: routing.classification?.class ?? null, providerMessageId: msg.headers?.['Message-Id'] ?? null });
+        }
+      } catch (routeErr: any) {
+        // FAIL CLOSED. If we cannot tell whether this is an Explorer, we must
+        // not fall through to an unvalidated auto-reply on the assumption that
+        // they are not one. Staying silent costs a reply; guessing wrong sends
+        // an ungrounded message to a learner.
+        explorerHandled = true;
+        console.error(
+          JSON.stringify({
+            level: 'error',
+            service: 'explorer-growth',
+            event: 'explorer_reply_routing_failed',
+            error_class: 'ExplorerRoutingError',
+            outcome: 'failure',
+            lead_id: lead.id,
+            message: String(routeErr?.message ?? '').slice(0, 200),
+          }),
+        );
+      }
+
       // Auto-reply: generate an AI response and send it back
       try {
-        // Don't auto-reply to Ali personal outreach — Ali handles those personally
-        const isAliOutreach = await CommunicationLog.findOne({
-          where: { lead_id: lead.id, metadata: { trigger: 'ali_personal_outreach' } } as any,
-        });
-        if (!isAliOutreach) {
-          const { generateMessage, buildConversationHistory } = require('../services/aiMessageService');
-          const nodemailer = require('nodemailer');
-
-          const conversationHistory = await buildConversationHistory(lead.id);
-          const campaignRecord = campaignId ? await (require('../models').Campaign.findByPk(campaignId)) : null;
-          const senderName = campaignRecord?.settings?.sender_name || 'Dhee - Colaberry Enterprise AI';
-          const senderEmail = campaignRecord?.settings?.sender_email || env.emailFrom;
-          const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
-          const replyToAddr = senderEmail.replace(/@[^@]+$/, '@' + replyDomain);
-
-          const result = await generateMessage({
-            channel: 'email',
-            ai_instructions: [
-              'You are responding to an inbound email reply from a lead.',
-              'The lead said: "' + body.substring(0, 500) + '"',
-              'Respond helpfully and specifically to what they asked or said.',
-              'If they asked about pricing, mention the upcoming April 14 cohort and suggest a strategy call.',
-              'If they expressed interest, acknowledge it warmly and offer to schedule a call.',
-              'If they asked a question, answer it directly.',
-              'Keep it concise (3-5 sentences). Be warm, professional, and helpful.',
-              'Sign off as ' + senderName.split(' - ')[0] + '.',
-            ].join('\n'),
-            tone: 'warm',
-            lead: { name: (lead as any).name, email: (lead as any).email, company: (lead as any).company, title: (lead as any).title } as any,
-            conversationHistory,
-          });
-
-          if (result.body) {
-            const replySubject = subject.startsWith('Re:') ? subject : 'Re: ' + subject;
-            const mailer = nodemailer.createTransport({
-              host: 'smtp.mandrillapp.com', port: 587, secure: false,
-              auth: { user: 'apikey', pass: env.mandrillApiKey },
-            });
-            await mailer.sendMail({
-              from: `"${senderName}" <${senderEmail}>`,
-              replyTo: `"${senderName}" <${replyToAddr}>`,
-              to: fromEmail,
-              subject: replySubject,
-              html: result.body,
-            });
-
-            await logCommunication({
-              lead_id: lead.id,
-              campaign_id: campaignId,
-              channel: 'email',
-              direction: 'outbound',
-              delivery_mode: 'live',
-              status: 'sent',
-              to_address: fromEmail,
-              from_address: senderEmail,
-              subject: replySubject,
-              body: result.body,
-              provider: 'mandrill',
-              metadata: { auto_reply: true, in_reply_to: inReplyTo || null },
-            }).catch(() => {});
-
-            console.log(`[MandrillInbound] Auto-replied to ${(lead as any).name} (${fromEmail})`);
-          }
-        } else {
-          console.log(`[MandrillInbound] Skipping auto-reply — Ali personal outreach (Ali handles personally)`);
+        if (explorerHandled) {
+          console.log('[MandrillInbound] Skipping auto-reply — Explorer reply routed to the classifier');
+          processed++;
+          continue;
         }
+        await sendInboundAutoReply({ lead, campaignId, body, subject, fromEmail, inReplyTo });
       } catch (replyErr: any) {
         console.warn(`[MandrillInbound] Auto-reply failed for lead ${lead.id}: ${replyErr.message}`);
       }

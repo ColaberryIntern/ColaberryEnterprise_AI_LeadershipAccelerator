@@ -12,6 +12,20 @@ import { computeIntentScore } from '../services/intentScoringService';
 import { evaluateVisitorForTriggers } from '../services/behavioralTriggerService';
 import { env } from '../config/env';
 import { logAgentExecution } from '../services/governanceService';
+import { redactForLogs } from '../utils/piiRedaction';
+import {
+  resolvePublicContext,
+  resolveContextByHostname,
+  hostnameFromUrl,
+  ResolvedTenantContext,
+  ResolutionPath,
+} from '../modules/tenancy/tenantResolver';
+import {
+  validateEventShape,
+  validateFingerprint,
+  validateTrackEvent,
+} from './tracking/trackingEventValidation';
+import { verifyJourneyToken } from '../modules/attribution/journeyLinkService';
 
 /** Fire-and-forget signal detection + intent scoring + behavioral triggers for high-value events */
 function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
@@ -26,29 +40,6 @@ function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
     })
     .catch((err) => console.error('[Tracking] Signal analysis error:', err.message));
 }
-
-const VALID_EVENT_TYPES = [
-  'pageview',
-  'scroll',
-  'click',
-  'cta_click',
-  'form_start',
-  'form_submit',
-  'time_on_page',
-  'heartbeat',
-  'media_play',
-  'embed_click',
-  'booking_modal_opened',
-  'booking_date_selected',
-  'booking_time_selected',
-  'book_strategy_call_click',
-  'demo_start',
-  'demo_complete',
-  'demo_skip',
-  'demo_to_input_focus',
-  'demo_watch_click',
-  'demo_industry_click',
-] as const;
 
 function extractReferrerDomain(referrerUrl?: string): string | undefined {
   if (!referrerUrl) return undefined;
@@ -95,23 +86,103 @@ function normalizeSiteSlug(raw: unknown, pageUrl?: string): string | undefined {
   }
 }
 
-function validateTrackEvent(body: Record<string, unknown>): string | null {
-  const { fingerprint, event_type, page_url, page_path } = body;
+/**
+ * Paths that belong to the logged-in product rather than the public marketing site.
+ *
+ * One hostname, two brands: enterprise.colaberry.ai serves Colaberry Consulting when
+ * logged out and the Refactored.ai working portal when logged in. The `brand_domains`
+ * table already models this as (hostname, purpose) — a `web` row and an `app` row — so
+ * the only question is how a request declares which side it is on.
+ *
+ * The path does, and that is why this list is the mechanism rather than auth state.
+ * Reading auth would mean the tracker knowing who the visitor is, which is exactly the
+ * new data collection this approach exists to avoid. Nothing here observes anything the
+ * request was not already sending.
+ *
+ * `/admin` is absent deliberately: the frontend tracker refuses to run there at all
+ * (`shouldTrack()` in utils/tracker.ts), so no admin event ever reaches this code.
+ *
+ * KNOWN LIMIT, stated rather than hidden: the portal is a single-page app that emits
+ * very few page events, so this undercounts Refactored.ai. It attributes correctly what
+ * it sees; it does not make the portal chatty. Fixing that is a separate decision about
+ * instrumenting the portal, which carries a consent question of its own.
+ */
+const APP_PATH_PREFIXES = ['/portal'] as const;
 
-  if (!fingerprint || typeof fingerprint !== 'string' || fingerprint.length > 64) {
-    return 'fingerprint is required (string, max 64 chars)';
+function isAppPath(pageUrl: string | undefined): boolean {
+  if (!pageUrl) return false;
+  let pathname: string;
+  try {
+    pathname = new URL(pageUrl).pathname;
+  } catch {
+    // Not a parseable URL: treat it as a bare path, which is what the batch endpoint
+    // sometimes carries.
+    pathname = pageUrl.split('?')[0] || '';
   }
-  if (!event_type || typeof event_type !== 'string' || !VALID_EVENT_TYPES.includes(event_type as any)) {
-    return `event_type must be one of: ${VALID_EVENT_TYPES.join(', ')}`;
-  }
-  if (!page_url || typeof page_url !== 'string' || page_url.length > 500) {
-    return 'page_url is required (string, max 500 chars)';
-  }
-  if (!page_path || typeof page_path !== 'string' || page_path.length > 255) {
-    return 'page_path is required (string, max 255 chars)';
-  }
+  return APP_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
-  return null;
+/**
+ * Resolve the ecosystem tenant/brand for an inbound tracking hit.
+ *
+ * SECURITY: resolution is driven ONLY by `site_slug` (which the server maps through
+ * `lead_sources`) and by the hostname in the page URL (mapped through `brand_domains`).
+ * A request body may never name its own tenant — if it could, any visitor could write
+ * into any tenant's data by editing one field.
+ *
+ * FAIL-SOFT: an unresolved site yields null context and the event is still recorded.
+ * A metric is emitted so unregistered sites and legacy-host-map usage are measurable
+ * rather than invisible. Dropping the event instead would lose real traffic to fix a
+ * bookkeeping problem.
+ */
+async function resolveTrackingContext(
+  siteSlug: string | undefined,
+  pageUrl: string | undefined,
+): Promise<ResolvedTenantContext | null> {
+  try {
+    // A portal path resolves against the hostname's `app` row, which points at
+    // Refactored.ai. `resolveContextByHostname` falls back to the `web` row when no
+    // `app` row is registered, so a host without one keeps behaving exactly as before.
+    if (isAppPath(pageUrl)) {
+      const host = hostnameFromUrl(pageUrl);
+      const appContext = await resolveContextByHostname(host, 'app');
+      if (appContext) return appContext;
+    }
+
+    const { context, path } = await resolvePublicContext({
+      sourceSlug: siteSlug,
+      pageUrl,
+    });
+    if (!context) emitUnresolvedContext(siteSlug, pageUrl, path);
+    return context;
+  } catch (err) {
+    // Resolution must never take the tracking endpoint down.
+    emitUnresolvedContext(siteSlug, pageUrl, 'unresolved');
+    return null;
+  }
+}
+
+function emitUnresolvedContext(
+  siteSlug: string | undefined,
+  pageUrl: string | undefined,
+  path: ResolutionPath,
+): void {
+  let hostname: string | null = null;
+  try {
+    hostname = pageUrl ? new URL(pageUrl).hostname : null;
+  } catch {
+    hostname = null;
+  }
+  console.warn(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'tenant_context_unresolved',
+      outcome: 'partial',
+      context: { site_slug: siteSlug ?? null, hostname, resolution_path: path },
+    }),
+  );
 }
 
 export async function handleTrackEvent(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -196,6 +267,9 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       }
     }
 
+    // Server-resolved, never taken from the request body.
+    const ecosystem = await resolveTrackingContext(site_slug, page_url);
+
     const sessionId = await getOrCreateSession(visitorId, {
       page_url,
       referrer_url,
@@ -205,9 +279,16 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       ip_address: req.ip,
       device_type,
       site_slug,
+      tenant_id: ecosystem?.tenantId ?? null,
+      brand_id: ecosystem?.brandId ?? null,
+      source_id: ecosystem?.sourceId ?? null,
+      campaign_id: campaign_id ?? null,
     });
 
-    const page_category = categorizePagePath(page_path);
+    // Categorise within the resolved brand. `ecosystem` is null when the site slug does
+    // not resolve, and passing null keeps the legacy global map — an unresolved site
+    // categorises exactly as it did before rather than losing its category entirely.
+    const page_category = categorizePagePath(page_path, ecosystem?.brandSlug);
 
     await recordPageEvent({
       session_id: sessionId,
@@ -219,6 +300,10 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       page_category,
       event_data,
       timestamp: timestamp ? new Date(timestamp) : new Date(),
+      tenant_id: ecosystem?.tenantId ?? null,
+      brand_id: ecosystem?.brandId ?? null,
+      source_id: ecosystem?.sourceId ?? null,
+      campaign_id: campaign_id ?? null,
     });
 
     // Trigger real-time signal analysis for high-value events
@@ -259,8 +344,9 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       site_slug: rawSiteSlug,
     } = req.body;
 
-    if (!fingerprint || typeof fingerprint !== 'string' || fingerprint.length > 64) {
-      res.status(400).json({ error: 'fingerprint is required (string, max 64 chars)' });
+    const fingerprintError = validateFingerprint(fingerprint);
+    if (fingerprintError) {
+      res.status(400).json({ error: fingerprintError });
       return;
     }
     if (!Array.isArray(events) || events.length === 0 || events.length > 50) {
@@ -268,8 +354,49 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       return;
     }
 
+    // Endpoint parity (D-3). `/api/t/event` rejects an event this endpoint used
+    // to accept without inspection, and the tracker chooses between the two by
+    // buffer size - so the same event survived or died depending on timing. The
+    // same per-event rules now run here.
+    //
+    // Rejection is per element, not per request, and deliberately so. A batch
+    // holds up to 50 events from one page load; failing the whole request over
+    // one bad element would discard up to 49 good ones and turn a validation
+    // fix into data loss. The invariant that matters - and the one AC4 states -
+    // is that an event's SURVIVAL cannot depend on which endpoint carried it.
+    //
+    // The one case where a batch is exactly equivalent to a single-event call is
+    // a batch of one: there, rejecting the only element rejects the request, and
+    // the status code and message are byte-identical to `/api/t/event`.
+    const acceptedEvents: any[] = [];
+    const rejections: string[] = [];
+    for (const candidate of events) {
+      const eventError =
+        candidate && typeof candidate === 'object'
+          ? validateEventShape(candidate)
+          : 'event must be an object';
+      if (eventError) rejections.push(eventError);
+      else acceptedEvents.push(candidate);
+    }
+    if (acceptedEvents.length === 0) {
+      res.status(400).json({ error: rejections[0] });
+      return;
+    }
+    if (rejections.length > 0) {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'backend',
+          event: 'track_batch_events_rejected',
+          outcome: 'partial',
+          context: { rejected: rejections.length, accepted: acceptedEvents.length, first_error: rejections[0] },
+        }),
+      );
+    }
+
     const referrer_domain = extractReferrerDomain(referrer_url);
-    const firstPageUrl = events[0] && events[0].page_url;
+    const firstPageUrl = acceptedEvents[0] && acceptedEvents[0].page_url;
     const site_slug = normalizeSiteSlug(rawSiteSlug, firstPageUrl);
 
     const visitorId = await findOrCreateVisitor(fingerprint, {
@@ -300,7 +427,12 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       }
     }
 
-    const firstEvent = events[0];
+    const firstEvent = acceptedEvents[0];
+    // Resolved once per batch, not per event: every event in a batch comes from the
+    // same page load on the same site, so re-resolving would be pure overhead on the
+    // highest-write path in the system.
+    const ecosystem = await resolveTrackingContext(site_slug, firstEvent.page_url);
+
     const sessionId = await getOrCreateSession(visitorId, {
       page_url: firstEvent.page_url,
       referrer_url,
@@ -310,11 +442,15 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       ip_address: req.ip,
       device_type,
       site_slug,
+      tenant_id: ecosystem?.tenantId ?? null,
+      brand_id: ecosystem?.brandId ?? null,
+      source_id: ecosystem?.sourceId ?? null,
+      campaign_id: campaign_id ?? null,
     });
 
     let eventsRecorded = 0;
-    for (const event of events) {
-      const page_category = categorizePagePath(event.page_path);
+    for (const event of acceptedEvents) {
+      const page_category = categorizePagePath(event.page_path, ecosystem?.brandSlug);
       await recordPageEvent({
         session_id: sessionId,
         visitor_id: visitorId,
@@ -325,12 +461,16 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
         page_category,
         event_data: event.event_data,
         timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
+        tenant_id: ecosystem?.tenantId ?? null,
+        brand_id: ecosystem?.brandId ?? null,
+        source_id: ecosystem?.sourceId ?? null,
+        campaign_id: campaign_id ?? null,
       });
       eventsRecorded++;
     }
 
     // Trigger real-time signal analysis if batch contains high-value events
-    const hasHighValue = events.some((e: any) =>
+    const hasHighValue = acceptedEvents.some((e: any) =>
       ['cta_click', 'form_start', 'form_submit'].includes(e.event_type)
     );
     if (hasHighValue) {
@@ -341,6 +481,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       visitor_id: visitorId,
       session_id: sessionId,
       events_recorded: eventsRecorded,
+      events_rejected: rejections.length,
     });
   } catch (err) {
     console.error('[Tracking]', err);
@@ -360,12 +501,50 @@ export async function handleIdentify(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { fingerprint, email, name, company, phone, metadata } = req.body;
+    const { fingerprint, email, name, company, phone, metadata, jx } = req.body;
 
     if (!fingerprint || typeof fingerprint !== 'string') {
       res.status(400).json({ error: 'fingerprint is required' });
       return;
     }
+
+    // A visitor arriving through a signed cross-domain link carries a `jx` token and no
+    // email — the whole point of the token is that the email never travels in the URL.
+    // Requiring one here rejected every journey link we have ever sent.
+    //
+    // The token is the only thing trusted on this path, and only after its HMAC and
+    // expiry verify. It is never used to CREATE a lead: an attacker who could mint a
+    // token would otherwise be able to manufacture leads, and a token that no longer
+    // resolves is indistinguishable from one that never did.
+    if (jx) {
+      const payload = verifyJourneyToken(typeof jx === 'string' ? jx : null);
+      // 204 on every failure, and on success. A distinguishable response would turn this
+      // endpoint into an oracle for which lead ids exist and which tokens are still live.
+      if (!payload || typeof payload.l !== 'number') {
+        res.status(204).end();
+        return;
+      }
+
+      const { Lead: LeadModel } = require('../models');
+      const tokenLead = await LeadModel.findByPk(payload.l);
+      if (!tokenLead) {
+        res.status(204).end();
+        return;
+      }
+
+      const journeyVisitorId = await findOrCreateVisitor(fingerprint, {
+        ip_address: (req.headers['x-forwarded-for'] as string || req.ip || '').split(',')[0].trim(),
+        user_agent: req.headers['user-agent'] || '',
+      });
+      await resolveIdentity(journeyVisitorId, tokenLead.id);
+
+      console.log(
+        `[Tracking] Journey token bound visitor ${fingerprint.substring(0, 12)} to lead ${tokenLead.id}`
+      );
+      res.status(204).end();
+      return;
+    }
+
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       res.status(400).json({ error: 'valid email is required' });
       return;
@@ -434,7 +613,7 @@ export async function handleIdentify(req: Request, res: Response): Promise<void>
       }
     } catch { /* non-blocking */ }
 
-    console.log(`[Tracking] Identified visitor ${fingerprint.substring(0, 12)} as lead ${lead.id} (${lead.name}, ${emailLower})${created ? ' [NEW]' : ''}`);
+    console.log(`[Tracking] Identified visitor ${fingerprint.substring(0, 12)} as lead ${lead.id} (${redactForLogs(lead.name)}, ${redactForLogs(emailLower)})${created ? ' [NEW]' : ''}`);
 
     res.json({
       lead_id: lead.id,

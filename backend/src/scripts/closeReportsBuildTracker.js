@@ -204,7 +204,7 @@ async function bcPostNoBody(url) {
     ticketId: TRACKER_TODO,
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: ['alimuwwakkil@gmail.com'],
+    cc: [],
     bcc: ['ali@colaberry.com'],
     replyTo: 'ali@colaberry.com',
     subject: '[Build Summary] Automated reports system - Phase 1 verified live, Phase 2 scope-split',

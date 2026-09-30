@@ -1,0 +1,135 @@
+{
+  "_comment": "Working example: the Colaberry free-class 15s spot. 450 frames @30fps = 15.000s exactly. Copy this, swap prompts/copy/accents, keep the structure. Durations must sum to a whole number of frames.",
+
+  "meta": {
+    "title": "Free AI Class - 15s vertical",
+    "fps": 30,
+    "width": 1080,
+    "height": 1920,
+    "gen_width": 768,
+    "gen_height": 1344,
+    "output_name": "free_ai_class_15s.mp4",
+    "output_prefix": "colaberry",
+    "checkpoint": "sd_xl_turbo_1.0_fp16.safetensors",
+    "_accents_note": "Lifted from brand tokens for legibility on dark footage. Brand navy #1a365d / blue #2b6cb0 / green #38a169 are tuned for white backgrounds and go muddy over video.",
+    "accents": {
+      "primary": "#4FD68C",
+      "secondary": "#63A9EA"
+    }
+  },
+
+  "_style_note": "suffix is appended to every prompt so eight generations read as one film. negative is INERT at cfg 1.0 - kept only for the day this runs on a GPU at higher cfg. Do not rely on it.",
+  "style": {
+    "suffix": "cinematic editorial photograph, shot on 35mm film, deep navy blue and steel teal color grade, dramatic rim lighting, volumetric atmospheric haze, shallow depth of field, high contrast, premium corporate aesthetic, ultra detailed, sharp focus",
+    "negative": "text, watermark, logo, letters, words, signage, caption, cartoon, anime, illustration, painting, deformed hands, extra fingers, mutated, blurry, low quality, jpeg artifacts, oversaturated, cluttered"
+  },
+
+  "_shot_fields": {
+    "dur": "seconds; dur*fps must be a whole number",
+    "motion": "zoom_in | zoom_in_slow | zoom_out | pan_left | pan_right - alternate so no two consecutive beats move alike",
+    "anchor": "vertical centre of the text block, 0-1. Keep constant (~0.45) across statement beats; only the CTA should differ",
+    "emphasis": "the line to colour with the accent - must match a string in lines exactly",
+    "emphasis_color": "key into meta.accents",
+    "zoom_base": "OPTIONAL permanent crop-in to push weak edge detail out of frame",
+    "grade": "OPTIONAL per-shot grade overriding the global one - fix weak shots here before paying for a re-generation"
+  },
+
+  "shots": [
+    {
+      "id": "01_hook",
+      "dur": 2.6,
+      "motion": "zoom_in",
+      "seed": 101,
+      "prompt": "over-the-shoulder view of a lone professional sitting in a dark open-plan office at night, silhouetted against one large softly glowing blank monitor, cold blue screen light on their face, empty desks receding into darkness, isolated and drained",
+      "lines": ["Most people use AI", "like a search engine."],
+      "emphasis": "like a search engine.",
+      "emphasis_color": "secondary",
+      "anchor": 0.45
+    },
+    {
+      "id": "02_repeat",
+      "dur": 1.5,
+      "motion": "zoom_out",
+      "seed": 2021,
+      "_fix_note": "First attempt prompted 'fingertips striking a mechanical keyboard'. The model dropped the fingers entirely and covered every keycap in garbled pseudo-lettering (cfg 1.0 = negative prompt inert). Reprompted to express repetition through identical repeating OBJECTS instead of hands and keycaps - no anatomy to mangle, no lettering to garble. Prefer this move over a grade rescue when the subject itself is the problem.",
+      "prompt": "a long row of identical blank monitors receding into darkness in perfect symmetry, each screen softly glowing the same cold blue, repetitive and impersonal, volumetric haze, dark navy, no people, no keyboards",
+      "grade": "eq=contrast=1.10:saturation=0.94:gamma=0.90,colorbalance=rs=-0.03:bs=0.05,vignette=angle=PI/4.5",
+      "lines": ["Ask. Copy. Paste.", "Repeat."],
+      "emphasis": "Repeat.",
+      "emphasis_color": "secondary",
+      "anchor": 0.45
+    },
+    {
+      "id": "03_turn",
+      "dur": 1.6,
+      "motion": "zoom_in",
+      "seed": 303,
+      "prompt": "a confident professional in a charcoal blazer turning to face the camera, strong teal rim light outlining their shoulders, standing before a vast dark glass wall etched with faint pale schematic lines, calm authority",
+      "lines": ["Architects work", "differently."],
+      "emphasis": "differently.",
+      "emphasis_color": "primary",
+      "anchor": 0.45
+    },
+    {
+      "id": "04_partner",
+      "dur": 2.4,
+      "motion": "pan_left",
+      "seed": 404,
+      "prompt": "a professional seated at a minimalist desk surrounded by three large floating translucent holographic panels showing abstract data charts and flow diagrams, soft teal and warm amber glow, collaborative and focused, dark studio background",
+      "lines": ["They make it a", "work partner."],
+      "sub": "research  ·  analysis  ·  planning",
+      "emphasis": "work partner.",
+      "emphasis_color": "primary",
+      "anchor": 0.45
+    },
+    {
+      "id": "05_skill",
+      "dur": 1.6,
+      "motion": "zoom_in",
+      "seed": 505,
+      "prompt": "a clean interconnected system diagram of glowing nodes and arrows drawn across a vertical glass panel, a silver marker resting on the ledge below, warm focused key light raking the glass, dark navy background, precise and deliberate, no people",
+      "_fix_note": "Originally read as a near-duplicate of 07. Tight crop + hue rotation to amber separates them without a re-generation.",
+      "zoom_base": 1.45,
+      "grade": "hue=h=-145:s=0.95,eq=contrast=1.10:saturation=1.04:gamma=0.95,vignette=angle=PI/5",
+      "lines": ["That's a skill.", "And it's teachable."],
+      "emphasis": "And it's teachable.",
+      "emphasis_color": "primary",
+      "anchor": 0.45
+    },
+    {
+      "id": "06_free",
+      "dur": 1.6,
+      "motion": "zoom_out",
+      "seed": 606,
+      "prompt": "bright airy modern learning studio, a diverse group of adult professionals leaning in over open laptops around a pale wood table, warm morning daylight through tall windows, energized optimistic atmosphere",
+      "lines": ["A free class.", "No card needed."],
+      "emphasis": "A free class.",
+      "emphasis_color": "primary",
+      "anchor": 0.45
+    },
+    {
+      "id": "07_hero",
+      "dur": 1.9,
+      "motion": "zoom_in",
+      "seed": 707,
+      "prompt": "wide low-angle shot from behind of a lone professional standing with arms crossed, facing an immense luminous wall of interconnected glowing nodes and architectural system diagrams, epic scale, deep navy and brilliant teal, aspirational",
+      "lines": ["From AI curious", "to AI architect."],
+      "emphasis": "to AI architect.",
+      "emphasis_color": "primary",
+      "anchor": 0.45
+    },
+    {
+      "id": "08_cta",
+      "dur": 1.8,
+      "motion": "zoom_in_slow",
+      "seed": 808,
+      "prompt": "minimal abstract dark navy gradient background with a faint constellation of softly glowing connected nodes clustered at the edges, large clean empty space in the center, subtle depth of field, elegant premium",
+      "cta": true,
+      "kicker": "COLABERRY",
+      "lines": ["myfreeaiclass.com"],
+      "sub": "Start learning for free",
+      "emphasis_color": "primary",
+      "anchor": 0.42
+    }
+  ]
+}

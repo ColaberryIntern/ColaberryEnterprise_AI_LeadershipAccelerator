@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260823-w9t5 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Sunday, August 23, 2026 at 1:44 PM</div>
+    <div><span class="sid">CC-20260823-w9t5</span><span class="count">4 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Replace the scraping probe with the YouTube Data API v3**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `videoLinkApiClient.ts` is the only I/O boundary to `videos.list` (50 ids/call, 1 quota unit/call, IPv4-pinned dispatcher because the prod key is IP-restricted to the host&#39;s IPv4 while the host egresses IPv6). `videoLinkClassifier.ts` now decides on `status.privacyStatus`, `status.embeddable`, `status.uploadStatus` and `contentDetails.regionRestriction` instead of a scraped `ytInitialPlayerResponse`. `videoLinkProbe.ts` carries the control video *inside* each request rather than bracketing the batch with two extra calls. The watch-page scrape, the bot-challenge detector and the brace-matching player-response parser are deleted - the ambiguity they existed to survive is gone at the source.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">live run from inside `accelerator-backend` over the real 150-video corpus - 147 HEALTHY, 3 broken, 0 untrusted batches, 4 quota units, 13/13 of our own channel healthy. The 3 are exactly the known ones, each in its own mode: `AqGFDPVsG1A` EMBEDDING_DISABLED, `OntMoGj45Tc` PRIVATE, `_RxzOouIcII` REMOVED. Cross-checked against the 2026-08-21 scraped measurement: of the 148 ids common to both, zero changed verdict.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`search.list` costs 100 units and is never used. Daily cost is ~5 units of a 10,000 unit allowance.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Make &quot;absent from the API response&quot; a failure, never a pass**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`videos.list` omits ids it cannot return rather than erroring on them, so 47 items back from 50 ids means three videos are broken. `observeBatch` iterates the REQUEST, not the response, and every missing id goes through `classifyAbsent()`, which has no code path to `HEALTHY`. An oEmbed follow-up (quota-free, and a different service from the challenged watch page) refines absence into PRIVATE / REMOVED / UPLOADER_CLOSED; when it cannot answer, the verdict stays actionable as `UNAVAILABLE` rather than silently downgrading to &quot;unknown&quot;.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">mutation-tested. Rewriting the loop to iterate `res.found` - the naive implementation - makes both headline tests go red with the exact bug signature: `failures` becomes `[]` where `[&quot;vid000001&quot;]` was expected, while `healthy` still reads 2. Reverted; both tests green.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">This is the 146-false-positive bug with the sign flipped. False positives were loud and caught in a day; a false negative here is silent forever.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Keep &quot;could not see&quot; distinct from both healthy and broken**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">quota exhaustion, an IP-restricted key, an upstream 5xx, a timeout, a paginated response and a 200 with no `items` array all return `ok: false` from the client and void the whole batch - zero observations, `untrusted_batches` and `unverified` up, nothing called healthy and nothing called broken. `status.embeddable` absent from an item resolves to UNKNOWN rather than defaulting either way. A missing `YOUTUBE_API_KEY` refuses the run outright with `error_class=NotConfigured` instead of probing 150 videos into a wall. A run that verified nothing no longer stamps the day&#39;s idempotency key, so a blind run cannot consume a sighted run&#39;s slot. `quota_units` is now on the run result and in the scheduler log line.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">141 tests across 6 suites green. The blind-run cases assert `healthy: 0, unknown: 150, unverified: 150, failures: []` - not one of them lands in the healthy count.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`CURRICULUM_VIDEO_HEALTH_ENABLED` deliberately untouched and still unset. No environment variable was set or changed in this session.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Rebuild the test corpus from measured API data**</h2>
+          <span class="badge">2026-08-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`fixtures/liveCorpusProbe.json` (154 scraped rows, 2026-08-21) replaced by `fixtures/liveApiCorpus.json` (150 rows as the Data API described them, recorded from inside the production container on 2026-08-23). Test helpers rebuilt to construct `videos.list` responses, including the ability to say &quot;the API omitted these ids&quot;. New suites for the client and the batch-level trust rules; the false-positive suite ported case-for-case.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">141/141 green on the branch. Against unmodified main the same tests produce 24 failures and 3 suites that cannot resolve `../videoLinkApiClient` - the headline one failing `Expected: 2, Received: 0` on `result.healthy`. Full backend suite: 27 failed suites on the branch vs 31 on main-plus-these-tests; the set difference is exactly the 5 curriculumHealth suites, i.e. no regressions. `enrollmentRoutes.test.ts` flaked once on a 5s timeout under load and passes twice in isolation.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Pre-existing `tsc` errors (`@anthropic-ai/sdk` unresolved) are identical on main and come from the borrowed `node_modules` junction, not from this change.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260823-w9t5.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

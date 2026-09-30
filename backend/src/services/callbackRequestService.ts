@@ -1,0 +1,320 @@
+import { Op } from 'sequelize';
+import { CommunicationLog } from '../models';
+import { V1CallbackInput } from '../schemas/v1CallbackSchema';
+import { ingestExternalLead } from './externalLeadIngestService';
+import { evaluateSend } from './communicationSafetyService';
+import {
+  captureSignupConsent,
+  CALLBACK_CONSENT_TEXT,
+  CALLBACK_CONSENT_TTL_DAYS,
+} from './consent/captureSignupConsent';
+import { triggerVoiceCall } from './synthflowService';
+import { buildFlotationCallPrompt, CallBrand } from './voiceCallPrompt';
+import { buildScholarshipCallPrompt } from './cpn/scholarshipCallPrompt';
+import { logCommunication } from './communicationLogService';
+import { WRITTEN_BRIEF_MAX } from './delivery/interviewMethod';
+
+// Two callbacks to the same lead inside this window collapse to one call. This is
+// the idempotency key for the side effect: a double-click, a client retry, or a
+// duplicate webhook must NOT place a second phone call. 5 minutes comfortably
+// covers retry storms without blocking a genuine "call me again" later in the day.
+const CALLBACK_DEDUP_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * The instructions for this call, chosen by the surface that asked for it.
+ *
+ * Returns `undefined` for a source with no script, which `synthflowService` now
+ * treats as a refusal to dial rather than as permission to improvise. Adding a
+ * brand to voice therefore means adding its prompt in the same change - the
+ * failure mode is a visible skip, never an unscripted agent phoning a stranger.
+ */
+function promptForSource(payload: {
+  source: string;
+  name?: string | null;
+  company?: string | null;
+  role?: string | null;
+  message?: string | null;
+  city_state?: string | null;
+}, brand?: CallBrand): string | undefined {
+  if (payload.source === 'ai-flotation') {
+    // `brand` is what the agent NAMES on the call — Colaberry for an internship
+    // intake, AI Flotation for a public prospect. The plumbing (agent, webhook,
+    // dedup) stays on the ai-flotation source; only the spoken brand differs.
+    return buildFlotationCallPrompt({
+      name: payload.name,
+      company: payload.company,
+      role: payload.role,
+      message: payload.message,
+    }, brand);
+  }
+
+  // OpportunityLift. A scholarship applicant is not a sales prospect, so this is a
+  // different script rather than the same one with the nouns swapped - see
+  // cpn/scholarshipCallPrompt.ts for what it refuses to ask and why.
+  if (payload.source === 'cpn') {
+    return buildScholarshipCallPrompt({
+      name: payload.name,
+      message: payload.message,
+      cityState: payload.city_state,
+    });
+  }
+
+  return undefined;
+}
+
+export type CallbackStatus =
+  | 'call_initiated' // handed to Synthflow, call_id returned
+  | 'deduplicated' // a recent callback to this lead already fired
+  | 'blocked' // safety pipeline stopped it (unsubscribed, rate limit, test-mode gap, paused)
+  | 'skipped' // voice feature/agent/key not configured — deterministic no-op
+  | 'failed'; // Synthflow upstream error
+
+export interface CallbackResult {
+  status: CallbackStatus;
+  lead_id: number;
+  call_id: string | null;
+  deduped: boolean;
+  reason?: string;
+}
+
+function log(
+  level: 'info' | 'warn' | 'error',
+  event: string,
+  outcome: 'success' | 'failure' | 'partial',
+  context: Record<string, unknown> = {},
+): void {
+  process.stdout.write(
+    JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'v1-request-callback', event, outcome, ...context }) + '\n',
+  );
+}
+
+/**
+ * Place an inbound "call me now" callback requested from training.colaberry.com.
+ *
+ * Pipeline: resolve an idempotent lead -> dedup the call -> run the shared safety
+ * checks -> trigger the Synthflow outbound agent (whose knowledge base stays
+ * attached server-side) -> log the communication for audit + webhook matching.
+ */
+export interface CallbackOptions {
+  /**
+   * The enrolment the resulting project belongs to, when someone other than the person
+   * being called asked for the call - an admin starting a project for a student. Stamped
+   * on the communication log so the completion webhook can land the build without
+   * guessing. A prospect's own call carries none; their build is found by their email.
+   */
+  enrollmentId?: string;
+  requestedBy?: 'admin';
+  /**
+   * Which business the agent names on the call. An internship intake run from the
+   * Colaberry side passes the Colaberry brand so the agent never says "AI Flotation"
+   * to a Colaberry intern. Omitted for a public AI Flotation prospect (the default).
+   */
+  brand?: CallBrand;
+}
+
+export async function requestInstantCallback(
+  payload: V1CallbackInput,
+  correlation_id: string,
+  options: CallbackOptions = {},
+): Promise<CallbackResult> {
+  // What the completion webhook needs to know about this call that the vendor cannot tell
+  // it. Present on every log row the call produces, whatever its outcome. `written` is what
+  // they typed before asking to be called: it goes into the agent's prompt AND, at
+  // completion, in front of the transcript - the extractor never sees the prompt, and on
+  // 2026-09-17 a project was built from a 37-second call whose whole brief was there.
+  const written = String(payload.message || '').trim().slice(0, WRITTEN_BRIEF_MAX);
+  const forWhom = {
+    ...(options.enrollmentId ? { enrollment_id: options.enrollmentId } : {}),
+    ...(options.requestedBy ? { requested_by: options.requestedBy } : {}),
+    ...(written ? { written } : {}),
+  };
+
+  // 1. Resolve the lead idempotently (dedup by strapi_lead_id/email inside the
+  //    shared ingest service). A person asking to be called IS a lead.
+  const lead = await ingestExternalLead(payload, correlation_id);
+  const leadId = lead.id;
+
+  // 2. Call-level idempotency: if we already fired a callback to this lead in the
+  //    window, return the existing call rather than dialing again.
+  const recent = await CommunicationLog.findOne({
+    where: {
+      lead_id: leadId,
+      channel: 'voice',
+      provider: 'synthflow',
+      direction: 'outbound',
+      status: { [Op.notIn]: ['failed', 'blocked', 'skipped'] },
+      created_at: { [Op.gte]: new Date(Date.now() - CALLBACK_DEDUP_WINDOW_MS) },
+    },
+    order: [['created_at', 'DESC']],
+  });
+
+  if (recent) {
+    log('info', 'callback_deduplicated', 'success', { correlation_id, lead_id: leadId, existing_call_id: recent.provider_message_id });
+    return { status: 'deduplicated', lead_id: leadId, call_id: recent.provider_message_id, deduped: true };
+  }
+
+  // 2.5 Record the voice consent the person just gave — BEFORE the safety gate,
+  //     never after.
+  //
+  //     ORDERING IS THE WHOLE FIX. evaluateSend below asks the consent gate
+  //     whether this number may be called, and with consent_enforcement=enforce
+  //     and no express voice grant on record it answers `no_express_consent` and
+  //     refuses the very call the person just asked for. Writing the grant after
+  //     the gate would create a row, pass any naive test, and still refuse THIS
+  //     caller — only the next one would get through. Between dedup and the gate
+  //     is the only correct position.
+  //
+  //     The affirmative act here is the request itself, not a ticked box: someone
+  //     pressing "call me now" is asking to be phoned at the number they typed.
+  //     So marketingOptIn is true by construction, and consent_text describes what
+  //     they DID rather than a permission they were asked to grant.
+  //
+  //     Bounded on purpose. An express request to be called must not quietly
+  //     become a standing telemarketing licence for this number — that would be
+  //     the original consent bug inverted, over-permission manufactured by a
+  //     record instead of by its absence. It lapses after
+  //     CALLBACK_CONSENT_TTL_DAYS; getCurrentConsent honours expires_at.
+  //
+  //     Guarded HERE, not only inside the helper. captureSignupConsent cannot
+  //     throw, but a call site can — an unguarded req.get('user-agent') did
+  //     exactly that on the enrollment path and swallowed the whole response. A
+  //     failure to record must never cost someone their callback.
+  try {
+    const expiresAt = new Date(Date.now() + CALLBACK_CONSENT_TTL_DAYS * 24 * 60 * 60 * 1000);
+    await captureSignupConsent({
+      channel: 'voice',
+      // Keyed on the phone, because that is what a voice send looks consent up
+      // by. An email-keyed row would be invisible to the gate below.
+      phone: payload.phone,
+      email: payload.email,
+      marketingOptIn: true,
+      source: 'training_site:request_callback',
+      // The request this consent came from, so the row is traceable.
+      correlationId: correlation_id,
+      consentText: CALLBACK_CONSENT_TEXT,
+      expiresAt,
+    });
+  } catch (consentErr) {
+    log('error', 'callback_consent_capture_failed', 'failure', {
+      correlation_id,
+      lead_id: leadId,
+      error_class: consentErr instanceof Error ? consentErr.constructor.name : 'UnknownError',
+      message: consentErr instanceof Error ? consentErr.message : String(consentErr),
+    });
+  }
+
+  // 3. Shared safety pipeline: scheduler pause, global rate limit, unsubscribe/DND,
+  //    and test-mode redirect (fail-closed). Same chokepoint every other send uses.
+  const decision = await evaluateSend({
+    leadId,
+    channel: 'voice',
+    toPhone: payload.phone,
+    source: 'manual',
+  });
+
+  if (!decision.allowed) {
+    await logCommunication({
+      lead_id: leadId,
+      channel: 'voice',
+      direction: 'outbound',
+      delivery_mode: 'blocked',
+      status: 'blocked',
+      to_address: payload.phone,
+      provider: 'synthflow',
+      error_message: decision.blockedReason || 'blocked_by_safety',
+      metadata: { trigger: 'instant_callback', call_type: 'callback', source: payload.source, correlation_id },
+    }).catch(() => {});
+    log('warn', 'callback_blocked', 'failure', { correlation_id, lead_id: leadId, reason: decision.blockedReason });
+    return { status: 'blocked', lead_id: leadId, call_id: null, deduped: false, reason: decision.blockedReason };
+  }
+
+  const targetPhone = decision.redirect?.phone || payload.phone;
+
+  // 4. Trigger the Synthflow outbound agent. The agent's prompt + knowledge base
+  //    live in Synthflow; we only pass the phone, name, and structured context.
+  const callResult = await triggerVoiceCall({
+    name: payload.name,
+    phone: targetPhone,
+    callType: 'callback',
+    // The source IS the brand for this purpose: a callback requested from an
+    // ai-flotation surface must be spoken with AI Flotation's instructions, and without
+    // them the call is skipped rather than improvised.
+    brandSlug: payload.source,
+    // Built per call rather than stored in the agent. The agent is a shell - its saved
+    // prompt is only `{prompt}` - so this string is what makes the call belong to a
+    // brand at all. A source with no prompt here is now SKIPPED by synthflowService
+    // rather than dialled unscripted, so adding a brand to voice means adding its
+    // instructions in the same change.
+    prompt: promptForSource(payload, options.brand),
+    context: {
+      lead_name: payload.name,
+      lead_company: payload.company || undefined,
+      lead_title: payload.title || undefined,
+      lead_email: payload.email,
+      lead_interest: payload.interest_area || undefined,
+      step_goal: `Inbound "call me now" — the prospect just asked on ${payload.source} to be called right away.`,
+    },
+  });
+
+  // 5. Classify the outcome. triggerVoiceCall returns success:true with data.skipped
+  //    when voice is disabled / no key / no agent — a deterministic no-op, not a failure.
+  const skipped = callResult.success && callResult.data?.skipped === true;
+  const callId: string | null = callResult.data?.call_id || null;
+
+  if (skipped) {
+    const reason = callResult.data?.reason || 'voice_not_configured';
+    await logCommunication({
+      lead_id: leadId,
+      channel: 'voice',
+      direction: 'outbound',
+      delivery_mode: decision.deliveryMode,
+      status: 'skipped',
+      to_address: targetPhone,
+      provider: 'synthflow',
+      error_message: reason,
+      metadata: { trigger: 'instant_callback', call_type: 'callback', source: payload.source, correlation_id, ...forWhom },
+    }).catch(() => {});
+    log('warn', 'callback_skipped', 'partial', { correlation_id, lead_id: leadId, reason });
+    return { status: 'skipped', lead_id: leadId, call_id: null, deduped: false, reason };
+  }
+
+  if (!callResult.success) {
+    await logCommunication({
+      lead_id: leadId,
+      channel: 'voice',
+      direction: 'outbound',
+      delivery_mode: decision.deliveryMode,
+      status: 'failed',
+      to_address: targetPhone,
+      provider: 'synthflow',
+      error_message: callResult.error || 'synthflow_error',
+      metadata: { trigger: 'instant_callback', call_type: 'callback', source: payload.source, correlation_id, ...forWhom },
+    }).catch(() => {});
+    log('error', 'callback_failed', 'failure', { correlation_id, lead_id: leadId, error_class: 'UpstreamUnavailable', reason: callResult.error });
+    return { status: 'failed', lead_id: leadId, call_id: null, deduped: false, reason: callResult.error };
+  }
+
+  // Success — log with the call_id so the Synthflow completion webhook can match it.
+  await logCommunication({
+    lead_id: leadId,
+    channel: 'voice',
+    direction: 'outbound',
+    delivery_mode: decision.deliveryMode,
+    status: 'sent',
+    to_address: targetPhone,
+    provider: 'synthflow',
+    provider_message_id: callId,
+    metadata: {
+      trigger: 'instant_callback',
+      call_type: 'callback',
+      source: payload.source,
+      interest_area: payload.interest_area,
+      test_mode: decision.testMode,
+      correlation_id,
+      ...forWhom,
+    },
+  }).catch(() => {});
+
+  log('info', 'callback_initiated', 'success', { correlation_id, lead_id: leadId, call_id: callId, delivery_mode: decision.deliveryMode });
+  return { status: 'call_initiated', lead_id: leadId, call_id: callId, deduped: false };
+}

@@ -1,0 +1,291 @@
+<title>Design Options — Sticky, CTA, Logo</title>
+<style>
+:root{
+  --ink:#14161a; --ink-2:#3d434e; --ink-3:#6b7280; --line:#e3e5ea; --paper:#fbfbfc; --card:#fff;
+  --cherry:#fb2832; --cherry-d:#c20e1e; --blue:#367895; --green:#5ba63c; --amber:#e8920c;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --r:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+header.top{background:var(--ink);color:#fff;padding:44px 0 38px;margin-bottom:38px}
+header.top h1{margin:0 0 8px;font-size:clamp(1.6rem,3.4vw,2.3rem);letter-spacing:-.02em}
+header.top p{margin:0;color:#a8b2c4;max-width:70ch;font-size:.95rem}
+.badge{display:inline-block;font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:#fd5760;margin-bottom:12px}
+
+section.grp{margin-bottom:56px}
+.grp>h2{font-size:1.35rem;letter-spacing:-.015em;margin:0 0 4px;padding-bottom:10px;border-bottom:2px solid var(--ink)}
+.grp>.note{color:var(--ink-3);font-size:.9rem;margin:10px 0 24px;max-width:78ch}
+
+.opt{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:18px;overflow:hidden}
+.opt>h3{margin:0;padding:12px 18px;background:#f4f5f7;border-bottom:1px solid var(--line);
+  font-size:.82rem;font-family:var(--mono);font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pick{background:var(--cherry);color:#fff;border-radius:4px;padding:2px 8px;font-size:.72rem}
+.opt>.why{padding:12px 18px 0;color:var(--ink-3);font-size:.86rem;margin:0}
+.stage{padding:18px}
+.stage--dark{background:#0f1218}
+.stage--paper{background:#f0f1f4}
+
+/* ---------- shared bits ---------- */
+.btn{border:0;border-radius:999px;padding:9px 18px;font:inherit;font-size:.86rem;font-weight:600;cursor:pointer;
+  text-decoration:none;display:inline-block}
+.btn--p{background:var(--cherry);color:#fff}
+.btn--g{background:#eceef1;color:var(--ink-2)}
+.btn--go{background:var(--cherry);color:#fff;border-radius:999px;padding:8px 20px}
+.btn--ghostw{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35)}
+
+/* fake portal shell chrome */
+.shell{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.shell__top{display:flex;align-items:center;gap:14px;padding:10px 14px;border-bottom:1px solid var(--line);background:#fff}
+.shell__logo{font-weight:800;letter-spacing:-.02em}
+.shell__logo i{color:var(--cherry);font-style:normal}
+.shell__body{padding:16px;background:#f7f8fa;color:var(--ink-3);font-size:.85rem}
+.divider{width:1px;height:26px;background:var(--line)}
+
+/* STICKY A — portal pill */
+.pillbar{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.pillbar__star{width:30px;height:30px;border-radius:50%;background:#eef2ff;color:#3b5bdb;display:grid;place-items:center;flex:none;font-size:.9rem}
+.pillbar__tx{min-width:0}
+.pillbar__k{font-family:var(--mono);font-size:.6rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.pillbar__t{font-weight:700;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{font-family:var(--mono);font-size:.66rem;font-weight:700;color:var(--green);background:rgba(91,166,60,.12);
+  border-radius:4px;padding:2px 7px}
+.chev{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink-3);
+  display:grid;place-items:center;font-size:.8rem;cursor:pointer;flex:none}
+
+/* STICKY B */
+.bandb{display:flex;align-items:center;gap:14px;padding:10px 14px;background:linear-gradient(90deg,#fff5f5,#fff);
+  border:1px solid rgba(251,40,50,.25);border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.06);flex-wrap:wrap}
+.bandb__dot{width:8px;height:8px;border-radius:50%;background:var(--cherry);flex:none}
+
+/* STICKY C */
+.bandc{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;
+  box-shadow:0 4px 14px rgba(0,0,0,.06)}
+.bandc__l{background:var(--ink);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:9px;font-size:.8rem;
+  font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.bandc__r{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:9px;padding:9px 12px;flex-wrap:wrap}
+
+/* CTA bands */
+.ctaA{background:var(--ink);color:#fff;border-radius:12px;padding:34px 30px;text-align:center}
+.ctaA h4{margin:0 0 8px;font-size:clamp(1.3rem,2.6vw,1.8rem);letter-spacing:-.02em}
+.ctaA p{margin:0 auto 18px;color:#a8b2c4;max-width:56ch;font-size:.92rem}
+.eyebrow{font-family:var(--mono);font-size:.66rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+  color:#fd5760;display:block;margin-bottom:10px}
+
+.ctaB{display:flex;gap:0;border-radius:12px;overflow:hidden;background:#fff;border:1px solid var(--line)}
+.ctaB__rail{width:6px;background:linear-gradient(180deg,var(--cherry),var(--blue));flex:none}
+.ctaB__in{padding:24px 26px;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;flex:1}
+.ctaB h4{margin:0 0 4px;font-size:1.2rem;letter-spacing:-.015em}
+.ctaB p{margin:0;color:var(--ink-3);font-size:.88rem;max-width:48ch}
+
+.ctaC{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 20px;border-top:2px solid var(--ink);
+  border-bottom:1px solid var(--line);background:#fff}
+.ctaC__k{font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cherry)}
+.ctaC__t{flex:1;min-width:220px;font-weight:600}
+
+/* logo */
+.logorow{display:flex;align-items:center;gap:36px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:11px}
+.logo__w{font-size:1.28rem;font-weight:800;letter-spacing:-.03em;color:var(--ink)}
+.logo__w i{color:var(--cherry);font-style:normal}
+.logo__div{width:1px;height:22px;background:var(--line)}
+.logo__sub{font-size:.95rem;color:var(--ink-2);font-weight:500}
+.logo__stack{display:flex;flex-direction:column;line-height:1.15}
+.logo__stack small{font-size:.66rem;color:var(--ink-3);font-family:var(--mono);letter-spacing:.06em}
+.ctx{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  margin:0 0 8px}
+.side{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:720px){.side{grid-template-columns:1fr}}
+.side>div{border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff}
+
+footer.end{border-top:1px solid var(--line);margin-top:20px;padding:26px 0 60px;color:var(--ink-3);font-size:.88rem}
+code{font-family:var(--mono);font-size:.85em;background:#f0f1f4;padding:1px 5px;border-radius:4px}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <span class="badge">Pick one per section</span>
+    <h1>Sticky bar, CTA bands, logo</h1>
+    <p>Three options each. Nothing here is built yet &mdash; tell me the letters (e.g. &ldquo;1A, 2C, 3A&rdquo;) and I&rsquo;ll build exactly those. Mockups are approximations at roughly true scale; the real cherry mark gets swapped into the logo options.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ============ 1. STICKY ============ -->
+<section class="grp">
+  <h2>1 &middot; The /try sticky bar</h2>
+  <p class="note">It already pins correctly at <code>top: 61px</code>. This is purely how it looks. Option A is the closest match to your classroom bar.</p>
+
+  <div class="opt">
+    <h3><span class="pick">1A</span> Portal match &mdash; a pill inside the topbar</h3>
+    <p class="why">Exactly the classroom pattern: circled icon, two-line stack, points chip, chevrons, action pill on the right. Lives <em>in</em> the header rather than below it, so nothing shifts as you scroll.</p>
+    <div class="stage stage--paper">
+      <div class="shell">
+        <div class="shell__top">
+          <div class="shell__logo"><i>c</i>olaberry</div>
+          <div class="divider"></div>
+          <div class="pillbar">
+            <span class="pillbar__star">&#9733;</span>
+            <div class="pillbar__tx">
+              <div class="pillbar__k">Your free account &middot; preview</div>
+              <div class="pillbar__t">Make this real: create your free account</div>
+            </div>
+            <span class="chip">no card</span>
+            <span class="chev">&lsaquo;</span><span class="chev">&rsaquo;</span>
+          </div>
+          <a class="btn btn--go" href="#">Create &rarr;</a>
+        </div>
+        <div class="shell__body">&hellip; dashboard content scrolls under here &hellip;</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="pick">1B</span> Tinted band &mdash; both buttons always visible</h3>
+    <p class="why">Keeps <em>both</em> CTAs at full size rather than collapsing to one. Reads as a continuation of the pink preview banner, so it feels like the banner followed you down.</p>
+    <div class="stage stage--paper">
+      <div class="shell">
+        <div class="shell__top"><div class="shell__logo"><i>c</i>olaberry</div></div>
+        <div style="padding:10px 14px 14px;background:#f7f8fa">
+          <div class="bandb">
+            <span class="bandb__dot"></span>
+            <span style="font-size:.86rem;flex:1;min-width:180px"><strong>Free preview</strong> &middot; sample data</span>
+            <a class="btn btn--p" href="#">Make this real: create your free account</a>
+            <a class="btn btn--g" href="#">Send free test invites</a>
+          </div>
+          <div style="color:var(--ink-3);font-size:.85rem;padding-top:12px">&hellip; content scrolls under &hellip;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="pick">1C</span> Split rail &mdash; dark label, light actions</h3>
+    <p class="why">The most distinct of the three. A dark label block states what you are looking at; the actions sit on white. Hardest to ignore, furthest from the portal&rsquo;s existing look.</p>
+    <div class="stage stage--paper">
+      <div class="shell">
+        <div class="shell__top"><div class="shell__logo"><i>c</i>olaberry</div></div>
+        <div style="padding:10px 14px 14px;background:#f7f8fa">
+          <div class="bandc">
+            <div class="bandc__l"><span style="width:7px;height:7px;border-radius:50%;background:var(--cherry);display:inline-block"></span> Sample data</div>
+            <div class="bandc__r">
+              <a class="btn btn--p" href="#">Create your free account</a>
+              <a class="btn btn--g" href="#">Send test invites</a>
+            </div>
+          </div>
+          <div style="color:var(--ink-3);font-size:.85rem;padding-top:12px">&hellip; content scrolls under &hellip;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2. CTA BANDS ============ -->
+<section class="grp">
+  <h2>2 &middot; Repeating CTA bands for the home page</h2>
+  <p class="note">Dropped between the long sections so a reader who has heard enough never has to scroll to act. All three point at <code>/try</code>. Designed to be repeatable &mdash; the copy changes each time, the shape does not.</p>
+
+  <div class="opt">
+    <h3><span class="pick">2A</span> Full-bleed dark interrupt</h3>
+    <p class="why">Hard visual break against the white page. Highest stopping power, heaviest &mdash; best used two or three times, not five.</p>
+    <div class="stage stage--paper">
+      <div class="ctaA">
+        <span class="eyebrow">Heard enough?</span>
+        <h4>Stop reading about it. Go stand inside it.</h4>
+        <p>The workspace opens on sample data so there is something to look at on day one. No credit card, no procurement conversation.</p>
+        <a class="btn btn--p" href="#">Open the free workspace</a>
+        <a class="btn btn--ghostw" href="#">Talk to an architect</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="pick">2B</span> Railed card &mdash; quieter, repeatable</h3>
+    <p class="why">Light enough to use four or five times without the page feeling like it is shouting. The gradient rail ties it to the section it follows.</p>
+    <div class="stage stage--paper">
+      <div class="ctaB">
+        <div class="ctaB__rail"></div>
+        <div class="ctaB__in">
+          <div>
+            <h4>You can see all of this yourself, today.</h4>
+            <p>Both experiences &mdash; the management view and the one your team works in &mdash; on a furnished workspace.</p>
+          </div>
+          <a class="btn btn--p" href="#">Open the workspace</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="pick">2C</span> Thin rule &mdash; nearly weightless</h3>
+    <p class="why">A single line with a rule above it. Almost no vertical cost, so it can appear after <em>every</em> section without bloating the page. Lowest stopping power of the three.</p>
+    <div class="stage stage--paper">
+      <div class="ctaC">
+        <span class="ctaC__k">Ready now</span>
+        <span class="ctaC__t">Open the free company workspace &mdash; no credit card.</span>
+        <a class="btn btn--p" href="#">Open it &rarr;</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. LOGO ============ -->
+<section class="grp">
+  <h2>3 &middot; The logo mismatch</h2>
+  <p class="note">Today the marketing site and the portal show two different brands, and your funnel now sends every prospect across that seam. Below: what each currently looks like, then three ways to close it.</p>
+
+  <div class="side" style="margin-bottom:20px">
+    <div>
+      <p class="ctx">Today &mdash; marketing site</p>
+      <div class="logo"><span style="font-size:1.3rem">&#127826;</span><span class="logo__w">Colaberry</span><span class="logo__div"></span><span class="logo__sub">Enterprise AI</span></div>
+    </div>
+    <div>
+      <p class="ctx">Today &mdash; portal &amp; /try</p>
+      <div class="logo"><span style="font-size:1.25rem;color:var(--ink-3)">&#9711;</span>
+        <span class="logo__stack"><span class="logo__w" style="font-size:1.1rem"><i>c</i>olaberry</span><small>AI Systems Architect Accelerator</small></span></div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="pick">3A</span> Portal adopts the site lockup</h3>
+    <p class="why">One brand everywhere. The crossing from <code>/platform</code> to <code>/try</code> becomes invisible, which is the point. Costs the portal its product subtitle.</p>
+    <div class="stage">
+      <div class="logorow" style="background:#fff;padding:14px 18px;border-radius:8px">
+        <div class="logo"><span style="font-size:1.3rem">&#127826;</span><span class="logo__w">Colaberry</span><span class="logo__div"></span><span class="logo__sub">Enterprise AI</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="pick">3B</span> Site lockup, product subtitle kept</h3>
+    <p class="why">Same mark and wordmark as the site, but the portal keeps naming the product underneath. Consistent brand, and a logged-in user still knows which room they are in. <strong>My recommendation.</strong></p>
+    <div class="stage">
+      <div class="logorow" style="background:#fff;padding:14px 18px;border-radius:8px">
+        <div class="logo"><span style="font-size:1.3rem">&#127826;</span>
+          <span class="logo__stack"><span class="logo__w">Colaberry</span><small>AI Systems Architect Accelerator</small></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="opt">
+    <h3><span class="pick">3C</span> Site adopts the portal wordmark</h3>
+    <p class="why">The reverse: the lowercase mark becomes the brand everywhere, including the marketing site. Cleaner and more modern, but it changes the public brand &mdash; a bigger decision than a bug fix, and not mine to make.</p>
+    <div class="stage">
+      <div class="logorow" style="background:#fff;padding:14px 18px;border-radius:8px">
+        <div class="logo"><span style="font-size:1.25rem;color:var(--cherry)">&#9711;</span><span class="logo__w"><i>c</i>olaberry</span><span class="logo__div"></span><span class="logo__sub">Enterprise AI</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="end">
+  <div>Reply with three letters &mdash; for example <code>1A, 2B, 3B</code> &mdash; and I&rsquo;ll build those, gate them, and deploy. Mixing is fine; so is &ldquo;none of these, here is what I want instead.&rdquo;</div>
+  <div style="margin-top:10px;color:var(--ink-3)">Session CC-20260807-h2r6 &middot; nothing in this file is shipped code.</div>
+</footer>
+</div>

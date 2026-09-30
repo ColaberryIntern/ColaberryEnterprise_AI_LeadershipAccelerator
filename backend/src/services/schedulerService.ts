@@ -1,9 +1,12 @@
 import cron from 'node-cron';
+import { rewriteLinksWithJourneyToken } from './journeyLinkRewriter';
+import { randomUUID } from 'crypto';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
-import { v4 as uuidv4 } from 'uuid';
-import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
+import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment } from '../models';
+import { buildSearchRequest, recordMandrillEngagement, searchSaturated, searchWindowStart } from './mandrillEngagementPoll';
+import type { MandrillSearchMessage } from './mandrillEngagementPoll';
 import { env } from '../config/env';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
@@ -17,93 +20,41 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { redactForLogs } from '../utils/piiRedaction';
+import { partitionNotifiable, isNotificationSuppressed } from './notifications/enrollmentNotificationSuppression';
+import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
 import { logCommunication } from './communicationLogService';
+import { buildUnsubscribeUrl } from './unsubscribeTokenService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
+import { finalizeSessionAttendance } from './liveSessionAttendanceService';
+import { generateSessionRecap } from './sessionRecapService';
+import { ensureSessionMeetLink } from './meetingService';
+import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
-
-/**
- * Instrumentation wrapper for cron jobs.
- * Checks the agent registry for enabled/paused status, generates a trace_id,
- * measures duration, logs to ai_agent_activity_logs, and updates agent metrics.
- */
-async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Promise<void> {
-  let agent: InstanceType<typeof AiAgent> | null = null;
-  try {
-    agent = await AiAgent.findOne({ where: { agent_name: agentName } });
-  } catch {
-    // If registry lookup fails, run the job anyway (don't break existing behavior)
-    await fn();
-    return;
-  }
-
-  // If agent not in registry, run untracked
-  if (!agent) {
-    await fn();
-    return;
-  }
-
-  // Check enabled and paused status
-  if (!agent.enabled || agent.status === 'paused') return;
-
-  const traceId = uuidv4();
-  const start = Date.now();
-  let result: 'success' | 'failed' = 'success';
-  let errorMsg: string | null = null;
-  let stackTrace: string | null = null;
-
-  try {
-    await agent.update({ status: 'running' });
-    await fn();
-  } catch (err: any) {
-    result = 'failed';
-    errorMsg = err.message || String(err);
-    stackTrace = err.stack || null;
-  }
-
-  const duration = Date.now() - start;
-  const newRunCount = (agent.run_count || 0) + 1;
-  const newAvgDuration = agent.avg_duration_ms
-    ? Math.round((agent.avg_duration_ms * (newRunCount - 1) + duration) / newRunCount)
-    : duration;
-
-  const updateFields: Record<string, any> = {
-    status: 'idle',
-    run_count: newRunCount,
-    avg_duration_ms: newAvgDuration,
-    last_run_at: new Date(),
-  };
-  if (result === 'failed') {
-    updateFields.error_count = (agent.error_count || 0) + 1;
-    updateFields.last_error = errorMsg;
-    updateFields.last_error_at = new Date();
-  }
-
-  try {
-    await agent.update(updateFields);
-    await AiAgentActivityLog.create({
-      id: uuidv4(),
-      agent_id: agent.id,
-      action: agentName,
-      result,
-      confidence: null,
-      reason: result === 'failed' ? errorMsg : `Completed in ${duration}ms`,
-      details: null,
-      trace_id: traceId,
-      duration_ms: duration,
-      stack_trace: stackTrace,
-      created_at: new Date(),
-    } as any);
-  } catch (logErr: any) {
-    console.error(`[Scheduler] Failed to log instrumentation for ${agentName}:`, logErr.message);
-  }
-}
+import LiveSession from '../models/LiveSession';
+import RoomBooking from '../models/RoomBooking';
+import CommunityRoom from '../models/CommunityRoom';
+import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
+import { attachClassNotesForSession } from './sessionClassNotesService';
+import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
+import { instrumentCronJob } from './cronInstrumentation';
+import { runScheduledRecompute } from './explorerGrowth/explorerProfileService';
+import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
+import { runScheduledGovernor } from './explorerGrowth/governor/runGovernor';
+import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
+import { runContentSync } from './explorerGrowth/content/runContentSync';
+import {
+  isWithinSendWindow,
+  isWithinCallSchedule,
+  getCampaignSettingsFromRecord,
+} from './campaignSendWindow';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -370,80 +321,8 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
   }
 }
 
-/** Check if a voice call is within the campaign's call schedule */
-/**
- * Check if current time is within a schedule window (timezone-aware).
- * Used for voice calls, email, and SMS send windows.
- */
-function isWithinScheduleWindow(
-  tz: string,
-  startTime: string,
-  endTime: string,
-  activeDays: number[],
-): boolean {
-  try {
-    const nowStr = new Date().toLocaleString('en-US', { timeZone: tz });
-    const nowInTz = new Date(nowStr);
-    const day = nowInTz.getDay(); // 0=Sun, 1=Mon...
-    const hours = nowInTz.getHours();
-    const minutes = nowInTz.getMinutes();
-
-    if (!activeDays.includes(day)) return false;
-
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    const currentMinutes = hours * 60 + minutes;
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
-
-    return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-  } catch {
-    return true; // On error, allow the send
-  }
-}
-
-function isWithinCallSchedule(settings: Record<string, any>): boolean {
-  return isWithinScheduleWindow(
-    settings.call_timezone || 'America/Chicago',
-    settings.call_time_start || '09:00',
-    settings.call_time_end || '17:00',
-    settings.call_active_days || [1, 2, 3, 4, 5],
-  );
-}
-
-/**
- * Check if current time is within the email/SMS send window.
- * Uses send_time_start/end if configured, otherwise defaults to 08:00-21:00 CT.
- * Active days default to Mon-Sat (1-6) for email/SMS.
- */
-function isWithinSendWindow(settings: Record<string, any>): boolean {
-  return isWithinScheduleWindow(
-    settings.send_timezone || settings.call_timezone || 'America/Chicago',
-    settings.send_time_start || '08:00',
-    settings.send_time_end || '17:00',
-    settings.send_active_days || settings.call_active_days || [1, 2, 3, 4, 5],
-  );
-}
-
-/** Get campaign settings (with defaults) from a campaign record */
-function getCampaignSettingsFromRecord(campaign: any): Record<string, any> {
-  const defaults = {
-    test_mode_enabled: false,
-    test_email: '',
-    test_phone: '',
-    delay_between_sends: 120,
-    max_leads_per_cycle: 10,
-    call_time_start: '09:00',
-    call_time_end: '17:00',
-    call_timezone: 'America/Chicago',
-    call_active_days: [1, 2, 3, 4, 5],
-    max_call_duration: 300,
-    max_daily_calls: 50,
-    voicemail_enabled: true,
-    pass_prior_conversations: true,
-  };
-  return { ...defaults, ...(campaign.settings || {}) };
-}
+// Send/call window predicates now live in campaignSendWindow.ts so the campaign
+// watchdog can share them without importing this module (which would be circular).
 
 // ── Auto-Pacing: spread emails evenly across the send window ──────────────
 
@@ -509,6 +388,39 @@ async function calculatePacedLimit(
 
 async function processScheduledActions(): Promise<void> {
   const processorId = `proc_${process.pid}_${Date.now()}`;
+
+  // Self-heal sends stranded in 'pending' after the email actually went out (e.g. a restart
+  // between send and status-update). Runs each cycle; ~0 rows in steady state. This is what
+  // unclogs the fetch when the queue fills with already-sent rows.
+  await reconcileStrandedSends();
+
+  // Expire "zombie" actions before claiming. An action whose scheduled_for is
+  // well in the past should never fire (a months-old sequence step sending today
+  // is wrong, not late). Without this the per-lead daily cap re-defers such
+  // actions to "tomorrow" forever, so they never drain and send_throughput stays
+  // red (730 Mar-May zombies, 2026-06-23 / CC-20260623-q8m4). One bulk UPDATE per
+  // tick; affects 0 rows in steady state. Configurable via setting
+  // `scheduled_action_max_age_days` (0/negative disables).
+  try {
+    const maxAgeDays = resolveMaxAgeDays(await getSetting('scheduled_action_max_age_days'));
+    if (maxAgeDays > 0) {
+      const cutoff = staleCutoff(new Date(), maxAgeDays);
+      const [, expiredMeta] = await sequelize.query(
+        `UPDATE scheduled_emails
+            SET status = 'cancelled',
+                metadata = COALESCE(metadata, '{}'::jsonb)
+                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason)
+          WHERE status = 'pending' AND scheduled_for < :cutoff`,
+        { replacements: { cutoff, reason: `auto-expired: >${maxAgeDays}d past scheduled_for` } }
+      );
+      const expiredCount = (expiredMeta as any)?.rowCount ?? 0;
+      if (expiredCount > 0) {
+        console.log(`[Scheduler] Expired ${expiredCount} stale scheduled action(s) (>${maxAgeDays}d past scheduled_for)`);
+      }
+    }
+  } catch (err: any) {
+    console.error('[Scheduler] stale-action expiry failed (non-blocking):', err.message);
+  }
 
   // Atomically claim pending actions using FOR UPDATE SKIP LOCKED
   // This prevents race conditions if multiple scheduler instances run concurrently
@@ -914,6 +826,44 @@ async function recoverStaleActions(): Promise<number> {
   return count;
 }
 
+/**
+ * Self-heal stranded sends. A send can leave its row stuck in 'pending' when the process
+ * restarts between "email left Mandrill / comm-log written" and "row marked sent". Such rows
+ * sit unfetchable (attempts_made >= max_attempts) and clog the queue forever, so the fetch
+ * starves on real work. If a matching OUTBOUND communication_log exists (same lead + campaign
+ * + subject, logged after the row was created), the email DID go out, so flip the row to
+ * 'sent' (dated from the comm-log) rather than risk a duplicate re-send. Idempotent and cheap:
+ * affects ~0 rows in steady state. The created_at guard prevents a re-enrolled row (whose
+ * matching comm-log predates it) from being wrongly suppressed.
+ */
+async function reconcileStrandedSends(): Promise<number> {
+  try {
+    const [, meta] = await sequelize.query(`
+      UPDATE scheduled_emails se
+      SET status = 'sent',
+          sent_at = COALESCE(se.sent_at, (
+            SELECT MAX(cl.created_at) FROM communication_logs cl
+            WHERE cl.lead_id = se.lead_id AND cl.campaign_id = se.campaign_id
+              AND cl.direction = 'outbound' AND cl.subject = se.subject)),
+          metadata = COALESCE(se.metadata, '{}'::jsonb)
+            || jsonb_build_object('reconciled_stranded', true, 'reconciled_at', NOW())
+      WHERE se.status = 'pending'
+        AND se.channel = 'email'
+        AND EXISTS (
+          SELECT 1 FROM communication_logs cl
+          WHERE cl.lead_id = se.lead_id AND cl.campaign_id = se.campaign_id
+            AND cl.direction = 'outbound' AND cl.subject = se.subject
+            AND cl.created_at >= se.created_at)
+    `);
+    const n = (meta as any)?.rowCount ?? 0;
+    if (n > 0) console.log(`[Scheduler] Reconciled ${n} stranded send(s) (already emailed, stuck pending) -> sent`);
+    return n;
+  } catch (err: any) {
+    console.error('[Scheduler] Stranded-send reconciliation failed (non-blocking):', err.message);
+    return 0;
+  }
+}
+
 async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
   const mailer = getTransporter();
   if (!mailer) {
@@ -934,8 +884,14 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     .replace(/(https?:\/\/(?:enterprise|advisor)\.colaberry\.ai\/[^\s"<>]*?)[.,;:!?)]+(?=[\s<"']|$)/gi, '$1');
   let campaignType = '';
 
+  let senderProfileId: string | null = null;
+  let campaignTenantId: string | null = null;
+  let campaignBrandId: string | null = null;
+
   if (action.campaign_id) {
-    const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['channel', 'type', 'settings'] });
+    const campaign = await Campaign.findByPk(action.campaign_id, {
+      attributes: ['channel', 'type', 'settings', 'tenant_id', 'brand_id', 'sender_profile_id'],
+    });
     if (campaign) {
       campaignType = campaign.type || '';
       // Auto-inject campaign tracking into all site links
@@ -946,10 +902,61 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
         campaignType || 'campaign',
         action.lead_id,
       );
-      // Use per-campaign sender if configured
       const settings = (campaign as any).settings || {};
-      if (settings.sender_email) senderEmail = settings.sender_email;
-      if (settings.sender_name) senderName = settings.sender_name;
+      campaignTenantId = (campaign as any).tenant_id || null;
+      campaignBrandId = (campaign as any).brand_id || null;
+
+      // Sender resolution, ecosystem-aware.
+      //
+      // Prefers the campaign's approved sender profile, then the brand default, then
+      // the legacy `settings.sender_email` this line used to read directly, then the
+      // module default. Every fallback past the first logs a deprecation so the removal
+      // project has usage data rather than a guess.
+      //
+      // Wrapped and non-fatal on purpose: a resolver fault must degrade to today's
+      // behaviour, never stop a campaign that has been sending fine for a year. The
+      // ONE exception is a cross-brand sender profile, which is re-thrown below —
+      // sending CPN mail over the AI Flotation envelope is a forgery, and falling back
+      // silently would produce exactly that.
+      try {
+        const { resolveCampaignSender, assertCanSendLive, SenderBrandMismatchError } =
+          require('../modules/communications/senderProfileService');
+        const resolved = await resolveCampaignSender({
+          campaignId: action.campaign_id,
+          tenantId: campaignTenantId,
+          brandId: campaignBrandId,
+          senderProfileId: (campaign as any).sender_profile_id || null,
+          settings,
+        });
+        senderEmail = resolved.fromEmail;
+        senderName = resolved.fromName;
+        senderProfileId = resolved.profileId;
+
+        // Preflight gates ecosystem-brand sends only. Applying it to the existing
+        // Colaberry pipeline would stop today's mail dead: those campaigns have no
+        // sender profile and no verified BrandDomain row yet, so every one of them
+        // would fail a check that describes a state they were never migrated into.
+        // A campaign that HAS been given a profile has opted into the stricter path.
+        if (resolved.profileId) {
+          await assertCanSendLive(resolved);
+        }
+      } catch (err: any) {
+        if (err?.name === 'SenderBrandMismatchError' || err?.name === 'SenderPreflightError') {
+          throw err;
+        }
+        console.warn(
+          JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: 'warn',
+            service: 'scheduler',
+            event: 'sender_resolution_degraded',
+            outcome: 'partial',
+            context: { campaign_id: action.campaign_id, message: err?.message },
+          }),
+        );
+        if (settings.sender_email) senderEmail = settings.sender_email;
+        if (settings.sender_name) senderName = settings.sender_name;
+      }
 
       // Append Ali's signature for executive_outreach campaigns
       if (settings.ali_signature && campaignType === 'executive_outreach') {
@@ -965,11 +972,29 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     mcMetadata.trigger = 'ali_personal_outreach';
     mcMetadata.lead_id = action.lead_id;
   }
+  // Ecosystem context, so a delivery event coming back from the provider can be mapped
+  // to a brand instead of arriving as a bare message id. Only added when the campaign
+  // actually carries tenancy: existing keys are untouched, so messages already in
+  // flight with the old metadata shape keep resolving in the webhook exactly as before.
+  if (campaignTenantId) mcMetadata.tenant_id = campaignTenantId;
+  if (campaignBrandId) mcMetadata.brand_id = campaignBrandId;
+  if (senderProfileId) mcMetadata.sender_profile_id = senderProfileId;
+
+  // The sequence step content appends its own CAN-SPAM line; strip it so the single legal
+  // footer rendered by the wrapper is not duplicated.
+  emailBody = emailBody.replace(/<p[^>]*>[^<]*Reply STOP[^<]*<\/p>/gi, '');
+
+  // Signed one-click unsubscribe URL (RFC 8058). Bound to this lead + its email so it
+  // can be honored automatically without a human sweeping the inbox. Only built when we
+  // have both a lead id and recipient address; otherwise we fall back to the mailto below.
+  const unsubscribeUrl = (action.lead_id && action.to_email)
+    ? buildUnsubscribeUrl(action.lead_id, action.to_email)
+    : '';
 
   // Executive outreach: minimal wrapper (personal email feel, no corporate footer)
   let html = campaignType === 'executive_outreach'
-    ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id })
-    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id });
+    ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, unsubscribeUrl })
+    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, senderName, senderEmail, unsubscribeUrl });
 
   // Deterministic validator for Ali personal emails — ensure no corporate artifacts
   if (campaignType === 'executive_outreach') {
@@ -986,8 +1011,36 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       .replace(/click here to opt out/gi, '')
       .replace(/<p>\s*<\/p>/g, '');
   }
+
+  // cold_outbound gets its clean signature from wrapEmailHtml. Executive-outreach uses the
+  // minimal personal wrapper, so append the same clean signature here (after the strip) so
+  // those personal emails also carry the company name + website. No duplication: only one
+  // path runs per send.
+  if (campaignType === 'executive_outreach') {
+    const sig = `
+  <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">
+    <tr><td style="border-left:3px solid #1a365d;padding-left:14px;">
+      <div style="font-weight:700;font-size:16px;color:#1a365d;">${senderName}</div>
+      <div style="font-size:14px;color:#718096;">Colaberry Inc.</div>
+      <div style="font-size:14px;margin-top:6px;"><a href="https://enterprise.colaberry.ai" style="color:#2b6cb0;text-decoration:none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color:#2b6cb0;text-decoration:none;">${senderEmail}</a></div>
+    </td></tr>
+  </table>`;
+    html = html.includes('</body>') ? html.replace('</body>', `${sig}\n</body>`) : `${html}${sig}`;
+  }
+
   // Reply-To: use reply subdomain so Mandrill catches inbound replies
   // For Ali personal outreach, reply goes to ali@colaberry.com directly (he handles personally)
+  // Per-recipient journey token, minted HERE and not earlier. Sequence bodies are
+  // rendered at enrollment and stored on ScheduledEmail, then sent days or weeks later;
+  // a `jx` lives 30 minutes, so a token minted at render time would be expired before
+  // the mail left the queue. Same reason, same place, as the signed unsubscribe URL
+  // above. Only hostnames registered in brand_domains are touched - see
+  // journeyLinkRewriter for why that allowlist is the security property.
+  html = await rewriteLinksWithJourneyToken(html, {
+    leadId: action.lead_id ?? null,
+    campaignId: action.campaign_id ?? null,
+  });
+
   const replyDomain = env.mandrillInboundDomain || 'reply.colaberry.com';
   const replyToAddr = campaignType === 'executive_outreach'
     ? 'ali@colaberry.com'
@@ -1001,7 +1054,24 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     text: stripHtml(html),
     headers: {
       'X-MC-Metadata': JSON.stringify(mcMetadata),
-      'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
+      // Force Mandrill open + click tracking on every send. The account-level
+      // default has open-tracking OFF (verified empirically 2026-06-23), so without
+      // this header no open pixel is injected and opens never reach the webhook —
+      // the War Room shows zero engagement even when emails are opened. Clicks are
+      // wrapped by account default, but we set clicks_all explicitly for determinism.
+      'X-MC-Track': 'opens,clicks_all',
+      // RFC 8058 one-click unsubscribe: when we have a signed link, advertise the
+      // https endpoint first (Gmail/Apple honor this button and POST to it directly),
+      // keeping the mailto as a fallback for older clients. Without a link (no lead
+      // id) we degrade to the mailto-only header, which the Inbox COS scanner sweeps.
+      ...(unsubscribeUrl
+        ? {
+            'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${senderEmail}?subject=unsubscribe>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          }
+        : {
+            'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
+          }),
       'X-MC-Tags': action.campaign_id ? `campaign-sequence,${mcMetadata.trigger || 'campaign'}` : 'campaign-sequence',
     },
   };
@@ -1360,7 +1430,7 @@ function injectCampaignTracking(
 }
 
 /** Minimal wrapper for personal emails — no corporate footer, no unsubscribe, looks like Gmail/Outlook */
-function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number }): string {
+function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number; unsubscribeUrl?: string }): string {
   // Aggressively strip ANY team/company sign-offs the AI generates
   let cleaned = body
     // Strip "The Colaberry Enterprise AI team" and all variants (with or without HTML tags)
@@ -1386,6 +1456,12 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
   if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
   const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
 
+  // Subtle, single-line opt-out. Keeps the personal-email feel while satisfying the
+  // "clear and conspicuous" opt-out requirement — a visible link, not just a header.
+  const unsubLine = tracking?.unsubscribeUrl
+    ? `<p style="font-size: 11px; color: #cbd5e0; margin-top: 14px;"><a href="${tracking.unsubscribeUrl}" style="color: #cbd5e0; text-decoration: underline;">Unsubscribe</a></p>`
+    : '';
+
   // Gmail-style plain email: Arial 14px, #222 text, no special formatting
   return `
 <!DOCTYPE html>
@@ -1397,18 +1473,21 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
   <div style="max-width: 600px; padding: 12px 0;">
     ${cleaned}
     <p style="font-size: 12px; color: #a0aec0; margin-top: 16px;">PS - Curious what AI could look like at your company? <a href="${advisorUrl}" style="color: #3b82f6;">Try our 5-minute AI org designer</a></p>
+    ${unsubLine}
   </div>
 </body>
 </html>
   `.trim();
 }
 
-function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number }): string {
-  const advisorParams: string[] = [];
-  if (tracking?.campaignType) { advisorParams.push('utm_source=email', `utm_medium=${tracking.campaignType}`); }
-  if (tracking?.campaignId) { advisorParams.push(`utm_campaign=${tracking.campaignId}`); }
-  if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
-  const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
+function wrapEmailHtml(
+  body: string,
+  tracking?: { campaignId?: string; campaignType?: string; leadId?: number; senderName?: string; senderEmail?: string; unsubscribeUrl?: string },
+): string {
+  const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
+  const senderEmail = tracking?.senderEmail || env.emailFrom;
+  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / AI Systems Architect' : '';
+  const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
 
   // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)
   // and inject a styled button after the body so it's visually prominent rather than buried inline.
@@ -1433,24 +1512,23 @@ function wrapEmailHtml(body: string, tracking?: { campaignId?: string; campaignT
   return `
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
-    h1 { color: #1a365d; font-size: 24px; }
-    h2 { color: #1a365d; font-size: 18px; margin-top: 24px; }
-    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
-    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
-  </style>
-</head>
-<body>
-  ${body}
-  ${primaryCtaButton}
-  <div class="footer">
-    <p style="font-size: 13px; margin-top: 12px;"><a href="${advisorUrl}" style="color: #3b82f6; text-decoration: none; font-weight: 600;">Design Your AI Organization in 5 Minutes &rarr;</a></p>
-    <p>Colaberry Enterprise AI Division<br>
-    AI Leadership | Architecture | Implementation | Advisory</p>
-    <p style="font-size: 12px; color: #a0aec0; margin-top: 12px;">If you no longer wish to receive these emails, reply with "unsubscribe" or <a href="mailto:${env.emailFrom}?subject=unsubscribe" style="color: #a0aec0;">click here to opt out</a>.</p>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+  <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#2d3748;line-height:1.6;max-width:600px;margin:0 auto;padding:24px;">
+    ${body}
+    ${primaryCtaButton}
+    <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;">
+      <tr><td style="border-left:3px solid #1a365d;padding-left:14px;font-family:Arial,Helvetica,sans-serif;">
+        <div style="font-weight:700;font-size:16px;color:#1a365d;">${senderName}</div>
+        ${titleLine}
+        <div style="font-size:14px;color:#718096;">Colaberry Inc.</div>
+        <div style="font-size:14px;margin-top:6px;color:#2d3748;"><a href="https://enterprise.colaberry.ai" style="color:#2b6cb0;text-decoration:none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color:#2b6cb0;text-decoration:none;">${senderEmail}</a></div>
+      </td></tr>
+    </table>
+    <div style="margin-top:28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;color:#a0aec0;line-height:1.5;">
+      Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075<br>
+      Not relevant? <a href="${tracking?.unsubscribeUrl || `mailto:${senderEmail}?subject=unsubscribe`}" style="color:#a0aec0;">Unsubscribe</a> or reply &ldquo;unsubscribe&rdquo;.
+    </div>
   </div>
 </body>
 </html>
@@ -1630,6 +1708,33 @@ async function checkPhaseGraduation(): Promise<void> {
 }
 
 export function startScheduler(): void {
+  // Reese Phase 1 — presence heartbeat. Touches ONLY Reese's own CommunityMember
+  // row's last_active_at, on the same ~60s cadence a real student's browser uses
+  // (pingPresence()), so the People panel's existing derivePresence() logic
+  // (90s online threshold) reads Reese as online without any new real-time
+  // infrastructure. Untracked in AiAgent run stats (not the same identity as
+  // Reese's own registry row — a heartbeat touch is not a "Reese ran" event).
+  cron.schedule('*/1 * * * *', () => {
+    instrumentCronJob('ReesePresenceHeartbeat', async () => {
+      const { runReesePresenceHeartbeat } = await import('./reese/reesePresenceHeartbeat');
+      await runReesePresenceHeartbeat();
+    }).catch((err) => {
+      console.error('[Scheduler] Reese presence heartbeat error:', err);
+    });
+  });
+
+  // AI Employee Consolidation Program, Employee #1 (Curriculum/Dara), Phase 4
+  // — Dara's own real, tracked always-online cron, same generic mechanism as
+  // Reese's own heartbeat above (agentBlueprint/agentPresenceHeartbeat.ts).
+  cron.schedule('*/1 * * * *', () => {
+    instrumentCronJob('DaraPresenceHeartbeat', async () => {
+      const { runDaraPresenceHeartbeat } = await import('./curriculum/daraPresenceHeartbeat');
+      await runDaraPresenceHeartbeat();
+    }).catch((err) => {
+      console.error('[Scheduler] Dara presence heartbeat error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
@@ -1637,22 +1742,571 @@ export function startScheduler(): void {
     });
   });
 
+  // AI Workforce Management, Checkpoint D — AgentReportSubscription
+  // dispatch. A single 15-minute tick checks every enabled subscription's
+  // OWN local hour (via its real timezone) against its configured delivery
+  // hour, rather than one cron job per timezone — real per-subscriber
+  // timezone-safety without N schedules. The DB-unique-constrained insert
+  // inside dispatchDueReportRuns() is the actual idempotency guard: a tick
+  // that fires more than once inside the same delivery hour (or a retried
+  // tick) cannot send the same period twice.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('AgentReportSubscriptionDispatch', async () => {
+      const { dispatchDueReportRuns } = await import('./agentReportRunService');
+      await dispatchDueReportRuns();
+    }).catch((err) => {
+      console.error('[Scheduler] Agent report subscription dispatch error:', err);
+    });
+  });
+
+  // Real-enforcement scoping, Phase 1 (2026-09-20) — releases a held
+  // ApprovalRequest that nobody reviewed within its real review window
+  // (default), so the queue never holds an action indefinitely. Calls the
+  // SAME approveApprovalRequest() the admin UI's Approve button calls — one
+  // real code path, inherits the replay + idempotency guard for free.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('ApprovalRequestTimeoutSweep', async () => {
+      const { sweepExpiredApprovalRequests } = await import('./workLedger/approvalRequestTimeoutJob');
+      await sweepExpiredApprovalRequests();
+    }).catch((err) => {
+      console.error('[Scheduler] Approval request timeout sweep error:', err);
+    });
+  });
+
+  // Explorer Growth OS — nightly profile recompute (EPIC 3 T006).
+  //
+  // RECOMPUTES ONLY. It scores and classifies; it decides nothing and sends
+  // nothing. The Journey Governor that acts on a state is EPIC 4, behind its
+  // own separate flag.
+  //
+  // runScheduledRecompute checks isExplorerFeatureEnabled('journeyIntelligence')
+  // itself and returns immediately when off, so this is dark until BOTH the
+  // master flag and the sub-flag are on. Registered in agentRegistrySeed as
+  // ExplorerProfileRecompute so it is pausable from Admin > Agents without a
+  // redeploy.
+  //
+  // 03:20 UTC: deliberately offset from the :00 and */5 jobs above so a
+  // 153-learner batch does not contend with them on the shared Postgres.
+  // Explorer Growth OS - Journey Governor (EPIC 4 T005).
+  //
+  // 03:50 UTC, THIRTY MINUTES AFTER the recompute above. Ordering is the whole
+  // point: the Governor reads the scores and journey states the recompute
+  // writes, and deciding on yesterday's scores would defeat the freshness gate
+  // it enforces. The recompute takes ~4s for 153 learners, so 30 minutes is
+  // generous headroom rather than a tight coupling.
+  //
+  // DECIDES AND RECORDS ONLY. It enqueues nothing and sends nothing; every row
+  // is written with executed:false. Execution is EPIC 6, behind its own flag.
+  //
+  // runScheduledGovernor checks isExplorerFeatureEnabled('journeyGovernor')
+  // itself and returns immediately when off, so this is dark until BOTH the
+  // master flag and the sub-flag are on.
+  cron.schedule('50 3 * * *', () => {
+    instrumentCronJob('ExplorerGovernorDecide', async () => {
+      await runScheduledGovernor();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerGovernorDecide failed:', err);
+    });
+  });
+
+  // Explorer Growth OS - content registry sync (EPIC 5 T006).
+  //
+  // 02:50 UTC, THIRTY MINUTES BEFORE the profile recompute and a full hour
+  // before the Governor decides. Ordering is the point again: the Governor
+  // resolves content at decision time, so a registry refreshed after it runs
+  // would serve yesterday's catalogue for a day.
+  //
+  // PROJECTS ONLY. It reads published curriculum and writes registry rows; it
+  // decides nothing and sends nothing. The no-send guard's sweep now covers
+  // services/explorerGrowth/content, so a mailer import there fails the build.
+  //
+  // runContentSync checks isExplorerFeatureEnabled('journeyIntelligence')
+  // itself and returns {skippedReason:'flag_off'} when off, so this is dark
+  // until both the master flag and the sub-flag are on. Registered in
+  // agentRegistrySeed as ExplorerContentSync so it is pausable from
+  // Admin > Agents without a redeploy.
+  cron.schedule('50 2 * * *', () => {
+    instrumentCronJob('ExplorerContentSync', async () => {
+      await runContentSync();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerContentSync failed:', err);
+    });
+  });
+
+  // Build-ladder sweep (progression/milestoneSweep.ts): re-evaluates every
+  // scored student so a milestone that became true without a trigger firing
+  // (a back-published week, a push whose evaluator call failed, an approval
+  // whose promotion hiccuped) is reflected by morning. Idempotent; one student
+  // at a time; per-student failures are logged and never stop the pass.
+  cron.schedule('40 3 * * *', () => {
+    instrumentCronJob('ProgressionLadderSweep', async () => {
+      await recomputeAllMilestonePromotions({ triggeredBy: 'scheduler' });
+    }).catch((err) => {
+      console.error('[Scheduler] ProgressionLadderSweep failed:', err);
+    });
+  });
+
+  cron.schedule('20 3 * * *', () => {
+    // Wrapped so the callback resolves to void: instrumentCronJob expects
+    // Promise<void>, and runScheduledRecompute returns a BatchResult the cron
+    // has no use for. The result is still captured in ai_agent_activity_logs by
+    // the instrumentation itself.
+    instrumentCronJob('ExplorerProfileRecompute', async () => {
+      await runScheduledRecompute();
+    }).catch((err) => {
+      console.error('[Scheduler] ExplorerProfileRecompute failed:', err);
+    });
+  });
+
+  // Growth Journey OS crons - the Phase 4 T408 nightly shadow decisions and, from Phase 5 T513, the executor - live in
+  // services/scheduling/growthJourneyCrons.ts, registered here at the position the shadow block held.
+  registerGrowthJourneyCrons();
+
+  // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
+  // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
+  // reliabilityAlertingService.ts). Cadence matches the check's own window.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('ReliabilityAlerting', async () => {
+      const { runReliabilityAlertCheck } = await import('./reliabilityAlertingService');
+      await runReliabilityAlertCheck();
+    }).catch((err) => {
+      console.error('[Scheduler] Reliability alerting error:', err);
+    });
+  });
+
+  // ProofDesk Outcomes & Learning (Milestone 5, spec 20.4): once a day, resolve any
+  // outcome_measurements row whose 7-day observation window has elapsed (scheduled by
+  // ticketService.ts's done-hook). Daily cadence is enough for a 7-day window — no
+  // need for the 5/15-min cadences used above.
+  cron.schedule('0 4 * * *', () => {
+    instrumentCronJob('ProofDeskOutcomeMeasurements', async () => {
+      const { processDueOutcomeMeasurements } = await import('./outcomes/outcomeMeasurementService');
+      const result = await processDueOutcomeMeasurements();
+      if (result.processed > 0) {
+        console.log('[Scheduler] ProofDesk outcome measurements processed:', result);
+      }
+    }).catch((err) => {
+      console.error('[Scheduler] ProofDesk outcome measurements error:', err);
+    });
+  });
+
+  // GitHub repository-invitation sweep (SBP-GH). Accepts the collaborator
+  // invitations students send us, which is the ONLY way the platform ever gets
+  // push access to a student repo.
+  //
+  // WHY THIS RUNS HOURLY, AND WHY IT WAS THE HIGHEST-VALUE CRON WE WERE MISSING.
+  // `sweepPendingInvitations` has existed and been tested since the SBP-GH work,
+  // but it was only ever runnable by hand — it was scheduled nowhere. GitHub
+  // expires a repository invitation after 7 days, and an expired one cannot be
+  // recovered: only a fresh invitation from the student restores that access.
+  // Measured on production 2026-08-23: of 28 connections with a repo,
+  // `platform_can_push` was TRUE for exactly ONE — and that one only because a
+  // human accepted the invitation by hand. `Samrawit26/jobflow_Agent` was
+  // invited 2026-07-21 and expired unaccepted; that grant is gone.
+  //
+  // Hourly rather than daily because the cost of a miss is asymmetric: an empty
+  // queue costs a single API request, while a missed window costs a student
+  // their portfolio sync for the rest of the cohort.
+  //
+  // Safe to run unattended (see repoInvitations' header): it accepts only
+  // invitations that already exist, never solicits one, never patches an EXPIRED
+  // invitation — a PATCH on an expired invite returns a lying 204 and destroys
+  // the evidence the student ever invited us — and never trusts a status code,
+  // re-reading `permissions.push` to settle whether access was actually gained.
+  // Ask GitHub, once a day, what access we actually hold on every connected
+  // repo, and record it. `platform_can_push` is otherwise written only at
+  // connect time and by the invitation sweep (as of 2026-09-17); a grant made
+  // through any other path (a student adding us by hand and never pressing
+  // Reconnect, a revocation, a repo rename) is invisible until something asks.
+  // The script has existed since 2026-08-23 and was only ever run by hand;
+  // three stale rows were found on 2026-09-17. ~25 GitHub reads a day.
+  cron.schedule('23 6 * * *', () => {
+    instrumentCronJob('GithubWriteAccessReconcile', async () => {
+      const { reconcile } = await import('../scripts/reconcileRepoWriteAccess');
+      const rows = await reconcile(true);
+      const flipped = rows.filter((r) => r.now !== null && r.was !== 'unrecorded' && String(r.was) !== String(r.now));
+      if (flipped.length) console.log('[Scheduler] GitHub write-access reconcile flipped:', flipped.map((r) => `${r.owner}/${r.repo} ${r.was}->${r.now}`));
+      else console.log('[Scheduler] GitHub write-access reconcile: no changes across', rows.length, 'connections');
+    }).catch((err) => {
+      console.error('[Scheduler] GitHub write-access reconcile error:', err);
+    });
+  });
+
+  cron.schedule('7 * * * *', () => {
+    instrumentCronJob('GithubInvitationSweep', async () => {
+      const { sweepPendingInvitations } = await import('./sbp/repoConnect/repoInvitations');
+      const result = await sweepPendingInvitations({ correlationId: randomUUID() });
+      // Silent on the common empty-queue case; loud when something happened or
+      // when a grant was lost, because an expiry is a student we must go ask.
+      if (result.accepted.length || result.expired.length || result.failed.length) {
+        console.log('[Scheduler] GitHub invitation sweep:', {
+          accepted: result.accepted.length,
+          expired: result.expired.length,
+          failed: result.failed.length,
+          expired_repos: result.expired.map((i) => `${i.owner}/${i.repo}`),
+        });
+      }
+    }).catch((err) => {
+      console.error('[Scheduler] GitHub invitation sweep error:', err);
+    });
+  });
+
+  // Reese Phase 2 (Autonomous Outreach) — daily scan of the approved pilot
+  // cohort for two real risk signals; on a real, non-duplicate,
+  // non-cadence-capped hit, sends one real autonomous DM + opens a ProofDesk
+  // ticket (R3, shadow-mode governance). Registered in agentRegistrySeed.ts
+  // ('ReeseAutonomousOutreachSweep') so instrumentCronJob()'s enabled/paused
+  // gate actually applies — pause from Admin > Agents, no redeploy needed.
+  cron.schedule('0 15 * * *', () => {
+    instrumentCronJob('ReeseAutonomousOutreachSweep', async () => {
+      const { runReeseAutonomousOutreachSweep } = await import('./reese/reeseAutonomousOutreachService');
+      const result = await runReeseAutonomousOutreachSweep();
+      console.log('[Scheduler] Reese autonomous outreach sweep:', {
+        evaluated: result.evaluated, sent: result.sent, skipped: result.skipped,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese autonomous outreach sweep error:', err);
+    });
+  });
+
+  // Reese Phase 2 (Autonomous Outreach) — daily follow-up/closure sweep for
+  // already-open autonomous-outreach threads. Runs an hour after the sweep
+  // above so a same-day new send's next_follow_up_due_at (+7 days) never
+  // collides with this run. Registered as 'ReeseOutreachFollowUps' for the
+  // same pause/kill-switch reason as the sweep above.
+  cron.schedule('0 16 * * *', () => {
+    instrumentCronJob('ReeseOutreachFollowUps', async () => {
+      const { processDueReeseOutreachFollowUps } = await import('./reese/reeseOutreachFollowUpService');
+      const result = await processDueReeseOutreachFollowUps();
+      console.log('[Scheduler] Reese outreach follow-ups:', {
+        processed: result.processed, signalCleared: result.signalCleared, goalMet: result.goalMet,
+        followUpSent: result.followUpSent, escalated: result.escalated, dailyCapDeferred: result.dailyCapDeferred,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese outreach follow-ups error:', err);
+    });
+  });
+
+  // Reese ticket auto-resolve (2026-08-16) — daily sweep of open student_support
+  // (DM conversation) tickets. Registered in agentRegistrySeed.ts
+  // ('ReeseStudentSupportSupersessionResolver', seeded enabled:false until the
+  // reviewed historical clear succeeds) for the same instrumentCronJob() pause/
+  // kill-switch reason as the two crons above. Runs an hour after the follow-up
+  // sweep so all three of Reese's crons stay sequential and never collide.
+  cron.schedule('0 17 * * *', () => {
+    instrumentCronJob('ReeseStudentSupportSupersessionResolver', async () => {
+      const { resolveReeseStudentSupportSupersession } = await import(
+        '../intelligence/autonomy/reeseStudentSupportSupersessionResolver'
+      );
+      const result = await resolveReeseStudentSupportSupersession();
+      console.log('[Scheduler] Reese student_support supersession resolver:', {
+        checked: result.checked, closed: result.closed, breakdown: result.breakdown,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese student_support supersession resolver error:', err);
+    });
+  });
+
+  // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
+  // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
+  cron.schedule(
+    '0 3 * * 1',
+    () => {
+      instrumentCronJob('PodcastRefresh', async () => {
+        const { refreshPodcasts } = await import('./podcast/podcastIngestionService');
+        await refreshPodcasts();
+      }).catch((err) => {
+        console.error('[Scheduler] Podcast refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Refresh the student blog library once per week (Monday 03:30 America/Chicago).
+  // One fetch of training.colaberry.com/blog (__NEXT_DATA__ JSON) upserted by slug —
+  // new posts appear automatically in the Blog type's auto-match pool.
+  cron.schedule(
+    '30 3 * * 1',
+    () => {
+      instrumentCronJob('BlogRefresh', async () => {
+        const { refreshBlogPosts } = await import('./blog/blogIngestionService');
+        await refreshBlogPosts();
+      }).catch((err) => {
+        console.error('[Scheduler] Blog refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Feed Control — publish scheduled timeline cards whose release_date has arrived
+  // (every 15 min). Idempotent; a no-op unless a card is scheduled with a date.
+  cron.schedule(
+    '*/15 * * * *',
+    () => {
+      instrumentCronJob('FeedReleaseTick', async () => {
+        const { publishDueCards } = await import('./timeline/feedControlService');
+        await publishDueCards();
+      }).catch((err) => {
+        console.error('[Scheduler] Feed release tick error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Daily content lifecycle (03:15 America/Chicago). AI News Flash: fetch free
+  // AI-lab RSS feeds, dedup-upsert the library, and (when AI_NEWS_INGEST_ENABLED
+  // =true) materialize up to AI_NEWS_MAX_PER_RUN fresh news cards (prod=3, code
+  // floor 1 → ~3 LLM calls/day). Then prune: archive any generated (*_pipeline)
+  // card older than 30 days out of the feed, so each generator holds a rolling
+  // ~30-day window and cost stays bounded. Idempotent + cost-gated; see
+  // aiNewsIngestionService + generatedContentRetention.
+  cron.schedule(
+    '15 3 * * *',
+    () => {
+      instrumentCronJob('AiNewsRefresh', async () => {
+        const { refreshAiNews } = await import('./intel/aiNewsIngestionService');
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await refreshAiNews(); // maxCards defaults to AI_NEWS_MAX_PER_RUN (prod=3)
+        await pruneGeneratedContent(); // discard generated cards older than 30 days
+      }).catch((err) => {
+        console.error('[Scheduler] AI News refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Intelligence pipelines — the 9 generators beyond AI News Flash (arXiv research,
+  // tools, YouTube, quotes, eng-blogs, GitHub builds, MCP servers, Claude Code
+  // techniques, market intel). Daily 03:45 CT, staggered 30 min after AiNewsRefresh
+  // to spread LLM load. Each source self-registers via the sources barrel, is
+  // cost-gated by its own <SLUG>_INGEST_ENABLED flag (default OFF → ships dark),
+  // and is tracked per-source via instrumentCronJob(`Intel_<slug>`). Prune runs once
+  // after the loop (shared 30-day generated-content retention).
+  cron.schedule(
+    '45 3 * * *',
+    () => {
+      (async () => {
+        await import('./intel/sources'); // register all adapters (idempotent)
+        const { listIntelSources, runIntelPipeline } = await import('./intel/intelPipeline');
+        for (const src of listIntelSources()) {
+          await instrumentCronJob(`Intel_${src.slug}`, async () => {
+            await runIntelPipeline(src.slug);
+          }).catch((err) => console.error(`[Scheduler] Intel ${src.slug} error:`, err));
+        }
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await pruneGeneratedContent();
+      })().catch((err) => console.error('[Scheduler] Intel pipelines error:', err));
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Distill each active student's recent sessions into their evolving LearnerMemory
+  // once nightly (02:15 America/Chicago) — the AI Mentor's "gets to know you over
+  // weeks" engine. Idempotent per (enrollment, day); safe to re-run.
+  cron.schedule(
+    '15 2 * * *',
+    () => {
+      instrumentCronJob('LearnerMemoryDistill', async () => {
+        const { runLearnerMemoryBatch } = await import('./runtime/learnerMemoryWriter');
+        await runLearnerMemoryBatch();
+      }).catch((err) => {
+        console.error('[Scheduler] Learner memory distill error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Reconcile enrollment payment state from PaySimple every 30 minutes: payments
+  // that went through become revenue; failed/reversed ones are subtracted. Ships
+  // dark — only scheduled when PAYSIMPLE_SYNC_ENABLED=true (needs live read creds).
+  if (env.paysimpleSyncEnabled) {
+    cron.schedule('*/30 * * * *', () => {
+      instrumentCronJob('PaySimplePaymentSync', async () => {
+        const { syncPaySimplePayments } = await import('./paymentSyncService');
+        await syncPaySimplePayments({});
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple payment sync error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimplePaymentSync scheduled (*/30 * * * *)');
+  }
+
+  // Heal missed-webhook membership payments every 20 minutes: for OUR checkout
+  // customers whose enrollment is still unpaid, link their live PaySimple membership
+  // payment (scoped to our stored customer ids only — no amount/email matching, so
+  // shared-gateway charges can't leak). Ships dark — PAYSIMPLE_APP_RECONCILE_ENABLED=true.
+  if (env.paysimpleAppReconcileEnabled) {
+    cron.schedule('*/20 * * * *', () => {
+      instrumentCronJob('AppPaymentReconcile', async () => {
+        const { reconcileAppPayments } = await import('./appPaymentReconcileService');
+        const summary = await reconcileAppPayments({});
+
+        // Healing via the checkout-window path means the WEBHOOK missed those payments.
+        // The reconcile succeeding is exactly why that stays invisible, so say it out
+        // loud rather than letting a broken primary path hide behind its safety net.
+        if (summary.linkedByCheckoutWindow > 0) {
+          const { emitAlert } = await import('./alertService');
+          await emitAlert({
+            type: 'warning',
+            severity: 6,
+            sourceType: 'system',
+            impactArea: 'revenue',
+            urgency: 'high',
+            title: 'PaySimple payments are being healed by reconcile, not the webhook',
+            description:
+              `The reconcile job linked ${summary.linkedByCheckoutWindow} payment(s) ` +
+              `($${(summary.linkedTotalCents / 100).toFixed(2)}) that the PaySimple webhook should have ` +
+              `activated on its own. Students were briefly left on the wrong access level. ` +
+              `Check webhook delivery and signature verification.`,
+            metadata: {
+              linked: summary.linked,
+              linkedByCheckoutWindow: summary.linkedByCheckoutWindow,
+              linkedTotalCents: summary.linkedTotalCents,
+            },
+          }).catch(() => {}); // alerting must never fail the reconcile
+        }
+      }).catch((err) => {
+        console.error('[Scheduler] App payment reconcile error:', err);
+      });
+    });
+    console.log('[Scheduler] AppPaymentReconcile scheduled (*/20 * * * *)');
+
+    // Watch the webhook itself every 15 minutes. The reconcile above only notices a
+    // problem once a payment is already late; this catches a total rejection run
+    // (the 2026-08-12 shape) within minutes of it starting.
+    cron.schedule('*/15 * * * *', () => {
+      instrumentCronJob('PaySimpleWebhookHealth', async () => {
+        const { webhookHealthSnapshot, evaluateWebhookHealth } = await import('./paysimpleWebhookHealth');
+        const snapshot = webhookHealthSnapshot();
+        const verdict = evaluateWebhookHealth(snapshot);
+        if (!verdict.alert) return;
+
+        const { emitAlert } = await import('./alertService');
+        await emitAlert({
+          type: verdict.type,
+          severity: verdict.severity,
+          sourceType: 'system',
+          impactArea: 'revenue',
+          urgency: verdict.type === 'critical' ? 'immediate' : 'high',
+          title: verdict.title,
+          description: verdict.description,
+          metadata: { ...snapshot },
+        });
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple webhook health check error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimpleWebhookHealth scheduled (*/15 * * * *)');
+  }
+
+  // Renewal reminders, daily at 9am Central. 9am CT because it is a message about
+  // somebody's money and it should land in their working day, not overnight.
+  //
+  // The job is now TWO messages, not one, because the platform stopped being all
+  // manual on 2026-09-01 (docs/BILLING_MODEL.md, and the original exposure audit
+  // at docs/RECURRING_BILLING_EXPOSURE.md for how it got here):
+  //
+  //   - no schedule (10 members): nothing collects when the period ends, so this
+  //     mails a checkout link and the member has to act or the term lapses.
+  //   - on a schedule (21 members): PaySimple collects on its own, so the same job
+  //     sends a heads-up instead. It must NOT send them a payment link; paying a
+  //     link a schedule is about to collect is how a member gets billed twice.
+  //
+  // Those are HEADCOUNTS, deduped by enrollment. A manual renewal leaves two rows
+  // active, so counting rows here reads high and misfiles auto-pay members as
+  // manual (the stale row has no schedule id on it).
+  //
+  // The branch is `DueReminder.autopay`, set from paysimple_schedule_id.
+  //
+  // Ships dark. RENEWAL_REMINDERS_ENABLED=true is the switch, and turning it on
+  // starts mailing real paying customers, so it is deliberately not a default.
+  // The job is idempotent on (subscription_id, period_end, reminder_kind), so a
+  // container restart or a double-fire sends nothing a second time.
+  if (env.renewalRemindersEnabled) {
+    cron.schedule('0 9 * * *', () => {
+      instrumentCronJob('RenewalReminders', async () => {
+        const { runRenewalReminders } = await import('./renewal/renewalReminderService');
+        await runRenewalReminders({ send: true });
+      }).catch((err) => {
+        console.error('[Scheduler] Renewal reminder error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] RenewalReminders scheduled (0 9 * * * America/Chicago)');
+
+    // Auto-pay disclosure, 08:30 CT, half an hour ahead of the reminders.
+    //
+    // A member who is about to be charged automatically must have been TOLD they
+    // are on automatic billing, and the reminder is not that telling: it fires 7
+    // days out, so anyone whose 7-day mark has already passed would learn it from
+    // the charge itself. On 2026-09-01 that was 20 members, four of them holding
+    // an older reminder that said the opposite.
+    //
+    // Ordering is deliberate. Running first means a member who gains a schedule
+    // and is also due a reminder the same morning hears the disclosure first,
+    // rather than a renewal note about billing they did not know was automatic.
+    //
+    // Once per member for ever, enforced by the SELECT excluding anyone who has
+    // been sent this kind at any period_end, not just the current one. It shares
+    // the reminder feature flag because both mail the same paying customers.
+    cron.schedule('30 8 * * *', () => {
+      instrumentCronJob('AutopayDisclosure', async () => {
+        const { runAutopayNotices } = await import('./renewal/autopayNotice');
+        const r = await runAutopayNotices({ send: true });
+        console.log(`[Scheduler] AutopayDisclosure: considered=${r.considered} sent=${r.sent} skipped=${r.skipped.length} failed=${r.failed}`);
+      }).catch((err) => {
+        console.error('[Scheduler] Autopay disclosure error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] AutopayDisclosure scheduled (30 8 * * * America/Chicago)');
+  }
+
+  // Billing watch, daily at 8am Central, an hour before the renewal reminders so a
+  // broken collection path is known BEFORE the day's money depends on it.
+  //
+  // It is read only and it stays silent when the book is healthy. Every check in it
+  // exists because that exact thing happened during the 2026-08 billing work and a
+  // human found it by accident: subscriptions anchored to a repair date, a member
+  // holding two active rows, three members lapsing into permanent silence, a card
+  // that expired the month before its renewal. None of those announced themselves.
+  //
+  // It cannot touch a customer and it cannot move money, but "the worst it does
+  // is email Ali" turned out to matter: the dev instance shares this scheduler
+  // and its database has no reminders table and no schedule ids, so every
+  // morning it mailed a false ACT NOW ("21 schedules not in our book", "check
+  // could not run") next to the real report. Only the instance that owns the
+  // renewal reminders owns the watch that precedes them, so it rides the same
+  // switch (RENEWAL_REMINDERS_ENABLED on the production host, nowhere else).
+  if (env.renewalRemindersEnabled) {
+    cron.schedule('0 8 * * *', () => {
+      instrumentCronJob('BillingWatch', async () => {
+        const { runBillingWatch } = await import('./billing/billingHealthReport');
+        const r = await runBillingWatch({ send: true });
+        console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
+      }).catch((err) => {
+        console.error('[Scheduler] Billing watch error:', err);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] BillingWatch scheduled (0 8 * * * America/Chicago)');
+  } else {
+    console.log('[Scheduler] BillingWatch not scheduled (RENEWAL_REMINDERS_ENABLED is off on this instance)');
+  }
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
-  cron.schedule('*/5 * * * *', async () => {
-    try {
+  cron.schedule('*/5 * * * *', () => {
+    instrumentCronJob('PreviewStackReaper', async () => {
       const { reapIdlePreviewStacks } = await import('./previewStackReaper');
       const result = await reapIdlePreviewStacks();
       if (result.stopped.length > 0) {
         console.log(`[PreviewReaper] Stopped ${result.stopped.length} idle stacks:`, result.stopped.join(', '));
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[PreviewReaper] error:', err?.message);
-    }
+    });
   });
 
   // Recover stale processing actions every 15 minutes
   cron.schedule('*/15 * * * *', () => {
-    recoverStaleActions().catch((err) => {
+    instrumentCronJob('StaleActionRecovery', () => recoverStaleActions().then(() => {})).catch((err) => {
       console.error('[Scheduler] Stale recovery error:', err);
     });
   });
@@ -1741,61 +2395,37 @@ export function startScheduler(): void {
 
   // Mandrill open/click poll — webhooks are unreliable because older webhooks
   // (school system) consume open/click events before ours. Poll API every 30 min.
+  // Attribution, dedup, recording AND the search request live in
+  // mandrillEngagementPoll.ts, where each rule has a test: match the SENT EMAIL
+  // BY SUBJECT (never by recency); ask only for campaign-tagged mail over a
+  // two-day window at the API's 1,000 cap (a bare `*` at 100 saw none of ours).
   cron.schedule('5,35 * * * *', () => {
     instrumentCronJob('MandrillOpenClickPoll', async () => {
       const axios = require('axios');
       const apiKey = env.mandrillApiKey;
       if (!apiKey) return;
-      const { InteractionOutcome, Lead } = require('../models');
-      const today = new Date().toISOString().split('T')[0];
+      const { InteractionOutcome } = require('../models');
+      const now = new Date();
       try {
-        const r = await axios.post('https://mandrillapp.com/api/1.0/messages/search.json', {
-          key: apiKey, query: '*', date_from: today, date_to: today, limit: 100,
-        });
-        let opens = 0, clicks = 0;
-        for (const msg of r.data) {
-          const lead = await Lead.findOne({ where: { email: msg.email.toLowerCase() } });
-          if (!lead) continue;
-
-          // Look up the most recent sent email to this lead for campaign attribution
-          const sentEmail = await ScheduledEmail.findOne({
-            where: { lead_id: lead.id, status: 'sent' },
-            order: [['sent_at', 'DESC']],
-            attributes: ['id', 'campaign_id', 'step_index'],
-          });
-          const campaignId = sentEmail?.campaign_id || null;
-          const scheduledEmailId = sentEmail?.id || null;
-          const stepIndex = sentEmail?.step_index ?? null;
-
-          if (msg.opens > 0) {
-            const exists = await InteractionOutcome.findOne({
-              where: { lead_id: lead.id, outcome: 'opened', created_at: { [Op.gte]: new Date(today) } },
-            });
-            if (!exists) {
-              await InteractionOutcome.create({
-                lead_id: lead.id, outcome: 'opened', channel: 'email',
-                campaign_id: campaignId, scheduled_email_id: scheduledEmailId, step_index: stepIndex,
-                metadata: { subject: msg.subject, backfilled: true, source: 'mandrill_poll' },
-              } as any);
-              opens++;
-            }
-          }
-          if (msg.clicks > 0) {
-            const exists = await InteractionOutcome.findOne({
-              where: { lead_id: lead.id, outcome: 'clicked', created_at: { [Op.gte]: new Date(today) } },
-            });
-            if (!exists) {
-              await InteractionOutcome.create({
-                lead_id: lead.id, outcome: 'clicked', channel: 'email',
-                campaign_id: campaignId, scheduled_email_id: scheduledEmailId, step_index: stepIndex,
-                metadata: { subject: msg.subject, backfilled: true, source: 'mandrill_poll' },
-              } as any);
-              clicks++;
-            }
-          }
+        const r = await axios.post(
+          'https://mandrillapp.com/api/1.0/messages/search.json',
+          { key: apiKey, ...buildSearchRequest(now) },
+          { timeout: 20000 },
+        );
+        if (!Array.isArray(r.data)) {
+          console.warn('[Mandrill Poll] Unexpected response shape; nothing recorded');
+          return;
         }
-        if (opens > 0 || clicks > 0) {
-          console.log(`[Mandrill Poll] Backfilled ${opens} opens, ${clicks} clicks`);
+        if (searchSaturated(r.data)) {
+          console.warn(`[Mandrill Poll] Result hit the ${r.data.length}-message cap; some campaign mail in the window was not scanned`);
+        }
+        const summary = await recordMandrillEngagement(
+          r.data as MandrillSearchMessage[],
+          { Lead, ScheduledEmail, InteractionOutcome },
+          searchWindowStart(now),
+        );
+        if (summary.opens > 0 || summary.clicks > 0 || summary.failed > 0) {
+          console.log(`[Mandrill Poll] Scanned ${summary.seen}; recorded ${summary.opens} opens, ${summary.clicks} clicks; ${summary.unattributed} on messages this platform did not send; ${summary.failed} failed`);
         }
       } catch (err: any) {
         console.error('[Mandrill Poll] Error:', err.message);
@@ -1902,6 +2532,48 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Campaign graduation: every 6 hours');
 
+  // -- Inbox Intel Case Auto-Sync: hourly, on the hour --
+  // Turns Ali's real inbox (email + Basecamp, filtered through Inbox COS's
+  // classification) into Cases without him having to search a person/topic
+  // first. Read-only against mail/Basecamp/Inbox COS; only creates Case/
+  // CaseItem rows in ASSESSING state, same as manual "Discover Related
+  // Work" — never auto-approves or auto-executes anything.
+  cron.schedule('0 * * * *', () => {
+    instrumentCronJob('InboxCaseAutoSync', async () => {
+      const { runAutoSync } = require('./inboxCase/caseAutoSyncService');
+      const result = await runAutoSync('cron', 'system');
+      console.log(
+        `[Scheduler] Inbox case auto-sync: ${result.newCasesCreated} new case(s), ${result.itemsAdded} item(s), ${result.emailsSkippedUnclassified} unclassified skipped`
+      );
+    }).catch((err: any) => {
+      console.error('[Scheduler] Inbox case auto-sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Inbox case auto-sync: hourly, on the hour');
+
+  // /inbox-zero T16 — inbox liveness (Ali: "If I delete something from my
+  // inbox, then it should not show up on this report"). Every five minutes,
+  // ask the providers about the stalest open case items — bounded to 150 a
+  // pass, never-checked rows first — so anything Ali archived or deleted
+  // leaves the console within minutes. Offset from :00 so it does not start
+  // at the same instant as the hourly auto-sync (which does its own pass);
+  // an overlap is harmless — every write is idempotent and a double
+  // settle is caught and logged, never thrown. Read-only
+  // against the outside world; dispositions only what has already left
+  // the inbox, through the engine's own closure guard.
+  cron.schedule('2-57/5 * * * *', () => {
+    instrumentCronJob('InboxLivenessReconcile', async () => {
+      const { reconcileLiveness } = require('./inboxCase/inboxLivenessService');
+      const r = await reconcileLiveness({ correlationId: require('crypto').randomUUID() }); // UUID: inbox_case_events.correlation_id
+      console.log(
+        `[Scheduler] Inbox liveness: ${r.checked} checked, ${r.live} live, ${r.gone} gone, ${r.unverifiable} unverifiable, ${r.skipped_backoff} skipped (backoff), ${r.cases_closed.length} case(s) closed, ${r.close_blocked.length} blocked`
+      );
+    }).catch((err: any) => {
+      console.error('[Scheduler] Inbox liveness error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Inbox liveness reconcile: every 5 minutes (offset :02)');
+
   // -- Inbox Chief of Staff --
   try {
     const { startInboxScheduler } = require('./inbox/inboxScheduler');
@@ -1911,21 +2583,103 @@ export function startScheduler(): void {
     console.error('[Scheduler] Inbox COS scheduler failed to start:', err.message);
   }
 
+  // -- Missed Opportunities Report — daily executive brief at 8:00 PM CT --
+  // Safety net against Inbox COS false negatives. The send is idempotent
+  // (one per CT date), so the timezone-pinned cron is safe to re-fire.
+  cron.schedule('0 20 * * *', () => {
+    instrumentCronJob('MissedOpportunitiesReport', async () => {
+      const { runMissedOpportunitiesReport } = require('./inbox/missedOpportunitiesEmailService');
+      const result = await runMissedOpportunitiesReport();
+      console.log(`[Scheduler] Missed Opportunities Report:`, JSON.stringify(result));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Missed Opportunities Report error:', err.message);
+    });
+  }, { timezone: 'America/Chicago' });
+  console.log('[Scheduler] Missed Opportunities Report: daily at 8:00 PM CT');
+
+  // -- Curriculum video link health — daily at 6:20 AM CT --
+  // 141 of the curriculum's 155 videos are third-party YouTube links that can be
+  // deleted, made private or have embedding disabled with no change on our side.
+  // Because every week's evaluation is gated on section_complete{learn, week},
+  // one dead video silently seals that week's evaluation -> survey -> reflection
+  // chain. Until 2026-08-21 the only detector was a student writing in.
+  //
+  // Runs before the working day so a break is triaged before class. The check is
+  // idempotent (one run per CT date) and read-only: it never edits a card,
+  // because choosing a replacement video is a curriculum judgement.
+  //
+  // OFF unless CURRICULUM_VIDEO_HEALTH_ENABLED=true. Alerts match the catch-all
+  // alert_subscriptions row, so enabling this starts real notifications; run it
+  // once with { dryRun: true } first.
+  if (env.curriculumVideoHealthEnabled) {
+    cron.schedule('20 6 * * *', () => {
+      instrumentCronJob('CurriculumVideoLinkHealth', async () => {
+        const { runVideoLinkHealthCheck } = require('./curriculumHealth/videoLinkHealthService');
+        const result = await runVideoLinkHealthCheck();
+        // `unverified`, `untrusted_batches` and the three-way ownership split are
+        // logged because a quiet run and a blindfolded run look identical
+        // otherwise. A run with untrusted batches found nothing because it could
+        // not see, not because everything is fine. `quota_units` is logged so the
+        // YouTube Data API cost is an observed number, not an estimate.
+        console.log('[Scheduler] Curriculum video link health:', JSON.stringify({
+          skipped: result.skipped, reason: result.reason, checked: result.checked, healthy: result.healthy,
+          unknown: result.unknown, failures: result.failures.length, sealed_weeks: result.sealed_weeks,
+          throttled: result.throttled, untrusted_batches: result.untrusted_batches,
+          unverified: result.unverified, quota_units: result.quota_units, ownership: result.ownership,
+        }));
+      }).catch((err: any) => {
+        console.error('[Scheduler] Curriculum video link health error:', err.message);
+      });
+    }, { timezone: 'America/Chicago' });
+    console.log('[Scheduler] Curriculum video link health: daily at 6:20 AM CT');
+  } else {
+    console.log('[Scheduler] Curriculum video link health: DISABLED (set CURRICULUM_VIDEO_HEALTH_ENABLED=true)');
+  }
+
+  // -- Deleted/Spam ingestion for Deleted-Email Recovery — hourly --
+  // Keeps inbox_deleted_emails fresh so the report's "Deleted But Potentially
+  // Valuable" section has data without putting external API calls in the
+  // request path. Idempotent (unique provider+message_id) and bounded.
+  cron.schedule('25 * * * *', () => {
+    instrumentCronJob('InboxDeletedSync', async () => {
+      const { syncDeletedAndSpam } = require('./inbox/inboxDeletedSyncService');
+      const result = await syncDeletedAndSpam();
+      if (result.created > 0) console.log(`[Scheduler] Deleted/spam sync: ${result.created} new of ${result.scanned} scanned`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Deleted/spam sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Deleted/spam ingestion: hourly at :25');
+
   // -- Accelerator Session Lifecycle --
 
-  // Session reminders: check every 30 minutes (with dedup to prevent spam)
-  const sentReminders = new Set<string>(); // Track "sessionId-type" to prevent re-sending
+  // Session reminders: check every 30 minutes. Arming is persisted on the session
+  // row (reminder_24h_sent_at / reminder_1h_sent_at), NOT in process memory: this
+  // used to be an in-process Set, so every deploy re-armed both sends and the next
+  // sweep re-mailed the whole cohort — see ensureSessionReminderSchema.ts.
   cron.schedule('*/30 * * * *', () => {
     instrumentCronJob('SessionReminders', async () => {
       // 24-hour reminders
       const upcoming24h = await getUpcomingSessions(24);
       for (const session of upcoming24h) {
-        const dedupKey = `${session.id}-24h`;
-        if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
+        // Ensure a teaching Meet link exists before reminding (idempotent; retries
+        // each tick until it succeeds, so a transient Google failure self-heals).
+        await ensureSessionMeetLink(session).catch((err: any) =>
+          console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
+        );
+        if (session.reminder_24h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
-        for (const e of enrollments) {
+        // Withhold from anyone whose notifications are paused. NOTE: arming
+        // below still keys off the FULL roster, not this filtered list — a
+        // cohort where everyone is paused must still arm, or this session is
+        // re-entered every tick forever.
+        const { notifiable, suppressed } = partitionNotifiable(enrollments);
+        if (suppressed.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: withheld 24h reminder from ${suppressed.length} paused enrollment(s)`);
+        }
+        for (const e of notifiable) {
           await sendSessionReminder({
             to: e.email,
             fullName: e.full_name,
@@ -1933,26 +2687,31 @@ export function startScheduler(): void {
             sessionNumber: session.session_number,
             sessionDate: session.session_date,
             startTime: session.start_time,
+            sessionId: String(session.id),
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: false,
-          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
-          sentReminders.add(dedupKey);
-          console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+          await session.update({ reminder_24h_sent_at: new Date() });
+          console.log(`[Scheduler] Sent 24h reminders for session ${session.session_number} to ${notifiable.length} participant(s)`);
         }
       }
 
       // 1-hour reminders
       const upcoming1h = await getUpcomingSessions(1);
       for (const session of upcoming1h) {
-        const dedupKey1h = `${session.id}-1h`;
-        if (sentReminders.has(dedupKey1h)) continue; // Already sent this reminder
+        if (session.reminder_1h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
-        for (const e of enrollments) {
+        // Same withholding as the 24h sweep; arming still keys off the full roster.
+        const { notifiable, suppressed } = partitionNotifiable(enrollments);
+        if (suppressed.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: withheld 1h reminder from ${suppressed.length} paused enrollment(s)`);
+        }
+        for (const e of notifiable) {
           await sendSessionReminder({
             to: e.email,
             fullName: e.full_name,
@@ -1960,14 +2719,15 @@ export function startScheduler(): void {
             sessionNumber: session.session_number,
             sessionDate: session.session_date,
             startTime: session.start_time,
+            sessionId: String(session.id),
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: true,
-          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
-          sentReminders.add(dedupKey1h);
-          console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${enrollments.length} participant(s)`);
+          await session.update({ reminder_1h_sent_at: new Date() });
+          console.log(`[Scheduler] Sent 1h reminders for session ${session.session_number} to ${notifiable.length} participant(s)`);
         }
       }
     }).catch((err: any) => {
@@ -1982,6 +2742,15 @@ export function startScheduler(): void {
       for (const session of toLive) {
         await session.update({ status: 'live' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as live`);
+
+        // Post the check-in QR into the session's Colaberry Commons waiting
+        // room (ensureRoomForSession provisions one per session) so a student
+        // already in the room sees it the moment class goes live. Best-effort
+        // and idempotent (marker) — a missing room or a cron re-run must never
+        // block/duplicate the status flip above.
+        await postLiveClassQrToRoom(session).catch((err: any) =>
+          console.error(`[Scheduler] Live-class QR post failed for session ${session.id}:`, err.message)
+        );
       }
 
       const toComplete = await getSessionsToMarkCompleted();
@@ -1989,9 +2758,27 @@ export function startScheduler(): void {
         await session.update({ status: 'completed' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
 
+        // Generate the AI recap (best-effort) — surfaced to absentees in the Today
+        // "you missed it" replay card. (Wiring it into the recap email is a follow-up.)
+        await generateSessionRecap(session).catch((err: any) =>
+          console.error(`[Scheduler] Recap generation failed for session ${session.id}:`, err.message)
+        );
+
+        // Fill leave_time/duration for anyone who self-joined but never left.
+        await finalizeSessionAttendance(session.id).catch((err: any) =>
+          console.error(`[Scheduler] Attendance finalize failed for session ${session.id}:`, err.message)
+        );
+
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);
         for (const { enrollment, consecutiveMisses, missedTitles } of absentees) {
+          // Attendance is still RECORDED for a paused student (detectAbsentParticipants
+          // above already wrote the record) — pausing notifications must not quietly
+          // edit somebody's academic history. Only the mail is withheld.
+          if (isNotificationSuppressed(enrollment)) {
+            console.log(`[Scheduler] Withheld missed-session mail for a paused enrollment on session ${session.session_number}`);
+            continue;
+          }
           // Send missed session recap
           await sendMissedSessionEmail({
             to: enrollment.email,
@@ -2002,7 +2789,7 @@ export function startScheduler(): void {
             recordingUrl: session.recording_url || null,
             materialsJson: session.materials_json || null,
             consecutiveMisses,
-          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${enrollment.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${redactForLogs(enrollment.email)}:`, err.message));
 
           // Alert admin if 2+ consecutive absences
           if (consecutiveMisses >= 2) {
@@ -2036,6 +2823,113 @@ export function startScheduler(): void {
   console.log('[Scheduler] Accelerator: session reminders every 30 min (24h + 1h before)');
   console.log('[Scheduler] Accelerator: session lifecycle (live/completed) every 5 min');
   console.log('[Scheduler] Accelerator: post-session absence detection + readiness recompute');
+
+  // Session Recordings — poll Drive for a completed session's Meet recording
+  // and ingest it into that session's Room as a downloadable resource.
+  // Proven on the July 2026 pilot cohort (per the staged rollout plan) and
+  // widened to every cohort going forward — no more cohort_id filter.
+  // Bounded retry: only sessions completed in the last 7 days are considered,
+  // then we give up automatically and fall back to the existing manual
+  // PATCH .../sessions/:id { recording_url } path.
+  cron.schedule('12,42 * * * *', () => {
+    instrumentCronJob('SessionRecordingIngest', async () => {
+      const candidates = await LiveSession.findAll({
+        where: {
+          status: 'completed',
+          session_date: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) },
+        },
+      });
+      // One at a time — a multi-hundred-MB stream-to-disk download alongside
+      // every other cron in this same 512MB-heap process is not something to
+      // run concurrently.
+      for (const session of candidates) {
+        try {
+          const result = await ingestRecordingForSession(session);
+          if (result.status === 'ingested') {
+            console.log(`[Scheduler] Recording ingested for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
+        }
+
+        // Class Notes — snapshot the standalone teaching deck into the Room.
+        // Independent of the recording above ON PURPOSE: Sessions 1-4 were
+        // taught on Google Meet and have no recoverable video at all, so notes
+        // must not be conditional on a recording existing. Cheap (renders HTML,
+        // no download) and idempotent, so it is safe on every sweep.
+        try {
+          const notes = await attachClassNotesForSession(session);
+          if (notes.status === 'attached') {
+            console.log(`[Scheduler] Class Notes attached for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Class Notes failed for session ${session.id}:`, err.message);
+        }
+      }
+
+      // Same sweep, for general Room bookings (the "+ Book a session" flow) —
+      // Zoom-only, and excludes class-session-derived bookings (owned by the
+      // loop above). "Completed" here means the booking's own scheduled end
+      // has passed, not that a host clicked Complete — that's a manual,
+      // easily-forgotten step this shouldn't depend on. Always-open
+      // persistent video rooms are swept separately below (no "completed"
+      // state applies to them).
+      const bookingCandidates = await RoomBooking.findAll({
+        where: {
+          meeting_provider: 'zoom',
+          related_live_session_id: null,
+          google_event_id: { [Op.ne]: null },
+          end_at: {
+            [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            [Op.lte]: new Date(),
+          },
+          state: { [Op.notIn]: ['cancelled', 'draft', 'pending_approval'] },
+        },
+      });
+      for (const booking of bookingCandidates) {
+        try {
+          const result = await ingestRecordingForBooking(booking);
+          if (result.status === 'ingested') {
+            console.log(`[Scheduler] Recording ingested for booking ${booking.id} "${booking.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for booking ${booking.id}:`, err.message);
+        }
+      }
+
+      // Same sweep, for always-open persistent video Rooms (e.g. a cohort's
+      // main class room — is_video + always_open). No "completed" state to
+      // filter on here (the room never closes), so this just re-scans a
+      // 7-day recordings window per room every tick — bounded work since
+      // there are only ever a handful of these rooms, unlike bookings/sessions.
+      // Found live 2026-08-05: a cohort's actual teaching happens in one of
+      // these, not a scheduled LiveSession, so this sweep exists to cover
+      // real classes, not just drop-in social use.
+      const alwaysOpenRooms = await CommunityRoom.findAll({
+        where: { is_video: true, always_open: true, meeting_link: { [Op.ne]: null } },
+      });
+      const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const to = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      for (const room of alwaysOpenRooms) {
+        const meetingId = extractZoomMeetingId(room.meeting_link);
+        if (!meetingId) continue;
+        try {
+          const instances = await findRecordingInstancesByMeetingId(meetingId, from, to, room.name);
+          for (const instance of instances) {
+            const result = await ingestRecordingForRoom(room, instance.uuid, instance.match);
+            if (result.status === 'ingested') {
+              console.log(`[Scheduler] Recording ingested for room ${room.id} "${room.name}" (instance ${instance.uuid})`);
+            }
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for room ${room.id}:`, err.message);
+        }
+      }
+    }).catch((err: any) => {
+      console.error('[Scheduler] Session recording ingest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Accelerator: session + room-booking + always-open-room recording ingestion every 30 min');
 
   // ── Alumni Lifecycle Processor (daily 6 AM CT / 11 UTC) ──────────────
   const { detectInactiveLeads, detectReengagementComplete } = require('./campaignLifecycleService');
@@ -2127,7 +3021,7 @@ export function startScheduler(): void {
 
           // Skip voice call if no phone — still mark as hot
           if (!lead.phone) {
-            console.log(`[HotLead] Marked ${lead.name} as hot (no phone — email-only lead)`);
+            console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot (no phone — email-only lead)`);
             continue;
           }
 
@@ -2143,7 +3037,7 @@ export function startScheduler(): void {
               LIMIT 1
             `, { replacements: { leadId: lead.lead_id }, type: QueryTypes.SELECT }) as any[];
             if (recentAliEmail) {
-              console.log(`[HotLead] Skipping ${lead.name} — Ali emailed in last 48h (Maya/Ali coordination)`);
+              console.log(`[HotLead] Skipping ${redactForLogs(lead.name)} — Ali emailed in last 48h (Maya/Ali coordination)`);
               continue;
             }
           } catch { /* non-critical — proceed with call if check fails */ }
@@ -2261,12 +3155,12 @@ export function startScheduler(): void {
                 goal: 'Book 30-min strategy call with Business Development team',
               },
             }).catch(() => {});
-            console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
+            console.log(`[HotLead] 📞 Called ${redactForLogs(lead.name)} (${redactForLogs(lead.phone)})`);
             callsToday++;
             await settingsSvc.setSetting('hot_lead_calls_today', String(callsToday));
           }
         } catch (err: any) {
-          console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
+          console.warn(`[HotLead] Failed to call ${redactForLogs(lead.name)}: ${err.message}`);
         }
 
         // 60s between calls — spread calls throughout the cycle
@@ -2444,6 +3338,59 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
+  // ── Cron Job Health Monitor (BC #10099862873 P0, every 15 min, 24/7) ───────
+  // Extends alerting beyond the single scheduler-heartbeat special case above
+  // to every cron-triggered AiAgent: error-rate spikes and missed-runs, using
+  // run/error data instrumentCronJob() already collects. Runs 24/7 (unlike the
+  // business-hours health monitor) since a silently-failing job doesn't wait
+  // for business hours to matter. Not itself business-critical enough to run
+  // through instrumentCronJob's AiAgent lookup — it's a monitor over the
+  // registry, not a registry entry.
+  cron.schedule('10,25,40,55 * * * *', () => {
+    const { checkAllCronJobHealth } = require('./cronHealthAlertService');
+    checkAllCronJobHealth().catch((err: any) => {
+      console.error('[CronHealthAlert] Cron job health check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Cron job health monitor: every 15 min (24/7, error-rate + missed-run alerts)');
+
+  // ── Dashboard Threshold Watcher (BC #10099862873 P1, every 15 min, 24/7) ───
+  // Converts the Trust Center + Ingest Logs dashboards from pull-only to
+  // push-alerts, reusing their existing computed data (no new dashboard logic).
+  cron.schedule('12,27,42,57 * * * *', () => {
+    const { checkDashboardThresholds } = require('./dashboardThresholdWatcherService');
+    checkDashboardThresholds().catch((err: any) => {
+      console.error('[DashboardThresholdWatcher] Dashboard threshold check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Dashboard threshold watcher: every 15 min (24/7, Trust Center + Ingest Logs)');
+
+  // ── Error-Class Spike Watcher (BC #10099862873 P1, every 15 min, 24/7) ─────
+  // Evaluates the classified ai_events rows now emitted by auth middleware +
+  // apollo/ghl/basecamp/synthflow wrappers for a failure-rate spike per event
+  // type, and alerts through the shared alert service.
+  cron.schedule('13,28,43,58 * * * *', () => {
+    const { checkErrorClassSpikes } = require('./errorSpikeAlertService');
+    checkErrorClassSpikes().catch((err: any) => {
+      console.error('[ErrorSpikeAlert] Error-class spike check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Error-class spike watcher: every 15 min (24/7, auth + external API failure spikes)');
+
+  // ── Build-log -> social drafter (BC #9985689786, weekly, Mon 6AM CT = 11:00 UTC) ──
+  // Scans completed Tier-A build weeks and AI-drafts a #Colaberry post per
+  // project/week. Draft-only — never auto-posts (see buildLogDraftService.ts).
+  cron.schedule('0 11 * * 1', () => {
+    instrumentCronJob('BuildLogDraftGenerator', async () => {
+      const { generateBuildLogDraftsForCompletedWeeks } = require('./buildLogDraftService');
+      const result = await generateBuildLogDraftsForCompletedWeeks();
+      console.log(`[BuildLogDraft] scanned=${result.scanned} drafted=${result.drafted} skipped=${result.skipped} failed=${result.failed}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Build-log draft generator error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Build-log social drafter: weekly Mon 6AM CT (11:00 UTC)');
+
   // ── Cold Outbound startup reactivation ──────────────────────────────
   // Cold Outbound reverts to draft on container restart — fix on startup
   (async () => {
@@ -2467,14 +3414,12 @@ export function startScheduler(): void {
   // Autonomous ingest insights — regenerate suggestion cards every 6 hours.
   // Never auto-applies; an admin must click Apply unless AUTONOMOUS_AUTOAPPLY=true.
   cron.schedule('0 */6 * * *', () => {
-    (async () => {
-      try {
-        const { runInsightsJob } = require('../jobs/autonomousIngestInsights');
-        await runInsightsJob();
-      } catch (err: any) {
-        console.error('[Scheduler] Autonomous ingest insights error:', err?.message);
-      }
-    })();
+    instrumentCronJob('AutonomousIngestInsights', async () => {
+      const { runInsightsJob } = require('../jobs/autonomousIngestInsights');
+      await runInsightsJob();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Autonomous ingest insights error:', err?.message);
+    });
   });
 
   // Anthropic content watcher — nightly at 02:00 UTC.
@@ -2519,6 +3464,25 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Anthropic curriculum impact agent: nightly at 03:00 UTC');
 
+  // Anthropic catalog scraper (course rows) — weekly, Monday 01:45 UTC.
+  // Scrapes each tracked course page's outline (curriculum_course_links where
+  // provider='skilljar'), diffs the SHA-256 against anthropic_content_registry,
+  // and flags change_detected on any course whose outline or link shifted. Runs
+  // before the 02:00 content watcher and 02:30 L2 detector so that night's
+  // detector + 03:00 L3 impact agent pick up the flagged course rows in the same
+  // cycle. Falls back to the hardcoded KNOWN_CATALOG when curriculum_course_links
+  // is unavailable, so a scrape/DB failure never leaves course links unwatched.
+  cron.schedule('45 1 * * 1', () => {
+    instrumentCronJob('AnthropicCatalogScraper', async () => {
+      const { runCatalogScraper } = require('./anthropicCatalogScraper');
+      const result = await runCatalogScraper();
+      console.log(`[Scheduler] AnthropicCatalogScraper: source=${result.source} found=${result.courses_found} created=${result.created} updated=${result.updated} unchanged=${result.unchanged} errors=${result.errors}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Anthropic catalog scraper error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Anthropic catalog scraper: weekly Monday 01:45 UTC');
+
   // Family Command Center daily + weekly: moved to host crontab on the VPS using
   // /opt/colaberry-accelerator/scripts/cron-env-wrapper.sh (CC-20260609-em4f).
   // Rationale: the raw .js script files in backend/src/scripts/ are NOT copied
@@ -2529,6 +3493,71 @@ export function startScheduler(): void {
   // rebuilds. Crontab entries to register on the VPS:
   //   0 11 * * * (every day, 6 AM CT)        -> sendFamilyCommandCenterDaily.js
   //   0 13 * * 1 (Monday, 8 AM CT)           -> sendFamilyCommandCenterDaily.js --weekly
+
+  // ── Portfolio GitHub Sync Agent (daily 2:15 AM UTC) ──────────────────────────
+  // Batch-syncs GitHub activity (commits_last_7d, open_prs, total_stars,
+  // contribution_graph_json) for every active enrollment with a connected repo.
+  // Webhook-triggered syncs already handle push events in real time; this job
+  // is the fallback that catches students who haven't pushed recently or whose
+  // webhooks missed. Each student's sync failure is isolated — one error does
+  // not abort the others.
+  cron.schedule('15 2 * * *', () => {
+    instrumentCronJob('PortfolioGitHubSyncAgent', async () => {
+      const { syncAllActiveStudentGitHubActivity } = await import('./githubIntegrationService');
+      const result = await syncAllActiveStudentGitHubActivity();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'portfolio_github_sync_complete',
+        outcome: 'success',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Portfolio GitHub sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Portfolio GitHub sync agent: daily at 02:15 UTC');
+
+  // ── Architect Evaluation Agent (weekly, Saturday 06:00 UTC) ──────────────────
+  // Evaluates each active student's project progress using ProjectDna +
+  // StudentGithubActivity + lesson completion. Upserts one row per
+  // (enrollment_id, week_number) in architect_evaluations — safe to re-run.
+  cron.schedule('0 6 * * 6', () => {
+    instrumentCronJob('ArchitectEvaluationAgent', async () => {
+      const { runArchitectEvaluationAgent } = await import('./agents/architectEvaluationAgent');
+      const result = await runArchitectEvaluationAgent();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'architect_evaluation_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Architect evaluation error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
+
+  // ── Community Digest (daily, 08:00 UTC) ──────────────────────────────────────
+  // Deduped per (member, date) via CommunityDigestLog — safe to re-run; a
+  // second fire the same day is a no-op for every member already sent.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('CommunityDigest', async () => {
+      const { runDailyDigest } = await import('./communityDigestService');
+      const result = await runDailyDigest();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'community_digest_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Community digest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Community digest: daily at 08:00 UTC');
 }
 
 // ---------------------------------------------------------------------------

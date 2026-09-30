@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import CurriculumLesson from '../models/CurriculumLesson';
 import { MiniSection, PromptTemplate, ProgramBlueprint } from '../models';
 import CurriculumModule from '../models/CurriculumModule';
@@ -8,7 +9,7 @@ import { buildCompositePromptForSimulation } from './contentGenerationService';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (!_openai) _openai = getInstrumentedOpenAI({ workflow_id: 'test_simulation' });
   return _openai;
 }
 const MODEL = process.env.AI_MODEL || 'gpt-4o-mini';

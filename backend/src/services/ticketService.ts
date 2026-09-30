@@ -1,7 +1,39 @@
+// CLAUDE.md size-ceiling disclosure: this file was already over the 500-line hard
+// ceiling (515) before the Agent Ticket Standard change (2026-08-18) touched it.
+// That change extracted its own new gate logic in full (enforceReportsToGate(),
+// ~30 lines) into ticketCreatorReportsToResolver.ts rather than adding it inline —
+// the file's net growth from this change is ~21 lines, not the ~40 the gate would
+// have cost inline. Closing the REMAINING pre-existing overage would mean
+// extracting getTicketById()/getTicketsForBoard() (the two largest functions
+// here, both carrying careful, recent, unrelated fixes — see their own header
+// comments) into a query-service module, mirroring getTicketStats()'s own past
+// extraction into ticketStatsService.ts. Deliberately NOT done as part of this
+// change (CLAUDE.md Scope Lock: logged here as a real, actionable follow-up
+// proposal, not silently expanded into this change's already-large diff, and not
+// silently left unacknowledged either).
+import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { Ticket, TicketActivity } from '../models';
 import type { TicketStatus, TicketPriority, TicketType, TicketActorType } from '../models/Ticket';
 import type { AgentExecutionResult } from './agents/types';
+import { emitLedgerEventSafe } from './workLedger/emitLedgerEventSafe';
+import { tryReuseStudentSupportTicket } from './ticketStudentSupportReuse';
+import {
+  resolveActorDisplayName,
+  resolveActorDisplayNamesBatch,
+  actorRefKey,
+} from './actorIdentity/resolveActorDisplayName';
+import { buildTicketAutoCheckResolver } from './ticketAutoCheckService';
+import { enforceReportsToGate } from './ticketCreatorReportsToResolver';
+import { recordAutoDecisionOnStatusChange } from './evidence/ticketDecisionAutoRecorder';
+// Ticket KPI filter-scoping fix (2026-08-25) — TicketFilters + its where-clause
+// builder live in ticketFilters.ts (a real circular-dependency risk with
+// ticketStatsService.ts otherwise — see that file's own header comment for
+// why). Re-exported below so every existing importer of `TicketFilters` from
+// this module keeps working unchanged.
+import type { TicketFilters } from './ticketFilters';
+import { buildTicketFilterWhere } from './ticketFilters';
+export type { TicketFilters } from './ticketFilters';
 
 // ── State Machine ────────────────────────────────────────────────────────
 
@@ -40,22 +72,30 @@ export interface CreateTicketData {
   due_date?: Date | null;
 }
 
-export interface TicketFilters {
-  status?: TicketStatus | TicketStatus[];
-  priority?: TicketPriority | TicketPriority[];
-  type?: TicketType | TicketType[];
-  source?: string;
-  assigned_to_id?: string;
-  parent_ticket_id?: string | null;
-  entity_type?: string;
-  entity_id?: string;
-}
-
 // ── Create ───────────────────────────────────────────────────────────────
 
 export async function createTicket(data: CreateTicketData) {
-  // Deduplication: check for existing open ticket on same entity
-  if (data.entity_type && data.entity_id && data.type) {
+  // Agent Ticket Standard — "every ticket must have a home" (Ali, live,
+  // 2026-08-18). Every non-human creator must resolve to a real human it
+  // reports to, BEFORE any DB write — a hard, structural rejection (throws
+  // TicketCreatorNotReportableError), never a silent no-op or a warning. See
+  // ticketCreatorReportsToResolver.ts's enforceReportsToGate() for the full
+  // resolution logic (including plan-audit cycle 1's ai_staff-vs-agent_name
+  // finding) — extracted out of this already-oversize file per CLAUDE.md's
+  // size-ceiling rule.
+  const reportsToOrgMemberId = await enforceReportsToGate(data.created_by_type, data.created_by_id);
+
+  // "One ticket per person per hour" (Ali, live feedback) — the student_support
+  // reuse/reopen rule lives in ticketStudentSupportReuse.ts (extracted so this
+  // function stays under CLAUDE.md's size ceiling); every other ticket type
+  // keeps the original, unbounded-while-open dedup below completely unchanged.
+  if (data.type === 'student_support') {
+    const reused = await tryReuseStudentSupportTicket(data);
+    if (reused) return reused;
+  } else if (data.entity_type && data.entity_id && data.type) {
+    // Original behavior, unchanged for every ticket type other than
+    // student_support: reuse any still-open ticket on the same entity, with
+    // no time window.
     const existing = await Ticket.findOne({
       where: {
         entity_type: data.entity_type,
@@ -67,8 +107,19 @@ export async function createTicket(data: CreateTicketData) {
     if (existing) return existing;
   }
 
+  // Agent Ticket Standard — stamp the resolved human as the real assignee, but
+  // only when the caller didn't already pass an explicit assigned_to_* (e.g.
+  // ensureAgentTicketForRoom()'s own `assigned_to_type:'ai_staff'` for Reese's
+  // room tickets) — this resolver adds a real assignee where none was specified,
+  // it never overrides a caller's deliberate explicit choice.
+  const assignedToFromReportsTo =
+    reportsToOrgMemberId && !data.assigned_to_type && !data.assigned_to_id
+      ? { assigned_to_type: 'org_member' as const, assigned_to_id: reportsToOrgMemberId }
+      : {};
+
   const ticket = await Ticket.create({
     ...data,
+    ...assignedToFromReportsTo,
     status: data.status || 'backlog',
     priority: data.priority || 'medium',
     type: data.type || 'task',
@@ -83,6 +134,22 @@ export async function createTicket(data: CreateTicketData) {
     action: 'created',
     to_value: ticket.status,
     metadata: { title: ticket.title, priority: ticket.priority, type: ticket.type },
+  });
+
+  await emitLedgerEventSafe({
+    ticketId: ticket.id,
+    traceId: crypto.randomUUID(),
+    actorType: data.created_by_type,
+    actorId: data.created_by_id,
+    intent: 'ticket.create',
+    domain: 'tickets',
+    actionClass: 'create',
+    targetType: 'ticket',
+    targetId: ticket.id,
+    idempotencyKey: `ticket-created:${ticket.id}`,
+    result: 'success',
+    sourceRecordType: 'ticket',
+    sourceRecordId: ticket.id,
   });
 
   return ticket;
@@ -110,7 +177,7 @@ export async function updateTicketStatus(
 
   await ticket.update(updates);
 
-  await TicketActivity.create({
+  const activity = await TicketActivity.create({
     ticket_id: ticketId,
     actor_type: actorType,
     actor_id: actorId,
@@ -119,10 +186,55 @@ export async function updateTicketStatus(
     to_value: newStatus,
   });
 
+  await emitLedgerEventSafe({
+    ticketId,
+    traceId: crypto.randomUUID(),
+    actorType,
+    actorId,
+    intent: 'ticket.status_change',
+    domain: 'tickets',
+    actionClass: 'status_change',
+    targetType: 'ticket',
+    targetId: ticketId,
+    idempotencyKey: `ticket-status-change:${activity.id}`,
+    result: 'success',
+    beforeStateRef: fromStatus,
+    afterStateRef: newStatus,
+    sourceRecordType: 'ticket_activity',
+    sourceRecordId: activity.id,
+  });
+
+  // ProofDesk Decisions-tab gap fix (2026-08-23) — see
+  // ticketDecisionAutoRecorder.ts's header comment for the full rationale.
+  // Awaited (unlike the two fire-and-forget hooks below) since it's a single
+  // fast local insert, not a heavier scheduling call — awaiting it means the
+  // Decisions tab is guaranteed consistent the moment this function returns.
+  // Doubly failure-isolated: the callee never throws by its own contract, and
+  // this call site catches anyway — the same defense-in-depth the other two
+  // hooks below get via their own `.catch()`, so a future change to either
+  // layer can't silently turn a decision-record failure into a broken status
+  // transition.
+  try {
+    await recordAutoDecisionOnStatusChange(ticket as any, ticketId, fromStatus, newStatus, actorType, actorId);
+  } catch (err: any) {
+    console.warn(`[ticketService] recordAutoDecisionOnStatusChange threw unexpectedly for ticket ${ticketId}:`, err.message);
+  }
+
   // Learning loop: when a strategic ticket reaches 'done', trigger outcome tracking
   if (newStatus === 'done' && (ticket as any).type === 'strategic' && (ticket as any).source === 'cory') {
     import('./reporting/coryDecisionEngine')
       .then((engine) => engine.trackExecutionOutcome(ticketId))
+      .catch(() => { /* non-critical */ });
+  }
+
+  // ProofDesk Outcomes & Learning (Milestone 5, spec 20.4): every ticket reaching
+  // 'done' — not just cory strategic tickets — gets a 7-day recurrence-check
+  // follow-up scheduled. Non-blocking, same failure-isolation contract as the cory
+  // hook above: a failure here must never affect this function's own success/failure
+  // or return value.
+  if (newStatus === 'done') {
+    import('./outcomes/outcomeMeasurementService')
+      .then((svc) => svc.scheduleOutcomeMeasurement(ticketId))
       .catch(() => { /* non-critical */ });
   }
 
@@ -213,6 +325,22 @@ export async function addAgentOutput(
 
   await ticket.update({ updated_at: new Date() } as any);
 
+  await emitLedgerEventSafe({
+    ticketId,
+    traceId: crypto.randomUUID(),
+    actorType: 'agent',
+    actorId: agentName,
+    intent: 'ticket.agent_output',
+    domain: 'tickets',
+    actionClass: 'agent_output',
+    targetType: 'ticket',
+    targetId: ticketId,
+    idempotencyKey: `ticket-agent-output:${activity.id}`,
+    result: output.errors && output.errors.length > 0 ? 'failure' : 'success',
+    sourceRecordType: 'ticket_activity',
+    sourceRecordId: activity.id,
+  });
+
   return activity;
 }
 
@@ -232,28 +360,62 @@ export async function getTicketById(ticketId: string) {
     order: [['created_at', 'ASC']],
   });
 
-  return { ticket, activities, subTasks };
+  // Display-layer enrichment only — actor_id/actor_type stay exactly as persisted.
+  // Ali's live feedback ("You fixed the name in part of the ticket, but not all the
+  // ticket") named two specific surfaces still showing a raw actor UUID after the
+  // prior run fixed titles/descriptions: the Technical tab's "Assigned" field and its
+  // activity-feed lines. Both read from this response, so both are resolved here,
+  // once, server-side — matching summaryGeneratorService.ts's own pattern of
+  // generating human-facing text on the backend rather than pushing N resolution
+  // calls onto the frontend.
+  const assignedToDisplayName =
+    ticket.assigned_to_type && ticket.assigned_to_id
+      ? await resolveActorDisplayName(ticket.assigned_to_type, ticket.assigned_to_id)
+      : null;
+
+  // Ticket Board UX fixes (2026-08-17) — the SAME two additive fields
+  // getTicketsForBoard() now returns, so the detail modal can show the same
+  // real creator name and honest auto-check disclosure the board card does,
+  // not a second, narrower picture. createdByDisplayName reuses this file's
+  // established resolveActorDisplayName() rather than a new lookup;
+  // buildTicketAutoCheckResolver() is cheap to build for a single ticket (its
+  // own internal batching is aimed at board-sized N, not a cost concern here).
+  const [createdByDisplayName, autoCheckResolver] = await Promise.all([
+    resolveActorDisplayName(ticket.created_by_type, ticket.created_by_id),
+    buildTicketAutoCheckResolver(),
+  ]);
+  const autoCheck = autoCheckResolver({
+    created_by_type: ticket.created_by_type,
+    created_by_id: ticket.created_by_id,
+    type: ticket.type,
+    source: ticket.source,
+    entity_type: ticket.entity_type,
+    status: ticket.status,
+  });
+
+  // Resolved concurrently (Promise.all), not one-at-a-time, so a ticket with a long
+  // activity history doesn't pay an N-query waterfall for what can run in parallel.
+  const activitiesWithNames = await Promise.all(
+    activities.map(async (activity) => ({
+      ...activity.toJSON(),
+      actor_display_name: await resolveActorDisplayName(activity.actor_type, activity.actor_id),
+    })),
+  );
+
+  return {
+    ticket: {
+      ...ticket.toJSON(),
+      assigned_to_display_name: assignedToDisplayName,
+      created_by_display_name: createdByDisplayName,
+      auto_check: autoCheck,
+    },
+    activities: activitiesWithNames,
+    subTasks,
+  };
 }
 
 export async function getTicketsForBoard(filters?: TicketFilters) {
-  const where: Record<string, any> = {};
-
-  if (filters?.status) {
-    where.status = Array.isArray(filters.status) ? { [Op.in]: filters.status } : filters.status;
-  }
-  if (filters?.priority) {
-    where.priority = Array.isArray(filters.priority) ? { [Op.in]: filters.priority } : filters.priority;
-  }
-  if (filters?.type) {
-    where.type = Array.isArray(filters.type) ? { [Op.in]: filters.type } : filters.type;
-  }
-  if (filters?.source) where.source = filters.source;
-  if (filters?.assigned_to_id) where.assigned_to_id = filters.assigned_to_id;
-  if (filters?.entity_type) where.entity_type = filters.entity_type;
-  if (filters?.entity_id) where.entity_id = filters.entity_id;
-  if (filters?.parent_ticket_id !== undefined) {
-    where.parent_ticket_id = filters.parent_ticket_id;
-  }
+  const where = buildTicketFilterWhere(filters);
 
   const tickets = await Ticket.findAll({
     where,
@@ -261,6 +423,42 @@ export async function getTicketsForBoard(filters?: TicketFilters) {
       ['priority', 'ASC'],
       ['created_at', 'DESC'],
     ],
+  });
+
+  // Ticket Board UX fixes (2026-08-17) — real creator names + honest auto-check
+  // timing, additive on every ticket the board/list endpoints return. The
+  // actor-name batch is deduped by (created_by_type, created_by_id) — verified
+  // live at 32 distinct pairs across 16,119 production tickets — so this never
+  // pays a per-ticket DB round trip regardless of table size. The auto-check
+  // resolver function is built ONCE for the whole request (fetches the 6
+  // resolvers' live enabled/schedule state a single time), then applied
+  // per-ticket as a cheap, synchronous, in-memory check.
+  const [displayNameByActor, autoCheckResolver] = await Promise.all([
+    resolveActorDisplayNamesBatch(
+      tickets.map((t) => ({ actorType: t.created_by_type, actorId: t.created_by_id })),
+    ),
+    buildTicketAutoCheckResolver(),
+  ]);
+
+  const enrichedTickets = tickets.map((t) => {
+    // Mutate-and-return, not an object spread: TypeScript drops a
+    // Record<string, any>'s index signature when it's spread into a fresh
+    // object literal alongside explicit properties (a known compiler
+    // quirk — the result narrows to JUST the explicit properties, silently
+    // losing every field from `plain`). Assigning onto `plain` directly
+    // keeps its type as Record<string, any> throughout, so downstream code
+    // (the status-bucket grouping below) can still read t.status.
+    const plain = t.toJSON() as Record<string, any>;
+    plain.created_by_display_name = displayNameByActor.get(actorRefKey(t.created_by_type, t.created_by_id)) ?? null;
+    plain.auto_check = autoCheckResolver({
+      created_by_type: t.created_by_type,
+      created_by_id: t.created_by_id,
+      type: t.type,
+      source: t.source,
+      entity_type: t.entity_type,
+      status: t.status,
+    });
+    return plain;
   });
 
   // Group by status for Kanban
@@ -273,31 +471,20 @@ export async function getTicketsForBoard(filters?: TicketFilters) {
     cancelled: [],
   };
 
-  for (const t of tickets) {
-    board[t.status]?.push(t);
+  for (const t of enrichedTickets) {
+    board[t.status as TicketStatus]?.push(t);
   }
 
   return board;
 }
 
-export async function getTicketStats() {
-  const tickets = await Ticket.findAll({ attributes: ['status', 'priority', 'type'], raw: true });
-
-  const byStatus: Record<string, number> = {};
-  const byPriority: Record<string, number> = {};
-  const byType: Record<string, number> = {};
-
-  for (const t of tickets) {
-    byStatus[t.status] = (byStatus[t.status] || 0) + 1;
-    byPriority[t.priority] = (byPriority[t.priority] || 0) + 1;
-    byType[t.type] = (byType[t.type] || 0) + 1;
-  }
-
-  const openCount = (byStatus.backlog || 0) + (byStatus.todo || 0) +
-    (byStatus.in_progress || 0) + (byStatus.in_review || 0);
-
-  return { total: tickets.length, open: openCount, byStatus, byPriority, byType };
-}
+// Ticket Board Performance fix (2026-08-18) — getTicketStats() moved to its own
+// module, ticketStatsService.ts (this file was already over CLAUDE.md's 500-line
+// hard ceiling; stats aggregation is a clean, separable responsibility from the
+// ticket CRUD/state-machine logic that makes up the rest of this file).
+// Re-exported here so existing callers (ticketRoutes.ts) keep working unchanged
+// — no consumer-facing contract break.
+export { getTicketStats } from './ticketStatsService';
 
 // ── Sub-Tasks ────────────────────────────────────────────────────────────
 

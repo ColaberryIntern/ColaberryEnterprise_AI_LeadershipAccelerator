@@ -1,21 +1,5 @@
 @import './tokens.css';
 
-:root {
-  --color-primary: #1a365d;
-  --color-primary-light: #2b6cb0;
-  --color-secondary: #e53e3e;
-  --color-accent: #38a169;
-  --color-bg: #ffffff;
-  --color-bg-alt: #f7fafc;
-  --color-text: #2d3748;
-  --color-text-light: #718096;
-  --color-border: #e2e8f0;
-  --font-heading: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-body: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --color-warning-bg: #fff3cd;
-  --max-width: 1200px;
-}
-
 * {
   margin: 0;
   padding: 0;

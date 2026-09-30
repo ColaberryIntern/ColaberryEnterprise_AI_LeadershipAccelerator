@@ -24,8 +24,8 @@
 - **Today** (reference): 2026-05-31
 - **Anthropic Partner Network deadline:** 2026-06-12 (HARD GATE — free CCA-F + "powered by Anthropic" branding both depend on this)
 - **Enrollment opens:** 2026-07-10 (Friday) — `LAUNCH DAY`
-- **Cohort 1 kickoff:** 2026-07-13 (Monday)
-- **Cohort 1 ends + Architect Expo:** ~2026-10-02
+- **Cohort 1 orientation:** 2026-07-23 (Thursday); **classes start:** 2026-07-27 (Monday)
+- **Cohort 1 ends + Architect Expo:** ~2026-10-16
 
 **41 days from today to launch.** Every plan is built backward from 2026-07-11.
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import express from 'express';
-import { handlePaySimpleWebhook } from '../controllers/webhookController';
+import { handlePaySimpleWebhook, handleZoomWebhook } from '../controllers/webhookController';
 import { handleMandrillWebhook, handleMandrillWebhookHead, handleMandrillInbound } from '../controllers/mandrillWebhookController';
 import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
@@ -9,8 +9,33 @@ import { handleAdvisoryWebhook, handleAdvisoryWebhookHead } from '../controllers
 
 const router = Router();
 
-// PaySimple payment webhook — JSON body
-router.post('/api/webhook/paysimple', express.json(), handlePaySimpleWebhook);
+// PaySimple payment webhook — raw body required for HMAC-SHA256 signature
+// validation, same reasoning as the GitHub webhook below. express.json()
+// (the previous parser here) hands the handler an already-parsed object,
+// which can never be re-serialized back into byte-identical JSON for
+// signature verification -- found live 2026-07-30 rejecting 100% of real
+// PaySimple webhook calls.
+//
+// type: () => true (not 'application/json' as used below for GitHub) --
+// found live 2026-07-31 that this route's Content-Type matcher was itself
+// the second bug: PaySimple's real webhook calls don't reliably arrive with
+// an exact 'application/json' Content-Type, so express.raw()'s type filter
+// silently skipped raw-body capture, req.body fell through to Express's
+// default '{}', and every real call failed signature verification again --
+// this time with a *different* underlying cause than the original
+// JSON.stringify(req.body) bug, but the identical-looking symptom. GitHub's
+// webhook sender is reliable about its Content-Type so its narrower matcher
+// is left as-is; PaySimple's is not, so this route now captures the raw
+// body unconditionally regardless of what Content-Type (if any) arrives.
+router.post('/api/webhook/paysimple', express.raw({ type: () => true }), handlePaySimpleWebhook);
+
+// Zoom webhook (recording.completed + the one-time endpoint.url_validation
+// handshake) — raw body required for the same HMAC-signature reasons as
+// PaySimple above, and type: () => true from day one rather than
+// 'application/json': the PaySimple incident above (found live, twice) is
+// exactly the failure mode of assuming a webhook sender's Content-Type is
+// reliable. No reason to re-discover that live for Zoom too.
+router.post('/api/webhook/zoom', express.raw({ type: () => true }), handleZoomWebhook);
 
 // Mandrill webhook — uses URL-encoded body (mandrill_events=<JSON>)
 router.head('/api/webhook/mandrill', handleMandrillWebhookHead);
@@ -32,5 +57,113 @@ router.post('/api/webhook/apollo/phone-reveal', express.json(), handleApolloPhon
 // Advisory sync webhook — Agent Foundry (AI Workforce Designer) events
 router.head('/api/webhooks/advisory', handleAdvisoryWebhookHead);
 router.post('/api/webhooks/advisory', express.json(), handleAdvisoryWebhook);
+
+// GitHub push webhook — raw body required for HMAC-SHA256 signature validation
+router.post('/api/webhook/github', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = req.headers['x-hub-signature-256'] as string | undefined;
+  if (!signature) { res.status(401).json({ error: 'Missing X-Hub-Signature-256' }); return; }
+
+  const { validateWebhookSignature, findRepoBinding, resolveProjectForPush, syncStudentActivity } = await import('../services/githubIntegrationService');
+
+  // PARSE BEFORE VERIFY — deliberately, and safely.
+  //
+  // Secrets are now PER REPO (students register their own hooks, so the secret
+  // has to be shown to them, and one shared secret shown to thirty students lets
+  // any one of them forge pushes for all the others). Choosing which secret to
+  // verify against therefore requires knowing which repo this is, and the only
+  // place that is written down is the body.
+  //
+  // This is the standard multi-tenant webhook shape and it is safe under one
+  // strict condition, held below: the parsed body is used ONLY to select a key.
+  // Nothing is read from it, nothing is written, and no side effect of any kind
+  // fires until the signature has been verified over the RAW BYTES. An attacker
+  // choosing which key we check against does not help them: they still have to
+  // produce a valid HMAC under it.
+  let payload: any;
+  try {
+    payload = JSON.parse((req.body as Buffer).toString('utf-8'));
+  } catch {
+    res.status(400).json({ error: 'Invalid JSON payload' });
+    return;
+  }
+
+  const owner: string | undefined = payload.repository?.owner?.login;
+  const repo: string | undefined = payload.repository?.name;
+
+  const { resolveWebhookSecret } = await import('../services/sbp/repoConnect/webhookSecretService');
+  const secret = await resolveWebhookSecret(owner ?? '', repo ?? '');
+
+  // No secret at all — neither per-repo nor shared — is a REJECT, never a skip.
+  // An unconfigured platform must fail closed on a signature check.
+  if (!secret || !validateWebhookSignature(req.body as Buffer, signature, secret)) {
+    res.status(401).json({ error: 'Invalid signature' });
+    return;
+  }
+
+  if (owner && repo) {
+    const binding = await findRepoBinding(owner, repo);
+    const enrollmentId = binding?.enrollmentId ?? null;
+    if (binding && enrollmentId) {
+      // 1. Sync activity stats (commits/PRs/contribution graph)
+      syncStudentActivity(enrollmentId).catch((err: Error) => {
+        console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_webhook_sync_failed', outcome: 'failure', error_class: err.constructor.name, context: { message: err.message, owner, repo } }));
+      });
+
+      // 2. Keyword+AI match for students with Capability-based requirements.
+      // Credited to the project this REPO is bound to, never to whichever of the
+      // student's projects is active: with two projects and two repos those are
+      // different things half the time. See resolveProjectForPush.
+      const project = await resolveProjectForPush(binding);
+      if (project) {
+        const { matchRecentCommitsToBPs } = await import('../services/commitDrivenMatcher');
+        matchRecentCommitsToBPs(enrollmentId, project.id).catch((err: Error) => {
+          console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_webhook_commit_match_failed', outcome: 'failure', error_class: err.constructor.name, context: { message: err.message, enrollment_id: enrollmentId } }));
+        });
+
+        // 3. Key-match for students on the DNA wizard path (capability_id = null requirements)
+        const { verifyRequirementsFromCommits } = await import('../services/githubIntegrationService');
+        const commits: Array<{ message: string }> = Array.isArray(payload.commits) ? payload.commits : [];
+        const headSha: string = payload.head_commit?.id ?? '';
+        verifyRequirementsFromCommits(project.id, commits, headSha).catch((err: Error) => {
+          console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_webhook_key_verify_failed', outcome: 'failure', error_class: err.constructor.name, context: { message: err.message, enrollment_id: enrollmentId } }));
+        });
+      }
+    }
+
+    // 4. STORY VERIFICATION — the build pipeline's completion loop.
+    //
+    // Deliberately OUTSIDE the `enrollmentId` branch above. That lookup is
+    // enrollment-keyed and predates project-scoped repos (FR-037); story
+    // verification resolves the repo to a PROJECT on its own, so a repo bound to
+    // a project but not matched by the legacy path still verifies.
+    //
+    // Fire-and-forget, like its three siblings, because GitHub counts a slow
+    // response against the endpoint's health and the work here includes several
+    // GitHub reads. The handler never throws and classifies its own failures.
+    const { handlePushForVerification } = await import('../services/sbp/verification/githubPushVerification');
+    handlePushForVerification({
+      deliveryId: String(req.headers['x-github-delivery'] ?? ''),
+      event: String(req.headers['x-github-event'] ?? 'push'),
+      owner,
+      repo,
+      // Used ONLY to answer "was this push entirely our own bot?". Nothing that
+      // decides credit is read from the payload — see the module header.
+      commits: Array.isArray(payload.commits) ? payload.commits : [],
+    }).catch((err: Error) => {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+        event: 'github_webhook_story_verification_failed', outcome: 'failure',
+        error_class: err?.constructor?.name ?? 'Error',
+        context: { message: err?.message, owner, repo },
+      }));
+    });
+  }
+
+  // 200 regardless of what the work above concludes. GitHub retries non-2xx,
+  // and a retry driven by our own downstream failure would re-read the repo
+  // without changing the outcome. Everything that could go wrong past this
+  // point is logged with a correlation id instead.
+  res.status(200).json({ ok: true });
+});
 
 export default router;

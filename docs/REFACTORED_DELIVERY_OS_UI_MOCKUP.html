@@ -1,0 +1,510 @@
+<title>Delivery OS Mockup</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1; --leaf:#77BB4A;
+    --bg:#ffffff; --bg-alt:#f7fafc; --text:#2d3748; --text-light:#718096; --border:#e2e8f0;
+    --success:#10b981; --danger:#ef4444; --warning:#f59e0b; --info:#3b82f6; --purple:#6366f1; --muted:#9ca3af;
+    --radius-sm:4px; --radius-md:8px; --radius-lg:12px; --radius-full:9999px;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.05); --shadow-card:0 1px 3px rgba(0,0,0,.12); --shadow-md:0 4px 6px rgba(0,0,0,.1);
+    --font:'Segoe UI',system-ui,-apple-system,sans-serif; --mono:'Consolas','Monaco','Courier New',monospace;
+    --sidebar:240px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--text);background:var(--bg-alt);line-height:1.6;font-size:14px}
+  h1,h2,h3,h4{margin:0;line-height:1.25;font-weight:700}
+  a{color:var(--cherry-deep)}
+  code{font-family:var(--mono);font-size:.8125rem;background:var(--bg-alt);padding:1px 5px;border-radius:var(--radius-sm)}
+
+  /* ---------- page chrome ---------- */
+  .doc-head{background:#fff;border-bottom:1px solid var(--border);padding:22px 24px}
+  .doc-wrap{max-width:1240px;margin:0 auto}
+  .doc-head h1{font-size:1.35rem}
+  .doc-head p{margin:6px 0 0;color:var(--text-light);max-width:70ch}
+  .stamp{display:inline-block;background:var(--cherry-bg);color:var(--cherry-deep);border:1px solid #f8c9cc;
+    font-size:.6875rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:var(--radius-full)}
+
+  .switch{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+  .switch button{font-family:inherit;font-size:.8125rem;font-weight:600;cursor:pointer;padding:9px 16px;border-radius:var(--radius-full);
+    border:1px solid var(--border);background:#fff;color:var(--text)}
+  .switch button[aria-pressed="true"]{background:var(--cherry);border-color:var(--cherry);color:#fff}
+
+  /* ---------- app shell ---------- */
+  .shell{max-width:1240px;margin:24px auto 60px;padding:0 16px}
+  .app{display:grid;grid-template-columns:var(--sidebar) 1fr;background:#fff;border:1px solid var(--border);
+    border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-card);min-height:620px}
+  @media(max-width:860px){.app{grid-template-columns:1fr}}
+
+  .topbar{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);background:#fff;flex-wrap:wrap}
+  .logo{width:26px;height:26px;border-radius:6px;background:var(--cherry);color:#fff;display:grid;place-items:center;font-weight:800;font-size:.8rem}
+  .crumb{font-weight:600}
+  .crumb span{color:var(--text-light);font-weight:400}
+  .who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:.8125rem;color:var(--text-light)}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--bg-alt);border:1px solid var(--border);display:grid;place-items:center;font-size:.7rem;font-weight:700;color:var(--text)}
+
+  nav.side{border-right:1px solid var(--border);background:#fff;padding:12px 10px}
+  @media(max-width:860px){nav.side{border-right:0;border-bottom:1px solid var(--border);display:flex;overflow-x:auto;gap:6px}}
+  nav.side .grp{font-size:.625rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:10px 10px 6px;font-weight:700}
+  @media(max-width:860px){nav.side .grp{display:none}}
+  nav.side button{display:block;width:100%;text-align:left;font-family:inherit;font-size:.8125rem;font-weight:500;cursor:pointer;
+    padding:8px 10px;border:0;border-radius:var(--radius-md);background:transparent;color:var(--text);white-space:nowrap}
+  nav.side button:hover{background:var(--bg-alt)}
+  nav.side button[aria-current="true"]{background:var(--cherry-bg);color:var(--cherry-deep);font-weight:700}
+
+  main.pane{padding:22px;background:var(--bg-alt)}
+  .screen{display:none}
+  .screen.on{display:block}
+  .ph{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .ph h2{font-size:1.05rem}
+  .ph p{margin:3px 0 0;color:var(--text-light);font-size:.8125rem;max-width:64ch}
+  .ph .act{margin-left:auto;display:flex;gap:8px}
+
+  /* ---------- components ---------- */
+  .btn{font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;padding:7px 13px;border-radius:var(--radius-md);border:1px solid var(--border);background:#fff;color:var(--text)}
+  .btn.p{background:var(--cherry);border-color:var(--cherry);color:#fff}
+  .btn.g{background:var(--success);border-color:var(--success);color:#fff}
+
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(4,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}}
+
+  .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
+  .card>h3{font-size:.8125rem;padding:11px 14px;border-bottom:1px solid var(--border);font-weight:600}
+  .card>.b{padding:14px}
+  .kpi{padding:14px;text-align:center}
+  .kpi .n{font-size:1.5rem;font-weight:800;color:var(--cherry-deep);line-height:1.1}
+  .kpi .l{font-size:.6875rem;color:var(--text-light);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+
+  table{width:100%;border-collapse:collapse;font-size:.8125rem}
+  th{text-align:left;font-size:.6875rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-light);
+    padding:9px 14px;border-bottom:1px solid var(--border);background:var(--bg-alt);font-weight:700}
+  td{padding:10px 14px;border-bottom:1px solid var(--border)}
+  tr:last-child td{border-bottom:0}
+
+  .pill{display:inline-block;font-size:.6875rem;font-weight:700;padding:2px 9px;border-radius:var(--radius-full);white-space:nowrap}
+  .ok{background:rgba(16,185,129,.1);color:#047857}
+  .no{background:rgba(239,68,68,.1);color:#b91c1c}
+  .wait{background:rgba(245,158,11,.12);color:#b45309}
+  .neu{background:var(--bg-alt);color:var(--text-light);border:1px solid var(--border)}
+  .inf{background:rgba(59,130,246,.1);color:#1d4ed8}
+  .pur{background:rgba(99,102,241,.1);color:#4338ca}
+
+  .note{border-left:3px solid var(--cherry);background:var(--cherry-bg);padding:11px 14px;border-radius:0 var(--radius-md) var(--radius-md) 0;font-size:.8125rem}
+  .note b{color:var(--cherry-deep)}
+  .safe{border-left:3px solid var(--success);background:rgba(16,185,129,.06)}
+  .safe b{color:#047857}
+
+  .bar{height:7px;border-radius:var(--radius-full);background:var(--border);overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--leaf)}
+  .bar.red i{background:var(--cherry)}
+
+  .row{display:flex;align-items:center;gap:10px}
+  .row+.row{margin-top:11px}
+  .row .lab{width:150px;font-size:.75rem;color:var(--text-light);flex:none}
+  .row .bar{flex:1}
+  .row .val{width:42px;text-align:right;font-size:.75rem;font-weight:700;flex:none}
+
+  ul.tl{list-style:none;margin:0;padding:0}
+  ul.tl li{position:relative;padding:0 0 14px 20px;border-left:2px solid var(--border);font-size:.8125rem}
+  ul.tl li:last-child{border-left-color:transparent;padding-bottom:0}
+  ul.tl li::before{content:"";position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--cherry)}
+  ul.tl li .t{font-size:.6875rem;color:var(--muted)}
+
+  .mock-frame{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:#fff}
+  .mock-frame .bar-top{display:flex;gap:5px;padding:8px 11px;background:var(--bg-alt);border-bottom:1px solid var(--border)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--border)}
+  .mock-frame .body{padding:26px;text-align:center;color:var(--text-light);font-size:.8125rem}
+  .skel{height:9px;border-radius:var(--radius-full);background:var(--border);margin:9px auto}
+
+  .legend{margin-top:22px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-md);padding:16px}
+  .legend h4{font-size:.8125rem;margin-bottom:8px}
+  .legend ul{margin:0;padding-left:18px;font-size:.8125rem;color:var(--text-light)}
+  .legend li{margin-bottom:5px}
+  .muted{color:var(--text-light)}
+  .sm{font-size:.75rem}
+</style>
+
+<div class="doc-head"><div class="doc-wrap">
+  <span class="stamp">Mockup · not built · for approval</span>
+  <h1 style="margin-top:10px">Refactored AI Delivery OS — the two UI halves</h1>
+  <p>Handoff item 5. These are <b>visual mockups only</b> — no React has been written. The backend for both
+     surfaces is built, merged and tested; this is the layer that was deliberately deferred because a
+     client-facing UI that has never been rendered and looked at is precisely the artifact that reads as
+     finished and is not.</p>
+  <p style="margin-top:8px">Palette, type and spacing are the repo's real tokens from
+     <code>frontend/src/styles/tokens.css</code> — cherry <code>#FB2832</code>, not the navy the
+     <code>baseline-ui</code> skill's table still lists.</p>
+  <div class="switch">
+    <button id="b-client" aria-pressed="true"  onclick="pick('client')">Client Review Room — 8 screens</button>
+    <button id="b-builder" aria-pressed="false" onclick="pick('builder')">Builder Workspace — 8 screens</button>
+  </div>
+</div></div>
+
+<div class="shell">
+
+<!-- =========================== CLIENT =========================== -->
+<div id="app-client">
+  <div class="app">
+    <div class="topbar">
+      <div class="logo">C</div>
+      <div class="crumb">Northgate Transit <span>/ Rider Information Portal</span></div>
+      <span class="pill inf">Client view</span>
+      <div class="who"><span>Dana Whitfield · Client owner</span><div class="avatar">DW</div></div>
+    </div>
+    <nav class="side">
+      <div class="grp">Review room</div>
+      <button aria-current="true" onclick="go('c','overview',this)">Overview</button>
+      <button onclick="go('c','decisions',this)">Decisions</button>
+      <button onclick="go('c','design',this)">Design</button>
+      <button onclick="go('c','preview',this)">Preview</button>
+      <button onclick="go('c','changes',this)">Changes</button>
+      <button onclick="go('c','releases',this)">Releases</button>
+      <button onclick="go('c','results',this)">Results</button>
+      <button onclick="go('c','documents',this)">Documents</button>
+    </nav>
+    <main class="pane">
+
+      <section class="screen on" id="c-overview">
+        <div class="ph"><div><h2>Overview</h2><p>What this project is for, and where it stands.</p></div></div>
+        <div class="grid g4" style="margin-bottom:14px">
+          <div class="card kpi"><div class="n">3</div><div class="l">Releases</div></div>
+          <div class="card kpi"><div class="n">2</div><div class="l">Awaiting you</div></div>
+          <div class="card kpi"><div class="n">24</div><div class="l">Delivered</div></div>
+          <div class="card kpi"><div class="n">Aug 30</div><div class="l">Next review</div></div>
+        </div>
+        <div class="grid g2">
+          <div class="card"><h3>Why this exists</h3><div class="b sm">
+            Riders cannot see real-time arrivals, so the call centre absorbs the demand.
+            The portal puts arrivals on the rider's phone and reduces call volume.
+          </div></div>
+          <div class="card"><h3>Needs your attention</h3><div class="b">
+            <div class="row" style="margin:0 0 10px"><span class="pill wait">Approval</span>
+              <span class="sm">Accessibility approach for the arrivals board</span></div>
+            <div class="row" style="margin:0"><span class="pill wait">Approval</span>
+              <span class="sm">Release 3 acceptance</span></div>
+          </div></div>
+        </div>
+        <div class="note safe" style="margin-top:14px"><b>What this screen cannot show.</b>
+          Agent scratchpad, internal mentor notes, private builder assessment, secrets and engineering logs are
+          not hidden by the browser — the server returns a different object. The allowlist is the control.</div>
+      </section>
+
+      <section class="screen" id="c-decisions">
+        <div class="ph"><div><h2>Decisions</h2><p>What was decided, why, and what still needs your approval.</p></div>
+          <div class="act"><button class="btn">Filter</button></div></div>
+        <div class="card"><table>
+          <thead><tr><th>Decision</th><th>Type</th><th>Rationale</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Arrivals refresh every 30s</td><td>Design</td><td>Balances freshness against data cost</td><td><span class="pill ok">Approved</span></td></tr>
+            <tr><td>Accessibility approach</td><td>Design</td><td>Screen-reader announcements on arrival change</td><td><span class="pill wait">Needs you</span></td></tr>
+            <tr><td>Offline behaviour</td><td>Requirements</td><td>Last known arrivals shown with a timestamp</td><td><span class="pill ok">Approved</span></td></tr>
+            <tr><td>Route colour scheme</td><td>Design</td><td>Superseded by the agency brand refresh</td><td><span class="pill neu">Superseded</span></td></tr>
+          </tbody></table></div>
+        <div class="note" style="margin-top:14px"><b>Superseded, never overwritten.</b>
+          A changed decision gets a successor row and keeps its original rationale, decider and date.
+          An <code>UPDATE</code> would let the record claim you approved something you never saw.</div>
+      </section>
+
+      <section class="screen" id="c-design">
+        <div class="ph"><div><h2>Design</h2><p>What it will look like and how it will behave.</p></div></div>
+        <div class="grid g2">
+          <div class="card"><h3>Arrivals board — option A</h3><div class="b">
+            <div class="mock-frame"><div class="bar-top"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+              <div class="body"><div class="skel" style="width:60%"></div><div class="skel" style="width:80%"></div>
+                <div class="skel" style="width:45%"></div><div style="margin-top:12px">Large type, one route per row</div></div></div>
+            <div style="margin-top:10px"><span class="pill ok">Approved</span></div>
+          </div></div>
+          <div class="card"><h3>Arrivals board — option B</h3><div class="b">
+            <div class="mock-frame"><div class="bar-top"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+              <div class="body"><div class="skel" style="width:70%"></div><div class="skel" style="width:50%"></div>
+                <div class="skel" style="width:65%"></div><div style="margin-top:12px">Map-led, routes as pins</div></div></div>
+            <div style="margin-top:10px"><span class="pill neu">Not chosen</span></div>
+          </div></div>
+        </div>
+      </section>
+
+      <section class="screen" id="c-preview">
+        <div class="ph"><div><h2>Preview</h2><p>The working thing, before it is released.</p></div>
+          <div class="act"><button class="btn">Open in new tab</button></div></div>
+        <div class="card"><div class="b">
+          <div class="mock-frame"><div class="bar-top"><i class="dot"></i><i class="dot"></i><i class="dot"></i>
+            <span class="sm muted" style="margin-left:8px">preview-r3.northgate.example</span></div>
+            <div class="body" style="padding:52px 26px">Live preview of release 3<div class="skel" style="width:55%;margin-top:14px"></div>
+              <div class="skel" style="width:72%"></div><div class="skel" style="width:40%"></div></div></div>
+          <p class="sm muted" style="margin:12px 0 0">This exact preview reference is snapshotted onto your acceptance,
+             so the record shows what you actually looked at.</p>
+        </div></div>
+      </section>
+
+      <section class="screen" id="c-changes">
+        <div class="ph"><div><h2>Changes</h2><p>What you asked to change, and what that would affect.</p></div>
+          <div class="act"><button class="btn p">Request a change</button></div></div>
+        <div class="card" style="margin-bottom:14px"><h3>Add Spanish translations</h3><div class="b">
+          <div class="row" style="margin:0 0 12px"><span class="pill wait">Impact assessed</span>
+            <span class="sm muted">Requested 21 Aug</span></div>
+          <div class="note"><b>Before this is built, here is what it touches.</b>
+            <ul style="margin:8px 0 0;padding-left:18px">
+              <li>This change reaches <b>4 other parts</b> of the project.</li>
+              <li>It affects work you have <b>already accepted</b>, which would need re-approval.</li>
+              <li>It affects something <b>already released and running</b>.</li>
+            </ul></div>
+          <div style="margin-top:12px;display:flex;gap:8px"><button class="btn g">Approve for build</button><button class="btn">Decline</button></div>
+        </div></div>
+        <div class="note safe"><b>There is no path from “submitted” straight to “build”.</b>
+          The route runs through impact assessment as a property of the workflow, not a rule someone must remember.</div>
+      </section>
+
+      <section class="screen" id="c-releases">
+        <div class="ph"><div><h2>Releases</h2><p>What shipped, when, and what evidence supported it.</p></div></div>
+        <div class="card"><table>
+          <thead><tr><th>Release</th><th>Date</th><th>Evidence</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>R3 — Arrivals board</td><td>—</td><td><span class="pill ok">8 of 8 checks</span></td><td><span class="pill wait">Awaiting your acceptance</span></td></tr>
+            <tr><td>R2 — Route search</td><td>12 Aug</td><td><span class="pill ok">8 of 8 checks</span></td><td><span class="pill ok">Accepted</span></td></tr>
+            <tr><td>R1 — Foundations</td><td>28 Jul</td><td><span class="pill ok">6 of 6 checks</span></td><td><span class="pill ok">Accepted with exceptions</span></td></tr>
+          </tbody></table></div>
+        <div class="card" style="margin-top:14px"><h3>Release 3 — evidence summary</h3><div class="b">
+          <div class="grid g4">
+            <div><span class="pill ok">Pass</span><div class="sm muted" style="margin-top:5px">Accessibility</div></div>
+            <div><span class="pill ok">Pass</span><div class="sm muted" style="margin-top:5px">Security</div></div>
+            <div><span class="pill ok">Pass</span><div class="sm muted" style="margin-top:5px">Browser</div></div>
+            <div><span class="pill ok">Pass</span><div class="sm muted" style="margin-top:5px">Rollback tested</div></div>
+          </div>
+          <p class="sm muted" style="margin:12px 0 0">You are shown the conclusion and the shape of the proof — not our CI output.</p>
+        </div></div>
+      </section>
+
+      <section class="screen" id="c-results">
+        <div class="ph"><div><h2>Results</h2><p>What it achieved against what was promised.</p></div></div>
+        <div class="card"><div class="b">
+          <div class="row"><span class="lab">Call volume</span><div class="bar"><i style="width:62%"></i></div><span class="val">−38%</span></div>
+          <div class="row"><span class="lab">Rider satisfaction</span><div class="bar"><i style="width:74%"></i></div><span class="val">+21</span></div>
+          <div class="row"><span class="lab">Arrivals accuracy</span><div class="bar"><i style="width:91%"></i></div><span class="val">91%</span></div>
+          <div class="row"><span class="lab">Availability</span><div class="bar"><i style="width:99%"></i></div><span class="val">99.9</span></div>
+        </div></div>
+        <div class="note" style="margin-top:14px"><b>Measured, or it does not appear.</b>
+          A metric with no reading shows as <i>not measured</i> rather than as a zero or a green bar.</div>
+      </section>
+
+      <section class="screen" id="c-documents">
+        <div class="ph"><div><h2>Documents</h2><p>The artifacts you were given.</p></div></div>
+        <div class="card"><table>
+          <thead><tr><th>Document</th><th>Kind</th><th>Published</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Accessibility conformance statement</td><td>Compliance</td><td>12 Aug</td><td><a href="#">Download</a></td></tr>
+            <tr><td>Data handling statement</td><td>Compliance</td><td>12 Aug</td><td><a href="#">Download</a></td></tr>
+            <tr><td>Release 2 notes</td><td>Release</td><td>12 Aug</td><td><a href="#">Download</a></td></tr>
+            <tr><td>Scope summary</td><td>Scope</td><td>28 Jul</td><td><a href="#">Download</a></td></tr>
+          </tbody></table></div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="legend">
+    <h4>What the client half is proving</h4>
+    <ul>
+      <li><b>A different object, not a filtered one.</b> The client API returns a client shape built from an allowlist. A role check in React would have already put private data in the network payload.</li>
+      <li><b>Eight destinations, none of them a builder tool.</b> No story board, no terminal, no agent log, no Kanban.</li>
+      <li><b>Impact before build</b>, and acceptance that is durable and supersedable rather than a UI checkbox.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- =========================== BUILDER =========================== -->
+<div id="app-builder" style="display:none">
+  <div class="app">
+    <div class="topbar">
+      <div class="logo">C</div>
+      <div class="crumb">Northgate Transit <span>/ Rider Information Portal</span></div>
+      <span class="pill pur">Builder view</span>
+      <span class="pill neu">Learn mode</span>
+      <div class="who"><span>Sam Okafor · Builder</span><div class="avatar">SO</div></div>
+    </div>
+    <nav class="side">
+      <div class="grp">Workspace</div>
+      <button aria-current="true" onclick="go('b','command',this)">Command</button>
+      <button onclick="go('b','plan',this)">Plan</button>
+      <button onclick="go('b','design',this)">Design</button>
+      <button onclick="go('b','build',this)">Build</button>
+      <button onclick="go('b','agents',this)">Agents</button>
+      <button onclick="go('b','proof',this)">Proof</button>
+      <button onclick="go('b','release',this)">Release</button>
+      <button onclick="go('b','operate',this)">Operate</button>
+    </nav>
+    <main class="pane">
+
+      <section class="screen on" id="b-command">
+        <div class="ph"><div><h2>Command</h2><p>What needs attention right now, across every project you are on.</p></div></div>
+        <div class="grid g4" style="margin-bottom:14px">
+          <div class="card kpi"><div class="n">3</div><div class="l">Active projects</div></div>
+          <div class="card kpi"><div class="n">2</div><div class="l">Blocked</div></div>
+          <div class="card kpi"><div class="n">5</div><div class="l">Awaiting review</div></div>
+          <div class="card kpi"><div class="n">1</div><div class="l">Release ready</div></div>
+        </div>
+        <div class="card"><h3>Mentor exceptions</h3><div class="b">
+          <div class="row" style="margin:0 0 10px"><span class="pill no">Urgent</span><span class="sm">Security gate failing on <code>story-114</code></span></div>
+          <div class="row" style="margin:0 0 10px"><span class="pill ok">Opportunity</span><span class="sm">Release 3 is ready and awaiting approval</span></div>
+          <div class="row" style="margin:0"><span class="pill wait">Watch</span><span class="sm">Carrying 5 concurrent stories (threshold 4)</span></div>
+        </div></div>
+        <div class="note safe" style="margin-top:14px"><b>Two of the six exceptions fire on good news.</b>
+          A mentor system that only surfaces failure teaches people to hide things — and misses the two
+          moments a mentor is most useful.</div>
+      </section>
+
+      <section class="screen" id="b-plan">
+        <div class="ph"><div><h2>Plan</h2><p>Requirements, stories, and what they trace to.</p></div>
+          <div class="act"><button class="btn p">New story</button></div></div>
+        <div class="card"><table>
+          <thead><tr><th>Story</th><th>Fulfils</th><th>Risk</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Arrivals board renders live times</td><td><code>REQ-004</code></td><td><span class="pill neu">R2</span></td><td><span class="pill ok">Done</span></td></tr>
+            <tr><td>Screen-reader announcements</td><td><code>REQ-011</code></td><td><span class="pill neu">R2</span></td><td><span class="pill wait">In review</span></td></tr>
+            <tr><td>Offline last-known arrivals</td><td><code>REQ-007</code></td><td><span class="pill neu">R1</span></td><td><span class="pill inf">Executing</span></td></tr>
+            <tr><td>Spanish translations</td><td><span class="muted">unmapped</span></td><td><span class="pill neu">R2</span></td><td><span class="pill no">Traceability gap</span></td></tr>
+          </tbody></table></div>
+        <div class="note" style="margin-top:14px"><b>An unmapped story is shown as a gap, not hidden.</b>
+          Work that traces to no requirement is the thing worth seeing.</div>
+      </section>
+
+      <section class="screen" id="b-design">
+        <div class="ph"><div><h2>Design</h2><p>Design decisions and the visual contract.</p></div></div>
+        <div class="grid g2">
+          <div class="card"><h3>Decision — refresh interval</h3><div class="b sm">
+            <p style="margin:0 0 8px"><b>Chosen:</b> 30 seconds.</p>
+            <p style="margin:0 0 8px" class="muted">Options considered: 10s (data cost), 30s, 60s (staleness complaints in pilot).</p>
+            <span class="pill ok">Approved by client</span>
+          </div></div>
+          <div class="card"><h3>Visual contract</h3><div class="b">
+            <div class="mock-frame"><div class="bar-top"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+              <div class="body">Reference vs implementation<div class="skel" style="width:62%;margin-top:12px"></div><div class="skel" style="width:62%"></div></div></div>
+            <div style="margin-top:10px"><span class="pill ok">Diff within tolerance</span></div>
+          </div></div>
+        </div>
+      </section>
+
+      <section class="screen" id="b-build">
+        <div class="ph"><div><h2>Build</h2><p>Execution runs, workspaces and pull requests.</p></div></div>
+        <div class="card" style="margin-bottom:14px"><h3>Run <code>er-4471</code> — offline last-known arrivals</h3><div class="b">
+          <div class="row" style="margin:0 0 12px"><span class="pill inf">Executing</span>
+            <span class="sm muted">GitHub-hosted runner · base <code>a1b2c3d</code> · 6m elapsed of 30m ceiling</span></div>
+          <ul class="tl">
+            <li><b>Provisioned</b> workspace at pinned SHA<div class="t">12:02</div></li>
+            <li><b>Planned</b> 4 file changes<div class="t">12:03</div></li>
+            <li><b>Editing</b> <code>src/arrivals/cache.ts</code><div class="t">12:06</div></li>
+          </ul>
+        </div></div>
+        <div class="note"><b>The runner holds no production credentials.</b>
+          Deploy, production database, DNS and live email are denied by the absence of anything to do them with.</div>
+      </section>
+
+      <section class="screen" id="b-agents">
+        <div class="ph"><div><h2>Agents</h2><p>Agent definitions and their trust requirements.</p></div></div>
+        <div class="card"><h3>Arrivals summariser — INPACT coverage</h3><div class="b">
+          <div class="row"><span class="lab">Intent</span><div class="bar"><i style="width:83%"></i></div><span class="val">5/6</span></div>
+          <div class="row"><span class="lab">Neutrality</span><div class="bar"><i style="width:66%"></i></div><span class="val">4/6</span></div>
+          <div class="row"><span class="lab">Provenance</span><div class="bar red"><i style="width:0%"></i></div><span class="val">—</span></div>
+          <div class="row"><span class="lab">Accountability</span><div class="bar"><i style="width:83%"></i></div><span class="val">5/6</span></div>
+          <div class="row"><span class="lab">Control</span><div class="bar"><i style="width:66%"></i></div><span class="val">4/6</span></div>
+          <div class="row"><span class="lab">Transparency</span><div class="bar"><i style="width:83%"></i></div><span class="val">5/6</span></div>
+          <div class="note" style="margin-top:14px"><b>Provenance is unscored, so this agent cannot go to production.</b>
+            An unscored dimension is a failure, not a pass.</div>
+        </div></div>
+      </section>
+
+      <section class="screen" id="b-proof">
+        <div class="ph"><div><h2>Proof</h2><p>Evidence and the quality gate for each story and release.</p></div></div>
+        <div class="card"><table>
+          <thead><tr><th>Dimension</th><th>Evidence</th><th>Pinned to</th><th>Outcome</th></tr></thead>
+          <tbody>
+            <tr><td>Unit tests</td><td>test_run</td><td><code>a1b2c3d</code></td><td><span class="pill ok">Pass</span></td></tr>
+            <tr><td>Integration</td><td>test_run</td><td><code>a1b2c3d</code></td><td><span class="pill ok">Pass</span></td></tr>
+            <tr><td>Browser</td><td>browser_run</td><td><code>a1b2c3d</code></td><td><span class="pill ok">Pass</span></td></tr>
+            <tr><td>Accessibility</td><td>accessibility_scan</td><td><code>9f8e7d6</code></td><td><span class="pill no">Stale — earlier commit</span></td></tr>
+            <tr><td>Security</td><td>—</td><td>—</td><td><span class="pill no">Not run</span></td></tr>
+          </tbody></table></div>
+        <div class="note" style="margin-top:14px"><b>Two different failures, shown differently.</b>
+          Evidence pinned to an older commit is not evidence about this one, and <i>not run</i> is never <i>pass</i>.</div>
+      </section>
+
+      <section class="screen" id="b-release">
+        <div class="ph"><div><h2>Release</h2><p>What is ready to ship and what is blocking it.</p></div>
+          <div class="act"><button class="btn" disabled style="opacity:.5;cursor:not-allowed">Deploy</button></div></div>
+        <div class="card" style="margin-bottom:14px"><h3>Release 3 — government profile, 10 mandatory checks</h3><div class="b">
+          <div class="grid g3" style="gap:9px">
+            <div><span class="pill ok">Pass</span> <span class="sm">Stories complete</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">Requirements covered</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">Tests</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">Browser</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">Security</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">Accessibility</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">AI evals</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">Migration rehearsal</span></div>
+            <div><span class="pill ok">Pass</span> <span class="sm">Rollback</span></div>
+            <div><span class="pill wait">Awaiting</span> <span class="sm">Client acceptance</span></div>
+          </div>
+        </div></div>
+        <div class="note"><b>Ready is not the same as authorized.</b>
+          Deployment is refused unconditionally while §20 stands — a code change with a review, never a config flag.</div>
+      </section>
+
+      <section class="screen" id="b-operate">
+        <div class="ph"><div><h2>Operate</h2><p>What is running, and what it is doing in production.</p></div></div>
+        <div class="grid g4" style="margin-bottom:14px">
+          <div class="card kpi"><div class="n muted" style="color:var(--muted)">—</div><div class="l">Availability</div></div>
+          <div class="card kpi"><div class="n muted" style="color:var(--muted)">—</div><div class="l">Errors</div></div>
+          <div class="card kpi"><div class="n muted" style="color:var(--muted)">—</div><div class="l">Latency</div></div>
+          <div class="card kpi"><div class="n muted" style="color:var(--muted)">—</div><div class="l">Cost</div></div>
+        </div>
+        <div class="note"><b>Unknown, not healthy.</b>
+          Nothing is deployed, so no signal has ever been read. A dashboard that renders green because no data
+          arrived is the specific failure this screen is built to refuse.</div>
+        <div class="card" style="margin-top:14px"><h3>Candidates from production signals</h3><div class="b sm muted">
+          No candidates. A signal proposes a defect, optimization, requirement, tuning or architecture change —
+          it never mutates production itself.
+        </div></div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="legend">
+    <h4>What the builder half is proving</h4>
+    <ul>
+      <li><b>Same project truth as the client sees</b>, with more support — Learn mode changes the help, never the data or the permissions.</li>
+      <li><b>Failures are shown as distinct kinds</b>: stale evidence, not-run evidence and unscored trust dimensions are three different problems.</li>
+      <li><b>Deploy is visibly disabled</b>, because readiness and authorization are separate questions.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="legend" style="max-width:1240px;margin:0 auto 60px">
+  <h4>Before this gets built — what I need from you</h4>
+  <ul>
+    <li><b>Layout:</b> left rail + top bar, or top tabs only? The rail suits eight destinations; tabs suit a narrower client surface.</li>
+    <li><b>Density:</b> this is calm/executive. Do you want it tighter and more Bloomberg-like?</li>
+    <li><b>Client tone:</b> the client screens explain themselves in plain language. Keep, or strip to bare data?</li>
+    <li><b>Scope:</b> both halves at once, or client room first so it can be deployed and looked at sooner?</li>
+  </ul>
+  <p class="sm muted" style="margin:10px 0 0"><b>Nothing is built yet.</b> On approval I will implement these as React
+     pages against the existing route conventions, and they will still need deploying to a dev instance and
+     looking at — green CI is not visual verification.</p>
+</div>
+
+</div>
+
+<script>
+  function pick(which){
+    document.getElementById('app-client').style.display  = which==='client' ? '' : 'none';
+    document.getElementById('app-builder').style.display = which==='builder'? '' : 'none';
+    document.getElementById('b-client').setAttribute('aria-pressed',  which==='client');
+    document.getElementById('b-builder').setAttribute('aria-pressed', which==='builder');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function go(side, screen, btn){
+    var root = btn.closest('.app');
+    root.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('on'); });
+    root.querySelector('#'+side+'-'+screen).classList.add('on');
+    root.querySelectorAll('nav.side button').forEach(function(b){ b.setAttribute('aria-current','false'); });
+    btn.setAttribute('aria-current','true');
+  }
+</script>

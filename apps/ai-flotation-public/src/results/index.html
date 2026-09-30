@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Results &mdash; AI Flotation</title>
+    <meta name="description" content="Verified client outcomes only. There are none published yet, and this page says so." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="/assets/site.css" />
+    <link rel="stylesheet" href="/assets/case-studies.css" />
+      <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap bar">
+        <a class="logo" href="/">
+          <svg width="19" height="19" viewBox="0 0 120 120" aria-hidden="true">
+            <path class="mark-hull" d="M16 54 H104 L93 86 A60 60 0 0 1 27 86 Z"></path>
+            <circle class="mark-float" cx="60" cy="30" r="15"></circle>
+          </svg>
+          AI Flotation
+        </a>
+        <span class="spacer"></span>
+        <nav class="nav" aria-label="Main">
+          <a href="/what-we-build/">What We Build</a>
+          <a href="/approach/">How It Works</a>
+          <a href="/trust-before-intelligence/">Trust</a>
+          <a href="/delivery-standard/">Delivery Standard</a>
+          <a href="/results/" aria-current="page">Results</a>
+          <a href="/about/">About</a>
+          <a class="btn btn-ghost" href="{{brand.platformApiBase}}/client/projects">Client Login</a>
+          <a class="btn btn-primary" href="/start/">Start a Project</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap">
+          <p class="eyebrow">Results</p>
+          <h1 id="results-title" style="margin-top:.7rem">We have nothing to show you here yet.</h1>
+          <p class="sub" id="results-sub" style="margin-top:1rem">This page exists to hold verified client outcomes. It is empty because there are none we can publish, and a page of invented metrics would contradict everything on the delivery standard.</p>
+        </div>
+      </section>
+      <section class="band alt" id="results-band">
+        <div class="wrap">
+          <!-- The word cloud: a view of the whole shelf, above the split. -->
+          <div class="cloud" id="results-cloud" hidden></div>
+
+          <div class="records-layout" id="results-layout" hidden>
+            <aside class="records-filters" id="results-filters" aria-label="Filter published results" hidden></aside>
+            <div class="records-main">
+              <label class="records-search-label" for="results-q">Search the results</label>
+              <input class="records-search" id="results-q" type="search" autocomplete="off"
+                     placeholder="e.g. audit trail, SQL Server, typescript" />
+              <p class="records-count" id="results-count" aria-live="polite"></p>
+              <div class="records-grid" id="results-records" hidden></div>
+            </div>
+          </div>
+          <div class="empty" id="results-empty">
+            <h3>No published results yet</h3>
+            <p>
+              When a client agrees to publication, this page will carry what was measured, over
+              what period, against what baseline &mdash; and it will say plainly where an outcome
+              was not measured.
+            </p>
+          </div>
+          <p class="note measure" id="results-why-empty" style="margin-top:1.5rem">
+            <b>Why this is empty rather than filled.</b> Logos we have no permission to use,
+            percentages with no baseline, and case studies about work that has not shipped are all
+            available to us. A delivery standard built on evidence has to survive its own
+            marketing page.
+          </p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <h2>What we can show you instead</h2>
+          <p class="measure" style="color:var(--fg-muted)">
+            The standard we work to, and the room you would get. Both are real today.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="/delivery-standard/">Read the delivery standard</a>
+            <a class="btn btn-ghost" href="/approach/">See how it works</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Company</p>
+            <a href="/about/">About</a>
+            <a href="/delivery-standard/">Delivery standard</a>
+            <a href="/pricing/">Membership</a>
+          <a href="/results/">Results</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Work</p>
+            <a href="/what-we-build/">What we build</a>
+            <a href="/approach/">How it works</a>
+            <a href="/trust-before-intelligence/">Trust Before Intelligence</a>
+            <a href="/pricing/">Build membership</a>
+            <a href="/start/">Start a project</a>
+          </div>
+          <div>
+            <p class="eyebrow quiet" style="margin-bottom:.6rem">Clients</p>
+            <a href="{{brand.platformApiBase}}/client/projects">Client login</a>
+            <a href="mailto:{{brand.supportEmail}}">{{brand.supportEmail}}</a>
+          </div>
+        </div>
+        <p class="fine">AI Flotation &middot; {{brand.publicUrl}}</p>
+      </div>
+    </footer>
+
+
+    <script src="/assets/case-studies.js" data-api="{{brand.platformApiBase}}"
+            data-surface="ai-flotation" data-detail="/results/" defer></script>
+    <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+  </body>
+</html>

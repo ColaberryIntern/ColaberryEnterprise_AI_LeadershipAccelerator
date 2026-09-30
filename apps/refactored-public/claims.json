@@ -1,0 +1,108 @@
+{
+  "$comment": [
+    "Claim register for the Refactored.ai public site.",
+    "",
+    "WHY THIS FILE EXISTS. Public capability claims are the easiest thing on a marketing",
+    "site to get wrong, because nothing fails when they are. A page can assert a feature",
+    "that does not exist and every test still passes. This is the record of what each",
+    "public claim rests on, so a reviewer can check the page against something.",
+    "",
+    "STATUS values: 'verified' ships in the present tense; 'qualified' ships only with the",
+    "stated hedge attached; 'roadmap' must be visibly marked and never written as though",
+    "available now; 'prohibited' must not appear on any surface."
+  ],
+  "reviewed": "2026-09-08",
+  "claims": [
+    {
+      "id": "agents-named",
+      "copy": "Reese, Cory, Maya and Cora are named AI roles with defined responsibilities.",
+      "status": "verified",
+      "evidence": "backend/src — Reese 188 files, Cory 194, Maya 50, Cora 35",
+      "surfaces": ["/", "/ai-workforce/"]
+    },
+    {
+      "id": "reese-excludes-metric",
+      "copy": "Reese excludes a metric it cannot trust rather than averaging over it, and escalates the source problem.",
+      "status": "verified",
+      "evidence": "Reese data-health behaviour in backend/src/services; described as behaviour, no volumes or rates claimed",
+      "surfaces": ["/", "/ai-workforce/"]
+    },
+    {
+      "id": "delivery-design-loop",
+      "copy": "Discovery produces written requirements and more than one interface direction; nothing is built until the client accepts one, and acceptance is recorded.",
+      "status": "verified",
+      "evidence": "backend/src/services/delivery/ — deliveryDesignLoop.ts, clientAcceptance.ts, clientAcceptanceService.ts, clientChangeRequest.ts, appPrototypeService.ts",
+      "surfaces": ["/", "/software-factory/"]
+    },
+    {
+      "id": "delivery-quality-evidence",
+      "copy": "Checks run before release and the result is visible to the client.",
+      "status": "verified",
+      "evidence": "backend/src/services/delivery/deliveryQualityGate.ts, deliveryEvidenceProjection.ts, clientProjection.ts",
+      "surfaces": ["/software-factory/"]
+    },
+    {
+      "id": "software-factory-name",
+      "copy": "\"Software Factory\" as the customer-facing name for the delivery capability.",
+      "status": "qualified",
+      "evidence": "The phrase appears in ZERO backend files; the system is named Delivery OS internally. Shipped as a marketing name for a real capability, which is legitimate — but the CAPABILITIES described under it must each trace to Delivery OS, and they do.",
+      "surfaces": ["/", "/software-factory/"]
+    },
+    {
+      "id": "free-tier-no-paywall",
+      "copy": "The core learning surface has no paywall in front of it.",
+      "status": "verified",
+      "evidence": "Explorer free tier has no paywall — confirmed platform behaviour",
+      "surfaces": ["/", "/learning/"]
+    },
+    {
+      "id": "certification-evidence",
+      "copy": "Certification readiness is tracked against evidence.",
+      "status": "verified",
+      "evidence": "backend/src — certification surfaces across 130 files",
+      "surfaces": ["/", "/learning/"]
+    },
+    {
+      "id": "multi-brand",
+      "copy": "Several distinct brands run on this platform, each with its own domain, audience and sender identity.",
+      "status": "verified",
+      "evidence": "apps/ holds three brand apps; nginx serves aiflotation.com and opportunitylift.org from the same container; brand_domains and per-brand page category maps exist",
+      "surfaces": ["/platform/"]
+    },
+    {
+      "id": "awards",
+      "copy": "MIT Solve Work of the Future; MIT Solve Community Favorite Award; Patrick J. McGovern Foundation AI for the Betterment of Humanity Prize; General Motors Prize for Advanced Technologies; JFFLabs $1 Billion Wage Gain Challenge finalist.",
+      "status": "qualified",
+      "evidence": "All five were displayed on the previous refactored.ai site, with logo assets for each on its CDN. Names carried over verbatim. Rendered as TEXT, not logos, so the site carries no dependency on a CDN nobody has confirmed owning. Independent confirmation of each award has not been done in this session.",
+      "surfaces": ["/", "/about/"]
+    },
+    {
+      "id": "book",
+      "copy": "Trust Before Intelligence by Ram Katamaraja is the intellectual foundation of the platform.",
+      "status": "verified",
+      "evidence": "Ram Katamaraja is Colaberry's founder; the book is an established internal anchor and the sibling brand site carries its own page on it",
+      "surfaces": ["/", "/trust-before-intelligence/"]
+    },
+    {
+      "id": "hero-console",
+      "copy": "The hero composition listing agent activity.",
+      "status": "qualified",
+      "evidence": "Illustrative, and labelled as such in the markup and on screen. Contains named roles and real behaviours but NO figures, precisely so nothing can read as live production data.",
+      "surfaces": ["/"]
+    },
+    {
+      "id": "metrics",
+      "copy": "Customer counts, revenue, placement rates, completion rates, market size, performance benchmarks, SOC 2 or any security certification.",
+      "status": "prohibited",
+      "evidence": "None verified. None appears anywhere on the site, and the homepage says so explicitly rather than staying silent about it.",
+      "surfaces": []
+    },
+    {
+      "id": "customer-logos",
+      "copy": "Named customers, logos or testimonials.",
+      "status": "prohibited",
+      "evidence": "No customer consent has been established for public naming.",
+      "surfaces": []
+    }
+  ]
+}

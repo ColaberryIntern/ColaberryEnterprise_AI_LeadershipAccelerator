@@ -81,11 +81,11 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  executive_reality_check: '#38a169',
-  ai_strategy: '#2b6cb0',
-  prompt_template: '#805ad5',
-  implementation_task: '#dd6b20',
-  knowledge_check: '#e53e3e',
+  executive_reality_check: 'var(--status-success)',
+  ai_strategy: 'var(--chart-1)',
+  prompt_template: 'var(--chart-5)',
+  implementation_task: 'var(--chart-4)',
+  knowledge_check: 'var(--status-danger)',
 };
 
 function buildDefaultPrompt(title?: string, description?: string, learningGoal?: string): string {
@@ -123,6 +123,7 @@ function ToggleChips({ items, selected, onToggle, colorActive, colorBg }: {
     <div className="d-flex flex-wrap gap-1">
       {items.map(item => {
         const isSelected = selected.includes(item.value);
+        const activeColor = colorActive || 'var(--chart-5)';
         return (
           <button
             key={item.value}
@@ -130,9 +131,9 @@ function ToggleChips({ items, selected, onToggle, colorActive, colorBg }: {
             className="btn btn-sm py-0 px-1"
             style={{
               fontSize: 9,
-              background: isSelected ? (colorBg || 'rgba(128,90,213,0.15)') : 'transparent',
-              color: isSelected ? (colorActive || '#805ad5') : '#718096',
-              border: `1px solid ${isSelected ? (colorActive || '#805ad5') + '40' : '#e2e8f0'}`,
+              background: isSelected ? (colorBg || 'color-mix(in srgb, var(--chart-5) 15%, transparent)') : 'transparent',
+              color: isSelected ? activeColor : 'var(--text-muted)',
+              border: `1px solid ${isSelected ? `color-mix(in srgb, ${activeColor} 25%, transparent)` : 'var(--border-default)'}`,
               borderRadius: 4,
             }}
             onClick={() => onToggle(item.value)}
@@ -288,10 +289,10 @@ export default function SectionBlueprintCard({
         onClick={() => setCollapsed(!collapsed)}
       >
         <span className="fw-semibold small">
-          <i className="bi bi-stars me-1" style={{ color: '#805ad5' }}></i>
+          <i className="bi bi-stars me-1" style={{ color: 'var(--chart-5)' }}></i>
           Section Blueprint
           {assignmentSummary && (
-            <span className="badge ms-1" style={{ fontSize: 8, background: 'rgba(128,90,213,0.12)', color: '#553c9a' }}>
+            <span className="badge ms-1" style={{ fontSize: 8, background: 'color-mix(in srgb, var(--chart-5) 12%, transparent)', color: 'var(--chart-5)' }}>
               {assignmentSummary}
             </span>
           )}
@@ -358,7 +359,7 @@ export default function SectionBlueprintCard({
                 const isDone = currentOrder > thisOrder;
                 const isActive = generationPhase === phase;
                 return (
-                  <span key={phase} className="d-flex align-items-center gap-1" style={{ color: isDone ? '#38a169' : isActive ? '#2b6cb0' : '#a0aec0' }}>
+                  <span key={phase} className="d-flex align-items-center gap-1" style={{ color: isDone ? 'var(--status-success)' : isActive ? 'var(--chart-1)' : 'var(--text-muted)' }}>
                     {isDone ? <i className="bi bi-check-circle-fill" style={{ fontSize: 10 }}></i> :
                      isActive ? <span className="spinner-border" style={{ width: 10, height: 10, borderWidth: 2 }}></span> :
                      <i className="bi bi-circle" style={{ fontSize: 10 }}></i>}
@@ -551,8 +552,8 @@ export default function SectionBlueprintCard({
                     items={variableOptions}
                     selected={sectionVariableKeys}
                     onToggle={v => onSectionAssignmentsChange({ section_variable_keys: toggleArrayItem(sectionVariableKeys, v) })}
-                    colorActive="#0d6efd"
-                    colorBg="rgba(13,110,253,0.1)"
+                    colorActive="var(--blue-500)"
+                    colorBg="color-mix(in srgb, var(--blue-500) 10%, transparent)"
                   />
                 </div>
               )}
@@ -572,8 +573,8 @@ export default function SectionBlueprintCard({
                     items={artifactOptions}
                     selected={sectionArtifactIds}
                     onToggle={v => onSectionAssignmentsChange({ section_artifact_ids: toggleArrayItem(sectionArtifactIds, v) })}
-                    colorActive="#dd6b20"
-                    colorBg="rgba(221,107,32,0.1)"
+                    colorActive="var(--chart-4)"
+                    colorBg="color-mix(in srgb, var(--chart-4) 10%, transparent)"
                   />
                 </div>
               )}
@@ -593,8 +594,8 @@ export default function SectionBlueprintCard({
                     items={skillOptions}
                     selected={sectionSkillIds}
                     onToggle={v => onSectionAssignmentsChange({ section_skill_ids: toggleArrayItem(sectionSkillIds, v) })}
-                    colorActive="#38a169"
-                    colorBg="rgba(56,161,105,0.1)"
+                    colorActive="var(--status-success)"
+                    colorBg="color-mix(in srgb, var(--status-success) 10%, transparent)"
                   />
                 </div>
               )}

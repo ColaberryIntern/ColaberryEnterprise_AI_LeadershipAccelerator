@@ -1,0 +1,645 @@
+/**
+ * todayAnchoredSources — gathers the ANCHORED candidates for the Today feed from
+ * every surface and blends them: Class curriculum (getFeed), the student's
+ * Project tasks (persisted StudentTask), and Community posts (community_posts).
+ * The composer (todayFeedComposer) consumes the blended list and interleaves
+ * ambient content around it.
+ *
+ * The one-way valve: these are the surfaces that flow INTO Today. Project +
+ * Community are gated behind env.todayAggregateSources (default OFF) so the live
+ * feed stays Class-only until enabled. Each source is fail-soft (errors → []),
+ * so one surface can never break the feed.
+ */
+import { getFeed, contentFromMetadata, type FeedCard, type FeedVideo } from './timelineService';
+import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
+import { anchoredWeekAllowed, weekStartedForToday, isWeekGated, groupByType } from './todayFeedPlan';
+import { resolve as resolveType } from './typeRegistry';
+import { blendSurfaces } from './todayAnchoredBlend';
+import { getActiveProjectTree } from '../projects/projectReadService';
+import { taskPointsForProject } from '../sbp/verification/storyPoints';
+import { prepCtaVerb } from '../sbp/verification/prepPoints';
+import TimelineCard from '../../models/TimelineCard';
+import CommunityPost from '../../models/CommunityPost';
+import CommunityMember from '../../models/CommunityMember';
+import StudentTask from '../../models/StudentTask';
+import LiveSession from '../../models/LiveSession';
+import AttendanceRecord from '../../models/AttendanceRecord';
+import { resolveCohortId } from '../communityService';
+import { ritualStudentLabel, ritualArt } from '../runtime/communityRituals';
+import { env } from '../../config/env';
+import type { TodayFeedItem } from './todayFeedComposer';
+import { getTypeExposureMap } from './feedTypeExposureService';
+import { getRoutingMap } from './feedControlService';
+
+const CANDIDATE_CAP = 20;
+
+/** Class curriculum card → a Today feed item (position assigned later by the composer). */
+export function anchoredItemFromCard(fc: FeedCard): TodayFeedItem {
+  return {
+    position: 0,
+    kind: 'anchored',
+    ref: `card:${fc.id}`,
+    surface: surfaceOf(fc.type) ?? 'class',
+    type: fc.type,
+    render_band: fc.render_band,
+    card_id: fc.id,
+    title: fc.title ?? null,
+    subtitle: fc.subtitle ?? null,
+    description: fc.description ?? null,
+    image: fc.image ?? fc.type_thumbnail ?? null,
+    video: fc.video ?? null,
+    blog: fc.blog ?? null,
+    content: fc.content ?? null,
+    week: fc.week ?? null,
+    estimated_time: fc.estimated_time ?? null,
+    status: fc.status ?? null,
+    points: (fc as any).points ?? null,
+    interacted: false,
+  };
+}
+
+// The DYNAMIC fields of a class curriculum card — the ones an author can change
+// after the card has been placed into a feed. Shared by compose-time
+// (anchoredItemFromCard) and serve-time (rehydrateCardItems) so an edited card's
+// text and saved AI content always reflect the live row, never a stale snapshot.
+//
+// Deliberately NOT here: image/video/blog (derived by getFeed from the type
+// thumbnail + media services, not readable off the row alone), status/interacted
+// (per-student progress, not card definition), points/week (fixed at placement).
+export function cardFieldsFromRow(
+  row: { title?: string | null; subtitle?: string | null; description?: string | null; estimated_time?: number | null; metadata?: any },
+): Pick<TodayFeedItem, 'title' | 'subtitle' | 'description' | 'estimated_time' | 'content'> {
+  return {
+    title: row.title ?? null,
+    subtitle: row.subtitle ?? null,
+    description: row.description ?? null,
+    estimated_time: row.estimated_time ?? null,
+    content: contentFromMetadata(row.metadata),
+  };
+}
+
+/**
+ * Serve-time re-hydration: refresh placed class curriculum cards from the LIVE
+ * timeline_cards row so an edited or re-authored card never renders from the
+ * frozen impression snapshot (see reference_today_feed_append_only_snapshot).
+ *
+ * WHY THIS EXISTS: the Today feed is an append-only snapshot store. Before this,
+ * `card:` items were the only anchored kind with no serve-time refresh, so a
+ * content edit (admin authoring, the Self Study regen job, a seed script, a
+ * direct backfill) reached the card detail view — which loads live via
+ * ensureFreshContent — but NOT any feed item already placed for an enrollment.
+ * That split let one surface show the new reading and another the old one.
+ *
+ * One batched query, only when card items are present. Fail-soft — on error the
+ * snapshot is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateCardItems(items: TodayFeedItem[]): Promise<void> {
+  const cards = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('card:') && i.card_id);
+  if (!cards.length) return;
+  try {
+    const ids = Array.from(new Set(cards.map((i) => i.card_id as string)));
+    const rows = await TimelineCard.findAll({
+      where: { id: ids },
+      attributes: ['id', 'title', 'subtitle', 'description', 'estimated_time', 'metadata'],
+    });
+    const byId = new Map(rows.map((r) => { const plain = r.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of cards) {
+      const row = byId.get(it.card_id as string);
+      if (!row) continue;
+      const f = cardFieldsFromRow(row);
+      it.title = f.title; it.subtitle = f.subtitle; it.description = f.description;
+      it.estimated_time = f.estimated_time; it.content = f.content;
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] card rehydrate failed:', err?.message?.split('\n')[0]);
+  }
+}
+
+function projectItem(
+  t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null; points?: number | null; story_id?: string | null },
+  projectId: string,
+): TodayFeedItem {
+  return {
+    position: 0,
+    kind: 'anchored',
+    ref: `project:${t.id}`,
+    surface: 'project',
+    type: 'project_task',
+    render_band: resolveType('project_task')?.render_band ?? 'task',
+    card_id: null,
+    // A demo-prep task is handed in, not built. The Projects page already says
+    // so on its cards (cab84953); the Today tile priced the same task at the
+    // same rate but kept saying "Build" over a rehearsal. Same verb, same
+    // source ids, and a label so the chip does not read "Project Task".
+    ...prepPresentation(t.story_id),
+    // A project task is not a curriculum card either — same defect class as the
+    // community items above. It has a real destination of its own (the project
+    // workspace, /portal/projects/workspace/:projectId/:taskId), so it carries
+    // both ids and the client navigates there instead of opening a card drawer
+    // that can only ever show a title and a dead "Enter workspace" button.
+    project_id: projectId,
+    project_task_id: t.id,
+    title: t.title ?? null,
+    subtitle: t.release_key ?? null,
+    description: t.description ?? null,
+    image: null,
+    video: null,
+    blog: null,
+    content: null,
+    week: null,
+    estimated_time: null,
+    status: t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available',
+    // What verifying this story pays (the tree already priced it from
+    // storyPoints). Builder points, because that is the ledger the work lands
+    // in; the tile shows the total either way. Null ⇒ no badge, never a guess.
+    points: projectPoints(t.points),
+    interacted: false,
+  };
+}
+
+/**
+ * How a project task presents on the tile beyond its price: the button's verb
+ * and the chip's label. A build story gets neither (defaults: "Build",
+ * "Project Task"); a demo-prep task is handed in ("Submit") and Demo Day is
+ * marked by staff ("Demo Day"), both under a "Demo Prep" chip.
+ */
+function prepPresentation(storyId: string | null | undefined): Pick<TodayFeedItem, 'cta_verb' | 'student_label'> {
+  const verb = prepCtaVerb(storyId);
+  return verb ? { cta_verb: verb, student_label: 'Demo Prep' } : {};
+}
+
+/** A story's price tag as the tile's `points`, or null when there is none. */
+function projectPoints(points: number | null | undefined): TodayFeedItem['points'] {
+  return typeof points === 'number' && points > 0 ? { builder: points } : null;
+}
+
+// A community post's media lives in media_urls (JSONB). Carry it into the Today card
+// the same way the Community feed renders it: a YouTube/video link becomes a playable
+// video (TimelineCard derives the thumbnail + play from the url), otherwise the first
+// image is the poster. Without this the timeline card falls back to the blank band tile.
+const YT_RE = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)[\w-]{11}/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i;
+
+function communityMedia(mediaUrls: unknown): { video: FeedVideo | null; image: string | null } {
+  const urls = Array.isArray(mediaUrls) ? (mediaUrls.filter((u) => typeof u === 'string' && u.trim()) as string[]) : [];
+  if (!urls.length) return { video: null, image: null };
+  const vid = urls.find((u) => YT_RE.test(u) || VIDEO_EXT_RE.test(u));
+  if (vid) return { video: { url: vid, presenter: null, poster: null }, image: null };
+  return { video: null, image: urls[0] };
+}
+
+type CommunityPostFields = {
+  id?: string; body: string; media_urls?: unknown;
+  week?: number | null; ritual_meta?: { ritual?: string } | null;
+  like_count?: number | null; comment_count?: number | null;
+  member?: { display_name?: string | null; avatar_url?: string | null; level?: number | null } | null;
+};
+
+type CommunityDynamicFields = Pick<
+  TodayFeedItem,
+  'title' | 'description' | 'image' | 'video' | 'author' | 'student_label' | 'week' | 'like_count' | 'comment_count'
+>;
+
+// The DYNAMIC fields of a community card — derived from the LIVE post. Shared by
+// compose-time (communityItem) and serve-time (rehydrateCommunityItems) so media,
+// author, and text always reflect the current post, never a stale snapshot.
+//
+// `student_label` is derived here rather than left to the client: a ritual post
+// belongs to the week's Community Ritual ("Skill Drop", "Cohort Wins"), and the
+// client's only other option is to title-case the type slug, which is how every
+// one of these tiles came to read "Community Discussion". Deriving it at
+// serve-time also repairs the FROZEN snapshots already sitting in
+// today_feed_impressions without a backfill.
+export function communityFieldsFromPost(p: CommunityPostFields): CommunityDynamicFields {
+  const body = (p.body || '').trim();
+  const title = body.length > 80 ? `${body.slice(0, 77)}…` : body;
+  const { video, image } = communityMedia(p.media_urls);
+  const author = p.member
+    ? { name: p.member.display_name || 'Member', avatar_url: p.member.avatar_url ?? null, level: p.member.level ?? 1 }
+    : null;
+  const week = typeof p.week === 'number' ? p.week : null;
+  const student_label = p.ritual_meta
+    ? ritualStudentLabel('community_discussion', week, 'Community Post')
+    : 'Community Post';
+  // A text-only post carried no art at all and rendered as a blank slab in the
+  // feed. Its own media always wins; otherwise fall back to the week's ritual
+  // banner (see ritualArt) so the timeline never shows an empty tile. A video
+  // post keeps a null image — the player is the visual.
+  const art = image || (video ? null : ritualArt(week));
+  return {
+    title: title || 'Community post', description: body || null, image: art, video, author,
+    student_label, week,
+    like_count: p.like_count ?? 0, comment_count: p.comment_count ?? 0,
+  };
+}
+
+function communityItem(p: CommunityPostFields & { id: string }): TodayFeedItem {
+  const f = communityFieldsFromPost(p);
+  return {
+    position: 0,
+    kind: 'anchored',
+    ref: `community:${p.id}`,
+    surface: 'community',
+    type: 'community_discussion',
+    render_band: resolveType('community_discussion')?.render_band ?? 'community',
+    card_id: null,
+    title: f.title,
+    subtitle: null,
+    description: f.description,
+    image: f.image,
+    video: f.video,
+    blog: null,
+    content: null,
+    // Deliberately null, even though a ritual post knows its week. `week` on a
+    // feed item is not just a label: isPrecedenceImpression() reads it to decide
+    // whether a placed impression counts toward the anchored or the variety
+    // cadence tier, so stamping it here would silently re-tier every community
+    // post in every student's feed. The week reaches the student through the
+    // ritual label and the post body instead.
+    week: null,
+    estimated_time: null,
+    status: null,
+    interacted: false,
+    author: f.author,
+    community_post_id: p.id,
+    student_label: f.student_label,
+    like_count: f.like_count,
+    comment_count: f.comment_count,
+  };
+}
+
+/**
+ * Serve-time re-hydration: refresh placed community cards from the LIVE post so a
+ * new or edited post's media/author/text never shows stale from the frozen
+ * impression snapshot (see reference_today_feed_append_only_snapshot). One batched
+ * query, only when community items are present. Fail-soft — on error the snapshot
+ * is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateCommunityItems(items: TodayFeedItem[]): Promise<void> {
+  const community = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('community:'));
+  if (!community.length) return;
+  try {
+    const ids = Array.from(new Set(community.map((i) => i.ref.slice('community:'.length))));
+    const posts = await CommunityPost.findAll({
+      where: { id: ids },
+      include: [{ model: CommunityMember, as: 'member', attributes: ['display_name', 'avatar_url', 'level'] }],
+    });
+    const byId = new Map(posts.map((p) => { const plain = p.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of community) {
+      const postId = it.ref.slice('community:'.length);
+      const post = byId.get(postId);
+      if (!post) continue;
+      const f = communityFieldsFromPost(post);
+      it.title = f.title; it.description = f.description; it.image = f.image; it.video = f.video; it.author = f.author;
+      // Identity + label repair for frozen snapshots: rows placed before the
+      // post carried its own id kept `card_id: null` and a slug-derived label,
+      // so the client opened `community:<uuid>` as a card. Re-stamping here
+      // fixes every existing impression on the next serve — no backfill.
+      it.community_post_id = postId;
+      it.student_label = f.student_label;
+      it.like_count = f.like_count; it.comment_count = f.comment_count;
+      // `week` is left exactly as placed — see communityItem() for why a community
+      // item must not acquire one.
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] community rehydrate failed:', err?.message?.split('\n')[0]);
+  }
+}
+
+/**
+ * Serve-time re-hydration for `project:` items — the SAME repair community
+ * items got, which project items were missed on.
+ *
+ * Found on prod 2026-09-11 after the routing fix in #2426 shipped: 360
+ * project-task impressions across 26 students, and not one carried
+ * project_id / project_task_id. The ids were added at compose time only, so
+ * every impression placed before that deploy still resolved to the card
+ * drawer — exactly the defect the fix was for. The feed is an append-only
+ * snapshot store; a generator-only change never reaches rows already placed.
+ *
+ * One batched query, only when project items are present. Stamps the task's
+ * current project_id and its own id, and refreshes title/description/status
+ * from the live task so a renamed or completed task does not show stale.
+ * Fail-soft: on error the snapshot is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateProjectItems(items: TodayFeedItem[]): Promise<void> {
+  const project = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('project:'));
+  if (!project.length) return;
+  try {
+    const ids = Array.from(new Set(project.map((i) => i.ref.slice('project:'.length))));
+    const tasks = await StudentTask.findAll({
+      where: { id: ids },
+      attributes: ['id', 'project_id', 'story_id', 'title', 'description', 'status', 'release_key'],
+    });
+    const byId = new Map(tasks.map((t) => { const plain = t.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    // The price tag, at SERVE time: impressions frozen before stories carried
+    // points (and any placed before a plan was published) get theirs here, one
+    // plan read per project, from the module the verifier pays from.
+    const priceByProject = await projectPriceTags(Array.from(new Set(Array.from(byId.values()).map((t) => String(t.project_id)))));
+    for (const it of project) {
+      const taskId = it.ref.slice('project:'.length);
+      const t = byId.get(taskId);
+      if (!t) continue;
+      it.project_id = t.project_id ?? null;
+      it.project_task_id = taskId;
+      if (t.title) it.title = t.title;
+      if (t.description !== undefined) it.description = t.description ?? null;
+      if (t.release_key !== undefined) it.subtitle = t.release_key ?? null;
+      it.status = t.status === 'complete' ? 'completed' : t.status === 'in_progress' ? 'in_progress' : 'available';
+      const price = t.story_id ? priceByProject.get(String(t.project_id))?.get(String(t.story_id)) : undefined;
+      it.points = projectPoints(price);
+      // Rows frozen before the verb existed get it here — the same rule as the
+      // price above: what the tile says is decided at serve time.
+      Object.assign(it, prepPresentation(t.story_id));
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] project rehydrate failed:', err?.message?.split('\n')[0]);
+  }
+}
+
+/** project_id → (story_id → points). One plan read per project; a failed one prices nothing on that project. */
+async function projectPriceTags(projectIds: string[]): Promise<Map<string, Map<string, number>>> {
+  const out = new Map<string, Map<string, number>>();
+  await Promise.all(projectIds.map(async (pid) => {
+    try {
+      out.set(pid, await taskPointsForProject(pid));
+    } catch (err: any) {
+      console.warn('[todayAnchoredSources] story points failed:', err?.message?.split('\n')[0]);
+    }
+  }));
+  return out;
+}
+
+// ─── Live-session replay ("You missed it") ──────────────────────────────
+// A completed session the student didn't attend surfaces as a replay card:
+// inline recording + AI recap. Both the recording_url and recap_json.summary
+// are admin-set / async-generated and may arrive AFTER the card is frozen into
+// the append-only impression snapshot, so the DYNAMIC fields (video + summary)
+// live in one shared deriver used at both compose-time (sessionReplayItem) and
+// serve-time (rehydrateSessionItems) — the same split as communityFieldsFromPost.
+
+type SessionReplayFields = {
+  id: string;
+  title: string | null;
+  recording_url?: string | null;
+  recap_json?: { summary?: string | null } | null;
+};
+
+// The fields that can change after the card is placed: the recording becomes
+// available and the recap is generated. Everything else on the card is static.
+export function sessionFieldsFromRow(s: Pick<SessionReplayFields, 'recording_url' | 'recap_json'>): Pick<TodayFeedItem, 'description' | 'video'> {
+  const summary = typeof s.recap_json?.summary === 'string' ? s.recap_json.summary.trim() : '';
+  return {
+    description: summary || 'Recap coming soon.',
+    video: s.recording_url ? { url: s.recording_url, presenter: null, poster: null } : null,
+  };
+}
+
+/** Completed LiveSession the student missed → a Today feed replay item. Pure. */
+export function sessionReplayItem(session: SessionReplayFields): TodayFeedItem {
+  const dyn = sessionFieldsFromRow(session);
+  return {
+    position: 0,
+    kind: 'anchored',
+    ref: `session:${session.id}`,
+    // live_class is registered under the 'group' (Group / Live) surface; fall
+    // back to 'group' if the registry ever drops it.
+    surface: surfaceOf('live_class') ?? 'group',
+    type: 'live_class',
+    render_band: 'live_class',
+    card_id: null,
+    title: `You missed it — ${session.title ?? 'Live class'}`,
+    subtitle: 'Live class recap',
+    description: dyn.description,
+    image: null,
+    video: dyn.video,
+    blog: null,
+    content: null,
+    week: null,
+    estimated_time: null,
+    status: 'available',
+    interacted: false,
+    author: null,
+  };
+}
+
+/**
+ * Serve-time re-hydration of placed session cards — heals a "You missed it"
+ * card that was frozen into the impression snapshot BEFORE the recording was
+ * uploaded or the recap generated. Batched, only when session items are present.
+ * Fail-soft — on error the snapshot is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateSessionItems(items: TodayFeedItem[]): Promise<void> {
+  const sessions = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('session:'));
+  if (!sessions.length) return;
+  try {
+    const ids = Array.from(new Set(sessions.map((i) => i.ref.slice('session:'.length))));
+    const rows = await LiveSession.findAll({ where: { id: ids }, attributes: ['id', 'recording_url', 'recap_json'] });
+    const byId = new Map(rows.map((r) => { const plain = r.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of sessions) {
+      const row = byId.get(it.ref.slice('session:'.length));
+      if (!row) continue;
+      const dyn = sessionFieldsFromRow(row);
+      it.video = dyn.video; it.description = dyn.description;
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] session rehydrate failed:', err?.message?.split('\n')[0]);
+  }
+}
+
+export interface ClassCandidates {
+  /** Real curriculum (week-bound) — the student's actual assigned work this week. Order untouched. */
+  weekBound: TodayFeedItem[];
+  /** Evergreen (week:null) intel-pipeline/curriculum types, grouped so the composer
+   *  can round-robin them alongside the ambient providers as one flat "variety"
+   *  pool — see gatherAnchored's docstring for why this is a separate tier from
+   *  weekBound rather than concatenated onto it. */
+  evergreenByType: Map<string, TodayFeedItem[]>;
+}
+
+/**
+ * Feed Control type-level suppression (`env.feedControlTypeSuppressionEnabled`,
+ * default OFF everywhere including production). A type's `feed_frequency_cap`/
+ * `feed_cooldown_days` (set via the Feed Control board's gear icon) are today
+ * consumed ONLY by the admin simulate() preview — this is what makes them real
+ * for a live student, covering both `weekBound` and `evergreenByType` since
+ * both flow through this one filter before the tiers are split.
+ *
+ * cap: a running per-type counter seeded from real exposure history and
+ * incremented as candidates are kept, so N never-before-shown cards of a
+ * capped type in ONE batch still respects the cap (a stateless per-candidate
+ * check against pre-existing history alone would not).
+ * cooldown: checked against the type's real last-shown timestamp only — never
+ * updated in-batch, since nothing placed in the same request has aged.
+ * Blank/null cap or cooldown = no limit; no fallback to any global default.
+ */
+async function suppressByTypeCapCooldown(enrollmentId: string, candidates: TodayFeedItem[]): Promise<TodayFeedItem[]> {
+  if (!candidates.length) return candidates;
+  const [exposure, routing] = await Promise.all([getTypeExposureMap(enrollmentId), getRoutingMap()]);
+  const inBatchCount = new Map<string, number>();
+  const now = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const kept: TodayFeedItem[] = [];
+  for (const cand of candidates) {
+    const type = cand.type;
+    const route = routing[type];
+    const exp = exposure.get(type);
+    const cap = route?.feed_frequency_cap;
+    if (typeof cap === 'number' && cap > 0 && (inBatchCount.get(type) ?? exp?.count ?? 0) >= cap) continue;
+    const cooldown = route?.feed_cooldown_days;
+    if (typeof cooldown === 'number' && cooldown > 0 && exp?.lastShownAt) {
+      const daysSince = (now - exp.lastShownAt.getTime()) / DAY_MS;
+      if (daysSince < cooldown) continue;
+    }
+    kept.push(cand);
+    inBatchCount.set(type, (inBatchCount.get(type) ?? exp?.count ?? 0) + 1);
+  }
+  return kept;
+}
+
+async function classCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<ClassCandidates> {
+  try {
+    const feed = await getFeed(enrollmentId);
+    const isExplorer = feed.is_explorer === true; // free tier — Week 0 curriculum only
+    // TODAY-ONLY: a week's cards only appear on Today once the student has
+    // started that week (see weekStartedForToday's docstring) — Classroom is
+    // completely unaffected (it never reads this flag or calls this function).
+    const weekStartGateOn = env.timelineWeekStartGateEnabled;
+    let eligible = feed.cards
+      .filter((c) => {
+        if (!isTodayEligible(c.type) || isAmbient(c.type)) return false;
+        if (c.status === 'locked' || c.status === 'completed') return false;
+        if (placedRefs.has(`card:${c.id}`)) return false;
+        // The week gate governs any card tied to a real curriculum week,
+        // regardless of surface — REGRESSION (2026-08-03): this used to be
+        // scoped to `surfaceOf(c.type) === 'class'`, but `announcement` (and
+        // `implementation_task`/`artifact_submission`, `community_discussion`
+        // in some cases) are registered under other home surfaces
+        // (`home_surface: 'today'`/`'project'`/`'community'`) despite
+        // carrying a real `week` — so the gate silently never ran for them at
+        // all, regardless of what the gate functions themselves did. Today-
+        // homed EVERGREEN content (news / tools / quotes) has `week: null`
+        // and must never be week-gated, or free users see none of it
+        // (null !== 0) — that's what this guard actually protects, not surface.
+        if (isWeekGated(c.week) && !anchoredWeekAllowed(c.week, isExplorer)) return false;
+        if (weekStartGateOn && isWeekGated(c.week) && !weekStartedForToday(c, feed.cards)) return false;
+        return true;
+      })
+      .map(anchoredItemFromCard);
+    if (env.feedControlTypeSuppressionEnabled) {
+      eligible = await suppressByTypeCapCooldown(enrollmentId, eligible);
+    }
+    const weekBound = eligible.filter((i) => i.week != null);
+    const evergreenByType = groupByType(eligible.filter((i) => i.week == null), (i) => i.type);
+    return { weekBound, evergreenByType };
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] class failed:', err?.message?.split('\n')[0]);
+    return { weekBound: [], evergreenByType: new Map() };
+  }
+}
+
+async function projectCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
+  try {
+    const tree = await getActiveProjectTree(enrollmentId);
+    if (!tree) return [];
+    return tree.lists
+      .flatMap((l) => l.tasks)
+      .filter((t) => t.status !== 'complete' && !placedRefs.has(`project:${t.id}`))
+      .slice(0, CANDIDATE_CAP)
+      .map((t) => projectItem(t, tree.id));
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] project failed:', err?.message?.split('\n')[0]);
+    return [];
+  }
+}
+
+async function communityCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
+  try {
+    const cohortId = await resolveCohortId(enrollmentId);
+    const posts = await CommunityPost.findAll({
+      where: { cohort_id: cohortId, status: 'visible' },
+      include: [{ model: CommunityMember, as: 'member', attributes: ['display_name', 'avatar_url', 'level'] }],
+      order: [['created_at', 'DESC']],
+      limit: CANDIDATE_CAP,
+    });
+    return posts
+      .map((p) => p.get({ plain: true }) as any)
+      .filter((p: any) => !placedRefs.has(`community:${p.id}`))
+      .map((p: any) => communityItem(p));
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] community failed:', err?.message?.split('\n')[0]);
+    return [];
+  }
+}
+
+async function missedSessionCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
+  try {
+    const cohortId = await resolveCohortId(enrollmentId);
+    // Completed sessions for the cohort, most-recent first (session_number DESC).
+    const sessions = await LiveSession.findAll({
+      where: { cohort_id: cohortId, status: 'completed' },
+      order: [['session_number', 'DESC']],
+    });
+    if (!sessions.length) return [];
+    // Two-step "LEFT JOIN": load the student's attendance for those sessions.
+    // Attended = a row with status present|late|excused. Absentee = NO row OR
+    // status='absent' → those are the ones they "missed".
+    const sessionIds = sessions.map((s) => s.id);
+    const attendance = await AttendanceRecord.findAll({
+      where: { enrollment_id: enrollmentId, session_id: sessionIds },
+      attributes: ['session_id', 'status'],
+    });
+    const attendedSessionIds = new Set(
+      (attendance as any[]).filter((a) => a.status !== 'absent').map((a) => a.session_id),
+    );
+    return sessions
+      .filter((s) => !attendedSessionIds.has(s.id) && !placedRefs.has(`session:${s.id}`))
+      .slice(0, 3)
+      .map((s) => sessionReplayItem(s.get({ plain: true }) as any));
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] missed session failed:', err?.message?.split('\n')[0]);
+    return [];
+  }
+}
+
+/**
+ * The Today feed's two candidate tiers:
+ *  - `weekBound`: real, precedence-worthy work — the student's current-week
+ *    curriculum blended (round-robin, via blendSurfaces) with Project tasks /
+ *    Community posts / missed-session replays when those surfaces are on.
+ *    This is what the composer treats as "anchored" for cadence purposes —
+ *    curriculum (and curriculum-adjacent work) gets first billing.
+ *  - `evergreenByType`: the intel-pipeline/curriculum evergreen types
+ *    (ai_news_flash, market_intelligence, ai_tool_of_the_day, …), grouped by
+ *    type. The composer merges this with the ambient providers
+ *    (blog/podcast/testimonial) into ONE flat round-robin "variety" pool —
+ *    see todayFeedComposer.extendFeed. Kept SEPARATE from weekBound (rather
+ *    than concatenated onto it, as before 2026-08-04) because lumping a
+ *    ~14-type evergreen pool in with a 3-provider ambient pool gave each
+ *    ambient provider (blog/testimonial/podcast) a much bigger individual
+ *    share than any single evergreen type — the exact "too many blogs"
+ *    imbalance this split fixes.
+ */
+export interface AnchoredCandidates {
+  weekBound: TodayFeedItem[];
+  evergreenByType: Map<string, TodayFeedItem[]>;
+}
+
+export async function gatherAnchored(enrollmentId: string, placedRefs: Set<string>): Promise<AnchoredCandidates> {
+  const cls = await classCandidates(enrollmentId, placedRefs);
+  // Each extra surface is gated by its own flag; when all are off this returns
+  // the class-only weekBound queue unchanged (flag-off ≡ byte-identical to before).
+  const extras: TodayFeedItem[][] = [];
+  if (env.todayAggregateSources) {
+    const [project, community] = await Promise.all([
+      projectCandidates(enrollmentId, placedRefs),
+      communityCandidates(enrollmentId, placedRefs),
+    ]);
+    extras.push(project, community);
+  }
+  if (env.todaySessionReplays) {
+    extras.push(await missedSessionCandidates(enrollmentId, placedRefs));
+  }
+  const weekBound = extras.length ? blendSurfaces([cls.weekBound, ...extras]) : cls.weekBound;
+  return { weekBound, evergreenByType: cls.evergreenByType };
+}

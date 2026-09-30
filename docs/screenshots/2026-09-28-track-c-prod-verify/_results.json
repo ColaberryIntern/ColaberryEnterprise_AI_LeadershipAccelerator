@@ -1,0 +1,112 @@
+{
+  "httpStatus": 200,
+  "finalUrl": "https://enterprise.colaberry.ai/admin/agents/97dfbdf4-0e5b-4d86-b060-f4087b61f311",
+  "activeTabText": "Overview",
+  "gridCheck": {
+    "found": true,
+    "display": "grid",
+    "gridTemplateColumns": "669px 375px",
+    "childCount": 2,
+    "childRects": [
+      {
+        "left": 291,
+        "top": 878,
+        "width": 669,
+        "height": 9499
+      },
+      {
+        "left": 984,
+        "top": 878,
+        "width": 375,
+        "height": 3303
+      }
+    ]
+  },
+  "shadowLight": "rgba(23, 53, 44, 0.06) 0px 8px 24px 0px",
+  "darkToggleFound": true,
+  "shadowDark": "rgba(0, 0, 0, 0.35) 0px 8px 24px 0px",
+  "workTab": {
+    "bucketButtons": [
+      {
+        "text": "Dark mode",
+        "active": false
+      },
+      {
+        "text": "Talk to Reese",
+        "active": false
+      },
+      {
+        "text": "Deactivate",
+        "active": false
+      },
+      {
+        "text": "Refresh",
+        "active": false
+      },
+      {
+        "text": "← Back to Admin",
+        "active": false
+      },
+      {
+        "text": "Override…",
+        "active": false
+      },
+      {
+        "text": "All · 40",
+        "active": true
+      },
+      {
+        "text": "Overdue · 0",
+        "active": false
+      },
+      {
+        "text": "Ready to verify · 0",
+        "active": false
+      },
+      {
+        "text": "Needs a reply · 0",
+        "active": false
+      },
+      {
+        "text": "Open · 40",
+        "active": false
+      },
+      {
+        "text": "Explain this decision",
+        "active": false
+      },
+      {
+        "text": "Discuss with Reese",
+        "active": false
+      }
+    ],
+    "visibleRowsApprox": 40
+  },
+  "detailPanel": {
+    "found": true,
+    "className": "adv2-card",
+    "border": "1px solid rgb(228, 229, 224)",
+    "borderWidth": "1px",
+    "background": "rgb(255, 255, 255)",
+    "boxShadow": "rgba(23, 53, 44, 0.06) 0px 8px 24px 0px"
+  },
+  "paddingByTab": {
+    "overviewFresh": {
+      "leftInset": 28,
+      "topInset": 34
+    },
+    "live-status": {
+      "leftInset": 28,
+      "topInset": 34,
+      "innerIsAdv2Wrap": false,
+      "innerClass": "adv2-id"
+    },
+    "talk": {
+      "leftInset": 28,
+      "topInset": 34,
+      "innerIsAdv2Wrap": false,
+      "innerClass": "adv2-id"
+    }
+  },
+  "consoleErrors": []
+}

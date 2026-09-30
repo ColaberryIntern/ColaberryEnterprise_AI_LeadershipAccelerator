@@ -105,7 +105,7 @@ Ali`);
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: ['dhee@colaberry.com', 'swati@colaberry.com'],
-    cc: ['ali@colaberry.com', 'alimuwwakkil@gmail.com'],
+    cc: ['ali@colaberry.com'],
     subject: 'Re: Basecamp access for Meghana',
     text,
     html,

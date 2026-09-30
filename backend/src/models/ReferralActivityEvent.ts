@@ -5,6 +5,8 @@ export type ReferralEventType =
   | 'referral_submitted'
   | 'lead_created'
   | 'campaign_assigned'
+  /** No campaign matched this referral, so no enrollment happened. See alumniReferralService. */
+  | 'campaign_assignment_failed'
   | 'email_sent'
   | 'email_opened'
   | 'link_clicked'

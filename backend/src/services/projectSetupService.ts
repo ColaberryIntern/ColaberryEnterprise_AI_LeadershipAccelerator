@@ -252,6 +252,29 @@ export async function activateProject(enrollmentId: string): Promise<{
 // 6. Get Setup Status
 // ---------------------------------------------------------------------------
 
+/**
+ * The setup checklist, DERIVED from the sources of truth rather than read from the cache.
+ *
+ * WHY THIS CHANGED. `projects.setup_status` is a stored mirror, and it drifted. Farhat
+ * Beig and Quincy Nkwain Ninying had connected, linked, actively-syncing repositories --
+ * 85, 126 and 289 files, last synced the same day -- while their checklist read
+ * `github_connected: false`. The portal told two students who had done the work that they
+ * had not started.
+ *
+ * The connection is recorded in `github_connections.project_id`, which was populated for
+ * 22 of 33 connections. `projects.github_repo_url`, which the mirror was written from,
+ * was null. So the flag was false while the truth sat one table over.
+ *
+ * Deriving at read time cannot drift, because there is no second copy to fall out of
+ * step. The stored value is still written by the setup steps -- other code reads it, and
+ * this change is deliberately not a schema migration -- but it is no longer what the
+ * learner is shown.
+ *
+ * FAILURE-FIRST. A failed connection lookup falls back to the stored flag rather than
+ * reporting `false`: telling a student who HAS connected that they have not is the exact
+ * failure this function exists to fix, and it must not be reintroduced by a transient
+ * database error.
+ */
 export async function getSetupStatus(enrollmentId: string): Promise<{
   has_project: boolean;
   setup_status: typeof INITIAL_SETUP_STATUS | null;
@@ -260,8 +283,34 @@ export async function getSetupStatus(enrollmentId: string): Promise<{
   if (!project) {
     return { has_project: false, setup_status: null };
   }
+
+  const stored: any = project.setup_status || { ...INITIAL_SETUP_STATUS };
+
+  // Each flag from the thing that actually proves it, falling back to the stored value
+  // so a lookup failure can never downgrade a step the learner has completed.
+  let githubConnected = stored.github_connected === true || !!(project as any).github_repo_url;
+  try {
+    const { sequelize } = await import('../config/database');
+    const [rows] = await sequelize.query(
+      `SELECT 1 FROM github_connections
+        WHERE enrollment_id = $1 AND (project_id = $2 OR project_id IS NULL)
+        LIMIT 1`,
+      { bind: [enrollmentId, (project as any).id] },
+    );
+    if ((rows as any[]).length > 0) githubConnected = true;
+  } catch {
+    // Keep whatever the stored flag said. Never downgrade.
+  }
+
   return {
     has_project: true,
-    setup_status: project.setup_status || null,
+    setup_status: {
+      ...stored,
+      requirements_loaded:
+        stored.requirements_loaded === true || !!(project as any).requirements_document,
+      claude_md_loaded:
+        stored.claude_md_loaded === true || !!(project as any).claude_md_content,
+      github_connected: githubConnected,
+    },
   };
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../utils/api';
 import LeadDetailModal from './LeadDetailModal';
+import PersonLink from '../../components/admin/person/PersonLink';
 
 const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG';
 const ghlContactUrl = (contactId: string) =>
@@ -250,15 +251,24 @@ export default function CRMTab({ campaignId, headers }: Props) {
                 <tbody>
                   {ghlStatus.leads.map((lead) => (
                     <tr key={lead.lead_id}>
-                      <td
-                        className="fw-medium"
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => {
-                          setSelectedLeadId(lead.lead_id);
-                          setSelectedLeadName(lead.name);
-                        }}
-                      >
-                        <span className="text-primary">{lead.name}</span>
+                      <td className="fw-medium">
+                        <PersonLink
+                          name={lead.name}
+                          email={lead.email}
+                          leadId={lead.lead_id}
+                          tab="communications"
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 ms-2 align-baseline text-muted"
+                          onClick={() => {
+                            setSelectedLeadId(lead.lead_id);
+                            setSelectedLeadName(lead.name);
+                          }}
+                          title="This campaign's own timeline (the 360 shows every campaign)"
+                        >
+                          <i className="ri-history-line" aria-hidden="true"></i>
+                        </button>
                       </td>
                       <td className="small">{lead.email}</td>
                       <td className="small">{lead.phone || '—'}</td>

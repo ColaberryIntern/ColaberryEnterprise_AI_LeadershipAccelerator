@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { env } from '../config/env';
 import { AppError } from '../utils/AppError';
 import { getTestOverrides } from './settingsService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 const SLOT_DURATION_MINUTES = 30;
 const BUFFER_MINUTES = 15;      // Buffer between consecutive bookable slots
@@ -227,7 +228,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   const startTime = new Date(data.slotStart);
   const endTime = new Date(startTime.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
 
-  console.log(`[Calendar] createBooking: ${data.name} | ${startTime.toISOString()} - ${endTime.toISOString()} | calendarId: ${env.googleCalendarId} | impersonating: ${env.googleCalendarOwnerEmail || 'none'}`);
+  console.log(`[Calendar] createBooking: ${redactForLogs(data.name)} | ${startTime.toISOString()} - ${endTime.toISOString()} | calendarId: ${env.googleCalendarId} | impersonating: ${env.googleCalendarOwnerEmail || 'none'}`);
 
   // Pre-booking conflict check: verify the slot is still free (ignoring all-day events)
   const conflicts = await getTimedBusyBlocks(calendar, startTime, endTime);
@@ -243,7 +244,7 @@ export async function createBooking(data: BookingInput): Promise<BookingResult> 
   try {
     const test = await getTestOverrides();
     if (test.enabled && test.email) {
-      console.log(`[Calendar] TEST MODE: redirecting attendee from ${data.email} to ${test.email}`);
+      console.log(`[Calendar] TEST MODE: redirecting attendee from ${redactForLogs(data.email)} to ${redactForLogs(test.email)}`);
       attendeeEmail = test.email;
     }
   } catch {

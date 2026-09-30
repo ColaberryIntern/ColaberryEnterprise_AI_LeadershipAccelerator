@@ -120,22 +120,14 @@ ${dodLine()}
 <p><strong>Note:</strong> We will launch even if TWC approval is not yet final. Goal is to create urgency, not gate on TWC.</p>
 </div>`,
   },
-  {
-    name: 'Approval Queues',
-    description: `<div><h3>Approval Queues</h3>
-<p><strong>Owner:</strong> Ali Muwwakkil (sole approver) | <strong>CB role:</strong> queue + summarize + nudge</p>
-<p><strong>Scope:</strong> Every task that needs Ali decision lives here. Design / Marketing / Curriculum / System approvals all flow through this list.</p>
-<p><strong>Approval pairings:</strong></p>
-<ul>
-<li>Design Approval: Ali + Aleem</li>
-<li>Marketing Approval: Ali + Sohail</li>
-<li>Curriculum Approval: Swati + Ali</li>
-<li>System Approval: Kes + Ali</li>
-</ul>
-<p><strong>Cadence:</strong> CB posts a HUMAN ACTION QUEUE update once a day (8am CST) listing what needs Ali this morning. Ali responds, CB unblocks the dependent AI tasks immediately.</p>
-${dodLine()}
-</div>`,
-  },
+  // NOTE: there is deliberately NO standalone "Approval Queues" list. Oversight
+  // approvals live IN their functional area, as a "Review and approve X" todo
+  // bound to the task that produces the artifact (per the 2026-06-10 assessment).
+  // A separate approval list only duplicated those in-area gates and accumulated
+  // orphans/misfiled producers; it was retired via retireApprovalQueue.js and
+  // must not be regenerated here. Oversight triggers (external/public-facing,
+  // financial/contractual, compliance/legal, strategic/irreversible) are gated
+  // inside each area, not in a parallel list.
   {
     name: 'Launch Readiness Dashboard',
     description: `<div><h3>Launch Readiness Dashboard</h3>
@@ -177,7 +169,7 @@ function kickoffMessage() {
 <li><strong>End of day:</strong> CB updates the "Launch Readiness Dashboard" todolist (top task = current readiness %).</li>
 </ul>
 
-<h3>Project structure (10 lists in this project)</h3>
+<h3>Project structure (9 lists in this project)</h3>
 <ol>
 <li>Curriculum (Swati)</li>
 <li>Website - training.colaberry.com (Tejesh)</li>
@@ -187,9 +179,9 @@ function kickoffMessage() {
 <li>Open Houses & Events (Jackie)</li>
 <li>Sales & Admissions (Roselen [blocked] + Taiwo)</li>
 <li>TWC Compliance (Swati + Dheeraj)</li>
-<li>Approval Queues (Ali)</li>
 <li>Launch Readiness Dashboard (CB)</li>
 </ol>
+<p><em>Oversight approvals are not a separate list — each area carries its own "Review and approve" gate, bound to the task that produces the artifact, and Ali signs off there.</em></p>
 
 <h3>Team roster (provisioned on this project)</h3>
 <ul>${provisionedRoster}</ul>
@@ -211,7 +203,7 @@ ${missingRoster ? `<h3>Blockers - need Ali action</h3><ul>${missingRoster}</ul>`
 <li>Daily PMO cron wired (next session continuation or this one)</li>
 </ol>
 
-<p><em>This project is operated by CB System under the Launch PMO operating contract. Any task without an Owner is CB's to figure out. Any decision flagged in Approval Queues is yours, Ali - reply on the task and CB unblocks the dependent work.</em></p>
+<p><em>This project is operated by CB System under the Launch PMO operating contract. Any task without an Owner is CB's to figure out. Any task flagged as a "Review and approve" gate in its area is your sign-off, Ali - reply on the task and CB unblocks the dependent work.</em></p>
 </div>`;
 }
 

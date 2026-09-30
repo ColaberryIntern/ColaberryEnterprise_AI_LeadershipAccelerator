@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260806-b4k2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, August 11, 2026 at 6:27 AM</div>
+    <div><span class="sid">CC-20260806-b4k2</span><span class="count">9 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Week 1 Self Study reading: added Part 0 (install from zero) and rewrote Part 2&#39;s four setup steps into real instructions — answers Ram&#39;s self-study feedback</h2>
+          <span class="badge">2026-08-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ram filed 3 Basecamp tickets in 45 minutes walking Week 1 as a self-study learner (todos 10174075841, 10174137603, 10174283832). Diagnosis: all three trace to ONE artifact — prod card `5653f10c` (canonical program `92b98a72`, week 1, type `warmup`), 4,820 chars of concept prose with **0 links, 0 lists, 0 commands** anywhere in it. Part 2 &quot;Setting Up Your Workspace&quot; was 273 characters plus a `data-diagram=&quot;steps&quot;` figure whose four labels (`Open your project|Start the assistant|Confirm it sees your files|Ask for a small first task`) were exactly the &quot;4 steps&quot; Ram said were impossible to follow — the diagram named them, nothing explained them. Install content did exist but sat in later buckets the reading reaches first (`setup_lab` 2e7b80e3 in `practice`, &quot;Claude Code 101&quot; f1242c5b in `learn`, and that card&#39;s body actually describes Claude-the-chat-assistant, not Claude Code). Nothing in Week 1 mentioned VS Code at all. Fix, in two layers: (1) **content** — new `backend/src/data/selfStudyWeek1.ts` adds **Part 0 - Before You Start** (4 `.prereq` tiles, a 4-step install with real commands, a VS Code integration walkthrough, and links to Anthropic&#39;s Claude Code 101 module Ram cited plus the official docs) and rewrites **Part 2** so each of the four diagram labels becomes a numbered step with its command and its expected output — including the &quot;which folder am I in&quot; trap and a &quot;claude is not recognized&quot; recovery callout. Parts 1/3/4/5 are byte-identical to the approved copy. Applied by new idempotent `backend/src/scripts/seedSelfStudyWeek1.ts`, which preserves the card&#39;s other content keys (questions/completion/github_task/etc.), sets `locked:true` so `ensureFreshContent` can&#39;t regenerate over it, and detects an already-current card and makes no write. (2) **code** — the reader engine physically could not render what this content needs: its iframe was `sandbox=&quot;allow-scripts&quot;`, so an authored `&lt;a href&gt;` click is silently swallowed (the exact failure already documented for the intel band at `RuntimeWorkspace.tsx`), and its stylesheet had no rules for links, `&lt;code&gt;`, or command blocks. Added exported `READER_SANDBOX` (`allow-scripts allow-popups allow-popups-to-escape-sandbox`) shared by both reader surfaces so drawer and workstation can&#39;t drift, plus reader CSS for `.ss a`, `.ss code`, `.cmd` (dark, monospace, `overflow-x:auto`) and `.ss ol li` markers, all with dark-mode variants. Deliberately no `allow-same-origin` — the reader still cannot reach the parent page, cookies, or storage.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Frontend `tsc --noEmit` **exit 0, zero errors** (authoritative CI gate). Backend `tsc --noEmit` clean apart from the pre-existing unrelated `@anthropic-ai/sdk` gap that CI installs fresh. Rendering verified rather than assumed: a headless Chromium harness extracted the **real** `readerDoc()` out of `CardDetailBody.tsx` (no copy-pasted duplicate) and rendered the new copy through it — 7 sections/7 nav tabs (was 6, Part 0 added), all 3 diagrams and 4 illustrations still drawn by the engine, 6 icon tiles intact, plus the new 4 `.prereq` tiles, 8 `.cmd` blocks and 4 links; `document.scrollWidth === clientWidth` (900) and `.cmd` does not overflow its box, confirming no horizontal-scroll regression; link colour resolves `#2E6A86` light / `#7fc4e0` dark. Screenshotted both themes and read them. An apparent &quot;body text is link-coloured&quot; artifact was probed via `getComputedStyle` rather than eyeballed — all prose computes `rgb(26,26,26)`; it was subpixel antialiasing, not a bug. Card content grows 4,820 → 9,974 chars.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Not yet deployed and not yet applied to prod** — PR opened against `main`; the seeder needs the backend built before `node dist/scripts/seedSelfStudyWeek1.js` can run, and Ali&#39;s standing preference is prod deploys after hours. This closes todo 10174075841 (Part 2) and the install/VS-Code/Claude-Code-101 asks in 10174137603. Two items from 10174137603 remain open by design: re-sequencing so Claude Code 101 precedes the reading, and fixing card `f1242c5b`&#39;s mis-scoped body. Todo 10174283832 (a hands-on Explore-Plan-Code-Commit workshop covering success criteria, tools, test suite and code-review agent) is untouched net-new work — Week 1&#39;s existing `prompt_lab`/`implementation_task` cards were checked and cover none of those four. Videos Ram asked for remain Ali&#39;s to record; both tickets explicitly allow richer written content instead, which is what shipped. Branch was cut fresh off `origin/main` because the checked-out `workstream/chapter-quality-and-worker` is 1,848 commits behind and does not even contain `frontend/src/components/timeline/`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Week 1 Claude Code cards: Explore/Plan/Code/Commit workshop authored, and the &quot;Claude Code 101&quot; card&#39;s mis-scoped body corrected</h2>
+          <span class="badge">2026-08-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">closes the remaining two items from Ram&#39;s 2026-08-06 self-study review. (1) **Todo 10174283832 — the workshop.** Ram&#39;s point was that Anthropic&#39;s explore-plan-code-commit video raises success criteria, tools, test suites and code-review agents without ever walking you through doing them. Verified first that Week 1&#39;s existing hands-on cards cover none of those four: `prompt_lab` (198663da) was a generic prompt list and `implementation_task` (7b5f244d) asks for a *diagram* of the workflow rather than performing it. Rather than mint a new curriculum type, the week-1 `prompt_lab` card — already titled &quot;Claude Code Hands-On Lab&quot;, already in `practice`, already copy-gated — is re-authored as **&quot;Workshop - Explore, Plan, Code, Commit&quot;**: 6 stages / 8 prompts, with each of Ram&#39;s four gaps as its own explicit stage (plan-with-success-criteria incl. a prompt that makes the assistant attack its own plan, tool setup, a test-suite stage that ends by asking which tests would pass even if the feature were broken, and a reusable code-review agent plus a stage on disagreeing with its findings rather than complying). Summary copy carries Ram&#39;s positioning note that Anthropic&#39;s material assumes seasoned coders and this slows the same loop down. Choice of vehicle was evidence-based: `implementation_task` renders through the interactive `build_artifacts` station and would have fought a freeform workshop, whereas `prompt_catalog` parses exactly the h3/h4/p/pre shape a staged workshop needs. (2) **Card `f1242c5b` (&quot;Claude Code 101&quot;).** Its `course.url`/`course.name` were already correct, but its authored body described *Claude the chat assistant* (&quot;leverage Claude in your daily work&quot;, &quot;core features of Claude&quot;) — a different product, and the first thing a self-study learner reads on that card. Body rewritten to describe Claude Code, positioned as the video companion to Part 0 of the Self Study reading, plus a `course.sections` line. Deliberately link-free: that body renders through `lessonDoc()` in an iframe sandboxed `allow-same-origin` with no `allow-popups`, so an `&lt;a href&gt;` there is silently swallowed — the SkillsJarPanel&#39;s own &quot;Open in SkillsJar&quot; button, which lives outside the iframe, is what actually opens the course. (3) **Refactor:** the find-card / merge-content / lock / skip-if-current logic now lives once in new `backend/src/scripts/lib/authorTimelineCard.ts` and is shared by all three authored cards; `seedSelfStudyWeek1.ts` was rewritten onto it and shrank from ~115 to ~68 lines. New `seedWeek1ClaudeCodeCards.ts` authors both cards above. Locking the `prompt_lab` card is deliberate and called out in its header — that card was previously week-generated, so generation would otherwise overwrite the workshop after 30 days.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` clean — zero errors in all six new/changed files, only the pre-existing unrelated `@anthropic-ai/sdk` gap that CI installs fresh. Frontend untouched this round (its gate passed at exit 0 in the prior entry). The workshop was parsed through the **real** `parseCatalog()` extracted from `PromptCatalogRender.tsx` (not a reimplementation) inside headless Chromium, confirming what the renderer will actually build: **6 categories, 8 prompts**, every one with a non-empty title, explanation and prompt body, zero problems — so no silently-dropped category (the parser discards any category with no `&lt;h4&gt;`, and empty `&lt;pre&gt;` would ship an uncopyable prompt behind a copy-gate). Copy-gate count is 8, stated explicitly because completion requires copying every prompt. Confirmed the h3/h4/p/pre format is already proven in production by reading the card&#39;s current live content before authoring.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Not yet deployed.** Same PR as the Part 0 / Part 2 work (#1248) — one review for the whole of Ram&#39;s feedback rather than three. After merge + backend build: `node dist/scripts/seedSelfStudyWeek1.js` and `node dist/scripts/seedWeek1ClaudeCodeCards.js` (both accept `--dry-run`, both no-op when already current). GitHub Actions still is not dispatching any workflow for this branch — confirmed not a platform outage this time (an unrelated branch&#39;s run completed green in the same window); the documented empty-commit nudge was tried once and did not help. Not admin-merged: this PR changes an iframe sandbox flag and should have a real review. **Re-sequencing so Claude Code 101 precedes the Self Study reading is now deliberately NOT being done** — Part 0 carries the install path and the 101 link inline at the top of the reading, which addresses the ordering complaint without reordering buckets underneath a live cohort; recorded here so it is a decision rather than an omission. Videos Ram suggested remain Ali&#39;s to record; all three tickets explicitly allowed richer written content instead.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Unblock production frontend builds: remove an eslint-disable naming a rule the build cannot resolve</h2>
+          <span class="badge">2026-08-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the production nginx image would not build — `react-scripts build` failed with `Failed to compile. [eslint] src/pages/admin/orchestration/FeedControlTypeDrawer.tsx Line 109:5: Definition for rule &#39;react-hooks/exhaustive-deps&#39; was not found`. CRA runs eslint with CI semantics during the image build, so an unknown *rule name* in a disable comment is a hard error, not a warning. Introduced by #1287 (Feed Control Type Analytics); the file is the ONLY one in `frontend/src` that referenced that rule (verified by grep across the whole tree — count 1), so nothing else in the repo depends on the rule being registered. Because the rule is not loaded at all, the underlying exhaustive-deps check was never running on this hook either, so deleting the comment changes zero lint behaviour — it only stops eslint erroring on a name it does not know. Replaced it with a plain comment stating why the dependency array is intentionally `[step, slug]` (`onProposed` is a fresh closure each render; including it would refire the debounced preview every render), so the original intent survives.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">root-caused from the actual build log on the VPS (`/tmp/build.log` lines 130-145) rather than guessed — the failing target is `nginx builder 8/8 RUN npm run build:frontend`, and the only reported error is this one rule-name line. Confirmed via `git log` that the line arrived in #1287 and is not from this session&#39;s own Week 1 work, and via `grep -rl` on the prod checkout that exactly 1 file in `frontend/src` references the rule. Production nginx + backend rebuild and live verification logged in the deploy entry that follows.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">found while deploying the Week 1 self-study work — `main` was un-deployable on the frontend for anyone, independent of that change. Fixed rather than worked around (e.g. rebuilding backend only) because shipping the Week 1 reading without the frontend would have put authored links in front of students that the un-updated reader still swallows.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Fix an idempotency defect in authorTimelineCard caught by running the Week 1 seeders twice against production</h2>
+          <span class="badge">2026-08-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">after deploying the Week 1 content, the standing &quot;run it twice&quot; check showed two of three cards correctly reporting `already-current` with no write, but the **Claude Code 101** card reporting `applied` on every run. Root cause: `authorTimelineCard.same()` compared values with a plain `JSON.stringify`, and Postgres **`jsonb` does not preserve object key order**. That card is the only one of the three that writes a nested object (`meta.course`), so its authored literal `{name,url,sections}` came back from the DB reordered, compared unequal to itself, and rewrote the card — churning `content_at` — on every single run. Fixed by canonicalising key order recursively before comparing (`canon()`), while deliberately preserving array order, since question order on a card is meaningful. This is an idempotency violation, which this repo classifies as a production defect rather than a nit, so it is fixed rather than noted.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">new `backend/src/scripts/lib/__tests__/authorTimelineCard.test.ts`, **7/7 passing**, opening with a test that reproduces the exact original break (the authored `course` literal vs the same object with jsonb&#39;s key order) and also covering nested depth, real content changes still reading as different, array order staying significant, key order inside array elements, and primitive/null/undefined handling. Backend `tsc --noEmit` clean — zero errors in the changed file, only the pre-existing unrelated `@anthropic-ai/sdk` gap. Re-verified against **production** after redeploy: all three cards now report `already-current` on a second consecutive run.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the bug was only visible by running the seeder a second time — a single successful apply looked completely healthy, which is exactly why the twice-run check is worth doing on anything that writes.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Week 1 Self Study: add video walkthroughs to Part 0 and Part 3, closing the &quot;add a video&quot; half of Ram&#39;s feedback</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">all three of Ram&#39;s tickets asked for video (&quot;add a video that shows what these 4 steps are&quot;, &quot;a video that explain how to integrated Cluade code with VS Code&quot;, &quot;a clear hands on workshop / video&quot;), each with written content offered as the acceptable alternative. The written content shipped first; this adds the video half using EXISTING material rather than anything recorded in-house. **Part 0** gains a &quot;Video walkthroughs&quot; block with two install videos (one general, one Windows-specific) and two VS Code integration videos (a 3-minute version and a longer guide). **Part 3** gains a &quot;Watch the loop being run&quot; block with the Claude Code 101 explore-plan-code-commit lesson (the same lesson Ram cited as module 469792, on video) plus a 25-minute Claude Code workshop and Anthropic&#39;s Code w/ Claude best-practices talk — then a callout pointing at the new Workshop card, making Ram&#39;s own argument explicitly: watching is not running it, and the workshop covers the parts the videos raise but never demonstrate. Links live in the READING rather than on the Workshop card by necessity: `PromptCatalogRender.parseCatalog()` reads `&lt;p&gt;` via `textContent`, so an anchor in a catalog explanation renders as dead plain text — the reader is the only Week 1 surface where an authored link actually works (and only because this session&#39;s earlier `READER_SANDBOX` change made it work).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">re-rendered the updated copy through the **real** `readerDoc()` extracted from `CardDetailBody.tsx` in headless Chromium — **11 links** (was 4) and **8 prereq tiles** (was 4), with all 7 sections, 3 diagrams, 4 illustrations, 6 icon tiles and 8 command blocks still intact, `scrollWidth === clientWidth` (no horizontal-scroll regression). Part 3 screenshotted in both themes and read. Backend `tsc --noEmit` clean (only the pre-existing `@anthropic-ai/sdk` gap). Body grew 9,974 → 12,359 chars. Applied to production and re-verified idempotent (second run reports `already-current`).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Provenance limit stated plainly.** Video URLs were found by search and confirmed to resolve with matching titles, but they were NOT watched, and YouTube&#39;s client-side rendering blocked reading channel metadata, so which are official Anthropic uploads could not be verified. The copy therefore never asserts authorship it cannot back — the Part 0 block says &quot;They are outside resources, not ours, so treat the written steps above as the source of truth if anything differs&quot;, and only the Code w/ Claude talk (whose Anthropic origin is in the title itself) is attributed. Links, not embeds — reversible in one edit if a video goes stale or turns out weak. Recommend someone skims the two install/VS Code picks; the written instructions carry the load regardless.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Deploy log: Week 1 video walkthroughs live on production — plus a prod stash-pop incident, caught and fully recovered</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed the Part 0 / Part 3 video walkthroughs (#1338) to production. **Incident during the deploy, disclosed in full:** the deploy script paired `git stash push -q -- scripts/cron-env-wrapper.sh` with a later `git stash pop`. That pairing is unsafe on this VPS. `git stash push -- &lt;path&gt;` creates **no stash entry at all** when the path is already clean, and by this run the cron hotfix had been committed upstream — so the push was a no-op and the following `pop` popped **`stash@{0}`, which belonged to a different session** (`pre-deploy CC-20260730-h4q9`). That dumped ~513 modified files and 100 conflicted paths into the prod working tree and failed the backend build (`BUILD_EXIT=1`), leaving the previously-deployed image running. **Nothing was lost:** because the pop hit conflicts, git retained the stash entry, verified still present as `stash@{0}` with all 47 stashes intact. Recovered by inspecting first (`git stash list`, conflict count, hotfix state) rather than reflexively re-running: confirmed the cron hotfix now lives in HEAD (so it never needed stashing), confirmed the other session&#39;s stash was retained, then `git reset --hard HEAD` to drop the popped content — which does not touch stashes. Verified 0 conflicts, 0 modified tracked files, `HEAD == origin/main`, hotfix present, 47 stashes still listed. Checked the 38 surviving untracked files for build risk before rebuilding (`0` untracked `.ts`/`.tsx` under `backend/src` or `frontend/src`) and deliberately did NOT `git clean` them — they are pre-existing prod-local artifacts and some may belong to another session.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend rebuilt `BUILD_EXIT=0`, health confirmed via `docker exec ... node -e fetch` (the image has no wget) after ~15s. Seeder applied then re-run: `applied` → `already-current`, proving the jsonb key-order idempotency fix holds in production. Live DB read-back of card `5653f10c`: **12,360 chars** (was 9,975), **7 sections**, **11 links**, **7 YouTube links** — read out of Postgres, not inferred from the deploy log. Earlier in the session the same read-back confirmed the workshop card (6 stages / 8 prompts, retitled) and the Claude Code 101 card, and confirmed the served bundle `main.53927f98.js` contains `allow-popups-to-escape-sandbox` so the authored links actually open.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Root lesson, worth carrying:** never pair a blind `git stash push -- &lt;path&gt;` with `git stash pop` on this VPS. Prod carries 47 stashes from many sessions, so a no-op push followed by a pop silently reaches into someone else&#39;s work. Use `git stash list` count before/after, or address the specific stash by ref, or — better — do not stash at all once the local change is committed upstream. The safe recovery shape when it does happen: inspect before acting, confirm the stash entry survived, then `git reset --hard` (stashes are untouched by reset), and never `git clean` a shared prod tree.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Week 1 video links corrected: two &quot;official&quot; picks were reuploads, replaced with verified first-party sources</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali reported a Part 3 video did not work. Checking it exposed a bigger problem than a dead link. Every URL was probed through YouTube&#39;s **oEmbed endpoint** (`/oembed?url=...&amp;format=json`), which returns the owning channel in `author_name` — the check that should have been run when these were first chosen. Result: of the 7 shipped links only **one** (`gv0WHhKelSE`, Code w/ Claude) was actually on Anthropic&#39;s channel. The two presented as strongest-official-signal were **reuploads**: `AADd9h6FpP8` belonged to &quot;Claude Courses&quot;, and `YNB9azeiypw` — titled &quot;25-minute Claude Code workshop by Anthropic&quot; — belonged to an individual, &quot;Samatcha Sihabut&quot;. Titles were trusted where ownership should have been verified. Corrected by probing ~27 candidate IDs for `author_name` and keeping only what could be proven: **Part 3** now carries `xJQuF02NAK8` (The Explore → Plan → Code → Commit workflow, on **Claude&#39;s** own channel — a genuine first-party version of the same lesson) and `gv0WHhKelSE` (**Anthropic**); the reuploads are gone. **Part 0** now leads with `6eBSHbLKuN0` (Mastering Claude Code in 30 minutes, **Anthropic**) and states plainly that Anthropic publishes no dedicated install or VS Code video, so the remainder are independent teachers — each now **named in the copy by channel** (Tech With Tim, Net Ninja, Nic Conley) so a student always knows whether they are watching the makers of the tool or a community teacher. Dropped the two weakest unattributed install picks.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">link IDs were extracted **from the content file itself** (`grep -oE &#39;youtube\.com/watch\?v=...&#39;`) rather than from notes, then each probed live — all 6 return HTTP 200, and 3 are confirmed `author_name` of &quot;Anthropic&quot; or &quot;Claude&quot;. Re-rendered through the real `readerDoc()` in headless Chromium: 7 sections, 10 links, 8 prereq tiles, 3 diagrams / 4 illustrations / 6 icon tiles / 8 command blocks intact, no horizontal overflow. Backend `tsc --noEmit` **0 errors total**. Applied to production and re-verified idempotent.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The lesson is that a matching title is not provenance.** oEmbed&#39;s `author_name` is a cheap, decisive ownership check and should be run on any third-party video before it goes in front of students — added to the durable memory alongside the link-verification habit. Ali&#39;s report of a broken video is what surfaced it; the oEmbed probe says that specific ID still resolves, so his failure was likely region or availability related, but the correct fix was the same either way — replace a reupload with the first-party original.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Architect Time Machine: single-select options now render as radios, not checkboxes</h2>
+          <span class="badge">2026-08-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ram (Basecamp todo 10189299315) found that &quot;The Architect Time Machine - The Request Is Not the Requirement&quot; shows **checkboxes you can only tick one of**, and that the problem repeats across many screens. Confirmed and root-caused: the markup was already semantically correct (`role=&quot;radiogroup&quot;` + `role=&quot;radio&quot;` + `aria-checked`, so screen readers were fine) — the defect was purely the **visual affordance**. `.am-box` was an 18px rounded SQUARE (`border-radius:5px`) rendering a `✓` glyph when chosen, which promises multi-select the group cannot honour. It repeats on every screen because a single shared `OptionList` component renders every option group in the experience (both the interview questions and the first-decision stage). Fixed at that one component: `.am-box` is now a circle (`border-radius:50%`) containing a scale-animated filled dot, the `✓` glyph is gone, and the change is `prefers-reduced-motion` aware. Verified there is nothing genuinely multi-select to protect: `mode: &#39;multiple&#39;` exists in the validators (`architectMindsetLogic.ts:93`, and the frontend completeness check) but **no UI path ever renders it and no live card uses it** — a live query across all **13** `architect_mindset` cards on prod returned **0** mentioning `mode` or `multiple`. So a checkbox is currently never correct anywhere in this component. Left a comment stating the rule for whoever authors the first real multi-select question: give it a square and a check then, not before.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">rendered the **real** `AM_CSS` extracted from `ArchitectTimeMachine.tsx` against the exact markup `OptionList` emits, in headless Chromium, and probed the computed styles rather than eyeballing a diff — `borderRadius: &quot;50%&quot;`, unselected dot `matrix(0,...)` (hidden) vs selected `matrix(1,...)` (shown), **no `✓` glyph present anywhere in the rendered text**, 3 elements with `role=radio` and exactly 1 with `aria-checked=true`. Screenshotted and read. Frontend `tsc --noEmit` **exit 0, zero errors** (the authoritative CI gate).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the latent `mode: &#39;multiple&#39;` inconsistency is reported, not silently fixed — validation would accept a multi-select question that the UI cannot produce (it reads `a.choices`, which the single-select renderer never sets), so such a question would be permanently un-completable. Not exercised by any live data today; flagged for whoever authors one rather than building an untested multi-select renderer with no content to prove it against.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Deploy log: Architect Time Machine radio fix live; all four of Ram&#39;s tickets answered and closed</h2>
+          <span class="badge">2026-08-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed the single-select radio fix (#1364) to production via an nginx rebuild (frontend change, so the CRA bundle had to be rebuilt, not just the backend). Then replied on all four Basecamp todos as Ali and marked each complete: 10174075841 (Part 2 unfollowable), 10174137603 (self-study assumes prior knowledge / install / VS Code / content flow), 10174283832 (Explore-Plan-Code-Commit workshop), 10189299315 (checkboxes that only accept one answer). Each reply states what actually shipped, and two carry disclosures rather than a clean claim: on 10174075841, Swati had commented that she shared updated Part 2 data with Ali which this session never received, so the reply says plainly that none of it is reflected and asks for it; on 10174137603, Kes&#39;s suggested setup video was **not** added because it covers Python/Jupyter/VS Code on Windows while Claude Code&#39;s prerequisite is Node — adding it would have sent learners down the wrong setup path — and the same reply passes on the re-upload finding so the team stops trusting video titles as provenance.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">prod `HEAD == origin/main` (`ff355852`) before building; `BUILD_EXIT=0`; served bundle rotated to `main.27239934.js` and confirmed by grepping the running nginx container — the circular `am-box` rule is present (1 match) and the old `border-radius:5px` square rule is gone (0 matches), so the fix is genuinely in what students download rather than merely merged. Basecamp writes verified by re-reading each todo after the fact: all four report `completed=True` with the new comment counted; every comment posted under Ali&#39;s identity (17454835, asserted before any write) and every @-mention used a live `attachable_sgid` fetched from the project&#39;s people list, so Ram, Swati and Kes are actually notified rather than seeing inert text.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**One item deliberately left open and named rather than absorbed** — Swati&#39;s updated Part 2 data. It is not in the repo, was never handed over, and the rewrite may or may not supersede it; that belongs to her and Ali to settle, and closing the todo silently over it would have hidden it. Also carried forward, not fixed: a `mode: &#39;multiple&#39;` question in The Architect Time Machine would be permanently un-completable (validation reads `a.choices`, which the single-select renderer never sets). No live card uses it, so it is flagged for whoever authors the first real multi-select question instead of being built blind.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260806-b4k2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

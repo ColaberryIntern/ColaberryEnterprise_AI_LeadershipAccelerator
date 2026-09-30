@@ -1,6 +1,8 @@
 # 41-Day Launch Timeline
 
-**Today: 2026-05-31. Launch: 2026-07-10. Cohort kickoff: 2026-07-13. Mon-Fri working days only.**
+**Today: 2026-05-31. Platform launch: 2026-07-16 (was 2026-07-10). Program launch / Cohort 1 orientation: 2026-07-23, classes start: 2026-07-27. Mon-Fri working days only.**
+
+> **DATE CORRECTION (Ali, 2026-07-10):** The platform launch (site + Open House go-live / first paid enrollment) moved from 2026-07-10 to **Thursday 2026-07-16**. Program launch (Cohort 1 orientation) stays **Thursday 2026-07-23**; classes still start **Monday 2026-07-27**. Week ranges below that still reference the old 2026-07-10 launch have NOT been re-laddered.
 
 ---
 
@@ -74,9 +76,9 @@ The single hardest week. Everything that's been in flight has to land:
 - First paid enrollment opens
 - Ali 5 LinkedIn lives
 
-**LAUNCH DAY: Friday 2026-07-10**
+**PLATFORM LAUNCH: Thursday 2026-07-16** (site + Open House go-live; first paid enrollment) — moved from 2026-07-10 per the DATE CORRECTION at the top of this doc.
 
-**COHORT 1 KICKOFF: Monday 2026-07-13** (12 weeks × Mon+Thu = ends ~2026-10-02 with Architect Expo)
+**PROGRAM LAUNCH / COHORT 1 ORIENTATION: Thursday 2026-07-23. CLASSES START: Monday 2026-07-27** (12 weeks × Mon+Thu = ends ~2026-10-16 with Architect Expo)
 
 ---
 

@@ -133,7 +133,12 @@ export async function runAgentBehaviorMonitorAgent(
               type: 'bug',
               source: 'security',
               created_by_type: 'agent',
-              created_by_id: agentId,
+              // Was the raw AiAgent.id UUID — resolveCreatorAiAgent()'s 'agent' case
+              // expects agent_name (the same convention every other registered
+              // creator uses), not a UUID, so this never resolved to a real human
+              // and the ticket landed under an unregistered raw-UUID identity. Fixed
+              // 2026-08-19 alongside registering this agent's identity/reports_to.
+              created_by_id: AGENT_NAME,
               entity_type: 'system',
               entity_id: deptId,
               metadata: { stuck_agents: stuckAgents },

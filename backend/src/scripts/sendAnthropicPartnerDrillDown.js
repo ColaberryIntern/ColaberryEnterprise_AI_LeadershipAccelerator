@@ -176,7 +176,6 @@ For DONE: thank-you note + ask them to mentor a stalled peer.
   const r = await transport.sendMail({
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    cc: 'alimuwwakkil@gmail.com',
     subject: `[Anthropic Partner] Drill-down - ${stalled.length} stalled, ${daysLeft} days to deadline`,
     text: stripEmDashes(text),
     html: stripEmDashes(html),

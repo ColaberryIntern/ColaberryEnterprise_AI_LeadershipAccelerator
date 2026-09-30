@@ -1,0 +1,80 @@
+/**
+ * todayFeedTypes — the shared item/page/row shapes for the Today feed, split out
+ * of todayFeedComposer.ts (2026-08-12, daily-refresh build) purely to keep that
+ * file under CLAUDE.md's 500-line hard ceiling. Pure types, no logic, no I/O.
+ *
+ * Lives in its own module (rather than folded into either composer.ts or the new
+ * todayFeedCapeRanking.ts) specifically so both of those files — and every other
+ * consumer across the codebase (capeLearningValueRanker.ts, todayAnchoredSources.ts,
+ * feedControlService.ts, capeTodayPlanService.ts, ...) — can import `TodayFeedItem`
+ * without creating a circular value-dependency between composer.ts and the ranking
+ * module (CLAUDE.md: "a dependency two modules share belongs in a third module
+ * they both import, never A→B→A"). todayFeedComposer.ts re-exports everything here
+ * so no existing `from './todayFeedComposer'` import site needed to change.
+ */
+import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
+import { type TodayItemKind } from './todayFeedPlan';
+
+export interface TodayFeedItem {
+  position: number;
+  kind: TodayItemKind;
+  ref: string;                 // `card:<id>` | `<provider>:<mediaId>`
+  surface: string;             // home_surface of the type (drives the section colour)
+  type: string;                // curriculum type slug
+  render_band: string;
+  card_id: string | null;      // anchored deep-link target (open/complete)
+  title: string | null;
+  subtitle: string | null;
+  description: string | null;
+  image: string | null;
+  video: FeedVideo | null;
+  blog: FeedBlog | null;
+  content: FeedContent | null;
+  week: number | null;
+  estimated_time: number | null;
+  status: string | null;       // anchored progress status
+  points?: { learning?: number; builder?: number; community?: number } | null;  // engagement points the card awards (anchored curriculum cards)
+  interacted: boolean;
+  author?: { name: string; avatar_url: string | null; level: number } | null;  // community posts: the member byline
+  // ── Community-post items only ────────────────────────────────────────────
+  // A `community:<postId>` item IS a post, not a curriculum card: `card_id` is
+  // null for it. The client used to fall back to the REF as the card id, which
+  // sent `community:<uuid>` to card-scoped runtime endpoints and 500'd (the id
+  // is not a UUID). These carry the post's own identity so the client opens the
+  // post's discussion thread instead of a card panel that cannot exist.
+  community_post_id?: string | null;
+  // ── Project-task items only ──────────────────────────────────────────────
+  // Same shape of problem: a `project:<taskId>` item is a task, not a card, so
+  // `card_id` is null. These carry the task's real address so the client can
+  // navigate to /portal/projects/workspace/:project_id/:project_task_id.
+  project_id?: string | null;
+  project_task_id?: string | null;
+  /** Server-resolved student-facing label — the week's Community Ritual name
+   *  ("Skill Drop", "Cohort Wins") for a ritual post. Clients MUST prefer this
+   *  over deriving a label from `type`, which only ever yields the raw slug. */
+  student_label?: string | null;
+  /** Project items only: the verb the tile's button uses when the task is not
+   *  built — "Submit" for a demo-prep task, "Demo Day" for the staff-marked
+   *  presentation. Null/absent means the default ("Build"). Mirrors the
+   *  frontend card's `cta_verb`, which the Projects page sets client-side. */
+  cta_verb?: string | null;
+  like_count?: number | null;
+  comment_count?: number | null;
+}
+
+export interface TodayPage {
+  items: TodayFeedItem[];
+  nextCursor: number;
+  exhausted: boolean;          // true only when even ambient produced nothing (empty pools)
+}
+
+export interface ImpressionRow {
+  position: number;
+  kind: TodayItemKind;
+  ref: string;
+  provider: string | null;
+  card_id: string | null;
+  item: any;                   // stored TodayFeedItem payload
+  interacted_at: Date | null;
+  served_at: Date;
+}

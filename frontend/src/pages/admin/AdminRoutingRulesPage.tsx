@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
-import Breadcrumb from '../../components/ui/Breadcrumb';
+import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
+import { TrustSignal } from '../../components/admin/shell/trust';
 
 interface RoutingRule {
   id: string;
@@ -52,6 +53,36 @@ export default function AdminRoutingRulesPage() {
   useEffect(() => {
     fetchRules();
   }, [fetchRules]);
+
+  const summary = useMemo(() => {
+    const total = rules.length;
+    const active = rules.filter((r) => r.is_active).length;
+    const inactive = total - active;
+    const continuing = rules.filter((r) => r.continue_on_match).length;
+    return { total, active, inactive, continuing };
+  }, [rules]);
+
+  // Per-page trust signal (Basecamp todo 10027085963) derived from live routing-rule state.
+  const trust: TrustSignal = useMemo(() => {
+    const { total, active, inactive } = summary;
+    return {
+      level: 'live',
+      source: 'routing rules',
+      updatedAt: new Date().toISOString(),
+      summary: `${total} routing rules, ${active} active, ${inactive} inactive.`,
+      href: '/admin/trust',
+      pillars: [
+        {
+          name: 'Coverage',
+          status: 'live',
+          evidence: [
+            { label: 'Total', value: String(total) },
+            { label: 'Active', value: String(active) },
+          ],
+        },
+      ],
+    };
+  }, [summary]);
 
   const startEdit = (rule: RoutingRule) => {
     setEditingId(rule.id);
@@ -124,25 +155,40 @@ export default function AdminRoutingRulesPage() {
   }
 
   return (
-    <div className="container-fluid py-4">
-      <Breadcrumb items={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Routing Rules' }]} />
-
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="h3 mb-1">Routing Rules</h1>
-          <p className="text-muted mb-0 small">Ordered rules that fire actions on incoming leads.</p>
+    <>
+      <PageHeader
+        title="Routing Rules"
+        icon="node-tree"
+        subtitle="Ordered rules that fire actions on incoming leads."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Routing Rules' }]}
+        trust={trust}
+        actions={
+          <button className="btn btn-primary btn-sm" onClick={startNew}>
+            <i className="ri-add-line" aria-hidden="true" /> New Rule
+          </button>
+        }
+      >
+        <div className="row g-3">
+          <div className="col-6 col-lg-3">
+            <StatCard label="Total" value={summary.total} icon="node-tree" tone="primary" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Active" value={summary.active} icon="checkbox-circle-line" tone="success" />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Inactive" value={summary.inactive} icon="pause-circle-line" tone={summary.inactive ? 'warning' : 'neutral'} />
+          </div>
+          <div className="col-6 col-lg-3">
+            <StatCard label="Continue-on-match" value={summary.continuing} icon="skip-forward-line" tone="info" />
+          </div>
         </div>
-        <button className="btn btn-sm btn-primary" onClick={startNew}>+ New Rule</button>
-      </div>
+      </PageHeader>
 
       {error && <div className="alert alert-danger py-2">{error}</div>}
 
       {editingId && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-header bg-white fw-semibold">
-            {editingId === 'new' ? 'New rule' : 'Edit rule'}
-          </div>
-          <div className="card-body">
+        <div className="mb-4">
+          <SectionCard title={editingId === 'new' ? 'New rule' : 'Edit rule'}>
             <div className="row g-3">
               <div className="col-md-6">
                 <label className="form-label small fw-medium">Name</label>
@@ -190,11 +236,11 @@ export default function AdminRoutingRulesPage() {
               <button className="btn btn-sm btn-primary" onClick={save}>Save</button>
               <button className="btn btn-sm btn-outline-secondary" onClick={() => { setEditingId(null); setForm(EMPTY); }}>Cancel</button>
             </div>
-          </div>
+          </SectionCard>
         </div>
       )}
 
-      <div className="card border-0 shadow-sm">
+      <SectionCard padded={false}>
         <div className="table-responsive">
           <table className="table table-hover mb-0">
             <thead className="table-light">
@@ -217,14 +263,18 @@ export default function AdminRoutingRulesPage() {
                   <td className="small"><code>{JSON.stringify(r.conditions)}</code></td>
                   <td className="small">
                     {r.actions.map((a: any, i) => (
-                      <span key={i} className="badge bg-info me-1">{a.type}</span>
+                      <span key={i} className="me-1">
+                        <StatusBadge label={a.type} tone="info" />
+                      </span>
                     ))}
                   </td>
                   <td className="small">
-                    {r.continue_on_match && <span className="badge bg-secondary me-1">continue</span>}
-                    <span className={`badge ${r.is_active ? 'bg-success' : 'bg-secondary'}`}>
-                      {r.is_active ? 'active' : 'inactive'}
-                    </span>
+                    {r.continue_on_match && (
+                      <span className="me-1">
+                        <StatusBadge label="continue" tone="neutral" />
+                      </span>
+                    )}
+                    <StatusBadge label={r.is_active ? 'active' : 'inactive'} tone={r.is_active ? 'success' : 'neutral'} />
                   </td>
                   <td className="text-end">
                     <button className="btn btn-sm btn-outline-secondary me-1" onClick={() => startEdit(r)}>Edit</button>
@@ -235,7 +285,7 @@ export default function AdminRoutingRulesPage() {
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+      </SectionCard>
+    </>
   );
 }

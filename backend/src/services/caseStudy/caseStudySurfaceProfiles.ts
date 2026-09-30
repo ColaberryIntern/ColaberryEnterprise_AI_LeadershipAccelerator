@@ -1,0 +1,307 @@
+/**
+ * caseStudySurfaceProfiles - the four surface profiles, as DATA (spec §21).
+ *
+ * Split out of `caseStudyFilterService.ts` to keep both files inside CLAUDE.md's
+ * size targets, on the same precedent as `caseStudySnapshotBuilder` + `…Sections`
+ * and `caseStudyReadinessService` + `…Rubric`. The dependency runs one way: this
+ * file imports contracts only, and the engine imports this. Nothing here imports
+ * the engine.
+ *
+ * ALL FOUR KEYS EXIST FROM DAY ONE. That is what makes "adding Training is a
+ * publication row, not a schema change" a real property rather than an
+ * aspiration - and it has now been collected on twice. AI Flotation went live in
+ * September 2026 and Training followed it, each by adding a key to
+ * `PUBLISHABLE_SURFACE_KEYS` and an address to its profile. No migration, no new
+ * table, no change to a single stored snapshot.
+ *
+ * `publishable` on the returned profile is DERIVED from that list rather than
+ * declared here, because a hand-written copy of it had already drifted.
+ *
+ * LEAF MODULE: type-only imports, no I/O, nothing that can fail.
+ */
+
+import { PUBLISHABLE_SURFACE_KEYS } from '../../types/caseStudy';
+import type {
+  CaseStudyBuiltByType,
+  CaseStudySectionKey,
+  CaseStudySurfaceKey,
+} from '../../types/caseStudy';
+import type { CaseStudySurfaceProfile } from '../../types/caseStudyFilters';
+import type { PublicVerificationClass } from '../../types/caseStudyPublic';
+
+/* ────────────────────────────────────────────────────── the four lenses ──── */
+
+/**
+ * A LENS REORDERS. IT DOES NOT DROP.
+ *
+ * Every one of the four orders below contains all ten section keys. That is the
+ * rule the four differ under, and it is deliberate: `hiddenSections` stays `[]`
+ * on all four surfaces because "this audience does not get to see the
+ * measurement" is an editorial decision nobody has made, while "this audience
+ * meets the architecture first" is the decision the lens model exists to
+ * express. A record's evidence is not audience-dependent
+ * (SURFACE_LENS_MODEL §7.2); the sequence it is met in is.
+ *
+ * `hero` leads and `cta` closes on all four — the hero carries the `h1` and the
+ * CTA carries its own heading from `profile.cta`, so moving either is a page
+ * structure change rather than a framing one.
+ *
+ * Until 2026-08-26 these were ONE shared constant, so `sectionOrder` was a
+ * mechanism that had never been given two different values. Four identical
+ * lenses do not prove a lens model; they prove a field exists.
+ */
+
+/**
+ * ENTERPRISE — "Can you help my organization respond to this change?"
+ *
+ * DELIBERATELY UNCHANGED, and it is the one order in this file that is not new.
+ * Two reasons, both recorded in STORY_STUDIO_PLAN §3 C-entry-2.
+ *
+ * 1. Enterprise's order is what `enterprise.colaberry.ai/stories/:slug` renders
+ *    TODAY. Reordering it is a production change wearing an admin-lab change's
+ *    clothes. (It is no longer the ONLY publishable surface - AI Flotation and
+ *    Training publish too - but each of those reads its own order, so this one
+ *    is still Enterprise's alone to change.)
+ * 2. SURFACE_LENS_MODEL §3.1 proposes leading with `measurement`, and on the
+ *    pilot record `heroMetrics[0]` and `measurement.metrics[0]` are the same
+ *    metric — a deliberate subset relationship pinned by
+ *    `storyDetailV2HeroInvariant.test.ts`. Putting `measurement` directly under
+ *    the hero therefore prints the same metric card twice inside one screen.
+ *    Resolving that duplication is a precondition of the change, and it is not
+ *    resolved.
+ *
+ * It is also the control. Three lenses moving against a fixed fourth is how an
+ * operator can see that the difference is the lens and not the record.
+ */
+const ENTERPRISE_ORDER = [
+  'hero', 'situation', 'decisions', 'build', 'architecture', 'measurement',
+  'roadmap', 'builder', 'contributors', 'artifacts', 'repositories', 'closing', 'cta',
+] as const;
+
+/**
+ * TRAINING — "Will this prepare me for the work AI is creating?"
+ *
+ * The learner's question is about THEMSELVES, so `contributors` (who did this,
+ * and were they like me) and `build` (what did the work actually consist of)
+ * rise to meet it, and `artifacts` — the thing a learner would put in a
+ * portfolio — comes before the architecture that produced it.
+ *
+ * TRUTH RISK IS HIGHEST HERE and it is structural, not editorial. This profile's
+ * hero title is "What our learners built"; the pilot record's `builtBy` is
+ * `colaberry_team`. Leading with `contributors` over a staff-built record makes
+ * a false implication out of nothing but section order. `requiredSections` is
+ * what stops the inverse failure (hiding attribution); what stops THIS one is
+ * that `builtBy` travels on the record and prints in the hero facts on every
+ * surface. Do not make that hero fact surface-conditional.
+ */
+const TRAINING_ORDER = [
+  'hero', 'situation', 'decisions', 'contributors', 'build', 'artifacts',
+  'architecture', 'measurement', 'roadmap', 'builder', 'closing', 'repositories', 'cta',
+] as const;
+
+/**
+ * AI FLOTATION — "Can you actually design and deliver sophisticated AI-native
+ * systems?"
+ *
+ * The delivery buyer's question is about CAPABILITY, so `architecture` (was this
+ * designed or assembled) leads and `repositories` (can I read the source) rises
+ * from the closing band to third. This is the lens that most wants the source
+ * link early, and the one that most needs the floor below.
+ *
+ * CONSTRAINT: AI Flotation must not imply it originally built this platform.
+ * The record already refuses the claim — `builtBy` is `colaberry_team` and
+ * `ai_flotation_team` is a separate enum member, so attribution travels with the
+ * record rather than with the surface. The failure mode this order gets close to
+ * is an architecture-led page under an AI Flotation masthead with `contributors`
+ * suppressed. `requiredSections` makes that unexpressible.
+ */
+const AI_FLOTATION_ORDER = [
+  'hero', 'architecture', 'decisions', 'build', 'repositories', 'measurement',
+  'situation', 'roadmap', 'artifacts', 'builder', 'contributors', 'closing', 'cta',
+] as const;
+
+/**
+ * REFACTORED — "How was this build architected, governed and verified?"
+ *
+ * This reader wants METHOD, so `build` (the chronology, assembled from
+ * repository evidence) leads and `repositories` follows the architecture that
+ * the evidence supports. `situation` — the business problem — falls to eighth,
+ * because it is the one lens for which the problem is context rather than
+ * subject.
+ *
+ * CONSTRAINT, AND IT IS AN EDITORIAL RULE ON TWO STRINGS RATHER THAN A
+ * MECHANISM: Refactored must not imply it governed work that predates it. No
+ * field on the record dates the governance relationship — `builtBy` says who
+ * built, and nothing says who governed — so no predicate can enforce this. What
+ * Refactored may truthfully claim is about the RECORD, not the WORK: that the
+ * timeline was assembled from repository evidence and the provenance was
+ * resolved by the platform, both true of the record whenever it was produced.
+ *
+ * The eyebrow and CTA below may describe how the record was produced. They may
+ * NOT use governance verbs — "we governed", "built under", "delivered by" —
+ * about the project. If a field ever records when a project came under platform
+ * governance, this comment becomes a predicate. Until then it is this comment.
+ */
+const REFACTORED_ORDER = [
+  'hero', 'build', 'architecture', 'decisions', 'repositories', 'artifacts',
+  'roadmap', 'measurement', 'situation', 'builder', 'contributors', 'closing', 'cta',
+] as const;
+
+/**
+ * The attribution floor, identical on all four surfaces (SURFACE_LENS_MODEL
+ * §5.4). Subtracted from `hiddenSections` before the section walk, so no
+ * profile can hide who built the work, where the source is, or the offer being
+ * made.
+ *
+ * It is the same on all four ON PURPOSE. A per-surface floor would be a floor
+ * the surface sets for itself, which is not a floor.
+ */
+const REQUIRED_SECTIONS = ['contributors', 'repositories', 'cta'] as const;
+
+/**
+ * Spec §14: the production list hides `pending` and `illustrative` by default.
+ * `pending` cannot even be represented publicly, so this line is about
+ * `illustrative` - a sample record stays reachable by an explicit
+ * `?verification=illustrative`, and never appears on the default index.
+ */
+const PROVEN_ONLY: readonly PublicVerificationClass[] = ['verified', 'anonymized'];
+
+function profile(
+  surfaceKey: CaseStudySurfaceKey,
+  brandLabel: string,
+  sectionOrder: readonly CaseStudySectionKey[],
+  hero: { eyebrow: string; title: string; description: string },
+  cta: { eyebrow: string; heading: string; buttonLabel: string; href: string },
+  emphasis: readonly string[],
+  /* Where this surface is read. Null while it has no page - see the field. */
+  address: { publicBaseUrl: string | null; detailPathPrefix: string | null }
+    = { publicBaseUrl: null, detailPathPrefix: null },
+  /* Fills a MISSING builder, never replaces a stated one - see the field. */
+  defaultBuiltBy: CaseStudyBuiltByType | null = null,
+): CaseStudySurfaceProfile {
+  return {
+    surfaceKey,
+    brandLabel,
+    /* DERIVED, not declared. This field used to be a hand-written literal
+       passed in at each call site, and it had already gone stale: AI Flotation
+       said `false` here while `PUBLISHABLE_SURFACE_KEYS` - the list the publish
+       gate actually consults - listed it as publishable, and it had been
+       publishing to a live customer page for a day. Nothing read this field, so
+       nothing caught the contradiction. One source of truth now. */
+    publishable: (PUBLISHABLE_SURFACE_KEYS as readonly string[]).includes(surfaceKey),
+    hero,
+    publicBaseUrl: address.publicBaseUrl,
+    detailPathPrefix: address.detailPathPrefix,
+    defaultBuiltBy,
+    defaultFilters: { surface: surfaceKey, verificationClass: PROVEN_ONLY },
+    defaultSort: 'featured',
+    sectionOrder,
+    // Empty on all four, and that is the point: the lens model is proved by
+    // ORDER, not by suppression. See the block comment on the four orders.
+    hiddenSections: [],
+    requiredSections: REQUIRED_SECTIONS,
+    cta: { key: `${surfaceKey}-default`, ...cta },
+    emphasis,
+  };
+}
+
+export const CASE_STUDY_SURFACE_PROFILES: Readonly<
+  Record<CaseStudySurfaceKey, CaseStudySurfaceProfile>
+> = Object.freeze({
+  enterprise: profile(
+    'enterprise', 'Colaberry Enterprise', ENTERPRISE_ORDER,
+    {
+      eyebrow: 'Enterprise · shipped work',
+      title: 'What we shipped, and who built it.',
+      description:
+        'Every published project is assembled from repository evidence, Refactored project '
+        + 'records, and approved verification. The proof behind a number matters as much as '
+        + 'the number.',
+    },
+    {
+      eyebrow: 'Same shape, different workflow',
+      heading: 'Bring us a workflow worth improving.',
+      buttonLabel: 'Map an opportunity',
+      href: '/lab',
+    },
+    ['business problem', 'team capability', 'outcome', 'measurement', 'architecture',
+      'roadmap', 'ownership'],
+    /* The address Enterprise already publishes at. Stated rather than assumed,
+       so the canonical stops depending on which surface happens to be default. */
+    { publicBaseUrl: 'https://enterprise.colaberry.ai', detailPathPrefix: '/stories' },
+  ),
+  training: profile(
+    'training', 'Colaberry Training', TRAINING_ORDER,
+    {
+      eyebrow: 'Training · learner work',
+      title: 'What our learners built.',
+      description: 'Projects assembled from the repositories and artifacts learners shipped.',
+    },
+    {
+      eyebrow: 'Build one of these',
+      heading: 'Start the program that produced this work.',
+      buttonLabel: 'See the program',
+      /* /accelerator, NOT /programs. This href is resolved on training.colaberry.com,
+         which has no /programs route -- it 404'd on every student-project page. The
+         program page there is /accelerator ("Bring your idea. We help you turn it into a
+         real AI system"). Cross-surface hrefs like this one are the weak link in the
+         profile: nothing in this repository can follow them, so they are pinned by
+         caseStudySurfaceCtaHrefs.test.ts and must be re-checked against the live site
+         when either side moves a route. */
+      href: '/accelerator',
+    },
+    ['who built it', 'what they learned', 'skills', 'stack', 'artifacts', 'portfolio proof'],
+    /* training.colaberry.com, its own site on its own domain. A learner's
+       project published here is a page ON THE TRAINING SITE, so its canonical
+       says so - the whole point of the page is that a prospective student can
+       see what students actually build, and a canonical pointing at the
+       enterprise site would hand that signal to a different audience's brand. */
+    { publicBaseUrl: 'https://training.colaberry.com', detailPathPrefix: '/student-projects' },
+    /* No default builder. Training records are about WHO BUILT THEM - that is
+       the surface's entire emphasis - so a record that names nobody should read
+       as naming nobody rather than being quietly attributed to an institution. */
+  ),
+  'ai-flotation': profile(
+    'ai-flotation', 'AI Flotation', AI_FLOTATION_ORDER,
+    {
+      eyebrow: 'AI Flotation · delivery',
+      title: 'What we put into production.',
+      description: 'Delivery records assembled from repository evidence and production proof.',
+    },
+    {
+      eyebrow: 'Same workflow, your systems',
+      heading: 'Talk to the team that shipped it.',
+      buttonLabel: 'Start a conversation',
+      href: '/contact',
+    },
+    ['workflow', 'what shipped', 'architecture', 'delivery', 'production', 'technical proof'],
+    /* Its own domain, on its own Cloudflare zone. A record published here is a
+       page ON AI FLOTATION, so its canonical says so - a canonical pointing at
+       Colaberry would hand this brand's ranking to another company's site. */
+    { publicBaseUrl: 'https://aiflotation.com', detailPathPrefix: '/results' },
+    // Records that come through AI Flotation and name no builder are AI
+    // Flotation's own delivery team. Records that DO name one keep it.
+    'ai_flotation_team',
+  ),
+  refactored: profile(
+    'refactored', 'Refactored', REFACTORED_ORDER,
+    {
+      eyebrow: 'Refactored · project records',
+      title: 'The work behind the platform.',
+      description: 'Project records assembled from platform facts and repository evidence.',
+    },
+    {
+      eyebrow: 'See how it was built',
+      heading: 'Explore the platform that produced this.',
+      buttonLabel: 'Explore Refactored',
+      href: '/refactored',
+    },
+    ['project facts', 'build timeline', 'architecture', 'ownership'],
+  ),
+});
+
+export function getCaseStudySurfaceProfile(
+  surfaceKey: CaseStudySurfaceKey,
+): CaseStudySurfaceProfile {
+  return CASE_STUDY_SURFACE_PROFILES[surfaceKey];
+}

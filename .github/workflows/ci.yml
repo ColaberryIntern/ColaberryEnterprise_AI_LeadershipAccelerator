@@ -1,0 +1,197 @@
+name: CI
+
+# TBI audit P3-1 / Security ci-secrets: typecheck + unit tests + secret-scan + route-auth lint on
+# every PR and on push to main. Non-blocking by default (not a required status check) — it reports,
+# it does not gate merges, unless branch protection is later configured to require it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend-typecheck:
+    name: Backend typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # The backend imports some deps that live in the ROOT package.json (e.g. axios, playwright),
+      # so install root deps first, then backend's; tsc resolves across both node_modules.
+      - name: Install deps (root + backend)
+        run: |
+          npm install --no-audit --no-fund
+          cd backend && npm install --no-audit --no-fund
+      - name: tsc --noEmit
+        working-directory: backend
+        run: npx tsc --noEmit
+
+  frontend-typecheck:
+    name: Frontend typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: tsc --noEmit
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+
+  # THE GAP THIS CLOSES. Until this job existed CI ran `tsc` and a build against the
+  # frontend and no TEST at all, so every assertion in `frontend/src/**/__tests__` was
+  # enforced only on whichever machine last happened to run it. A red frontend suite could
+  # therefore sit in main indefinitely, and one did: `storyDetailV2Contract` has six
+  # failures nobody was told about.
+  #
+  # CI=true is what makes react-scripts run once and exit instead of entering watch mode,
+  # and it is also what promotes warnings to errors — the same reason `frontend-build`
+  # sets it explicitly rather than relying on the runner.
+  frontend-tests:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: react-scripts test
+        working-directory: frontend
+        env:
+          CI: 'true'
+        run: |
+          npm install --no-audit --no-fund
+          # WHAT IS EXCLUDED, AND WHY — one line per suite, mirroring the rule in
+          # backend/jest.ci.config.ts. Turning this job on revealed 7 red suites beyond the
+          # one already known: leave the frontend unenforced, or enforce what passes and NAME
+          # the rest as debt. Named debt wins; an unenforced test file is worth nothing.
+          #
+          # SEVEN OF THE ORIGINAL EIGHT ARE GONE, and every one was a stale test rather than a
+          # broken page: linkIntegrity and claimsRegistry pinned copy (verified live in a
+          # browser); PlatformV2 described a showroom Ali removed on 2026-08-20; the
+          # subscription fixture never carried `plans`, a field the API always sends; and the
+          # preview test clicked a single Publish button that became one button per surface.
+          # Each was rewritten to guard the PROPERTY, not the snapshot, so it cannot go stale
+          # the same way twice.
+          #
+          # HomeV2 was the one that was NOT a stale test: its section budget caught real
+          # growth. Put to Ali as a design decision on 2026-09-11; he kept the twelve, the
+          # budget was raised and recorded in the test the same way the 9 -> 10 raise was,
+          # and it is enforced again.
+          #
+          # storyDetailV2Contract was the LAST one out, and the only one whose failures were
+          # in the CODE rather than the test: two non-existent spacing tokens, raw colours in
+          # the player rule, and two files past the ceilings the test asserts. The hero
+          # figure moved to its own file and the "Keep reading" band to its own stylesheet,
+          # both listed in the contract so the split is not a way out of the checks. Nothing
+          # is excluded now except the helper directory below.
+          #
+          # testEnv/ is NOT a failure. It holds jest helpers that live under __tests__ and
+          # contain no test, so jest fails them for being empty. Excluding the directory is
+          # the correct config, not a concession.
+          #
+          # MAINTENANCE: nothing joins this list without a reason beside it. Every entry
+          # below is a real red suite in main, not a flaky one, and each shrinks the list
+          # when fixed.
+          npx react-scripts test --watchAll=false --testPathIgnorePatterns "/testEnv/"
+
+  # A typecheck is NOT a build. On 2026-08-15 commit 2f0a72dd left main
+  # unbuildable for hours with every check green: an eslint-disable comment in a
+  # .ts file named `react-hooks/exhaustive-deps`, a rule CRA does not register
+  # for .ts, which is itself an ESLint error — and CI=true promotes it to a
+  # failed build. tsc had nothing to say about any of it. The break surfaced
+  # only when a production deploy failed, which is the worst place to find it.
+  #
+  # CI=true is set explicitly rather than relied on: it is what makes
+  # react-scripts treat warnings as errors, and therefore what makes this job
+  # reproduce the production image build instead of a laxer local one.
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm run build:frontend
+        env:
+          CI: 'true'
+        run: |
+          npm install --no-audit --no-fund
+          npm run build:frontend
+
+  unit-tests:
+    name: Backend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Root deps first, for the same reason the typecheck job does it: some
+      # backend suites import deps hoisted to the ROOT package.json (axios,
+      # playwright). The old 3-suite pattern never touched them, so installing
+      # backend alone was enough; running the real suite is not.
+      - name: Install deps (root + backend)
+        run: |
+          npm install --no-audit --no-fund
+          cd backend && npm install --no-audit --no-fund
+      # Runs EVERY backend suite except a documented list of ones that need a
+      # live database — see backend/jest.ci.config.ts for the list and the
+      # reason each is on it. This replaced an allow-list of three suites that
+      # checked 28 tests; it now checks 8,229 across 588 suites.
+      - name: Jest (backend suites)
+        working-directory: backend
+        run: npx jest -c jest.ci.config.ts --ci
+
+  guards:
+    # DO NOT RENAME. This job also runs the Explorer copy lint now, so the name
+    # reads short — but "Secret scan + route-auth lint" is a REQUIRED status
+    # check on main (branch protection, verified 2026-09-07). Renaming the job
+    # renames the check, main then waits forever on a context that no longer
+    # reports, and every PR is blocked until someone edits branch protection.
+    # The stale name is deliberate; update protection first if it must change.
+    name: Secret scan + route-auth lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Secret scan
+        run: node scripts/secret-scan.js
+      - name: Admin route-auth lint
+        run: node scripts/lint-route-auth.js
+      # Explorer copy lint (plan §11.4, the April-14 rule). The self-test runs
+      # FIRST and as its own step: the lint's patterns are the thing being
+      # trusted here, and a matcher that has silently stopped matching reports
+      # a clean pass over copy it never read. Its first draft did exactly that
+      # — 1 value scanned instead of 77 — so this ordering is not ceremony.
+      - name: Explorer copy lint self-test
+        run: node scripts/lint-explorer-copy.js --self-test
+      - name: Explorer copy lint
+        run: node scripts/lint-explorer-copy.js
+
+  security-scan:
+    name: Static security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps (backend)
+        run: cd backend && npm install --no-audit --no-fund
+      # Runs the same scan CodeSecurityAuditAgent runs in production — except
+      # production ships only compiled `dist`, so there is no TypeScript source
+      # for it to scan there and it has never actually audited anything. CI is
+      # where the source exists. Report-only for now: these are regex heuristics
+      # and the real false-positive rate is unknown, so it reports the baseline
+      # rather than blocking PRs. Add --fail-on=critical once that baseline is
+      # triaged and clean.
+      - name: Static security scan (report-only)
+        working-directory: backend
+        run: npx ts-node src/scripts/runSecurityScan.ts

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { env } from '../config/env';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /* ------------------------------------------------------------------ */
 /*  PaySimple API Service                                              */
@@ -27,15 +28,53 @@ function getAuthHeaders(): Record<string, string> {
 
 const isTestMode = (): boolean => env.paymentMode === 'test';
 
-async function apiRequest<T>(
+/** Outbound ceiling for a single PaySimple call. CLAUDE.md requires an explicit
+ *  timeout at every external boundary; this was a bare fetch that could hang
+ *  forever, which is how a batch job ends up half finished with no record of where
+ *  it stopped. 30s is generous for this API and still bounded. */
+const PAYSIMPLE_TIMEOUT_MS = 30_000;
+
+export type PaySimpleErrorClass =
+  | 'TimeoutError' | 'RateLimitError' | 'AuthError'
+  | 'UpstreamUnavailable' | 'ValidationError' | 'UpstreamError'
+  // A 2xx whose body is not the JSON we were promised. Distinct from
+  // UpstreamError (which is the gateway reporting its own failure): here the
+  // call succeeded and the contract did not hold, so retrying will not help.
+  | 'ContractViolation';
+
+/** A stable error_class beats a bare Error: "PaySimple API error" in a log tells
+ *  you nothing about whether to retry, re-auth, or fix the payload. */
+export class PaySimpleError extends Error {
+  readonly errorClass: PaySimpleErrorClass;
+  readonly status?: number;
+  constructor(message: string, errorClass: PaySimpleErrorClass, status?: number) {
+    super(message);
+    this.name = 'PaySimpleError';
+    this.errorClass = errorClass;
+    this.status = status;
+  }
+}
+
+function classifyStatus(status: number): PaySimpleErrorClass {
+  if (status === 401 || status === 403) return 'AuthError';
+  if (status === 429) return 'RateLimitError';
+  if (status >= 500) return 'UpstreamUnavailable';
+  if (status >= 400) return 'ValidationError';
+  return 'UpstreamError';
+}
+
+export async function apiRequest<T>(
   method: string,
   path: string,
   body?: unknown
 ): Promise<T> {
   const url = `${getBaseUrl()}${path}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PAYSIMPLE_TIMEOUT_MS);
   const options: RequestInit = {
     method,
     headers: getAuthHeaders(),
+    signal: controller.signal,
   };
   if (body) {
     options.body = JSON.stringify(body);
@@ -43,15 +82,61 @@ async function apiRequest<T>(
 
   console.log(`[PaySimple] ${method} ${path}${isTestMode() ? ' (TEST MODE)' : ''}`);
 
-  const response = await fetch(url, options);
+  let response: Response;
+  try {
+    response = await fetch(url, options);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new PaySimpleError(`PaySimple ${method} ${path} timed out after ${PAYSIMPLE_TIMEOUT_MS}ms`, 'TimeoutError');
+    }
+    throw new PaySimpleError(`PaySimple ${method} ${path} failed: ${err?.message}`, 'UpstreamUnavailable');
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errorBody = await response.text();
     console.error(`[PaySimple] API error ${response.status}: ${errorBody}`);
-    throw new Error(`PaySimple API error ${response.status}: ${errorBody}`);
+    throw new PaySimpleError(
+      `PaySimple API error ${response.status}: ${errorBody}`,
+      classifyStatus(response.status),
+      response.status,
+    );
   }
 
-  const data: any = await response.json();
+  // A successful call does not have to return a body. PaySimple's
+  // /recurringpayment/{id}/suspend answers 200 with an EMPTY body, and
+  // `response.json()` on that throws "Unexpected end of JSON input".
+  //
+  // That threw AFTER the gateway had already done the work, so the caller saw a
+  // failure for an action that succeeded. In suspendScheduleForSubscription the
+  // throw landed between the suspend and the UPDATE that clears
+  // paysimple_schedule_id, leaving the schedule suspended at PaySimple while our
+  // book still showed it live — and logging `schedule_suspend_failed`, which
+  // tells an operator to go and fix something that is not broken.
+  //
+  // Found 2026-09-01 suspending Victor Chukwukere's schedule 4511896 on a
+  // deferral: the gateway returned Suspended, our code returned
+  // { suspended: false }.
+  const raw = await response.text();
+  // Widened deliberately. Every caller that reads a body calls an endpoint that
+  // returns one; the endpoints that return nothing (suspend) are called for their
+  // effect and their result is discarded. Making the signature `T | null` would
+  // push a null check onto ~40 call sites to describe a case none of them meet.
+  if (!raw.trim()) return null as unknown as T;
+
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch (err: any) {
+    // A non-empty body we cannot parse is a real contract violation, unlike an
+    // empty one. Say which, and include what arrived.
+    throw new PaySimpleError(
+      `PaySimple ${method} ${path} returned unparseable body: ${raw.slice(0, 200)}`,
+      'ContractViolation',
+      response.status,
+    );
+  }
   return data.Response ?? data.data ?? data;
 }
 
@@ -98,7 +183,16 @@ export async function findCustomerByEmail(
       'GET',
       `/v4/customer?email=${encodeURIComponent(email)}`
     );
-    return Array.isArray(results) && results.length > 0 ? results[0] : null;
+    if (!Array.isArray(results) || results.length === 0) return null;
+    // GUARD: PaySimple does not always honor the ?email filter server-side — when it
+    // doesn't, it returns the whole (paged) account and results[0] is just the first
+    // customer in the merchant account (the same shared id for everyone). Returning
+    // that stored the wrong customer id on subscriptions (a shared 7095991 reused
+    // across different people). Only accept a customer whose email actually matches;
+    // otherwise report "not found" so findOrCreateCustomer creates a real one.
+    const want = email.trim().toLowerCase();
+    const match = results.find((c) => (c.Email || '').trim().toLowerCase() === want);
+    return match || null;
   } catch {
     return null;
   }
@@ -112,11 +206,11 @@ export async function findOrCreateCustomer(params: {
 }): Promise<PaySimpleCustomer> {
   const existing = await findCustomerByEmail(params.email);
   if (existing) {
-    console.log(`[PaySimple] Found existing customer ${existing.Id} for ${params.email}`);
+    console.log(`[PaySimple] Found existing customer ${existing.Id} for ${redactForLogs(params.email)}`);
     return existing;
   }
   const customer = await createCustomer(params);
-  console.log(`[PaySimple] Created customer ${customer.Id} for ${params.email}`);
+  console.log(`[PaySimple] Created customer ${customer.Id} for ${redactForLogs(params.email)}`);
   return customer;
 }
 
@@ -129,6 +223,19 @@ export interface HostedPaymentLink {
   payment_link: string;
 }
 
+// PaySimple rejects item.name over 50 chars (validation error, not a 5xx —
+// found live 2026-07-31 when a student's credit-applied checkout ("Monthly
+// plan (-$50 credit)") pushed the combined name to 54 chars and PaySimple
+// returned a 400 for every one of the 25 students with an unapplied credit).
+const MAX_ITEM_NAME_LENGTH = 50;
+
+function clampItemName(name: string): string {
+  if (name.length <= MAX_ITEM_NAME_LENGTH) return name;
+  const truncated = name.slice(0, MAX_ITEM_NAME_LENGTH);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return lastSpace > 30 ? truncated.slice(0, lastSpace) : truncated;
+}
+
 export async function createPaymentLink(params: {
   externalId: string;
   cohortName: string;
@@ -136,11 +243,14 @@ export async function createPaymentLink(params: {
   customerFirstName: string;
   customerLastName: string;
   customerEmail: string;
+  // When true, charge `amount` verbatim even in test mode (used by subscriptions,
+  // which set their own small test amounts). Otherwise test mode forces $0.01.
+  exactAmount?: boolean;
 }): Promise<HostedPaymentLink> {
-  const amount = isTestMode() ? 0.01 : params.amount;
+  const amount = (isTestMode() && !params.exactAmount) ? 0.01 : params.amount;
 
   if (isTestMode()) {
-    console.log(`[PaySimple] TEST MODE ACTIVE - $${amount} transaction (production: $${params.amount})`);
+    console.log(`[PaySimple] TEST MODE${params.exactAmount ? ' (exact amount)' : ''} - $${amount} transaction (list price: $${params.amount})`);
   }
 
   const result = await apiRequest<HostedPaymentLink>('POST', '/ps/payment_link', {
@@ -149,7 +259,7 @@ export async function createPaymentLink(params: {
     item: {
       price: amount,
       allow_price_entry: false,
-      name: `AI Leadership Accelerator - ${params.cohortName}`,
+      name: clampItemName(`AI Leadership Accelerator - ${params.cohortName}`),
       description: isTestMode()
         ? `TEST MODE - Colaberry Enterprise AI Leadership Accelerator enrollment (original: $${params.amount})`
         : 'Colaberry Enterprise AI Leadership Accelerator enrollment',
@@ -175,6 +285,94 @@ export async function createPaymentLink(params: {
 export async function deletePaymentLink(linkId: string): Promise<void> {
   await apiRequest('DELETE', `/ps/payment_link/${linkId}`);
   console.log(`[PaySimple] Deleted payment link ${linkId}`);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Payments — lookup, void, refund (API v4)                           */
+/* ------------------------------------------------------------------ */
+
+export interface PaySimplePayment {
+  Id: number;
+  Status: string;                 // Authorized | Posted | Settled | Failed | Voided | Refunded | ...
+  Amount: number;
+  CustomerId?: number;
+  CustomerFirstName?: string;
+  CustomerLastName?: string;
+  PaymentDate?: string;
+  ActualSettledDate?: string | null;    // set once the payment settles; null while in flight
+  EstimatedSettleDate?: string | null;  // when it is expected to settle
+  CanVoidUntil?: string | null;   // void allowed only while now < CanVoidUntil
+}
+
+/** Fetch a single payment. Used to read the amount/status/void-window before a refund. */
+export async function getPayment(paymentId: string | number): Promise<PaySimplePayment> {
+  return apiRequest<PaySimplePayment>('GET', `/v4/payment/${paymentId}`);
+}
+
+/**
+ * List payments most-recent-first, paging until we pass `since` (or run out).
+ * Used by the app-scoped payment reconcile to find a member's PaySimple payment
+ * when the checkout webhook failed to link it. The CALLER must filter to our own
+ * stored customer ids — this returns raw pages from the shared gateway. Bounded by
+ * `maxPages` so a bad `since` can't page the whole account.
+ */
+export async function listRecentPayments(params: {
+  since: Date;
+  pageSize?: number;
+  maxPages?: number;
+}): Promise<PaySimplePayment[]> {
+  const pageSize = params.pageSize ?? 200;
+  const maxPages = params.maxPages ?? 20;
+  const sinceMs = params.since.getTime();
+  const out: PaySimplePayment[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const rows = await apiRequest<PaySimplePayment[]>(
+      'GET',
+      `/v4/payment?pagesize=${pageSize}&page=${page}&sortby=PaymentDate&direction=DESC`
+    );
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    out.push(...rows);
+    const earliest = rows[rows.length - 1]?.PaymentDate;
+    if (earliest && Date.parse(earliest) < sinceMs) break;
+    if (rows.length < pageSize) break;
+  }
+  return out;
+}
+
+/** Fetch a customer by id (to resolve the payer email for a payment). Null on error. */
+export async function getCustomerById(customerId: string | number): Promise<PaySimpleCustomer | null> {
+  try {
+    return await apiRequest<PaySimpleCustomer>('GET', `/v4/customer/${customerId}`);
+  } catch {
+    return null;
+  }
+}
+
+/** True while the payment can still be voided (full reversal, no fee). PaySimple
+ *  only voids a payment in Authorized status, inside its CanVoidUntil window. */
+export function isVoidable(payment: Pick<PaySimplePayment, 'CanVoidUntil'>, nowMs: number = Date.now()): boolean {
+  if (!payment.CanVoidUntil) return false;
+  const until = Date.parse(payment.CanVoidUntil);
+  return Number.isFinite(until) && until > nowMs;
+}
+
+/** True once the payment has settled — PaySimple only reverses/refunds a
+ *  SETTLED payment (verified against the live API: "Only Settled payments can
+ *  be Refunded"). */
+export function isSettled(payment: Pick<PaySimplePayment, 'ActualSettledDate' | 'Status'>): boolean {
+  return !!payment.ActualSettledDate || payment.Status === 'Settled';
+}
+
+/** Void an authorized payment (full reversal, no fee). PaySimple: PUT /v4/payment/{id}/void. */
+export async function voidPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/void`);
+}
+
+/** Refund (reverse) a SETTLED payment — full reversal. PaySimple's endpoint is
+ *  PUT /v4/payment/{id}/reverse (there is no /refund route; PaySimple reverses
+ *  the whole payment, so partial refunds are not supported here). */
+export async function refundPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/reverse`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -261,16 +459,35 @@ export function verifyWebhookSignature(
     return false;
   }
 
-  // PaySimple HMAC verification
+  // PaySimple HMAC verification.
+  //
+  // Compare the raw 32 DIGEST BYTES, not the text of the digest. PaySimple sends
+  // UPPERCASE hex ("5F0738DD...") while Node's digest('hex') returns lowercase
+  // ("5f0738dd..."), so the previous string-buffer comparison could never match:
+  // '5F' is 0x35,0x46 and '5f' is 0x35,0x66. That silently rejected 100% of real
+  // webhooks with a signature failure -- found live 2026-08-12 by capturing an
+  // actual PaySimple delivery, whose digest was byte-identical to ours apart from
+  // letter case. It is the third distinct cause of "every PaySimple webhook is
+  // rejected" (after the JSON.stringify raw-body bug on 2026-07-30 and the
+  // Content-Type matcher on 2026-07-31), so decoding to bytes here also makes the
+  // check immune to the encoding PaySimple happens to use: hex in either case, or
+  // base64, all reduce to the same 32 bytes.
   const expected = crypto
     .createHmac('sha256', env.paysimpleWebhookSecret)
     .update(payload)
-    .digest('hex');
+    .digest();
 
-  const sigBuf = Buffer.from(signature);
-  const expBuf = Buffer.from(expected);
+  const sigBuf = decodeDigest(signature.trim());
+  if (!sigBuf || sigBuf.length !== expected.length) return false;
 
-  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expected);
+}
 
-  return crypto.timingSafeEqual(sigBuf, expBuf);
+/** A signature header decoded to its raw digest bytes: 64 hex chars (either case)
+ *  or standard base64. Null when it is neither, so a malformed header is rejected
+ *  rather than compared against a truncated buffer. */
+function decodeDigest(signature: string): Buffer | null {
+  if (/^[0-9a-fA-F]{64}$/.test(signature)) return Buffer.from(signature, 'hex');
+  if (/^[A-Za-z0-9+/]{43}=$/.test(signature)) return Buffer.from(signature, 'base64');
+  return null;
 }
