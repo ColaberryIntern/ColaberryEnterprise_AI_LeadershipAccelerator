@@ -46,6 +46,7 @@ import {
   type InterviewTurn,
   type InterviewFacts,
 } from './flotationInterviewService';
+import { boundDocuments, type IntakeDocument } from './intakeDocuments';
 import { recordUnderstandingFromConversation } from './recordProjectUnderstanding';
 import { startBuildFromUnderstanding } from './buildFromUnderstanding';
 import { Enrollment } from '../../models';
@@ -111,8 +112,17 @@ export async function runIntakeTurn(params: {
   sourceRef: string;
   leadId: number | null;
   buildFor: BuildTarget;
+  /**
+   * Documents handed over during the conversation, already extracted to text.
+   *
+   * Bounded here rather than trusted from the door, for the same reason `boundTurns`
+   * exists: a client must not be able to buy an arbitrarily large prompt. Re-sent with
+   * every turn, because this endpoint is stateless.
+   */
+  documents?: IntakeDocument[];
 }): Promise<IntakeTurnResult> {
-  const result = await nextInterviewMessage({ turns: params.turns, facts: params.facts });
+  const documents = boundDocuments(params.documents);
+  const result = await nextInterviewMessage({ turns: params.turns, facts: params.facts, documents });
 
   if (!result.ok) {
     return {
@@ -129,7 +139,13 @@ export async function runIntakeTurn(params: {
   // Extraction runs on the FULL transcript including the closing message, and is awaited:
   // whoever is on the other end switches straight to the write-up, so producing it before
   // responding is what makes that transition honest rather than a spinner over a promise.
-  const conversation = interviewTranscript([...params.turns, { role: 'assistant', text: result.message }]);
+  // The documents go in with the transcript. This is the half of the document contract
+  // that reaches the requirements: what is in this string is what the extraction sees,
+  // and the understanding it produces is what the brief is built from.
+  const conversation = interviewTranscript(
+    [...params.turns, { role: 'assistant', text: result.message }],
+    documents,
+  );
 
   const outcome = await finishIntake({
     conversation,

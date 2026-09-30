@@ -15,7 +15,7 @@
  * returns the project the first call made.
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { z, ZodError } from 'zod';
 import { Op } from 'sequelize';
@@ -24,6 +24,9 @@ import ProjectUnderstandingRecord from '../../models/ProjectUnderstandingRecord'
 import { CommunicationLog, Enrollment, Lead } from '../../models';
 import { startBuildFromUnderstanding } from '../../services/delivery/buildFromUnderstanding';
 import { runIntakeTurn } from '../../services/delivery/projectIntake';
+import { DOCUMENT_TEXT_MAX } from '../../services/delivery/intakeDocuments';
+import { intakeDocumentUpload } from '../../config/upload';
+import { extractTextFromBuffer } from '../../services/fileExtractionService';
 import { requestInstantCallback } from '../../services/callbackRequestService';
 import { COLABERRY_BRAND } from '../../services/voiceCallPrompt';
 import { reconcileFlotationCall } from '../../services/delivery/flotationCallCompletion';
@@ -146,6 +149,20 @@ const turnSchema = z.object({
     .array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().min(1).max(4000) }))
     .min(1)
     .max(30),
+  /**
+   * Documents attached during the conversation, already extracted to text by
+   * `/intake/document`. Carried by the client and re-sent each turn, like the
+   * transcript, because this endpoint holds nothing between turns.
+   *
+   * The ceilings here are the schema's outer bound; `runIntakeTurn` re-bounds with
+   * `boundDocuments`, which is the one that decides what actually reaches a prompt.
+   * Two layers deliberately: a validation ceiling that rejects nonsense, and a service
+   * ceiling that cannot be bypassed by a future door that forgets to validate.
+   */
+  documents: z
+    .array(z.object({ name: z.string().min(1).max(200), text: z.string().min(1).max(50_000) }))
+    .max(6)
+    .optional(),
 });
 
 router.post('/api/admin/flotation/intake/turn', requireAdmin, async (req: Request, res: Response) => {
@@ -162,6 +179,7 @@ router.post('/api/admin/flotation/intake/turn', requireAdmin, async (req: Reques
       sourceRef: `admin:${body.session_id}`,
       leadId: null,
       buildFor: { kind: 'enrollment', enrollmentId: enrollment.id },
+      documents: body.documents,
     });
 
     return res.status(200).json(result);
@@ -171,6 +189,82 @@ router.post('/api/admin/flotation/intake/turn', requireAdmin, async (req: Reques
     return res.status(500).json({ error: 'We could not continue the conversation right now.' });
   }
 });
+
+/**
+ * Read a document so the interview can use it.
+ *
+ *     "Also I should be able to add documents to this process that can be analyzed
+ *      before submitting the next question and can be used when creating the
+ *      requirements."  (Ali, 2026-09-29)
+ *
+ * EXTRACTION ONLY. It takes a file, returns its text, and keeps nothing — no row, no
+ * disk, no id to look up later. The client holds the text and sends it with each turn,
+ * which is what keeps the turn endpoint stateless and a reload resumable.
+ *
+ * "Before submitting the next question" is why this is its own call rather than a field
+ * on the turn: the person attaches, sees what was read, and only then types. Parsing on
+ * the turn instead would mean discovering a scanned PDF yielded nothing at the moment
+ * they were expecting an answer.
+ *
+ * An unreadable file is a 422 that says so. A document that extracted to nothing is the
+ * common real failure — a scan with no text layer — and returning 200 with an empty
+ * string would attach a document that silently contributes nothing to the requirements.
+ */
+router.post(
+  '/api/admin/flotation/intake/document',
+  requireAdmin,
+  // Multer's own refusals — wrong type, over 15MB — arrive as an error it hands to
+  // `next()`, which without this reaches Express's default handler and answers HTML with
+  // a 500. A refused file type is a 400 the person can act on, and the filter already
+  // wrote the sentence that tells them which types work.
+  (req: Request, res: Response, next: NextFunction) => {
+    intakeDocumentUpload.single('file')(req, res, (err: any) => {
+      if (!err) return next();
+      const tooBig = err?.code === 'LIMIT_FILE_SIZE';
+      return res.status(400).json({
+        error: tooBig ? 'That file is over 15MB. Attach a smaller one, or paste the relevant part.' : err.message,
+        error_class: tooBig ? 'FileTooLarge' : 'RejectedFileType',
+      });
+    });
+  },
+  async (req: Request, res: Response) => {
+    const file = (req as any).file as { buffer: Buffer; originalname: string } | undefined;
+    if (!file) return res.status(400).json({ error: 'Attach a file.' });
+
+    const name = String(file.originalname || 'Untitled document').slice(0, 200);
+
+    try {
+      const text = (await extractTextFromBuffer(file.buffer, name)).trim();
+
+      if (!text) {
+        return res.status(422).json({
+          error: `I could not read any text out of ${name}. If it is a scan, it has no text layer — `
+            + 'paste the important parts into the conversation instead.',
+          error_class: 'NoTextExtracted',
+        });
+      }
+
+      const clipped = text.length > DOCUMENT_TEXT_MAX;
+      return res.status(200).json({
+        document: { name, text: text.slice(0, DOCUMENT_TEXT_MAX) },
+        chars: Math.min(text.length, DOCUMENT_TEXT_MAX),
+        // Said out loud, because a clipped document that reports success is how a
+        // requirement goes missing while everything looks fine.
+        clipped,
+      });
+    } catch (err: any) {
+      console.error('[AdminIntake] document extraction failed', {
+        error_class: err instanceof Error ? err.constructor.name : 'Unknown',
+        message: err?.message,
+        name,
+      });
+      return res.status(422).json({
+        error: `I could not read ${name}. Try a PDF, Word or plain-text version.`,
+        error_class: 'ExtractionFailed',
+      });
+    }
+  },
+);
 
 /** Students an admin can build for, by name or email. */
 router.get('/api/admin/flotation/intake/enrollments', requireAdmin, async (req: Request, res: Response) => {
