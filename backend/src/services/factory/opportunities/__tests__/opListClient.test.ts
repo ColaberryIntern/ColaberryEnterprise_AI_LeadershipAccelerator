@@ -6,20 +6,31 @@
 import { fetchGovOpportunityCandidatesV2 } from '../opListClient';
 
 const res = (status: number, body: any) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
-let prevBase: string | undefined; let prevKey: string | undefined;
+let prevBase: string | undefined; let prevKey: string | undefined; let prevV2Key: string | undefined;
 beforeEach(() => {
-  prevBase = process.env.OPPORTUNITY_PULSE_V2_BASE; prevKey = process.env.OPPORTUNITY_PULSE_API_KEY;
+  prevBase = process.env.OPPORTUNITY_PULSE_V2_BASE; prevKey = process.env.OPPORTUNITY_PULSE_API_KEY; prevV2Key = process.env.OPPORTUNITY_PULSE_V2_API_KEY;
   (global as any).fetch = jest.fn();
 });
 afterEach(() => {
   const restore = (k: string, v: string | undefined) => { if (v === undefined) delete (process.env as any)[k]; else (process.env as any)[k] = v; };
-  restore('OPPORTUNITY_PULSE_V2_BASE', prevBase); restore('OPPORTUNITY_PULSE_API_KEY', prevKey);
+  restore('OPPORTUNITY_PULSE_V2_BASE', prevBase); restore('OPPORTUNITY_PULSE_API_KEY', prevKey); restore('OPPORTUNITY_PULSE_V2_API_KEY', prevV2Key);
   jest.restoreAllMocks();
 });
-const configure = () => { process.env.OPPORTUNITY_PULSE_V2_BASE = 'https://op.example'; process.env.OPPORTUNITY_PULSE_API_KEY = 'op_k'; };
+// v2 uses the DEDICATED credential; a v1 key is intentionally present to prove it is never used as a fallback.
+const configure = () => { process.env.OPPORTUNITY_PULSE_V2_BASE = 'https://op.example'; process.env.OPPORTUNITY_PULSE_V2_API_KEY = 'op_v2k'; process.env.OPPORTUNITY_PULSE_API_KEY = 'op_v1k'; };
 
 it('unconfigured → not_configured, no candidates, no fetch', async () => {
-  delete process.env.OPPORTUNITY_PULSE_V2_BASE; delete process.env.OPPORTUNITY_PULSE_API_KEY;
+  delete process.env.OPPORTUNITY_PULSE_V2_BASE; delete process.env.OPPORTUNITY_PULSE_V2_API_KEY; delete process.env.OPPORTUNITY_PULSE_API_KEY;
+  const r = await fetchGovOpportunityCandidatesV2();
+  expect(r.available).toBe(false);
+  expect(r.reason).toBe('not_configured');
+  expect((global.fetch as jest.Mock)).not.toHaveBeenCalled();
+});
+
+it('does NOT fall back to the v1 key: v2 base + v1 key present but v2 key ABSENT → not_configured, no fetch', async () => {
+  process.env.OPPORTUNITY_PULSE_V2_BASE = 'https://op.example';
+  process.env.OPPORTUNITY_PULSE_API_KEY = 'op_v1k';        // v1 key present
+  delete process.env.OPPORTUNITY_PULSE_V2_API_KEY;          // dedicated v2 key absent
   const r = await fetchGovOpportunityCandidatesV2();
   expect(r.available).toBe(false);
   expect(r.reason).toBe('not_configured');
@@ -39,7 +50,7 @@ it('configured + 200 → candidates carrying real canonical ids (sends X-API-Key
     'op:gov:0000000000000000000000000000aaaa', 'op:gov:0000000000000000000000000000bbbb',
   ]);
   expect(r.candidates[0].title).toBe('A');
-  expect((global.fetch as jest.Mock).mock.calls[0][1].headers['X-API-Key']).toBe('op_k');
+  expect((global.fetch as jest.Mock).mock.calls[0][1].headers['X-API-Key']).toBe('op_v2k'); // dedicated v2 key
 });
 
 it('DROPS any row without a valid canonical id — never derived from a title/id', async () => {

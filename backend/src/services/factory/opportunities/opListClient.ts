@@ -49,7 +49,8 @@ function mapCandidate(raw: any): GovCandidate | null {
 
 export async function fetchGovOpportunityCandidatesV2(): Promise<GovCandidatesResult> {
   const base = process.env.OPPORTUNITY_PULSE_V2_BASE;
-  const apiKey = process.env.OPPORTUNITY_PULSE_API_KEY;
+  // v2 uses its OWN dedicated read:gov_opportunities credential — never the v1 best-fit key, no silent fallback.
+  const apiKey = process.env.OPPORTUNITY_PULSE_V2_API_KEY;
   if (!base || !apiKey) return { available: false, reason: 'not_configured', candidates: [] };
   const path = process.env.OPPORTUNITY_PULSE_V2_PATH || DEFAULT_V2_PATH;
   const url = `${base}${path}`;

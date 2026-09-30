@@ -7,15 +7,16 @@
 import { resolveGovOpportunityDetail, isLiveOpDetailConfigured } from '../opDetailClient';
 import { CLEAN_CANONICAL, UNAVAILABLE_CANONICAL, DEGRADED_CANONICAL, UNRECORDED_CANONICAL } from '../govOpportunityFixtures';
 
-let prevBase: string | undefined; let prevKey: string | undefined; let prevEnv: string | undefined;
+let prevBase: string | undefined; let prevKey: string | undefined; let prevV2Key: string | undefined; let prevEnv: string | undefined;
 beforeEach(() => {
-  prevBase = process.env.OPPORTUNITY_PULSE_V2_BASE; prevKey = process.env.OPPORTUNITY_PULSE_API_KEY; prevEnv = process.env.NODE_ENV;
+  prevBase = process.env.OPPORTUNITY_PULSE_V2_BASE; prevKey = process.env.OPPORTUNITY_PULSE_API_KEY; prevV2Key = process.env.OPPORTUNITY_PULSE_V2_API_KEY; prevEnv = process.env.NODE_ENV;
   delete process.env.OPPORTUNITY_PULSE_V2_BASE; // not live-configured
+  delete process.env.OPPORTUNITY_PULSE_V2_API_KEY;
   delete process.env.OPPORTUNITY_PULSE_API_KEY;
 });
 afterEach(() => {
   const restore = (k: string, v: string | undefined) => { if (v === undefined) delete (process.env as any)[k]; else (process.env as any)[k] = v; };
-  restore('OPPORTUNITY_PULSE_V2_BASE', prevBase); restore('OPPORTUNITY_PULSE_API_KEY', prevKey); restore('NODE_ENV', prevEnv);
+  restore('OPPORTUNITY_PULSE_V2_BASE', prevBase); restore('OPPORTUNITY_PULSE_API_KEY', prevKey); restore('OPPORTUNITY_PULSE_V2_API_KEY', prevV2Key); restore('NODE_ENV', prevEnv);
 });
 
 it('outside production, an unconfigured live base falls back to fixtures', async () => {
