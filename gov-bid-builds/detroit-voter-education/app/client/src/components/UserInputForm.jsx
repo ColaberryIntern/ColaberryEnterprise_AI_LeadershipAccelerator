@@ -101,7 +101,13 @@ export default function UserInputForm({ onJurisdictionResolved }) {
   };
 
   const zipValid = ZIP_RE.test(zipCode);
-  const canSubmit = zipValid && selectedIssues.length > 0 && wsStatus === 'connected';
+  // Bug fix: wsStatus becomes 'saved' after the first successful save (see
+  // ws.onmessage above) and nothing ever sets it back to 'connected' -- the
+  // submit button was permanently disabled after one save, blocking any
+  // second preference change without a full page reload. 'saved' only ever
+  // occurs while the same socket is still open (it's set from a message the
+  // socket just received), so it's a valid submit state, not a stale one.
+  const canSubmit = zipValid && selectedIssues.length > 0 && (wsStatus === 'connected' || wsStatus === 'saved');
 
   return (
     <section className="user-input-form" aria-label="Voter preference form">
