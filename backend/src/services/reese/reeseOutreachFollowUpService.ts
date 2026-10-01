@@ -12,6 +12,7 @@ import { getReeseAdminUserId, getReeseEnrollmentId } from './reeseIdentitySeed';
 import { countAutonomousSendsToday, DAILY_SEND_CAP, FOLLOW_UP_DAYS, RISK_TIER } from './reeseAutonomousOutreachService';
 import { createClosureChecklistInstance } from './closureChecklist';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
 
 // Reese Phase 2 (Autonomous Outreach) — the follow-up + closure loop. Mirrors
 // M5's outcomeMeasurementService.ts structurally (a `status`/due-timestamp
@@ -25,7 +26,7 @@ const MAX_ATTEMPTS = 3;
 export interface FollowUpDecision {
   outreachId: string;
   enrollmentId: string;
-  branch: 'signal_cleared' | 'goal_met' | 'follow_up_sent' | 'escalated' | 'daily_cap_deferred';
+  branch: 'signal_cleared' | 'goal_met' | 'follow_up_sent' | 'escalated' | 'daily_cap_deferred' | 'held_for_approval';
 }
 
 export interface FollowUpResult {
@@ -36,6 +37,14 @@ export interface FollowUpResult {
   followUpSent: number;
   escalated: number;
   dailyCapDeferred: number;
+  /** Real-enforcement scoping, Phase 3 (R209/R210, 2026-10-01) — a
+   * send/escalation genuinely held by the ABAC gate (only possible when
+   * `abac_mode_override`/`abac_enforcement` is 'enforce' and the policy
+   * denies). Counted separately, never folded into `followUpSent`/
+   * `escalated` — a held action was NOT sent/escalated, and reporting it as
+   * if it were would be dishonest, the exact class of bug this phase's own
+   * mission exists to close. */
+  heldForApproval: number;
   decisions: FollowUpDecision[];
 }
 
@@ -134,9 +143,38 @@ async function closeWithEvidence(
   }
 }
 
-async function escalate(row: ReeseOutreach): Promise<void> {
+/** Real-enforcement scoping, Phase 3 (R210, 2026-10-01) — gated the same
+ * way `sendNewOutreach()` already is, evaluated BEFORE the real mutation
+ * (per `agentActionAuthorizationBridge.ts`'s own documented "gate ahead of
+ * the action" design intent). Returns whether escalation actually happened,
+ * so the caller never records 'escalated' for a held action — a
+ * genuinely new branch, not a silent no-op, since this is the SAFETY path
+ * (flag a human when autonomous attempts are exhausted); a caller that
+ * can't tell "escalated" from "silently did nothing" would be worse than
+ * before this gate existed. */
+async function escalate(row: ReeseOutreach): Promise<{ escalated: boolean }> {
   const reeseAdminUserId = await getReeseAdminUserId();
   const actorId = reeseAdminUserId || 'Reese';
+
+  const eventId = crypto.randomUUID();
+  const authResult = await authorizeTicketDispatch({
+    eventId,
+    ticketId: row.ticket_id,
+    agentName: 'Reese',
+    action: 'reese_outreach_escalated',
+    riskTier: RISK_TIER,
+    preparedAction: { ticketId: row.ticket_id, outreachId: row.id },
+  });
+
+  if (!authResult.allowed) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'info', service: 'reeseOutreachFollowUpService',
+      event: 'escalation_held_for_approval', outcome: 'partial', correlation_id: eventId,
+      context: { ticket_id: row.ticket_id, outreach_id: row.id, reason: authResult.reason },
+    }));
+    return { escalated: false };
+  }
+
   await addTicketComment(
     row.ticket_id,
     `[Reese] Reached the ${MAX_ATTEMPTS}-attempt autonomous follow-up cap for this student without a resolved ` +
@@ -163,9 +201,20 @@ async function escalate(row: ReeseOutreach): Promise<void> {
     sourceRecordType: 'reese_outreach',
     sourceRecordId: row.id,
   });
+
+  return { escalated: true };
 }
 
-async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, any>): Promise<void> {
+/** Real-enforcement scoping, Phase 3 (R209, 2026-10-01) — gated the same
+ * way `sendNewOutreach()` already is. A held action returns here, BEFORE
+ * `initiateDm()` and every downstream write below it — deliberately, so a
+ * held follow-up is never recorded as a real contact (same reasoning
+ * `reeseAutonomousOutreachService.ts`'s own comment documents for its
+ * `ReeseOutreach.create()` call: a stamped `last_contacted_at` for a send
+ * that never happened would incorrectly suppress a legitimate future
+ * attempt). Returns whether the follow-up actually sent, so the caller
+ * never records 'follow_up_sent' for a held action. */
+async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, any>): Promise<{ sent: boolean }> {
   const message = await generateOutreachMessage({
     enrollmentId: row.enrollment_id,
     signalType: row.signal_type,
@@ -174,6 +223,26 @@ async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, 
     isFollowUp: true,
     attemptNumber: row.attempt_count + 1,
   });
+
+  const eventId = crypto.randomUUID();
+  const authResult = await authorizeTicketDispatch({
+    eventId,
+    ticketId: row.ticket_id,
+    agentName: 'Reese',
+    action: 'reese_outreach_followup',
+    riskTier: RISK_TIER,
+    preparedAction: { studentEnrollmentId: row.enrollment_id, content: message },
+  });
+
+  if (!authResult.allowed) {
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'info', service: 'reeseOutreachFollowUpService',
+      event: 'follow_up_held_for_approval', outcome: 'partial', correlation_id: eventId,
+      context: { ticket_id: row.ticket_id, enrollment_id: row.enrollment_id, reason: authResult.reason },
+    }));
+    return { sent: false };
+  }
+
   const dm = await initiateDm(row.enrollment_id, message);
   await row.update({
     attempt_count: row.attempt_count + 1,
@@ -200,6 +269,8 @@ async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, 
     sourceRecordType: 'room_message',
     sourceRecordId: dm.messageId,
   });
+
+  return { sent: true };
 }
 
 /**
@@ -249,8 +320,16 @@ export async function processDueReeseOutreachFollowUps(dryRun = false): Promise<
     }
 
     if (row.attempt_count >= MAX_ATTEMPTS) {
-      if (!dryRun) await escalate(row);
-      decisions.push({ outreachId: row.id, enrollmentId: row.enrollment_id, branch: 'escalated' });
+      // dryRun never calls the real gate (dryRun also never ran it before
+      // this phase) — in dry-run mode this branch is reported exactly as it
+      // always has been, since nothing real is actually at risk of being
+      // misreported when nothing real happens either way.
+      const escalateResult = dryRun ? { escalated: true } : await escalate(row);
+      decisions.push({
+        outreachId: row.id,
+        enrollmentId: row.enrollment_id,
+        branch: escalateResult.escalated ? 'escalated' : 'held_for_approval',
+      });
       continue;
     }
 
@@ -270,10 +349,12 @@ export async function processDueReeseOutreachFollowUps(dryRun = false): Promise<
       continue;
     }
 
-    if (!dryRun) {
-      await sendFollowUp(row, currentSignal);
-    }
-    decisions.push({ outreachId: row.id, enrollmentId: row.enrollment_id, branch: 'follow_up_sent' });
+    const sendResult = dryRun ? { sent: true } : await sendFollowUp(row, currentSignal);
+    decisions.push({
+      outreachId: row.id,
+      enrollmentId: row.enrollment_id,
+      branch: sendResult.sent ? 'follow_up_sent' : 'held_for_approval',
+    });
   }
 
   return {
@@ -284,6 +365,7 @@ export async function processDueReeseOutreachFollowUps(dryRun = false): Promise<
     followUpSent: decisions.filter((d) => d.branch === 'follow_up_sent').length,
     escalated: decisions.filter((d) => d.branch === 'escalated').length,
     dailyCapDeferred: decisions.filter((d) => d.branch === 'daily_cap_deferred').length,
+    heldForApproval: decisions.filter((d) => d.branch === 'held_for_approval').length,
     decisions,
   };
 }
