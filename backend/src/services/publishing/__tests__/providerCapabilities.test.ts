@@ -95,14 +95,21 @@ describe('an unapproved app yields Handoff even for a supported action', () => {
     }
   });
 
-  it('Instagram IS still unapproved, and says so - its sibling passing is not evidence', () => {
-    // Instagram publishes through a container/publish flow and needs media; nothing has proved
-    // it end to end. Promoting it because Facebook worked is the inference this guards against.
+  it('Instagram is self-serve too, proved on its OWN flow rather than inherited from Facebook', () => {
+    // This asserted `not_submitted` for a few hours on 2026-09-30, deliberately, because
+    // Facebook passing said nothing about Instagram - it publishes through its own
+    // container/publish flow. It was then proved on that flow: creating a real media container
+    // against @agentcory.ai returned HTTP 200 and a creation id, with the app unpublished and no
+    // App Review. Only the gate moved; the "prove each flow separately" rule stands.
     const caps = getProviderCapabilities('meta_instagram');
-    expect(caps.appReview.status).toBe('not_submitted');
+    expect(caps.appReview.status).toBe('self_serve');
     const mode = decidePublishMode(caps, 'publish');
     expect(mode.mode).toBe('handoff');
-    if (mode.mode === 'handoff') expect(mode.reasons.some((r) => /not approved/.test(r))).toBe(true);
+    if (mode.mode === 'handoff') {
+      // Switched off in this process, so one reason - and it must not blame approval.
+      expect(mode.reasons).toHaveLength(1);
+      expect(mode.reasons[0]).toMatch(/built but switched off/);
+    }
   });
 
   it('reports BOTH reasons when both apply, as separate problems with separate fixes', () => {

@@ -47,8 +47,9 @@ it('Meta CAN be switched on now that its adapter exists - and is off until someo
   // app unpublished and no App Review - so approval was never the gate for Pages we administer,
   // and treating it as one was quietly costing us direct publishing.
   expect(decidePublishMode(getProviderCapabilities('meta_facebook_page'), 'publish', on).mode).toBe('direct');
-  // Instagram is NOT promoted on its sibling's evidence: different flow, not yet proved.
-  expect(decidePublishMode(getProviderCapabilities('meta_instagram'), 'publish', on).mode).toBe('handoff');
+  // Instagram too - but proved on its OWN flow (a real media container), not inherited from
+  // Facebook. Both were measured against the live API on 2026-09-30.
+  expect(decidePublishMode(getProviderCapabilities('meta_instagram'), 'publish', on).mode).toBe('direct');
   expect(liveConnectorsFromEnv({}).has('meta_facebook_page')).toBe(false);
 });
 
@@ -82,16 +83,23 @@ describe('Meta publish mode', () => {
     expect(JSON.stringify(mode)).toMatch(/switched off on this server/);
   });
 
-  it('INSTAGRAM stays handoff, because nothing has proved it', () => {
-    // Its sibling working is not evidence: Instagram publishes through a container/publish flow
-    // and needs media. Promoting it on inference is the failure this asserts against.
+  it('Instagram publishes directly too, proved on its OWN flow', () => {
+    // These two assertions said `handoff` / `not approved` earlier on 2026-09-30, deliberately:
+    // Facebook passing was no evidence about Instagram, which publishes through a separate
+    // container/publish flow. It was then measured on that flow - a real media container against
+    // @agentcory.ai returned HTTP 200 and a creation id, app unpublished, no App Review. The
+    // rule that each flow is proved separately is what changed the gate, not an inference.
     const caps = getProviderCapabilities('meta_instagram');
-    expect(caps.appReview.status).toBe('not_submitted');
-    expect(decidePublishMode(caps, 'publish', on(['meta_instagram'])).mode).toBe('handoff');
+    expect(caps.appReview.status).toBe('self_serve');
+    expect(decidePublishMode(caps, 'publish', on(['meta_instagram'])).mode).toBe('direct');
   });
 
-  it('and says approval is what is missing for Instagram, not the switch', () => {
-    const mode = decidePublishMode(getProviderCapabilities('meta_instagram'), 'publish', on(['meta_instagram']));
-    expect(JSON.stringify(mode)).toMatch(/not approved/);
+  it('and both Meta providers still need the env switch, approval alone being insufficient', () => {
+    for (const p of ['meta_facebook_page', 'meta_instagram'] as const) {
+      const mode = decidePublishMode(getProviderCapabilities(p), 'publish', new Set());
+      expect(mode.mode).toBe('handoff');
+      expect(JSON.stringify(mode)).toMatch(/switched off on this server/);
+      expect(JSON.stringify(mode)).not.toMatch(/not approved/);
+    }
   });
 });

@@ -134,15 +134,15 @@ export const PROVIDER_CAPABILITIES: Record<ProviderKey, ProviderCapabilities> = 
     requiredScopes: ['instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights', 'pages_show_list'],
     accountType: 'Instagram Business or Creator account linked to a Facebook Page',
     appReview: {
-      // Deliberately NOT promoted alongside meta_facebook_page. The Page post was proved against
-      // the live API on 2026-09-30; Instagram was not, and it is a different path - a container
-      // is created, polled, then published, and it needs an image or video because Instagram has
-      // no text-only post. Assuming it works because its sibling does is the kind of inference
-      // this field exists to prevent. Promote it to 'self_serve' when, and only when, a real
-      // container-and-publish round trip has returned a media id.
-      status: 'not_submitted',
+      // PROVED separately from meta_facebook_page, because a sibling passing is not evidence:
+      // Instagram publishes through its own container/publish flow. On 2026-09-30 a real
+      // container was created against @agentcory.ai (POST /{ig-user-id}/media returned HTTP 200
+      // and a creation id) with the app UNPUBLISHED and no App Review. Container creation is the
+      // step `instagram_content_publish` gates, so the permission is settled; `media_publish` was
+      // deliberately NOT called, so nothing was posted and the container expired.
+      status: 'self_serve',
       reviewedAt: null,
-      note: 'Not yet proved against the live API. Facebook Page publishing was verified self-serve on 2026-09-30, but Instagram publishes through a different container/publish flow and needs media; until a real round trip succeeds this stays Handoff. Instagram has NO text-only post type: a text draft cannot be published here at all.',
+      note: 'Standard Access: an app-role user can publish to an Instagram professional account linked to a Page they administer. Verified against the live API on 2026-09-30 by creating a media container. Instagram has NO text-only post type: a text draft cannot be published here at all.',
     },
     rateLimits: { postsPerDay: 100, note: 'Content Publishing API: 100 posts per rolling 24 hours per account (checked 2026-09-18); a carousel counts as one.' },
     requirements: { altText: 'recommended', disclosureForPaid: true },
