@@ -125,6 +125,11 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
   const lowFit: GovOpportunity = { ...candidate, uuid: 'l1', title: 'Low Fit Services', agency: 'U3P', category: 'Consulting', fitScore: 50, priorityScore: 40 };
 
   const findButton = (label: string) => Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').trim() === label);
+  const kpi = (label: string) => {
+    const card = Array.from(container.querySelectorAll('.admin-stat-card'))
+      .find((c) => c.querySelector('.admin-stat-card__label')?.textContent === label);
+    return card?.querySelector('.admin-stat-card__value')?.textContent?.trim();
+  };
   const clickEl = async (el: Element) => {
     await act(async () => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     await act(async () => { await Promise.resolve(); });
@@ -149,6 +154,17 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     const text = container.textContent ?? '';
     expect(text).toContain('High Fit Platform'); // fit 80 kept
     expect(text).not.toContain('Low Fit Services'); // fit 50 hidden
+  });
+
+  it('KPI cards recompute when a filter is applied (they reflect the filtered view, not the full set)', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit, lowFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
+    await renderPage();
+    expect(kpi('Candidates')).toBe('2');   // both in view by default
+    expect(kpi('Good fits')).toBe('1');    // only the fit-80 row
+    const toggle = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Decent options'));
+    await clickEl(toggle!);
+    expect(kpi('Candidates')).toBe('1');   // the fit-50 row is filtered out → KPI drops
+    expect(kpi('Good fits')).toBe('1');    // the fit-80 row stays
   });
 
   it('shows how many are available vs shown', async () => {
