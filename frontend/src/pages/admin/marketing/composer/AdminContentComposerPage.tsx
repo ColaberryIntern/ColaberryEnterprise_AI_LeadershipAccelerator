@@ -263,17 +263,46 @@ export default function AdminContentComposerPage() {
 
   // Media. Reload after each change because the attachment count feeds validation (an
   // `image` post with nothing attached is a blocker) and the confirmation's asset list.
-  const attachMedia = (file: File, altText: string) => withItem(async (id) => {
+  /**
+   * Attach a file, creating the draft first if there is not one yet.
+   *
+   * The upload used to be dead until a draft existed, which read as broken: pick `video`, see a
+   * file picker, and nothing happens. Reported 2026-10-01: "None of these buttons work to upload
+   * the video." They were disabled, correctly and uselessly.
+   *
+   * The draft is a prerequisite of the API, not of the operator's intent, so the page satisfies
+   * it rather than demanding it. An empty internal title - the only other required field -
+   * defaults to the file's own name, which is a better guess than an empty box and is editable.
+   */
+  const attachMedia = async (file: File, altText: string) => {
+    if (!setup.brand_id) { say('danger', 'Choose a brand before attaching a file.'); return; }
+    setBusy(true);
     setUpload({ name: file.name, sent: 0, total: file.size });
     try {
+      let id = item?.id ?? null;
+      if (!id) {
+        const title = setup.title.trim() || file.name.replace(/\.[^.]+$/, '');
+        const created = await composer.createDraft({
+          brand_id: setup.brand_id, campaign_id: setup.campaign_id || null, title,
+          canonical_body: setup.canonical_body, content_type: setup.content_type,
+          is_paid: setup.is_paid, has_offer: setup.has_offer,
+          ...(setup.content_type === 'poll' && setup.poll ? { poll: trimPoll(setup.poll) } : {}),
+        });
+        id = created.id;
+        setSetup((prev) => ({ ...prev, title }));
+        navigate(`/admin/marketing/composer/${created.id}`, { replace: true });
+      }
       const next = await composer.attachMedia(id, file, altText, (sent, total) => setUpload({ name: file.name, sent, total }));
       setMedia(next);
       await reload(id);
       say('success', `Attached. ${next.length} media item${next.length === 1 ? '' : 's'} on this post.`);
+    } catch (err) {
+      fail(err, 'The file could not be attached.');
     } finally {
       setUpload(null);
+      setBusy(false);
     }
-  }, 'The file could not be attached.')();
+  };
 
   const detachMedia = (mediaAssetId: string) => withItem(async (id) => {
     setMedia(await composer.detachMedia(id, mediaAssetId));
@@ -351,9 +380,6 @@ export default function AdminContentComposerPage() {
             // It sat after the whole form until 2026-10-01: "why isn't the video upload closer
             // to where the video is. It seems weird towards the bottom."
             <div className="mt-2" data-testid="setup-media">
-              {mediaGateNote(shape, Boolean(item)) && (
-                <div className="form-text text-warning-emphasis mb-1" data-testid="setup-media-gate">{mediaGateNote(shape, Boolean(item))}</div>
-              )}
               <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
             </div>
           ) : null}
