@@ -80,9 +80,21 @@ export async function getOrCreateAssignment(
   enrollmentId: string,
   projectId: string,
   storyId: string,
+  cohortId?: string | null,
 ): Promise<AssignmentResult> {
   const tree = await getOwnedProjectTree(enrollmentId, projectId);
   if (!tree) return { ok: false, reason: 'not_found' };
+
+  // An instructor's cohort setting beats the per-task default, but only for an
+  // assignment being created NOW. Changing the cohort template never re-points an
+  // assignment a learner has already started — that would throw away their Prepare
+  // answers and any deck they have already built against the old one.
+  let template = defaultTemplateIdFor(storyId);
+  if (cohortId) {
+    const { getCohortRequiredTemplate } = await import('./presentationInstructorService');
+    const setting = await getCohortRequiredTemplate(cohortId);
+    if (setting.configured) template = setting.templateId;
+  }
 
   const [row] = await PresentationAssignment.findOrCreate({
     where: { project_id: projectId, story_id: storyId },
@@ -90,7 +102,8 @@ export async function getOrCreateAssignment(
       project_id: projectId,
       story_id: storyId,
       enrollment_id: enrollmentId,
-      template_slug: defaultTemplateIdFor(storyId),
+      cohort_id: cohortId || null,
+      template_slug: template,
       template_version: 1,
       // `required` stays false: an assignment existing because a student opened the
       // page is not the same as an instructor requiring it of them.
@@ -107,8 +120,9 @@ export async function updateAssignment(
   projectId: string,
   storyId: string,
   patch: AssignmentPatch,
+  cohortId?: string | null,
 ): Promise<AssignmentResult> {
-  const existing = await getOrCreateAssignment(enrollmentId, projectId, storyId);
+  const existing = await getOrCreateAssignment(enrollmentId, projectId, storyId, cohortId);
   if (!existing.ok) return existing;
 
   if (patch.templateId && !templateById(patch.templateId)) {

@@ -384,6 +384,31 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(urls.some((u) => u.includes('presentation-templates/ai_visual_presentation'))).toBe(true);
   });
 
+  it('announces the stage change — switching stages moves no focus, so silence is the default', async () => {
+    mount('PREP-3');
+    const live = container.querySelector('[data-testid="ps-announce"]')!;
+    expect(live.getAttribute('aria-live')).toBe('polite');
+    expect(live.getAttribute('role')).toBe('status');
+    expect(live.textContent).toContain('Build');
+
+    click(stageBtn('practice'));
+    expect(container.querySelector('[data-testid="ps-announce"]')!.textContent).toContain('Practice');
+
+    // Visually hidden, NOT `hidden` — the hidden attribute is not announced at all,
+    // which would make this region useless.
+    expect(live.hasAttribute('hidden')).toBe(false);
+    expect(live.className).toContain('ps-sr');
+  });
+
+  it('announces whether preparation saved, rather than leaving it to be noticed', async () => {
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+    const status = container.querySelector('[data-testid="ps-save-state"]')!;
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+  });
+
   it('every stage button is reachable and labelled for assistive tech', () => {
     mount('PREP-1');
     const nav = container.querySelector('nav[aria-label="Presentation stages"]');

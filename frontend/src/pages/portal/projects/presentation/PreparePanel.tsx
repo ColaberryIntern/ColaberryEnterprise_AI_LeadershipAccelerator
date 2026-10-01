@@ -136,8 +136,16 @@ export default function PreparePanel({ projectId, storyId, demo }: PreparePanelP
           data-testid="ps-purpose"
         />
 
-        {/* Honest save state. "Saved" only ever appears after the server said so. */}
-        <p className="ps-note ps-note--soft" style={{ marginTop: 10 }} data-testid="ps-save-state">
+        {/* Honest save state. "Saved" only ever appears after the server said so.
+            role=status + aria-live so a screen-reader user learns their work saved —
+            or did not — without having to go looking for the message. */}
+        <p
+          className="ps-note ps-note--soft"
+          style={{ marginTop: 10 }}
+          role="status"
+          aria-live="polite"
+          data-testid="ps-save-state"
+        >
           {status === 'saving' && 'Saving…'}
           {status === 'saved' && 'Saved'}
           {status === 'error' && message}

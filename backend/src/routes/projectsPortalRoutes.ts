@@ -320,7 +320,7 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/presentation-assignme
     if (!gate(res)) return;
     if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
     const { getOrCreateAssignment } = await import('../services/presentation/presentationAssignmentService');
-    const r = await getOrCreateAssignment(eid(req), String(req.params.projectId), String(req.params.storyId));
+    const r = await getOrCreateAssignment(eid(req), String(req.params.projectId), String(req.params.storyId), req.participant?.cohort_id ?? null);
     if (!r.ok) {
       if (r.reason === 'unknown_template') return res.status(409).json({ error: 'This task points at a template that no longer exists' });
       return res.status(404).json({ error: 'Project not found' });
@@ -340,7 +340,7 @@ router.patch('/api/portal/projects/:projectId/tasks/:storyId/presentation-assign
       audience: body.audience,
       purpose: body.purpose,
       checklist: body.checklist,
-    });
+    }, req.participant?.cohort_id ?? null);
     if (!r.ok) {
       if (r.reason === 'unknown_template') return res.status(400).json({ error: 'Unknown presentation template' });
       return res.status(404).json({ error: 'Project not found' });

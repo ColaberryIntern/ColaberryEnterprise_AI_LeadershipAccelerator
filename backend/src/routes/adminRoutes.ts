@@ -30,6 +30,7 @@ import kbRoutes from './admin/kbRoutes';
 import orchestrationRoutes from './admin/orchestrationRoutes';
 import timelineAdminRoutes from './admin/timelineAdminRoutes';
 import componentRoutes from './admin/componentRoutes';
+import presentationStudioRoutes from './admin/presentationStudioRoutes';
 import composerRoutes from './admin/composerRoutes';
 import feedControlRoutes from './admin/feedControlRoutes';
 import intelRoutes from './admin/intelRoutes';
@@ -204,6 +205,9 @@ router.use(kbRoutes);
 router.use(orchestrationRoutes);
 router.use(timelineAdminRoutes);
 router.use(componentRoutes);
+// Presentation Studio instructor controls. Behind PRESENTATION_STUDIO_ENABLED, so with
+// the flag off these 404 exactly as if they did not exist.
+router.use(presentationStudioRoutes);
 router.use(composerRoutes);
 router.use(feedControlRoutes);
 router.use(intelRoutes);

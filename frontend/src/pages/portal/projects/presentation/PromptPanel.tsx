@@ -119,6 +119,10 @@ export default function PromptPanel({ projectId, storyId, demo }: PromptPanelPro
         <button type="button" className="ps-btn" onClick={() => copy(data.prompt)} data-testid="ps-copy">
           {copied ? 'Copied' : 'Copy prompt'}
         </button>
+        {/* The button's own label changing is not announced; this is. */}
+        <span className="ps-sr" role="status" aria-live="polite">
+          {copied ? 'Prompt copied to your clipboard' : ''}
+        </span>
         <button type="button" className="ps-btn ps-btn--soft" onClick={() => download(data)} data-testid="ps-download">
           Download as .txt
         </button>

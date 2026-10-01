@@ -116,6 +116,13 @@ export default function PresentationStudio(props: PresentationStudioProps) {
         />
       </div>
 
+      {/* Clicking a stage swaps the whole centre column without moving focus, so a
+          screen-reader user gets no signal that anything changed. This announces it.
+          Visually hidden rather than `hidden`, because `hidden` is not read out. */}
+      <div className="ps-sr" role="status" aria-live="polite" data-testid="ps-announce">
+        {STAGE_META[stage].label} stage
+      </div>
+
       {/* Exposed for tests: proves the resume effect ran rather than leaving the
           rail on its initial guess. */}
       <span hidden data-testid="ps-restored">{restored ? 'yes' : 'no'}</span>

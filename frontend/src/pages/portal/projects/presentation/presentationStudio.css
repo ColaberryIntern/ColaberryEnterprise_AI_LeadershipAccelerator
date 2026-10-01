@@ -149,6 +149,21 @@
 
 .ps-pending strong { color: var(--ps-ink); display: block; margin-bottom: 4px; }
 
+/* Visually hidden but still announced. `display:none` and `hidden` are NOT read by
+ * screen readers, which is the whole point of this class. */
+.ps-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ── learn panel ──────────────────────────────────────────────────────────── */
 
 /* The good and bad examples are given equal visual weight on purpose: the
@@ -253,17 +268,21 @@
   resize: vertical;
 }
 
-:root[data-theme='dark'] .ps-btn--soft { color: var(--ps-accent); border-color: var(--ps-accent); }
-:root[data-theme='dark'] .ps-rail button[aria-current='step'],
-:root[data-theme='dark'] .ps-btn { color: #1a202c; }
-
 @media (prefers-reduced-motion: reduce) {
   .ps-studio * { transition: none !important; animation: none !important; }
 }
 
-/* Dark mode: the portal sets data-theme on the document. Guarded so an explicit
- * light choice still wins. */
-:root[data-theme='dark'] .ps-studio {
+/* ── dark theme ───────────────────────────────────────────────────────────────
+ * Every rule below is listed TWICE, against `:root[data-theme]` and against
+ * `.rt[data-theme]`. ProjectWorkspacePage stamps the attribute on BOTH
+ * document.documentElement and the `.rt` wrapper, and the surrounding runtimeCss
+ * targets the `.rt` form. Matching only one of them works today by luck; matching
+ * both is what stops a future change to either stamp silently losing dark mode.
+ *
+ * Every selector is scoped under `.ps-studio` — a bare `:root[data-theme='dark']`
+ * rule here would repaint the whole application. */
+:root[data-theme='dark'] .ps-studio,
+.rt[data-theme='dark'] .ps-studio {
   --ps-ink: #e2e8f0;
   --ps-ink-soft: #a0aec0;
   --ps-line: #2d3748;
@@ -275,7 +294,18 @@
   --ps-wait: #f6ad55;
 }
 
-:root[data-theme='dark'] .ps-rail button[aria-current='step'] { color: #1a202c; }
-:root[data-theme='dark'] .ps-rail button:hover { background: #2d3748; }
-:root[data-theme='dark'] .ps-chip--ok { background: rgba(104,211,145,.12); border-color: rgba(104,211,145,.3); }
-:root[data-theme='dark'] .ps-chip--wait { background: rgba(246,173,85,.12); border-color: rgba(246,173,85,.3); }
+:root[data-theme='dark'] .ps-rail button[aria-current='step'],
+.rt[data-theme='dark'] .ps-rail button[aria-current='step'] { color: #1a202c; }
+:root[data-theme='dark'] .ps-rail button:hover,
+.rt[data-theme='dark'] .ps-rail button:hover { background: #2d3748; }
+:root[data-theme='dark'] .ps-chip--ok,
+.rt[data-theme='dark'] .ps-chip--ok { background: rgba(104,211,145,.12); border-color: rgba(104,211,145,.3); }
+:root[data-theme='dark'] .ps-chip--wait,
+.rt[data-theme='dark'] .ps-chip--wait { background: rgba(246,173,85,.12); border-color: rgba(246,173,85,.3); }
+
+/* The accent flips to a light blue in dark mode, so anything sitting ON the accent
+ * needs dark text to stay readable. */
+:root[data-theme='dark'] .ps-studio .ps-btn,
+.rt[data-theme='dark'] .ps-studio .ps-btn { color: #1a202c; }
+:root[data-theme='dark'] .ps-studio .ps-btn--soft,
+.rt[data-theme='dark'] .ps-studio .ps-btn--soft { background: transparent; color: var(--ps-accent); border-color: var(--ps-accent); }
