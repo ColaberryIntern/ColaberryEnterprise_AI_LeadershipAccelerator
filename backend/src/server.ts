@@ -50,6 +50,7 @@ import { ensureExplorerCampaignKeyIndex } from './db/ensureExplorerCampaignKeyIn
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
+import { ensureZoomRequestLedgerSchema } from './db/ensureZoomRequestLedgerSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
@@ -2465,6 +2466,9 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Live Sessions build-out: 5 live-session tables (idempotent DDL, sync is disabled).
   await ensureLiveSessionSchema();
+  // Zoom meeting idempotency ledger. Must exist before any booking provisions a
+  // meeting, so it is ensured on boot like the rest, not behind a feature flag.
+  await ensureZoomRequestLedgerSchema();
   // Project Presentation Studio: 5 tables + 4 additive columns on `projects`
   // (idempotent DDL). Runs unconditionally, not behind PRESENTATION_STUDIO_ENABLED:
   // the tables must exist before the flag can be turned on, and empty unread tables
