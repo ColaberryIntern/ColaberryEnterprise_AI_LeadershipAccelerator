@@ -1,0 +1,311 @@
+/* Presentation Studio — the six-stage workspace laid over a demo-prep task.
+ *
+ * Scoped under .ps-studio so nothing here can leak into the rest of the workspace,
+ * which still renders through runtimeCss. Light by default with an explicit dark
+ * block, matching the portal's existing behaviour rather than inventing a theme. */
+
+.ps-studio {
+  --ps-ink: #2d3748;
+  --ps-ink-soft: #718096;
+  --ps-line: #e2e8f0;
+  --ps-surface: #ffffff;
+  --ps-surface-alt: #f7fafc;
+  --ps-accent: #1a365d;
+  --ps-accent-soft: #2b6cb0;
+  --ps-ok: #2f855a;
+  --ps-wait: #975a16;
+  color: var(--ps-ink);
+}
+
+/* ── stage rail ───────────────────────────────────────────────────────────── */
+
+.ps-rail {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0;
+  margin: 0 0 18px;
+  list-style: none;
+  border-bottom: 1px solid var(--ps-line);
+  padding-bottom: 12px;
+}
+
+.ps-rail li { flex: 1 1 110px; }
+
+.ps-rail button {
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: var(--ps-surface-alt);
+  border: 1px solid var(--ps-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--ps-ink-soft);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.ps-rail button:hover { background: #edf2f7; }
+
+/* Focus must be visible for keyboard users — never remove the ring. */
+.ps-rail button:focus-visible,
+.ps-studio button:focus-visible,
+.ps-studio a:focus-visible {
+  outline: 2px solid var(--ps-accent-soft);
+  outline-offset: 2px;
+}
+
+.ps-rail button[aria-current='step'] {
+  background: var(--ps-accent);
+  border-color: var(--ps-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.ps-rail .ps-num {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+/* ── layout ───────────────────────────────────────────────────────────────── */
+
+.ps-cols { display: flex; gap: 20px; align-items: flex-start; }
+.ps-main { flex: 1 1 auto; min-width: 0; }
+.ps-side { flex: 0 0 260px; }
+
+@media (max-width: 860px) {
+  .ps-cols { display: block; }
+  .ps-side { margin-top: 20px; }
+}
+
+.ps-h {
+  margin: 0 0 4px;
+  font-size: 1.12rem;
+  font-weight: 650;
+  color: var(--ps-accent);
+}
+
+.ps-blurb { margin: 0 0 16px; color: var(--ps-ink-soft); font-size: 0.92rem; }
+
+.ps-card {
+  background: var(--ps-surface);
+  border: 1px solid var(--ps-line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.ps-card h3 {
+  margin: 0 0 8px;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ps-ink-soft);
+}
+
+/* Replaces inline styles so the side panel's type is themed with everything else
+ * and dark mode does not have to fight a hardcoded colour. */
+/* The PREP id beside the student-facing title: present and findable, but not
+ * competing with the name a student actually reads. */
+.ps-id { color: var(--ps-ink-soft); font-size: 0.8rem; white-space: nowrap; }
+
+.ps-note { margin: 0; font-size: 0.88rem; }
+.ps-note--soft { color: var(--ps-ink-soft); }
+
+.ps-facts { margin: 0; font-size: 0.88rem; }
+.ps-facts dt { color: var(--ps-ink-soft); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.ps-facts dd { margin: 0 0 10px; }
+
+/* ── honest state chips ───────────────────────────────────────────────────── */
+
+.ps-chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.ps-chip--ok { background: #f0fff4; color: var(--ps-ok); border-color: #c6f6d5; }
+.ps-chip--wait { background: #fffaf0; color: var(--ps-wait); border-color: #feebc8; }
+.ps-chip--idle { background: var(--ps-surface-alt); color: var(--ps-ink-soft); border-color: var(--ps-line); }
+
+/* A stage whose machinery has not shipped yet says so plainly, and offers no
+ * button that would do nothing. */
+.ps-pending {
+  background: var(--ps-surface-alt);
+  border: 1px dashed var(--ps-line);
+  border-radius: 10px;
+  padding: 16px;
+  color: var(--ps-ink-soft);
+  font-size: 0.9rem;
+}
+
+.ps-pending strong { color: var(--ps-ink); display: block; margin-bottom: 4px; }
+
+/* Visually hidden but still announced. `display:none` and `hidden` are NOT read by
+ * screen readers, which is the whole point of this class. */
+.ps-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── learn panel ──────────────────────────────────────────────────────────── */
+
+/* The good and bad examples are given equal visual weight on purpose: the
+ * counter-case is where the judgement is taught, not a footnote to the good one. */
+.ps-eg {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--ps-line);
+  background: var(--ps-surface-alt);
+  border-radius: 0 7px 7px 0;
+  font-size: 0.88rem;
+  font-style: normal;
+}
+
+.ps-eg--good { border-left-color: var(--ps-ok); }
+.ps-eg--bad { border-left-color: var(--ps-secondary, #e53e3e); }
+
+.ps-outline { list-style: none; margin: 0; padding: 0; counter-reset: beat; }
+
+.ps-outline li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ps-line);
+}
+
+.ps-outline li:last-child { border-bottom: 0; }
+.ps-beat { font-weight: 600; font-size: 0.88rem; }
+.ps-secs { color: var(--ps-ink-soft); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.ps-say { grid-column: 1 / -1; color: var(--ps-ink-soft); font-size: 0.85rem; }
+
+/* ── prepare panel ────────────────────────────────────────────────────────── */
+
+.ps-label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--ps-ink-soft);
+  margin-bottom: 5px;
+}
+
+.ps-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ps-line);
+  border-radius: 7px;
+  background: var(--ps-surface);
+  color: var(--ps-ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.ps-input:focus-visible {
+  outline: 2px solid var(--ps-accent-soft);
+  outline-offset: 1px;
+}
+
+.ps-check { list-style: none; margin: 0; padding: 0; }
+.ps-check li { margin-bottom: 7px; }
+
+.ps-check label {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+/* Big enough to hit on a phone without zooming. */
+.ps-check input[type='checkbox'] { margin-top: 3px; width: 16px; height: 16px; flex: 0 0 auto; }
+
+/* ── prompt panel ─────────────────────────────────────────────────────────── */
+
+.ps-acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }
+
+.ps-btn {
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--ps-accent);
+  background: var(--ps-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.ps-btn--soft { background: transparent; color: var(--ps-accent); }
+.ps-btn:hover { filter: brightness(1.08); }
+
+.ps-prompt-text {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ps-line);
+  border-radius: 8px;
+  background: var(--ps-surface-alt);
+  color: var(--ps-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-studio * { transition: none !important; animation: none !important; }
+}
+
+/* ── dark theme ───────────────────────────────────────────────────────────────
+ * Every rule below is listed TWICE, against `:root[data-theme]` and against
+ * `.rt[data-theme]`. ProjectWorkspacePage stamps the attribute on BOTH
+ * document.documentElement and the `.rt` wrapper, and the surrounding runtimeCss
+ * targets the `.rt` form. Matching only one of them works today by luck; matching
+ * both is what stops a future change to either stamp silently losing dark mode.
+ *
+ * Every selector is scoped under `.ps-studio` — a bare `:root[data-theme='dark']`
+ * rule here would repaint the whole application. */
+:root[data-theme='dark'] .ps-studio,
+.rt[data-theme='dark'] .ps-studio {
+  --ps-ink: #e2e8f0;
+  --ps-ink-soft: #a0aec0;
+  --ps-line: #2d3748;
+  --ps-surface: #1a202c;
+  --ps-surface-alt: #171923;
+  --ps-accent: #90cdf4;
+  --ps-accent-soft: #63b3ed;
+  --ps-ok: #68d391;
+  --ps-wait: #f6ad55;
+}
+
+:root[data-theme='dark'] .ps-rail button[aria-current='step'],
+.rt[data-theme='dark'] .ps-rail button[aria-current='step'] { color: #1a202c; }
+:root[data-theme='dark'] .ps-rail button:hover,
+.rt[data-theme='dark'] .ps-rail button:hover { background: #2d3748; }
+:root[data-theme='dark'] .ps-chip--ok,
+.rt[data-theme='dark'] .ps-chip--ok { background: rgba(104,211,145,.12); border-color: rgba(104,211,145,.3); }
+:root[data-theme='dark'] .ps-chip--wait,
+.rt[data-theme='dark'] .ps-chip--wait { background: rgba(246,173,85,.12); border-color: rgba(246,173,85,.3); }
+
+/* The accent flips to a light blue in dark mode, so anything sitting ON the accent
+ * needs dark text to stay readable. */
+:root[data-theme='dark'] .ps-studio .ps-btn,
+.rt[data-theme='dark'] .ps-studio .ps-btn { color: #1a202c; }
+:root[data-theme='dark'] .ps-studio .ps-btn--soft,
+.rt[data-theme='dark'] .ps-studio .ps-btn--soft { background: transparent; color: var(--ps-accent); border-color: var(--ps-accent); }
