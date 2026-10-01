@@ -20,7 +20,12 @@ import type { ReeseBehaviourKey } from './agentDetailEmployeeFacts';
 
 const REESE_AGENT_NAME = 'Reese';
 
-const SIBLING_REGISTRY_NAME: Partial<Record<ReeseBehaviourKey, string>> = {
+// Exported (2026-10-01, Phase 3 effective-access resolver, R199) so that
+// resolver can enumerate Reese's real, fragmented AiAgent rows without
+// duplicating this literal list — single source of truth, not a copy that
+// could silently drift. Read-only consumer; nothing outside this file writes
+// through anything but setReeseBehaviourSwitch() below.
+export const SIBLING_REGISTRY_NAME: Partial<Record<ReeseBehaviourKey, string>> = {
   autonomous_outreach_sweep: 'ReeseAutonomousOutreachSweep',
   outreach_follow_ups: 'ReeseOutreachFollowUps',
   presence_heartbeat: 'ReesePresenceHeartbeat',
