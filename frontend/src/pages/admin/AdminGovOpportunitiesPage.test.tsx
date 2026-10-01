@@ -28,6 +28,8 @@ async function renderPage() {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => { root.render(<MemoryRouter><AdminGovOpportunitiesPage /></MemoryRouter>); });
+  // Two flushes: one for listGovOpportunities resolving, one for the resulting setFeed re-render.
+  await act(async () => { await Promise.resolve(); });
   await act(async () => { await Promise.resolve(); });
 }
 
@@ -37,70 +39,70 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-describe('AdminGovOpportunitiesPage — Phase 1 correction', () => {
-  it('labels Fit/Priority as legacy discovery scores and drops "best fits" wording', async () => {
+describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preserved)', () => {
+  it('renders the legacy scores as advisory chips and never says "best fit"', async () => {
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
     await renderPage();
     const text = container.textContent ?? '';
-    expect(text).toContain('Priority 79 (legacy)');
-    expect(text).toContain('Fit 80 (legacy)');
-    expect(text).toContain('Legacy discovery scores');   // caption: advisory, not verified fit
+    expect(text).toContain('79');   // priority chip
+    expect(text).toContain('80');   // fit chip
+    expect(text).toContain('Legacy discovery scores are advisory, not verified company fit');
     expect(text).not.toContain('best fit');
   });
 
-  it('shows Unassessed for BOTH an absent and an explicitly-null verdict', async () => {
+  it('shows Unassessed for BOTH an absent and an explicitly-null verdict (one badge per row)', async () => {
     const absent: GovOpportunity = { ...candidate, uuid: 'ab', vetVerdict: undefined, vetVerdictPresent: false };
     const nulled: GovOpportunity = { ...candidate, uuid: 'nu', vetVerdict: null, vetVerdictPresent: true };
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [absent, nulled], source: 'live', snapshotDate: null, snapshotReason: null });
     await renderPage();
     const unassessed = Array.from(container.querySelectorAll('.badge')).filter((b) => b.textContent === 'Unassessed');
-    expect(unassessed.length).toBe(2); // both cards render Unassessed
+    expect(unassessed.length).toBe(2);
   });
 
-  it('explains a flagged verdict with its reason + method, and marks a weak legacy (title_regex, unevidenced) assessment', async () => {
+  it('explains a flagged verdict with its reason + method and marks a weak legacy assessment (never a candidate)', async () => {
     const flagged: GovOpportunity = { ...candidate, uuid: 'fl', title: 'Out Of Domain RFP', vetVerdict: { status: 'no_bid', reason: 'construction', method: 'title_regex', evidence: null }, vetVerdictPresent: true };
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [flagged], source: 'live', snapshotDate: null, snapshotReason: null });
     await renderPage();
     const text = container.textContent ?? '';
     expect(text).toContain('Flagged for review');
-    expect(text).toContain('no bid — construction');            // reason surfaced, not just "no bid"
+    expect(text).toContain('no bid — construction');
     expect(text).toContain('method: title_regex');
-    expect(text).toContain('legacy, unevidenced (weak)');       // weak-evidence marking
+    expect(text).toContain('legacy, unevidenced (weak)');
   });
 
-  it('"Open project" opens an EXISTING project (navigates) — without restoring creation', async () => {
+  it('"Qualify" routes to the qualification workspace (no canonical id derived from the title)', async () => {
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
-    (factoryApi.startGovOpportunity as jest.Mock).mockResolvedValue({ deliveryProjectId: 'dp-gov-1', created: false });
     await renderPage();
-    const open = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open project'));
-    expect(open).toBeDefined();
-    await act(async () => { open!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    await act(async () => { await Promise.resolve(); });
-    expect(factoryApi.startGovOpportunity).toHaveBeenCalledWith('u9', {});
-    expect(mockNavigate).toHaveBeenCalledWith('/admin/factory?contract=dp-gov-1');
+    const qualify = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Qualify'));
+    expect(qualify).toBeDefined();
+    await act(async () => { qualify!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(mockNavigate).toHaveBeenCalledWith('/admin/gov-qualification');
   });
 
-  it('"Open project" on a not-yet-started opportunity explains qualification is required (409), does not navigate', async () => {
-    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
-    (factoryApi.startGovOpportunity as jest.Mock).mockRejectedValue({ response: { status: 409, data: { qualificationRequired: true } } });
-    await renderPage();
-    const open = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open project'))!;
-    await act(async () => { open.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    await act(async () => { await Promise.resolve(); });
-    expect(mockNavigate).not.toHaveBeenCalled();
-    expect(container.textContent ?? '').toContain('No project exists for this opportunity yet');
-  });
-
-  it('candidate card: value UNVERIFIED, review-source link, deadline warning; distinct snapshot banners', async () => {
+  it('row: unverified value, Source link, deadline warning; live pill in the header', async () => {
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
     await renderPage();
     const text = container.textContent ?? '';
     expect(text).toContain('Live from Opportunity Pulse');
-    expect(text).toContain('Value unverified');
-    expect(text).toContain('source estimate $1.0M (not verified)');
-    const reviewLink = Array.from(container.querySelectorAll('a')).find((a) => a.textContent?.includes('Review source'));
-    expect(reviewLink!.getAttribute('href')).toBe('https://dallascityhall.bonfirehub.com/opportunities/1');
+    expect(text).toContain('$1.0M');
+    expect(text).toContain('unverified');
+    expect(text).toContain('not revenue');   // the pipeline card never calls an estimate revenue
+    const sourceLink = Array.from(container.querySelectorAll('a')).find((a) => a.textContent?.includes('Source'));
+    expect(sourceLink!.getAttribute('href')).toBe('https://dallascityhall.bonfirehub.com/opportunities/1');
     expect(container.querySelector('.ri-error-warning-line')).toBeTruthy(); // deadline verification warning
+  });
+
+  it('summarises the pipeline and distribution without presenting estimates as revenue', async () => {
+    const other: GovOpportunity = { ...candidate, uuid: 'o2', title: 'Advisory Services', agency: 'U3P', category: 'Consulting', fitScore: 70, priorityScore: 54, estimatedValue: 250000, closeDate: '2026-10-05' };
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [candidate, other], source: 'live', snapshotDate: null, snapshotReason: null });
+    await renderPage();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Pipeline value');
+    expect(text).toContain('Priority mix');
+    expect(text).toContain('Fit mix');
+    // IT vs Consulting split surfaced
+    expect(text).toMatch(/IT \$1\.0M/);
+    expect(text).toMatch(/Consulting \$250K|Consulting \$0K/);
   });
 
   it('distinguishes a CONFIGURED-but-FAILED source from "not configured"', async () => {
