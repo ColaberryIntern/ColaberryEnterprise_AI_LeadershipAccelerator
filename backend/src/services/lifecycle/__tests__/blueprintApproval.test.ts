@@ -29,6 +29,8 @@ jest.mock('../../../models/BlueprintApproval', () => ({
   default: { findOne: jest.fn(), create: jest.fn() },
 }));
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import OperatingBlueprintManifest from '../../../models/OperatingBlueprintManifest';
 import BlueprintApproval from '../../../models/BlueprintApproval';
 import {
@@ -82,6 +84,33 @@ beforeEach(() => {
   ManifestMock.update.mockResolvedValue([0]);
   ApprovalMock.findOne.mockResolvedValue(null);
   ApprovalMock.create.mockImplementation(async (vals: any) => ({ id: 'appr-1', ...vals }));
+});
+
+describe('STRUCTURAL: models are lazy-loaded, so importing this never inits the ORM', () => {
+  // The reason is documented at routes/admin/factoryRoutes.ts:9-11 and the pattern at
+  // factoryApproval.ts:125. A STATIC model import initialises Sequelize at module load, so any
+  // route importing this file would init the ORM just by being imported — which breaks every
+  // route test that stubs config/database, surfacing as `Model.init … reading 'define'` inside
+  // product code that is fine. Asserted over the source text so it cannot silently regress.
+  const src = readFileSync(join(__dirname, '..', 'blueprintApproval.ts'), 'utf8');
+  const topOfFile = src.slice(0, src.indexOf('export type ApprovalScope'));
+
+  it('has no VALUE import of a model or the database connection at module scope', () => {
+    expect(topOfFile).not.toMatch(/^import\s+(?!type\b)[^\n]*from\s+'\.\.\/\.\.\/models\//m);
+    expect(topOfFile).not.toMatch(/^import\s+\{\s*sequelize\s*\}/m);
+  });
+
+  it('loads them dynamically inside the function instead', () => {
+    expect(src).toMatch(/await import\('\.\.\/\.\.\/config\/database'\)/);
+    expect(src).toMatch(/await import\('\.\.\/\.\.\/models\/OperatingBlueprintManifest'\)/);
+    expect(src).toMatch(/await import\('\.\.\/\.\.\/models\/BlueprintApproval'\)/);
+  });
+
+  it('POSITIVE CONTROL: the pattern does match a static model import', () => {
+    // Guards against a regex that matches nothing and therefore always "passes".
+    const bad = "import OperatingBlueprintManifest from '../../models/OperatingBlueprintManifest';";
+    expect(bad).toMatch(/^import\s+(?!type\b)[^\n]*from\s+'\.\.\/\.\.\/models\//m);
+  });
 });
 
 describe('the happy path', () => {
