@@ -462,6 +462,10 @@ import ContractTrack from './ContractTrack';
 import ContractRequirement from './ContractRequirement';
 import ContractProcessDocument from './ContractProcessDocument';
 import ContractProcessReview from './ContractProcessReview';
+import ProjectLifecycleState from './ProjectLifecycleState';
+import OperatingBlueprintManifest from './OperatingBlueprintManifest';
+import BlueprintApproval from './BlueprintApproval';
+import LifecycleStageFailure from './LifecycleStageFailure';
 import CapstoneReviewApproval from './CapstoneReviewApproval';
 import CohortMembership from './CohortMembership';
 import InternshipApplication from './InternshipApplication';
@@ -1649,6 +1653,12 @@ export {
   ContractRequirement,
   ContractProcessDocument,
   ContractProcessReview,
+
+  // Unified project lifecycle (docs/project-lifecycle/architecture.md)
+  ProjectLifecycleState,
+  OperatingBlueprintManifest,
+  BlueprintApproval,
+  LifecycleStageFailure,
 
   // Living Career Portfolio (Gate 10 — versioned publication)
   CapstoneReviewApproval,
