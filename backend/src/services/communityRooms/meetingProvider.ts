@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { env } from '../../config/env';
 import * as zoomService from '../zoomService';
+import { instantToWallClock } from '../centralDate';
 
 // Meeting provider adapter (spec §11) — a stable interface behind which the
 // actual video provider can be swapped without touching room/booking logic.
@@ -177,23 +178,44 @@ export class GoogleMeetAdapter implements MeetingProvider {
 export class ZoomMeetAdapter implements MeetingProvider {
   readonly name = 'zoom';
 
+  /**
+   * THE BUG THIS CONVERSION FIXES. `startAt` is a real instant. Zoom's API reads a
+   * `start_time` with no trailing `Z` as a wall clock IN the `timezone` field sent
+   * alongside it. The previous code did `startAt.toISOString().slice(0, 19)`, which
+   * takes the UTC wall clock and strips the only character saying it was UTC — so an
+   * instant of 18:30Z (13:30 Central) was handed to Zoom as "18:30, Central" and the
+   * meeting was created FIVE HOURS LATE. Every room booking and every `joinVideoRoom`
+   * went through this path.
+   *
+   * Slicing a `Z` off an ISO string converts nothing. `instantToWallClock` actually
+   * converts, via Intl, so a booking either side of a DST transition uses the offset
+   * really in force that day.
+   *
+   * The class path was never affected: `meetingService.ts` builds its string from the
+   * stored Central wall clock and never had an instant to mis-handle.
+   */
   async createMeeting(input: CreateMeetingInput): Promise<MeetingResult> {
     const durationMinutes = Math.max(1, Math.round((input.endAt.getTime() - input.startAt.getTime()) / 60000));
+    const timezone = input.timezone || DEFAULT_TZ;
     const result = await zoomService.createMeeting({
       topic: input.title,
       agenda: input.description,
-      startDateTime: input.startAt.toISOString().slice(0, 19),
+      startDateTime: instantToWallClock(input.startAt, timezone),
       durationMinutes,
-      timezone: input.timezone || DEFAULT_TZ,
+      timezone,
     });
     return { providerEventId: result.meetingId, joinUrl: result.joinUrl };
   }
 
   async updateMeeting(providerEventId: string, patch: Partial<CreateMeetingInput>): Promise<void> {
+    // Same conversion as createMeeting. The timezone a patch is interpreted against is
+    // the one it carries, falling back to the adapter default — NOT whatever the
+    // meeting was created with, which this adapter cannot see.
+    const patchTz = patch.timezone || DEFAULT_TZ;
     await zoomService.updateMeeting(providerEventId, {
       ...(patch.title !== undefined ? { topic: patch.title } : {}),
       ...(patch.description !== undefined ? { agenda: patch.description } : {}),
-      ...(patch.startAt ? { startDateTime: patch.startAt.toISOString().slice(0, 19) } : {}),
+      ...(patch.startAt ? { startDateTime: instantToWallClock(patch.startAt, patchTz) } : {}),
       ...(patch.endAt && patch.startAt
         ? { durationMinutes: Math.max(1, Math.round((patch.endAt.getTime() - patch.startAt.getTime()) / 60000)) }
         : {}),
