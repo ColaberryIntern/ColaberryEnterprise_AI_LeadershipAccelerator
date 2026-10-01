@@ -326,3 +326,148 @@ export async function resolveEffectiveAccess(agentId: string): Promise<AgentEffe
     mismatches: agentMismatches,
   };
 }
+
+/** One real drift finding — a disagreement or gap this resolver's own
+ * sources (or this phase's own prior discovery) found between what's
+ * declared and what's real. */
+export interface DriftFinding {
+  agentName: string;
+  /** Null for the hand-curated execution-gating findings below when the
+   * named agent can't be resolved against the real fleet at report-build
+   * time (shouldn't happen in practice, but never guessed) — the UI's deep
+   * link degrades honestly rather than pointing at a wrong agent. */
+  agentId: string | null;
+  description: string;
+}
+
+export interface InventoryDriftReport {
+  generatedAt: string;
+  findings: DriftFinding[];
+}
+
+/** Real, execution-TIME gating gaps this phase's own discovery confirmed —
+ * NOT derivable from the 10 "grant" sources `resolveEffectiveAccess()` reads
+ * above (those answer "is this tool declared/granted," never "does the real
+ * call site actually invoke the authorization chokepoint before it runs").
+ * A small, hand-curated list, the same honest pattern `TOOL_CAPABILITIES`
+ * and `AGENT_PERMISSIONS` already use elsewhere in this codebase — grounded
+ * in this phase's own confirmed findings, not guessed, and deliberately NOT
+ * claiming to be exhaustive across every one of the ~15 real call sites this
+ * phase's discovery mapped (see execution-contract.md for the full map).
+ * Every entry here is a finding this Phase 3 slice deliberately did NOT
+ * close (see execution-contract.md's "Explicitly out of scope" / STOP AND
+ * ASK) — if a future phase closes one, remove it here too, or this report
+ * starts lying by omission in the other direction. */
+const KNOWN_EXECUTION_GATING_GAPS: Array<Omit<DriftFinding, 'agentId'>> = [
+  {
+    agentName: 'Dara',
+    description:
+      "escalate_to_human (daraTools.ts's escalateToHumanTool — a real side-effecting handoff-ticket creation) has zero authorization or kill-switch check before it executes. Not closed this phase: fixing it means adding Reese-style blocking enforcement to Dara for the first time, a real governance decision flagged for Ali, not an implementation default.",
+  },
+  {
+    agentName: 'Dara',
+    description:
+      "Dara's reply path (daraReplyService.ts's maybeTriggerDaraReply) has zero authorization call AND zero kill-switch check of any kind — no isDaraEnabled() function exists anywhere in this codebase. Same STOP-AND-ASK as escalate_to_human above.",
+  },
+  ...Array.from(PROOFDESK_AGENT_NAMES).map((agentName) => ({
+    agentName,
+    description:
+      "ticketAgentDispatcher.ts's authorizeTicketDispatchSafe() computes a real authorization verdict but discards it before dispatchTicketToAgent() runs the real mapping.execute() — the central task runner's enforcement is dead code, platform-wide (every dispatched/retried ticket for every agent routed through it, not only this one). Not closed this phase — a production-infrastructure-scale change flagged for Ali, not an implementation default.",
+  })),
+];
+
+/** Aggregates every real mismatch this resolver's own sources find, across
+ * every registered agent, plus the hand-curated execution-gating gaps above
+ * — the full A09 drift report. Admin-diagnostic surface, not a hot path:
+ * calls `resolveEffectiveAccess()` once per real agent (each does its own
+ * `AiAgent.findByPk`, a small, accepted redundancy against the single
+ * `findAll()` below, traded for reusing one well-tested code path rather
+ * than a second, parallel aggregation implementation that could drift from
+ * it). */
+export async function buildInventoryDriftReport(): Promise<InventoryDriftReport> {
+  const agents = await AiAgent.findAll();
+  const findings: DriftFinding[] = [];
+
+  for (const agent of agents) {
+    const report = await resolveEffectiveAccess(agent.id);
+    if (!report) continue;
+
+    for (const mismatch of report.mismatches) {
+      findings.push({ agentName: report.agentName, agentId: report.agentId, description: mismatch });
+    }
+    for (const tool of report.tools) {
+      for (const mismatch of tool.mismatches) {
+        findings.push({ agentName: report.agentName, agentId: report.agentId, description: `${tool.toolName}: ${mismatch}` });
+      }
+    }
+  }
+
+  // Curated findings only name an agent by string — resolve each against
+  // the SAME real fleet list already fetched above, rather than a second
+  // query. Honestly null (never guessed) when no live match is found.
+  for (const gap of KNOWN_EXECUTION_GATING_GAPS) {
+    const matched = agents.find((a) => a.agent_name === gap.agentName);
+    findings.push({ ...gap, agentId: matched?.id ?? null });
+  }
+
+  return { generatedAt: new Date().toISOString(), findings };
+}
+
+/** One tool's fleet-wide view — T10's own spec ("search/filter by tool...
+ * assigned agents... versions, usage/failures") needs a TOOL-centric catalog,
+ * not just the agent-centric drift report above. Added after writing the
+ * route layer surfaced that `buildInventoryDriftReport()` alone doesn't
+ * satisfy T10's literal ask — caught and fixed before shipping, not a silent
+ * gap. */
+export interface ToolCatalogEntry {
+  toolName: string;
+  reads: string[];
+  produces: string[];
+  documented: boolean;
+  assignedAgents: Array<{
+    agentId: string;
+    agentName: string;
+    registered: boolean;
+    grantedVia: string[];
+    usable: boolean;
+  }>;
+}
+
+export interface ToolCatalog {
+  generatedAt: string;
+  tools: ToolCatalogEntry[];
+}
+
+/** Same admin-diagnostic-surface tradeoff as `buildInventoryDriftReport()`
+ * above (its own doc comment explains the accepted per-agent
+ * `resolveEffectiveAccess()` redundancy) — a second, separate fleet-wide
+ * pass rather than merging into that function, so each stays single-
+ * responsibility and the already-tested drift report's own shape doesn't
+ * have to change to carry tool-catalog data it was never scoped to hold. */
+export async function buildToolCatalog(): Promise<ToolCatalog> {
+  const agents = await AiAgent.findAll();
+  const toolMap = new Map<string, ToolCatalogEntry>();
+
+  for (const agent of agents) {
+    const report = await resolveEffectiveAccess(agent.id);
+    if (!report) continue;
+
+    for (const tool of report.tools) {
+      let entry = toolMap.get(tool.toolName);
+      if (!entry) {
+        entry = { toolName: tool.toolName, reads: tool.reads, produces: tool.produces, documented: tool.documented, assignedAgents: [] };
+        toolMap.set(tool.toolName, entry);
+      }
+      entry.assignedAgents.push({
+        agentId: report.agentId,
+        agentName: report.agentName,
+        registered: tool.registered,
+        grantedVia: tool.grantedVia,
+        usable: tool.usable,
+      });
+    }
+  }
+
+  const tools = Array.from(toolMap.values()).sort((a, b) => a.toolName.localeCompare(b.toolName));
+  return { generatedAt: new Date().toISOString(), tools };
+}

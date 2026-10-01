@@ -8,11 +8,13 @@
  */
 const mockAiAgentFindByPk = jest.fn();
 const mockAiAgentFindOne = jest.fn();
+const mockAiAgentFindAll = jest.fn();
 jest.mock('../../../models/AiAgent', () => ({
   __esModule: true,
   default: {
     findByPk: (...a: any[]) => mockAiAgentFindByPk(...a),
     findOne: (...a: any[]) => mockAiAgentFindOne(...a),
+    findAll: (...a: any[]) => mockAiAgentFindAll(...a),
   },
 }));
 
@@ -59,7 +61,7 @@ jest.mock('../../agentAuthorizationService', () => ({
   resolveEffectiveMode: (globalMode: string, override: string | null) => override ?? globalMode,
 }));
 
-import { resolveEffectiveAccess } from '../agentEffectiveAccessService';
+import { resolveEffectiveAccess, buildInventoryDriftReport, buildToolCatalog } from '../agentEffectiveAccessService';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -443,6 +445,110 @@ describe('resolveEffectiveAccess', () => {
       for (const forbidden of ['authorizeAgentAction', 'ApprovalRequest', 'WorkLedgerEvent', 'emitAiEvent', 'emitEvent']) {
         expect(importLines).not.toContain(forbidden);
       }
+    });
+  });
+
+  describe('R201 — buildInventoryDriftReport() surfaces the real A09 findings', () => {
+    it('surfaces all 3 named A09 findings: Reese’s tools_granted gap, Dara’s escalate_to_human ungated status, and the ProofDesk hardcoded-enabled disconnect', async () => {
+      const agents: Record<string, any> = {
+        'id-reese': { id: 'id-reese', agent_name: 'Reese', tools_granted: [], enabled: true },
+        'id-dara': { id: 'id-dara', agent_name: 'Dara', tools_granted: [], enabled: true },
+        'id-cqa': { id: 'id-cqa', agent_name: 'CurriculumArchitectAgent', tools_granted: [], enabled: true },
+      };
+      mockAiAgentFindAll.mockResolvedValue(Object.values(agents));
+      mockAiAgentFindByPk.mockImplementation(async (id: string) => agents[id] ?? null);
+
+      const report = await buildInventoryDriftReport();
+
+      expect(report.generatedAt).toEqual(expect.any(String));
+      // Finding 1: Reese's real GRANTS/tools_granted gap, surfaced from the
+      // resolver's own per-tool mismatches (computed, not hand-added here).
+      expect(
+        report.findings.some((f) => f.agentName === 'Reese' && f.description.includes('read_attachments') && f.description.includes('absent from tools_granted')),
+      ).toBe(true);
+      // Finding 2: Dara's escalate_to_human ungated status — the
+      // hand-curated execution-gating-gap list, since this is NOT derivable
+      // from the 10 grant sources alone.
+      expect(
+        report.findings.some((f) => f.agentName === 'Dara' && f.description.includes('escalate_to_human') && f.description.includes('zero authorization')),
+      ).toBe(true);
+      // The curated finding's agentId is resolved against the real fleet
+      // list, not left null when a real match exists.
+      const daraEscalateFinding = report.findings.find((f) => f.agentName === 'Dara' && f.description.includes('escalate_to_human'));
+      expect(daraEscalateFinding?.agentId).toBe('id-dara');
+      // Finding 3: the ProofDesk capabilityRegistry.ts hardcoded-enabled
+      // disconnect, surfaced from the resolver's own agent-level mismatches.
+      expect(
+        report.findings.some((f) => f.agentName === 'CurriculumArchitectAgent' && f.description.includes('hardcoded enabled:true literal')),
+      ).toBe(true);
+    });
+
+    it('an agent with zero mismatches contributes zero findings (no fabricated drift)', async () => {
+      const agents: Record<string, any> = {
+        'id-clean': { id: 'id-clean', agent_name: 'CleanAgent', tools_granted: [], enabled: true },
+      };
+      mockAiAgentFindAll.mockResolvedValue(Object.values(agents));
+      mockAiAgentFindByPk.mockImplementation(async (id: string) => agents[id] ?? null);
+
+      const report = await buildInventoryDriftReport();
+
+      expect(report.findings.some((f) => f.agentName === 'CleanAgent')).toBe(false);
+    });
+
+    it("a curated finding's agentId is honestly null when no real agent named 'Dara' exists in the fleet (never guessed)", async () => {
+      mockAiAgentFindAll.mockResolvedValue([]); // no agents at all, real or named 'Dara'
+      mockAiAgentFindByPk.mockResolvedValue(null);
+
+      const report = await buildInventoryDriftReport();
+
+      const daraFinding = report.findings.find((f) => f.agentName === 'Dara');
+      expect(daraFinding).toBeDefined();
+      expect(daraFinding?.agentId).toBeNull();
+    });
+  });
+
+  describe("buildToolCatalog() — T10's tool-centric view (search/filter by tool, assigned agents per tool)", () => {
+    it('groups by tool name across the whole fleet, listing every assigned agent under its own real tool entry', async () => {
+      const agents: Record<string, any> = {
+        'id-reese': { id: 'id-reese', agent_name: 'Reese', tools_granted: ['read_student_success_snapshot'], enabled: true },
+        'id-dara': { id: 'id-dara', agent_name: 'Dara', tools_granted: ['escalate_to_human'], enabled: true },
+      };
+      mockAiAgentFindAll.mockResolvedValue(Object.values(agents));
+      mockAiAgentFindByPk.mockImplementation(async (id: string) => agents[id] ?? null);
+
+      const catalog = await buildToolCatalog();
+
+      const snapshotEntry = catalog.tools.find((t) => t.toolName === 'read_student_success_snapshot');
+      expect(snapshotEntry?.assignedAgents).toEqual([
+        expect.objectContaining({ agentId: 'id-reese', agentName: 'Reese', registered: true }),
+      ]);
+      const escalateEntry = catalog.tools.find((t) => t.toolName === 'escalate_to_human');
+      expect(escalateEntry?.assignedAgents).toEqual([
+        expect.objectContaining({ agentId: 'id-dara', agentName: 'Dara', registered: true }),
+      ]);
+      // Tools are sorted alphabetically, not insertion order — a real,
+      // checkable contract for the frontend's search/filter UI.
+      expect(catalog.tools.map((t) => t.toolName)).toEqual([...catalog.tools.map((t) => t.toolName)].sort());
+    });
+
+    it('a tool held by 2 real agents lists both under the same single catalog entry, not duplicated', async () => {
+      const agents: Record<string, any> = {
+        'id-reese': { id: 'id-reese', agent_name: 'Reese', tools_granted: [], enabled: true },
+        'id-dara': { id: 'id-dara', agent_name: 'Dara', tools_granted: [], enabled: true },
+        'id-cory': { id: 'id-cory', agent_name: 'cory-engine', tools_granted: [], enabled: true },
+      };
+      mockAiAgentFindAll.mockResolvedValue(Object.values(agents));
+      mockAiAgentFindByPk.mockImplementation(async (id: string) => agents[id] ?? null);
+
+      const catalog = await buildToolCatalog();
+
+      // read_attachments (GRANTS) is held by both Reese and Dara (real
+      // production data) — this resolver's real toAgentKey() mapping
+      // correctly matches 'Reese'->'reese' and 'Dara'->'dara', but NOT
+      // 'cory-engine'->'cory' (a real, deliberate non-match this file's own
+      // header already documents), so only 2 of the 3 fixture agents appear.
+      const entry = catalog.tools.find((t) => t.toolName === 'read_attachments');
+      expect(entry?.assignedAgents.map((a) => a.agentName).sort()).toEqual(['Dara', 'Reese']);
     });
   });
 });

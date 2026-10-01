@@ -138,6 +138,10 @@ export const NAV_GROUPS: NavGroup[] = [
     // so every existing deep link, bookmark and ?tab= link keeps working.
     { path: '/admin/orchestration', label: 'Curriculum', icon: 'flow-chart' },
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
+    // Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide tool/
+    // capability catalog, reconciled read-only across every real authority
+    // source. Sibling to "AI Organization" (agents), not nested under it.
+    { path: '/admin/tools', label: 'Tools', icon: 'tools-line' },
     // AI Project Factory Command Center (Phase 3). A delivery contract is program-domain work; the
     // backend mgmtSectionGate maps /api/admin/factory to 'program', so the nav and the API agree.
     { path: '/admin/factory', label: 'Project Factory', icon: 'node-tree' },
