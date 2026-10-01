@@ -14,7 +14,7 @@ import ComposerPublishing from './ComposerPublishing';
 import { fromCentralInput, toCentralInput } from '../centralTime';
 import { listChannelAccounts } from '../../../../services/channelAccountApi';
 import {
-  channelChoices, connectedProviders, pruneSelection, unavailableNote,
+  channelChoices, connectedProviders, orphanVariantNote, pruneSelection, unavailableNote,
   type ConnectedAccountLike,
 } from './channelChoices';
 
@@ -134,19 +134,31 @@ export default function AdminContentComposerPage() {
     () => channelChoices(providers, connectedProviders(brandAccounts), Boolean(setup.brand_id)),
     [providers, brandAccounts, setup.brand_id],
   );
+  const orphanNote = useMemo(
+    () => orphanVariantNote(variants.map((v) => v.provider), choices),
+    [variants, choices],
+  );
   const channelNote = useMemo(
     () => unavailableNote(choices, Boolean(setup.brand_id), Boolean(item)),
     [choices, setup.brand_id, item],
   );
 
-  // The brand can change under a selection, and an account can be disconnected after an item was
-  // saved. Either way a tick that is no longer valid must not survive into generation.
+  /**
+   * A tick that is no longer valid must not survive into generation.
+   *
+   * `selected` IS a dependency, not just `choices`. `reload()` replaces the whole selection with
+   * every provider that already has a variant - so after generating, an item carrying variants
+   * from before this rule existed put all seven back, checked, including the disabled ones.
+   * Watching only `choices` pruned once and then never again, because the brand had not changed.
+   * The identity guard below returns the same array when nothing is dropped, so React bails out
+   * and this cannot loop.
+   */
   useEffect(() => {
     setSelected((s) => {
       const next = pruneSelection(s, choices);
       return next.length === s.length ? s : next;
     });
-  }, [choices]);
+  }, [choices, selected]);
 
   // ── First draft from a topic ────────────────────────────────────────────────────────────
   const [draftNotes, setDraftNotes] = useState<{ placeholders: string[]; unverifiedClaims: string[] } | null>(null);
@@ -327,6 +339,7 @@ export default function AdminContentComposerPage() {
       <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
         {/* Greyed boxes explained once, above the row, rather than only in seven tooltips. */}
         {channelNote && <div className="small text-warning-emphasis mb-2" data-testid="channel-note">{channelNote}</div>}
+        {orphanNote && <div className="small text-warning-emphasis mb-2" data-testid="orphan-variant-note">{orphanNote}</div>}
         <div className="d-flex flex-wrap gap-3 mb-3">
           {choices.map((c) => (
             <label key={c.provider} className={`form-check small ${c.selectable ? '' : 'text-muted'}`} title={c.reason ?? undefined}>

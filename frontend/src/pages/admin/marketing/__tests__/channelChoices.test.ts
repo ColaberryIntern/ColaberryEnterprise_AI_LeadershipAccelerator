@@ -1,5 +1,5 @@
 import {
-  channelChoices, connectedProviders, pruneSelection, unavailableNote,
+  channelChoices, connectedProviders, orphanVariantNote, pruneSelection, unavailableNote,
   type ConnectedAccountLike,
 } from '../composer/channelChoices';
 import type { ProviderKey, ProviderSummary } from '../../../../services/contentComposerApi';
@@ -156,5 +156,39 @@ describe('the note above the row', () => {
     it('no brand still outranks no draft - it is the earlier step', () => {
       expect(unavailableNote(choices, false, false)).toMatch(/Choose a brand/);
     });
+  });
+});
+
+describe('variants that already exist for networks the brand cannot use', () => {
+  /**
+   * The residue of the same bug: an item generated BEFORE this rule existed keeps its variant
+   * cards, and they look exactly like the ones that will publish. Ali's item had seven.
+   */
+  const choices = channelChoices(PROVIDERS, TRAINING, true);
+
+  it('names them, so a LinkedIn card on a brand with no LinkedIn is explained', () => {
+    const note = orphanVariantNote(
+      ['meta_facebook_page', 'linkedin_member', 'linkedin_organization'],
+      choices,
+    )!;
+    expect(note).toMatch(/^2 variants below cannot publish/);
+    expect(note).toContain('LinkedIn Page (organization)');
+    expect(note).toContain('LinkedIn (personal profile)');
+    // The one that CAN publish is not accused.
+    expect(note).not.toContain('Facebook Page');
+  });
+
+  it('says they are kept rather than implying they were thrown away', () => {
+    const note = orphanVariantNote(['tiktok'], choices)!;
+    expect(note).toMatch(/kept so nothing is lost/);
+    expect(note).toMatch(/^1 variant below/);
+  });
+
+  it('is silent when every variant can publish', () => {
+    expect(orphanVariantNote(['meta_facebook_page', 'meta_instagram'], choices)).toBeNull();
+  });
+
+  it('is silent when there are no variants at all', () => {
+    expect(orphanVariantNote([], choices)).toBeNull();
   });
 });

@@ -86,6 +86,26 @@ export function pruneSelection(selected: readonly ProviderKey[], choices: readon
 }
 
 /**
+ * Variants that exist for networks this brand cannot publish to.
+ *
+ * An item generated before the brand lost an account - or before this rule existed at all - keeps
+ * those variant cards, and they look exactly like the ones that will go out. Saying so is the
+ * difference between "why is there a LinkedIn card on a brand with no LinkedIn?" and a page that
+ * answers it.
+ */
+export function orphanVariantNote(
+  variantProviders: readonly string[],
+  choices: readonly ChannelChoice[],
+): string | null {
+  const allowed = new Set(choices.filter((c) => c.selectable).map((c) => c.provider as string));
+  const names = choices
+    .filter((c) => !allowed.has(c.provider) && variantProviders.includes(c.provider))
+    .map((c) => c.displayName);
+  if (names.length === 0) return null;
+  return `${names.length} variant${names.length === 1 ? '' : 's'} below cannot publish: this brand has no account for ${names.join(', ')}. They are kept so nothing is lost, and they will be skipped.`;
+}
+
+/**
  * One line above the row when something is unavailable, so the greyed boxes are explained once.
  *
  * `draftExists` is the case that bit in production: every box is also disabled until the draft is
