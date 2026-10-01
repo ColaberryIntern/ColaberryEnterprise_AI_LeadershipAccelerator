@@ -17,6 +17,7 @@ import {
   channelChoices, connectedProviders, orphanVariantNote, pruneSelection, unavailableNote,
   type ConnectedAccountLike,
 } from './channelChoices';
+import { mediaGateNote, setupShape } from './setupShape';
 
 /**
  * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
@@ -113,6 +114,14 @@ export default function AdminContentComposerPage() {
   }, [routeId]);
 
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
+
+  /**
+   * What the chosen content type needs. The upload lives in Setup for types that take a file,
+   * because that is the moment the operator decided they wanted one - reported 2026-10-01:
+   * "the video should be uploaded at the time you select that you want a video."
+   */
+  const shape = useMemo(() => setupShape(setup.content_type), [setup.content_type]);
+
 
   /**
    * Which networks THIS brand can post to. The channel row used to list every network the
@@ -333,7 +342,18 @@ export default function AdminContentComposerPage() {
       )}
 
       <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
-        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} onDraftMessage={draftMessage} draftNotes={draftNotes} />
+        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers} />
+        {shape.mediaRole !== 'none' && (
+          <div className="mt-3 pt-3 border-top" data-testid="setup-media">
+            <div className="fw-semibold small mb-1">{shape.mediaLabel}</div>
+            {/* The upload needs the draft to exist. Said HERE, where the control is, rather
+                than leaving a disabled file input to be puzzled over. */}
+            {mediaGateNote(shape, Boolean(item)) && (
+              <div className="form-text text-warning-emphasis mb-2" data-testid="setup-media-gate">{mediaGateNote(shape, Boolean(item))}</div>
+            )}
+            <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
@@ -354,7 +374,6 @@ export default function AdminContentComposerPage() {
             </label>
           ))}
         </div>
-        <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
         <div className="d-flex flex-wrap gap-2 mb-3">
           <button type="button" className="btn btn-sm btn-primary" disabled={!item || busy || selected.length === 0} onClick={generate}>Generate variants</button>
           <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !setup.destination_url} onClick={makeLinks}>Generate tracked links</button>
