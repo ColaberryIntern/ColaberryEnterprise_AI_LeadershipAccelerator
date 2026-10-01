@@ -305,7 +305,15 @@ router.get('/api/portal/presentation-templates/:templateId', requireParticipant,
 // a row rather than browser storage: losing them to a cleared cache would cost real
 // work. `prep_state` is DERIVED server-side from what the learner has actually filled
 // in — a client cannot declare itself ready — and nothing on this route can complete a
-// task. markTaskVerifiedComplete remains the only writer that may do that.
+// task — the canonical completion writer in services/projects/projectWriteService.ts
+// remains the only thing that may do that.
+//
+// That writer's name is deliberately NOT spelled out anywhere in this directory.
+// `projectTaskStatusGuard.test.ts` asserts no file under backend/src/routes/ contains
+// the symbol, and it does a plain substring match over the whole file INCLUDING
+// comments. That bluntness is the point — it is a tripwire on the one path that can
+// grant completion, and it should stay blunt rather than be taught to ignore prose.
+// Naming the function here, even to say this route never calls it, fails that test.
 const assignmentPatchSchema = z.object({
   template: z.string().trim().max(80).optional(),
   audience: z.string().trim().max(200).nullable().optional(),
