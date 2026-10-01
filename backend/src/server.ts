@@ -105,6 +105,7 @@ import { ensureStudentAssessmentSchema } from './db/ensureStudentAssessmentSchem
 import { ensureChecklistInstanceSchema } from './db/ensureChecklistInstanceSchema';
 import { ensureAgentManagerConversationReliabilitySchema } from './db/ensureAgentManagerConversationReliabilitySchema';
 import { ensureAgentManagerConversationIntentSchema } from './db/ensureAgentManagerConversationIntentSchema';
+import { ensureAgentManagerConversationFocusedTicketSchema } from './db/ensureAgentManagerConversationFocusedTicketSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
 import {
@@ -2921,6 +2922,9 @@ async function start(): Promise<void> {
   // intent-confirmation workflow's one new column (pending_intent_confirmation)
   // on the same table. Additive, idempotent, no flag.
   await ensureAgentManagerConversationIntentSchema();
+  // Reese manager-directed growth mission, Phase 2 — the real case a conversation is
+  // currently focused on (focused_ticket_id), on the same table. Additive, idempotent, no flag.
+  await ensureAgentManagerConversationFocusedTicketSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
