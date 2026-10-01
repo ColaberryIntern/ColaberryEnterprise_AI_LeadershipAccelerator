@@ -97,6 +97,37 @@ describe('getUpcomingEvents', () => {
     expect(result).toEqual([]);
   });
 
+  // These two did not exist before, and their absence is why a five-hour error lived here
+  // unnoticed: every pre-existing assertion checked ORDER or membership, never the actual
+  // instant, and both the buggy and correct derivations produce the same order for the
+  // fixtures above.
+  it('resolves a live session wall-clock as CENTRAL, not as UTC', async () => {
+    findAllSessions.mockResolvedValue([
+      { id: 's-tz', title: 'Evening Class', session_type: 'core', session_date: '2026-07-16', start_time: '6:00 PM', end_time: '8:00 PM', meeting_link: null },
+    ]);
+
+    const [event] = await getUpcomingEvents(enrollmentId, now);
+
+    // 2026-07-16 is CDT (UTC-5), so 6:00 PM Central is 23:00Z.
+    expect(event.starts_at.toISOString()).toBe('2026-07-16T23:00:00.000Z');
+    // The bug: a naive parse yields 18:00Z. If these were ever equal the conversion is gone.
+    expect(event.starts_at.toISOString()).not.toBe('2026-07-16T18:00:00.000Z');
+    expect(event.ends_at!.toISOString()).toBe('2026-07-17T01:00:00.000Z');
+  });
+
+  it('tolerates the trailing seconds a Sequelize TIME column returns', async () => {
+    // The removed local parser rejected "HH:MM:SS" and silently fell through to 10:00,
+    // moving the class by eight hours with no error anywhere.
+    findAllSessions.mockResolvedValue([
+      { id: 's-sec', title: 'Evening Class', session_type: 'core', session_date: '2026-07-16', start_time: '18:00:00', end_time: '20:00:00', meeting_link: null },
+    ]);
+
+    const [event] = await getUpcomingEvents(enrollmentId, now);
+
+    expect(event.starts_at.toISOString()).toBe('2026-07-16T23:00:00.000Z');
+    expect(event.starts_at.toISOString()).not.toBe('2026-07-16T15:00:00.000Z'); // the 10:00 CDT fallback
+  });
+
   it('failure path: propagates NotFoundError for a missing enrollment', async () => {
     findByPkEnrollment.mockResolvedValue(null);
 

@@ -3,21 +3,23 @@ import LiveSession from '../models/LiveSession';
 import OpenHouseEvent from '../models/OpenHouseEvent';
 import CommunityEvent from '../models/CommunityEvent';
 import { resolveCohortId } from './communityService';
+import { classInstant } from './centralDate';
 
-// Local copy of the "5:00 PM" -> "17:00" conversion (acceleratorService.ts
-// has the same logic, but importing that service here would transitively
-// pull in the entire models barrel via its own imports — not worth the
-// coupling for an 8-line parser).
-function convertTo24h(timeStr: string): string {
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!match) return '10:00';
-  let hours = parseInt(match[1], 10);
-  const minutes = match[2];
-  const period = match[3]?.toUpperCase();
-  if (period === 'PM' && hours < 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
-  return `${hours.toString().padStart(2, '0')}:${minutes}`;
-}
+// The private convertTo24h that used to live here is gone, and so is the naive
+// `new Date(date + "T" + time)` it fed. Both were the bug centralDate.classInstant
+// exists to prevent, and this file had BOTH halves of it:
+//
+//   1. live_sessions stores Central wall-clock TEXT with no timezone. Parsing it
+//      without an offset in a UTC container read 6:30 PM Central as 18:30Z — five
+//      to six hours early. Root-caused 2026-07-23, when an Orientation was
+//      auto-marked 'completed' hours before its real start and blocked check-in.
+//   2. The local regex did not tolerate the trailing seconds a Sequelize TIME
+//      column returns ("18:30:00"), so such a value fell through to the '10:00'
+//      default and the event silently moved to 10am.
+//
+// classInstant takes the RAW stored string and normalizes internally, precisely so
+// a caller cannot skip the conversion step — which is how the bug nearly regressed
+// while being fixed. Do not reintroduce a local parser here.
 
 export type CalendarEventSource = 'live_session' | 'open_house' | 'community_event';
 
@@ -32,11 +34,11 @@ export interface CalendarEvent {
 }
 
 function liveSessionStartsAt(session: LiveSession): Date {
-  return new Date(`${session.session_date}T${convertTo24h(session.start_time)}:00`);
+  return classInstant(session.session_date, session.start_time);
 }
 
 function liveSessionEndsAt(session: LiveSession): Date {
-  return new Date(`${session.session_date}T${convertTo24h(session.end_time)}:00`);
+  return classInstant(session.session_date, session.end_time);
 }
 
 // Merges the three real event sources into one sorted feed (REQ-C6). No new
