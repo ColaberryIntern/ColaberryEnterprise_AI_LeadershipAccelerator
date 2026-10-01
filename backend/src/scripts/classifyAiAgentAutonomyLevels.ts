@@ -38,8 +38,8 @@
  *
  * `--agent=<agent_name>` restricts the run to a single real agent — the shape
  * needed to migrate the fleet "one at a time" (Ali's stated onboarding
- * process, see the onboard-ai-agent skill) rather than only ever running a
- * blanket fleet-wide pass. Same idempotency/no-overwrite contract applies.
+ * process, see the build-platform-agent skill) rather than only ever running
+ * a blanket fleet-wide pass. Same idempotency/no-overwrite contract applies.
  *
  * Usage:
  *   node dist/scripts/classifyAiAgentAutonomyLevels.js                        # dry run, whole fleet
