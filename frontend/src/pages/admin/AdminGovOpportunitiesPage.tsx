@@ -230,34 +230,19 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
   const candidates = useMemo(() => opportunities.filter((o) => !isFlaggedForReview(o)), [opportunities]);
   const flagged = useMemo(() => opportunities.filter(isFlaggedForReview), [opportunities]);
 
-  // Derived summary — all from the discovery feed; estimates stay UNVERIFIED and are never called revenue.
-  const stats = useMemo(() => {
-    const sum = (list: GovOpportunity[]) => list.reduce((a, o) => a + (o.estimatedValue ?? 0), 0);
-    const itVal = sum(candidates.filter(isIT));
-    const consultVal = sum(candidates.filter((o) => !isIT(o) && isConsulting(o)));
-    const pipeline = sum(candidates);
-    const fits = candidates.map((o) => o.fitScore).filter((s): s is number => typeof s === 'number');
-    const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
-    const closing = candidates
-      .map((o) => ({ o, d: daysLeft(o.closeDate) }))
-      .filter((x) => x.d !== null && (x.d as number) <= 14)
-      .sort((a, b) => (a.d as number) - (b.d as number));
-    const unassessed = candidates.filter((o) => o.vetVerdict == null).length;
-    const inPursuit = candidates.filter((o) => o.pursuitStatus === 'pursuing' || o.pursuitStatus === 'submitted').length;
-    const goodFits = candidates.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= GOOD_FIT).length;
-    const decentCount = candidates.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT).length;
-    return {
-      pipeline, itVal, consultVal, avgFit: avg(fits), goodFits, decentCount,
-      closingCount: closing.length, nextClose: closing[0]?.o ?? null, unassessed, inPursuit,
-    };
-  }, [candidates]);
-
+  // The category filter is the base for the Decent-options count and for `shown`; the decent toggle narrows it.
+  const categoryFiltered = useMemo(
+    () => candidates.filter((o) => catFilter === 'all' || (catFilter === 'it' ? isIT(o) : isConsulting(o) && !isIT(o))),
+    [candidates, catFilter],
+  );
+  const decentInView = useMemo(
+    () => categoryFiltered.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT).length,
+    [categoryFiltered],
+  );
   const shown = useMemo(() => {
-    const list = candidates.filter((o) => {
-      const catOk = catFilter === 'all' || (catFilter === 'it' ? isIT(o) : isConsulting(o) && !isIT(o));
-      const decentOk = !decentOnly || (typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT);
-      return catOk && decentOk;
-    });
+    const list = decentOnly
+      ? categoryFiltered.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= DECENT_FIT)
+      : categoryFiltered;
     const by: Record<SortKey, (a: GovOpportunity, b: GovOpportunity) => number> = {
       priority: (a, b) => (b.priorityScore ?? -1) - (a.priorityScore ?? -1),
       fit: (a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1),
@@ -265,7 +250,30 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
       value: (a, b) => (b.estimatedValue ?? -1) - (a.estimatedValue ?? -1),
     };
     return [...list].sort(by[sort]);
-  }, [candidates, catFilter, sort, decentOnly]);
+  }, [categoryFiltered, decentOnly, sort]);
+
+  // Summary KPIs + the mix bars are computed over the CURRENTLY-FILTERED view (`shown`) so they move with the
+  // filters. Estimates stay UNVERIFIED and are never called revenue. (The Flagged card is a separate bucket and
+  // stays a total; the filter-chip counts below are over the full candidate set so they show what's available.)
+  const stats = useMemo(() => {
+    const sum = (list: GovOpportunity[]) => list.reduce((a, o) => a + (o.estimatedValue ?? 0), 0);
+    const itVal = sum(shown.filter(isIT));
+    const consultVal = sum(shown.filter((o) => !isIT(o) && isConsulting(o)));
+    const pipeline = sum(shown);
+    const fits = shown.map((o) => o.fitScore).filter((s): s is number => typeof s === 'number');
+    const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+    const closing = shown
+      .map((o) => ({ o, d: daysLeft(o.closeDate) }))
+      .filter((x) => x.d !== null && (x.d as number) <= 14)
+      .sort((a, b) => (a.d as number) - (b.d as number));
+    const unassessed = shown.filter((o) => o.vetVerdict == null).length;
+    const inPursuit = shown.filter((o) => o.pursuitStatus === 'pursuing' || o.pursuitStatus === 'submitted').length;
+    const goodFits = shown.filter((o) => typeof o.fitScore === 'number' && o.fitScore >= GOOD_FIT).length;
+    return {
+      pipeline, itVal, consultVal, avgFit: avg(fits), goodFits,
+      closingCount: closing.length, nextClose: closing[0]?.o ?? null, unassessed, inPursuit,
+    };
+  }, [shown]);
 
   const dismissedCount = feed?.dismissedCount ?? 0;
   const totalAvailable = feed?.totalAvailable ?? candidates.length;
@@ -330,11 +338,11 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
           </div>
         </div>
         <div className="col-6 col-lg-2">
-          <StatCard label="Candidates" value={String(candidates.length)} icon="file-list-3-line" tone="primary" hint={`${stats.unassessed} unassessed · ${stats.inPursuit} in pursuit`} />
+          <StatCard label="Candidates" value={String(shown.length)} icon="file-list-3-line" tone="primary" hint={`${stats.unassessed} unassessed · ${stats.inPursuit} in pursuit`} />
         </div>
         <div className="col-6 col-lg-2">
           <StatCard label="Good fits" value={String(stats.goodFits)} icon="focus-3-line" tone={stats.goodFits ? 'success' : 'neutral'}
-            hint={`fit ≥ ${GOOD_FIT} · ${stats.decentCount} decent (≥ ${DECENT_FIT})`} />
+            hint={`fit ≥ ${GOOD_FIT} · ${decentInView} decent (≥ ${DECENT_FIT})`} />
         </div>
         <div className="col-6 col-lg-2">
           <StatCard label="Closing ≤ 14 days" value={String(stats.closingCount)} icon="time-line" tone={stats.closingCount ? 'danger' : 'neutral'}
@@ -350,11 +358,11 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
         </div>
       </div>
 
-      {candidates.length > 0 && (
+      {shown.length > 0 && (
         <SectionCard className="mb-3">
           <div className="d-flex flex-column gap-2">
-            <MixBar label="Priority mix" items={candidates.map((o) => o.priorityScore)} />
-            <MixBar label="Fit mix" items={candidates.map((o) => o.fitScore)} />
+            <MixBar label="Priority mix" items={shown.map((o) => o.priorityScore)} />
+            <MixBar label="Fit mix" items={shown.map((o) => o.fitScore)} />
             <div className="small text-secondary">Legacy discovery scores are advisory, not verified company fit. Qualification comes before any pursuit.</div>
           </div>
         </SectionCard>
@@ -402,7 +410,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
               </div>
               <button type="button" className={`btn btn-sm ${decentOnly ? 'btn-success' : 'btn-outline-success'}`} aria-pressed={decentOnly}
                 onClick={() => setDecentOnly((v) => !v)} title={`Show only decent options (fit ≥ ${DECENT_FIT})`}>
-                <i className="ri-filter-3-line me-1" aria-hidden="true" />Decent options {stats.decentCount}
+                <i className="ri-filter-3-line me-1" aria-hidden="true" />Decent options {decentInView}
               </button>
               <div className="btn-group btn-group-sm" role="group" aria-label="Sort by">
                 {(['priority', 'fit', 'closing', 'value'] as SortKey[]).map((k) => (
