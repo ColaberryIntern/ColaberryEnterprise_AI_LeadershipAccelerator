@@ -6,8 +6,14 @@ jest.mock('../../zoomService', () => ({
 }));
 jest.mock('googleapis', () => ({ google: { auth: { JWT: jest.fn() }, calendar: jest.fn() } }));
 jest.mock('../../../config/env', () => ({ env: {} }));
+// The adapter now routes creation through the idempotency ledger, which touches the
+// database. This suite's job is the adapter's MAPPING — timezone conversion, duration,
+// result shape — so the ledger is mocked at its boundary and has its own suite
+// (zoomMeetingIdempotency.test.ts) covering claim/replay/reconcile.
+jest.mock('../zoomMeetingIdempotency', () => ({ createMeetingIdempotent: jest.fn() }));
 
 import * as zoomService from '../../zoomService';
+import { createMeetingIdempotent } from '../zoomMeetingIdempotency';
 import { ZoomMeetAdapter, getMeetingProvider } from '../meetingProvider';
 
 /**
@@ -20,7 +26,8 @@ import { ZoomMeetAdapter, getMeetingProvider } from '../meetingProvider';
  * mocked; its own real-API behavior is covered by zoomService.test.ts.
  */
 
-const createMeetingMock = zoomService.createMeeting as jest.Mock;
+// createMeeting now goes through the ledger; updateMeeting still calls zoomService directly.
+const createMeetingMock = createMeetingIdempotent as unknown as jest.Mock;
 const updateMeetingMock = zoomService.updateMeeting as jest.Mock;
 const cancelMeetingMock = zoomService.cancelMeeting as jest.Mock;
 const getJoinUrlMock = zoomService.getMeetingJoinUrl as jest.Mock;
@@ -48,7 +55,11 @@ describe('ZoomMeetAdapter', () => {
     // handing Zoom the UTC wall clock labelled Central — so every booking was created
     // five hours late. The test passing is what let it survive. It asserts the real
     // local time now.
+    // `requestId` is in this payload now. It was accepted by the interface and silently
+    // DROPPED by this adapter, which is why a retry could create a second real meeting.
+    // Asserting it here is what stops it being dropped again.
     expect(createMeetingMock).toHaveBeenCalledWith({
+      requestId: 'booking-1',
       topic: 'Study Group',
       agenda: 'Weekly review',
       startDateTime: '2026-08-04T13:30:00',
