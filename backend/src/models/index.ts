@@ -359,6 +359,11 @@ import RoomMembership from './RoomMembership';
 import Friendship from './Friendship'; // portal Contacts rail friend graph
 import RoomBooking from './RoomBooking';
 import RoomBookingAttendee from './RoomBookingAttendee';
+import PresentationAssignment from './PresentationAssignment';
+import PresentationAttempt from './PresentationAttempt';
+import PresentationRecording from './PresentationRecording';
+import PresentationFeedback from './PresentationFeedback';
+import PresentationShowcase from './PresentationShowcase';
 import RoomMessage from './RoomMessage';
 import RoomResource from './RoomResource';
 import RoomOutboxEvent from './RoomOutboxEvent';
@@ -1554,6 +1559,11 @@ export {
   RoomMembership,
   RoomBooking,
   RoomBookingAttendee,
+  PresentationAssignment,
+  PresentationAttempt,
+  PresentationRecording,
+  PresentationFeedback,
+  PresentationShowcase,
   RoomMessage,
   RoomResource,
   RoomOutboxEvent,

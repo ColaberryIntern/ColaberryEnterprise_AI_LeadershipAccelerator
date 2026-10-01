@@ -29,6 +29,13 @@ export interface PortalFlags {
   // capeTodayPlanController.ts.
   cape_today_plan: boolean;
   internship: boolean;
+  // Project Presentation Studio. Belongs here rather than staying a backend-only
+  // gate because it decides whether a student opening a demo-prep card sees the
+  // Studio or the existing DemoEvidencePanel — a section students actually see,
+  // which is the stated bar for this list. Sourced from env.presentationStudioEnabled
+  // so PRESENTATION_STUDIO_ENABLED is parsed in exactly one place, shared by this
+  // flag and the backend route gates.
+  presentation_studio: boolean;
 }
 
 export function getPortalFlags(): PortalFlags {
@@ -36,5 +43,6 @@ export function getPortalFlags(): PortalFlags {
     today_redesign: isPortalTodayRedesignEnabled(),
     cape_today_plan: env.capeTodayPlanEnabled,
     internship: isInternshipEnabled(),
+    presentation_studio: env.presentationStudioEnabled,
   };
 }

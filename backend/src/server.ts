@@ -50,6 +50,7 @@ import { ensureExplorerCampaignKeyIndex } from './db/ensureExplorerCampaignKeyIn
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
+import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
@@ -2460,6 +2461,11 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Live Sessions build-out: 5 live-session tables (idempotent DDL, sync is disabled).
   await ensureLiveSessionSchema();
+  // Project Presentation Studio: 5 tables + 4 additive columns on `projects`
+  // (idempotent DDL). Runs unconditionally, not behind PRESENTATION_STUDIO_ENABLED:
+  // the tables must exist before the flag can be turned on, and empty unread tables
+  // change no behaviour while it is off.
+  await ensurePresentationStudioSchema();
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
   // /inbox-zero commitment ledger (what Ali owes). Depends on inbox_cases above.
