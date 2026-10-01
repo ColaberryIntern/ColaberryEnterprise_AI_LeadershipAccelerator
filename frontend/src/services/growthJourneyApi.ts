@@ -51,7 +51,30 @@ import api from '../utils/api';
  * free-form JSONB column - see `HandoffDetail` below.
  */
 
-const BASE = '/admin/growth-journey';
+/*
+ * `/api`, not `/admin`. This was `'/admin/growth-journey'` through T613 and every
+ * call in this file therefore reached NOTHING in a deployed build:
+ *
+ *   - the backend serves `/api/admin/growth-journey` (growthJourneyRoutes.ts:75,
+ *     growthJourneyStatusRoutes.ts:44, growthJourneyReadRoutes.ts:48);
+ *   - `utils/api.ts` sets `baseURL: process.env.REACT_APP_API_URL || ''`, and
+ *     `nginx/Dockerfile:8` hardcodes `ENV REACT_APP_API_URL=` (empty), so the path
+ *     is sent verbatim;
+ *   - there is no `proxy` field in package.json and no `setupProxy.js`;
+ *   - `nginx/nginx.conf:95` proxies only `location /api/` to the backend.
+ *
+ * So `/admin/growth-journey/status/registry` fell through to `location /` - and
+ * because `/admin/growth-journey` is ALSO a React route (adminRoutes.tsx:187), it
+ * returned index.html with 200 OK rather than a 404. All 10 sibling admin services
+ * carry the prefix; this file was the only one that did not, including the
+ * `explorerGrowthApi.ts` this page was modelled on (its BASE is
+ * `/api/admin/explorer-growth`).
+ *
+ * NO TEST COULD HAVE CAUGHT THIS. Every suite on this surface mocks this module
+ * wholesale, so the one string none of them exercises is the base path. The
+ * contract test added alongside this fix is what closes that loop.
+ */
+const BASE = '/api/admin/growth-journey';
 
 // ─── status/registry (T604) ──────────────────────────────────────────────────
 
@@ -146,24 +169,47 @@ export const getReadiness = (): Promise<Readiness> =>
 
 // ─── status/health (T609) ────────────────────────────────────────────────────
 
+/*
+ * ── THESE THREE TYPES WERE WRONG UNTIL T614 ─────────────────────────────────
+ *
+ * Types in this repo are hand-mirrored (there is no shared-types package), and
+ * three of them had drifted from what the backend actually serves. The field
+ * names below are now copied from `backend/src/services/growthJourney/health/
+ * journeyHealth.ts` L107-122, and `__tests__/healthContract.test.ts` reads that
+ * file and fails if they drift again.
+ *
+ * What the drift cost: `StatusAge.oldest_hours` and `CronHealth.agent_name` do
+ * not exist on the wire (they are `max_age_hours` and `agent`), and
+ * `TruncatedRead` was declared an object when the backend sends a bare string
+ * union - so the Overview health panel rendered `undefined` for the receipt age
+ * and the cron name, and "undefined (cap undefined)" for a capped read. The
+ * suite passed throughout, because its fixture was built from THESE types: a
+ * closed loop in which the test and the code agreed with each other and both
+ * disagreed with the server.
+ */
+
 export interface StatusAge {
   status: string;
   count: number;
-  oldest_hours: number | null;
+  max_age_hours: number | null;
 }
 
+export type CronState = 'on_time' | 'late' | 'never' | 'disabled';
+
 export interface CronHealth {
-  agent_name: string;
-  state: string;
+  agent: string;
+  /** The cron expression, which is what makes a missing run readable as late vs dark. */
+  schedule: string;
+  state: CronState;
   last_run_at: string | null;
   minutes_since: number | null;
 }
 
-/** A read whose row cap was reached, so a caller can tell a total from a floor. */
-export interface TruncatedRead {
-  read: string;
-  cap: number;
-}
+/**
+ * A read whose row cap was reached, so a caller can tell a total from a floor.
+ * A bare name, not an object: the backend sends `['receipts', 'held']`.
+ */
+export type TruncatedRead = 'receipts' | 'held' | 'refused' | 'controls';
 
 export interface JourneyHealth {
   receipts: StatusAge[];

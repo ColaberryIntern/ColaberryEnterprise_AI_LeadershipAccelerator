@@ -121,7 +121,7 @@ function HealthPanel({ data }: { data: JourneyHealth }) {
           // a number that does not exist.
           <div className="alert alert-warning" role="status">
             <strong>Some counts below are floors, not totals.</strong> These reads hit their row cap:{' '}
-            {data.truncated.map((t) => `${t.read} (cap ${t.cap})`).join(', ')}.
+            {data.truncated.join(', ')}.
           </div>
         )}
         <div className="row g-3">
@@ -134,7 +134,7 @@ function HealthPanel({ data }: { data: JourneyHealth }) {
                 {data.receipts.map((r) => (
                   <li key={r.status}>
                     <code>{r.status}</code>: {r.count}
-                    {r.oldest_hours !== null && <span className="text-muted"> · oldest {r.oldest_hours}h</span>}
+                    {r.max_age_hours !== null && <span className="text-muted"> · oldest {r.max_age_hours}h</span>}
                   </li>
                 ))}
               </ul>
@@ -162,8 +162,9 @@ function HealthPanel({ data }: { data: JourneyHealth }) {
             ) : (
               <ul className="list-unstyled mb-0">
                 {data.crons.map((c) => (
-                  <li key={c.agent_name}>
-                    <code>{c.agent_name}</code>: {c.state}
+                  <li key={c.agent}>
+                    <code>{c.agent}</code>: {c.state}
+                    <span className="text-muted"> · {c.schedule}</span>
                     {c.minutes_since !== null && <span className="text-muted"> · {c.minutes_since}m ago</span>}
                   </li>
                 ))}

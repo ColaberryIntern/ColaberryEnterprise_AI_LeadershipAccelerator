@@ -54,12 +54,30 @@ const readiness = (over: Partial<Readiness> = {}): Readiness => ({
   ...over,
 });
 
+/*
+ * THIS FIXTURE WAS THE BUG, not just a witness to it. Until T614 it was built from
+ * `growthJourneyApi.ts`'s own types, three of which had drifted from the wire:
+ * `oldest_hours` for `max_age_hours`, `agent_name` for `agent`, and an object
+ * `{read, cap}` for what the backend sends as a bare string. So the fixture, the
+ * component and this suite all agreed with each other and all three disagreed with
+ * the server, and the panel rendered `undefined` in production with everything
+ * green. Field names here now match the backend, and `healthContract.test.ts`
+ * reads the backend source so this cannot drift silently a second time.
+ */
 const health = (over: Partial<JourneyHealth> = {}): JourneyHealth => ({
-  receipts: [{ status: 'pending_review', count: 4, oldest_hours: 12 }],
+  receipts: [{ status: 'pending_review', count: 4, max_age_hours: 12 }],
   stuck_pending_review: { count: 1, over_hours: 72 },
   held: { total: 2, by_reason: { quiet_hours: 2 } },
   refused: { total: 0, by_reason: {}, capped: false },
-  crons: [{ agent_name: 'journey_nightly', state: 'enabled', last_run_at: '2026-10-01T04:00:00.000Z', minutes_since: 240 }],
+  crons: [{
+    agent: 'journey_nightly',
+    schedule: '0 3 * * *',
+    // 'enabled' was not a CronState and never had been; the real union is
+    // on_time | late | never | disabled.
+    state: 'on_time',
+    last_run_at: '2026-10-01T04:00:00.000Z',
+    minutes_since: 240,
+  }],
   controls: { pause: 0, rollout: 1 },
   journey_hold_rows: 0,
   ledger_read: 'ok',
@@ -96,11 +114,13 @@ describe('a capped read is reported as a FLOOR, not a total', () => {
   it('says so loudly when any read hit its cap', async () => {
     // The first surviving mutant: this warning made unreachable. A capped count then
     // reads as a complete one, and an operator acts on a number that does not exist.
-    api.getHealth.mockResolvedValue(health({ truncated: [{ read: 'ledger_events', cap: 10000 }] }));
+    api.getHealth.mockResolvedValue(health({ truncated: ['receipts', 'held'] }));
     await render();
     expect(text()).toContain('floors, not totals');
-    expect(text()).toContain('ledger_events');
-    expect(text()).toContain('10000');
+    // Anchored to the warning's own sentence, NOT a bare toContain('receipts'):
+    // "receipts" and "held" both appear elsewhere on this panel, so a loose
+    // assertion would pass with the capped list rendering nothing at all.
+    expect(text()).toContain('row cap: receipts, held.');
   });
 
   it('and says nothing when nothing was capped - the normal answer', async () => {
@@ -131,6 +151,29 @@ describe('`ready: null` is a third answer, never a blocker', () => {
     // 1 of 2 KNOWN, with the third held separately - not 1 of 3.
     expect(text()).toContain('1 of 2 known checks ready');
     expect(text()).toContain('1 unknown');
+  });
+
+});
+
+describe('every number on screen is read off the payload', () => {
+  it('and no literal matching one fixture can survive two', async () => {
+    // T613's attempt-4 verifier replaced `{data.score.ready}` and `{data.score.known}`
+    // with the literals 1 and 2 and it SURVIVED all 63 cells - because the only
+    // fixture reaching that line was 1 of 2, so the cell above checks the count and
+    // not the extraction. One fixture can never catch that: a literal matching it
+    // passes. Two fixtures with different values can, and no literal survives both.
+    //
+    // The same single-value gap covered score.unknown, score.pct, window_hours and
+    // ledger_read, so this cell gives all six a second, distinctive value. These
+    // appear nowhere else in the render.
+    api.getReadiness.mockResolvedValue(readiness({ score: { ready: 5, known: 9, unknown: 4, pct: 56 } }));
+    api.getHealth.mockResolvedValue(health({ window_hours: 6, ledger_read: 'timed_out' }));
+    await render();
+    expect(text()).toContain('5 of 9 known checks ready');
+    expect(text()).toContain('4 unknown');
+    expect(text()).toContain('56%');
+    expect(text()).toContain('6h window');
+    expect(text()).toContain('ledger read timed_out');
   });
 
   it('a blocked check still renders as blocked, so the three are distinguishable', async () => {
@@ -290,7 +333,7 @@ describe('the mechanical accessibility rules', () => {
   });
 
   it('pass with the floor warning on screen', async () => {
-    api.getHealth.mockResolvedValue(health({ truncated: [{ read: 'ledger_events', cap: 10000 }] }));
+    api.getHealth.mockResolvedValue(health({ truncated: ['receipts', 'held'] }));
     await render();
     expectNoA11yViolations(container);
   });
