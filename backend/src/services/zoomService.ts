@@ -77,18 +77,47 @@ export function isZoomConfigured(): boolean {
 
 // ---- Webhook verification ----
 // Mirrors paysimpleService.verifyWebhookSignature's exact pattern: reject
-// (not warn-and-accept) if the secret is configured but the request has no
-// signature, and use a timing-safe, length-guarded compare. Zoom's scheme:
-// message = "v0:{timestamp}:{raw_body}", HMAC-SHA256 with the webhook
-// Secret Token (NOT the Client Secret), expected value prefixed "v0=".
+// (not warn-and-accept) if the request has no signature, and use a timing-safe,
+// length-guarded compare. Zoom's scheme: message = "v0:{timestamp}:{raw_body}",
+// HMAC-SHA256 with the webhook Secret Token (NOT the Client Secret), expected
+// value prefixed "v0=".
+//
+// Hardened 2026-10-01 (Colaberry Live P2-06). Two holes were closed: this used to
+// return TRUE when no secret was configured, and it folded the timestamp into the
+// signed message without ever comparing it to now — so a captured request replayed
+// successfully forever. The repo's own test encoded that, signing a Nov-2023
+// timestamp and asserting acceptance.
+/**
+ * Replay window. Zoom's own guidance is to reject requests older than five minutes; the
+ * timestamp is already inside the signed message, so an attacker cannot move it without
+ * invalidating the signature — what this adds is a bound on how long a CAPTURED, validly
+ * signed request stays usable.
+ */
+export const ZOOM_WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000;
+
 export function verifyZoomWebhookSignature(
   rawBody: string,
   timestamp: string | undefined,
   signature: string | undefined,
+  nowMs: number = Date.now(),
 ): boolean {
+  // FAIL CLOSED. This previously returned true with a warning when no secret was
+  // configured, which meant a misconfigured deploy silently accepted every unsigned
+  // request to a webhook that mutates recording state. A missing secret is an outage, not
+  // a licence to trust the internet — and it is loud here rather than invisible, because
+  // computeZoomWebhookEncryptedToken already throws without it, so a subscription cannot
+  // have been registered without one.
   if (!env.zoomWebhookSecretToken) {
-    console.warn('[Zoom] No webhook secret token configured — skipping signature check');
-    return true;
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'zoom',
+      event: 'zoom_webhook_secret_missing', outcome: 'failure',
+      error_class: 'ConfigMissing',
+      context: {
+        impact: 'All Zoom webhooks are rejected; recording ingestion will stall.',
+        remedy: 'Set ZOOM_WEBHOOK_SECRET_TOKEN in the backend environment.',
+      },
+    }));
+    return false;
   }
   if (!signature || !timestamp) {
     console.warn('[Zoom] Webhook secret IS configured but request is missing signature/timestamp headers — rejecting');
@@ -101,7 +130,27 @@ export function verifyZoomWebhookSignature(
   const sigBuf = Buffer.from(signature);
   const expBuf = Buffer.from(expected);
   if (sigBuf.length !== expBuf.length) return false;
-  return crypto.timingSafeEqual(sigBuf, expBuf);
+  if (!crypto.timingSafeEqual(sigBuf, expBuf)) return false;
+
+  // Freshness is checked AFTER the signature, deliberately: an attacker probing with
+  // guessed signatures should not be able to tell a stale-but-valid request from an
+  // invalid one, and checking age first would leak that distinction.
+  //
+  // Zoom sends seconds; tolerate a small clock skew in the future rather than rejecting a
+  // request that is merely a second ahead of our clock.
+  const sentMs = Number(timestamp) * 1000;
+  if (!Number.isFinite(sentMs)) return false;
+  const ageMs = nowMs - sentMs;
+  if (ageMs > ZOOM_WEBHOOK_MAX_AGE_MS || ageMs < -ZOOM_WEBHOOK_MAX_AGE_MS) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'zoom',
+      event: 'zoom_webhook_stale_rejected', outcome: 'failure',
+      error_class: 'StaleWebhook',
+      context: { age_ms: ageMs, max_age_ms: ZOOM_WEBHOOK_MAX_AGE_MS },
+    }));
+    return false;
+  }
+  return true;
 }
 
 // One-time challenge Zoom sends when the webhook endpoint URL is first
