@@ -342,18 +342,22 @@ export default function AdminContentComposerPage() {
       )}
 
       <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
-        <ComposerSetup values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy} onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug} onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers} />
-        {shape.mediaRole !== 'none' && (
-          <div className="mt-3 pt-3 border-top" data-testid="setup-media">
-            <div className="fw-semibold small mb-1">{shape.mediaLabel}</div>
-            {/* The upload needs the draft to exist. Said HERE, where the control is, rather
-                than leaving a disabled file input to be puzzled over. */}
-            {mediaGateNote(shape, Boolean(item)) && (
-              <div className="form-text text-warning-emphasis mb-2" data-testid="setup-media-gate">{mediaGateNote(shape, Boolean(item))}</div>
-            )}
-            <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
-          </div>
-        )}
+        <ComposerSetup
+          values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy}
+          onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug}
+          onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers}
+          mediaSlot={shape.mediaRole !== 'none' ? (
+            // Inside the content-type column, directly under the type that asked for it.
+            // It sat after the whole form until 2026-10-01: "why isn't the video upload closer
+            // to where the video is. It seems weird towards the bottom."
+            <div className="mt-2" data-testid="setup-media">
+              {mediaGateNote(shape, Boolean(item)) && (
+                <div className="form-text text-warning-emphasis mb-1" data-testid="setup-media-gate">{mediaGateNote(shape, Boolean(item))}</div>
+              )}
+              <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
+            </div>
+          ) : null}
+        />
       </SectionCard>
 
       <SectionCard title="2. Channels and variants" subtitle="Pick networks, generate, edit, add tracked links, validate." icon="share-line">
