@@ -14,8 +14,8 @@ let container: HTMLDivElement;
 let root: Root;
 
 const ATTACHED: ItemMedia[] = [
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png', durationMs: null, pages: null },
-  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: 1080, height: 1920, altText: 'A short clip', position: 1, originalFilename: null, durationMs: 45_000, pages: null },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000001', mimeType: 'image/png', byteSize: 2_400_000, width: 1200, height: 628, altText: 'Two people at a whiteboard', position: 0, originalFilename: 'class.png', durationMs: null, pages: null, url: 'https://www.refactored.ai/m/b/aaa.png?e=1&s=x' },
+  { mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000002', mimeType: 'video/mp4', byteSize: 41_000_000, width: 1080, height: 1920, altText: 'A short clip', position: 1, originalFilename: null, durationMs: 45_000, pages: null, url: 'https://www.refactored.ai/m/b/bbb.mp4?e=1&s=x' },
 ];
 
 function render(props: Partial<React.ComponentProps<typeof ComposerMedia>> = {}) {
@@ -88,7 +88,7 @@ describe('ComposerMedia attach rule', () => {
 
 describe('ComposerMedia documents', () => {
   it('accepts PDF, asks for a TITLE rather than a description when a PDF is picked, and lists page counts', () => {
-    render({ media: [{ mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000003', mimeType: 'application/pdf', byteSize: 4_000_000, width: null, height: null, altText: 'Five AI habits', position: 0, originalFilename: 'deck.pdf', durationMs: null, pages: 12 }] });
+    render({ media: [{ mediaAssetId: 'a1a1a1a1-0000-4000-8000-000000000003', mimeType: 'application/pdf', byteSize: 4_000_000, width: null, height: null, altText: 'Five AI habits', position: 0, originalFilename: 'deck.pdf', durationMs: null, pages: 12, url: null }] });
     expect(fileInput().accept).toContain('application/pdf');
     expect(container.querySelector('[data-testid="media-pages"]')!.textContent).toBe('12 pages');
     expect(container.textContent).toMatch(/PDF up to 100 MB/);

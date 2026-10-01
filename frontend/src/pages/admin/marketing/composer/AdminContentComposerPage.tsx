@@ -364,7 +364,7 @@ export default function AdminContentComposerPage() {
       </SectionCard>
 
       <SectionCard title="3. Preview" subtitle="Desktop and mobile, per network." icon="eye-line">
-        <ComposerPreview variants={variants} providers={providers} links={links} mediaCount={confirmation?.assets.length ?? 0} brandName={brand?.name ?? 'Brand'} poll={setup.content_type === 'poll' ? setup.poll : null} />
+        <ComposerPreview variants={variants} providers={providers} links={links} mediaCount={confirmation?.assets.length ?? 0} media={media} brandName={brand?.name ?? 'Brand'} poll={setup.content_type === 'poll' ? setup.poll : null} />
       </SectionCard>
 
       <SectionCard title="4. Confirm" subtitle="What will go out, where, and when (Central time)." icon="checkbox-circle-line">
