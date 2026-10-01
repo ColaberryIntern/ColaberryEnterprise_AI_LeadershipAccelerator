@@ -85,9 +85,22 @@ export function pruneSelection(selected: readonly ProviderKey[], choices: readon
   return selected.filter((p) => allowed.has(p));
 }
 
-/** One line above the row when something is unavailable, so the greyed boxes are explained once. */
-export function unavailableNote(choices: readonly ChannelChoice[], brandChosen: boolean): string | null {
+/**
+ * One line above the row when something is unavailable, so the greyed boxes are explained once.
+ *
+ * `draftExists` is the case that bit in production: every box is also disabled until the draft is
+ * created, so a brand with two connected networks saw SEVEN greyed boxes and a note explaining
+ * five of them. The two it said nothing about looked broken. The reason a control is disabled has
+ * to be the reason on screen, and "no draft yet" outranks "not connected" because it is the one
+ * standing between the operator and every box, not just some.
+ */
+export function unavailableNote(
+  choices: readonly ChannelChoice[],
+  brandChosen: boolean,
+  draftExists = true,
+): string | null {
   if (!brandChosen) return 'Choose a brand to see which networks it can post to.';
+  if (!draftExists) return 'Create the draft first, then pick the networks it goes to.';
   const blocked = choices.filter((c) => !c.selectable);
   if (blocked.length === 0) return null;
   if (blocked.length === choices.length) {

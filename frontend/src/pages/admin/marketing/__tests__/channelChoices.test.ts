@@ -129,4 +129,32 @@ describe('the note above the row', () => {
     const four = connectedProviders(PROVIDERS.slice(0, 4).map((p) => account(p.provider)));
     expect(unavailableNote(channelChoices(PROVIDERS, four, true), true)).toMatch(/^1 network greyed out/);
   });
+
+  describe('before the draft exists', () => {
+    /**
+     * Reported from production: "Colaberry Training has a fb and ig but when composing it blocks
+     * all of them - they are all dimmed out." They were dimmed because every box is disabled
+     * until the draft is created, but the note explained only the five that were disconnected,
+     * so the two working ones looked broken with no reason given.
+     */
+    const choices = channelChoices(PROVIDERS, TRAINING, true);
+
+    it('says the draft is what is missing, not which networks are disconnected', () => {
+      expect(unavailableNote(choices, true, false)).toBe('Create the draft first, then pick the networks it goes to.');
+    });
+
+    it('outranks the not-connected note, because it blocks EVERY box rather than some', () => {
+      const note = unavailableNote(choices, true, false)!;
+      expect(note).not.toMatch(/greyed out/);
+      expect(note).not.toContain('TikTok');
+    });
+
+    it('and the not-connected note returns once the draft exists', () => {
+      expect(unavailableNote(choices, true, true)).toMatch(/^3 networks greyed out/);
+    });
+
+    it('no brand still outranks no draft - it is the earlier step', () => {
+      expect(unavailableNote(choices, false, false)).toMatch(/Choose a brand/);
+    });
+  });
 });

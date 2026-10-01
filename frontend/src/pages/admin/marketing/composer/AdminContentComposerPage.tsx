@@ -134,7 +134,10 @@ export default function AdminContentComposerPage() {
     () => channelChoices(providers, connectedProviders(brandAccounts), Boolean(setup.brand_id)),
     [providers, brandAccounts, setup.brand_id],
   );
-  const channelNote = useMemo(() => unavailableNote(choices, Boolean(setup.brand_id)), [choices, setup.brand_id]);
+  const channelNote = useMemo(
+    () => unavailableNote(choices, Boolean(setup.brand_id), Boolean(item)),
+    [choices, setup.brand_id, item],
+  );
 
   // The brand can change under a selection, and an account can be disconnected after an item was
   // saved. Either way a tick that is no longer valid must not survive into generation.
