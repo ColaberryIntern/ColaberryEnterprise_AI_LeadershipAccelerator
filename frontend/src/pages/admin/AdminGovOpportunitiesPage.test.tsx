@@ -39,6 +39,11 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+// DetailsModal calls the matcher on open; default it to empty so tests that don't care don't break.
+beforeEach(() => {
+  (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 0 });
+});
+
 describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preserved)', () => {
   it('renders the legacy scores as advisory chips and never says "best fit"', async () => {
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
@@ -186,6 +191,29 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     expect(text).toContain('Preliminary, unverified'); // the honesty label
     expect(text).toContain('not confirmed requirements');
     expect(text).toContain('A courts case-management modernization.');
+  });
+
+  it('Details shows suggested services (advisory) with the "suggested — confirm" label and the overlap reason', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
+    (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [
+      { id: 'data', name: 'Managed Data Services', category: 'Data', score: 2, strength: 'moderate', reason: 'Matches on keywords: data analytics', matchedKeywords: ['data analytics'], categoryMatched: false, matchedNaics: [] },
+    ], catalogSize: 10 });
+    await renderPage();
+    await clickEl(findButton('Details')!);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Services we could offer');
+    expect(text).toContain('suggested — confirm');
+    expect(text).toContain('Managed Data Services');
+    expect(text).toContain('Matches on keywords: data analytics');
+    expect(factoryApi.matchServicesToOpportunity).toHaveBeenCalled();
+  });
+
+  it('Details shows the empty-state when no services match', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
+    (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 10 });
+    await renderPage();
+    await clickEl(findButton('Details')!);
+    expect(container.textContent ?? '').toContain('No suggested services');
   });
 
   it('Details overview falls back to an explicit "not available yet" when no summary', async () => {

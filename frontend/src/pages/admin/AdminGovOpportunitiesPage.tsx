@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import {
-  listGovOpportunities, dismissGovOpportunity, restoreGovOpportunity,
-  type GovOpportunity, type GovOpportunityFeed,
+  listGovOpportunities, dismissGovOpportunity, restoreGovOpportunity, matchServicesToOpportunity,
+  type GovOpportunity, type GovOpportunityFeed, type ServiceMatch,
 } from '../../services/factoryApi';
 
 /**
@@ -126,6 +126,19 @@ function DetailsModal({ opp, onClose, onQualify, onDismiss, dismissing }: {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Advisory service suggestions (deterministic matcher, server-side). Best-effort: a failure shows the empty state.
+  const [matches, setMatches] = useState<ServiceMatch[] | null>(null);
+  const [matchLoading, setMatchLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    setMatchLoading(true);
+    matchServicesToOpportunity({ category: opp.category, title: opp.title, summary: opp.preliminarySummary })
+      .then((r) => { if (active) setMatches(r.matches); })
+      .catch(() => { if (active) setMatches([]); })
+      .finally(() => { if (active) setMatchLoading(false); });
+    return () => { active = false; };
+  }, [opp.category, opp.title, opp.preliminarySummary]);
+
   const v = opp.vetVerdict;
   const dl = daysLeft(opp.closeDate);
   return (
@@ -176,6 +189,31 @@ function DetailsModal({ opp, onClose, onQualify, onDismiss, dismissing }: {
               {opp.preliminarySummary
                 ? <p className="mb-0" style={{ whiteSpace: 'pre-line' }}>{opp.preliminarySummary}</p>
                 : <p className="text-secondary mb-0">No preliminary summary available yet — open the source posting or qualify to learn more.</p>}
+            </div>
+
+            {/* Services we could offer — advisory, deterministic match against Our Services; a suggestion to confirm */}
+            <div className="mt-3">
+              <div className="text-uppercase small fw-semibold text-secondary mb-2" style={{ letterSpacing: '.05em' }}>
+                Services we could offer <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span>
+              </div>
+              {matchLoading ? (
+                <p className="text-secondary small mb-0">Matching against Our Services…</p>
+              ) : matches && matches.length > 0 ? (
+                <ul className="list-unstyled mb-0">
+                  {matches.map((m) => (
+                    <li key={m.id} className="py-1 border-bottom">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="fw-semibold">{m.name}</span>
+                        {m.category && <span className="badge bg-secondary-subtle text-secondary-emphasis">{m.category}</span>}
+                        <span className={`badge ${m.strength === 'strong' ? 'bg-success-subtle text-success-emphasis' : m.strength === 'moderate' ? 'bg-warning-subtle text-warning-emphasis' : 'bg-secondary-subtle text-secondary-emphasis'}`}>{m.strength}</span>
+                      </div>
+                      <div className="small text-secondary">{m.reason}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-secondary small mb-0">No suggested services — add or refine keywords in <strong>Our Services</strong>.</p>
+              )}
             </div>
           </div>
           <div className="modal-footer justify-content-between">

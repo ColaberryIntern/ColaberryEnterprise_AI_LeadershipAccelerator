@@ -55,8 +55,38 @@ const clickButton = async (label: string) => {
   return btn;
 };
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
+// The workspace renders the advisory "what we offer" panel, which calls the matcher; default it to empty.
+beforeEach(() => { (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 0 }); });
+const flush = async () => { await act(async () => { await Promise.resolve(); }); await act(async () => { await Promise.resolve(); }); };
 
 describe('AdminGovQualificationPage — journey', () => {
+  it('shows the advisory "what they want vs what we offer" panel with the "suggested — confirm" label and matches', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [
+      { id: 'build', name: 'Enterprise AI Build & System Modernization', category: 'IT', score: 2, strength: 'moderate', reason: 'Matches on keywords: case management system', matchedKeywords: ['case management system'], categoryMatched: false, matchedNaics: [] },
+    ], catalogSize: 10 });
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('What they want vs what we offer');
+    expect(text).toContain('suggested — confirm');
+    expect(text).toContain('Enterprise AI Build');
+    expect(text).toContain('Matches on keywords: case management system');
+    expect(factoryApi.matchServicesToOpportunity).toHaveBeenCalled();
+  });
+
+  it('the panel shows "no requirements established yet" when none are established (matches on preliminary signals)', async () => {
+    const base = cleanWs();
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue({
+      ...base,
+      source: { ...base.source!, requirements: [] },
+      qualification: { ...base.qualification!, requirements_json: { established: [] } },
+    });
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No requirements established yet');
+  });
+
   it('no canonical + v2 unavailable → surfaces the canonical-mapping GAP, no start, no title-derived id', async () => {
     (factoryApi.getGovOpportunityCandidates as jest.Mock).mockResolvedValue({ available: false, reason: 'not_configured', candidates: [], sourceLive: false });
     await renderAt('');

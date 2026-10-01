@@ -26,6 +26,8 @@ import {
   createServiceOffering, updateServiceOffering, retireServiceOffering, listServiceOfferings,
   ServiceOfferingNotFoundError,
 } from '../../services/factory/serviceCatalog';
+// The pure, deterministic opportunity->services matcher (advisory; writes nothing, gates nothing).
+import { matchServicesToOpportunity } from '../../services/factory/serviceMatcher';
 // Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
 import multer from 'multer';
 import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
@@ -396,6 +398,34 @@ router.post('/api/admin/factory/services/:id/retire', requireSection('program'),
     if (err instanceof ServiceOfferingNotFoundError) { res.status(404).json({ error: 'That service was not found in this workspace.' }); return; }
     logFail('factory_services_retire_failed', err, { id: p.data.id });
     res.status(500).json({ error: 'Could not retire the service.' });
+  }
+});
+
+const matchBody = z.object({
+  category: z.string().max(120).optional(),
+  title: z.string().max(300).optional(),
+  summary: z.string().max(4000).optional(),
+  requirements: z.array(z.string().max(2000)).max(200).optional(),
+  naics: z.array(z.string().max(20)).max(50).optional(),
+});
+
+/**
+ * POST /api/admin/factory/opportunities/match — ADVISORY suggested services for an opportunity. Runs the pure,
+ * deterministic matcher over the tenant's ACTIVE catalog and returns ranked, explainable suggestions. It writes
+ * nothing and gates nothing — a suggestion to confirm, never a verified fit. Program-gated + tenant-scoped (503).
+ */
+router.post('/api/admin/factory/opportunities/match', requireSection('program'), async (req: Request, res: Response) => {
+  const b = matchBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid match signals.', issues: b.error.issues }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_match_scope', new Error('gov container not resolvable'), {}); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const catalog = await listServiceOfferings({ tenantId: container.tenant.id, status: 'active' });
+    const matches = matchServicesToOpportunity(b.data, catalog as any);
+    res.json({ matches, catalogSize: catalog.length });
+  } catch (err: any) {
+    logFail('factory_services_match_failed', err, {});
+    res.status(500).json({ error: 'Could not compute service matches.' });
   }
 });
 

@@ -3,8 +3,9 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../../components/admin/shell';
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
-  authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments,
+  authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
+  type ServiceMatch,
 } from '../../services/factoryApi';
 
 const AUTHORITATIVE_ROLES = ['solicitation', 'final_pws_sow', 'amendment'];
@@ -122,6 +123,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [build, setBuild] = useState({ deliveryProjectId: '', scope: '', resourceLimit: '' });
   const [docFile, setDocFile] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [svcMatches, setSvcMatches] = useState<ServiceMatch[] | null>(null);
+  const [svcMatchLoading, setSvcMatchLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!canonical) return;
@@ -136,6 +139,24 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   }, [canonical, biddingEntity]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Advisory service suggestions for this opportunity (deterministic matcher). Best-effort; feeds no gate.
+  useEffect(() => {
+    if (!ws?.source) { setSvcMatches(null); return; }
+    const src = ws.source;
+    const established = ws.qualification?.requirements_json?.established ?? [];
+    const needs = established.length ? established : src.requirements;
+    let active = true;
+    setSvcMatchLoading(true);
+    matchServicesToOpportunity({
+      title: `${src.publisher.leadBuyer.name} — ${src.notice.noticeType.value} ${src.notice.procurementType.value}`,
+      requirements: needs.map((r) => r.text),
+    })
+      .then((r) => { if (active) setSvcMatches(r.matches); })
+      .catch(() => { if (active) setSvcMatches([]); })
+      .finally(() => { if (active) setSvcMatchLoading(false); });
+    return () => { active = false; };
+  }, [ws]);
 
   // Every write runs one at a time (in-flight guard → no duplicate qualification/decision from repeated clicks),
   // reloads the server truth, and maps its error to a recoverable state.
@@ -162,6 +183,10 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
   const record = ws?.qualification ?? null;
   const version = record?.version ?? 0;
+  // The source's needs for the "what they want vs what we offer" panel: the reviewer-established requirements when
+  // any exist, otherwise the source's own requirements (empty for live v2 until a reviewer establishes them).
+  const established = ws?.qualification?.requirements_json?.established ?? [];
+  const needs: Array<{ id: string; text: string }> = ws?.source ? (established.length ? established : ws.source.requirements) : [];
 
   return (
     <div className="admin-page">
@@ -233,6 +258,41 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               {ws.coverage && !ws.coverage.sufficient && (
                 <div className="small text-warning-emphasis mt-2"><i className="ri-information-line me-1" aria-hidden="true" />Coverage not yet sufficient for approval: {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
               )}
+            </SectionCard>
+          )}
+
+          {ws.source && (
+            <SectionCard title="What they want vs what we offer" icon="scales-3-line"
+              subtitle="Advisory suggestion from Our Services — a starting point to confirm, not a verified fit. Feeds no gate.">
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <h3 className="h6 text-secondary text-uppercase small mb-2">What they want</h3>
+                  {needs.length === 0 ? (
+                    <p className="text-secondary small mb-0">No requirements established yet — matching on the preliminary signals (buyer, notice type). Establish cited requirements above for a sharper match.</p>
+                  ) : (
+                    <ul className="small mb-0">{needs.slice(0, 12).map((r) => <li key={r.id}>{r.text}</li>)}</ul>
+                  )}
+                </div>
+                <div className="col-md-6">
+                  <h3 className="h6 text-secondary text-uppercase small mb-2">What we offer <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span></h3>
+                  {svcMatchLoading ? (
+                    <p className="text-secondary small mb-0">Matching against Our Services…</p>
+                  ) : svcMatches && svcMatches.length > 0 ? (
+                    <ul className="list-unstyled mb-0">{svcMatches.map((m) => (
+                      <li key={m.id} className="py-1 border-bottom">
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="fw-semibold">{m.name}</span>
+                          {m.category && <span className="badge bg-secondary-subtle text-secondary-emphasis">{m.category}</span>}
+                          <span className={`badge ${m.strength === 'strong' ? 'bg-success-subtle text-success-emphasis' : m.strength === 'moderate' ? 'bg-warning-subtle text-warning-emphasis' : 'bg-secondary-subtle text-secondary-emphasis'}`}>{m.strength}</span>
+                        </div>
+                        <div className="small text-secondary">{m.reason}</div>
+                      </li>
+                    ))}</ul>
+                  ) : (
+                    <p className="text-secondary small mb-0">No suggested services — add or refine keywords in <strong>Our Services</strong>.</p>
+                  )}
+                </div>
+              </div>
             </SectionCard>
           )}
 

@@ -273,6 +273,33 @@ export async function retireServiceOffering(id: string): Promise<ServiceOffering
   return data.service;
 }
 
+// ── Opportunity → services matcher (advisory, deterministic) ─────────────────
+export type MatchStrength = 'strong' | 'moderate' | 'weak';
+/** A suggested service for an opportunity. ADVISORY ("suggested — confirm"), never a verified fit; the reason names the overlap. */
+export interface ServiceMatch {
+  id: string;
+  name: string;
+  category: string | null;
+  score: number;
+  strength: MatchStrength;
+  reason: string;
+  matchedKeywords: string[];
+  categoryMatched: boolean;
+  matchedNaics: string[];
+}
+export interface MatchSignals {
+  category?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  requirements?: string[];
+  naics?: string[];
+}
+/** Suggested services for an opportunity, ranked. Advisory only — writes nothing, gates nothing. */
+export async function matchServicesToOpportunity(signals: MatchSignals): Promise<{ matches: ServiceMatch[]; catalogSize: number }> {
+  const { data } = await api.post<{ matches: ServiceMatch[]; catalogSize: number }>('/api/admin/factory/opportunities/match', signals);
+  return data;
+}
+
 /**
  * Phase 1: reachability of an EXISTING gov project only. New pursuits now require qualification, so the server
  * returns 409 { qualificationRequired } and creates nothing; the entry page no longer offers a create action.
