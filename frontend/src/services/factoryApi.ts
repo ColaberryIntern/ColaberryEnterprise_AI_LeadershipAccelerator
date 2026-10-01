@@ -451,6 +451,22 @@ export async function reviewGovQualificationDocuments(canonicalOpportunityId: st
   return data;
 }
 
+/** One requirement the deterministic extractor found in the uploaded solicitation ZIP. A CANDIDATE only — it becomes
+ *  an established (gate-bearing) requirement solely when the reviewer confirms it via the establish/decision path. */
+export interface ExtractedRequirementCandidate {
+  id: string; text: string; extractedText?: string | null;
+  sourceDocument?: string | null; section?: string | null; kind?: string | null; priority?: string | null;
+}
+
+/** READ-ONLY: upload the solicitation ZIP and get back the extractor's candidate requirements for the reviewer to
+ *  confirm. Persists nothing server-side — establishment stays the deliberate, confirmed write. */
+export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; fileCount: number }> {
+  const form = new FormData();
+  form.append('document', file);
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/extract-requirements'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+
 export interface GovCandidate { canonicalOpportunityId: string; title: string | null; agency: string | null; noticeType: string | null; }
 export interface GovCandidatesResult { available: boolean; reason?: 'not_configured' | 'source_failed'; candidates: GovCandidate[]; sourceLive: boolean; }
 

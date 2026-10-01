@@ -4,9 +4,13 @@ import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../.
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
+  extractGovQualificationRequirements,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
-  type ServiceMatch,
+  type ServiceMatch, type ExtractedRequirementCandidate,
 } from '../../services/factoryApi';
+
+/** Per-candidate reviewer choices while confirming extracted requirements into established ones. */
+interface CandidateRow { checked: boolean; applicability: string; dueStage: string; }
 
 const AUTHORITATIVE_ROLES = ['solicitation', 'final_pws_sow', 'amendment'];
 
@@ -125,6 +129,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
   const [svcMatches, setSvcMatches] = useState<ServiceMatch[] | null>(null);
   const [svcMatchLoading, setSvcMatchLoading] = useState(false);
+  // Extract-from-ZIP → confirm → establish. Extraction is read-only (persists nothing); establishment is the write.
+  const [extractFile, setExtractFile] = useState<File | null>(null);
+  const [candidates, setCandidates] = useState<ExtractedRequirementCandidate[] | null>(null);
+  const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
+  const [extractBusy, setExtractBusy] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!canonical) return;
@@ -168,6 +178,25 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     finally { inFlight.current = false; setBusy(false); }
   }, [load]);
 
+  // READ-ONLY: extract candidate requirements from the uploaded solicitation ZIP. Persists nothing — the reviewer
+  // confirms which candidates become established (gate-bearing) requirements below.
+  const extract = useCallback(async () => {
+    if (!extractFile || !canonical) return;
+    setExtractBusy(true); setExtractError(null);
+    try {
+      const r = await extractGovQualificationRequirements(canonical, extractFile);
+      setCandidates(r.candidates);
+      const rows: Record<string, CandidateRow> = {};
+      for (const c of r.candidates) rows[c.id] = { checked: true, applicability: 'always', dueStage: 'submission' };
+      setCandRows(rows);
+    } catch (err: any) {
+      setExtractError(err?.response?.data?.error ?? 'Could not extract requirements from the document.');
+      setCandidates(null);
+    } finally {
+      setExtractBusy(false);
+    }
+  }, [extractFile, canonical]);
+
   const header = (
     <PageHeader
       title="Qualification Workspace"
@@ -187,6 +216,30 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   // any exist, otherwise the source's own requirements (empty for live v2 until a reviewer establishes them).
   const established = ws?.qualification?.requirements_json?.established ?? [];
   const needs: Array<{ id: string; text: string }> = ws?.source ? (established.length ? established : ws.source.requirements) : [];
+
+  const selectedCandidateCount = candidates ? candidates.filter((c) => candRows[c.id]?.checked).length : 0;
+  // Confirm the checked candidates into established requirements: map with the per-row applicability/due-stage,
+  // MERGE with any already-established (de-dup by id; a confirmed candidate overrides the same id), then call the
+  // existing deliberate establish/decision write. Requires an opened record (same gate as the one-at-a-time form).
+  const establishSelected = (): void => {
+    if (!candidates || !record) return;
+    const chosen = candidates.filter((c) => candRows[c.id]?.checked);
+    if (chosen.length === 0) return;
+    const mapped: EstablishedRequirement[] = chosen.map((c) => ({
+      id: c.id, text: c.text,
+      applicability: (candRows[c.id]?.applicability ?? 'always') as EstablishedRequirement['applicability'],
+      dueStage: (candRows[c.id]?.dueStage ?? 'submission') as EstablishedRequirement['dueStage'],
+      bindingStatus: 'binding_solicitation_requirement',
+    }));
+    const byId = new Map<string, EstablishedRequirement>();
+    for (const e of record.requirements_json?.established ?? []) byId.set(e.id, e);
+    for (const m of mapped) byId.set(m.id, m);
+    const merged = Array.from(byId.values());
+    void run(async () => {
+      await recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: merged });
+      setCandidates(null); setCandRows({});
+    }, `Established ${mapped.length} requirement(s) from the solicitation.`);
+  };
 
   return (
     <div className="admin-page">
@@ -243,6 +296,69 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <dt className="col-sm-3">Deadline</dt><dd className="col-sm-9">{ws.source.deadline.originalText ?? 'unstated'} <StatusBadge label={`confidence: ${ws.source.deadline.utcConfidence}`} tone={ws.source.deadline.utcConfidence === 'high' ? 'success' : 'warning'} /></dd>
                 <dt className="col-sm-3">Documents</dt><dd className="col-sm-9">{ws.source.documents.coverage} · {ws.source.documents.counts.parsed}/{ws.source.documents.counts.listed} parsed{ws.source.documents.counts.inaccessible > 0 ? `, ${ws.source.documents.counts.inaccessible} inaccessible` : ''}</dd>
               </dl>
+            </SectionCard>
+          )}
+
+          {ws.source && (
+            <SectionCard title="Extract requirements from the solicitation ZIP" icon="file-search-line"
+              subtitle="Upload the solicitation package (the Bonfire ZIP). The extractor lists the requirements it detects as CANDIDATES — confirm the real ones to establish them. It reads the file in memory and stores nothing; a candidate is not a requirement until you confirm it.">
+              <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
+                  onChange={(e) => setExtractFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                <button type="button" className="btn btn-outline-primary btn-sm" disabled={extractBusy || !extractFile}
+                  onClick={() => { void extract(); }}>
+                  <i className="ri-search-eye-line me-1" aria-hidden="true" />{extractBusy ? 'Extracting…' : 'Extract requirements'}
+                </button>
+              </div>
+              {extractError && <div className="alert alert-danger py-2" role="alert">{extractError}</div>}
+              {candidates !== null && candidates.length === 0 && (
+                <div className="text-secondary small"><i className="ri-information-line me-1" aria-hidden="true" />No requirements detected in that ZIP — establish them manually below.</div>
+              )}
+              {candidates !== null && candidates.length > 0 && (
+                <>
+                  <div className="small text-secondary mb-2">{candidates.length} candidate requirement(s) detected <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span></div>
+                  <ul className="list-unstyled mb-3">
+                    {candidates.map((c, idx) => {
+                      const row = candRows[c.id] ?? { checked: true, applicability: 'always', dueStage: 'submission' };
+                      return (
+                        <li key={c.id + idx} className="py-2 border-bottom">
+                          <div className="d-flex align-items-start gap-2">
+                            <input type="checkbox" className="form-check-input mt-1" checked={row.checked}
+                              aria-label={`Confirm ${c.id}`}
+                              onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, checked: e.target.checked } })} />
+                            <div className="flex-grow-1">
+                              <div className="fw-semibold small">{c.id}</div>
+                              <div className="small">{c.text}</div>
+                              {(c.sourceDocument || c.section || c.kind) && (
+                                <div className="small text-secondary">{c.sourceDocument ?? ''}{c.section ? ` · §${c.section}` : ''}{c.kind ? ` · ${c.kind}` : ''}</div>
+                              )}
+                              <div className="d-flex flex-wrap gap-2 mt-1">
+                                <select className="form-select form-select-sm" style={{ maxWidth: 150 }} value={row.applicability} aria-label={`Applicability for ${c.id}`}
+                                  onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, applicability: e.target.value } })}>
+                                  <option value="always">always</option><option value="conditional">conditional</option><option value="not_applicable">not_applicable</option><option value="unknown">unknown</option>
+                                </select>
+                                <select className="form-select form-select-sm" style={{ maxWidth: 140 }} value={row.dueStage} aria-label={`Due stage for ${c.id}`}
+                                  onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, dueStage: e.target.value } })}>
+                                  <option value="submission">submission</option><option value="award">award</option><option value="delivery">delivery</option><option value="unknown">unknown</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {record ? (
+                    <button type="button" className="btn btn-primary btn-sm" disabled={busy || selectedCandidateCount === 0} onClick={establishSelected}>
+                      <i className="ri-check-double-line me-1" aria-hidden="true" />Establish selected ({selectedCandidateCount})
+                    </button>
+                  ) : (
+                    <div className="alert alert-info py-2 mb-0" role="status">
+                      <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification (in <strong>Qualification actions</strong> below) to confirm these into established requirements.
+                    </div>
+                  )}
+                </>
+              )}
             </SectionCard>
           )}
 
