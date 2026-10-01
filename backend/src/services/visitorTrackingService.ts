@@ -84,6 +84,11 @@ export function categorizePagePath(path: string, brandSlug?: string | null): str
   // strength-20 `deep_scroll_case_study` lead signal. The index route itself is
   // matched by the exact `/stories` key in the map above.
   if (cleaned.startsWith('/stories/')) return 'case_studies';
+  // Hosted landing pages: `/p/:brand/:slug`. Without this every campaign destination lands in
+  // 'other', which is the one bucket that answers no question - and a landing page view is the
+  // single most interesting event in a campaign funnel. Trailing slash is load-bearing for the
+  // same reason as `/stories/` above.
+  if (cleaned.startsWith('/p/')) return 'landing_page';
 
   return categoryMap[cleaned] || 'other';
 }

@@ -28,6 +28,7 @@ import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
+import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
@@ -225,6 +226,11 @@ app.use(openclawShortLinkRoutes);
 // Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
 // Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
 app.use(mediaFetchRoutes);
+// Hosted landing pages (GET /p/:brand/:slug) - public server-rendered HTML, the destination of
+// social posts. Same rule as /r/ /i/ /m/ above: a visitor clicking a link in a post has no
+// session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
+// publicLandingPageRoutes.test.ts, which builds both orders and asserts 200 above / 404 below.
+app.use(publicLandingPageRoutes);
 // LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
 app.use(linkedInCallbackRoutes);
 // Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).

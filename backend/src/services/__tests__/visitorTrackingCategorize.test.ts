@@ -90,3 +90,39 @@ describe('categorizePagePath - the pre-existing map is untouched', () => {
     expect(categorizePagePath(path)).toBe(expected);
   });
 });
+
+/**
+ * Hosted landing pages, `/p/:brand/:slug`.
+ *
+ * WHY A CATEGORY AT ALL, given the lesson above. The `case_studies` story was a category with
+ * six consumers that nothing ever produced. The opposite mistake - producing a category nothing
+ * reads - would be just as useless, so the consumer was checked first: `visitorAnalyticsService`
+ * groups `page_events` by `page_category` generically (`group: ['page_category']`, with a
+ * `?? 'uncategorized'` fallback), so a new category becomes its own row in the breakdown without
+ * anything else being registered. Without this rule every campaign destination would land in
+ * `'other'`, which is the one bucket that answers no question - and a landing-page view is the
+ * most interesting event in a campaign funnel.
+ */
+describe('categorizePagePath - hosted landing pages', () => {
+  it('categorises a landing page under its brand', () => {
+    expect(categorizePagePath('/p/colaberry-training/six-week-build')).toBe('landing_page');
+  });
+
+  it('survives the normalisation, including the UTM query a real click carries', () => {
+    expect(categorizePagePath('/p/colaberry-training/six-week-build/')).toBe('landing_page');
+    expect(categorizePagePath('/p/colaberry-training/six-week-build?utm_source=li')).toBe('landing_page');
+  });
+
+  it.each([
+    '/portfolio',
+    '/pricing',
+    '/program',
+  ])('%s is not a landing page - the trailing slash in the prefix is load-bearing', (path) => {
+    // A bare startsWith('/p') would swallow every route beginning with the letter p.
+    expect(categorizePagePath(path)).not.toBe('landing_page');
+  });
+
+  it('does not claim a bare /p', () => {
+    expect(categorizePagePath('/p')).not.toBe('landing_page');
+  });
+});
