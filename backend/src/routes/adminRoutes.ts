@@ -122,6 +122,7 @@ import podcastRoutes from './admin/podcastRoutes';
 import studentStoryRoutes from './admin/studentStoryRoutes';
 import internshipAdminRoutes from './admin/internshipRoutes';
 import factoryAdminRoutes from './admin/factoryRoutes';
+import projectLifecycleRoutes from './admin/projectLifecycleRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
@@ -311,6 +312,7 @@ router.use(studentStoryRoutes);
 // gate is deny-by-default and Dhee's 'admissions' token 403s on every call.
 router.use(internshipAdminRoutes);
 router.use(factoryAdminRoutes);
+router.use(projectLifecycleRoutes);
 // Gov qualification workspace (Phase 2). Paths are nested under /api/admin/factory/qualification, so
 // mgmtSectionGate's existing '/api/admin/factory' → 'program' PREFIX row already covers them.
 router.use(govQualificationRoutes);

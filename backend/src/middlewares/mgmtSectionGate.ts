@@ -117,6 +117,15 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/import', 'lead_ingestion'],
   ['/api/admin/tracking-estate', 'campaigns'],
   ['/api/admin/executive-narrative', 'dashboard'],
+  // Unified project lifecycle (docs/project-lifecycle/architecture.md). A project's lifecycle is
+  // program-domain work, the same section as the delivery contracts and projects it governs.
+  //
+  // Mapped the day the routes landed, for the reason the rows above give: THIS GATE IS
+  // DENY-BY-DEFAULT, so an unmapped path reaches the final 403 with nothing explaining why. There
+  // is no frontend route yet (Phase 5 adds the review page), so there is deliberately no
+  // UNLISTED_PATH_SECTIONS twin — that list pairs FRONTEND routes lacking a sidebar entry with a
+  // section, and this is an API-only surface for now.
+  ['/api/admin/project-lifecycle', 'program'],
   // Audit ledger — classified from what it returns (event_type, actor,
   // entity_type, entity_id, payload), not from its name.
   ['/api/admin/events', 'system'],
