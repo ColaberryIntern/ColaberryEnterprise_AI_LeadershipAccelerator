@@ -220,6 +220,59 @@ export async function restoreGovOpportunity(key: string): Promise<{ restored: Go
   return data;
 }
 
+// ── Our Services catalog ─────────────────────────────────────────────────────
+/** A Colaberry service offering — the catalog an opportunity is later matched against. Retired, never deleted. */
+export interface ServiceOffering {
+  id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  keywords?: string[];
+  naicsCodes?: string[];
+  pscCodes?: string[];
+  pastPerformance?: string | null;
+  owner?: string | null;
+  status: 'active' | 'retired';
+  createdBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+/** The editable fields of a service offering (what the add/edit form submits). */
+export interface ServiceOfferingInput {
+  name: string;
+  description?: string;
+  category?: string;
+  keywords?: string[];
+  naicsCodes?: string[];
+  pscCodes?: string[];
+  pastPerformance?: string;
+  owner?: string;
+}
+
+/** List the team's service offerings (active by default, or every status). */
+export async function listServiceOfferings(status: 'active' | 'all' = 'active'): Promise<ServiceOffering[]> {
+  const { data } = await api.get<{ services: ServiceOffering[] }>(`/api/admin/factory/services?status=${status}`);
+  return data.services;
+}
+
+/** Add a service offering. */
+export async function createServiceOffering(body: ServiceOfferingInput): Promise<ServiceOffering> {
+  const { data } = await api.post<{ service: ServiceOffering }>('/api/admin/factory/services', body);
+  return data.service;
+}
+
+/** Edit a service offering. */
+export async function updateServiceOffering(id: string, patch: Partial<ServiceOfferingInput>): Promise<ServiceOffering> {
+  const { data } = await api.patch<{ service: ServiceOffering }>(`/api/admin/factory/services/${encodeURIComponent(id)}`, patch);
+  return data.service;
+}
+
+/** Soft-retire a service offering (status flip; reversible by editing it back to active is not exposed — retire is one-way in the UI). */
+export async function retireServiceOffering(id: string): Promise<ServiceOffering> {
+  const { data } = await api.post<{ service: ServiceOffering }>(`/api/admin/factory/services/${encodeURIComponent(id)}/retire`, {});
+  return data.service;
+}
+
 /**
  * Phase 1: reachability of an EXISTING gov project only. New pursuits now require qualification, so the server
  * returns 409 { qualificationRequired } and creates nothing; the entry page no longer offers a create action.

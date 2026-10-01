@@ -21,6 +21,11 @@ import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContai
 // Team-scoped dismissals: hide a discovered v1 candidate from the whole team's feed (reversible). The service
 // lazy-loads its model inside each function, so this import never inits the ORM here.
 import { dismissOpportunity, restoreOpportunity, listActiveDismissedKeys } from '../../services/factory/opportunities/govOpportunityDismissals';
+// Colaberry's service catalog (CRUD). Lazy-loads its model inside each function, so this import never inits the ORM.
+import {
+  createServiceOffering, updateServiceOffering, retireServiceOffering, listServiceOfferings,
+  ServiceOfferingNotFoundError,
+} from '../../services/factory/serviceCatalog';
 // Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
 import multer from 'multer';
 import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
@@ -304,6 +309,93 @@ router.post('/api/admin/factory/opportunities/:key/restore', requireSection('pro
   } catch (err: any) {
     logFail('factory_opportunity_restore_failed', err, { key: p.data.key });
     res.status(500).json({ error: 'Could not restore the opportunity.' });
+  }
+});
+
+// ── Service catalog (Colaberry's own offerings) ──────────────────────────────
+// Program-gated + tenant-scoped (fail closed 503 when the gov container is unresolvable). The catalog is the store
+// the deterministic opportunity→services matcher (separate, advisory) will later read; nothing here feeds a gate.
+const serviceIdParam = z.object({ id: z.string().uuid() });
+const serviceStrArr = z.array(z.string().max(60)).max(50);
+const serviceCreateBody = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  category: z.string().max(80).optional(),
+  keywords: serviceStrArr.optional(),
+  naicsCodes: serviceStrArr.optional(),
+  pscCodes: serviceStrArr.optional(),
+  pastPerformance: z.string().max(4000).optional(),
+  owner: z.string().max(120).optional(),
+});
+const serviceUpdateBody = serviceCreateBody.partial();
+const serviceStatusQuery = z.object({ status: z.enum(['active', 'all']).optional() });
+
+/** GET /api/admin/factory/services?status=active|all — list the tenant's service offerings. */
+router.get('/api/admin/factory/services', requireSection('program'), async (req: Request, res: Response) => {
+  const q = serviceStatusQuery.safeParse(req.query ?? {});
+  if (!q.success) { res.status(400).json({ error: 'Invalid status filter.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_list_scope', new Error('gov container not resolvable'), {}); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const services = await listServiceOfferings({ tenantId: container.tenant.id, status: q.data.status });
+    res.json({ services });
+  } catch (err: any) {
+    logFail('factory_services_list_failed', err, {});
+    res.status(500).json({ error: 'Could not load the service catalog.' });
+  }
+});
+
+/** POST /api/admin/factory/services — add a service offering (tenant/org/createdBy from scope + token, not the body). */
+router.post('/api/admin/factory/services', requireSection('program'), async (req: Request, res: Response) => {
+  const b = serviceCreateBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid service body.', issues: b.error.issues }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_create_scope', new Error('gov container not resolvable'), {}); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const service = await createServiceOffering({
+      tenantId: container.tenant.id, organizationId: container.org.id, createdBy: actorIdentity(req),
+      name: b.data.name, description: b.data.description ?? null, category: b.data.category ?? null,
+      keywords: b.data.keywords, naicsCodes: b.data.naicsCodes, pscCodes: b.data.pscCodes,
+      pastPerformance: b.data.pastPerformance ?? null, owner: b.data.owner ?? null,
+    });
+    res.status(201).json({ service });
+  } catch (err: any) {
+    logFail('factory_services_create_failed', err, {});
+    res.status(500).json({ error: 'Could not add the service.' });
+  }
+});
+
+/** PATCH /api/admin/factory/services/:id — edit a service offering. */
+router.patch('/api/admin/factory/services/:id', requireSection('program'), async (req: Request, res: Response) => {
+  const p = serviceIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid service id.' }); return; }
+  const b = serviceUpdateBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid service body.', issues: b.error.issues }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_update_scope', new Error('gov container not resolvable'), { id: p.data.id }); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const service = await updateServiceOffering({ tenantId: container.tenant.id, id: p.data.id, patch: b.data });
+    res.json({ service });
+  } catch (err: any) {
+    if (err instanceof ServiceOfferingNotFoundError) { res.status(404).json({ error: 'That service was not found in this workspace.' }); return; }
+    logFail('factory_services_update_failed', err, { id: p.data.id });
+    res.status(500).json({ error: 'Could not update the service.' });
+  }
+});
+
+/** POST /api/admin/factory/services/:id/retire — soft-retire (status flip; idempotent). */
+router.post('/api/admin/factory/services/:id/retire', requireSection('program'), async (req: Request, res: Response) => {
+  const p = serviceIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid service id.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_retire_scope', new Error('gov container not resolvable'), { id: p.data.id }); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const service = await retireServiceOffering({ tenantId: container.tenant.id, id: p.data.id });
+    res.json({ service });
+  } catch (err: any) {
+    if (err instanceof ServiceOfferingNotFoundError) { res.status(404).json({ error: 'That service was not found in this workspace.' }); return; }
+    logFail('factory_services_retire_failed', err, { id: p.data.id });
+    res.status(500).json({ error: 'Could not retire the service.' });
   }
 });
 
