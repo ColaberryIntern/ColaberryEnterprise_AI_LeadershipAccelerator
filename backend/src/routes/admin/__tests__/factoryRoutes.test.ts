@@ -513,11 +513,49 @@ describe('Service catalog routes — /api/admin/factory/services (program-gated,
   });
 });
 
+describe('POST /api/admin/factory/opportunities/match — advisory suggested services (program-gated, tenant-scoped)', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('returns ranked matches from the real matcher over the tenant\'s active catalog', async () => {
+    listServiceOfferings.mockResolvedValue([
+      { id: 'data', name: 'Managed Data Services', category: 'Data', keywords: ['data analytics', 'dashboards'], naicsCodes: [] },
+      { id: 'train', name: 'Workforce Training', category: 'Training', keywords: ['upskilling'], naicsCodes: [] },
+    ]);
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ title: 'RFP for a data analytics dashboards platform' });
+    expect(res.status).toBe(200);
+    expect(res.body.catalogSize).toBe(2);
+    expect(res.body.matches.map((m: any) => m.id)).toContain('data');
+    expect(res.body.matches[0].reason).toContain('data analytics');
+    expect(listServiceOfferings.mock.calls[0][0]).toMatchObject({ tenantId: 'ten-1', status: 'active' });
+  });
+
+  it('returns an empty match list when nothing overlaps (still 200)', async () => {
+    listServiceOfferings.mockResolvedValue([{ id: 'data', name: 'Data', category: 'Data', keywords: ['dashboards'], naicsCodes: [] }]);
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ title: 'snow plowing and road salt' });
+    expect(res.status).toBe(200);
+    expect(res.body.matches).toEqual([]);
+  });
+
+  it('400s a malformed body (requirements not an array)', async () => {
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ requirements: 'not-an-array' });
+    expect(res.status).toBe(400);
+    expect(listServiceOfferings).not.toHaveBeenCalled();
+  });
+
+  it('FAILS CLOSED (503) when the gov container is unresolvable', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ title: 'x' });
+    expect(res.status).toBe(503);
+    expect(listServiceOfferings).not.toHaveBeenCalled();
+  });
+});
+
 describe('route-auth — every route is section-gated (required CI lint)', () => {
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(15); // + services GET/POST/PATCH/retire (prev 11: 9 base + dismiss + restore)
+    expect(guards.length).toBeGreaterThanOrEqual(16); // + opportunities/match (prev 15: 11 + services GET/POST/PATCH/retire)
   });
 });
 
