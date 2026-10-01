@@ -40,6 +40,7 @@ const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStor
 const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
 const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrationPage'));
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
+const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
 const IntelligenceOSPage = lazy(() => import('../pages/admin/intelligence/IntelligenceOSPage'));
@@ -207,6 +208,9 @@ const adminRoutes = (
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        {/* Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide
+            read-only effective-access resolver + tool catalog. */}
+        <Route path="/admin/tools" element={<AdminToolsPage />} />
         {/* Real-enforcement scoping, Phase 1 (2026-09-20) — the first real UI
             for the already-real approval-requests backend routes. */}
         <Route path="/admin/approval-requests" element={<ApprovalRequestsPage />} />

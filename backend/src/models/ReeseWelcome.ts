@@ -18,10 +18,17 @@ import { sequelize } from '../config/database';
  *                 already as an enrolled student gets the student intro only,
  *                 so the account intro is retired here rather than left
  *                 pending, where it would surface later out of order.
- * Both are visible in the ledger instead of looking identical to a person who
- * was simply never eligible.
+ *  'held'       — Real-enforcement scoping, Phase 3 (R211, 2026-10-01): the
+ *                 real ABAC authorization check denied this send. Follows
+ *                 the SAME design choice this file already made for
+ *                 'failed' — the claim stays, this intro is never retried
+ *                 later, even once/if the hold is later approved ("no
+ *                 intro is better than one arriving days later on an
+ *                 unrelated login").
+ * All three are visible in the ledger instead of looking identical to a
+ * person who was simply never eligible.
  */
-export type ReeseWelcomeOutcome = 'sent' | 'failed' | 'superseded';
+export type ReeseWelcomeOutcome = 'sent' | 'failed' | 'superseded' | 'held';
 
 /**
  * Which introduction this row records.

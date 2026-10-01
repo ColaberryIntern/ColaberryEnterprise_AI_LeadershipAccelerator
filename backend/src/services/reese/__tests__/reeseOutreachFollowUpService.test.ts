@@ -25,6 +25,11 @@ jest.mock('../reeseAutonomousOutreachService', () => ({
 }));
 jest.mock('../closureChecklist', () => ({ createClosureChecklistInstance: jest.fn() }));
 jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
+// Real-enforcement scoping, Phase 3 (R209/R210) — the new gate on
+// sendFollowUp()/escalate(). Defaults to allow in every existing test
+// below (regression: identical behavior to before this gate existed);
+// denial is exercised by its own dedicated describe block.
+jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import RoomMessage from '../../../models/RoomMessage';
@@ -38,6 +43,7 @@ import { getReeseAdminUserId, getReeseEnrollmentId } from '../reeseIdentitySeed'
 import { countAutonomousSendsToday } from '../reeseAutonomousOutreachService';
 import { createClosureChecklistInstance } from '../closureChecklist';
 import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
+import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { processDueReeseOutreachFollowUps } from '../reeseOutreachFollowUpService';
 
 const mockReeseOutreachFindAll = ReeseOutreach.findAll as unknown as jest.Mock;
@@ -55,6 +61,7 @@ const mockGetReeseEnrollmentId = getReeseEnrollmentId as unknown as jest.Mock;
 const mockCountAutonomousSendsToday = countAutonomousSendsToday as unknown as jest.Mock;
 const mockCreateClosureChecklistInstance = createClosureChecklistInstance as unknown as jest.Mock;
 const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
+const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 
 function makeRow(overrides: Record<string, any> = {}) {
   return {
@@ -85,6 +92,7 @@ beforeEach(() => {
   mockInitiateDm.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-2' });
   mockRecordEvidence.mockResolvedValue({ id: 'evidence-1' });
   mockCreateClosureChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: null, verdict: 'would_allow', reason: 'ok', allowed: true });
 });
 
 describe('processDueReeseOutreachFollowUps — branch: signal cleared', () => {
@@ -248,6 +256,40 @@ describe('processDueReeseOutreachFollowUps — branch: under cap, sends one more
       }),
     );
   });
+
+  it('Real-enforcement scoping (R209): a denied follow-up is held, never sent — no initiateDm, no ledger write, no attempt-count bump, reported as held_for_approval not follow_up_sent', async () => {
+    const row = makeRow({ attempt_count: 1 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 14, completionPct: 5 });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-1', verdict: 'would_block', reason: 'level_forbids:write', allowed: false });
+
+    const result = await processDueReeseOutreachFollowUps(false);
+
+    expect(result.followUpSent).toBe(0);
+    expect(result.heldForApproval).toBe(1);
+    expect(result.decisions[0].branch).toBe('held_for_approval');
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    expect(mockEmitReeseLedgerEvent).not.toHaveBeenCalled();
+    expect(row.update).not.toHaveBeenCalled();
+  });
+
+  it('the authorization check runs BEFORE the real send, with the real risk tier and prepared-action replay data', async () => {
+    const row = makeRow({ attempt_count: 1 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 14, completionPct: 5 });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: 'ticket-1',
+        agentName: 'Reese',
+        action: 'reese_outreach_followup',
+        riskTier: 'R3',
+        preparedAction: { studentEnrollmentId: 'student-1', content: 'A real unique follow-up message.' },
+      }),
+    );
+  });
 });
 
 describe('processDueReeseOutreachFollowUps — branch: at cap, escalates', () => {
@@ -280,6 +322,22 @@ describe('processDueReeseOutreachFollowUps — branch: at cap, escalates', () =>
         result: 'success', sourceRecordType: 'reese_outreach', sourceRecordId: 'outreach-1',
       }),
     );
+  });
+
+  it('Real-enforcement scoping (R210): a denied escalation is held — no ticket comment, no status flip, no ledger write, reported as held_for_approval not escalated (the safety path does not silently no-op as a false "escalated")', async () => {
+    const row = makeRow({ attempt_count: 3 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 28, completionPct: 5 });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-2', verdict: 'would_block', reason: 'level_forbids:write', allowed: false });
+
+    const result = await processDueReeseOutreachFollowUps(false);
+
+    expect(result.escalated).toBe(0);
+    expect(result.heldForApproval).toBe(1);
+    expect(result.decisions[0].branch).toBe('held_for_approval');
+    expect(mockAddTicketComment).not.toHaveBeenCalled();
+    expect(row.update).not.toHaveBeenCalled();
+    expect(mockEmitReeseLedgerEvent).not.toHaveBeenCalled();
   });
 });
 
