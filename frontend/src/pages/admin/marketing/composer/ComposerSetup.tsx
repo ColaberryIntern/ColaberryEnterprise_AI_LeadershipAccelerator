@@ -51,13 +51,22 @@ export interface ComposerSetupProps {
   draftNotes?: { placeholders: string[]; unverifiedClaims: string[] } | null;
   /** Connected networks, so a link post can name which of them it would exclude. */
   providers?: readonly ProviderSummary[];
+  /**
+   * The upload control, rendered INSIDE the content-type column.
+   *
+   * It is a slot rather than a prop bundle because the upload needs the item id, the upload
+   * progress and the attach/detach handlers - all of which live on the page. Passing the node
+   * keeps that ownership where it is and still puts the control where the eye expects it:
+   * directly under "video", not at the bottom of the form.
+   */
+  mediaSlot?: React.ReactNode;
 }
 
 const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll', 'document'];
 
 export default function ComposerSetup({
   values, brands, campaigns, locked, busy, onChange, onSubmit, onAssignSlug, onDraftMessage, draftNotes,
-  providers = [],
+  providers = [], mediaSlot = null,
 }: ComposerSetupProps) {
   const [topic, setTopic] = React.useState('');
   /** 'upload' or 'link', for a video. Local: choosing it is not yet a change to the post. */
@@ -163,6 +172,7 @@ export default function ComposerSetup({
               )}
             </div>
           )}
+          {mediaSlot}
         </div>
         <div className="col-md-6">
           <label className="form-label small mb-1" htmlFor="composer-title">
