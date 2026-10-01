@@ -1,5 +1,8 @@
 import React from 'react';
 import DemoEvidencePanel from '../DemoEvidencePanel';
+import PromptPanel from './PromptPanel';
+import PreparePanel from './PreparePanel';
+import LearnStage from './LearnStage';
 import { STAGE_META, type PresentationStage } from './presentationStages';
 
 /**
@@ -66,24 +69,21 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
       )}
 
       {stage === 'learn' && (
-        <Pending
-          what="Worked examples for this presentation type are being written."
-          when="They arrive with the seven presentation templates."
-        />
+        <LearnStage projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
-      {stage === 'prepare' && !onEvidenceStage && (
-        <Pending
-          what="The audience-and-story worksheet is not here yet."
-          when="It arrives with the templates, prefilled from your project."
-        />
+      {/* Prepare is live on every task, not only the one that hands in here: the
+          audience and purpose feed the deck prompt, so a student on PREP-5 revisiting
+          Prepare is doing real work, not browsing. */}
+      {stage === 'prepare' && (
+        <PreparePanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
-      {stage === 'build' && !onEvidenceStage && (
-        <Pending
-          what="The personalised deck prompt is not here yet."
-          when="It arrives with the templates, built from your own project's evidence."
-        />
+      {/* The deck prompt is live on Build, whether or not this task hands in here —
+          a student on PREP-3 needs it, and so does a student on PREP-5 who came back
+          to rebuild their slides. */}
+      {stage === 'build' && (
+        <PromptPanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
       {stage === 'practice' && !onEvidenceStage && (

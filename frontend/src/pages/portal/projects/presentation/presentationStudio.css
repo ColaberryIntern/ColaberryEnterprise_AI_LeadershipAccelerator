@@ -149,6 +149,114 @@
 
 .ps-pending strong { color: var(--ps-ink); display: block; margin-bottom: 4px; }
 
+/* ── learn panel ──────────────────────────────────────────────────────────── */
+
+/* The good and bad examples are given equal visual weight on purpose: the
+ * counter-case is where the judgement is taught, not a footnote to the good one. */
+.ps-eg {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--ps-line);
+  background: var(--ps-surface-alt);
+  border-radius: 0 7px 7px 0;
+  font-size: 0.88rem;
+  font-style: normal;
+}
+
+.ps-eg--good { border-left-color: var(--ps-ok); }
+.ps-eg--bad { border-left-color: var(--ps-secondary, #e53e3e); }
+
+.ps-outline { list-style: none; margin: 0; padding: 0; counter-reset: beat; }
+
+.ps-outline li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ps-line);
+}
+
+.ps-outline li:last-child { border-bottom: 0; }
+.ps-beat { font-weight: 600; font-size: 0.88rem; }
+.ps-secs { color: var(--ps-ink-soft); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.ps-say { grid-column: 1 / -1; color: var(--ps-ink-soft); font-size: 0.85rem; }
+
+/* ── prepare panel ────────────────────────────────────────────────────────── */
+
+.ps-label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--ps-ink-soft);
+  margin-bottom: 5px;
+}
+
+.ps-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ps-line);
+  border-radius: 7px;
+  background: var(--ps-surface);
+  color: var(--ps-ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.ps-input:focus-visible {
+  outline: 2px solid var(--ps-accent-soft);
+  outline-offset: 1px;
+}
+
+.ps-check { list-style: none; margin: 0; padding: 0; }
+.ps-check li { margin-bottom: 7px; }
+
+.ps-check label {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+/* Big enough to hit on a phone without zooming. */
+.ps-check input[type='checkbox'] { margin-top: 3px; width: 16px; height: 16px; flex: 0 0 auto; }
+
+/* ── prompt panel ─────────────────────────────────────────────────────────── */
+
+.ps-acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }
+
+.ps-btn {
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--ps-accent);
+  background: var(--ps-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.ps-btn--soft { background: transparent; color: var(--ps-accent); }
+.ps-btn:hover { filter: brightness(1.08); }
+
+.ps-prompt-text {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--ps-line);
+  border-radius: 8px;
+  background: var(--ps-surface-alt);
+  color: var(--ps-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+:root[data-theme='dark'] .ps-btn--soft { color: var(--ps-accent); border-color: var(--ps-accent); }
+:root[data-theme='dark'] .ps-rail button[aria-current='step'],
+:root[data-theme='dark'] .ps-btn { color: #1a202c; }
+
 @media (prefers-reduced-motion: reduce) {
   .ps-studio * { transition: none !important; animation: none !important; }
 }

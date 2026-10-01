@@ -5,8 +5,67 @@ import PresentationStudio from '../presentation/PresentationStudio';
 import { PRESENTATION_STAGES, readSavedStage, studentTitleFor } from '../presentation/presentationStages';
 import type { ProjectTask } from '../projectsStore';
 
-jest.mock('../../../../utils/portalApi', () => ({ __esModule: true, default: { post: jest.fn() } }));
+// `get` is mocked too now that the Build stage fetches the deck prompt. Spread the
+// actual module rather than enumerating exports — a factory that lists only what it
+// thinks is used silently deletes the rest, and that failure surfaces inside unmocked
+// product code where it looks like a bug in the component.
+jest.mock('../../../../utils/portalApi', () => ({
+  __esModule: true,
+  default: { post: jest.fn(), get: jest.fn(), patch: jest.fn() },
+}));
 jest.mock('../projectSync', () => ({ refreshProjectsFromBackend: jest.fn().mockResolvedValue(undefined) }));
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const portalApi = require('../../../../utils/portalApi').default as { get: jest.Mock; patch: jest.Mock };
+
+const LESSON_OK = {
+  data: {
+    id: 'ai_visual_presentation',
+    label: 'AI visual presentation',
+    prominent: true,
+    defaultSeconds: 300,
+    qaSeconds: 120,
+    outcome: 'Make a visual argument someone could follow with the sound off.',
+    objective: 'Show rather than describe.',
+    expectedOutput: 'A five-minute slide presentation plus speaker notes.',
+    preface: 'A visual presentation is not a document read aloud.',
+    structure: ['The problem, shown', 'Before and after'],
+    strongExample: { text: 'Example: a single slide split down the middle.', why: 'The image makes the claim.' },
+    weakExample: { text: 'Example of what not to do: six bullets read aloud.', why: 'The audience reads ahead.' },
+    timedOutline: [{ beat: 'The problem, shown', seconds: 40, say: 'Open on the current state as an image.' }],
+    vocabulary: [{ term: 'Workflow', plain: 'The steps a job goes through.' }],
+    prepare: ['Screenshot the current process first.'],
+    checklist: ['Every slide makes one point'],
+    practiceDrill: 'Play the deck with the sound off.',
+    rubric: [{ dimension: 'Problem and audience clarity', weight: 20, lookFor: 'Opens on the problem.' }],
+    reflection: 'Which slide were you tempted to add words to?',
+  },
+};
+
+const ASSIGNMENT_OK = {
+  data: {
+    storyId: 'PREP-3',
+    templateId: 'ai_visual_presentation',
+    templateLabel: 'AI visual presentation',
+    audience: null,
+    purpose: null,
+    checklist: {},
+    prepState: 'not_started',
+    checklistItems: ['Every slide makes one point', 'Someone could follow with the sound off'],
+  },
+};
+
+const PROMPT_OK = {
+  data: {
+    prompt: 'PRESENTATION TYPE: AI visual presentation\n(not supplied)',
+    template_id: 'ai_visual_presentation',
+    template_version: 1,
+    template_label: 'AI visual presentation',
+    speaking_seconds: 300,
+    qa_seconds: 120,
+    missing: ['audience', 'purpose'],
+  },
+};
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,6 +76,15 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   try { window.localStorage.clear(); } catch { /* ignore */ }
+  portalApi.get.mockReset();
+  portalApi.patch.mockReset();
+  // Route by URL: the Studio calls three different GET endpoints.
+  portalApi.get.mockImplementation((url: string) => {
+    if (url.includes('presentation-assignment')) return Promise.resolve(ASSIGNMENT_OK);
+    if (url.includes('presentation-templates')) return Promise.resolve(LESSON_OK);
+    return Promise.resolve(PROMPT_OK);
+  });
+  portalApi.patch.mockResolvedValue({ data: { ...ASSIGNMENT_OK.data, audience: 'Hiring managers', prepState: 'preparing' } });
 });
 afterEach(() => { act(() => root?.unmount()); root = null; container.remove(); });
 
@@ -32,6 +100,9 @@ function mount(storyId: string, extra: Partial<ProjectTask> = {}) {
 const click = (el: Element | null) => act(() => {
   el?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
+
+/** Lets the prompt fetch's promise chain settle and React re-render. */
+const flush = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); };
 
 const stageBtn = (id: string) => container.querySelector(`[data-testid="ps-stage-${id}"]`);
 const currentStage = () => container.querySelector('[aria-current="step"]')?.textContent || '';
@@ -144,6 +215,173 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(studentTitleFor('PREP-99')).toBeNull();
     mount('PREP-99', { title: 'Some stored task name' } as any);
     expect(container.textContent).toContain('Some stored task name');
+  });
+
+  it('the Build stage offers the deck prompt, so it is no longer a dead stage', async () => {
+    mount('PREP-3');
+    await flush();
+    expect(container.querySelector('[data-testid="ps-prompt"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ps-copy"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ps-download"]')).not.toBeNull();
+    expect(portalApi.get).toHaveBeenCalledWith(
+      expect.stringContaining('/presentation-prompt'),
+    );
+  });
+
+  it('tells the student what the prompt could NOT fill, rather than hiding it', async () => {
+    // A student who pastes a prompt full of "(not supplied)" without noticing gets a
+    // deck full of invented detail — the exact failure the accuracy rules prevent.
+    mount('PREP-3');
+    await flush();
+    const warn = container.querySelector('[data-testid="ps-prompt-missing"]');
+    expect(warn).not.toBeNull();
+    expect(warn!.textContent).toContain('audience');
+    expect(warn!.textContent).toContain('purpose');
+  });
+
+  it('failure path: a prompt that cannot load says why and does not break the stage', async () => {
+    portalApi.get.mockRejectedValue({ response: { status: 404 } });
+    mount('PREP-3');
+    await flush();
+    const err = container.querySelector('[data-testid="ps-prompt-error"]');
+    expect(err).not.toBeNull();
+    expect(err!.getAttribute('role')).toBe('alert');
+    // The rail still works — one failed fetch must not strand the student.
+    expect(container.querySelectorAll('.ps-rail button')).toHaveLength(6);
+  });
+
+  it('a preview account never calls the API for a prompt', async () => {
+    // The prompt is built from a real student's own project; there is nothing to
+    // generate for Explorer, and calling anyway would 404 noisily.
+    act(() => {
+      const r = createRoot(container);
+      root = r;
+      r.render(<PresentationStudio task={{ id: 't1', storyId: 'PREP-3' } as any} projectId="p1" taskId="PREP-3" demo />);
+    });
+    await flush();
+    expect(portalApi.get).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="ps-prompt-demo"]')).not.toBeNull();
+  });
+
+  it('the Prepare stage collects the audience, and the checklist comes from the template', async () => {
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+    expect(container.querySelector('[data-testid="ps-prepare"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ps-audience"]')).not.toBeNull();
+    // The UI never invents checklist items — they arrive with the assignment.
+    const items = container.querySelectorAll('[data-testid="ps-checklist"] li');
+    expect(items).toHaveLength(2);
+    expect(container.textContent).toContain('Every slide makes one point');
+  });
+
+  it('the server decides readiness — a save response replaces local state', async () => {
+    jest.useFakeTimers();
+    try {
+      mount('PREP-3');
+      click(stageBtn('prepare'));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      const input = container.querySelector('[data-testid="ps-audience"]') as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      act(() => {
+        setter.call(input, 'Hiring managers');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      // Debounced: nothing has been sent yet.
+      expect(portalApi.patch).not.toHaveBeenCalled();
+
+      act(() => { jest.advanceTimersByTime(800); });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(portalApi.patch).toHaveBeenCalledTimes(1);
+      expect(portalApi.patch.mock.calls[0][1]).toEqual({ audience: 'Hiring managers' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('failure path: a save that fails keeps the student\'s text on screen', async () => {
+    jest.useFakeTimers();
+    try {
+      portalApi.patch.mockRejectedValue({ response: { data: { error: 'Could not save.' } } });
+      mount('PREP-3');
+      click(stageBtn('prepare'));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      const input = container.querySelector('[data-testid="ps-audience"]') as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      act(() => {
+        setter.call(input, 'Some audience');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      act(() => { jest.advanceTimersByTime(800); });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      // Losing what they typed because the network blipped would be the worst
+      // possible response to a failed save.
+      expect((container.querySelector('[data-testid="ps-audience"]') as HTMLInputElement).value).toBe('Some audience');
+      expect(container.querySelector('[data-testid="ps-save-state"]')!.textContent).toContain('Could not save.');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a preview account never saves preparation', async () => {
+    act(() => {
+      const r = createRoot(container);
+      root = r;
+      r.render(<PresentationStudio task={{ id: 't1', storyId: 'PREP-1' } as any} projectId="p1" taskId="PREP-1" demo />);
+    });
+    await flush();
+    expect(container.querySelector('[data-testid="ps-prepare-demo"]')).not.toBeNull();
+    expect(portalApi.patch).not.toHaveBeenCalled();
+  });
+
+  it('the Learn stage shows the authored lesson, not a placeholder', async () => {
+    mount('PREP-3');
+    click(stageBtn('learn'));
+    await flush();
+    await flush();
+    expect(container.querySelector('[data-testid="ps-learn"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ps-pending"]')).toBeNull();
+    expect(container.textContent).toContain('Make a visual argument');
+    expect(container.textContent).toContain('A visual presentation is not a document read aloud.');
+  });
+
+  it('Learn gives the weak example equal weight — that is where judgement is taught', async () => {
+    mount('PREP-3');
+    click(stageBtn('learn'));
+    await flush();
+    await flush();
+    expect(container.textContent).toContain('Example: a single slide split down the middle.');
+    expect(container.textContent).toContain('Why it works:');
+    expect(container.textContent).toContain('Example of what not to do: six bullets read aloud.');
+    expect(container.textContent).toContain('Why it fails:');
+    // Both rendered as examples, so neither can read as a real student's work.
+    expect(container.querySelectorAll('.ps-eg')).toHaveLength(2);
+  });
+
+  it('Learn shows the timed outline and the rubric weights', async () => {
+    mount('PREP-3');
+    click(stageBtn('learn'));
+    await flush();
+    await flush();
+    expect(container.querySelector('[data-testid="ps-outline"]')).not.toBeNull();
+    expect(container.textContent).toContain('40s');
+    expect(container.querySelector('[data-testid="ps-rubric"]')).not.toBeNull();
+    expect(container.textContent).toContain('20%');
+  });
+
+  it('Learn resolves the template from the assignment, never guesses it client-side', async () => {
+    // Guessing would let the lesson a student reads drift from the template their
+    // deck prompt is actually built from.
+    mount('PREP-3');
+    click(stageBtn('learn'));
+    await flush();
+    await flush();
+    const urls = portalApi.get.mock.calls.map((c: any[]) => String(c[0]));
+    expect(urls.some((u) => u.includes('presentation-assignment'))).toBe(true);
+    expect(urls.some((u) => u.includes('presentation-templates/ai_visual_presentation'))).toBe(true);
   });
 
   it('every stage button is reachable and labelled for assistive tech', () => {
