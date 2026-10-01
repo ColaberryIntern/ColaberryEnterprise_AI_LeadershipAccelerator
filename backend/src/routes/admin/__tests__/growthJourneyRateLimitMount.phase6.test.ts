@@ -156,20 +156,26 @@ describe('the derivation is real', () => {
     // record of a past one.
     //
     // WHICH CELL CATCHES WHAT. These are not interchangeable, and the distinction was
-    // measured rather than reasoned about - build the hazard below, register a live 36th
-    // route inside the window it swallows, and this suite answers
-    // `2 failed, 73 passed, 75 total`:
+    // measured rather than reasoned about - build the hazard below, register a live route
+    // inside the window it swallows, and run this suite:
     //
     //   - a route that DISAPPEARS from the derivation       -> this cell
     //   - a route HIDDEN from the derivation by the stripper -> the two cells below
     //     (`no scanned file hides code from the stripper`, `every mount this suite
     //      depends on is visible to the stripper`)
     //
-    // In that state THIS CELL IS GREEN, and it has to be: a swallowed route never reaches
-    // `DECLARED`, so the count is still 35 and an exact pin is satisfied. Only the stripper
-    // cells fire. Two earlier versions of this comment got that wrong in opposite
-    // directions - one claimed routes "did" drop out, the next credited this pin with
-    // catching the swallowed-route hazard - which is why the claim is now a run.
+    // With a route hidden, THIS CELL IS GREEN, and it has to be: a swallowed route never
+    // reaches `DECLARED`, so the count is unchanged and an exact pin is satisfied. Only the
+    // stripper cells fire. Delete a real route instead and the reverse holds - this cell
+    // fires alone. Two earlier versions of this comment got that wrong in opposite
+    // directions: one claimed routes "did" drop out, the next credited this pin with
+    // catching the swallowed-route hazard.
+    //
+    // NO TOTALS ARE QUOTED HERE ON PURPOSE. An earlier draft named a pass/fail count for
+    // that run, and no check reads it - add one cell to this suite or one route to any of
+    // the three routers and the comment is false with nothing red. That is the same
+    // stale-figure defect this paragraph exists to describe, merely relocated from a log
+    // into a comment. The CELL NAMES above are drift-proof; a tally is not.
     expect(DECLARED.length).toBe(35);
     expect(DECLARED.filter((r) => r.verb === 'post').length).toBe(8);
     expect(DECLARED.every((r) => r.pattern.startsWith(J))).toBe(true);
@@ -180,8 +186,10 @@ describe('the derivation is real', () => {
     // block-open inside a line comment pairs with the next block-close further down the
     // file and everything between vanishes. `/people/` + `*` in a `//` comment swallowed
     // twelve lines of growthJourneyReadRoutes.ts, hiding the limiter mount from the cell
-    // written to watch it, and a live 36th route registered in that window was invisible
-    // to this matrix AND to the privacy sweep, with nothing red.
+    // written to watch it. A live route registered in that window WOULD BE invisible to
+    // this matrix and to the privacy sweep, with nothing red - stated as the property it
+    // is, because no such route ever shipped and the past tense would assert an event
+    // that did not happen.
     const offenders: string[] = [];
     for (const rel of SCANNED) {
       const src = fs.readFileSync(path.join(HERE, rel), 'utf8');
