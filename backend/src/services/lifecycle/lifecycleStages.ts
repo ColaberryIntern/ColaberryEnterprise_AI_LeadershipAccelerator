@@ -101,14 +101,23 @@ export const RETURN: Readonly<Record<LifecycleStage, ReadonlyArray<LifecycleStag
   operating: ['awaiting_blueprint_approval'],
 };
 
-/** The full allow-list, forward and return edges combined. Anything absent is refused. */
-export const LEGAL: Readonly<Record<LifecycleStage, ReadonlyArray<LifecycleStage>>> =
-  Object.fromEntries(
-    LIFECYCLE_STAGES.map((s) => {
-      const fwd = ADVANCE[s];
-      return [s, fwd ? [fwd, ...RETURN[s]] : [...RETURN[s]]];
-    }),
-  ) as Record<LifecycleStage, ReadonlyArray<LifecycleStage>>;
+/**
+ * The full allow-list, forward and return edges combined. Anything absent is refused.
+ *
+ * Built with a typed accumulator rather than `Object.fromEntries(...) as Record<...>`: that cast
+ * does not typecheck under TS 5.x, because `fromEntries` widens the key to `string` and the
+ * result no longer overlaps the keyed `Record`. The tests did not catch it — ts-jest runs with
+ * `isolatedModules`, so suites transpile without type checking and were green while
+ * `tsc --noEmit` was not.
+ */
+export const LEGAL: Readonly<Record<LifecycleStage, ReadonlyArray<LifecycleStage>>> = (() => {
+  const out = {} as Record<LifecycleStage, ReadonlyArray<LifecycleStage>>;
+  for (const stage of LIFECYCLE_STAGES) {
+    const forward = ADVANCE[stage];
+    out[stage] = forward ? [forward, ...RETURN[stage]] : [...RETURN[stage]];
+  }
+  return out;
+})();
 
 export function isLifecycleStage(value: unknown): value is LifecycleStage {
   return typeof value === 'string' && (LIFECYCLE_STAGES as ReadonlyArray<string>).includes(value);
