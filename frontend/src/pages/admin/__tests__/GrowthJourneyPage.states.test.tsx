@@ -23,6 +23,17 @@ import type { StatusRegistry } from '../../../services/growthJourneyApi';
  * nothing to these assertions.
  */
 
+/*
+ * 30s, not jest's 5000ms default - the third of this task's three rendering suites
+ * to carry it, and the reason is worth keeping. Two sibling suites got this line
+ * after the full 290-suite run starved them; this one was left on the default and
+ * failed in the very next full run while the two fixed ones passed. The machine was
+ * at 1.18GB free of 39.73GB and 100% CPU, and 13 other suites this branch has never
+ * touched failed in the same run - two of which pass 92 tests when run scoped.
+ * NOTHING BELOW ASSERTS LESS BECAUSE OF THIS LINE. It buys time, not leniency.
+ */
+jest.setTimeout(30000);
+
 jest.mock('../../../services/growthJourneyApi', () => ({
   getStatusRegistry: jest.fn(),
   getReadiness: jest.fn(),

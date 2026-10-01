@@ -29,6 +29,19 @@ import type { HandoffDetail, HandoffRow } from '../../../services/growthJourneyA
  * not, they are the only thing standing between that column and the screen.
  */
 
+/*
+ * 30s, not jest's 5000ms default. In the full 290-suite run on this machine this
+ * suite took 103s of wall clock and its FIRST cell died on the default budget -
+ * then the next cell asserted against a tree still reading "Loading…". Nothing
+ * here does real I/O; both reads are resolved mocks, and these same cells passed
+ * 13 consecutive scoped runs today. The budget was measuring how starved the
+ * worker was, not how slow the page is, and the same shape hit two
+ * AgentDetailPage suites this branch has never touched in the same run.
+ * NOTHING BELOW ASSERTS LESS BECAUSE OF THIS LINE. It buys time, not leniency -
+ * a genuine hang still fails, 25s later.
+ */
+jest.setTimeout(30000);
+
 jest.mock('../../../services/growthJourneyApi', () => ({
   getHandoff: jest.fn(),
   acceptHandoff: jest.fn(),

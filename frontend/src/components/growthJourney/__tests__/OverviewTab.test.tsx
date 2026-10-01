@@ -23,6 +23,14 @@ import type { JourneyHealth, Readiness } from '../../../services/growthJourneyAp
  * Both were reachable by anyone editing this file and nothing would have gone red.
  */
 
+/*
+ * 30s, not jest's 5000ms default - the same reason the handoff suite carries this
+ * line. In the full 290-suite run this suite took 76s of wall clock and its first
+ * cell died on the default budget while asserting against two resolved mocks.
+ * NOTHING BELOW ASSERTS LESS BECAUSE OF THIS LINE. It buys time, not leniency.
+ */
+jest.setTimeout(30000);
+
 jest.mock('../../../services/growthJourneyApi', () => ({
   getReadiness: jest.fn(),
   getHealth: jest.fn(),
@@ -135,6 +143,50 @@ describe('`ready: null` is a third answer, never a blocker', () => {
   });
 });
 
+describe('the all-ready branch - unreachable by every fixture until now', () => {
+  // T613's attempt-2 verifier found three survivors in this file; two live here. No
+  // fixture had zero blocked AND zero unknown, so lines 99-101 were never rendered by
+  // any cell - including the one line attempt 2 changed (a hardcoded "seventeen"
+  // replaced by `data.items.length`), which was therefore backed by nothing.
+  const allReady = (): Readiness => ({
+    items: [
+      { key: 'master_flag', ready: true, reason: 'on', next_move: 'nothing' },
+      { key: 'ledger_indexes', ready: true, reason: 'all three present', next_move: 'nothing' },
+      { key: 'memberships', ready: true, reason: 'seeded', next_move: 'nothing' },
+    ],
+    score: { ready: 3, known: 3, unknown: 0, pct: 100 },
+    next_move: null,
+    as_of: '2026-10-01T08:00:00.000Z',
+  });
+
+  it('counts the checks rather than naming a number', async () => {
+    // Kills the hardcoded-figure mutant: revert `{data.items.length}` to a literal and
+    // this fails. Three items, so the sentence must say three - not seventeen.
+    api.getReadiness.mockResolvedValue(allReady());
+    await render();
+    expect(text()).toContain('All 3 checks are ready');
+    expect(text()).not.toContain('seventeen');
+  });
+
+  it('does NOT claim all-ready while any check is unknowable', async () => {
+    // THE LIVE BUG this cell exists for: drop the `unknown.length === 0` guard and the
+    // page announces "All N checks are ready" with a check it could not evaluate. That
+    // is a false all-clear on the screen whose job is to say whether this is safe to
+    // switch on.
+    const withUnknown = allReady();
+    withUnknown.items = [
+      ...withUnknown.items,
+      { key: 'migration_applied', ready: null, reason: 'not knowable from here', next_move: 'run it' },
+    ];
+    withUnknown.score = { ready: 3, known: 3, unknown: 1, pct: 100 };
+    api.getReadiness.mockResolvedValue(withUnknown);
+    await render();
+    expect(text()).not.toContain('checks are ready');
+    // and it says what it cannot answer instead of going quiet
+    expect(text()).toContain('cannot be answered from here');
+  });
+});
+
 describe('the runbook reads as a runbook', () => {
   it('names the next move, and every row carries what was found AND what would fix it', async () => {
     await render();
@@ -165,6 +217,43 @@ describe('health', () => {
     expect(text()).toContain('journey_nightly');
     expect(text()).toContain('24h window');
     expect(text()).toContain('ledger read ok');
+    // The cell was NAMED for held and refused and asserted neither, so replacing
+    // either total with a literal 0 survived. `Held: 2` closes that half.
+    //
+    // `Refused: 0` does NOT, and attempt 3 claimed it did. This fixture's
+    // `refused.total` IS 0, so asserting the string "Refused: 0" is asserting a
+    // constant: replace `{data.refused.total}` with `{0}` and this still passes.
+    // Same for `journey_hold_rows`, also 0 here. Both bindings are pinned by the
+    // next cell instead, with values that cannot be confused with a literal.
+    // Keeping these two here is still worth something - zero must render AS zero
+    // rather than as a blank - which is all they are asserting.
+    expect(text()).toContain('Held: 2');
+    expect(text()).toContain('quiet_hours 2');
+    expect(text()).toContain('Refused: 0');
+    expect(text()).toContain('0 hold rows');
+    expect(text()).toContain('1 awaiting review for over 72h');
+    expect(text()).toContain('oldest 12h');
+    expect(text()).toContain('240m ago');
+  });
+
+  it('reads every total off the payload rather than printing a literal', async () => {
+    // The cell above cannot catch a hardcoded total, because the numbers it checks
+    // are 0 and a literal 0 is indistinguishable from the real binding. These
+    // values are deliberately distinctive and appear nowhere else in the render,
+    // so each one can only come from the payload it was put in.
+    api.getHealth.mockResolvedValue(health({
+      held: { total: 7, by_reason: { quiet_hours: 7 } },
+      refused: { total: 13, by_reason: { no_consent: 13 }, capped: false },
+      journey_hold_rows: 5,
+      stuck_pending_review: { count: 3, over_hours: 48 },
+    }));
+    await render();
+    expect(text()).toContain('Held: 7');
+    expect(text()).toContain('Refused: 13');
+    expect(text()).toContain('5 hold rows');
+    expect(text()).toContain('3 awaiting review for over 48h');
+    // and a non-capped refused count must NOT carry the floor caveat
+    expect(text()).not.toContain('capped, so this is a floor');
   });
 
   it('says an empty receipt list is EXPECTED while the system is dark', async () => {

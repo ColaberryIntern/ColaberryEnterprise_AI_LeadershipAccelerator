@@ -10,15 +10,23 @@ import api from '../utils/api';
  * ── WHAT IS HERE, AND WHAT IS DELIBERATELY NOT ──────────────────────────────
  *
  * T613 builds two surfaces: the workspace shell with its Overview tab, and the
- * handoff detail page. So this covers the three status reads those need plus the
- * handoff detail and its three moves - SIX functions, which is every function this
- * file has. The other EIGHT tabs the shell declares - `classification`, `decisions`,
- * `shadow`, `content`, `handoffs`, `experiments`, `performance`, `controls` - are
- * later tasks, and their routes are absent on purpose rather than stubbed: a
- * function that exists but is never called reads as finished work.
+ * handoff detail page. This file exports EIGHT functions: seven that call a route -
+ * the three `/status` reads, the handoff detail, and the three handoff moves - plus
+ * `handoffConflict`, which is a pure predicate over an error shape and reaches no
+ * network. There are no non-exported functions. The other EIGHT tabs the shell
+ * declares - `classification`, `decisions`, `shadow`, `content`, `handoffs`,
+ * `experiments`, `performance`, `controls` - are later tasks, and their routes are
+ * absent on purpose rather than stubbed: a function that exists but is never called
+ * reads as finished work.
  *
- * Both figures were wrong in the first draft: it said "eight functions" while naming
- * seven tabs, having dropped `handoffs` from the list.
+ * THIS COUNT IS NOW DERIVED, AND THE PREVIOUS THREE WERE NOT. It said "eight
+ * functions" while naming seven tabs; then "six functions, which is every function
+ * this file has", asserted to have been re-derived when it had been counted by eye -
+ * the file had eight and the sentence's own enumeration gave seven, so no reading
+ * produced six. The figure above comes from
+ * `grep -cE "^export (const|function|async function)"` over this file (8) and
+ * `grep -nE "^(function|const [a-zA-Z]+ = \()"` for private ones (none). A number
+ * about a file should come from a command run against that file.
  *
  * ── THE MASTER FLAG MAKES A ROUTE 404, AND NOTHING HERE MEETS IT YET ────────
  *

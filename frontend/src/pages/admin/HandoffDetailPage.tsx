@@ -50,7 +50,17 @@ import {
  * own stated contract.
  */
 
-/** Any `local@domain`-looking run, masked. Deliberately greedy about what counts. */
+/**
+ * Any `local@domain`-looking run, masked. Deliberately greedy about what counts.
+ *
+ * WHAT IT DOES NOT CATCH, stated because the captions below used to claim more than
+ * this delivers. `\S+@\S+` needs non-space on both sides of an ASCII `@`, so it
+ * misses `@handle` (no local part), `lead @example.com` (a space inside), `lead@`
+ * (no domain) and `lead＠example.com` (U+FF20, a full-width at-sign). The backend's
+ * writer guard refuses any packet VALUE containing `@`, so these shapes need a legacy
+ * or non-journey writer to appear at all - but "no address is rendered" was broader
+ * than the regex, and a caption that over-claims is how the key leak went unnoticed.
+ */
 const ADDRESS = /\S+@\S+/g;
 
 /** A packet value as text, with addresses masked whatever shape they arrive in. */
@@ -152,7 +162,8 @@ export default function HandoffDetailPage() {
                 <div className="card-body">
                   <table className="table table-sm mb-0">
                     <caption className="small text-muted">
-                      Ids, counts and ranks. No address is rendered from this row or its packet.
+                      Ids, counts and ranks. Addresses are masked on the way out - see this file&rsquo;s
+                      header for the shapes the mask does not catch.
                     </caption>
                     <thead className="visually-hidden">
                       <tr><th scope="col">Field</th><th scope="col">Value</th></tr>
