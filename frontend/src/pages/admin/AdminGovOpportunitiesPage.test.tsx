@@ -119,4 +119,89 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     await renderPage();
     expect(container.textContent ?? '').toContain('Could not load government opportunities');
   });
+
+  // ── Discovery upgrade: show more, good-fits, decent filter, details popup, team dismiss/restore ──
+  const goodFit: GovOpportunity = { ...candidate, uuid: 'g1', title: 'High Fit Platform', fitScore: 80, priorityScore: 78 };
+  const lowFit: GovOpportunity = { ...candidate, uuid: 'l1', title: 'Low Fit Services', agency: 'U3P', category: 'Consulting', fitScore: 50, priorityScore: 40 };
+
+  const findButton = (label: string) => Array.from(container.querySelectorAll('button')).find((b) => (b.textContent ?? '').trim() === label);
+  const clickEl = async (el: Element) => {
+    await act(async () => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+  };
+
+  it('shows a Good fits count (fit ≥ 75) and a Decent options filter', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit, lowFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
+    await renderPage();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Good fits');
+    expect(text).toContain('Decent options');
+    expect(text).toContain('decent'); // the good-fits hint names the decent threshold
+  });
+
+  it('the Decent options filter hides a fit<60 row', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit, lowFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
+    await renderPage();
+    expect(container.textContent ?? '').toContain('Low Fit Services'); // both shown initially
+    const toggle = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Decent options'));
+    await clickEl(toggle!);
+    const text = container.textContent ?? '';
+    expect(text).toContain('High Fit Platform'); // fit 80 kept
+    expect(text).not.toContain('Low Fit Services'); // fit 50 hidden
+  });
+
+  it('shows how many are available vs shown', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit, lowFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50, dismissedCount: 3 });
+    await renderPage();
+    const text = container.textContent ?? '';
+    expect(text).toMatch(/Showing\s*2\s*of\s*50/);
+    expect(text).toContain('3'); // dismissed count surfaced
+  });
+
+  it('Details opens a popup with why-it-surfaced + the PRELIMINARY, UNVERIFIED overview', async () => {
+    const withSummary: GovOpportunity = { ...candidate, uuid: 's1', title: 'Summarized RFP', preliminarySummary: 'A courts case-management modernization.' };
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [withSummary], source: 'live', snapshotDate: null, snapshotReason: null });
+    await renderPage();
+    await clickEl(findButton('Details')!);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Why it surfaced');
+    expect(text).toContain('Project overview');
+    expect(text).toContain('Preliminary, unverified'); // the honesty label
+    expect(text).toContain('not confirmed requirements');
+    expect(text).toContain('A courts case-management modernization.');
+  });
+
+  it('Details overview falls back to an explicit "not available yet" when no summary', async () => {
+    const noSummary: GovOpportunity = { ...candidate, uuid: 'n1', title: 'No Summary RFP', preliminarySummary: null };
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [noSummary], source: 'live', snapshotDate: null, snapshotReason: null });
+    await renderPage();
+    await clickEl(findButton('Details')!);
+    expect(container.textContent ?? '').toContain('No preliminary summary available yet');
+  });
+
+  it('Dismiss calls the API with the OP uuid and removes the row', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit, lowFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
+    (factoryApi.dismissGovOpportunity as jest.Mock).mockResolvedValue({ dismissed: { opportunity_key: 'g1', restored_at: null } });
+    await renderPage();
+    const dismissBtn = findButton('Dismiss'); // the row dismiss button (icon + visually-hidden "Dismiss")
+    expect(dismissBtn).toBeDefined();
+    await clickEl(dismissBtn!);
+    expect(factoryApi.dismissGovOpportunity).toHaveBeenCalledWith('g1', expect.objectContaining({ title: 'High Fit Platform' }));
+    expect(container.textContent ?? '').not.toContain('High Fit Platform'); // row removed optimistically
+  });
+
+  it('Restore calls the API for a session-dismissed opportunity', async () => {
+    (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit, lowFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50 });
+    (factoryApi.dismissGovOpportunity as jest.Mock).mockResolvedValue({ dismissed: { opportunity_key: 'g1', restored_at: null } });
+    (factoryApi.restoreGovOpportunity as jest.Mock).mockResolvedValue({ restored: { opportunity_key: 'g1', restored_at: '2026-10-01T00:00:00Z' } });
+    await renderPage();
+    await clickEl(findButton('Dismiss')!);                 // dismiss g1 (l1 remains, so the card still renders)
+    const disclosure = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Dismissed this session'));
+    expect(disclosure).toBeDefined();
+    await clickEl(disclosure!);                             // open the dismissed manager
+    const restoreBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Restore'));
+    await clickEl(restoreBtn!);
+    expect(factoryApi.restoreGovOpportunity).toHaveBeenCalledWith('g1');
+  });
 });
