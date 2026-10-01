@@ -180,6 +180,31 @@ describe('no address reaches the screen, whatever the API served', () => {
     expect(text()).toContain('rank');
   });
 
+  it('masks an address in a packet KEY, not only in a value', async () => {
+    // THE DEFECT THIS CELL EXISTS FOR. The first version of this page passed every
+    // packet VALUE through the mask and rendered the KEY raw - `<code>{k}</code>` -
+    // directly beneath a caption claiming the packet was not trusted to be
+    // address-free. T613's verifier moved the address out of a value and into a key
+    // and it printed verbatim. The backend shares the blind spot: `noAddress.ts`
+    // recurses Object.entries VALUES and never inspects a key.
+    api.getHandoff.mockResolvedValue(detail({
+      packet: { 'lead@example.com': 'contact', note: 'cc someone@example.com', rank: 3 },
+    }));
+    await render();
+    expect(text()).not.toContain('@');
+    // The other keys and values must survive, so this is a redaction and not a drop.
+    expect(text()).toContain('note');
+    expect(text()).toContain('rank');
+    expect(text()).toContain('contact');
+  });
+
+  it('the KEY fixture really does carry an address - the needle exists', () => {
+    // The positive control for the cell above. Without it that cell would pass
+    // against a fixture whose key had quietly stopped containing an address.
+    const keys = Object.keys({ 'lead@example.com': 'contact', note: 'x', rank: 3 });
+    expect(keys.some((k) => k.includes('@'))).toBe(true);
+  });
+
   it('the fixture really does carry addresses - the needle exists', () => {
     // The positive control. Without it both cells above would pass against a
     // fixture that had quietly stopped containing an address.

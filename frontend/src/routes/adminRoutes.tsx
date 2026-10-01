@@ -24,7 +24,7 @@ const AdminEventLedgerPage = lazy(() => import('../pages/admin/AdminEventLedgerP
 const AdminCampaignsPage = lazy(() => import('../pages/admin/AdminCampaignsPage'));
 const ExplorerGrowthPage = lazy(() => import('../pages/admin/ExplorerGrowthPage'));
 const GrowthJourneyPage = lazy(() => import('../pages/admin/GrowthJourneyPage'));
-const GrowthJourneyHandoffPage = lazy(() => import('../components/growthJourney/HandoffDetailPage'));
+const GrowthJourneyHandoffPage = lazy(() => import('../pages/admin/HandoffDetailPage'));
 const AdminCampaignDetailPage = lazy(() => import('../pages/admin/AdminCampaignDetailPage'));
 const AdminApolloPage = lazy(() => import('../pages/admin/AdminApolloPage'));
 const CampaignBuilderPage = lazy(() => import('../pages/admin/CampaignBuilderPage'));

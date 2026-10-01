@@ -217,8 +217,10 @@ export default function GrowthJourneyPage() {
       {tab === 'overview' ? (
         <OverviewTab />
       ) : (
-        // Named as unbuilt rather than rendered empty. An empty panel and a
-        // broken one look the same, and seven of these nine tabs are later tasks.
+        // Named as unbuilt rather than rendered empty. An empty panel and a broken
+        // one look the same, and EIGHT of these nine tabs are later tasks - only
+        // Overview renders content today. The first draft said seven here while the
+        // header said eight, so the file contradicted itself.
         <EmptyState
           tone="quiet"
           icon="tools-line"

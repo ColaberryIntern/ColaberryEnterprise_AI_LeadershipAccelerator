@@ -11,24 +11,29 @@ import api from '../utils/api';
  *
  * T613 builds two surfaces: the workspace shell with its Overview tab, and the
  * handoff detail page. So this covers the three status reads those need plus the
- * handoff queue, its detail and its three moves - eight functions. The other
- * eight tabs the shell declares (`classification`, `decisions`, `shadow`,
- * `content`, `experiments`, `performance`, `controls`) are later tasks, and
- * their routes are absent on purpose rather than stubbed: a function that exists
- * but is never called reads as finished work.
+ * handoff detail and its three moves - SIX functions, which is every function this
+ * file has. The other EIGHT tabs the shell declares - `classification`, `decisions`,
+ * `shadow`, `content`, `handoffs`, `experiments`, `performance`, `controls` - are
+ * later tasks, and their routes are absent on purpose rather than stubbed: a
+ * function that exists but is never called reads as finished work.
  *
- * ── THE MASTER FLAG MAKES A ROUTE 404, NOT 403 ──────────────────────────────
+ * Both figures were wrong in the first draft: it said "eight functions" while naming
+ * seven tabs, having dropped `handoffs` from the list.
+ *
+ * ── THE MASTER FLAG MAKES A ROUTE 404, AND NOTHING HERE MEETS IT YET ────────
  *
  * `growthJourneyRoutes` gates the whole prefix on `GROWTH_JOURNEY_ENABLED` and
- * answers a bare `{ error: 'Not found' }` when it is off - the route genuinely
- * does not exist. A screen that reported that as "failed to load" would send
- * someone hunting a bug in a system that is simply switched off, so
- * `isSwitchedOff` recognises that exact shape and the page renders a banner
- * naming the flag instead.
+ * answers a bare `{ error: 'Not found' }` when it is off - the route genuinely does
+ * not exist. But the three `/status` reads are exempt by design (T604) and they are
+ * the only gated-prefix reads these surfaces make, so no screen here can currently
+ * meet that 404: `GrowthJourneyPage` derives the off state from
+ * `registry.flags.master`, which is readable either way.
  *
- * The three `/status` reads are the exception by design (T604): they answer
- * while the flag is off, because a screen that can say nothing about a dark
- * system is the thing that gets someone to turn it on blind.
+ * A switched-off predicate lived here and this paragraph claimed the page used it.
+ * IT HAD NO CALL SITE - which breaks the standard set two paragraphs above, in the
+ * same file. It is deleted rather than left looking wired; the task that builds a tab
+ * reading a gated route is the task that needs it. The handoff QUEUE read went the
+ * same way, because the handoffs tab is not built either.
  *
  * ── EVERY `id` IS AN ID ─────────────────────────────────────────────────────
  *
@@ -37,18 +42,6 @@ import api from '../utils/api';
  * The one field that is NOT guaranteed clean is the handoff `packet`, which is a
  * free-form JSONB column - see `HandoffDetail` below.
  */
-
-// ─── The master-flag 404 ─────────────────────────────────────────────────────
-
-/**
- * True when the request failed because the system is switched off, rather than
- * because something broke. Narrow on purpose: a 404 with any other body is a
- * missing row and must keep reading as one.
- */
-export function isSwitchedOff(err: unknown): boolean {
-  const e = err as { response?: { status?: number; data?: { error?: string } } };
-  return e?.response?.status === 404 && e?.response?.data?.error === 'Not found';
-}
 
 const BASE = '/admin/growth-journey';
 
@@ -229,15 +222,6 @@ export interface HandoffRow {
   talking_points: string[] | null;
 }
 
-export interface HandoffList {
-  rows: HandoffRow[];
-  total: number;
-  limit: number;
-  offset: number;
-  status: string;
-  owner_queue: string | null;
-}
-
 export interface HandoffDetail {
   handoff: HandoffRow;
   /**
@@ -253,9 +237,6 @@ export interface HandoffDetail {
    */
   packet: Record<string, unknown>;
 }
-
-export const listHandoffs = (params: { status?: string; owner_queue?: string; limit?: number } = {}): Promise<HandoffList> =>
-  api.get<HandoffList>(`${BASE}/handoffs`, { params }).then((r) => r.data);
 
 export const getHandoff = (id: string): Promise<HandoffDetail> =>
   api.get<HandoffDetail>(`${BASE}/handoffs/${id}`).then((r) => r.data);

@@ -97,7 +97,7 @@ function ReadinessPanel({ data, nextMove }: { data: Readiness; nextMove: string 
           </table>
         </div>
         {blocked.length === 0 && unknown.length === 0 && (
-          <p className="mt-3 mb-0 text-muted">All seventeen checks are ready.</p>
+          <p className="mt-3 mb-0 text-muted">All {data.items.length} checks are ready.</p>
         )}
       </div>
     </div>

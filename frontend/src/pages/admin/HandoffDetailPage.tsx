@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import PageHeader from '../admin/shell/PageHeader';
-import AsyncPanel from '../explorerGrowth/AsyncPanel';
-import { useGrowthJourneyData } from './useGrowthJourneyData';
+import PageHeader from '../../components/admin/shell/PageHeader';
+import AsyncPanel from '../../components/explorerGrowth/AsyncPanel';
+import { useGrowthJourneyData } from '../../components/growthJourney/useGrowthJourneyData';
 import {
   acceptHandoff,
   dispositionHandoff,
@@ -36,8 +36,18 @@ import {
  * admin payload with consumers.
  *
  * Until that is decided, this page does not render an address it was handed. The
- * redaction is structural - every string value is masked on the way to the DOM,
- * so a new packet key cannot leak by being unanticipated.
+ * redaction is structural: every packet string is masked on the way to the DOM -
+ * KEYS AS WELL AS VALUES.
+ *
+ * The keys were NOT masked in the first version of this file, and the caption under
+ * the packet table claimed they were. T613's verifier moved the address out of a
+ * packet value and into a packet KEY and it rendered verbatim, directly beneath that
+ * caption. The backend shares the blind spot: `services/growthJourney/noAddress.ts`
+ * recurses `Object.entries(...)` VALUES and never inspects a key, so
+ * `assertPacketCarriesNoAddress` would not refuse such a row either. It is not a live
+ * leak today because the writer builds packets from a frozen field list - but
+ * `packet` is free-form JSONB, and "not trusted to be address-free" is this page's
+ * own stated contract.
  */
 
 /** Any `local@domain`-looking run, masked. Deliberately greedy about what counts. */
@@ -188,7 +198,7 @@ export default function HandoffDetailPage() {
                       <tbody>
                         {Object.entries(d.packet).map(([k, v]) => (
                           <tr key={k}>
-                            <th scope="row" className="fw-normal text-muted" style={{ width: '40%' }}><code>{k}</code></th>
+                            <th scope="row" className="fw-normal text-muted" style={{ width: '40%' }}><code>{safeText(k)}</code></th>
                             <td className="text-break">{safeText(v)}</td>
                           </tr>
                         ))}
