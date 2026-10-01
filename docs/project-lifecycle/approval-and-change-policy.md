@@ -11,12 +11,12 @@ This repo already contains **four** approval/acceptance implementations, each of
 |---|---|---|
 | `factoryApproval.ts` | CAS on a client-supplied `expected_version`; fork-on-edit snapshot; a write-time validation gate (`assertApprovable` → `factoryErrors`); a legal-transition table; `ApprovalConflictError`→409 / `ApprovalGateError`→422 | `:45-57`, `:31-41`, `:78-93`, `:147` |
 | `govQualification.ts` | **Separation of duty** (`SelfApprovalError`); re-resolving a server-side source snapshot at approval time; `ChangedSourceError`; evidence-sufficiency gating; a DB unique index backstopping the CAS | `:23`, `:311-315`, `:317-326`, `ensureGovQualificationSchema.ts:65-66` |
-| `deliveryContractService.ts` | **Idempotent approval** — a retried approval returns the original with its original approver and timestamp; refusal to approve a superseded version; **supersede-first ordering** | `:175-179`, `:184-186`, `:188-190` |
+| `deliveryContractService.ts` | **Idempotent approval** — a retried approval returns the original with its original approver and timestamp; refusal to approve a superseded version; **supersede-first ordering** | `:178-182`, `:184-186`, `:188-190` |
 | `clientAcceptanceService.ts` | Approval is **not terminal** — it can be superseded by a later decision; a full acceptance state machine | `:22`, `:31-36` |
 
 Two of these carry their own reasoning worth preserving verbatim:
 
-> *"a retried approval returns the original, with its original approver and timestamp. Re-freezing would quietly change who approved what, and when."* — `deliveryContractService.ts:175-176`
+> *"a retried approval returns the original, with its original approver and timestamp. Re-freezing would quietly change who approved what, and when."* — `deliveryContractService.ts:178-179`
 
 > *"Mark older approved versions superseded first. If this fails, nothing has been approved yet — better to leave the previous contract governing than to end up with two approved versions and no way to tell which one is current."* — `deliveryContractService.ts:188-190`
 

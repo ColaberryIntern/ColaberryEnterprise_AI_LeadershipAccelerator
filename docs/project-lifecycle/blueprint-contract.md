@@ -19,7 +19,7 @@ operating_blueprint_manifests
 
 **Immutable once approved.** An approved revision is never edited. A change forks a new revision — the pattern `factoryApproval.ts` already uses (fork-on-edit at `:147`) and `deliveryContractService.ts` reinforces with supersede-first ordering.
 
-## 2. Required content (request §4.2, all ten bullets)
+## 2. Required content (request §4.2, all nine bullets)
 
 | # | Bullet | How the manifest satisfies it |
 |---|---|---|
@@ -32,11 +32,10 @@ operating_blueprint_manifests
 | 7 | Effort assumptions, allocation measurements, uncertainty | §4 below |
 | 8 | Approval records and dependency fingerprints | Approval binding per `approval-and-change-policy.md`; fingerprints per §5 below |
 | 9 | Downstream plan/release/story references and validation evidence | Pinned plan/release/story IDs plus the evidence that validated them |
-| 10 | — | (bullets 1-9 above; this row intentionally blank) |
 
 ## 3. The six states stay distinct
 
-The request requires `heard`, `proposed`, `confirmed`, `open`, `tested`, `production_verified` to keep distinct meanings. **Three already exist** as `SectionKind = 'heard' | 'proposed' | 'open'` (`services/delivery/buildBlueprint.ts:51`); `confirmed` exists in `services/sbp/intakeReview.ts:50` with `HUMAN_CONFIRMED` provenance mapping at `:112`; `tested` and `demonstrated` exist in the Factory's `EvidenceState`.
+The request requires `heard`, `proposed`, `confirmed`, `open`, `tested`, `production_verified` to keep distinct meanings. **Three already exist** as `SectionKind = 'heard' | 'proposed' | 'open'` (`services/delivery/buildBlueprint.ts:51`); `confirmed` exists in `services/sbp/intakeReview.ts:50` with `HUMAN_CONFIRMED` provenance mapping at `:109`; `tested` and `demonstrated` exist in the Factory's `EvidenceState`.
 
 **Decision: extend the existing vocabulary to all six rather than inventing a parallel set.**
 

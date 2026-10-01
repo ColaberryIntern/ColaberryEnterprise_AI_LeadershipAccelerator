@@ -52,16 +52,47 @@ discovery → requirements_ready → process_ready → allocation_ready → desi
 
 **Transitions are commands, not setters.** Each transition is a server command evaluated against typed prerequisites **and** actor permission. The client never writes a stage. Invalid jumps are refused, not corrected.
 
-**Prerequisite examples (typed, each machine-checkable):**
+### The legal transition table
+
+Enumerated in full, in the `LEGAL: Record<Stage, Stage[]>` shape `factoryApproval.ts:31-41` already uses. Anything absent from this table is refused — the default is deny, not allow.
+
+| From | May advance to | May return to | Rationale for the return edge |
+|---|---|---|---|
+| `discovery` | `requirements_ready` | — | nothing earlier exists |
+| `requirements_ready` | `process_ready` | `discovery` | new evidence reopens discovery |
+| `process_ready` | `allocation_ready` | `requirements_ready` | a process gap usually means a missing requirement |
+| `allocation_ready` | `design_ready` | `process_ready` | an unallocatable task means the process is wrong |
+| `design_ready` | `awaiting_blueprint_approval` | `allocation_ready` | a design that cannot be staffed is not a design |
+| `awaiting_blueprint_approval` | `blueprint_approved` | `requirements_ready`, `process_ready`, `allocation_ready`, `design_ready` | request-changes returns to whichever stage owns the change |
+| `blueprint_approved` | `planning` | `awaiting_blueprint_approval` | a material edit invalidates the approval |
+| `planning` | `plan_ready` | `awaiting_blueprint_approval` | a material edit mid-planning must not publish against a superseded revision |
+| `plan_ready` | `building` | `planning` | plan rejected at review |
+| `building` | `release_review` | `plan_ready` | scope change during build |
+| `release_review` | `launch_ready` | `building` | release rejected |
+| `launch_ready` | `operating` | `release_review` | launch blocked |
+| `operating` | — | `awaiting_blueprint_approval` | change after launch re-enters approval; `operating` is steady state, not terminal |
+
+**Every return edge sets the `needs_reapproval` condition** when it crosses `blueprint_approved`, so the downstream work that depended on the old revision is blocked rather than silently carried forward.
+
+### Typed prerequisites — all thirteen stages
+
+Each predicate returns **structured reasons**, never a bare boolean, so the UI can state what is missing. Each is machine-checkable.
 
 | Target stage | Prerequisites |
 |---|---|
-| `requirements_ready` | ≥1 requirement with provenance; every requirement-kind source block cited |
-| `allocation_ready` | every business task has an execution class **and** a resolvable accountable human role |
-| `design_ready` | every task maps to a workspace/action or an explicit headless operation; selected design variant recorded |
-| `awaiting_blueprint_approval` | manifest content hash computed; no unknown allocation; effort coverage disclosed |
-| `blueprint_approved` | an immutable approval bound to tenant + project + revision + authorized actor, approver ≠ proposer |
-| `planning` | **re-checked** `blueprint_approved` at the moment of authorization, not merely once |
+| `discovery` | project registered against a tenant; entry point recorded |
+| `requirements_ready` | ≥1 requirement carrying provenance; every `requirement`-kind source block cited by ≥1 task (reuses the existing `SOURCE_COVERAGE` rule); no source block left `unresolved` |
+| `process_ready` | every process has ≥1 task; the transition graph has a reachable start and end, no orphan task, no unbounded rework loop (reuses `START`/`END`/`REACHABILITY`/`LOOP`/`BRANCH_KIND`) |
+| `allocation_ready` | every business task has an execution class **and** a resolvable accountable human role; every agent-performed task has a human accountable or approver that is not itself (reuses `PERFORMER`/`OVERSIGHT`) |
+| `design_ready` | every business task maps to a workspace/action **or** an explicitly recorded headless operation; the selected design variant and its visual-contract revision are recorded; every proposed new screen carries a rationale |
+| `awaiting_blueprint_approval` | manifest `content_sha256` computed over its pinned references; **no allocation left unknown**; effort coverage disclosed beside every percentage; `proposed_by` recorded |
+| `blueprint_approved` | an immutable approval bound to tenant + project + revision + hash + authorized actor and role; **approver ≠ proposer**; the revision is not superseded |
+| `planning` | `blueprint_approved` **re-checked at the moment of authorization**, not merely once (see §TOCTOU in `approval-and-change-policy.md`); actor authority re-checked |
+| `plan_ready` | every must-have requirement covered by ≥1 story; every story carries its requirement, business-task, workspace/action and blueprint revision references; no story serves nothing |
+| `building` | plan revision pinned; repo handoff target resolved; approved revision re-checked at handoff |
+| `release_review` | each release demonstrates a business workflow in the approved workspaces, including its human decision |
+| `launch_ready` | release approved by an authorized actor; controls that are not implemented are labelled unavailable rather than claimed |
+| `operating` | runtime business actions re-check the approved revision and current authority at execution time |
 
 **Draft and preview are allowed; authorization is not.** Previews and draft scenarios may exist at any stage. What they can never do is mark themselves authorized for build. No preview branch publishes implementation tasks.
 
@@ -71,7 +102,7 @@ The 14 creation paths converge on **three** chokepoints. Instrumenting these cov
 
 1. **`projectService.createProjectForEnrollment()` / `createNewProjectForEnrollment()`** — highest fan-in (portal, enrollment side effects ×3, internship authoring, backfill script).
 2. **`sbpOrchestrator.startBuild()`** — SBP route, internship build, Flotation intake, delivery intake, repo import (the last four reach it transitively).
-3. **`DeliveryProject.create()`** — lead conversion and seeds. **This is the one place with no service seam today**; an additive `createDeliveryProject()` helper must be introduced and the 5 direct call sites routed through it.
+3. **`DeliveryProject.create()`** — lead conversion and seeds. **This is the one place with no service seam today**; an additive `createDeliveryProject()` helper must be introduced and the 4 direct call sites routed through it.
 
 **Enforcement is a refusal, and the refusal already has a precedent in this repo.** `routes/admin/factoryRoutes.ts` refuses to create an unqualified government project with `409 { qualificationRequired: true }`, enforced server-side and documented as "defense in depth, not just the UI". The lifecycle generalizes that shape; it does not invent one.
 
@@ -103,7 +134,7 @@ Request packet P3-T4 asks for runtime agents to be scoped **before** story gener
 
 ## 6. Naming
 
-`Blueprint` is already taken and consumed: `BuildBlueprint` (`services/delivery/buildBlueprint.ts:117`, consumed by `blueprintProposals.ts` and `projectScopeService.ts`), `GeneratedBlueprint` (`structureGenerationService.ts:108`), and the whole `services/agentBlueprint/` tree.
+`Blueprint` is already taken and consumed: `BuildBlueprint` (`services/delivery/buildBlueprint.ts:117`, consumed by `blueprintProposals.ts`, `projectScopeService.ts`, `designBrief.ts` and `requirementsHandoff.ts`), `GeneratedBlueprint` (`structureGenerationService.ts:108`), and the whole `services/agentBlueprint/` tree.
 
 **Decision:** the new artifact is `OperatingBlueprintManifest`, stored in `operating_blueprint_manifests`. Never `Blueprint` or `BuildBlueprint`. Reusing the bare name would make every future grep ambiguous.
 
@@ -152,7 +183,7 @@ Enforcement ships behind a narrowly scoped flag, default **OFF** until Phase 8 a
 
 **Positive.** One place to stand for governance. Existing engines, tests and vocabularies are preserved. Approval gains tenant binding, separation of duty and idempotency it does not have today. Three of the request's hardest requirements (LC-05/LC-06 human accountability, LC-07 honest unknowns, LC-14 source-injection defense) are extensions of machinery that already exists rather than new inventions.
 
-**Negative / accepted costs.** A new table family and a new module tree to maintain. Two deliberate inconsistencies are preserved on purpose (SBP scopes agents late; the prospect prototype shows one design). An additive seam must be introduced in front of `DeliveryProject.create()`, touching 5 call sites. The coordinator is a new dependency in the boot order.
+**Negative / accepted costs.** A new table family and a new module tree to maintain. Two deliberate inconsistencies are preserved on purpose (SBP scopes agents late; the prospect prototype shows one design). An additive seam must be introduced in front of `DeliveryProject.create()`, touching 4 call sites. The coordinator is a new dependency in the boot order.
 
 **Risks.** Recorded as R1-R12 in the run's plan, with the two highest being the non-transactional CAS in `factoryApproval` (load-bearing for LC-13, which was a real incident) and the allocation gap being schema+prompt+derivation work rather than a prompt edit.
 

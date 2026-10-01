@@ -55,9 +55,9 @@ Instrumenting three functions covers all fourteen paths:
 |---|---|---|
 | `createProjectForEnrollment()` / `createNewProjectForEnrollment()` | `services/projectService.ts:96`, `:121` | rows 2, 3, 4, 7 (×3), 10, 13 |
 | `sbpOrchestrator.startBuild()` | `services/sbp/sbpOrchestrator.ts:192` | rows 1, 5, 6, 8, 9 — the last four transitively, via `internshipProjectGeneration.ts:152` and `buildFromUnderstanding.ts:149` |
-| `DeliveryProject.create()` | 5 direct call sites | rows 11, 14 |
+| `DeliveryProject.create()` | 4 direct call sites | rows 11, 14 |
 
-**The third needs a seam that does not exist yet.** `DeliveryProject.create()` is called directly on the model; there is no service-level helper to wrap. An additive `createDeliveryProject()` must be introduced and the 5 call sites routed through it.
+**The third needs a seam that does not exist yet.** `DeliveryProject.create()` is called directly on the model; there is no service-level helper to wrap. An additive `createDeliveryProject()` must be introduced and the 4 call sites routed through it: `services/delivery/leadConversion.ts:175` plus the three seed scripts. Verified by `grep -arn --include=*.ts "DeliveryProject\.create(" src` returning 4, with no `findOrCreate`/`bulkCreate`/`upsert` on that model anywhere.
 
 ## How LC-01 must be tested
 
