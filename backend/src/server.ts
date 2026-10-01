@@ -134,6 +134,7 @@ import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
+import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2625,6 +2626,7 @@ async function start(): Promise<void> {
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
+  await ensureLandingPageSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).
