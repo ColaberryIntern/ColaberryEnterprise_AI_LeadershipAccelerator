@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { env } from '../../config/env';
 import * as zoomService from '../zoomService';
 import { instantToWallClock } from '../centralDate';
+import { createMeetingIdempotent } from './zoomMeetingIdempotency';
 
 // Meeting provider adapter (spec §11) — a stable interface behind which the
 // actual video provider can be swapped without touching room/booking logic.
@@ -197,7 +198,14 @@ export class ZoomMeetAdapter implements MeetingProvider {
   async createMeeting(input: CreateMeetingInput): Promise<MeetingResult> {
     const durationMinutes = Math.max(1, Math.round((input.endAt.getTime() - input.startAt.getTime()) / 60000));
     const timezone = input.timezone || DEFAULT_TZ;
-    const result = await zoomService.createMeeting({
+    // `requestId` is USED now, not dropped. It was part of this interface from the
+    // start — GoogleMeetAdapter has always passed it as the conference createRequest
+    // id — and this adapter silently ignored it, leaving the only duplicate protection
+    // a non-atomic `if (booking.meeting_link) return` in roomOutboxHandlers. Zoom has
+    // no idempotency key of its own, so createMeetingIdempotent supplies one via a
+    // ledger written before the call. See zoomMeetingIdempotency.ts.
+    const result = await createMeetingIdempotent({
+      requestId: input.requestId,
       topic: input.title,
       agenda: input.description,
       startDateTime: instantToWallClock(input.startAt, timezone),
