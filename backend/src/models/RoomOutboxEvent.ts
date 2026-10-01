@@ -8,7 +8,10 @@ import { sequelize } from '../config/database';
 // a no-op. Named room_outbox_events to avoid colliding with the existing
 // community_events (per-cohort calendar) table.
 export type RoomOutboxStatus = 'pending' | 'processing' | 'processed' | 'failed' | 'dead';
-export type RoomOutboxAggregateType = 'room' | 'booking' | 'attendee' | 'message' | 'resource';
+// 'broadcast' added for Colaberry Live occurrences. Purely a TypeScript widening: the
+// column is `aggregate_type VARCHAR(30) NOT NULL` with no CHECK constraint (server.ts:2346),
+// so no DDL changes and existing rows are unaffected.
+export type RoomOutboxAggregateType = 'room' | 'booking' | 'attendee' | 'message' | 'resource' | 'broadcast';
 
 export interface RoomOutboxEventAttributes {
   id?: string;
