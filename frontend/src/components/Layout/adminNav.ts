@@ -147,6 +147,9 @@ export const NAV_GROUPS: NavGroup[] = [
     // Gov qualification workspace (Phase 2): review an opportunity's source evidence before a bid pursuit is
     // approved. Same 'program' section (backend mgmtSectionGate covers /api/admin/factory/qualification/*).
     { path: '/admin/gov-qualification', label: 'Gov Qualification', icon: 'shield-check-line' },
+    // Our Services: Colaberry's own offering catalog, matched (advisory) against opportunities. Same 'program'
+    // section (backend mgmtSectionGate covers /api/admin/factory/services).
+    { path: '/admin/gov-services', label: 'Our Services', icon: 'service-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

@@ -35,6 +35,21 @@ jest.mock('../../../services/factory/opportunities/govOpportunityDismissals', ()
   restoreOpportunity: (...a: any[]) => restoreOpportunity(...a),
   listActiveDismissedKeys: (...a: any[]) => listActiveDismissedKeys(...a),
 }));
+// Partial mock: override the CRUD fns but KEEP the real error class (instanceof must work in the route).
+const createServiceOffering = jest.fn();
+const updateServiceOffering = jest.fn();
+const retireServiceOffering = jest.fn();
+const listServiceOfferings = jest.fn();
+jest.mock('../../../services/factory/serviceCatalog', () => {
+  const actual = jest.requireActual('../../../services/factory/serviceCatalog');
+  return {
+    ...actual,
+    createServiceOffering: (...a: any[]) => createServiceOffering(...a),
+    updateServiceOffering: (...a: any[]) => updateServiceOffering(...a),
+    retireServiceOffering: (...a: any[]) => retireServiceOffering(...a),
+    listServiceOfferings: (...a: any[]) => listServiceOfferings(...a),
+  };
+});
 const ingestProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalIngest', () => ({ ingestProposal: (...a: any[]) => ingestProposal(...a) }));
 const generateDecomposition = jest.fn();
@@ -57,6 +72,7 @@ import request from 'supertest';
 import factoryRoutes, { toContractRequirement } from '../factoryRoutes';
 import { buildSampleContractProject } from '../../../services/factory/sample/sampleContractProject';
 import { ApprovalConflictError, ApprovalGateError } from '../../../services/factory/factoryApproval';
+import { ServiceOfferingNotFoundError } from '../../../services/factory/serviceCatalog';
 
 const app = express();
 app.use(express.json());
@@ -429,11 +445,79 @@ describe('POST /api/admin/factory/contract/:id/generate — run the generation e
   });
 });
 
+describe('Service catalog routes — /api/admin/factory/services (program-gated, tenant-scoped)', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  const UUIDV4 = '33333333-3333-4333-a333-333333333333';
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('GET lists the tenant\'s services (status passthrough, tenant from the container)', async () => {
+    listServiceOfferings.mockResolvedValue([{ id: 's1', name: 'Data Platform', status: 'active' }]);
+    const res = await request(app).get('/api/admin/factory/services?status=all');
+    expect(res.status).toBe(200);
+    expect(res.body.services).toHaveLength(1);
+    expect(listServiceOfferings.mock.calls[0][0]).toMatchObject({ tenantId: 'ten-1', status: 'all' });
+  });
+
+  it('GET 400s an invalid status filter', async () => {
+    const res = await request(app).get('/api/admin/factory/services?status=bogus');
+    expect(res.status).toBe(400);
+    expect(listServiceOfferings).not.toHaveBeenCalled();
+  });
+
+  it('POST creates a service with tenant/org/createdBy from scope + token, not the body', async () => {
+    createServiceOffering.mockResolvedValue({ id: 's1', name: 'Data Platform', status: 'active' });
+    const res = await request(app).post('/api/admin/factory/services').send({ name: 'Data Platform', category: 'Data', keywords: ['etl', 'dashboards'], tenantId: 'HACK' });
+    expect(res.status).toBe(201);
+    const arg = createServiceOffering.mock.calls[0][0];
+    expect(arg).toMatchObject({ tenantId: 'ten-1', organizationId: 'org-1', createdBy: 'admin@test', name: 'Data Platform', keywords: ['etl', 'dashboards'] });
+    expect(arg.tenantId).not.toBe('HACK'); // body cannot spoof the tenant
+  });
+
+  it('POST 400s a missing name without creating', async () => {
+    const res = await request(app).post('/api/admin/factory/services').send({ category: 'Data' });
+    expect(res.status).toBe(400);
+    expect(createServiceOffering).not.toHaveBeenCalled();
+  });
+
+  it('PATCH updates a service (200) and maps a not-found id to 404', async () => {
+    updateServiceOffering.mockResolvedValueOnce({ id: 's1', name: 'New' });
+    let res = await request(app).patch(`/api/admin/factory/services/${UUIDV4}`).send({ name: 'New' });
+    expect(res.status).toBe(200);
+    expect(updateServiceOffering.mock.calls[0][0]).toMatchObject({ tenantId: 'ten-1', id: UUIDV4 });
+    updateServiceOffering.mockRejectedValueOnce(new ServiceOfferingNotFoundError(UUIDV4));
+    res = await request(app).patch(`/api/admin/factory/services/${UUIDV4}`).send({ name: 'New' });
+    expect(res.status).toBe(404);
+  });
+
+  it('PATCH 400s a non-uuid id', async () => {
+    const res = await request(app).patch('/api/admin/factory/services/not-a-uuid').send({ name: 'x' });
+    expect(res.status).toBe(400);
+    expect(updateServiceOffering).not.toHaveBeenCalled();
+  });
+
+  it('POST retire soft-retires (200) and 404s an unknown id', async () => {
+    retireServiceOffering.mockResolvedValueOnce({ id: 's1', status: 'retired' });
+    let res = await request(app).post(`/api/admin/factory/services/${UUIDV4}/retire`);
+    expect(res.status).toBe(200);
+    expect(res.body.service.status).toBe('retired');
+    retireServiceOffering.mockRejectedValueOnce(new ServiceOfferingNotFoundError(UUIDV4));
+    res = await request(app).post(`/api/admin/factory/services/${UUIDV4}/retire`);
+    expect(res.status).toBe(404);
+  });
+
+  it('FAILS CLOSED (503) when the gov container is unresolvable — never writes', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).post('/api/admin/factory/services').send({ name: 'X' });
+    expect(res.status).toBe(503);
+    expect(createServiceOffering).not.toHaveBeenCalled();
+  });
+});
+
 describe('route-auth — every route is section-gated (required CI lint)', () => {
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(11); // + opportunities/:key/dismiss, opportunities/:key/restore (prev 9: sample, contract, contracts, approve, request-changes, opportunities, start, ingest-proposal, generate)
+    expect(guards.length).toBeGreaterThanOrEqual(15); // + services GET/POST/PATCH/retire (prev 11: 9 base + dismiss + restore)
   });
 });
 
