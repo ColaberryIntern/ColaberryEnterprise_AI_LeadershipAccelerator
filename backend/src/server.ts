@@ -84,6 +84,7 @@ import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema'
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
 import { ensureAiAgentAbacOverrideSchema } from './db/ensureAiAgentAbacOverrideSchema';
+import { ensureAiAgentReportsToAuditSchema } from './db/ensureAiAgentReportsToAuditSchema';
 import { ensureAiAgentConsolidationSchema } from './db/ensureAiAgentConsolidationSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
@@ -2836,6 +2837,10 @@ async function start(): Promise<void> {
   // Real-enforcement scoping, Phase 3 — abac_mode_override ('shadow'|'enforce'|null),
   // the per-agent switch Ali asked for. Additive, idempotent, no flag.
   await ensureAiAgentAbacOverrideSchema();
+  // Reports-to editor (2026-09-30) — reports_to_set_at/reports_to_set_by, the real audit
+  // trail for the new "change who this agent reports to" admin write. Additive, idempotent,
+  // no flag.
+  await ensureAiAgentReportsToAuditSchema();
   // AI Employee Consolidation Program, Phase 4 — record_kind/parent_agent_id/
   // migration_status, the program's legacy-item-to-employee ownership fields.
   // Additive, idempotent, no flag.

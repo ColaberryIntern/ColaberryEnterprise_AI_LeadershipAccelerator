@@ -356,7 +356,7 @@ export default function AgentDetailPage() {
       onReactivate={handleReactivate}
     >
       {activeTab === 'overview' && (
-        <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} onNavigate={setActiveTab} />
+        <AgentOverviewV2 detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} onNavigate={setActiveTab} onReportsToChanged={fetchDetail} />
       )}
       {activeTab === 'work' && (
         <AgentWorkV2 detail={detail} onNavigate={setActiveTab} onDraftTalk={handleDraftTalk} />
