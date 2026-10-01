@@ -1,0 +1,178 @@
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/communications" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div>
+    <h2 class="mb-0">Create Survey</h2>
+    <p class="text-muted mb-0 small">Build a multi-question survey and send it to staff.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <form method="POST" action="/communications/surveys" id="surveyForm">
+
+      <!-- Basic info -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light fw-semibold small py-2">Survey Details</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Title <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="title" required
+              placeholder="e.g. End-of-Year Staff Satisfaction Survey">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description <span class="text-muted">(optional)</span></label>
+            <textarea class="form-control" name="description" rows="2"
+              placeholder="A brief note to recipients about the purpose of this survey."></textarea>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Audience <span class="text-danger">*</span></label>
+              <select class="form-select" id="surveyAudienceType" name="audience_type"
+                onchange="updateSurveyAudience()">
+                <option value="all_staff">All Staff</option>
+                <option value="hall">Specific Hall</option>
+                <option value="individual">Individual</option>
+              </select>
+            </div>
+            <div class="col-md-6" id="surveyAudienceValueWrap" style="display:none">
+              <label class="form-label" id="surveyAudienceLabel">Hall</label>
+              <select id="surveyHallSelect" class="form-select">
+                <option value="">— Select —</option>
+                {{#each halls}}<option value="{{this}}">{{this}}</option>{{/each}}
+              </select>
+              <select id="surveyUserSelect" class="form-select d-none">
+                <option value="">— Select —</option>
+                {{#each allUsers}}<option value="{{id}}">{{name}}</option>{{/each}}
+              </select>
+              <input type="hidden" name="audience_value" id="surveyAudienceValue">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Questions -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light fw-semibold small py-2 d-flex justify-content-between align-items-center">
+          <span>Questions</span>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addQuestion()">
+            <i class="bi bi-plus me-1"></i>Add Question
+          </button>
+        </div>
+        <div class="card-body">
+          <div id="questionList">
+            <!-- starter questions injected by JS below -->
+          </div>
+          <div class="text-muted small mt-2" id="noQuestionsHint" style="display:none">
+            Click "Add Question" to start building your survey.
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <div class="d-flex gap-2">
+        <button type="submit" name="action" value="activate" class="btn btn-success px-4">
+          <i class="bi bi-send me-1"></i>Save &amp; Activate
+        </button>
+        <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+          Save as Draft
+        </button>
+        <a href="/communications" class="btn btn-link text-muted">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold small py-2">
+        <i class="bi bi-info-circle me-2 text-muted"></i>Question Types
+      </div>
+      <div class="card-body small">
+        <p class="mb-2">
+          <span class="badge bg-secondary me-1">Text</span>
+          Free-response text field.
+        </p>
+        <p class="mb-2">
+          <span class="badge bg-warning text-dark me-1">Rating</span>
+          1–5 star scale.
+        </p>
+        <p class="mb-0">
+          <span class="badge bg-info text-dark me-1">Yes / No</span>
+          Binary choice.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var qCount = 0;
+
+function addQuestion(text, type) {
+  var i = qCount++;
+  var wrap = document.getElementById('questionList');
+  var div = document.createElement('div');
+  div.className = 'question-item border rounded p-3 mb-3 position-relative';
+  div.dataset.index = i;
+  div.innerHTML =
+    '<div class="d-flex gap-2 align-items-start">' +
+      '<div class="flex-grow-1">' +
+        '<label class="form-label small fw-semibold">Question ' + (i + 1) + '</label>' +
+        '<input type="text" class="form-control form-control-sm mb-2" ' +
+          'name="question_text[]" required placeholder="Type your question here…" ' +
+          'value="' + (text || '').replace(/"/g, '&quot;') + '">' +
+        '<select class="form-select form-select-sm" name="question_type[]">' +
+          '<option value="text"' + (type === 'text' ? ' selected' : '') + '>Text response</option>' +
+          '<option value="rating"' + (type === 'rating' ? ' selected' : '') + '>Rating (1–5)</option>' +
+          '<option value="yesno"' + (type === 'yesno' ? ' selected' : '') + '>Yes / No</option>' +
+        '</select>' +
+      '</div>' +
+      '<button type="button" class="btn btn-sm btn-outline-danger mt-4" onclick="removeQuestion(this)">' +
+        '<i class="bi bi-trash"></i>' +
+      '</button>' +
+    '</div>';
+  wrap.appendChild(div);
+  document.getElementById('noQuestionsHint').style.display = 'none';
+  renumberQuestions();
+}
+
+function removeQuestion(btn) {
+  btn.closest('.question-item').remove();
+  renumberQuestions();
+  if (document.querySelectorAll('.question-item').length === 0) {
+    document.getElementById('noQuestionsHint').style.display = '';
+  }
+}
+
+function renumberQuestions() {
+  document.querySelectorAll('.question-item').forEach(function(el, idx) {
+    el.querySelector('.fw-semibold').textContent = 'Question ' + (idx + 1);
+  });
+}
+
+function updateSurveyAudience() {
+  var type = document.getElementById('surveyAudienceType').value;
+  var wrap = document.getElementById('surveyAudienceValueWrap');
+  if (type === 'all_staff') {
+    wrap.style.display = 'none';
+  } else {
+    wrap.style.display = '';
+    var isHall = type === 'hall';
+    document.getElementById('surveyHallSelect').classList.toggle('d-none', !isHall);
+    document.getElementById('surveyUserSelect').classList.toggle('d-none', isHall);
+    document.getElementById('surveyAudienceLabel').textContent = isHall ? 'Hall' : 'Staff Member';
+  }
+}
+
+document.getElementById('surveyForm').addEventListener('submit', function() {
+  var type = document.getElementById('surveyAudienceType').value;
+  var av   = document.getElementById('surveyAudienceValue');
+  if (type === 'hall')       av.value = document.getElementById('surveyHallSelect').value;
+  else if (type === 'individual') av.value = document.getElementById('surveyUserSelect').value;
+});
+
+// Seed two starter questions
+addQuestion('', 'text');
+addQuestion('', 'rating');
+</script>

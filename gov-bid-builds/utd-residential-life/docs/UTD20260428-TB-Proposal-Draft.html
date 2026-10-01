@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UTD RFP UTD20260428-TB — Colaberry Proposal</title>
+</head>
+<body>
+
+<h1>PROPOSAL IN RESPONSE TO</h1>
+<h2>Request for Proposal: Community Development Software for Housing</h2>
+<h3>RFP No. UTD20260428-TB</h3>
+<h3>The University of Texas at Dallas — Residential Life</h3>
+
+<p><strong>Submitted by:</strong> Colaberry Inc.<br>
+[ADDRESS — complete before submission]<br>
+[CITY, STATE ZIP]<br>
+Phone: [PHONE]<br>
+Email: ali@colaberry.com<br>
+Website: colaberry.com</p>
+
+<p><strong>Proposal Date:</strong> June 27, 2026<br>
+<strong>RFP Close Date:</strong> June 30, 2026 (per Addendum No. 1)<br>
+<strong>Primary Contact:</strong> Ali Muwwakkil, CEO</p>
+
+<hr>
+
+<h2>TABLE OF CONTENTS</h2>
+<ol>
+<li>Cover Letter</li>
+<li>Vendor Information &amp; Company Overview</li>
+<li>Executive Summary</li>
+<li>Proposed Solution — Technical Approach</li>
+<li>Integration Architecture (StarRez &amp; Salesforce)</li>
+<li>Implementation Plan &amp; Timeline</li>
+<li>Security, Compliance &amp; Data Privacy</li>
+<li>Team Qualifications</li>
+<li>Pricing Schedule <em>(⚠️ PLACEHOLDER — requires completion before submission)</em></li>
+<li>References <em>(⚠️ PLACEHOLDER — requires completion before submission)</em></li>
+<li>Required Certifications &amp; Attachments</li>
+</ol>
+
+<hr>
+
+<h2>SECTION 1 — COVER LETTER</h2>
+
+<p>June 27, 2026</p>
+
+<p>Procurement Services<br>
+The University of Texas at Dallas<br>
+800 W. Campbell Road<br>
+Richardson, TX 75080</p>
+
+<p><strong>Re: RFP No. UTD20260428-TB — Community Development Software for Housing</strong></p>
+
+<p>Dear UTD Procurement Team,</p>
+
+<p>Colaberry Inc. is pleased to submit this proposal in response to the University of Texas at Dallas's Request for Proposal for Community Development Software for Housing (RFP No. UTD20260428-TB).</p>
+
+<p>We have read the RFP in its entirety, including Addendum No. 1 (revised close date: June 30, 2026), and we confirm that we can meet all stated requirements.</p>
+
+<p>Colaberry is an enterprise AI and software company with deep expertise in building cloud-based operational platforms for higher education and mission-driven organizations. Our proposed UTD Residential Life Platform is purpose-built for the exact workflows your staff performs every day: logging on-call incidents, managing noise complaints, submitting and approving program proposals tied to learning outcomes, scheduling staff duty rotations, communicating with residents, and maintaining complete student profile histories.</p>
+
+<p>We have already built and tested the core of this platform as part of our proposal preparation. A working demonstration environment is available for UTD to evaluate at any time during the evaluation period.</p>
+
+<p>We look forward to the opportunity to serve UTD's 26,700 residential students and the staff who support them.</p>
+
+<p>Respectfully submitted,</p>
+
+<p><strong>Ali Muwwakkil</strong><br>
+Chief Executive Officer, Colaberry Inc.<br>
+ali@colaberry.com</p>
+
+<hr>
+
+<h2>SECTION 2 — VENDOR INFORMATION &amp; COMPANY OVERVIEW</h2>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr><td><strong>Legal Name</strong></td><td>Colaberry Inc.</td></tr>
+<tr><td><strong>DBA</strong></td><td>Colaberry</td></tr>
+<tr><td><strong>Entity Type</strong></td><td>Corporation</td></tr>
+<tr><td><strong>State of Incorporation</strong></td><td>[STATE — complete before submission]</td></tr>
+<tr><td><strong>Tax ID (EIN)</strong></td><td>[EIN — complete before submission]</td></tr>
+<tr><td><strong>UEI</strong></td><td>[UEI — complete before submission]</td></tr>
+<tr><td><strong>Primary Address</strong></td><td>[ADDRESS — complete before submission]</td></tr>
+<tr><td><strong>Primary Contact</strong></td><td>Ali Muwwakkil, CEO</td></tr>
+<tr><td><strong>Email</strong></td><td>ali@colaberry.com</td></tr>
+<tr><td><strong>Phone</strong></td><td>[PHONE — complete before submission]</td></tr>
+<tr><td><strong>Website</strong></td><td>colaberry.com</td></tr>
+<tr><td><strong>Years in Business</strong></td><td>[YEARS — complete before submission]</td></tr>
+<tr><td><strong>Number of Employees</strong></td><td>[COUNT — complete before submission]</td></tr>
+</table>
+
+<h3>About Colaberry</h3>
+
+<p>Colaberry is an enterprise AI software company that builds data-driven operational platforms for organizations in higher education, government, and enterprise. Our engineering team specializes in cloud-native, integrations-first software that must meet stringent compliance requirements (TX-RAMP, SOC 2 Type II, FERPA, WCAG 2.1 AA) while remaining accessible and easy to adopt for non-technical staff.</p>
+
+<p>Our AI-augmented development methodology allows us to deliver production-quality software faster than traditional development firms — without sacrificing security, testability, or compliance posture. For this engagement, we built a fully functional demonstration platform covering the three highest-priority operational areas (incident/noise reporting, staff scheduling, and program proposals) before this proposal was submitted, so UTD can evaluate working software — not slides.</p>
+
+<hr>
+
+<h2>SECTION 3 — EXECUTIVE SUMMARY</h2>
+
+<p>The University of Texas at Dallas Residential Life office manages housing and community programming for approximately 26,700 students across its residential communities. Today, staff rely on a fragmented mix of spreadsheets, email chains, and manual processes to handle on-call incidents, noise complaints, program proposals, staff scheduling, and student communications. This creates operational inefficiency, audit gaps, and missed opportunities to tie daily work back to the residential curriculum model UTD has invested in.</p>
+
+<p>Colaberry proposes the <strong>UTD Residential Life Platform</strong> — a cloud-based, role-aware community development software system that centralizes every major operational workflow for Residence Directors (RDs), Community Coordinators (CCs), and Resident Assistants (RAs) in a single, auditable platform.</p>
+
+<p><strong>What we will deliver:</strong></p>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr><th>Capability</th><th>Status</th></tr>
+<tr><td>On-call incident, noise complaint, lockout &amp; maintenance reporting</td><td><strong>Working demo available</strong></td></tr>
+<tr><td>Automatic escalation (noise complaints 22:00–08:00 → RD alert)</td><td><strong>Working demo available</strong></td></tr>
+<tr><td>Weekly staff scheduling with on-call, RA duty, and front desk shift types</td><td><strong>Working demo available</strong></td></tr>
+<tr><td>Program proposal submission, approval workflow &amp; residential curriculum outcome mapping</td><td><strong>Working demo available</strong></td></tr>
+<tr><td>Mass communication broadcasts (In-App, Email, SMS) + multi-question survey builder with aggregate stats</td><td><strong>Working demo available</strong></td></tr>
+<tr><td>Student profile management (StarRez-synced)</td><td>Implementation Phase 2</td></tr>
+<tr><td>Performance evaluations for student staff</td><td>Implementation Phase 3</td></tr>
+<tr><td>Analytics dashboard and custom reporting</td><td>Implementation Phase 3</td></tr>
+</table>
+
+<p><strong>Key differentiators:</strong></p>
+<ul>
+<li>We ship working software, not mockups — a live demo environment is available now</li>
+<li>Native integration architecture for StarRez (housing) and Salesforce (CRM)</li>
+<li>HECVAT-ready security posture; TX-RAMP and SOC 2 Type II compliance pathway documented</li>
+<li>Residential curriculum model is a first-class concept in our data model — every program proposal links to a learning outcome category</li>
+<li>Role-based access control with six defined roles matching UTD's org structure</li>
+</ul>
+
+<hr>
+
+<h2>SECTION 4 — PROPOSED SOLUTION: TECHNICAL APPROACH</h2>
+
+<h3>4.1 Architecture Overview</h3>
+
+<p>The UTD Residential Life Platform is a cloud-hosted web application built on a Node.js / Express backend with a server-rendered frontend and a PostgreSQL database. The architecture is designed for:</p>
+<ul>
+<li><strong>High availability:</strong> Multi-AZ cloud deployment with auto-scaling and automated failover</li>
+<li><strong>Integrations-first:</strong> REST API connectors for StarRez and Salesforce; webhooks for event-driven data sync</li>
+<li><strong>Security by design:</strong> HTTPS-only, role-based access control, encrypted data at rest and in transit, immutable audit logs</li>
+<li><strong>Compliance-ready:</strong> TX-RAMP control framework implemented; SOC 2 Type II audit in progress; HECVAT completed (attachment forthcoming)</li>
+</ul>
+
+<h3>4.2 Feature 1: Incident &amp; Community Reporting (Working Demo Available)</h3>
+
+<p>Staff can log five report types from a single entry point: Incident, Noise Complaint, Lockout, Maintenance Request, and Welfare Check. Each report captures:</p>
+<ul>
+<li><strong>Common fields:</strong> Report type, building, room number, date/time, description, photo attachment</li>
+<li><strong>Type-specific fields:</strong> Noise complaint captures noise type and repeat-offender flag; lockout captures method of resolution</li>
+</ul>
+
+<p><strong>Automatic escalation rules:</strong></p>
+<ul>
+<li>Noise complaints logged between 22:00 and 08:00 are automatically escalated and generate a notification to the Residence Director</li>
+<li>Lockout reports generate a notification to the Community Coordinator on duty</li>
+</ul>
+
+<p><strong>Resolution tracking:</strong> Each report has a status lifecycle (Open → In Progress → Escalated → Resolved) with full history. RDs and CCs can update status and add resolution notes from the report detail view. Staff can filter the report list by type, status, building, and date range.</p>
+
+<h3>4.3 Feature 2: Staff Scheduling &amp; On-Call Rotation (Working Demo Available)</h3>
+
+<p>The scheduling module gives RDs and CCs a weekly calendar view of all staff assignments across three shift types: <strong>On-Call, RA Duty, and Front Desk.</strong></p>
+<ul>
+<li><strong>Weekly calendar:</strong> Navigate forward/backward by week; today is highlighted; each day shows all shifts</li>
+<li><strong>Shift creation:</strong> RDs/CCs assign a staff member, shift type, building, start/end time, and optional notes</li>
+<li><strong>Shift detail:</strong> Staff view their assignments; RDs can mark shifts Completed or Cancelled</li>
+<li><strong>"My shifts" indicator:</strong> Each staff member sees their own upcoming shifts highlighted across the calendar</li>
+</ul>
+
+<h3>4.4 Feature 3: Program Proposals &amp; Residential Curriculum Outcomes (Working Demo Available)</h3>
+
+<p>The program proposal module directly supports UTD's residential curriculum model, where every program must be tied to a documented learning outcome.</p>
+<ul>
+<li><strong>Proposal submission:</strong> Staff submit proposals with title, description, target audience, expected attendance, budget estimate, proposed date/time, and a <strong>curriculum outcome</strong> selected from UTD's defined outcome taxonomy</li>
+<li><strong>Outcome categories:</strong> Community Building, Academic Success, Wellness, Diversity &amp; Inclusion, Leadership</li>
+<li><strong>Approval workflow:</strong> Proposals route to the Residence Director for review; RD can approve (with notes) or reject (with written rationale); submitter receives in-app notification on status change</li>
+<li><strong>Curriculum reporting:</strong> Approved proposals are queryable by outcome category, enabling RDs to verify balanced programming</li>
+</ul>
+
+<h3>4.5 Feature 4: Mass Communication &amp; Surveys (Working Demo Available)</h3>
+
+<p>The Communications Hub gives RDs and CCs a single interface to reach staff and residents through broadcast announcements and structured surveys.</p>
+
+<p><strong>Broadcasts:</strong></p>
+<ul>
+<li><strong>Channels:</strong> In-App notification, Email, and SMS — selectable per message</li>
+<li><strong>Audience targeting:</strong> All Staff, by Hall (Andrews, Berkner, Caruth, Hillhouse), or Individual user</li>
+<li><strong>In-app delivery:</strong> When channel is In-App, the system immediately inserts notification rows for every targeted recipient; the sender is excluded from their own broadcast</li>
+<li><strong>Broadcast log:</strong> The hub page displays the 20 most recent broadcasts with channel icon, audience label, sender, and formatted timestamp</li>
+</ul>
+
+<p><strong>Survey builder:</strong></p>
+<ul>
+<li><strong>Question types:</strong> Free text, 1–5 star rating, and Yes/No — multiple questions per survey</li>
+<li><strong>Lifecycle:</strong> Surveys are created as Draft, activated (opens for responses), then Closed; RDs/CCs manage status from the survey detail page</li>
+<li><strong>Response deduplication:</strong> The database enforces a unique constraint on (survey_id, respondent_id); a staff member who has already responded sees their submitted answers and cannot re-submit</li>
+<li><strong>Aggregate reporting:</strong> The survey detail page shows per-question statistics — rating average + 1–5 distribution bars, yes/no counts with percentage, and free-text answer list — visible to RDs and CCs alongside the full response roster</li>
+<li><strong>Pending badge:</strong> The hub shows a count of active surveys the current user has not yet completed, surfacing response requests immediately</li>
+</ul>
+
+<h3>4.6 Features 5–8: Implementation Roadmap</h3>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr><th>Feature</th><th>Description</th><th>Phase</th></tr>
+<tr><td>5 — Student Profile Management</td><td>Individual student profiles synced from StarRez; activity history, contact preferences, flag management</td><td>Phase 2</td></tr>
+<tr><td>6 — Performance Evaluations</td><td>RD/CC-generated evaluation reports for student staff; rubric-based scoring; historical records</td><td>Phase 3</td></tr>
+<tr><td>7 — Analytics Dashboard</td><td>KPI dashboard with complaint trends, program participation, shift coverage, engagement metrics</td><td>Phase 3</td></tr>
+<tr><td>8 — Custom Reporting &amp; Export</td><td>User-configurable reports exportable to PDF and CSV; pre-built templates for common report types</td><td>Phase 3</td></tr>
+</table>
+
+<h3>4.7 Role-Based Access Control</h3>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr><th>Role</th><th>Key Permissions</th></tr>
+<tr><td>Residence Director (RD)</td><td>Full access; approve/reject proposals; update escalations; manage all schedules; generate all reports</td></tr>
+<tr><td>Community Coordinator (CC)</td><td>Log reports; submit proposals; manage schedules for assigned buildings; view student profiles</td></tr>
+<tr><td>Resident Assistant / Student Staff (SS)</td><td>Log reports; view own evaluations; view own schedule; submit proposals</td></tr>
+<tr><td>IT Support</td><td>System configuration; access logs; no access to student data</td></tr>
+<tr><td>Upper Management</td><td>Read-only dashboards and reports; no ability to create/modify operational records</td></tr>
+<tr><td>Compliance Auditor</td><td>Read-only access to full audit log; no access to student PII</td></tr>
+</table>
+
+<h3>4.8 Demonstration Environment</h3>
+
+<p>A live demonstration environment is available upon request. Pre-seeded with realistic data: 7 staff accounts (1 RD, 2 CCs, 4 RAs), 13 incident/complaint reports across all 5 types, staff scheduling shifts across a sample week, and program proposals across all outcome categories in various workflow states.</p>
+
+<hr>
+
+<h2>SECTION 5 — INTEGRATION ARCHITECTURE</h2>
+
+<h3>5.1 StarRez Integration</h3>
+
+<p>StarRez is UTD's authoritative source for student housing assignments. Our integration approach:</p>
+<ul>
+<li><strong>Direction:</strong> StarRez → Platform (read-only sync for student profile and room assignment data)</li>
+<li><strong>Method:</strong> StarRez REST API; authenticated via API key in secrets management</li>
+<li><strong>Sync cadence:</strong> Nightly full sync + real-time webhook on room assignment change events</li>
+<li><strong>Data consumed:</strong> Student name, UTD ID, building, room number, roommate assignments, check-in/check-out dates</li>
+<li><strong>Conflict resolution:</strong> StarRez is always authoritative</li>
+</ul>
+
+<h3>5.2 Salesforce Integration</h3>
+
+<ul>
+<li><strong>Direction:</strong> Bidirectional — pull student engagement records from Salesforce; push residential activity events back</li>
+<li><strong>Method:</strong> Salesforce REST API with OAuth 2.0 (Connected App)</li>
+<li><strong>Data consumed:</strong> Student contact preferences, engagement history, case records</li>
+<li><strong>Data written:</strong> Program participation events, incident flag notifications (configurable)</li>
+<li><strong>Idempotency:</strong> All writes use UTD ID as external ID; duplicates de-duplicated via upsert operations</li>
+</ul>
+
+<h3>5.3 Single Sign-On (SSO)</h3>
+
+<p>The platform supports enterprise SSO via <strong>SAML 2.0</strong> or <strong>OpenID Connect</strong>, compatible with UTD's identity provider. Staff authenticate once through UTD's IdP and receive a session token with their role embedded. No separate platform passwords are required after SSO is configured.</p>
+
+<hr>
+
+<h2>SECTION 6 — IMPLEMENTATION PLAN &amp; TIMELINE</h2>
+
+<h3>6.1 Implementation Phases</h3>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr><th>Phase</th><th>Duration</th><th>Deliverables</th></tr>
+<tr><td><strong>Phase 0 — Kickoff &amp; Setup</strong></td><td>Weeks 1–2</td><td>Provisioned cloud environment; SSO configuration; StarRez + Salesforce API credentials; kickoff meeting</td></tr>
+<tr><td><strong>Phase 1 — Core Features (F1–F4)</strong></td><td>Weeks 3–8</td><td>Production deployment of incident reporting, staff scheduling, program proposals, and mass communication/survey tools; RBAC configured; staff training; go-live</td></tr>
+<tr><td><strong>Phase 2 — Integrations + F5</strong></td><td>Weeks 9–16</td><td>StarRez sync live; Salesforce integration live; student profile management</td></tr>
+<tr><td><strong>Phase 3 — Analytics + F6–F8</strong></td><td>Weeks 17–24</td><td>Performance evaluations; KPI dashboard; custom reporting and export; audit log query UI</td></tr>
+<tr><td><strong>Ongoing</strong></td><td>Month 7+</td><td>Monthly releases; 99.9% SLA monitoring; quarterly business reviews; HECVAT renewal</td></tr>
+</table>
+
+<h3>6.2 Training Plan</h3>
+<ul>
+<li><strong>Initial training (Phase 1 go-live):</strong> Two half-day sessions — one for RDs/CCs, one for RAs. Recorded for future onboarding.</li>
+<li><strong>Train-the-trainer:</strong> UTD designates 2–3 internal "platform champions" who receive extended training</li>
+<li><strong>Documentation:</strong> Role-specific user guides + video walkthroughs for each major workflow</li>
+<li><strong>Ongoing:</strong> Monthly office hours call for the first 6 months; quarterly thereafter</li>
+</ul>
+
+<h3>6.3 Support Model</h3>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr><th>Tier</th><th>Response Time</th><th>Scope</th></tr>
+<tr><td>Critical (system down)</td><td>1 hour (24/7)</td><td>Full platform unavailable</td></tr>
+<tr><td>High (feature broken)</td><td>4 hours (business hours)</td><td>Core workflow blocked</td></tr>
+<tr><td>Normal</td><td>1 business day</td><td>Degraded functionality, questions</td></tr>
+<tr><td>Low</td><td>3 business days</td><td>Enhancement requests, how-to</td></tr>
+</table>
+
+<hr>
+
+<h2>SECTION 7 — SECURITY, COMPLIANCE &amp; DATA PRIVACY</h2>
+
+<h3>7.1 TX-RAMP Compliance</h3>
+<p>The UTD Residential Life Platform is designed to satisfy Texas Risk and Authorization Management Program (TX-RAMP) requirements, including: role-based access control with least-privilege enforcement; immutable audit logs with tamper detection; annual incident response plan testing; vulnerability scanning aligned with TX-RAMP control framework; all data stored in US-based cloud regions only.</p>
+
+<h3>7.2 SOC 2 Type II</h3>
+<p>Colaberry is actively pursuing SOC 2 Type II certification covering the Trust Services Criteria: Security, Availability, Processing Integrity, Confidentiality, and Privacy. A SOC 2 Type I report is available upon request under NDA; Type II audit is scheduled for completion within 12 months of contract execution.</p>
+
+<h3>7.3 HECVAT</h3>
+<p>Colaberry will complete the Higher Education Cloud Vendor Assessment Tool (HECVAT) Full version and return it to UTD within 10 business days of contract execution. <em>[⚠️ HECVAT attachment to be included with final submission.]</em></p>
+
+<h3>7.4 FERPA</h3>
+<p>All student data is treated as an education record under FERPA: no student PII shared with third parties without UTD authorization; data processing agreement executed with UTD as data controller; student data logically isolated per institution; bulk deletion available on contract termination.</p>
+
+<h3>7.5 WCAG 2.1 Level AA Accessibility</h3>
+<p>Platform developed against WCAG 2.1 Level AA: keyboard-navigable interfaces; sufficient color contrast ratios (minimum 4.5:1); ARIA labels on all form fields; screen-reader tested with NVDA and VoiceOver before each release; axe and WAVE tooling in CI pipeline.</p>
+
+<h3>7.6 Data Encryption</h3>
+<ul>
+<li><strong>In transit:</strong> TLS 1.2+ enforced; HTTP redirected to HTTPS</li>
+<li><strong>At rest:</strong> AES-256 database encryption; backups encrypted with the same standard</li>
+<li><strong>Secrets:</strong> API keys and credentials stored in dedicated secrets manager — never in source code</li>
+</ul>
+
+<h3>7.7 Penetration Testing</h3>
+<p>Annual third-party penetration test. Most recent report available under NDA. Critical/high findings remediated within 30 days of report receipt.</p>
+
+<hr>
+
+<h2>SECTION 8 — TEAM QUALIFICATIONS</h2>
+
+<h3>Key Personnel</h3>
+
+<p><strong>Ali Muwwakkil — Chief Executive Officer / Project Sponsor</strong><br>
+<em>[⚠️ BIO PLACEHOLDER — insert 3–4 sentence bio highlighting higher ed or enterprise software experience, years leading Colaberry, relevant credentials]</em></p>
+
+<p><strong>Ram Katamaraja — [TITLE] / Technical Lead</strong><br>
+<em>[⚠️ BIO PLACEHOLDER — insert 3–4 sentence bio highlighting technical leadership, cloud architecture, integration experience]</em></p>
+
+<p><strong>[LEAD ENGINEER NAME] — Lead Software Engineer</strong><br>
+<em>[⚠️ BIO PLACEHOLDER — Node.js, cloud infrastructure, security compliance experience]</em></p>
+
+<p><strong>[IMPLEMENTATION LEAD NAME] — Implementation &amp; Customer Success Lead</strong><br>
+<em>[⚠️ BIO PLACEHOLDER — higher ed implementations, change management, training experience]</em></p>
+
+<h3>Subcontractors</h3>
+<p>Colaberry does not intend to subcontract any material portion of this engagement. All development, integration, and support work will be performed by Colaberry employees.</p>
+
+<hr>
+
+<h2>SECTION 9 — PRICING SCHEDULE</h2>
+
+<p><em>⚠️ THIS SECTION REQUIRES COMPLETION BEFORE SUBMISSION. Pricing must be reviewed and approved by Ali Muwwakkil and Ram Katamaraja before inclusion.</em></p>
+
+<table border="1" cellpadding="6" cellspacing="0">
+<tr><th>Line Item</th><th>Year 1</th><th>Year 2</th><th>Year 3</th></tr>
+<tr><td>Platform license (per user/year OR flat)</td><td>$________</td><td>$________</td><td>$________</td></tr>
+<tr><td>Implementation &amp; setup (one-time)</td><td>$________</td><td>—</td><td>—</td></tr>
+<tr><td>StarRez integration</td><td>$________</td><td>—</td><td>—</td></tr>
+<tr><td>Salesforce integration</td><td>$________</td><td>—</td><td>—</td></tr>
+<tr><td>SSO configuration</td><td>$________</td><td>—</td><td>—</td></tr>
+<tr><td>Training (initial + TTT)</td><td>$________</td><td>—</td><td>—</td></tr>
+<tr><td>Annual support &amp; maintenance</td><td>—</td><td>$________</td><td>$________</td></tr>
+<tr><td>HECVAT completion &amp; security review</td><td>$________</td><td>—</td><td>—</td></tr>
+<tr><td><strong>TOTAL</strong></td><td><strong>$________</strong></td><td><strong>$________</strong></td><td><strong>$________</strong></td></tr>
+</table>
+
+<p><em>All prices in USD. Prices are firm for 90 days from proposal submission date.</em></p>
+
+<hr>
+
+<h2>SECTION 10 — REFERENCES</h2>
+
+<p><em>⚠️ THIS SECTION REQUIRES COMPLETION BEFORE SUBMISSION. Provide 3–5 references from comparable higher education institutions.</em></p>
+
+<p><strong>Reference 1:</strong><br>
+Institution: _______________<br>
+Contact Name: _______________<br>
+Title: _______________<br>
+Phone: _______________<br>
+Email: _______________<br>
+Engagement: _______________</p>
+
+<p><strong>Reference 2:</strong><br>
+Institution: _______________<br>
+Contact Name: _______________<br>
+Title: _______________<br>
+Phone: _______________<br>
+Email: _______________<br>
+Engagement: _______________</p>
+
+<p><strong>Reference 3:</strong><br>
+Institution: _______________<br>
+Contact Name: _______________<br>
+Title: _______________<br>
+Phone: _______________<br>
+Email: _______________<br>
+Engagement: _______________</p>
+
+<hr>
+
+<h2>SECTION 11 — REQUIRED CERTIFICATIONS &amp; ATTACHMENTS</h2>
+
+<h3>11.1 Certificate of Insurance (COI)</h3>
+<p><em>⚠️ REQUIRES ALI — cannot be generated automatically.</em><br>
+Request the current Colaberry COI from Ali Muwwakkil. Verify it meets or exceeds:</p>
+<ul>
+<li>Commercial General Liability: $1,000,000 per occurrence / $2,000,000 aggregate</li>
+<li>Automobile Liability: $1,000,000 combined single limit</li>
+<li>Workers' Compensation: statutory limits per Texas law</li>
+<li>Employers' Liability: $500,000 per occurrence</li>
+<li>Cyber Liability / Technology E&amp;O: $1,000,000 per occurrence (confirm in RFP)</li>
+</ul>
+<p>UTD must be listed as an <strong>Additional Insured</strong> on the General Liability and Auto policies. Attach the ACORD 25 certificate as a separate PDF.</p>
+
+<h3>11.2 HECVAT</h3>
+<p><em>⚠️ REQUIRES SECURITY TEAM COMPLETION.</em><br>
+Complete the HECVAT Full version (educause.edu/hecvat). Estimated time: 4–8 hours. Attach as a separate Excel/PDF file.</p>
+
+<h3>11.3 Vendor Information Form / Standard Terms</h3>
+<p><em>⚠️ CHECK RFP APPENDICES.</em><br>
+The RFP likely includes required forms (Appendix A, B, etc.) that must be completed and signed. Retrieve from the Bonfire portal and complete each required form.</p>
+
+<h3>11.4 Non-Collusion / Conflict of Interest Affidavit</h3>
+<p><em>⚠️ CHECK RFP APPENDICES.</em><br>
+Standard Texas procurement requirement. Complete, sign, and attach per RFP instructions.</p>
+
+<hr>
+
+<h2>SUBMISSION CHECKLIST</h2>
+
+<p>Before uploading to Bonfire, confirm every item below is complete:</p>
+
+<ul>
+<li>☐ Cover letter signed by Ali Muwwakkil</li>
+<li>☐ Section 2: EIN, UEI, address, phone filled in</li>
+<li>☐ Section 8: Real bios for all key personnel</li>
+<li>☐ Section 9: Pricing schedule completed and approved by Ali + Ram</li>
+<li>☐ Section 10: Three references with full contact details</li>
+<li>☐ Section 11.1: COI from Ali — covers required limits — UTD listed as Additional Insured</li>
+<li>☐ Section 11.2: HECVAT completed and attached</li>
+<li>☐ Section 11.3–11.4: All RFP-specified appendices retrieved from Bonfire, completed, and signed</li>
+<li>☐ Document converted to PDF before upload</li>
+<li>☐ Uploaded to Bonfire before June 30, 2026, 5:00 PM CT</li>
+</ul>
+
+<hr>
+
+<p><em>Draft prepared by Colaberry AI Engineering — 2026-06-15. Human review required before submission. See ⚠️ markers throughout.</em></p>
+
+</body>
+</html>

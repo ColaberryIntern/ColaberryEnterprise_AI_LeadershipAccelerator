@@ -1,0 +1,157 @@
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/schedule" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div class="flex-grow-1">
+    <h2 class="mb-0 d-flex align-items-center gap-2 flex-wrap">
+      <span class="badge bg-{{shift.typeBadge}} fs-6">{{shift.typeLabel}}</span>
+      <span>{{shift.dateLabel}}</span>
+    </h2>
+    <p class="text-muted mb-0 small">{{shift.timeRange}}</p>
+  </div>
+  <span class="badge bg-{{shift.statusBadge}} fs-6">{{shift.statusLabel}}</span>
+</div>
+
+{{#if swapRequested}}
+<div class="alert alert-success d-flex align-items-center gap-2 mb-3">
+  <i class="bi bi-check-circle-fill flex-shrink-0"></i>
+  Swap request submitted. Your supervisor will review and respond — you'll receive a notification.
+</div>
+{{/if}}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2">
+        <i class="bi bi-calendar-event me-2 text-muted"></i>Shift Details
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4 text-muted fw-normal">Assigned To</dt>
+          <dd class="col-sm-8 fw-semibold">{{shift.assigned_user_name}}
+            <span class="text-muted fw-normal">({{roleLabel shift.assigned_user_role}})</span>
+          </dd>
+          <dt class="col-sm-4 text-muted fw-normal">Date</dt>
+          <dd class="col-sm-8">{{shift.dateLabel}}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Time</dt>
+          <dd class="col-sm-8">{{shift.timeRange}}</dd>
+          <dt class="col-sm-4 text-muted fw-normal">Type</dt>
+          <dd class="col-sm-8"><span class="badge bg-{{shift.typeBadge}}">{{shift.typeLabel}}</span></dd>
+          {{#if shift.notes}}
+          <dt class="col-sm-4 text-muted fw-normal">Notes</dt>
+          <dd class="col-sm-8">{{shift.notes}}</dd>
+          {{/if}}
+          {{#if shift.created_by_name}}
+          <dt class="col-sm-4 text-muted fw-normal">Scheduled By</dt>
+          <dd class="col-sm-8 text-muted">{{shift.created_by_name}}</dd>
+          {{/if}}
+        </dl>
+      </div>
+    </div>
+
+    {{#if canManage}}
+    {{#if swaps.length}}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2">
+        <i class="bi bi-arrow-left-right me-2 text-muted"></i>Swap Requests
+        <span class="badge bg-warning text-dark ms-1">{{swaps.length}}</span>
+      </div>
+      <div class="card-body p-0">
+        {{#each swaps}}
+        <div class="p-3 {{#unless @last}}border-bottom{{/unless}}">
+          <div class="d-flex align-items-start justify-content-between gap-2">
+            <div class="small">
+              <span class="fw-semibold">{{requester_name}}</span> requested swap
+              {{#if swap_with_name}}
+                with <strong>{{swap_with_name}}</strong>
+              {{else}}
+                <span class="text-muted">(open — any available staff)</span>
+              {{/if}}
+              {{#if reason}}
+              <p class="text-muted mb-1 mt-1">Reason: {{reason}}</p>
+              {{/if}}
+              {{#if resolved_by_name}}
+              <p class="text-muted mb-0 mt-1">Resolved by {{resolved_by_name}}</p>
+              {{/if}}
+            </div>
+            <span class="badge bg-{{statusBadge}} {{statusText}} flex-shrink-0">{{status}}</span>
+          </div>
+          {{#if (eq status "pending")}}
+          <form method="POST" action="/schedule/swap/{{id}}/respond" class="d-flex gap-2 mt-2">
+            <button name="decision" value="approved" class="btn btn-sm btn-success">
+              <i class="bi bi-check me-1"></i>Approve
+            </button>
+            <button name="decision" value="denied" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-x me-1"></i>Deny
+            </button>
+          </form>
+          {{/if}}
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{/if}}
+    {{/if}}
+
+  </div>
+
+  <div class="col-lg-5">
+
+    {{#if canRequestSwap}}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2">
+        <i class="bi bi-arrow-left-right me-2 text-muted"></i>Request Swap
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Submit a swap request. Your supervisor will approve or deny it.</p>
+        <form method="POST" action="/schedule/{{shift.id}}/swap">
+          <div class="mb-3">
+            <label class="form-label small">Swap With <span class="text-muted">(optional)</span></label>
+            <select class="form-select form-select-sm" name="swap_with_user_id">
+              <option value="">Open — any available staff</option>
+              {{#each otherStaff}}
+              <option value="{{id}}">{{name}}</option>
+              {{/each}}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Reason</label>
+            <textarea class="form-control form-control-sm" name="reason" rows="2"
+              placeholder="Class conflict, exam, appointment…"></textarea>
+          </div>
+          <button type="submit" class="btn btn-warning btn-sm w-100">
+            <i class="bi bi-arrow-left-right me-1"></i>Submit Swap Request
+          </button>
+        </form>
+      </div>
+    </div>
+    {{/if}}
+
+    {{#if hasPending}}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-hourglass-split flex-shrink-0"></i>
+      <span class="small">You have a pending swap request for this shift. Awaiting supervisor approval.</span>
+    </div>
+    {{/if}}
+
+    {{#if canManage}}
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-pencil-square me-2 text-muted"></i>Update Status
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/schedule/{{shift.id}}/status" class="d-flex gap-2">
+          <select class="form-select form-select-sm" name="status">
+            <option value="scheduled"  {{#if (eq shift.status "scheduled")}}selected{{/if}}>Scheduled</option>
+            <option value="completed"  {{#if (eq shift.status "completed")}}selected{{/if}}>Completed</option>
+            <option value="cancelled"  {{#if (eq shift.status "cancelled")}}selected{{/if}}>Cancelled</option>
+          </select>
+          <button type="submit" class="btn btn-outline-secondary btn-sm">Save</button>
+        </form>
+      </div>
+    </div>
+    {{/if}}
+
+  </div>
+</div>
