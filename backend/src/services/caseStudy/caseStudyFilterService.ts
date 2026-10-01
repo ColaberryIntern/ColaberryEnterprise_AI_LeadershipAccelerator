@@ -29,6 +29,8 @@
 import { assertNever } from '../../types/caseStudyGuards';
 import type {
   CaseStudyBuiltByType,
+  CaseStudyDeliveryContext,
+  CaseStudyGovCapability,
   CaseStudyPublicationStatus,
   CaseStudyRepoVisibility,
   CaseStudyRoadmapStatus,
@@ -116,6 +118,10 @@ export interface CaseStudyFilterCandidate {
   readonly builtBy: CaseStudyBuiltByType | null;
   readonly deliverables: readonly string[];
   readonly projectStatus: CaseStudyRoadmapStatus | null;
+  /** Already read through `readGovCapabilities`: known members only. */
+  readonly govCapabilities: readonly CaseStudyGovCapability[];
+  /** Already read through `readDeliveryContext`: a member or null. */
+  readonly deliveryContext: CaseStudyDeliveryContext | null;
   readonly verificationClass: CaseStudyVerificationClass;
   readonly verificationMethod: CaseStudyVerificationMethod;
   /** Visibilities only - never an owner, a name or a URL. */
@@ -245,6 +251,11 @@ export function matchesCaseStudyFilters(
   if (!oneOf(filters.verificationClass, candidate.verificationClass)) return false;
   if (!oneOf(filters.verificationMethod, candidate.verificationMethod)) return false;
   if (!oneOf(filters.projectStatus, candidate.projectStatus)) return false;
+  if (filters.govCapability && filters.govCapability.length > 0) {
+    const held = new Set<string>(candidate.govCapabilities);
+    if (!filters.govCapability.some((g) => held.has(g))) return false;
+  }
+  if (!oneOf(filters.deliveryContext, candidate.deliveryContext)) return false;
   if (filters.repoVisibility && filters.repoVisibility.length > 0) {
     const held = new Set(candidate.repoVisibilities);
     if (!filters.repoVisibility.some((v) => held.has(v))) return false;
@@ -359,6 +370,7 @@ function countKeyed<T extends string>(
 export function buildCaseStudyTaxonomy(
   candidates: readonly CaseStudyFilterCandidate[],
 ): PublicCaseStudyTaxonomyFacets {
+  const chapter = candidates.filter(isGovernmentChapterCandidate);
   return {
     capabilities: countFacets(candidates, (c) => [
       ...c.capabilities, ...(c.primaryCapability ? [c.primaryCapability] : []),
@@ -370,7 +382,32 @@ export function buildCaseStudyTaxonomy(
     verificationClasses: countKeyed<PublicVerificationClass>(candidates, (c) => (
       c.verificationClass === 'pending' ? null : c.verificationClass
     )),
+    govCapabilities: countKeyedList<CaseStudyGovCapability>(chapter, (c) => c.govCapabilities),
+    deliveryContexts: countKeyed<CaseStudyDeliveryContext>(chapter, (c) => c.deliveryContext),
   };
+}
+
+/**
+ * The Government chapter's population: mapped to a procurement category AND
+ * carrying a delivery context. Both are human decisions, so a record is on the
+ * chapter only because someone put it there; a record with one but not the
+ * other is unfinished review, not a partial match.
+ */
+export function isGovernmentChapterCandidate(c: CaseStudyFilterCandidate): boolean {
+  return c.govCapabilities.length > 0 && c.deliveryContext !== null;
+}
+
+function countKeyedList<T extends string>(
+  candidates: readonly CaseStudyFilterCandidate[],
+  pick: (c: CaseStudyFilterCandidate) => readonly T[],
+): { slug: T; count: number }[] {
+  const counts = new Map<T, number>();
+  for (const c of candidates) {
+    for (const key of new Set(pick(c))) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([slug, count]) => ({ slug, count }))
+    .sort((a, b) => b.count - a.count || a.slug.localeCompare(b.slug));
 }
 
 /** Spec §22's dynamic ledger. Counts only, computed - never a hardcoded number. */

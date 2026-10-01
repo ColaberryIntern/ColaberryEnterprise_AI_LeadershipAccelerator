@@ -112,6 +112,25 @@ const AUTHORED: Record<string, Entry> = {
     disposition: 'human_approved', indexHome: 'card eyebrow', detailHome: 'masthead eyebrow',
     emptyBehaviour: 'eyebrow shows industry only',
   }),
+  /* ── Government chapter (both human-set at review; tagging IS the opt-in) ── */
+  'CaseStudyTaxonomy.govCapabilities': D({
+    disposition: 'human_approved',
+    authoring: 'admin override at review, one of seven procurement categories',
+    sourcePriority: 'human override only — no sync or repo source',
+    indexHome: 'Government chapter card chips', detailHome: '—',
+    publicBehaviour: 'projected as a canonical-order list; unknown members dropped',
+    emptyBehaviour: 'absent, never []; record stays off the Government chapter',
+    test: 'caseStudyGovTaxonomy.test.ts',
+  }),
+  'CaseStudyTaxonomy.deliveryContext': D({
+    disposition: 'human_approved',
+    authoring: 'admin override at review: client_delivery | internal_platform | capability_demonstration',
+    sourcePriority: 'human override only — a model may never infer it',
+    indexHome: 'Government chapter card label', detailHome: '—',
+    publicBehaviour: 'projected verbatim; a demonstration is labelled, never cited as past performance',
+    emptyBehaviour: 'null; record stays off the Government chapter (fail closed)',
+    privacy: 'public', test: 'caseStudyGovTaxonomy.test.ts',
+  }),
   'CaseStudyIdentitySection.engagementWindow': D({
     disposition: 'human_approved', detailHome: 'ledger "Elapsed" + badge',
     emptyBehaviour: 'cell reads "not recorded"',

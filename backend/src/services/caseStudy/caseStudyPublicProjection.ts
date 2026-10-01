@@ -42,6 +42,7 @@
  */
 
 import { getCaseStudySurfaceProfile, normalizeFacetList, normalizeFacetSlug } from './caseStudyFilterService';
+import { readDeliveryContext, readGovCapabilities } from './caseStudyGovTaxonomy';
 import { projectBuilder, projectDecisions, resolveSurfaceContent } from './caseStudySurfaceVariant';
 import {
   arr,
@@ -206,6 +207,8 @@ export function projectPublicSummary(input: PublicProjectionInput): PublicCaseSt
     verificationMethod: c.verification.verificationMethod,
     headlineMetric: headline,
     deliverables: normalizeFacetList(content?.taxonomy?.deliverables),
+    govCapabilities: readGovCapabilities(content?.taxonomy?.govCapabilities),
+    deliveryContext: readDeliveryContext(content?.taxonomy?.deliveryContext),
     featured: input.publication.featured === true,
     publishedAt: input.publication.publishedAt,
     updatedAt: input.publication.updatedAt,

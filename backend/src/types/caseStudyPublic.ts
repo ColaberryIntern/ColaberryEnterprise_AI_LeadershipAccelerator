@@ -37,6 +37,8 @@
 import type {
   CaseStudyArtifactType,
   CaseStudyBuiltByType,
+  CaseStudyDeliveryContext,
+  CaseStudyGovCapability,
   CaseStudyMetricPayload,
   CaseStudyMetricPlain,
   CaseStudyMetricShape,
@@ -475,6 +477,10 @@ export interface PublicCaseStudySummary {
   /** Null when nothing is verified — the card shows a proof point, not a number. */
   readonly headlineMetric: PublicCaseStudyMetric | null;
   readonly deliverables: readonly string[];
+  /** Procurement categories, canonical order. `[]` when a human has not mapped the record. */
+  readonly govCapabilities: readonly CaseStudyGovCapability[];
+  /** Past performance vs. demonstration. Null when unset; the Government chapter excludes null. */
+  readonly deliveryContext: CaseStudyDeliveryContext | null;
   readonly featured: boolean;
   readonly publishedAt: IsoDateTime;
   readonly updatedAt: IsoDateTime;
@@ -574,6 +580,8 @@ const PUBLIC_SUMMARY_KEY_MAP: Record<keyof PublicCaseStudySummary, true> = {
   verificationMethod: true,
   headlineMetric: true,
   deliverables: true,
+  govCapabilities: true,
+  deliveryContext: true,
   featured: true,
   publishedAt: true,
   updatedAt: true,
@@ -681,6 +689,9 @@ export interface PublicCaseStudyTaxonomyFacets {
     readonly slug: PublicVerificationClass;
     readonly count: number;
   }[];
+  /** Counted over Government-chapter records only (mapped AND labelled), so the chapter's menu matches its cards. */
+  readonly govCapabilities: readonly { readonly slug: CaseStudyGovCapability; readonly count: number }[];
+  readonly deliveryContexts: readonly { readonly slug: CaseStudyDeliveryContext; readonly count: number }[];
 }
 
 export interface PublicCaseStudyFacet {

@@ -25,6 +25,8 @@ import { CASE_STUDY_SORT_KEYS } from '../types/caseStudyFilters';
 import { PUBLIC_VERIFICATION_CLASSES } from '../types/caseStudyPublic';
 import type {
   CaseStudyBuiltByType,
+  CaseStudyDeliveryContext,
+  CaseStudyGovCapability,
   CaseStudyRepoVisibility,
   CaseStudyRoadmapStatus,
   CaseStudyVerificationMethod,
@@ -52,6 +54,15 @@ const BUILT_BY_MAP: Record<CaseStudyBuiltByType, true> = {
 };
 const PROJECT_STATUS_MAP: Record<CaseStudyRoadmapStatus, true> = {
   shipped: true, in_progress: true, paused: true, not_pursued: true, unknown: true,
+};
+const GOV_CAPABILITY_MAP: Record<CaseStudyGovCapability, true> = {
+  'ai-strategy-readiness': true, 'agentic-multi-agent-ai': true,
+  'rag-document-intelligence': true, 'data-engineering-modernization': true,
+  'decision-intelligence-forecasting': true, 'ai-workforce-enablement': true,
+  'ai-governance-assurance': true,
+};
+const DELIVERY_CONTEXT_MAP: Record<CaseStudyDeliveryContext, true> = {
+  client_delivery: true, internal_platform: true, capability_demonstration: true,
 };
 const REPO_VISIBILITY_MAP: Record<CaseStudyRepoVisibility, true> = {
   public: true, private: true, unknown: true,
@@ -92,6 +103,9 @@ export const PublicCaseStudyListQuery = z.object({
   method: enumList(list(CASE_STUDY_VERIFICATION_METHODS)),
   verification_method: enumList(list(CASE_STUDY_VERIFICATION_METHODS)),
   status: enumList(keys(PROJECT_STATUS_MAP)),
+  /** The Government chapter. `?gov_capability=a,b` ORs within the axis like every other facet. */
+  gov_capability: enumList(keys(GOV_CAPABILITY_MAP)),
+  delivery_context: enumList(keys(DELIVERY_CONTEXT_MAP)),
   // Accepted and validated because spec §19 lists it, then DROPPED for public
   // audiences by `sanitizeFiltersForAudience`. The protection is that a
   // well-formed value cannot PARTITION the results - `private` and `public`
@@ -143,6 +157,8 @@ export function toPublicFilterInput(q: PublicCaseStudyListQueryInput): CaseStudy
     verificationMethod:
       (q.verification_method ?? q.method) as readonly CaseStudyVerificationMethod[] | undefined,
     projectStatus: q.status as readonly CaseStudyRoadmapStatus[] | undefined,
+    govCapability: q.gov_capability as readonly CaseStudyGovCapability[] | undefined,
+    deliveryContext: q.delivery_context as readonly CaseStudyDeliveryContext[] | undefined,
     repoVisibility: q.repo_visibility as readonly CaseStudyRepoVisibility[] | undefined,
     featured: q.featured === undefined ? undefined : q.featured === 'true',
   };

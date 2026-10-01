@@ -50,6 +50,8 @@ export const SUMMARY_FIXTURE: PublicCaseStudySummary = {
   verificationMethod: 'client',
   headlineMetric: HEADLINE_METRIC,
   deliverables: ['architecture', 'evaluation'],
+  govCapabilities: ['decision-intelligence-forecasting'],
+  deliveryContext: 'client_delivery',
   featured: true,
   publishedAt: '2026-08-22T10:00:00.000Z',
   updatedAt: '2026-08-22T10:00:00.000Z',

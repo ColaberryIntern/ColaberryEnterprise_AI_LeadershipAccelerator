@@ -1,0 +1,168 @@
+/* ============================================================== government ===
+   The Government chapter: the records read by procurement category. Sits between
+   the evidence standard and the results, because it is a second vocabulary the
+   cards are about to use (the delivery-context note in the card foot).
+
+   The category tiles reuse the cloud term's grammar - pill, hue, aria-pressed
+   fill - so a reader who has learned one control has learned both. One hue for
+   the whole chapter: the categories are not competing series, they are seven
+   doors into one list.
+   ========================================================================== */
+
+.cbv2-stories__gov-lede { margin: var(--space-3) 0 var(--space-6); }
+
+.cbv2-stories__gov-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Seven is a prime, so no column count divides it evenly. Two from 40rem,
+   three from 64rem: the odd tile sits alone on the last row at both widths,
+   which reads as "one more" rather than as a gap. */
+@media (min-width: 40rem) {
+  .cbv2-stories__gov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 64rem) {
+  .cbv2-stories__gov-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.cbv2-stories__gov-item { min-width: 0; --cloud-hue: var(--brand-primary); }
+
+.cbv2-stories__gov-cat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  line-height: 1.35;
+  text-align: left;
+  color: color-mix(in srgb, var(--cloud-hue) 82%, var(--text-strong));
+  background: color-mix(in srgb, var(--cloud-hue) 9%, var(--surface-card));
+  border: var(--border-1) solid color-mix(in srgb, var(--cloud-hue) 28%, var(--surface-card));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-stories__gov-cat, .cbv2-stories__gov-ctx { transition: none; }
+}
+
+.cbv2-stories__gov-cat:hover {
+  background: color-mix(in srgb, var(--cloud-hue) 18%, var(--surface-card));
+  border-color: color-mix(in srgb, var(--cloud-hue) 45%, var(--surface-card));
+}
+
+.cbv2-stories__gov-cat:focus-visible,
+.cbv2-stories__gov-ctx:focus-visible {
+  outline: var(--border-2) solid var(--text-strong);
+  outline-offset: 2px;
+}
+
+/* Selected: fill, inverse ink, aria-pressed. Never colour alone. */
+.cbv2-stories__gov-cat[data-on='true'] {
+  color: var(--text-on-inverse);
+  background: var(--cloud-hue);
+  border-color: var(--cloud-hue);
+  font-weight: var(--fw-bold);
+}
+.cbv2-stories__gov-cat[data-on='true'] .cbv2-stories__gov-cat-count { color: var(--text-on-inverse); }
+
+/* An empty category is a statement, not a control: the page's own ink, no
+   pointer, no hover. It is still a tile so the seven read as one set. */
+.cbv2-stories__gov-cat--empty {
+  --cloud-hue: var(--text-muted);
+  cursor: default;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  border-color: var(--border-subtle);
+}
+
+.cbv2-stories__gov-cat-label { min-width: 0; }
+
+.cbv2-stories__gov-cat-count {
+  flex: none;
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-regular);
+  color: color-mix(in srgb, var(--cloud-hue) 55%, var(--text-muted));
+  white-space: nowrap;
+}
+
+.cbv2-stories__gov-buys {
+  margin: var(--space-2) 0 0;
+  color: var(--text-body);
+  font-size: var(--fs-body-sm);
+  line-height: 1.6;
+}
+
+/* The codes are set as an overline: reference data, not prose. */
+.cbv2-stories__gov-codes {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cbv2-stories__gov-subtitle {
+  margin: var(--space-8) 0 var(--space-4);
+  font-size: var(--fs-h4);
+  color: var(--text-strong);
+}
+
+.cbv2-stories__gov-contexts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 48rem) {
+  .cbv2-stories__gov-contexts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.cbv2-stories__gov-context { min-width: 0; --cloud-hue: var(--brand-primary); }
+
+.cbv2-stories__gov-ctx {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  font-family: inherit;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--cloud-hue) 82%, var(--text-strong));
+  background: color-mix(in srgb, var(--cloud-hue) 9%, var(--surface-card));
+  border: var(--border-1) solid color-mix(in srgb, var(--cloud-hue) 28%, var(--surface-card));
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.cbv2-stories__gov-ctx:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--cloud-hue) 18%, var(--surface-card));
+}
+.cbv2-stories__gov-ctx[data-on='true'] {
+  color: var(--text-on-inverse);
+  background: var(--cloud-hue);
+  border-color: var(--cloud-hue);
+  font-weight: var(--fw-bold);
+}
+.cbv2-stories__gov-ctx[data-on='true'] .cbv2-stories__gov-cat-count { color: var(--text-on-inverse); }
+.cbv2-stories__gov-ctx:disabled {
+  --cloud-hue: var(--text-muted);
+  cursor: default;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  border-color: var(--border-subtle);
+}

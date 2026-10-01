@@ -36,7 +36,9 @@ export type CaseStudyFilterField =
   | 'builtBy'
   | 'verification'
   | 'verificationMethod'
-  | 'status';
+  | 'status'
+  | 'govCapability'
+  | 'deliveryContext';
 
 export interface CaseStudyFilterOption {
   readonly value: string;

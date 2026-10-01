@@ -130,6 +130,62 @@ export type CaseStudyBuiltByType =
   | 'ai_flotation_team'
   | 'joint_team';
 
+/**
+ * What a government buyer would buy this work AS. The seven categories are the
+ * procurement-shaped taxonomy used in federal responses (each maps to NAICS and
+ * PSC codes in the renderer's catalog), deliberately NOT the free-form
+ * `capabilities` list: a contracting officer searches by what they purchase, and
+ * a record appears on the Government chapter only because a human mapped it to
+ * one of these. Tagging IS the opt-in; there is no inference path.
+ */
+export type CaseStudyGovCapability =
+  | 'ai-strategy-readiness'
+  | 'agentic-multi-agent-ai'
+  | 'rag-document-intelligence'
+  | 'data-engineering-modernization'
+  | 'decision-intelligence-forecasting'
+  | 'ai-workforce-enablement'
+  | 'ai-governance-assurance';
+
+export const CASE_STUDY_GOV_CAPABILITIES = [
+  'ai-strategy-readiness',
+  'agentic-multi-agent-ai',
+  'rag-document-intelligence',
+  'data-engineering-modernization',
+  'decision-intelligence-forecasting',
+  'ai-workforce-enablement',
+  'ai-governance-assurance',
+] as const;
+
+/**
+ * WHETHER THIS WORK WAS DELIVERED TO A CLIENT, which is a different question
+ * from who built it (`CaseStudyBuiltByType`) and from how a fact was verified.
+ *
+ * It exists because federal "past performance" means delivered contracts, and
+ * a proposal that cites a demonstration as past performance is a
+ * misrepresentation, not a style lapse. Ali, 2026-09-17: capability
+ * demonstrations belong on the Government chapter only "clearly labeled, never
+ * cited as past performance".
+ *
+ *   client_delivery          - delivered to a client under an engagement
+ *   internal_platform        - our own system, running in our production
+ *   capability_demonstration - real work built against real requirements, not
+ *                              delivered under contract
+ *
+ * A human sets it at review. A model may never infer it, and absence keeps a
+ * record OFF the Government chapter rather than defaulting to any member.
+ */
+export type CaseStudyDeliveryContext =
+  | 'client_delivery'
+  | 'internal_platform'
+  | 'capability_demonstration';
+
+export const CASE_STUDY_DELIVERY_CONTEXTS = [
+  'client_delivery',
+  'internal_platform',
+  'capability_demonstration',
+] as const;
+
 /** `case_study_snapshots.status`. */
 export type CaseStudySnapshotStatus = 'draft' | 'approved' | 'superseded';
 
@@ -663,6 +719,10 @@ export interface CaseStudyTaxonomy {
   readonly builtByType?: CaseStudyBuiltByType;
   readonly deliverables: readonly string[];
   readonly projectStatus?: CaseStudyRoadmapStatus;
+  /** Human-set at review. Absent, never `[]`, when unmapped, so every existing snapshot keeps its content hash. */
+  readonly govCapabilities?: readonly CaseStudyGovCapability[];
+  /** Human-set at review. Absent means unknown, and unknown keeps the record off the Government chapter. */
+  readonly deliveryContext?: CaseStudyDeliveryContext;
 }
 
 /**
