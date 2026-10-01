@@ -90,7 +90,12 @@ describe('connect', () => {
   });
 
   it('returns a view with lifecycle metadata and no secret anywhere in it', async () => {
-    const view = await connectAccount({ ...CONNECT, tokenExpiresAt: new Date('2026-10-01T00:00:00Z') });
+    // RELATIVE, not a literal date. This read `new Date('2026-10-01T00:00:00Z')` and asserted
+    // `expired: false`, which was true when it was written and became false at midnight UTC on
+    // 2026-10-01 - failing CI on every open PR at once, for a reason that had nothing to do with
+    // any of them. A test that asserts "not expired" has to derive its date from now.
+    const notYetExpired = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const view = await connectAccount({ ...CONNECT, tokenExpiresAt: notYetExpired });
     const asText = JSON.stringify(view);
     expect(asText).not.toContain(TOKEN);
     expect(asText).not.toContain('ciphertext');
