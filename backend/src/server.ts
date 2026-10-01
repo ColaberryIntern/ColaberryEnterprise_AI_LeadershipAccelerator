@@ -69,6 +69,7 @@ import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
+import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -2812,6 +2813,12 @@ async function start(): Promise<void> {
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
   // env.communityRoomsEnabled at the route/worker/linkage layers.
   await ensureCommunityRoomsSchema();
+  // Colaberry Live — canonical broadcast occurrence model (idempotent, additive, new tables only).
+  // Deliberately AFTER ensureCommunityRoomsSchema: broadcast_occurrences.room_id points at a community
+  // room, and although it carries no FK (cross-epic house style), ordering keeps the two readable as a
+  // pair. Created unconditionally like its neighbours; the feature stays dark behind its own settings
+  // flags at the route/player layers, not by withholding the tables.
+  await ensureBroadcastSchema();
   // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
   await ensureFriendshipSchema();
   // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
