@@ -35,6 +35,8 @@ jest.mock('../../../services/factory/opportunities/govOpportunityAlias', () => {
   const actual = jest.requireActual('../../../services/factory/opportunities/govOpportunityAlias');
   return { ...actual, linkGovOpportunity: (...a: any[]) => linkGovOpportunity(...a) };
 });
+const extractProposal = jest.fn();
+jest.mock('../../../services/factory/proposal/proposalExtractor', () => ({ extractProposal: (...a: any[]) => extractProposal(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -59,7 +61,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(8);
+    expect(routeLines.length).toBe(9);
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -277,6 +279,65 @@ describe('POST review-documents (manual Bonfire-ZIP attestation)', () => {
     } finally {
       if (prev === undefined) delete process.env.OPPORTUNITY_PULSE_V2_BASE; else process.env.OPPORTUNITY_PULSE_V2_BASE = prev;
     }
+  });
+});
+
+describe('POST extract-requirements (read-only: extract candidates from the solicitation ZIP)', () => {
+  const url = `/api/admin/factory/qualification/${CLEAN_CANONICAL}/extract-requirements`;
+
+  it('200: runs extractProposal on the uploaded ZIP, returns mapped candidates + fileCount, and persists NOTHING', async () => {
+    extractProposal.mockResolvedValue({
+      blocks: [],
+      fileCount: 3,
+      requirements: [
+        { canonicalReqId: 'RQ1', statement: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' },
+        { canonicalReqId: 'RQ2', statement: 'Submit three past-performance references.', extractedText: '...past performance...', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission', priority: 'should' },
+      ],
+    });
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry')
+      .attach('document', Buffer.from('pretend-zip-bytes'), 'solicitation.zip');
+    expect(res.status).toBe(200);
+    expect(res.body.fileCount).toBe(3);
+    expect(res.body.candidates).toHaveLength(2);
+    expect(res.body.candidates[0]).toEqual({ id: 'RQ1', text: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' });
+    // read-only: the extractor got the uploaded bytes; no qualification record was read or written
+    expect(extractProposal).toHaveBeenCalledTimes(1);
+    expect(Buffer.isBuffer(extractProposal.mock.calls[0][0])).toBe(true);
+    expect(govQualFindOne).not.toHaveBeenCalled();
+    expect(recordDecision).not.toHaveBeenCalled();
+    expect(createQualification).not.toHaveBeenCalled();
+  });
+
+  it('200: an empty extraction returns no candidates (honest empty-state, not an error)', async () => {
+    extractProposal.mockResolvedValue({ blocks: [], fileCount: 1, requirements: [] });
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry')
+      .attach('document', Buffer.from('z'), 'empty.zip');
+    expect(res.status).toBe(200);
+    expect(res.body.candidates).toEqual([]);
+    expect(res.body.fileCount).toBe(1);
+  });
+
+  it('400 when no file is attached (never calls the extractor)', async () => {
+    const res = await request(app).post(url).field('biddingEntity', 'colaberry');
+    expect(res.status).toBe(400);
+    expect(extractProposal).not.toHaveBeenCalled();
+  });
+
+  it('400 on a non-canonical opportunity id (never calls the extractor)', async () => {
+    const res = await request(app).post('/api/admin/factory/qualification/not-a-canonical/extract-requirements')
+      .attach('document', Buffer.from('z'), 'p.zip');
+    expect(res.status).toBe(400);
+    expect(extractProposal).not.toHaveBeenCalled();
+  });
+
+  it('500 when the extractor throws (mapped, never an unhandled crash)', async () => {
+    extractProposal.mockRejectedValue(new Error('boom'));
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry')
+      .attach('document', Buffer.from('z'), 'p.zip');
+    expect(res.status).toBe(500);
   });
 });
 

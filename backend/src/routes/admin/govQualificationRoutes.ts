@@ -375,6 +375,32 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/review-doc
   }
 });
 
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements — READ-ONLY. Run the existing
+ * deterministic, in-memory extractor on the uploaded solicitation ZIP and return CANDIDATE requirements for the
+ * reviewer to confirm in the workspace. It PERSISTS NOTHING: extraction is a convenience, not establishment — an
+ * extracted candidate becomes an established (gate-bearing) requirement only when the reviewer confirms it through
+ * the /decision establish path. Program-gated; multer in-memory ZIP (bytes hashed/parsed in memory, never stored).
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements', requireSection('program'), uploadDocumentZip, async (req: Request, res: Response) => {
+  const p = canonicalParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const file: any = (req as any).file;
+  if (!file || !file.buffer) { res.status(400).json({ error: 'No document file uploaded (field "document").' }); return; }
+  try {
+    const { extractProposal } = await import('../../services/factory/proposal/proposalExtractor');
+    const result = await extractProposal(file.buffer);
+    const candidates = (result.requirements || []).map((r: any) => ({
+      id: r.canonicalReqId, text: r.statement, extractedText: r.extractedText,
+      sourceDocument: r.sourceDocument, section: r.section, kind: r.kind, priority: r.priority,
+    }));
+    res.json({ candidates, fileCount: result.fileCount });
+  } catch (err: any) {
+    logFail('gov_qualification_extract_requirements_failed', err, { canonicalOpportunityId: p.data.canonicalOpportunityId });
+    res.status(500).json({ error: 'Could not extract requirements from the document.' });
+  }
+});
+
 export const QUALIFICATION_DECISION_STATES = QUALIFICATION_DECISIONS;
 export const QUALIFICATION_APPROVAL_STATES = APPROVAL_DECISIONS;
 export default router;

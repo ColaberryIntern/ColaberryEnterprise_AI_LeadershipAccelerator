@@ -199,7 +199,8 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(bonfireWs());
     (factoryApi.reviewGovQualificationDocuments as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
     await renderAt(`?canonical=${CANON}`);
-    const fileInput = container.querySelector('input[type=file]') as HTMLInputElement;
+    // The page now has two file inputs (extract card first, manual-review card last); target the manual-review one.
+    const fileInput = (Array.from(container.querySelectorAll('input[type=file]')) as HTMLInputElement[]).pop() as HTMLInputElement;
     const file = new File(['zip-bytes'], 'pkg.zip', { type: 'application/zip' });
     Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
     await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
@@ -218,5 +219,84 @@ describe('AdminGovQualificationPage — journey', () => {
     await renderAt(`?canonical=${CANON}`);
     expect((container.textContent ?? '')).toContain('manual');
     expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Revoke')).toBe(true);
+  });
+
+  // ── Extract requirements from the solicitation ZIP → confirm → establish ──
+  const uploadExtractZip = async (name = 'solicitation.zip') => {
+    const fileInput = container.querySelector('input[type=file]') as HTMLInputElement; // extract card's input is first
+    const file = new File(['zip'], name, { type: 'application/zip' });
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+    await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Extract requirements');
+    await flush();
+  };
+
+  it('extract: uploading the solicitation ZIP lists requirements as CANDIDATES (suggested — confirm), establishing nothing yet', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 2, candidates: [
+      { id: 'RQ1', text: 'Offeror shall be registered in SAM.', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility' },
+      { id: 'RQ2', text: 'Submit three past-performance references.', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission' },
+    ] });
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    await uploadExtractZip();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Offeror shall be registered in SAM.');
+    expect(text).toContain('Submit three past-performance references.');
+    expect(text).toContain('candidate requirement(s) detected');
+    expect(text).toContain('suggested — confirm');
+    // extraction is read-only: no establish/decision write fired
+    expect(factoryApi.recordGovQualificationDecision).not.toHaveBeenCalled();
+  });
+
+  it('extract → Establish selected: confirms the CHECKED candidates into established requirements, merged with existing; unchecked are skipped', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 4, rationale: null, source_snapshot_version: 3, reviewer_identity_id: 'rev-1', requirements_json: { established: [{ id: 'EXIST', text: 'pre-existing', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
+    }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [
+      { id: 'RQ1', text: 'Offeror shall be registered in SAM.', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility' },
+      { id: 'RQ2', text: 'Submit past performance.', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission' },
+    ] });
+    (factoryApi.recordGovQualificationDecision as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    await uploadExtractZip();
+    // Uncheck RQ2 (pre-click activation flips checkedness before React's onChange reads it).
+    const rq2 = (Array.from(container.querySelectorAll('input[type=checkbox]')) as HTMLInputElement[]).find((c) => c.getAttribute('aria-label') === 'Confirm RQ2') as HTMLInputElement;
+    await act(async () => { rq2.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Establish selected');
+    await flush();
+    expect((factoryApi.recordGovQualificationDecision as jest.Mock).mock.calls.length).toBe(1);
+    const [canonArg, body] = (factoryApi.recordGovQualificationDecision as jest.Mock).mock.calls[0];
+    expect(canonArg).toBe(CANON);
+    expect(body.expectedVersion).toBe(4);
+    const ids = body.establishedRequirements.map((r: any) => r.id);
+    expect(ids).toContain('EXIST'); // merged with the already-established requirement
+    expect(ids).toContain('RQ1');   // the checked candidate
+    expect(ids).not.toContain('RQ2'); // unchecked candidate is not established
+    const rq1 = body.establishedRequirements.find((r: any) => r.id === 'RQ1');
+    expect(rq1.bindingStatus).toBe('binding_solicitation_requirement');
+    expect(rq1.applicability).toBe('always');
+    expect(rq1.dueStage).toBe('submission');
+  });
+
+  it('extract: an empty extraction shows the honest "establish manually" note and establishes nothing', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [] });
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    await uploadExtractZip('empty.zip');
+    expect(container.textContent ?? '').toContain('No requirements detected');
+    expect(factoryApi.recordGovQualificationDecision).not.toHaveBeenCalled();
+  });
+
+  it('extract without an opened qualification prompts to open it first (establishment stays a deliberate write)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({ qualification: null }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    await uploadExtractZip();
+    expect(container.textContent ?? '').toContain('Open the qualification');
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Establish selected'))).toBe(false);
   });
 });
