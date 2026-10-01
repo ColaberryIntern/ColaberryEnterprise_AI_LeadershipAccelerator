@@ -150,16 +150,26 @@ const SCANNED = [
 
 describe('the derivation is real', () => {
   it('enumerates EXACTLY the routes the three routers declare, verbs included', () => {
-    // `toBe`, not `toBeGreaterThanOrEqual`. The loose `>= 33` pin TOLERATED a silent loss
-    // of two routes from this whole matrix. No route ever actually dropped out - the count
-    // was 35 before this fix and 35 after - but the verifier demonstrated the hole with a
-    // synthetic route: one character of comment blinded the stripper below, and a LIVE
-    // route registered inside that swallowed window was driven by no cell here and no cell
-    // in the privacy sweep, with nothing red. An exact pin is what makes that a failure.
+    // `toBe`, not `toBeGreaterThanOrEqual`. The loose `>= 33` pin TOLERATED two routes
+    // vanishing from this matrix without a word. No route ever actually did - the count was
+    // 35 before the fix and 35 after - so this pin is a guard against a future loss, not a
+    // record of a past one.
     //
-    // An earlier version of this comment said two routes dropped out "and they did". They
-    // did not, and overstating it would have been the same defect as a stale count: a
-    // sentence the evidence does not support.
+    // WHICH CELL CATCHES WHAT. These are not interchangeable, and the distinction was
+    // measured rather than reasoned about - build the hazard below, register a live 36th
+    // route inside the window it swallows, and this suite answers
+    // `2 failed, 73 passed, 75 total`:
+    //
+    //   - a route that DISAPPEARS from the derivation       -> this cell
+    //   - a route HIDDEN from the derivation by the stripper -> the two cells below
+    //     (`no scanned file hides code from the stripper`, `every mount this suite
+    //      depends on is visible to the stripper`)
+    //
+    // In that state THIS CELL IS GREEN, and it has to be: a swallowed route never reaches
+    // `DECLARED`, so the count is still 35 and an exact pin is satisfied. Only the stripper
+    // cells fire. Two earlier versions of this comment got that wrong in opposite
+    // directions - one claimed routes "did" drop out, the next credited this pin with
+    // catching the swallowed-route hazard - which is why the claim is now a run.
     expect(DECLARED.length).toBe(35);
     expect(DECLARED.filter((r) => r.verb === 'post').length).toBe(8);
     expect(DECLARED.every((r) => r.pattern.startsWith(J))).toBe(true);
