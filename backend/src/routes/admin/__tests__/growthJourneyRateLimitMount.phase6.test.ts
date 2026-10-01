@@ -150,9 +150,16 @@ const SCANNED = [
 
 describe('the derivation is real', () => {
   it('enumerates EXACTLY the routes the three routers declare, verbs included', () => {
-    // `toBe`, not `toBeGreaterThanOrEqual`. The loose pin let two routes drop out of this
-    // whole matrix without a word - and they did: one character of comment blinded the
-    // stripper below and a LIVE route inside that window was never driven by any cell.
+    // `toBe`, not `toBeGreaterThanOrEqual`. The loose `>= 33` pin TOLERATED a silent loss
+    // of two routes from this whole matrix. No route ever actually dropped out - the count
+    // was 35 before this fix and 35 after - but the verifier demonstrated the hole with a
+    // synthetic route: one character of comment blinded the stripper below, and a LIVE
+    // route registered inside that swallowed window was driven by no cell here and no cell
+    // in the privacy sweep, with nothing red. An exact pin is what makes that a failure.
+    //
+    // An earlier version of this comment said two routes dropped out "and they did". They
+    // did not, and overstating it would have been the same defect as a stale count: a
+    // sentence the evidence does not support.
     expect(DECLARED.length).toBe(35);
     expect(DECLARED.filter((r) => r.verb === 'post').length).toBe(8);
     expect(DECLARED.every((r) => r.pattern.startsWith(J))).toBe(true);
