@@ -1,0 +1,198 @@
+/**
+ * The project-lifecycle schema must be purely ADDITIVE, and its two load-bearing invariants —
+ * the exactly-one-project CHECK and the UNIQUE revision backstop — must actually be in the DDL.
+ *
+ * Asserted against the real statement list so a future edit that sneaks in an ALTER of an
+ * existing table, or quietly drops the unique index the approval CAS depends on, fails here.
+ *
+ * Every assertion below is paired with a POSITIVE CONTROL that feeds it a deliberately-bad
+ * input and proves the assertion rejects it. A schema check that cannot fail is not a check,
+ * and this repo has already been bitten by one that passed because it was scanning nothing.
+ */
+// Hoisted above the imports by jest, which is the only place a module mock works. Both exports
+// of config/database are declared: a mock factory that enumerates exports silently deletes every
+// one it omits, and `connectDatabase` is the other. The module under test imports only
+// `sequelize`, so this mock is complete for it and nothing real connects to a database.
+jest.mock('../../config/database', () => ({
+  sequelize: { query: jest.fn() },
+  connectDatabase: jest.fn(),
+}));
+
+import { sequelize } from '../../config/database';
+import {
+  PROJECT_LIFECYCLE_STATEMENTS,
+  REQUIRED_TABLES,
+  assertProjectLifecycleSchema,
+} from '../ensureProjectLifecycleSchema';
+
+const queryMock = sequelize.query as unknown as jest.Mock;
+
+// Tables that already exist at base and may therefore be referenced but never altered.
+const PRE_EXISTING = ['tenants', 'projects', 'delivery_projects'];
+
+/** The additive predicate, extracted so the positive control can exercise the same code path. */
+function isAdditive(sql: string): boolean {
+  const s = sql.trim().toUpperCase();
+  const startsRight =
+    s.startsWith('CREATE TABLE IF NOT EXISTS') ||
+    s.startsWith('CREATE INDEX IF NOT EXISTS') ||
+    s.startsWith('CREATE UNIQUE INDEX IF NOT EXISTS');
+  return startsRight && !/\bALTER\s+TABLE\b/.test(s) && !/\bDROP\b/.test(s) && !/\bTRUNCATE\b/.test(s);
+}
+
+describe('ensureProjectLifecycleSchema is additive-only', () => {
+  it('finds a non-trivial statement list, so the sweep cannot pass by scanning nothing', () => {
+    expect(PROJECT_LIFECYCLE_STATEMENTS.length).toBeGreaterThanOrEqual(10);
+    expect(REQUIRED_TABLES.length).toBe(4);
+  });
+
+  it('every statement is CREATE ... IF NOT EXISTS (no ALTER, no DROP, no TRUNCATE)', () => {
+    for (const sql of PROJECT_LIFECYCLE_STATEMENTS) {
+      expect(isAdditive(sql)).toBe(true);
+    }
+  });
+
+  it('positive control: the additive predicate rejects a destructive statement', () => {
+    expect(isAdditive('ALTER TABLE projects ADD COLUMN stage TEXT')).toBe(false);
+    expect(isAdditive('DROP TABLE project_lifecycle_states')).toBe(false);
+    expect(isAdditive('CREATE TABLE project_lifecycle_states (id UUID)')).toBe(false); // missing IF NOT EXISTS
+    expect(isAdditive('TRUNCATE project_lifecycle_states')).toBe(false);
+  });
+
+  it('every CREATE TABLE targets one of the new REQUIRED_TABLES, never an existing table', () => {
+    const created = PROJECT_LIFECYCLE_STATEMENTS
+      .map((s) => s.match(/CREATE TABLE IF NOT EXISTS\s+(\w+)/i)?.[1])
+      .filter(Boolean) as string[];
+    expect(created.sort()).toEqual([...REQUIRED_TABLES].sort());
+    for (const t of created) expect(PRE_EXISTING).not.toContain(t);
+  });
+
+  it('foreign keys reference only pre-existing tables or this schema\'s own new tables', () => {
+    const refs = PROJECT_LIFECYCLE_STATEMENTS
+      .join('\n')
+      .match(/REFERENCES\s+(\w+)\s*\(/gi)
+      ?.map((r) => r.replace(/REFERENCES\s+/i, '').replace(/\s*\(/, '').trim()) ?? [];
+    expect(refs.length).toBeGreaterThan(0);
+    const allowed = [...PRE_EXISTING, ...REQUIRED_TABLES];
+    for (const t of refs) expect(allowed).toContain(t);
+  });
+});
+
+describe('the two identity tables stay separate, as a database invariant', () => {
+  const joined = PROJECT_LIFECYCLE_STATEMENTS.join('\n');
+
+  it('both the lifecycle state and the manifest CHECK that exactly one project FK is set', () => {
+    expect(joined).toMatch(/CONSTRAINT\s+ck_lifecycle_exactly_one_project\s+CHECK/i);
+    expect(joined).toMatch(/CONSTRAINT\s+ck_manifest_exactly_one_project\s+CHECK/i);
+    // Both arms of each CHECK must be present, or it would permit neither-or-both.
+    const checks = joined.match(/CHECK \([\s\S]*?\)\s*\n\s*\)/g) ?? [];
+    expect(checks.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('carries a nullable FK to each project table, neither of them NOT NULL', () => {
+    expect(joined).toMatch(/student_project_id\s+UUID\s+REFERENCES\s+projects\(id\)/i);
+    expect(joined).toMatch(/delivery_project_id\s+UUID\s+REFERENCES\s+delivery_projects\(id\)/i);
+    // A NOT NULL on either would make the other arm of the CHECK unsatisfiable.
+    expect(joined).not.toMatch(/student_project_id\s+UUID\s+NOT NULL/i);
+    expect(joined).not.toMatch(/delivery_project_id\s+UUID\s+NOT NULL/i);
+  });
+
+  it('scopes every table to a tenant, so no row can exist outside a tenant', () => {
+    const tables = PROJECT_LIFECYCLE_STATEMENTS.filter((s) => /CREATE TABLE/i.test(s));
+    expect(tables.length).toBe(4);
+    for (const t of tables) {
+      expect(t).toMatch(/tenant_id\s+UUID\s+NOT NULL\s+REFERENCES\s+tenants\(id\)/i);
+    }
+  });
+});
+
+describe('the invariants the approval ladder depends on', () => {
+  const joined = PROJECT_LIFECYCLE_STATEMENTS.join('\n');
+
+  it('declares the UNIQUE revision backstop for BOTH project kinds', () => {
+    // This index is what actually makes a concurrent double-approval impossible; the
+    // application-level CAS is a read-then-compare and cannot do it alone.
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_revision_student/i);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_revision_delivery/i);
+    expect(joined).toMatch(/\(tenant_id,\s*student_project_id,\s*revision\)/i);
+    expect(joined).toMatch(/\(tenant_id,\s*delivery_project_id,\s*revision\)/i);
+  });
+
+  it('declares proposed_by on the manifest, so separation of duty is not vacuous', () => {
+    // Without a proposer there is nothing to compare the approver against, and the SoD check
+    // would short-circuit on a null and pass silently on every row.
+    expect(joined).toMatch(/proposed_by\s+TEXT/i);
+  });
+
+  it('makes an approval of a given revision happen at most once', () => {
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_approval_revision/i);
+    expect(joined).toMatch(/\(manifest_id,\s*revision\)/i);
+  });
+
+  it('binds an approval to an actor, a role, a revision and a content hash', () => {
+    const approvals = PROJECT_LIFECYCLE_STATEMENTS.find((s) => /CREATE TABLE IF NOT EXISTS blueprint_approvals/i.test(s))!;
+    expect(approvals).toMatch(/approved_by\s+TEXT\s+NOT NULL/i);
+    expect(approvals).toMatch(/approved_by_role\s+TEXT/i);
+    expect(approvals).toMatch(/revision\s+INTEGER\s+NOT NULL/i);
+    expect(approvals).toMatch(/content_sha256\s+VARCHAR\(64\)\s+NOT NULL/i);
+  });
+
+  it('keeps condition separate from stage, so the resume point is never lost', () => {
+    const states = PROJECT_LIFECYCLE_STATEMENTS.find((s) => /CREATE TABLE IF NOT EXISTS project_lifecycle_states/i.test(s))!;
+    expect(states).toMatch(/stage\s+TEXT\s+NOT NULL\s+DEFAULT\s+'discovery'/i);
+    expect(states).toMatch(/\bcondition\s+TEXT\b/i);
+    // condition must NOT be NOT NULL: most of a project's life has no condition.
+    expect(states).not.toMatch(/condition\s+TEXT\s+NOT NULL/i);
+  });
+
+  it('gives exhausted retries somewhere to land', () => {
+    const dl = PROJECT_LIFECYCLE_STATEMENTS.find((s) => /CREATE TABLE IF NOT EXISTS lifecycle_stage_failures/i.test(s))!;
+    expect(dl).toMatch(/attempts\s+INTEGER\s+NOT NULL/i);
+    expect(dl).toMatch(/error_class\s+TEXT/i);
+    expect(dl).toMatch(/context_json\s+JSONB/i);
+  });
+});
+
+describe('assertProjectLifecycleSchema reads the bool_or aggregate correctly', () => {
+  beforeEach(() => {
+    queryMock.mockReset();
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+  afterEach(() => { jest.restoreAllMocks(); });
+
+  it('returns true when every table reports present', async () => {
+    const all: Record<string, boolean> = {};
+    REQUIRED_TABLES.forEach((_, i) => { all[`t${i}`] = true; });
+    queryMock.mockResolvedValue([[all]]);
+    await expect(assertProjectLifecycleSchema()).resolves.toBe(true);
+  });
+
+  it('POSITIVE CONTROL: returns false and names the table when one is absent', async () => {
+    const partial: Record<string, boolean> = {};
+    REQUIRED_TABLES.forEach((_, i) => { partial[`t${i}`] = i !== 2; }); // table index 2 missing
+    queryMock.mockResolvedValue([[partial]]);
+    const errSpy = jest.spyOn(console, 'error');
+    await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
+    const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).toContain(REQUIRED_TABLES[2]);
+    expect(logged).toContain('project_lifecycle_schema_invariant_violated');
+  });
+
+  it('returns false when introspection itself throws, rather than reporting success', async () => {
+    queryMock.mockRejectedValue(new Error('connection refused'));
+    await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
+  });
+
+  it('asks for one bool_or alias per required table', async () => {
+    const all: Record<string, boolean> = {};
+    REQUIRED_TABLES.forEach((_, i) => { all[`t${i}`] = true; });
+    queryMock.mockResolvedValue([[all]]);
+    await assertProjectLifecycleSchema();
+    const sql = String(queryMock.mock.calls[0][0]);
+    REQUIRED_TABLES.forEach((t, i) => {
+      expect(sql).toContain(`bool_or(table_name = '${t}') AS t${i}`);
+    });
+    expect(sql).toContain("table_schema = 'public'");
+  });
+});

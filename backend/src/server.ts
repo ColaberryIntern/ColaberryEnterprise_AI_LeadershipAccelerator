@@ -68,6 +68,7 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
+import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
@@ -2721,6 +2722,14 @@ async function start(): Promise<void> {
   // the requirement link tables, and the versioned contract_process_documents). Additive NEW
   // tables that FK to delivery_projects (and projects) — no existing table is altered.
   await ensureContractTrackSchema();
+  // Unified project lifecycle: project_lifecycle_states, operating_blueprint_manifests,
+  // blueprint_approvals, lifecycle_stage_failures. Additive NEW tables only. Placed AFTER the
+  // contract tables because a manifest may FK to delivery_projects, and after the project
+  // approval schema because both describe the owner-side approval surface. NOTE: this DDL
+  // reaches production on the next backend deploy by ANY session, regardless of the
+  // ENABLE_PROJECT_LIFECYCLE flag — the code ships dark, the schema does not. The paired assert
+  // is what makes a failed migration visible, since the statement loop is warn-only.
+  await ensureProjectLifecycleSchema();
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
   // (and the qualification table itself) — no existing table is altered; placed after the contract
