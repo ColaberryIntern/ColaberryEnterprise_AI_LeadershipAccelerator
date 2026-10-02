@@ -163,3 +163,39 @@ describe('explorer/demo mode', () => {
     expect(q('ps-practice-demo')).not.toBeNull();
   });
 });
+
+/**
+ * THE REGRESSION THIS FILE EXISTS TO PREVENT.
+ *
+ * The practice panel is mounted by PresentationStageBody. It was first wired with
+ * the `!onEvidenceStage` guard copied from the placeholder it replaced, which meant
+ * PREP-4 — whose entire ask is "rehearse with one other person", and which hands in
+ * ON the Practice stage — was the single task where room booking was invisible. It
+ * reached production that way and was caught by eye, not by a test.
+ */
+describe('the practice panel is mounted on the Practice stage of every prep task', () => {
+  const SRC_PATH = require('path').join(__dirname, '..', 'presentation', 'PresentationStageBody.tsx');
+  const src: string = require('fs').readFileSync(SRC_PATH, 'utf8');
+
+  it('is reading the real stage body file', () => {
+    // Positive control: a wrong path yields '' and every assertion below would
+    // then pass vacuously.
+    expect(src.length).toBeGreaterThan(500);
+    expect(src).toContain('PracticePanel');
+  });
+
+  it('mounts the panel on the Practice stage unconditionally', () => {
+    expect(src).toContain("{stage === 'practice' && (");
+  });
+
+  it('does NOT gate it on the task handing in somewhere else', () => {
+    // PREP-4 hands in ON 'practice'. This guard hid the booking form from the one
+    // task most about rehearsing.
+    expect(src).not.toContain("stage === 'practice' && !onEvidenceStage");
+  });
+
+  it('still gates the not-shipped placeholders, which SHOULD defer to a hand-in form', () => {
+    // Keeps the fix from being over-applied: the guard is right for a notice.
+    expect(src).toContain("stage === 'reflect' && !onEvidenceStage");
+  });
+});
