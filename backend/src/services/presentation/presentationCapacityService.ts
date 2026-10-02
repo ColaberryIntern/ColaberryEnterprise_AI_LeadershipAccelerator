@@ -33,8 +33,14 @@ export interface SlotRequest {
 }
 
 export type SlotResult =
-  | { ok: true; reservationId: string; startAt: Date; endAt: Date }
+  | { ok: true; reservationId: string; startAt: Date; endAt: Date; hostEmail: string | null }
   | { ok: false; reason: 'taken' | 'class_window' | 'in_the_past'; nextAvailable: Date | null; message: string };
+
+/** Lazy, for the same reason as db() — the registry touches the ORM too. */
+async function allocatableHosts(): Promise<string[]> {
+  const { allocatableHostEmails } = await import('../zoom/zoomHostRegistry');
+  return allocatableHostEmails('practice');
+}
 
 /** Lazy so importing this module never constructs the ORM. */
 async function db() {
@@ -77,6 +83,43 @@ export async function collidingClassWindows(startAt: Date, endAt: Date): Promise
   return hits;
 }
 
+/**
+ * The stretches where EVERY host is busy at once.
+ *
+ * With one host this is just "any held slot", which is what the single-host version
+ * computed. With several, one student's rehearsal no longer blocks the next — only a
+ * moment where all `capacity` hosts overlap does. A sweep line over the interval
+ * endpoints, rather than per-minute sampling, so the answer does not depend on a
+ * granularity nobody chose.
+ */
+export function saturatedIntervals(
+  held: Array<{ start: Date; end: Date }>,
+  capacity: number,
+): Array<{ start: Date; end: Date }> {
+  const events: Array<{ t: number; d: number }> = [];
+  for (const h of held) {
+    events.push({ t: h.start.getTime(), d: 1 });
+    events.push({ t: h.end.getTime(), d: -1 });
+  }
+  // Ends before starts at the same instant: a slot ending at 19:30 does not keep a
+  // host busy for one starting at 19:30. The range is half-open for the same reason.
+  events.sort((a, b) => a.t - b.t || a.d - b.d);
+
+  const out: Array<{ start: Date; end: Date }> = [];
+  let open = 0;
+  let since: number | null = null;
+  for (const e of events) {
+    const before = open;
+    open += e.d;
+    if (before < capacity && open >= capacity) since = e.t;
+    else if (before >= capacity && open < capacity && since !== null) {
+      out.push({ start: new Date(since), end: new Date(e.t) });
+      since = null;
+    }
+  }
+  return out;
+}
+
 /** The earliest free start time at or after `from`, or null if none within the horizon. */
 export async function nextAvailableFrom(from: Date, durationMinutes: number, horizonHours = 48): Promise<Date | null> {
   const sequelize = await db();
@@ -90,9 +133,15 @@ export async function nextAvailableFrom(from: Date, durationMinutes: number, hor
     { replacements: { from, horizon: horizonEnd } },
   ) as [Array<{ s: string; e: string }>, unknown];
 
+  // How many rehearsals can genuinely run at once. No registered hosts means the
+  // configured default and nothing else — capacity one, exactly as before.
+  const hosts = await allocatableHosts();
+  const capacity = Math.max(1, hosts.length);
+
   const classes = await collidingClassWindows(from, horizonEnd);
   const blocks = [
-    ...held.map((h) => ({ start: new Date(h.s), end: new Date(h.e) })),
+    ...saturatedIntervals(held.map((h) => ({ start: new Date(h.s), end: new Date(h.e) })), capacity),
+    // A class takes the whole platform regardless of host count: the cohort is in it.
     ...classes.map((c) => ({ start: c.start, end: c.end })),
   ].sort((a, b) => a.start.getTime() - b.start.getTime());
 
@@ -127,40 +176,62 @@ export async function reserveSlot(req: SlotRequest): Promise<SlotResult> {
   }
 
   const sequelize = await db();
-  try {
-    const [rows] = await sequelize.query(
-      `INSERT INTO presentation_slot_reservations
-         (enrollment_id, attempt_id, assignment_id, slot, mode, state)
-       VALUES (:eid, :aid, :asg, tstzrange(:s, :e, '[)'), :mode, 'held')
-       RETURNING id`,
-      {
-        replacements: {
-          eid: req.enrollmentId,
-          aid: req.attemptId ?? null,
-          asg: req.assignmentId ?? null,
-          s: startAt,
-          e: endAt,
-          mode: req.mode || 'practice_solo',
+
+  // ALLOCATION IS "TRY IT AND LET THE CONSTRAINT ANSWER", not "find a free host
+  // then take it". Querying for a free host and inserting afterwards is a
+  // read-then-write: two students reading the same instant both see the same host
+  // free and both take it. Attempting the insert per host makes Postgres the
+  // arbiter, which is the only participant that can decide atomically.
+  //
+  // An empty registry yields [''] — the single pseudo-host every pre-existing row
+  // uses — so with nothing registered this behaves exactly as it did before.
+  const hosts = await allocatableHosts();
+  const candidates = hosts.length ? hosts : [''];
+
+  let sawConflict = false;
+  for (const host of candidates) {
+    try {
+      const [rows] = await sequelize.query(
+        `INSERT INTO presentation_slot_reservations
+           (enrollment_id, attempt_id, assignment_id, slot, mode, state, host_email)
+         VALUES (:eid, :aid, :asg, tstzrange(:s, :e, '[)'), :mode, 'held', :host)
+         RETURNING id`,
+        {
+          replacements: {
+            eid: req.enrollmentId,
+            aid: req.attemptId ?? null,
+            asg: req.assignmentId ?? null,
+            s: startAt,
+            e: endAt,
+            mode: req.mode || 'practice_solo',
+            host,
+          },
         },
-      },
-    ) as [Array<{ id: string }>, unknown];
-    return { ok: true, reservationId: rows[0].id, startAt, endAt };
-  } catch (err: any) {
-    // 23P01 = exclusion_violation. Someone else holds an overlapping slot. This is the
-    // normal, expected outcome of two students wanting the same time — not an error to
-    // log loudly, and it must produce a usable alternative rather than a dead end.
-    const code = err?.parent?.code || err?.original?.code;
-    if (code === '23P01' || /presentation_slot_no_overlap/.test(String(err?.message))) {
-      const next = await nextAvailableFrom(endAt, durationMinutes);
-      return {
-        ok: false, reason: 'taken', nextAvailable: next,
-        message: next
-          ? 'Someone else just took that slot. The next free time is shown below.'
-          : 'Someone else just took that slot, and nothing is free in the next two days.',
-      };
+      ) as [Array<{ id: string }>, unknown];
+      return { ok: true, reservationId: rows[0].id, startAt, endAt, hostEmail: host || null };
+    } catch (err: any) {
+      // 23P01 = exclusion_violation: this host is busy then. Expected, not an error
+      // — try the next one before concluding anything.
+      const code = err?.parent?.code || err?.original?.code;
+      const isConflict = code === '23P01' || /presentation_slot_no_overlap/.test(String(err?.message));
+      if (!isConflict) throw err;
+      sawConflict = true;
     }
-    throw err;
   }
+
+  // Every host was busy. Only now is the answer "taken", and it still has to offer
+  // a real alternative rather than a dead end.
+  if (sawConflict) {
+    const next = await nextAvailableFrom(endAt, durationMinutes);
+    return {
+      ok: false, reason: 'taken', nextAvailable: next,
+      message: next
+        ? 'Every practice room is busy then. The next free time is shown below.'
+        : 'Every practice room is busy then, and nothing is free in the next two days.',
+    };
+  }
+  // Unreachable: the loop either returns, throws, or records a conflict.
+  throw Object.assign(new Error('slot reservation reached no outcome'), { error_class: 'InvariantViolation' });
 }
 
 /**
