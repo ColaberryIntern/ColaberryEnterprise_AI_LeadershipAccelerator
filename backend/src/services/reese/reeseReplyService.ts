@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
+import ReeseTicketFollowUp from '../../models/ReeseTicketFollowUp';
 import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId, isReeseEnabled } from './reeseIdentitySeed';
 import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
@@ -130,6 +131,24 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       try {
         const ticket = await ensureReeseTicketForRoom(roomId, senderEnrollmentId, triggeringMessage.content);
         ticketId = ticket.id;
+
+        // Reese ticket follow-up (2026-10-02) — the moment the student
+        // replies, any silence streak reeseTicketFollowUpService.ts was
+        // tracking genuinely broke; a later quiet period is a fresh one, not
+        // a continuation toward the same 3-attempt cap. Best-effort, never
+        // blocking the real reply — a reset failure just means the counter
+        // stays stale until the next sweep re-evaluates eligibility fresh.
+        try {
+          await ReeseTicketFollowUp.update(
+            { attempt_count: 0, status: 'active' } as any,
+            { where: { ticket_id: ticketId } },
+          );
+        } catch (e: any) {
+          console.warn(JSON.stringify({
+            level: 'warn', service: 'reese', event: 'ticket_followup_reset_failed',
+            ticket_id: ticketId, error_class: e?.name || 'Error', message: String(e?.message || e),
+          }));
+        }
 
         const studentName = await resolveStudentDisplayName(senderEnrollmentId);
         const workUnit = await createWorkUnit(ticketId, {

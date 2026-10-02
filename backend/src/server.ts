@@ -84,6 +84,7 @@ import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
+import { ensureReeseTicketFollowUpSchema } from './db/ensureReeseTicketFollowUpSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
@@ -2801,6 +2802,9 @@ async function start(): Promise<void> {
   // Reese's first-login welcome ledger — also the "has this student logged in
   // before" marker, since enrollments carry no last_login_at.
   await ensureReeseWelcomeSchema();
+  // Reese's follow-up tracking for quiet student_support tickets (idempotent DDL,
+  // additive only — see reeseTicketFollowUpService.ts).
+  await ensureReeseTicketFollowUpSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
