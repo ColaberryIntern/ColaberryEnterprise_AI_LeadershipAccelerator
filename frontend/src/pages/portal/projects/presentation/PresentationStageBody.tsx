@@ -87,10 +87,14 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
         <PromptPanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
-      {/* Practice is live on every task that is not handing in here. Reserving a
-          room is real work on PREP-4 and equally real for a student on PREP-5 who
-          wants one more run before demo day. */}
-      {stage === 'practice' && !onEvidenceStage && (
+      {/* NO `!onEvidenceStage` GUARD HERE, unlike the placeholders below. That guard
+          exists to stop a "not shipped yet" notice appearing beside a real hand-in
+          form. The practice panel is not a notice — and PREP-4, whose whole ask is
+          "rehearse with one other person", is precisely the task that BOTH hands in
+          on this stage and needs a room. Gating it the placeholder's way hid it on
+          the one task that needed it most. Learn, Prepare and Build are ungated for
+          the same reason. */}
+      {stage === 'practice' && (
         <PracticePanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 

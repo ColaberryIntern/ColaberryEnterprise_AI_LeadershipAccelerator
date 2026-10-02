@@ -72,10 +72,13 @@ export default function PresentationTaskAside(props: PresentationTaskAsideProps)
 
       <div className="ps-card">
         <h3>Session</h3>
-        {/* Deliberately not a button. Nothing can launch a session until the next
-            phase, and a control that does nothing is worse than an honest sentence. */}
-        <p className="ps-note ps-note--soft">
-          No practice room is connected to this task yet.
+        {/* Points at the stage that owns rooms rather than asserting a state this
+            component cannot see. The previous copy said no room was connected, which
+            was true while nothing could launch one and became a flat contradiction of
+            the Practice stage the moment booking shipped. A sidebar should not be a
+            second, staler source of truth about the same fact. */}
+        <p className="ps-note ps-note--soft" data-testid="ps-aside-session">
+          Reserve or join your practice room on the Practice stage.
         </p>
       </div>
     </aside>
