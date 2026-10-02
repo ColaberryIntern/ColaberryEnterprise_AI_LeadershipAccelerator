@@ -19,7 +19,7 @@ function render(content: LandingPageContentShape, over: Partial<Parameters<typeo
     content,
     brand: BRAND,
     siteSlug: 'training',
-    pageUrl: 'https://enterprise.colaberry.ai/p/colaberry-training/six-week-build',
+    pageUrl: 'https://enterprise.colaberry.ai/lp/colaberry-training/six-week-build',
     ...over,
   });
 }
@@ -125,7 +125,7 @@ describe('links', () => {
     // written by a path that bypassed the schema.
     const { html } = renderLandingPage({
       content: { sections: [{ type: 'cta', headline: 'Go', cta: { label: 'Apply', href: '//evil.example.com' } }] } as LandingPageContentShape,
-      brand: BRAND, siteSlug: 'training', pageUrl: 'https://enterprise.colaberry.ai/p/b/s',
+      brand: BRAND, siteSlug: 'training', pageUrl: 'https://enterprise.colaberry.ai/lp/b/s',
     });
     expect(html).not.toContain('evil.example.com');
   });
@@ -133,7 +133,7 @@ describe('links', () => {
   it('drops a javascript: href', () => {
     const { html } = renderLandingPage({
       content: { sections: [{ type: 'cta', headline: 'Go', cta: { label: 'Apply', href: 'javascript:alert(1)' } }] } as LandingPageContentShape,
-      brand: BRAND, siteSlug: 'training', pageUrl: 'https://enterprise.colaberry.ai/p/b/s',
+      brand: BRAND, siteSlug: 'training', pageUrl: 'https://enterprise.colaberry.ai/lp/b/s',
     });
     expect(html).not.toContain('javascript:');
   });
@@ -170,7 +170,7 @@ describe('the social card, which is the reason this is server-rendered', () => {
   });
 
   it('sets a canonical url', () => {
-    expect(render(MINIMAL).html).toContain('<link rel="canonical" href="https://enterprise.colaberry.ai/p/colaberry-training/six-week-build">');
+    expect(render(MINIMAL).html).toContain('<link rel="canonical" href="https://enterprise.colaberry.ai/lp/colaberry-training/six-week-build">');
   });
 });
 
