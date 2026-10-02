@@ -7,8 +7,10 @@ import SystemStateNotices from '../../components/growthJourney/SystemStateNotice
 import type { TrustSignal } from '../../components/admin/shell/trust';
 import AsyncPanel from '../../components/explorerGrowth/AsyncPanel';
 import { useGrowthJourneyData } from '../../components/growthJourney/useGrowthJourneyData';
-import OverviewTab from '../../components/growthJourney/OverviewTab';
-import { getStatusRegistry, type StatusRegistry } from '../../services/growthJourneyApi';
+import { wordsOf, brandNameOf } from '../../components/growthJourney/journeyWords';
+import { TAB_VIEWS } from '../../components/growthJourney/tabViews';
+import type { TabKey } from '../../components/growthJourney/tabKeys';
+import { getStatusRegistry } from '../../services/growthJourneyApi';
 
 /**
  * Growth Journey OS — the workspace (Phase 6, T613).
@@ -46,9 +48,6 @@ import { getStatusRegistry, type StatusRegistry } from '../../services/growthJou
  * programme's words. Hardcoding "lead" here would quietly rebrand four brands.
  */
 
-type TabKey =
-  | 'overview' | 'classification' | 'decisions' | 'shadow'
-  | 'content' | 'handoffs' | 'experiments' | 'performance' | 'controls';
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: 'Overview', icon: 'dashboard-line' },
@@ -64,11 +63,7 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
 
 const isTabKey = (v: string | null): v is TabKey => TABS.some((t) => t.key === v);
 
-/** The programme's own words, with a neutral fallback that names nothing brand-specific. */
-const wordsOf = (reg: StatusRegistry | null, programId: string) =>
-  reg?.programs.find((p) => p.id === programId)?.terminology
-  ?? { subject: 'subject', relationship: 'relationship', pipeline: 'pipeline' };
-
+/** What a tab view needs from the page, so the lookup below can be one list. */
 export default function GrowthJourneyPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const raw = searchParams.get('tab');
@@ -92,6 +87,11 @@ export default function GrowthJourneyPage() {
   const off = reg !== null && reg.flags.master === false;
   const unseeded = reg !== null && reg.memberships_populated === false;
   const words = wordsOf(reg, programId);
+  // The nine inspect reads return `brand_id` as a bare UUID, so an empty state that
+  // wants to name the brand it was empty FOR has to resolve it through the registry.
+  // Null rather than the UUID: a raw id in a sentence meant for an operator is worse
+  // than saying "every brand in your scope".
+  const brandName_ = brandNameOf(reg, brandId);
 
   /**
    * The trust signal, derived from what the API returned.
@@ -214,20 +214,38 @@ export default function GrowthJourneyPage() {
         ))}
       </ul>
 
-      {tab === 'overview' ? (
-        <OverviewTab />
-      ) : (
-        // Named as unbuilt rather than rendered empty. An empty panel and a broken
-        // one look the same, and EIGHT of these nine tabs are later tasks - only
-        // Overview renders content today. The first draft said seven here while the
-        // header said eight, so the file contradicted itself.
+      {/*
+        * ONE list, and this time it really is one.
+        *
+        * The first draft of this block had `BUILT` as an array AND five separate
+        * `tab === '…' &&` branches - two parallel lists that could disagree, and
+        * T614's verifier proved they could: dropping 'content' from `BUILT` rendered
+        * ContentTab AND the "not built yet" panel at the same time, with all 194
+        * cells green. The same draft also claimed in a comment that
+        * `adminNavGrowthJourney` asserted the list against `TABS`. IT DID NOT - that
+        * suite never imports this file, and I had invented a named guarantee.
+        *
+        * So the lookup below IS the list: a tab is built if and only if it has an
+        * entry, there is nothing to keep in step, and removing one makes the page
+        * fall through to the unbuilt panel - which the page suite now catches by
+        * mounting every built tab and asserting its heading renders.
+        *
+        * `words` and `brandName_` come down as props because the registry that
+        * carries them is read ONCE here; four children re-reading it would be four
+        * requests against a 120/min budget for an answer that cannot differ.
+        * ShadowTab takes neither: its read is not brand-scoped and accepts no brand
+        * filter, so handing it a brand would imply a scope it does not apply.
+        */}
+      {(TAB_VIEWS[tab] ?? ((): React.ReactNode => (
+        // Named as unbuilt rather than rendered empty: an empty panel and a broken
+        // one look the same.
         <EmptyState
           tone="quiet"
           icon="tools-line"
           title={`${TABS.find((t) => t.key === tab)?.label} is not built yet`}
           description="The backend reads for this tab exist; the panel is a later task in this phase."
         />
-      )}
+      )))({ words, brandName: brandName_, unseeded, programId })}
     </div>
   );
 }

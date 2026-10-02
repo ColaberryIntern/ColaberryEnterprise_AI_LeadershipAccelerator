@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import PageHeader from '../../components/admin/shell/PageHeader';
 import AsyncPanel from '../../components/explorerGrowth/AsyncPanel';
 import { useGrowthJourneyData } from '../../components/growthJourney/useGrowthJourneyData';
+import { safeText } from '../../components/growthJourney/journeyText';
 import {
   acceptHandoff,
   dispositionHandoff,
@@ -50,25 +51,15 @@ import {
  * own stated contract.
  */
 
-/**
- * Any `local@domain`-looking run, masked. Deliberately greedy about what counts.
- *
- * WHAT IT DOES NOT CATCH, stated because the captions below used to claim more than
- * this delivers. `\S+@\S+` needs non-space on both sides of an ASCII `@`, so it
- * misses `@handle` (no local part), `lead @example.com` (a space inside), `lead@`
- * (no domain) and `lead＠example.com` (U+FF20, a full-width at-sign). The backend's
- * writer guard refuses any packet VALUE containing `@`, so these shapes need a legacy
- * or non-journey writer to appear at all - but "no address is rendered" was broader
- * than the regex, and a caption that over-claims is how the key leak went unnoticed.
+/*
+ * `safeText` and its `ADDRESS` regex moved to `components/growthJourney/journeyText.ts`
+ * in T614, unchanged, because the classification, decisions and content tabs are the
+ * third through fifth call sites. What the mask does NOT catch - `@handle`,
+ * `lead @example.com`, `lead@`, full-width `＠` - is documented there and pinned by
+ * `journeyText.test.ts`, which asserts those shapes still pass through so that
+ * widening the pattern has to break a named test. The captions below are written
+ * against that limit and must not be loosened without it.
  */
-const ADDRESS = /\S+@\S+/g;
-
-/** A packet value as text, with addresses masked whatever shape they arrive in. */
-function safeText(value: unknown): string {
-  if (value === null || value === undefined) return '—';
-  const raw = typeof value === 'string' ? value : JSON.stringify(value);
-  return raw.replace(ADDRESS, '[redacted]');
-}
 
 const FIELDS: { key: keyof HandoffRow; label: string }[] = [
   { key: 'subject_ref', label: 'Subject' },

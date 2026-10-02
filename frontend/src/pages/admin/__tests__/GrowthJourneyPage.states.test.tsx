@@ -40,12 +40,32 @@ jest.mock('../../../services/growthJourneyApi', () => ({
   getHealth: jest.fn(),
 }));
 
+/*
+ * The inspect reads are mocked too, because this suite now MOUNTS the real tabs
+ * from the page. Their own suites cover what each tab renders; these cells only
+ * ask whether the page reaches them at all, so every read here resolves to an
+ * empty page - the cheapest payload that still lets a tab render its heading.
+ */
+jest.mock('../../../services/growthJourneyInspectApi', () => ({
+  listClassifications: jest.fn(),
+  listDecisions: jest.fn(),
+  listTransitions: jest.fn(),
+  listShadowRuns: jest.fn(),
+  listOfferPolicies: jest.fn(),
+  listContentRules: jest.fn(),
+  getClassificationWhy: jest.fn(),
+  getDecisionWhy: jest.fn(),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const api = require('../../../services/growthJourneyApi') as {
   getStatusRegistry: jest.Mock;
   getReadiness: jest.Mock;
   getHealth: jest.Mock;
 };
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const inspect = require('../../../services/growthJourneyInspectApi') as Record<string, jest.Mock>;
 
 /**
  * EVERY IMPLEMENTATION IS SET PER TEST, NEVER IN THE FACTORY.
@@ -95,6 +115,22 @@ beforeEach(() => {
   // nothing to what these cells assert.
   api.getReadiness.mockImplementation(() => new Promise(() => {}));
   api.getHealth.mockImplementation(() => new Promise(() => {}));
+
+  // Empty pages, shaped per endpoint family: the inspect reads echo a `scope`,
+  // `/classifications` echoes `status`, `/decisions` echoes `mode`, and
+  // `/shadow/runs` echoes a window plus its agent list. Implementations HERE and
+  // never in the factory - react-scripts sets resetMocks: true, and the symptom of
+  // forgetting is exactly the `undefined.then` these four cells first hit.
+  const scope = { tenant_id: 't-1', brand_id: null, program_id: null };
+  const emptyPage = { rows: [], total: 0, limit: 25, offset: 0 };
+  inspect.listClassifications.mockResolvedValue({ ...emptyPage, status: 'needs_review' });
+  inspect.listDecisions.mockResolvedValue({ ...emptyPage, mode: 'shadow' });
+  inspect.listTransitions.mockResolvedValue({ ...emptyPage, scope });
+  inspect.listShadowRuns.mockResolvedValue({
+    ...emptyPage, window_days: 7, agents: [], counts_available: false, scope,
+  });
+  inspect.listOfferPolicies.mockResolvedValue({ ...emptyPage, scope });
+  inspect.listContentRules.mockResolvedValue({ ...emptyPage, scope });
 });
 
 afterEach(() => {
@@ -191,6 +227,37 @@ describe('loaded', () => {
       );
     });
     expect(text()).toContain('not built yet');
+  });
+
+  /*
+   * EVERY BUILT TAB IS MOUNTED FROM THE PAGE HERE, and the reason is this phase's
+   * central lesson. T613's `/api` defect survived four attempts and a PASS because
+   * every suite mocked the API module and nothing exercised the real wiring. T614's
+   * five tabs then shipped with suites that mounted each component DIRECTLY and
+   * nothing that mounted the page at `?tab=…` - so the verifier could drop
+   * 'content' from the page's built list and keep all 194 cells green while the
+   * page rendered the tab AND "not built yet" at the same time.
+   *
+   * A component that works in isolation and is unreachable from its page is not
+   * shipped. These cells are the only thing standing between that and a repeat.
+   */
+  it.each([
+    ['classification', 'was classified'],
+    ['decisions', 'What was decided'],
+    ['shadow', 'Did the shadow runs happen?'],
+    ['content', 'What may be said'],
+  ])('mounts the %s tab from the page itself', async (tabKey, heading) => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={[`/admin/growth-journey?tab=${tabKey}`]}>
+          <GrowthJourneyPage />
+        </MemoryRouter>,
+      );
+    });
+    expect(text()).toContain(heading);
+    // And the unbuilt panel must NOT also be on screen: the page's first lookup was
+    // two parallel lists and could render both together.
+    expect(text()).not.toContain('not built yet');
   });
 });
 
