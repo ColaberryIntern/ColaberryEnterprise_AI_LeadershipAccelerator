@@ -5,7 +5,7 @@ import { renderLandingPage } from '../services/marketing/landingPageRenderer';
 import { parseLandingPageContent } from '../schemas/landingPageContentSchema';
 
 /**
- * GET /p/:brand/:slug — a hosted landing page, served to strangers.
+ * GET /lp/:brand/:slug — a hosted landing page, served to strangers.
  *
  * ── MOUNT POSITION IS CORRECTNESS, NOT STYLE ──
  * This MUST be mounted above `adminRoutes`. `adminRoutes` is mounted with no path prefix and
@@ -77,7 +77,7 @@ function absoluteUrl(req: Request): string {
 
 const router = Router();
 
-router.get('/p/:brand/:slug', landingPageRateLimiter, async (req: Request, res: Response) => {
+router.get('/lp/:brand/:slug', landingPageRateLimiter, async (req: Request, res: Response) => {
   const parsedParams = paramsSchema.safeParse(req.params);
   if (!parsedParams.success) {
     res.status(404).type('html').send('<!doctype html><title>Not found</title><p>Not found.');

@@ -93,7 +93,7 @@ beforeEach(() => {
   brandsById[BRAND] = { id: BRAND, slug: 'colaberry-training', name: 'Colaberry Training', tenant_id: 't-1', default_theme_key: 'training' };
   rows.push(makeRow({
     id: PAGE, tenant_id: 't-1', brand_id: BRAND, kind: 'hosted', status: 'draft',
-    name: 'Six-week build', slug: 'six-week-build', path: '/p/colaberry-training/six-week-build',
+    name: 'Six-week build', slug: 'six-week-build', path: '/lp/colaberry-training/six-week-build',
     site_slug: 'training', content: GOOD_CONTENT, published_at: null, repo_path: null,
     repo_commit: null, updated_at: new Date(),
   }));
@@ -234,7 +234,7 @@ describe('publishing', () => {
     const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
 
     expect(res.status).toBe(200);
-    expect(res.body.url).toBe('/p/colaberry-training/six-week-build');
+    expect(res.body.url).toBe('/lp/colaberry-training/six-week-build');
     expect(rows[0].status).toBe('published');
     expect(rows[0].published_at).toBeInstanceOf(Date);
   });
@@ -259,7 +259,7 @@ describe('publishing', () => {
     rows[0].slug = null;
     const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({ slug: 'november-cohort' });
     expect(res.status).toBe(200);
-    expect(res.body.url).toBe('/p/colaberry-training/november-cohort');
+    expect(res.body.url).toBe('/lp/colaberry-training/november-cohort');
   });
 
   it('explains a slug clash instead of letting the unique index 500', async () => {
@@ -267,7 +267,7 @@ describe('publishing', () => {
     const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
     expect(res.status).toBe(409);
     expect(res.body.error_class).toBe('SlugTaken');
-    expect(res.body.error).toContain('/p/colaberry-training/six-week-build');
+    expect(res.body.error).toContain('/lp/colaberry-training/six-week-build');
   });
 
   it('409s an external_path row', async () => {
@@ -300,7 +300,7 @@ describe('hand-editing', () => {
 
   it('keeps the legacy path column in step with a new slug', async () => {
     await request(app).patch(`/api/admin/landing-pages/${PAGE}`).send({ slug: 'new-slug' });
-    expect(rows[0].path).toBe('/p/colaberry-training/new-slug');
+    expect(rows[0].path).toBe('/lp/colaberry-training/new-slug');
   });
 });
 

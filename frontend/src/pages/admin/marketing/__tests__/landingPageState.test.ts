@@ -12,7 +12,7 @@ import type { LandingPage } from '../../../../services/landingPageApi';
 function page(over: Partial<LandingPage> = {}): LandingPage {
   return {
     id: 'lp-1', name: 'Six-week build', kind: 'hosted', status: 'draft',
-    slug: 'six-week-build', path: '/p/colaberry-training/six-week-build',
+    slug: 'six-week-build', path: '/lp/colaberry-training/six-week-build',
     brand_id: 'b-1', site_slug: 'training', published_at: null,
     repo_path: null, repo_commit: null, updated_at: '2026-10-02T12:00:00.000Z',
     ...over,
@@ -122,7 +122,7 @@ describe('the row badge', () => {
 
 describe('the public URL', () => {
   it('is shown only for a page that is actually live', () => {
-    expect(publicUrl(page({ status: 'published' }))).toBe('/p/colaberry-training/six-week-build');
+    expect(publicUrl(page({ status: 'published' }))).toBe('/lp/colaberry-training/six-week-build');
   });
 
   it('is withheld for a draft, which has no working URL', () => {

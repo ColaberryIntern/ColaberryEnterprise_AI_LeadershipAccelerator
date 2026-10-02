@@ -221,7 +221,7 @@ export default function ComposerSetup({
           >
             <option value="">No landing page</option>
             {selectablePages(landingPages, values.brand_id).map((p) => (
-              <option key={p.id} value={p.id}>{p.name} ({p.path ?? `/p/.../${p.slug}`})</option>
+              <option key={p.id} value={p.id}>{p.name} ({p.path ?? `/lp/.../${p.slug}`})</option>
             ))}
             <option value="__url__">A URL we did not build...</option>
           </select>

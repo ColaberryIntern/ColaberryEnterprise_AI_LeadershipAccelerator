@@ -30,14 +30,14 @@ function page(over: Partial<Parameters<typeof assertSelectable>[0]> = {}) {
 
 describe('the URL is derived, not stored', () => {
   it('builds the public path from the brand and page slugs', () => {
-    expect(landingPagePath('colaberry-training', 'six-week-build')).toBe('/p/colaberry-training/six-week-build');
+    expect(landingPagePath('colaberry-training', 'six-week-build')).toBe('/lp/colaberry-training/six-week-build');
   });
 
   it('builds an absolute URL on the same origin the short link is minted on', () => {
     // A tracked link re-validates its destination against the brand-domain allowlist, which only
     // works on an absolute URL.
     expect(absoluteLandingPageUrl('colaberry-training', 'six-week-build'))
-      .toBe('https://www.refactored.ai/p/colaberry-training/six-week-build');
+      .toBe('https://www.refactored.ai/lp/colaberry-training/six-week-build');
   });
 
   it('does not double the slash when the configured origin has a trailing one', () => {
@@ -46,7 +46,7 @@ describe('the URL is derived, not stored', () => {
       env: { ...jest.requireActual('../../../config/env').env, publicAppUrl: 'https://www.refactored.ai/' },
     }));
     const { absoluteLandingPageUrl: fn } = require('../landingPageSelection');
-    expect(fn('b', 's')).toBe('https://www.refactored.ai/p/b/s');
+    expect(fn('b', 's')).toBe('https://www.refactored.ai/lp/b/s');
   });
 });
 
@@ -99,7 +99,7 @@ describe('where a post actually sends people', () => {
       BRAND,
     );
     expect(d).toEqual({
-      url: 'https://www.refactored.ai/p/colaberry-training/six-week-build',
+      url: 'https://www.refactored.ai/lp/colaberry-training/six-week-build',
       source: 'landing_page',
       landingPageId: 'lp-1',
     });
