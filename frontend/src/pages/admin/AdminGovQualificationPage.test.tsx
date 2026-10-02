@@ -56,7 +56,11 @@ const clickButton = async (label: string) => {
 };
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 // The workspace renders the advisory "what we offer" panel, which calls the matcher; default it to empty.
-beforeEach(() => { (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 0 }); });
+beforeEach(() => {
+  (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 0 });
+  // The decoupled workspace fetches the discovery detail by uuid; default to "not in the feed" so unrelated tests don't throw.
+  (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: null, source: 'snapshot', snapshotDate: null });
+});
 const flush = async () => { await act(async () => { await Promise.resolve(); }); await act(async () => { await Promise.resolve(); }); };
 
 describe('AdminGovQualificationPage — journey', () => {
@@ -369,5 +373,58 @@ describe('AdminGovQualificationPage — journey', () => {
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     expect(text).toContain('Pursuit approval and evidence attestation come in a later step'); // honest deferred note, not an OP-source block
+  });
+
+  // ── Discovery details card + Source link + Gaps panel (decoupled only) ──
+  it('decoupled workspace shows the Discovery details card (why-surfaced + overview + Source link)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: { uuid: '11111111-1111-4111-a111-111111111111', title: 'IVR', agency: 'Fort Worth', closeDate: '2026-10-22', fitScore: 75, priorityScore: 81, estimatedValue: 500000, valueBasis: null, sourceUrl: 'https://bonfire.example/op', preliminarySummary: 'AI IVR solution for Fort Worth.' }, source: 'live', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Discovery details');
+    expect(text).toContain('$500K');                                // est value (fmtValue)
+    expect(text).toContain('AI IVR solution for Fort Worth.');      // project overview
+    const srcLink = Array.from(container.querySelectorAll('a')).find((a) => a.getAttribute('href') === 'https://bonfire.example/op');
+    expect(srcLink).toBeTruthy();                                   // the Source link to Bonfire
+  });
+
+  it('decoupled workspace: a not-found detail shows the honest "no longer in the live discovery feed" note', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: null, source: 'snapshot', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('no longer in the live discovery feed');
+  });
+
+  it('Gaps panel: advisory banner + a flagged eligibility gap (SAM registration, no evidence, no matching capability)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'E1', text: 'Offeror must be registered in SAM.gov.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
+      evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Gaps / potential disqualifiers');
+    expect(text).toContain('Advisory only');                       // the unmissable advisory banner
+    expect(text).toContain('registered in SAM.gov');               // the flagged eligibility requirement
+    expect(text).toContain('no evidence attached');                // the honest basis
+  });
+
+  it('Gaps panel: honest no_requirements empty state when nothing is established', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs()); // qualification null -> established []
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No requirements established yet — establish the cited requirements above to surface potential disqualifiers');
+  });
+
+  it('canonical workspace renders NEITHER new card (Discovery details / Gaps panel are decoupled-only)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('Discovery details');
+    expect(text).not.toContain('Gaps / potential disqualifiers');
+    expect(factoryApi.getGovOpportunityDetail).not.toHaveBeenCalled(); // canonical path never fetches the discovery detail
   });
 });

@@ -190,6 +190,19 @@ export async function listGovOpportunities(): Promise<GovOpportunityFeed> {
   return data;
 }
 
+/** One discovery opportunity's display details (the Details-popup data) for the decoupled Qualify workspace, so it
+ *  can show why-it-surfaced + the project overview + the Source link without going back. 404 (aged out of the feed,
+ *  or feed degraded dark) → { opportunity: null } so the caller renders an honest empty state instead of throwing. */
+export async function getGovOpportunityDetail(uuid: string): Promise<{ opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null; snapshotReason?: SnapshotReason | null }> {
+  try {
+    const { data } = await api.get(`/api/admin/factory/opportunities/${encodeURIComponent(uuid)}`);
+    return data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { opportunity: null, source: 'snapshot', snapshotDate: null };
+    throw err;
+  }
+}
+
 /** A persisted team dismissal row (one per tenant+opportunity). restoredAt null => active (hidden). */
 export interface GovOpportunityDismissal {
   opportunity_key: string;

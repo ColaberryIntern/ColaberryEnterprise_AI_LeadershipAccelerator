@@ -4,10 +4,15 @@ import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../.
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
-  extractGovQualificationRequirements,
+  extractGovQualificationRequirements, getGovOpportunityDetail,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
-  type ServiceMatch, type ExtractedRequirementCandidate,
+  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity,
 } from '../../services/factoryApi';
+import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
+import { derivePotentialDisqualifiers } from './govGaps';
+
+/** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
+type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
 
 /** Per-candidate reviewer choices while confirming extracted requirements into established ones. */
 interface CandidateRow { checked: boolean; applicability: string; dueStage: string; }
@@ -176,6 +181,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
+  const [oppDetail, setOppDetail] = useState<OppDetail | null>(null);
 
   const load = useCallback(async () => {
     if (!canonical) return;
@@ -212,6 +219,18 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       .finally(() => { if (active) setSvcMatchLoading(false); });
     return () => { active = false; };
   }, [ws, fromParam]);
+
+  // Decoupled (ZIP) workspace: fetch the clicked discovery row's details by its uuid (the gws key), so the page
+  // shows the Details-popup info + the Source link without going back. Best-effort; a 404 degrades to an honest note.
+  useEffect(() => {
+    if (!canonical.startsWith('gws:')) { setOppDetail(null); return; }
+    const uuid = canonical.slice(4);
+    let active = true;
+    getGovOpportunityDetail(uuid)
+      .then((r) => { if (active) setOppDetail(r); })
+      .catch(() => { if (active) setOppDetail({ opportunity: null, source: 'snapshot', snapshotDate: null }); });
+    return () => { active = false; };
+  }, [canonical]);
 
   // Every write runs one at a time (in-flight guard → no duplicate qualification/decision from repeated clicks),
   // reloads the server truth, and maps its error to a recoverable state.
@@ -353,6 +372,41 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
+          {isDecoupled && (
+            <SectionCard title="Discovery details" icon="information-line"
+              subtitle="Why this opportunity surfaced + the source posting. Legacy scores are advisory (not a verified fit); the overview is preliminary and unverified.">
+              {oppDetail === null ? (
+                <div className="text-secondary small">Loading discovery details…</div>
+              ) : oppDetail.opportunity ? (
+                <>
+                  <div className="row g-3 mb-2">
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Priority (legacy)</div><span className={`badge ${subtle(band(oppDetail.opportunity.priorityScore).tone)}`}>{oppDetail.opportunity.priorityScore ?? '—'} {band(oppDetail.opportunity.priorityScore).label}</span></div>
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Fit (legacy)</div><span className={`badge ${subtle(band(oppDetail.opportunity.fitScore).tone)}`}>{oppDetail.opportunity.fitScore ?? '—'} {band(oppDetail.opportunity.fitScore).label}</span></div>
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Est. value</div><div className="fw-semibold">{fmtValue(oppDetail.opportunity.estimatedValue)} <span className="small text-secondary">unverified</span></div></div>
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Closes</div><div>{closeLabel(oppDetail.opportunity.closeDate)}{daysLeft(oppDetail.opportunity.closeDate) !== null ? ` · ${daysLeft(oppDetail.opportunity.closeDate)} days` : ''} <span className="small text-secondary">(verify tz on portal)</span></div></div>
+                  </div>
+                  {oppDetail.opportunity.sourceUrl && (
+                    <a className="btn btn-outline-secondary btn-sm mb-2" href={oppDetail.opportunity.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      <i className="ri-external-link-line me-1" aria-hidden="true" />Open source posting (download the ZIP here)
+                    </a>
+                  )}
+                  {oppDetail.opportunity.preliminarySummary ? (
+                    <>
+                      <div className="alert alert-warning py-2 small mb-2" role="status"><i className="ri-draft-line me-1" aria-hidden="true" />Preliminary, unverified — not confirmed requirements. Qualify from the uploaded ZIP below.</div>
+                      <p className="small mb-0">{oppDetail.opportunity.preliminarySummary}</p>
+                    </>
+                  ) : (
+                    <p className="small text-secondary mb-0">No preliminary overview available.</p>
+                  )}
+                </>
+              ) : (
+                <div className="text-secondary small">
+                  <i className="ri-information-line me-1" aria-hidden="true" />This opportunity is no longer in the live discovery feed. Open the source posting from Gov Opportunities, or just work from the uploaded ZIP below.
+                </div>
+              )}
+            </SectionCard>
+          )}
+
           {(ws.source || isDecoupled) && (
             <SectionCard title="Extract requirements from the solicitation ZIP" icon="file-search-line"
               subtitle="Upload the solicitation package (the Bonfire ZIP). The extractor lists the requirements it detects as CANDIDATES — confirm the real ones to establish them. It reads the file in memory and stores nothing; a candidate is not a requirement until you confirm it.">
@@ -465,6 +519,35 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               </div>
             </SectionCard>
           )}
+
+          {/* ── Gaps / potential disqualifiers (advisory; surfaces, never decides) ─ */}
+          {isDecoupled && (() => {
+            const gaps = derivePotentialDisqualifiers(established, ws.evaluation, svcMatches ?? []);
+            return (
+              <SectionCard title="Gaps / potential disqualifiers" icon="error-warning-line"
+                subtitle="Requirements that could keep us from winning — to verify or resolve before bidding.">
+                <div className="alert alert-warning py-2 small" role="status">
+                  <i className="ri-alert-line me-1" aria-hidden="true" />Advisory only — not a verified pass/fail. Deeper eligibility verification (SAM/registration/set-asides/clearances) is a later step.
+                </div>
+                {gaps.empty === 'no_requirements' ? (
+                  <p className="text-secondary small mb-0">No requirements established yet — establish the cited requirements above to surface potential disqualifiers. An empty list is not evidence of "no requirements".</p>
+                ) : gaps.empty === 'none_flagged' ? (
+                  <p className="text-secondary small mb-0">No potential disqualifiers detected from the established requirements. This is advisory; verify eligibility before bidding.</p>
+                ) : (
+                  <ul className="list-unstyled mb-0">{gaps.items.map((g) => (
+                    <li key={g.kind + g.id} className="py-2 border-bottom">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className={`badge ${g.kind === 'blocking' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}`}>{g.kind === 'blocking' ? 'blocking' : 'verify / resolve'}</span>
+                        <span className="fw-semibold small">{g.id}</span>
+                      </div>
+                      <div className="small">{g.text}</div>
+                      <div className="small text-secondary">{g.reason} · {g.basis}</div>
+                    </li>
+                  ))}</ul>
+                )}
+              </SectionCard>
+            );
+          })()}
 
           {/* ── Manual document review (the Bonfire ZIP is downloaded by hand) ─── */}
           {ws.source && record && (() => {
