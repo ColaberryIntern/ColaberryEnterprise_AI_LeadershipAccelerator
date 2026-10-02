@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261002-k3r8 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, October 2, 2026 at 2:47 PM</div>
+    <div><span class="sid">CC-20261002-k3r8</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Case studies are linked to the services they evidence, as suggestions a person confirms</h2>
+          <span class="badge">2026-10-02</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">A new additive join table `case_study_service_links` plus the advisory pass, API and admin UI that fill and review it. Nothing connected the two before: `service_offerings` carried a free-text `past_performance` field, which is prose rather than a link, and no table joined a record to an offering in either direction. Many-to-many, because both directions are real questions (a bid asks a service what proves it; a record asks which offerings it supports), and it carries a STATE because a proposal is not a claim: a link is born `suggested` with the overlap that produced it recorded in `rationale`, and only a person moves it to `confirmed`. A `rejected` row is kept rather than deleted, so the same weak match is not proposed again. New files: `backend/src/db/ensureCaseStudyServiceLinkSchema.ts`, `backend/src/models/CaseStudyServiceLink.ts`, `backend/src/services/caseStudy/caseStudyServiceLinkSuggestor.ts` (pure), `.../caseStudyServiceLinkStore.ts`, `backend/src/routes/admin/caseStudyServiceLinkRoutes.ts`, `frontend/src/services/caseStudyServiceLinkApi.ts`, `frontend/src/components/admin/ServiceEvidencePanel.tsx`, `frontend/src/components/admin/caseStudy/CaseStudyServiceLinksPanel.tsx`, plus their three test suites. Wired into `server.ts` (boot, after both parents), `adminRoutes.ts` (mount), the Story Studio&#39;s TRUTH tab and the Our Services table.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">52 tests across 4 new suites (7 schema + 10 suggestor + 19 store + 16 routes), re-run after the rebase onto a base 20 commits newer. Every load-bearing assertion was proved by mutation rather than accepted on its first pass: 5 schema mutations, 6 suggestor, 6 store, each naming the single test that caught it while the other 8-15 stayed green (so none broke collection), each file restored and sha256-verified against its pre-mutation baseline, none undone with `git checkout`. Backend and frontend `tsc --noEmit` both exit 0 on tsc 5.9.3 post-rebase, and neither was taken on faith: the frontend gate was proved to cover the new files by inserting a deliberate type error and confirming it was named and located, and `--listFilesOnly` shows all five new backend source files among the program&#39;s 5,696 (the three test files are absent because this repo excludes `**/__tests__/**` from tsc repo-wide, so no suite here is covered by that gate, mine included). `node scripts/lint-route-auth.js` OK, 129 files. The existing `AdminGovServicesPage` suite still passes 6/6. The rebase was checked for silent reversion: the diff against `origin/main` is exactly 17 files, 2052 insertions and 1 deletion, and that deletion is a column-width change in this PR.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Not merged and not deployed. The table is created at boot by `ensureCaseStudyServiceLinkSchema()`, so the feature reaches production on the next deploy; both remain Ali&#39;s call, per surface.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261002-k3r8.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
