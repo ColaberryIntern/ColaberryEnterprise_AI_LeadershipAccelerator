@@ -2670,6 +2670,31 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'multi-ticket room, is left untouched.',
     enabled: false,
   },
+  // --- Reese ticket follow-up (2026-10-02) ---
+  // Closes the real gap the discovery for this run confirmed: `student_support`
+  // tickets' own `due_date` is set once at creation and never updated, so
+  // "Overdue" never meant real neglect, and nothing proactively re-engaged a
+  // quiet conversation. Eligibility is computed fresh from the real conversation
+  // (Reese spoke last, no reply for 3+ days) — due_date is never read or written
+  // by this job. Own daily cap (10), separate from the outreach jobs' shared 12 —
+  // a disjoint ticket population, disclosed assumption (see this run's own
+  // execution-contract.md).
+  {
+    agent_name: 'ReeseTicketFollowUpSweep',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reeseTicketFollowUpService.ts',
+    trigger_type: 'cron',
+    schedule: '0 18 * * *',
+    category: 'student_success',
+    description:
+      'Reese — daily sweep of open student_support (DM conversation) tickets ' +
+      'where Reese spoke last and the student has gone quiet for 3+ days. Sends ' +
+      'one real, grounded check-in if under the 3-attempt cap; escalates to ' +
+      'human review (never a 4th message) once the cap is reached. Own 10/day ' +
+      'send ceiling, separate from the autonomous-outreach jobs above.',
+    enabled: true,
+  },
 
   // ─── Agent Registration Stage 1 — ticket-creator identities ────────────────
   // Identity-only registrations for real, high-volume ticket-creator processes
