@@ -113,4 +113,33 @@
   --r-pill: 999px;
   /* mono font */
   --font-mono-de: 'Roboto Mono', 'Consolas', 'Monaco', monospace;
+
+  /* ── Intern Console activity bands ───────────────────────────────────────────
+   * The six bands the finalised Intern Console design specifies, in the order they
+   * degrade. They live here rather than in the console's own stylesheet because this
+   * file is the source of truth for colour and because the bands are read as a scale:
+   * defining them next to each other is what keeps them a scale.
+   *
+   * Green and red alias the existing semantic tokens, whose values the design already
+   * matched exactly. Yellow, orange, black and unknown carry the design's own values —
+   * there was no existing token at those steps.
+   *
+   * `unknown` is deliberately grey and NOT a darker red: an intern who has never done
+   * anything is a different fact from one who stopped, and a reader must not see them
+   * as the far end of the same ramp. */
+  --activity-green: var(--color-success);
+  --activity-yellow: #e5a50a;
+  --activity-orange: #f97316;
+  --activity-red: var(--color-danger);
+  --activity-black: #334155;
+  --activity-unknown: #a3aab6;
+
+  /* Intern Console activity heatmap, five steps from "nothing that day" upward. Step 0 is a filled
+   * neutral rather than transparent, so a quiet day reads as a measured zero instead of a gap in
+   * the grid. */
+  --heat-0: #eef1f5;
+  --heat-1: #cfe3d4;
+  --heat-2: #9ccfab;
+  --heat-3: #5fb37c;
+  --heat-4: #2f8f54;
 }

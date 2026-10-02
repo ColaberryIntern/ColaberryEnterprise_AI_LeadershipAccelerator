@@ -22,6 +22,11 @@ import { documentsFor, outstandingRequirements, verifyDocument } from '../../ser
 import { activate, activeInternView, buildChecklist } from '../../services/internship/internshipActivationService';
 import { commitConversion, planConversion } from '../../services/internship/internshipConversionService';
 import { internshipKpis, internshipProfileSection } from '../../services/internship/internshipTrackingService';
+import { getConsoleRoster, consoleCounts } from '../../services/internship/internConsoleRoster';
+import { PROJECT_STAGES } from '../../services/projectDeliveryService';
+import { getInternConsoleDetail } from '../../services/internship/internConsoleDetail';
+import { transition } from '../../services/internship/internshipApplicationService';
+import { isTerminal, InternshipState } from '../../services/internship/internshipStateMachine';
 
 /**
  * Admin — AI Internship applications.
@@ -78,6 +83,164 @@ const decideSchema = z.object({
   reviewer_notes: z.string().max(4000).nullish(),
   conditions: z.string().max(2000).nullish(),
 }).strict();
+
+/**
+ * GET /api/admin/internship/console
+ *
+ * One row per active intern for the Intern Console: identity, state, day N, activity, training
+ * with the weeks 1-3 gate, cert sitting counts, and their project if they have one.
+ *
+ * `requireSection('internship')` rather than `requireAdmin`, matching every route around it.
+ * Narrowing to admin-only would remove access that internship-scoped staff have today, which is
+ * a permissions regression dressed as a new feature.
+ *
+ * **There is no attendance field in this response, by product decision.** See
+ * `internConsoleRoster`'s header: 7 join rows existed across 2 interns and no denominator exists.
+ */
+router.get('/api/admin/internship/console', requireSection('internship'), async (_req: Request, res: Response) => {
+  try {
+    const interns = await getConsoleRoster();
+    // `stages` is served rather than hardcoded in the client so the pipeline's columns come from the
+    // same constant the `stage` values are produced from. A client with its own copy of the list
+    // silently drops a column the day a stage is added, and the projects in it vanish from the board.
+    res.json({ interns, counts: consoleCounts(interns), stages: PROJECT_STAGES });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_console_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the intern console.' });
+  }
+});
+
+/**
+ * GET /api/admin/internship/console/:enrollmentId
+ *
+ * One intern in depth: their roster row, the per-section training breakdown, the cert attempt
+ * series with each sitting's item count, the readiness/claim pair, and their activity feed.
+ *
+ * **404 rather than 403 for someone who is not an active intern.** The enrollment id is not a
+ * secret, but whether a given person is an intern is not something this endpoint should confirm to
+ * a caller who cannot already see the roster — and the roster's own predicate is what decides, so
+ * the two surfaces cannot disagree about who exists.
+ */
+router.get('/api/admin/internship/console/:enrollmentId', requireSection('internship'), async (req: Request, res: Response) => {
+  const enrollmentId = String(req.params.enrollmentId ?? '');
+  try {
+    const detail = await getInternConsoleDetail(enrollmentId);
+    if (!detail) { res.status(404).json({ error: 'Not an active intern.' }); return; }
+    res.json(detail);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_console_detail_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load this intern.' });
+  }
+});
+
+/**
+ * The five status actions the console's Manage drawer offers, mapped to states.
+ *
+ * A fixed allowlist, not a free-text state: a route that accepted any `InternshipState` would let a
+ * caller move an application to `documents_verified` or `active` and skip approval entirely. These
+ * five are the only moves a manager makes from the console.
+ */
+const CONSOLE_ACTIONS: Record<string, InternshipState> = {
+  pause: 'paused',
+  resume: 'active',
+  complete: 'completed',
+  withdraw: 'withdrawn',
+  remove: 'removed',
+};
+
+/** `complete`, `withdraw` and `remove` have NO reverse edge — see the state machine's terminal map. */
+const ONE_WAY = new Set(['complete', 'withdraw', 'remove']);
+
+const transitionSchema = z.object({
+  action: z.enum(['pause', 'resume', 'complete', 'withdraw', 'remove']),
+  reason: z.string().trim().min(1).max(2000).optional(),
+  /**
+   * Required for the three actions that cannot be undone: the caller must echo the action name.
+   * A typed confirmation is the only thing standing between a misclick and a terminal record that
+   * can never be reopened — reapplying opens a NEW application rather than reviving this one.
+   */
+  confirm: z.string().optional(),
+}).strict();
+
+/**
+ * POST /api/admin/internship/applications/:id/transition
+ *
+ * Thin by design. `transition()` in `internshipApplicationService` is the ONLY writer of
+ * `internship_applications.state`; it takes a row lock, asserts the move against the state machine
+ * and writes the audit event in the same transaction. This route adds the console's own rules —
+ * the five-action allowlist, the typed confirmation on one-way moves, and the actor — and nothing
+ * else. Re-implementing any of it here would create a second write path, which is exactly what the
+ * service's header says must not exist.
+ *
+ * **The actor comes from the verified session, never from the body.** A body-supplied actor would
+ * let a caller attribute their own decision to someone else in the permanent audit trail.
+ */
+router.post('/api/admin/internship/applications/:id/transition', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = transitionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid transition request.', issues: parsed.error.issues });
+    return;
+  }
+  const { action, reason, confirm } = parsed.data;
+
+  if (ONE_WAY.has(action) && confirm !== action) {
+    res.status(400).json({
+      error: `"${action}" cannot be undone. Send confirm:"${action}" to proceed.`,
+      one_way: true,
+    });
+    return;
+  }
+
+  const applicationId = String(req.params.id);
+  try {
+    const current = await InternshipApplication.findByPk(applicationId);
+    if (!current) { res.status(404).json({ error: 'Application not found.' }); return; }
+
+    // Refused before the writer is even called, with the reason named. The state machine would also
+    // refuse it, but a terminal record is the one case worth answering precisely: "this application
+    // was completed on <date> and cannot be reopened" is actionable, "invalid transition" is not.
+    if (isTerminal(current.state as InternshipState)) {
+      res.status(409).json({
+        error: `This application is ${current.state} and cannot be changed. Reapplying opens a new application.`,
+        state: current.state,
+        terminal: true,
+      });
+      return;
+    }
+
+    const app = await transition(applicationId, CONSOLE_ACTIONS[action], {
+      actor: 'reviewer',
+      actorId: (req as any).admin?.email ?? null,
+      reason: reason ?? null,
+      evidenceSource: 'intern_console',
+    });
+
+    res.json({ application_id: app.id, state: app.state, action });
+  } catch (err: any) {
+    if (err instanceof InvalidInternshipTransitionError) {
+      // The state machine's own refusal, passed through with its message rather than flattened.
+      res.status(409).json({ error: err.message, refused_by: 'state_machine' });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_console_transition_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, action },
+    }));
+    res.status(500).json({ error: "Could not change this intern's status." });
+  }
+});
 
 /** GET /api/admin/internship/queue */
 router.get('/api/admin/internship/queue', requireSection('internship'), async (req: Request, res: Response) => {
