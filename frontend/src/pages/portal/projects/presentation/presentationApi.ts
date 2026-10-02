@@ -138,3 +138,94 @@ export async function fetchPresentationPrompt(
   );
   return data;
 }
+
+/**
+ * One practice take and the room it happens in. Mirrors the backend `SessionView`;
+ * the backend stays the single source of truth.
+ *
+ * THERE IS NO URL FIELD HERE AND THAT IS DELIBERATE. The server returns
+ * `meetingReady` only. Entitlement to join is re-checked at the moment a student
+ * asks to join, so a link carried in a page payload would outlive the permission
+ * that produced it.
+ */
+export interface PracticeSession {
+  attemptId: string;
+  attemptNo: number;
+  mode: string;
+  attemptState: string;
+  recordingState: string;
+  bookingId: string | null;
+  roomId: string | null;
+  title: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  timezone: string | null;
+  bookingState: string | null;
+  meetingReady: boolean;
+  recordingPolicy: string | null;
+}
+
+const taskPath = (projectId: string, storyId: string, leaf: string) =>
+  `/api/portal/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(storyId)}/${leaf}`;
+
+export async function fetchPracticeSession(projectId: string, storyId: string): Promise<PracticeSession | null> {
+  const { data } = await portalApi.get<{ session: PracticeSession | null }>(
+    taskPath(projectId, storyId, 'presentation-session'),
+  );
+  return data.session;
+}
+
+export async function fetchPracticeSessions(projectId: string, storyId: string): Promise<PracticeSession[]> {
+  const { data } = await portalApi.get<{ sessions: PracticeSession[] }>(
+    taskPath(projectId, storyId, 'presentation-sessions'),
+  );
+  return data.sessions;
+}
+
+/**
+ * The host is busy. Carries the truthful next-available instant so the student can
+ * be told when they CAN practise, not only that they cannot now.
+ */
+export class SlotUnavailableError extends Error {
+  readonly why: string;
+  readonly nextAvailable: string | null;
+  constructor(message: string, why: string, nextAvailable: string | null) {
+    super(message);
+    this.name = 'SlotUnavailableError';
+    this.why = why;
+    this.nextAvailable = nextAvailable;
+  }
+}
+
+export interface StartPracticeBody {
+  /** ISO-8601 instants. A naive local string would be read in the server's zone. */
+  start_at: string;
+  end_at: string;
+  mode?: 'practice_solo' | 'practice_peer';
+  new_attempt?: boolean;
+}
+
+export async function startPractice(
+  projectId: string,
+  storyId: string,
+  body: StartPracticeBody,
+): Promise<PracticeSession> {
+  try {
+    const { data } = await portalApi.post<PracticeSession>(
+      taskPath(projectId, storyId, 'presentation-practice'),
+      body,
+    );
+    return data;
+  } catch (err: any) {
+    // 409 is not a failure of the request — it is a real answer about the room.
+    if (err?.response?.status === 409) {
+      const d = err.response.data || {};
+      throw new SlotUnavailableError(
+        d.error || 'That time is already taken.',
+        d.why || 'taken',
+        d.next_available ?? null,
+      );
+    }
+    throw err;
+  }
+}
