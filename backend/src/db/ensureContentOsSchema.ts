@@ -65,6 +65,16 @@ export const CONTENT_OS_SCHEMA_STATEMENTS: readonly string[] = [
      owner_admin_id UUID,
      created_by UUID,
      template_id UUID,
+     -- Where the post sends people. Own columns rather than the metadata JSONB: a destination is
+     -- the point of a campaign post, and a durable fact in a JSONB blob is erased the next time
+     -- an unrelated writer replaces the object. landing_page_id is a page this platform built and
+     -- can track end to end; destination_url is for the destinations that are not ours to build.
+     -- The FOREIGN KEY, the index, and the ALTERs for databases that already have this table all
+     -- live in ensureContentItemDestinationSchema, which runs after landing_pages exists. This
+     -- file is CREATE-only by contract and its own test enforces that.
+     -- (No backticks in here: this is inside a TS template literal and one would terminate it.)
+     landing_page_id UUID,
+     destination_url VARCHAR(2048),
      scheduled_for TIMESTAMPTZ,
      published_at TIMESTAMPTZ,
      -- Bumped on every edit to an approval-relevant field. contentWorkflowService (T021, NOT
