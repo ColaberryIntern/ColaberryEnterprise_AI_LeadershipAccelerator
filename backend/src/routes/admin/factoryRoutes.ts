@@ -433,6 +433,34 @@ const startBody = z.object({ title: z.string().max(300).optional(), agency: z.st
 const uuidParam = z.object({ uuid: z.string().uuid() });
 
 /**
+ * GET /api/admin/factory/opportunities/:uuid — one discovery row's display details (the Details-popup data), so the
+ * decoupled Qualify (ZIP) workspace can show why-it-surfaced + the project overview + the Source link without going
+ * back to discovery. Program-gated + tenant-scoped (FAIL CLOSED 503 when the gov container is unconfigured — a
+ * single-row detail scopes to the tenant, unlike the UNFILTERED feed). Returns the ALREADY-ALLOWLISTED mapped row
+ * (never raw upstream); a uuid not in the live best-fit feed → 404 { found:false } (honest: it may have aged out of
+ * best-fit, or the feed degraded dark). Read-only; no dismissal filtering (you may open the detail of a row to qualify it).
+ */
+router.get('/api/admin/factory/opportunities/:uuid', requireSection('program'), async (req: Request, res: Response) => {
+  const p = uuidParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity id.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) {
+    logFail('factory_opportunity_detail_scope', new Error('gov container not resolvable'), { uuid: p.data.uuid });
+    res.status(503).json({ error: 'The government contracts workspace is not configured.' });
+    return;
+  }
+  try {
+    const feed = await fetchBestFitOpportunities(); // never throws (degrades dark)
+    const opportunity = feed.opportunities.find((o) => o.uuid === p.data.uuid) ?? null;
+    if (!opportunity) { res.status(404).json({ error: 'Opportunity not found in the live discovery feed.', found: false }); return; }
+    res.json({ opportunity, source: feed.source, snapshotDate: feed.snapshotDate, snapshotReason: (feed as any).snapshotReason ?? null });
+  } catch (err: any) {
+    logFail('factory_opportunity_detail_failed', err, { uuid: p.data.uuid });
+    res.status(500).json({ error: 'Could not load the opportunity details.' });
+  }
+});
+
+/**
  * POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 TEMPORARY GUARD.
  *
  * Until the Phase 2 qualification record + approval flow lands, this route MUST NOT create a new government
