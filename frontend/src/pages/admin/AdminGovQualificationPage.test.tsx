@@ -100,16 +100,25 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(container.textContent ?? '').toContain('Digital Evidence');
   });
 
-  it('arriving from a discovery "Qualify" click names the clicked proposal and explains the pick-the-solicitation step', async () => {
+  it('from a "Qualify" click where the proposal is NOT in the feed: names it and says so honestly (never implies a match)', async () => {
     (factoryApi.getGovOpportunityCandidates as jest.Mock).mockResolvedValue({ available: true, candidates: [{ canonicalOpportunityId: CANON, title: 'Digital Evidence', agency: 'City', noticeType: 'solicitation' }], sourceLive: true });
     await renderAt('?from=One%20(1)%20Wood%20Chipper&agency=PEI%20Dept%20of%20Finance');
     const text = container.textContent ?? '';
-    expect(text).toContain('Pick the matching solicitation');   // contextual title, not the generic "pick a candidate"
-    expect(text).toContain('One (1) Wood Chipper');             // the clicked proposal is named (not a generic list)
-    expect(text).toContain('PEI Dept of Finance');
-    expect(text).toContain('one click straight');               // explains the real one-click fix is coming
-    expect(text).toContain('Digital Evidence');                 // the trusted v2 list is still shown to pick from
-    expect(factoryApi.getGovQualificationWorkspace as jest.Mock).not.toHaveBeenCalled(); // still no canonical established
+    expect(text).toContain("This proposal isn't in the qualification feed yet"); // honest title
+    expect(text).toContain('One (1) Wood Chipper');                 // the clicked proposal is still named
+    expect(text).toContain('flagged for the source team to add');   // honest explanation of the gap
+    expect(text).not.toContain('Pick the matching solicitation');   // must NOT imply a match exists when it doesn't
+    expect(text).toContain('Digital Evidence');                     // the feed list is still shown to try the workspace
+    expect(factoryApi.getGovQualificationWorkspace as jest.Mock).not.toHaveBeenCalled();
+  });
+
+  it('from a "Qualify" click where the proposal IS in the feed: shows the match + one-click-coming framing', async () => {
+    (factoryApi.getGovOpportunityCandidates as jest.Mock).mockResolvedValue({ available: true, candidates: [{ canonicalOpportunityId: CANON, title: 'RFP AI-based Interactive Voice Response Solution', agency: 'City of Fort Worth', noticeType: 'solicitation' }], sourceLive: true });
+    await renderAt('?from=RFP%20AI-based%20Interactive%20Voice%20Response%20Solution&agency=City%20of%20Fort%20Worth');
+    const text = container.textContent ?? '';
+    expect(text).toContain('Pick the matching solicitation');       // the clicked proposal IS in the feed
+    expect(text).toContain('one click straight');
+    expect(text).not.toContain("isn't in the qualification feed yet");
   });
 
   it('clean workspace → source facts render and Approve is enabled', async () => {

@@ -97,18 +97,37 @@ function CandidatePicker(): React.ReactElement {
       </SectionCard>
     );
   }
+  // Is the clicked discovery proposal actually present in the trusted qualification feed? Normalized title compare,
+  // DISPLAY ONLY — it decides which honest message to show, never derives a canonical id. Today the discovery and
+  // qualification feeds are disjoint sets, so this is normally false; it flips true once OP aligns the feeds.
+  const norm = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const fromNorm = norm(fromTitle);
+  const inFeed = !!fromNorm && result.candidates.some((c) => {
+    const t = norm(c.title);
+    return !!t && (t === fromNorm || t.includes(fromNorm) || fromNorm.includes(t));
+  });
   return (
     <SectionCard
-      title={fromTitle ? 'Pick the matching solicitation' : 'Start a qualification — pick a candidate'}
+      title={!fromTitle ? 'Start a qualification — pick a candidate' : inFeed ? 'Pick the matching solicitation' : "This proposal isn't in the qualification feed yet"}
       icon="search-line"
       subtitle="The qualification workspace needs the verified solicitation id, which lives in this trusted list (Opportunity Pulse v2).">
-      {fromTitle && (
+      {fromTitle && inFeed && (
         <div className="alert alert-info d-flex align-items-start gap-2" role="status">
           <i className="ri-links-line mt-1" aria-hidden="true" />
           <div>
             You're qualifying <strong>{fromTitle}</strong>{fromAgency ? ` (${fromAgency})` : ''}. The discovery list and the
             qualification catalog use different ids, so pick the matching solicitation below to begin — one click straight
             through is coming once the two lists are linked.
+          </div>
+        </div>
+      )}
+      {fromTitle && !inFeed && (
+        <div className="alert alert-warning d-flex align-items-start gap-2" role="status">
+          <i className="ri-error-warning-line mt-1" aria-hidden="true" />
+          <div>
+            You're qualifying <strong>{fromTitle}</strong>{fromAgency ? ` (${fromAgency})` : ''}, but it isn't in the
+            qualification feed yet — that feed currently lists a different set of opportunities than discovery. It's been
+            flagged for the source team to add. In the meantime you can open any solicitation below to try the workspace.
           </div>
         </div>
       )}
