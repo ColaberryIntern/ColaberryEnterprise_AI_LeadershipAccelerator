@@ -73,6 +73,11 @@ function RequirementRow({ r }: { r: QualRequirementEval }): React.ReactElement {
 /** The no-canonical landing: a trusted candidate picker, or the gap when v2 is unavailable. */
 function CandidatePicker(): React.ReactElement {
   const navigate = useNavigate();
+  const [sp] = useSearchParams();
+  // When the user arrives from a discovery-row "Qualify" click we carry the clicked proposal's title/agency (display
+  // only — the canonical id is still chosen from the trusted list, never derived from the title).
+  const fromTitle = sp.get('from');
+  const fromAgency = sp.get('agency');
   const [result, setResult] = useState<GovCandidatesResult | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -93,7 +98,20 @@ function CandidatePicker(): React.ReactElement {
     );
   }
   return (
-    <SectionCard title="Start a qualification — pick a candidate" icon="search-line" subtitle="Canonical ids from the Opportunity Pulse v2 list (trusted mapping).">
+    <SectionCard
+      title={fromTitle ? 'Pick the matching solicitation' : 'Start a qualification — pick a candidate'}
+      icon="search-line"
+      subtitle="The qualification workspace needs the verified solicitation id, which lives in this trusted list (Opportunity Pulse v2).">
+      {fromTitle && (
+        <div className="alert alert-info d-flex align-items-start gap-2" role="status">
+          <i className="ri-links-line mt-1" aria-hidden="true" />
+          <div>
+            You're qualifying <strong>{fromTitle}</strong>{fromAgency ? ` (${fromAgency})` : ''}. The discovery list and the
+            qualification catalog use different ids, so pick the matching solicitation below to begin — one click straight
+            through is coming once the two lists are linked.
+          </div>
+        </div>
+      )}
       {result.candidates.length === 0 && <div className="text-secondary">No candidates returned.</div>}
       <ul className="list-unstyled mb-0">
         {result.candidates.map((c) => (
