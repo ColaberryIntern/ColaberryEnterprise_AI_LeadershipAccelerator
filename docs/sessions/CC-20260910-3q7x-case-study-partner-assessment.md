@@ -1,4 +1,4 @@
-# Session CC-20260910-3q7x (build-case-study: the three sections a partner assessment asks for, an attested evidence class, and a submission PDF)
+# Session CC-20260910-3q7x (build-case-study: the three sections a partner assessment asks for, the two-axis verification model, and a submission PDF)
 
 Per-PR session log (kept separate from PROGRESS.md to avoid union-merge conflicts).
 
@@ -70,29 +70,34 @@ Branch: `workstream/case-study-partner-assessment` (cut from `origin/main`).
   - Notes: these add no claim and relax no gate. `applyHumanOverride` already creates
     arbitrary whole sections (§3), so all three are usable with no code change.
 
-- [x] §4: the `attested` evidence class, specified and explicitly NOT yet live
+- [x] §4: how to evidence what a repository cannot prove — and a correction
   - Date: 2026-10-02
   - Session: CC-20260910-3q7x
-  - What changed: documents `verification_class: 'attested'` for facts a repository cannot
-    prove (a user count, an engagement date, a client-confirmed outcome), pinned to a named
-    person and date instead of a commit SHA, with `reviewed_by` and `reviewed_at` required.
-    Marked **"specified here, NOT yet accepted by the gate"** so nobody uses it on a record
-    they intend to publish before the code lands.
-  - Verification: `case_study_evidence.verification_class` is `character varying`, not an
-    enum (checked against production `information_schema`), and the values in use are
-    `pending` and `verified`. **No migration is required**; the constraint is in
-    application code at `caseStudyPublishRules.ts` and `caseStudyPublishMaturityRule.ts`,
-    both named in the skill.
-  - Notes: this is the change that would let `computeMaturity` reach `operational_result`
-    honestly instead of it being unreachable by construction. The backend work is
-    deliberately NOT in this PR.
+  - What changed: an earlier draft of this section specified a new
+    `verification_class: 'attested'`. **That was wrong and has been removed.** The
+    codebase already models this, and models it better: `class` (how much may be shown:
+    `verified` / `anonymized` / `illustrative` / `pending`) and `method` (who established
+    it: `client` / `repo` / `platform` / `internal` / `self` / `manual`) are **orthogonal
+    axes**, declared together in `backend/src/types/caseStudy.ts`. A client-confirmed
+    outcome is `class: 'verified', method: 'client'`, or `anonymized` + `client` where the
+    client will not be named. §4 now documents that, with `reviewed_by` / `reviewed_at`
+    pinned and `source_commit_sha` null.
+  - Verification: `backend/src/types/__tests__/caseStudyContracts.test.ts` reads
+    `frontend/src/components/publicV2/Claim.tsx` **as text**, asserts the class union
+    matches member-for-member in the same order, and asserts `toHaveLength(4)`. A fifth
+    class fails that test by design and would need a coordinated frontend change. The
+    type's own header warns against exactly the conflation the draft committed.
+  - Notes: caught by reading the type before writing the code, not after. The skill now
+    states plainly that there is no `attested` class and that adding one is a mistake, so
+    the next reader does not repeat it.
 
 - [x] §6: why the banned-phrase list is absolute today, and what makes it conditional
   - Date: 2026-10-02
   - Session: CC-20260910-3q7x
   - What changed: the list is unchanged. Added the reasoning — a commit cannot prove a
     saving, so an unconditional ban is correct for the evidence we have — and the intended
-    end state: blocked without an attested row on the same claim, permitted with one.
+    end state: blocked without a `method: 'client'` evidence row on the same claim,
+    permitted with one.
   - Verification: no behaviour change; the scanner is untouched.
   - Notes: written this way on purpose so the next reader does not simply relax the
     scanner. A blocked phrase means the claim is not yet evidenced, which is information.
@@ -114,9 +119,15 @@ Branch: `workstream/case-study-partner-assessment` (cut from `origin/main`).
 
 ## Not in this PR, and why
 
-- **The backend change for `attested`.** `caseStudyPublishRules.ts` and
-  `caseStudyPublishMaturityRule.ts` must accept the class and the maturity ladder must
-  honour it before the class is usable. Specified in §4, not implemented.
+- **Teaching the ladder to read `method`.** `computeMaturity`
+  (`backend/src/services/sbp/caseStudyFoundation.ts:123`) counts verified stories, merged
+  enrichments and demonstration references and **never reads a verification method at
+  all**. That, not the vocabulary, is why `operational_result` is unreachable. Specified
+  in §4, not implemented.
+- **A proof hole worth closing with it.** `ruleProofMetadata`
+  (`caseStudyPublishRules.ts:452`) requires an `evidenceId` only when
+  `class === 'verified'`, so a `client`-method figure recorded as `anonymized` carries no
+  proof requirement at all.
 - **Making the §6 ban conditional.** Depends on the above; relaxing the scanner first would
   let unevidenced outcome language through.
 - **Backfilling the three new sections onto the fourteen approved records.** Each needs a
