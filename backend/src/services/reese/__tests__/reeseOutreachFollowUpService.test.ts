@@ -255,6 +255,12 @@ describe('processDueReeseOutreachFollowUps — branch: under cap, sends one more
         result: 'success', sourceRecordType: 'room_message', sourceRecordId: 'msg-2',
       }),
     );
+    // Approval-correlation fix (2026-10-02) — the ledger event's real eventId
+    // (not traceId) matches the authorization check's own eventId exactly.
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    const [ledgerArgs] = mockEmitReeseLedgerEvent.mock.calls[0];
+    expect(ledgerArgs.eventId).toBe(authArgs.eventId);
+    expect(ledgerArgs.traceId).not.toBe(authArgs.eventId);
   });
 
   it('Real-enforcement scoping (R209): a denied follow-up is held, never sent — no initiateDm, no ledger write, no attempt-count bump, reported as held_for_approval not follow_up_sent', async () => {
@@ -322,6 +328,12 @@ describe('processDueReeseOutreachFollowUps — branch: at cap, escalates', () =>
         result: 'success', sourceRecordType: 'reese_outreach', sourceRecordId: 'outreach-1',
       }),
     );
+    // Approval-correlation fix (2026-10-02) — the ledger event's real eventId
+    // (not traceId) matches the authorization check's own eventId exactly.
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    const [ledgerArgs] = mockEmitReeseLedgerEvent.mock.calls[0];
+    expect(ledgerArgs.eventId).toBe(authArgs.eventId);
+    expect(ledgerArgs.traceId).not.toBe(authArgs.eventId);
   });
 
   it('Real-enforcement scoping (R210): a denied escalation is held — no ticket comment, no status flip, no ledger write, reported as held_for_approval not escalated (the safety path does not silently no-op as a false "escalated")', async () => {

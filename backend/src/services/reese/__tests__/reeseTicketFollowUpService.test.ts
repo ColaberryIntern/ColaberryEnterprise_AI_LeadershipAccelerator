@@ -102,6 +102,13 @@ describe('processDueReeseTicketFollowUps — eligibility', () => {
     expect(mockInitiateDm).toHaveBeenCalledWith(STUDENT_ID, 'A real, grounded check-in message.');
     expect(mockAddTicketComment).toHaveBeenCalledWith(TICKET_ID, expect.stringContaining('quiet'), 'ai_staff', REESE_ADMIN_ID);
     expect(mockEmitReeseLedgerEvent).toHaveBeenCalledWith(expect.objectContaining({ intent: 'reese.ticket_follow_up', targetId: TICKET_ID }));
+    // Approval-correlation fix (2026-10-02) — the ledger event's real eventId
+    // (not traceId) matches the authorization check's own eventId exactly —
+    // the exact bug this file itself introduced earlier today, now fixed.
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    const [ledgerArgs] = mockEmitReeseLedgerEvent.mock.calls[0];
+    expect(ledgerArgs.eventId).toBe(authArgs.eventId);
+    expect(ledgerArgs.traceId).not.toBe(authArgs.eventId);
   });
 
   it('not eligible: the student spoke last -> never sends (Reese already owes a reply via the normal reactive path)', async () => {
@@ -170,6 +177,12 @@ describe('processDueReeseTicketFollowUps — attempt cap + escalation', () => {
     expect(mockInitiateDm).not.toHaveBeenCalled();
     expect(row.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'escalated' }));
     expect(mockAddTicketComment).toHaveBeenCalledWith(TICKET_ID, expect.stringContaining('3-attempt follow-up cap'), 'ai_staff', REESE_ADMIN_ID);
+    // Approval-correlation fix (2026-10-02) — same correlation check on the
+    // escalation path's own ledger write.
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    const [ledgerArgs] = mockEmitReeseLedgerEvent.mock.calls[0];
+    expect(ledgerArgs.eventId).toBe(authArgs.eventId);
+    expect(ledgerArgs.traceId).not.toBe(authArgs.eventId);
   });
 
   it('escalation held by authorization: never falsely reports escalated', async () => {
