@@ -114,7 +114,13 @@ describe('maybeTriggerDaraReply', () => {
     expect(mockEnsureTicket).toHaveBeenCalledWith(ROOM_ID, STUDENT_ID, 'Hi Dara, what does Module 3 cover?');
     expect(mockLogExchange).toHaveBeenCalledTimes(2);
     expect(mockLogExchange).toHaveBeenNthCalledWith(1, 'ticket-1', 'human', STUDENT_ID, 'student-msg-1', 'Hi Dara, what does Module 3 cover?');
-    expect(mockLogExchange).toHaveBeenNthCalledWith(2, 'ticket-1', 'ai_staff', DARA_ADMIN_ID, 'reply-msg-1', 'Module 3 covers supervised learning fundamentals.');
+    // Approval-correlation fix (2026-10-02) — ONLY Dara's own reply call gets
+    // the authorization eventId/decisionId threaded through (6th/7th args);
+    // the student's own message above is never gated, so it stays 5-arg.
+    expect(mockLogExchange).toHaveBeenNthCalledWith(
+      2, 'ticket-1', 'ai_staff', DARA_ADMIN_ID, 'reply-msg-1', 'Module 3 covers supervised learning fundamentals.',
+      expect.any(String), null,
+    );
   });
 
   it('ProofDesk linkage boundary: if ticket-ensure fails, the reply is still generated and sent (ticket layer never blocks messaging)', async () => {

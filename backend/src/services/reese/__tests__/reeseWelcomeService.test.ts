@@ -139,6 +139,12 @@ describe('an empty ledger does not mean everyone is new', () => {
         result: 'success', sourceRecordType: 'room_message', sourceRecordId: 'msg-1',
       }),
     );
+    // Approval-correlation fix (2026-10-02) — the ledger event's real eventId
+    // (not traceId) matches the authorization check's own eventId exactly.
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    const [ledgerArgs] = mockEmitReeseLedgerEvent.mock.calls[0];
+    expect(ledgerArgs.eventId).toBe(authArgs.eventId);
+    expect(ledgerArgs.traceId).not.toBe(authArgs.eventId);
   });
 
   it('fails CLOSED on an unknown enrollment age', async () => {

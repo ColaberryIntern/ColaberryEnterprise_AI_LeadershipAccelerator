@@ -276,15 +276,23 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
     // — would be a real, new regression: a student's reply going unanswered
     // over an unrelated ticket-linking hiccup, worse than the gap it would
     // "fix".
+    // Approval-correlation fix (2026-10-02) — lifted out of the authorization
+    // call below (which only runs inside `if (ticketId)`) so the SAME id can
+    // also be threaded into the ledger write for Reese's own reply further
+    // down, in a separate `if (ticketId)` block after the real send.
+    const replyEventId = crypto.randomUUID();
+    let replyAuthorizationDecisionId: string | null | undefined;
+
     if (ticketId) {
       const authResult = await authorizeTicketDispatch({
-        eventId: crypto.randomUUID(),
+        eventId: replyEventId,
         ticketId,
         agentName: 'Reese',
         action: 'reese_dm_reply',
         riskTier: REPLY_RISK_TIER,
         preparedAction: { roomId, content: reply },
       });
+      replyAuthorizationDecisionId = authResult.decisionId;
 
       // allowed is the real, mode-aware signal (unconditionally true in shadow
       // mode — see agentActionAuthorizationBridge.ts's own header). A held
@@ -351,7 +359,14 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       // different identity row used only for presence/DM membership.
       const reeseAdminUserId = await getReeseAdminUserId();
       if (reeseAdminUserId) {
-        await logReeseExchangeActivity(ticketId, 'ai_staff', reeseAdminUserId, replyMessage.id, reply, workUnitId);
+        // Approval-correlation fix (2026-10-02) — thread the same
+        // eventId/decisionId the authorization check above generated, so the
+        // real ledger row this call writes is the one that id was always
+        // meant to correlate to.
+        await logReeseExchangeActivity(
+          ticketId, 'ai_staff', reeseAdminUserId, replyMessage.id, reply, workUnitId,
+          replyEventId, replyAuthorizationDecisionId,
+        );
       }
     }
 
