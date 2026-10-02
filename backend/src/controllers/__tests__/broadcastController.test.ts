@@ -172,3 +172,30 @@ describe('postPlaybackGrant', () => {
     expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'not_watchable' });
   });
 });
+
+describe('5xx logging does not leak a connection string to stdout', () => {
+  // The verifier flagged this: the RESPONSE was already clean, but the log line carried
+  // err.message, and stdout is captured by the container runtime. A clean response is not
+  // enough on its own.
+  let errLines: string[];
+  beforeEach(() => {
+    errLines = [];
+    jest.spyOn(console, 'error').mockImplementation((s: any) => { errLines.push(String(s)); });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('logs error_class but NOT the raw message', async () => {
+    runCommand.mockRejectedValue(
+      Object.assign(new Error('connect ECONNREFUSED postgres://user:pw@db.internal:5432/accel'), { name: 'SequelizeConnectionError' }),
+    );
+    const res = mockRes();
+    await postProducerCommand(req({ body: { command: 'end', expected_version: 1 } }), res);
+
+    expect(errLines).toHaveLength(1);
+    expect(errLines[0]).not.toContain('postgres://');
+    expect(errLines[0]).not.toContain('db.internal');
+    const line = JSON.parse(errLines[0]);
+    expect(line).toMatchObject({ level: 'error', outcome: 'failure', event: 'broadcast_command_failed' });
+    expect(line.context).toEqual({ error_name: 'SequelizeConnectionError' });
+  });
+});

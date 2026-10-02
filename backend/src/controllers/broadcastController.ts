@@ -29,9 +29,15 @@ function respondError(res: Response, err: any, event: string): void {
   const status = Number(err?.status) || 500;
   const error_class = err?.error_class || 'UnexpectedError';
   if (status >= 500) {
+    // The raw message is deliberately NOT logged. A driver error can carry a connection
+    // string, and stdout is captured by the container runtime — so the response being clean
+    // is not enough on its own. error_class plus the event name is what triage actually
+    // needs; the stack is available from the thrown object at the call site if more is
+    // required. (Sibling controllers log err.message here; this one does not, rather than
+    // propagate the pattern.)
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'error', service: 'broadcast',
-      event, outcome: 'failure', error_class, context: { message: err?.message },
+      event, outcome: 'failure', error_class, context: { error_name: err?.name ?? 'unknown' },
     }));
   }
   // Never echo err.message on a 5xx: it can carry query fragments or provider detail.
