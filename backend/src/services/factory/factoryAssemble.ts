@@ -62,7 +62,14 @@ export function assembleFactoryProject(input: FactoryAssembleInput): FactoryProj
     roles: d.roles,
     assignments,
     transitions,
-    allocation: input.allocation ?? [],
-    role_map: input.role_map ?? [],
+    // The DECOMPOSITION's rows are now a real path, where before they were discarded: this
+    // read `input.allocation ?? []`, so a compliant model's output had nowhere to go and
+    // "allocation is emittable" was true of the schema and false of the pipeline.
+    //
+    // Explicit input still WINS. A caller that passes allocation means it (the hand-authored
+    // fixtures do), and when `d` carries nothing the behaviour is byte-identical to before,
+    // which is what keeps this additive for every decomposition already stored.
+    allocation: input.allocation ?? d.allocation ?? [],
+    role_map: input.role_map ?? d.role_map ?? [],
   };
 }

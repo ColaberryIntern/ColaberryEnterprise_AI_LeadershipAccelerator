@@ -254,6 +254,31 @@ const PREREQUISITES: Readonly<Record<LifecycleStage, Predicate>> = {
   // Re-checked at build handoff, per the four TOCTOU moments in the approval policy.
   building: (e) => PREREQUISITES.planning(e),
 
+  /**
+   * EMPTY MEANS 'NOT YET IMPLEMENTED', NOT 'NOTHING IS REQUIRED HERE'.
+   *
+   * The contract of this map is "unmet prerequisites", so an empty list means none unmet and the
+   * stage PASSES. These two therefore permit unconditionally, which is the opposite of every
+   * other entry here and must not be mistaken for a decision.
+   *
+   * The architecture doc specifies what release_review owes: "each release demonstrates a
+   * business workflow in the approved workspaces, including its human decision". That cannot be
+   * evaluated until a story carries a workspace/action reference, which Phase 6 (P6-T3/T4) adds.
+   * Implementing a placeholder rule now would either block every transition or wave every one
+   * through, and neither is more honest than saying so here.
+   *
+   * WHY THIS IS WRITTEN DOWN AT ALL: a peer session traced a real production failure to exactly
+   * this gap on 2026-10-02 - a student finished 20 of 20 stories, platform-verified, with twelve
+   * of her fourteen services unreachable, because her releases were layered by pipeline stage
+   * and no release-level check asked whether r0 reached user-visible output. release_review is
+   * the prerequisite that would have caught it. Full record and the constraints it places on
+   * Phase 6 (including why a keyword rule cannot do this job, and why any new r0 gate rule must
+   * ship ADVISORY so it does not retroactively lock students out via PlanPredatesGate) are in
+   * .loop-architect/runs/20261001-unified-project-lifecycle/phase6-design-constraints.md.
+   *
+   * Nothing routes through the coordinator yet and FLAGS.lifecycleEnforcement defaults off, so
+   * the present blast radius is nil. That is why it has not bitten, not that it is safe.
+   */
   release_review: () => [],
   launch_ready: () => [],
   // Runtime business actions re-check the approved revision and current authority at execution.

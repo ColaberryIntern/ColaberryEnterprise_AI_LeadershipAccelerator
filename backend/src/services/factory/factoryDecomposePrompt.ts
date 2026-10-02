@@ -41,7 +41,29 @@ export const MAX_CONTEXT_CHARS = 20_000;
 
 export const FACTORY_DECOMPOSE_SYSTEM_PROMPT = `You decompose a contract requirement into a complete, buildable PROCESS: the work, who does it, and how it flows. Your output is graded by a deterministic machine gate; anything it rejects is worthless, so obey every rule below exactly.
 
-YOU EMIT FIVE LISTS (and nothing else): processes, tasks, assignments, transitions, roles.
+YOU EMIT SEVEN LISTS (and nothing else): processes, tasks, assignments, transitions, roles,
+allocation, role_map.
+
+ALLOCATION AND ROLE_MAP - send [] for either if you genuinely have nothing to state; never
+invent rows to fill them.
+- allocation: one row per TASK/DECISION. execution_class is exactly one of human,
+  ai_with_approval, ai_autonomous, deterministic_software. It MUST agree with the
+  assignments you emitted: an agent PERFORMER with a human APPROVER is ai_with_approval,
+  an agent PERFORMER without one is ai_autonomous, a person or team PERFORMER is human.
+  A disagreement between your allocation and your assignments is rejected by the gate.
+- rationale: WHY the work sits on that side of the line, in one sentence. This is the only
+  part that cannot be derived from the assignments, so it is the part that matters.
+  "All human" is a decision and needs its reason stated like any other.
+- accountable_role_id: the role answerable for the outcome; null is allowed for purely
+  human work, where the performer IS the accountability. AI work without one is rejected.
+- NEVER allocate ai_autonomous to a task whose data_sensitivity is confidential or
+  regulated, or whose decision_authority is decide_bounded or decide_full. Those need a
+  human in the loop; use ai_with_approval.
+- role_map: one row per DISPLACED FUNCTION, not per role. previous_function is what a
+  person used to do, ai_contribution is the part the AI now does, new_role_id is the role
+  that carries what is left, retained_responsibilities is what the person keeps. Emit at
+  most one row per previous_function: two answers to "what happened to this job" is
+  worse than none.
 
 GRANULARITY — one task is one unit of work:
 - One verb, one object, one outcome, one performer. "Extract requirements from the solicitation" is a task; "Build the system" is not.

@@ -338,7 +338,10 @@ describe('ALLOCATION_CONTRADICTS_ASSIGNMENTS — the stated row against the grap
     const clash = issues.filter((i) => i.code === 'ALLOCATION_CONTRADICTS_ASSIGNMENTS');
     expect(clash).toHaveLength(1);
     expect(clash[0].stepId).toBe('t-1');
-    expect(clash[0].message).toContain('the oversight does not exist');
+    // Wording corrected after the verifier pointed out the old message claimed NO human was
+    // assigned, when a human ACCOUNTABLE may well be - only the APPROVER is missing.
+    expect(clash[0].message).toContain('No human APPROVER is assigned');
+    expect(clash[0].message).toContain('not the same as approving it');
   });
 
   it('PASSING COUNTERPART: ai_with_approval stated WITH a human approver assigned', () => {
@@ -362,7 +365,7 @@ describe('ALLOCATION_CONTRADICTS_ASSIGNMENTS — the stated row against the grap
     const issues = validateAllocation(agentPerformed(), row('ai_autonomous'));
     const clash = issues.filter((i) => i.code === 'ALLOCATION_CONTRADICTS_ASSIGNMENTS');
     expect(clash).toHaveLength(1);
-    expect(clash[0].message).not.toContain('the oversight does not exist');
+    expect(clash[0].message).not.toContain('No human APPROVER is assigned');
     expect(clash[0].message).toContain('disagree about who does this work');
   });
 
@@ -373,6 +376,29 @@ describe('ALLOCATION_CONTRADICTS_ASSIGNMENTS — the stated row against the grap
     expect(codes(base(), row('deterministic_software'))).not.toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
     const blank = row('deterministic_software', { rationale: '  ' });
     expect(codes(base(), blank)).toContain('ALLOCATION_RATIONALE');
+  });
+
+
+  it('CLOSES THE BYPASS: deterministic_software claimed for agent-performed work is refused', () => {
+    // The verifier measured this on an agent-performed, regulated, decide_full task: labelling it
+    // 'deterministic_software' turned THREE blocking errors into ZERO. The sensitivity and
+    // accountability rules key on the AI classes, and this rule exempted the label
+    // unconditionally - so one word bypassed the whole module.
+    const p = agentPerformed();
+    p.assignments = p.assignments.filter((a) => a.responsibility !== 'APPROVER');
+    const t = p.tasks.find((x) => x.id === 't-1')!;
+    t.data_sensitivity = 'regulated';
+    t.decision_authority = 'decide_full';
+
+    const claimed = codes(p, row('deterministic_software'));
+    expect(claimed).toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+  });
+
+  it('PASSING COUNTERPART: deterministic_software claimed for human-performed work is allowed', () => {
+    // A person running a deterministic script is plausible, and the graph derives human, so
+    // there is genuinely nothing to contradict. The exemption survives where it was justified.
+    expect(codes(base(), row('deterministic_software')))
+      .not.toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
   });
 
   it('says nothing when the class cannot be derived at all', () => {

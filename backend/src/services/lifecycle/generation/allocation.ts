@@ -284,10 +284,23 @@ export function validateAllocation(
     // is wrong but not dangerous.
     const derivedClass = deriveExecutionClass(byTask.get(t.id) ?? []);
     for (const r of rows) {
-      if (derivedClass === null || r.execution_class === 'deterministic_software') {
-        // No executor type expresses "deterministic software", so the graph cannot confirm or
-        // contradict it. Exempt from this comparison rather than failed by it - but it still
-        // needs a rationale, which ALLOCATION_RATIONALE above enforces.
+      // The exemption is SCOPED, because unscoped it was a total bypass of this module.
+      // Measured by the P3-T3 verifier on an agent-performed, regulated, decide_full task:
+      // labelling it 'deterministic_software' turned THREE blocking errors into zero, since
+      // the sensitivity and accountability rules key on the AI classes and this rule
+      // exempted the label unconditionally. One word, three errors gone.
+      //
+      // The exemption's rationale - that no executor type expresses "software", so the
+      // graph can neither confirm nor contradict - holds ONLY when the graph derives
+      // 'human'. An AGENT performer is positive evidence the label is false, and this
+      // module already knows it. So the exemption now requires the derivation to be
+      // 'human': deterministic software performed by a person is plausible, deterministic
+      // software performed by an agent is a contradiction worth naming.
+      const softwareClaimPlausible = r.execution_class === 'deterministic_software'
+        && derivedClass === 'human';
+      if (derivedClass === null || softwareClaimPlausible) {
+        // Either nothing to compare against, or a plausible software claim. Still subject
+        // to ALLOCATION_RATIONALE, which requires it to say why.
         continue;
       }
       if (r.execution_class !== derivedClass) {
@@ -297,8 +310,9 @@ export function validateAllocation(
           'ALLOCATION_CONTRADICTS_ASSIGNMENTS',
           `task ${t.id} is stated as '${r.execution_class}' but its assignments derive '${derivedClass}'.`
           + (overstated
-            ? ' This claims a human approver that no assignment provides: the label reassures a'
-              + ' reviewer while the oversight does not exist.'
+            ? ' No human APPROVER is assigned to this task, so the stated approval step does not'
+              + ' exist. A human ACCOUNTABLE may be assigned, but being answerable for work is'
+              + ' not the same as approving it, and the label reads as the latter.'
             : claimsHuman
               ? ' This claims a person does work an agent is assigned to perform.'
               : ' The stated allocation and the assignment graph disagree about who does this work.'),

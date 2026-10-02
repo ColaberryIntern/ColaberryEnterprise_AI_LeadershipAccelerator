@@ -179,18 +179,31 @@ export const FACTORY_ROLE_MAP_JSON_SCHEMA = {
 export const FACTORY_DECOMPOSITION_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['processes', 'tasks', 'assignments', 'transitions', 'roles'],
+  // ALL SEVEN. OpenAI strict structured outputs require every key in `properties`
+  // to appear in `required`, at every object level, and this schema is submitted with
+  // `strict: true` from factoryDecompose.ts:152 and factoryRepair.ts:189. An earlier
+  // version of P3-T3 added allocation and role_map to `properties` only, which made the
+  // WHOLE SCHEMA unsubmittable - so the moment FLAGS.factoryGeneration flipped, nothing
+  // would have generated at all, on either path. Both suites mock the client, so no test
+  // caught it; the parity assertion added in factoryContract.test.ts now does.
+  //
+  // The reason originally given for omitting them - that stored decompositions would fail
+  // to parse - was unfounded. Nothing parses stored decompositions against this schema:
+  // its only non-test consumers are the two `response_format` sites, and stored shape is
+  // checked by the hand-rolled isDecompositionShaped (factoryDecompose.ts:118-126), which
+  // does not read either key.
+  required: ['processes', 'tasks', 'assignments', 'transitions', 'roles', 'allocation', 'role_map'],
   properties: {
     processes: { type: 'array', items: FACTORY_PROCESS_JSON_SCHEMA },
     tasks: { type: 'array', items: FACTORY_TASK_JSON_SCHEMA },
     assignments: { type: 'array', items: FACTORY_ASSIGNMENT_JSON_SCHEMA },
     transitions: { type: 'array', items: FACTORY_TRANSITION_JSON_SCHEMA },
     roles: { type: 'array', items: FACTORY_ROLE_JSON_SCHEMA },
-    // DELIBERATELY ABSENT FROM `required`. Adding them there would make every decomposition
-    // stored before P3-T3 fail to parse, which is a migration dressed as a schema tweak.
-    // Their absence is caught by lifecyclePrerequisites.allocation_unknown instead, where it
-    // blocks full approval while still permitting a draft.
-    allocation: { type: 'array', items: FACTORY_ALLOCATION_JSON_SCHEMA },
-    role_map: { type: 'array', items: FACTORY_ROLE_MAP_JSON_SCHEMA },
+    // NULLABLE, not optional. Strict mode forces them into `required`, so `null` is how a
+    // model says "nothing to declare" without being forced to invent rows. An absent
+    // allocation is still caught downstream by lifecyclePrerequisites.allocation_unknown,
+    // which blocks full approval while permitting a draft.
+    allocation: { type: ['array', 'null'], items: FACTORY_ALLOCATION_JSON_SCHEMA },
+    role_map: { type: ['array', 'null'], items: FACTORY_ROLE_MAP_JSON_SCHEMA },
   },
 } as const;
