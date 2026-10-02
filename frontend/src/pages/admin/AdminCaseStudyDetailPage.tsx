@@ -19,6 +19,9 @@ import { useCaseStudyMeasurement } from './useCaseStudyMeasurement';
 import CaseStudyMeasuredMetricsPanel from '../../components/admin/caseStudy/CaseStudyMeasuredMetricsPanel';
 import CaseStudyHeroVideoPanel from '../../components/admin/caseStudy/CaseStudyHeroVideoPanel';
 import CaseStudyVisualStoryPanel from '../../components/admin/caseStudy/CaseStudyVisualStoryPanel';
+// Which of our services this record is evidence for. Self-contained: it loads and writes its own links, so it
+// takes only the record id and does not go through `useCaseStudyDesk`'s single-write path.
+import CaseStudyServiceLinksPanel from '../../components/admin/caseStudy/CaseStudyServiceLinksPanel';
 import { generateVisualStory, readVisualStoryState } from '../../services/caseStudyStudioApi';
 
 /**
@@ -210,6 +213,14 @@ function AdminCaseStudyDetailPage(): React.ReactElement {
             <CaseStudyContributorsPanel
               contributors={desk.view.contributors} busy={busy} onApplyOverride={desk.override}
             />
+            {/*
+              Record-level fact, so it sits on TRUTH beside consent and contributors rather than in a tab about
+              presentation. It reports its own outcome inline, which does NOT repeat the 2026-08-26 bug the
+              ActionBand exists for: that report was invisible because it rendered in a panel reachable only on
+              PUBLISH, while the button that triggered it lived elsewhere. Here the button and its report are in
+              the same card, on screen together.
+            */}
+            <CaseStudyServiceLinksPanel caseStudyId={record.id} />
             <CaseStudyProvenancePanel
               rows={readProvenance(
                 (desk.provenanceId ? desk.provenanceSnapshot : detail.latestSnapshot)?.provenance ?? null,

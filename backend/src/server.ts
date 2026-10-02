@@ -76,6 +76,7 @@ import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema'
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
+import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -2770,6 +2771,14 @@ async function start(): Promise<void> {
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).
   await ensureServiceOfferingSchema();
+  // Which case studies evidence which services (case_study_service_links). A single additive NEW join table, so a
+  // bid can answer "what proves you can do this" with a record rather than prose. Unlike its siblings it DOES carry
+  // foreign keys, both ON DELETE CASCADE: deleting a case study on 2026-10-02 rolled back on an undeclared FK, and
+  // cascade means a future deletion can neither orphan a link nor be blocked by one. A link is born `suggested`
+  // and only a person moves it to `confirmed`, because these feed past-performance claims.
+  // MUST run after ensureCaseStudySchema and ensureServiceOfferingSchema: its REFERENCES name both parents, and a
+  // foreign key to a table that does not exist yet is a boot error, not a no-op.
+  await ensureCaseStudyServiceLinkSchema();
   // AI Project Factory: the executor/accountable/skills/judgment/confidence/source-evidence
   // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
   // pattern). Existing rows are untouched and unset until the factory populates them.
