@@ -381,6 +381,11 @@ export const env = {
   // the outbox drain cron no-ops, and createSession skips linked-room creation
   // until COMMUNITY_ROOMS_ENABLED=true is set explicitly in an environment.
   communityRoomsEnabled: process.env.COMMUNITY_ROOMS_ENABLED === 'true',
+  // Colaberry Live — the broadcast surface. OFF by default so the routes 404 and the
+  // feature ships dark, exactly as the community rooms above do. Deliberately its OWN flag
+  // rather than riding COMMUNITY_ROOMS_ENABLED: the blast radii differ (this one gates a
+  // paywalled media surface), so they need independent rollback.
+  broadcastEnabled: process.env.BROADCAST_ENABLED === 'true',
   // Peer Wins — the Cohort Wins grid behind the community_discussion type. ON by
   // default; set PEER_WINS_ENABLED=false to revert the type to the plain 'community'
   // reading render (a full-stack kill switch — typeRegistry picks the render_band

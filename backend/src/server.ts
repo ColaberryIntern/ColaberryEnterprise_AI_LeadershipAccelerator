@@ -14,6 +14,7 @@ import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import unsubscribeRoutes from './routes/unsubscribeRoutes';
+import broadcastRoutes from './routes/broadcastRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
@@ -196,6 +197,11 @@ app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
+// Colaberry Live — broadcast surface (flag-gated inside the router; 404s when
+// BROADCAST_ENABLED is off). Mounted here, beside Community Rooms and well ABOVE
+// adminRoutes: anything below that guard answers 401 to an ordinary participant, which is
+// the bug /r/ and /i/ each hit in production.
+app.use(broadcastRoutes);
 app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
