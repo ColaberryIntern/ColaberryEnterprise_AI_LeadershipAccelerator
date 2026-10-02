@@ -250,6 +250,22 @@ describe('figures come off the payload', () => {
 });
 
 describe('the mechanical accessibility rules', () => {
+  it('every data table carries thead.table-light with scoped column headers', async () => {
+    // T614's acceptance names this and NOTHING asserted it - the verifier confirmed
+    // the property held only by its own grep, which means it could regress with
+    // every cell green. The a11y rules check th+scope but say nothing about the
+    // class, so this is the only thing holding that half of the acceptance.
+    await render();
+    const tables = Array.from(container.querySelectorAll('table'));
+    expect(tables.length).toBeGreaterThan(0);
+    tables.forEach((t) => {
+      expect(t.querySelector('thead')?.className ?? '').toContain('table-light');
+      const cols = Array.from(t.querySelectorAll('thead th'));
+      expect(cols.length).toBeGreaterThan(0);
+      cols.forEach((th) => expect(th.getAttribute('scope')).toBe('col'));
+    });
+  });
+
   it('pass with both panels populated', async () => {
     await render();
     expectNoA11yViolations(container);

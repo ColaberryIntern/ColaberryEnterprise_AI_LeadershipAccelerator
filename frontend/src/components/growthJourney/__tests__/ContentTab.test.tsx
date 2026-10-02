@@ -153,18 +153,27 @@ describe('decision is a stored setting, not a verdict about a person', () => {
   });
 
   it('says the claim and CTA copy is never served, so counts do not read as a failed load', async () => {
-    // The counts asserted as BARE CHARACTERS could never fail: '3' and '2' are
-    // satisfied by `limit 25`, `2026-01-01` and `of 5 offer policies` elsewhere on
-    // the page. The verifier replaced both cells with 'n/a' and all 194 stayed
-    // green. Two-digit values in their own cells, asserted positionally.
+    // Two layers, because each caught a different defect.
+    //
+    // Bare '3' and '2' could never fail - `limit 25`, `2026-01-01` and `of 5 offer
+    // policies` already satisfy them - so T614's verifier replaced both cells with
+    // 'n/a' and all 194 stayed green. Distinct two-digit values fixed that.
+    //
+    // But `toContain` over the cell ARRAY is membership, not position, so attempt
+    // 2's verifier then SWAPPED the two columns and all 198 stayed green: the claim
+    // count rendered under the CTAs header and vice versa. An operator reading that
+    // table would have the two numbers exactly backwards. So this asserts ADJACENCY
+    // in the row's own cell order - Claims immediately followed by CTAs - which is
+    // what the header order promises and the only thing a swap cannot satisfy.
     api.listOfferPolicies.mockResolvedValue(pPage({
       rows: [pRow({ claims_count: 37, ctas_count: 19 })],
     }));
     await renderTab();
     expect(text()).toContain('never served to this screen');
     const cells = Array.from(container.querySelectorAll('tbody td')).map((c) => c.textContent ?? '');
-    expect(cells).toContain('37');
-    expect(cells).toContain('19');
+    const claimsAt = cells.indexOf('37');
+    expect(claimsAt).toBeGreaterThan(-1);
+    expect(cells[claimsAt + 1]).toBe('19');
   });
 
   it('reports an open-ended policy as open-ended rather than blank', async () => {
@@ -242,6 +251,22 @@ describe('the rules table reports the API mask rather than guessing', () => {
 });
 
 describe('the mechanical accessibility rules', () => {
+  it('every data table carries thead.table-light with scoped column headers', async () => {
+    // T614's acceptance names this and NOTHING asserted it - the verifier confirmed
+    // the property held only by its own grep, which means it could regress with
+    // every cell green. The a11y rules check th+scope but say nothing about the
+    // class, so this is the only thing holding that half of the acceptance.
+    await renderTab();
+    const tables = Array.from(container.querySelectorAll('table'));
+    expect(tables.length).toBeGreaterThan(0);
+    tables.forEach((t) => {
+      expect(t.querySelector('thead')?.className ?? '').toContain('table-light');
+      const cols = Array.from(t.querySelectorAll('thead th'));
+      expect(cols.length).toBeGreaterThan(0);
+      cols.forEach((th) => expect(th.getAttribute('scope')).toBe('col'));
+    });
+  });
+
   it('pass on the policies table', async () => {
     await renderTab();
     expectNoA11yViolations(container);

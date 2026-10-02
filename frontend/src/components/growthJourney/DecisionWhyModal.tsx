@@ -35,6 +35,16 @@ import { safeText } from './journeyText';
  *
  * What the mask does not catch is listed in `journeyText.ts`. The caption below is
  * written against that limit and must not be loosened without widening the regex.
+ *
+ * ── THE ONE TABLE ON THIS SURFACE WITH NO `thead` ───────────────────────────
+ *
+ * T614's acceptance says every table carries `thead.table-light` with
+ * `<th scope="col">`, and the seven DATA tables do. The key/value nest below does
+ * not, deliberately: it has no column headers to label, because each row's header
+ * IS the key. `<th scope="row">` is the correct ARIA form for that layout and is
+ * what the a11y rules check for. Recorded here because it is a literal
+ * non-conformance with the acceptance line, and an undisclosed exception is how a
+ * rule quietly stops meaning anything.
  */
 
 type Kind = 'classification' | 'decision';
