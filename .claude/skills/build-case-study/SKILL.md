@@ -120,10 +120,57 @@ applyHumanOverride({ path: 'situation', value: {...} })     // ✓ creates the s
 ```
 
 Set the complete object: `identity`, `taxonomy`, `situation`, `architecture`,
-`buildTimeline`, `measurement`, `heroMetrics`, `roadmap`, `contributors`, `artifacts`.
+`buildTimeline`, `measurement`, `heroMetrics`, `roadmap`, `contributors`, `artifacts`,
+plus the three partner-assessment sections in §3a: `deployment`, `engagement`, `governance`.
 
 **`heroMetrics` is its own section.** Marking a metric `isHeadline: true` inside
 `measurement` does **not** populate it once measurement has been overridden. Set both.
+
+### 3a. `deployment`, `engagement`, `governance` — the three the record kept in prose
+
+Added 2026-10-02, after measuring the library against the **OpenAI Partner Assessment
+Technical Capability Assessment** workbook. Of the twelve fields that form requires, the
+record could answer **three**. Five of the remaining nine were already *on* the record —
+in a narrative paragraph, a capability tag, or the methodology text of a metric — just
+nowhere a form, a partner questionnaire or an RFP could reach them.
+
+**These sections exist to stop us failing to claim work we have already done.** They add
+no new claim and relax no gate; every rule in §4, §5 and §6 applies to them unchanged.
+
+```js
+applyHumanOverride({ path: 'deployment', value: {
+  customer, activeUsers, usageFrequency, volumeProcessed, productionDate } })
+applyHumanOverride({ path: 'engagement', value: {
+  targetOutcome, firstContactDate, productionDate, elapsed } })
+applyHumanOverride({ path: 'governance', value: {
+  owner, humanInLoop, guards, boundedActions, complianceRegimes, models } })
+```
+
+| field | fill it from | if you cannot |
+|---|---|---|
+| `deployment.usageFrequency` | the job's own schedule, usually already written in a metric's `plain.from` | omit the key |
+| `deployment.volumeProcessed` | a `count`-shaped metric you already collected | omit the key |
+| `deployment.activeUsers` | **a person. Never a repository.** | omit the key |
+| `engagement.firstContactDate` | **a person.** The first commit is not the first conversation | omit the key |
+| `governance.humanInLoop` / `.guards` / `.boundedActions` | the narrative you already wrote | omit the key |
+| `governance.models` | the connected repository | **do not omit — see below** |
+
+**Rules that bite:**
+
+- **An omitted key and an empty one mean different things.** Omit what is unknown. Write
+  `complianceRegimes: []` only to say *none is claimed for this deployment*, which is a
+  real and useful answer. Never write `0`, `"n/a"` or `"TBD"` into a count.
+- **`governance.models` is not optional on a record about an AI system.** We published
+  fourteen case studies about systems that run models and named the model in none of them:
+  `taxonomy.stack` listed seven technologies and not one was a model, on a record whose own
+  summary says a draft is "prepared by a model". If the subject calls a model, name the
+  provider, the model and the step it runs. If it genuinely calls none, say so explicitly.
+- **`deployment.customer` obeys `organization_identity_mode`, always.** An `anonymized`
+  record stays anonymized here. Naming consent is consent to *publish*; it is not consent to
+  disclose in a partner submission, and the two are not interchangeable. Where disclosure
+  matters, ask for it and record it separately — do not infer it from a published page.
+- **Dates are `YYYY-MM-DD` and `elapsed` is computed, never typed.** A hand-typed interval
+  is the first thing to drift when either date is corrected.
 
 ### Re-authoring an existing record: replace the body, not just the head
 
@@ -165,6 +212,39 @@ one number that can then disagree, and the gate blocks a figure whose commit doe
 match the one the record is pinned to (`metric_collected_sha_mismatch`).
 
 The hand-written block above is for figures the repository cannot compute.
+
+### `attested` — the class for what a repository can never prove
+
+**Status: specified here, NOT yet accepted by the gate. Do not use it on a record you
+intend to publish until the code below lands.**
+
+`verification_class` is a `varchar`, not an enum, so no migration is required; the
+constraint lives in application code. Two places decide:
+`backend/src/services/caseStudy/caseStudyPublishRules.ts` and
+`backend/src/services/caseStudy/caseStudyPublishMaturityRule.ts`.
+
+The gap it closes: `verified` means *pinned to a commit*. A user count, an engagement date
+and a client-confirmed outcome have no commit to pin to, so today they cannot be evidenced
+at all — which is why `computeMaturity` can never return `operational_result` or
+`impact_case_study` from a build, and why `outcomeEvidence` is empty by construction.
+
+```js
+{ source_type: 'attestation', source_ref: '<person, role, organisation>',
+  source_commit_sha: null,               // there is none, and that is the point
+  verification_class: 'attested',
+  title, description,                    // what was asked, and the answer given verbatim
+  reviewed_by, reviewed_at,              // REQUIRED: who heard it, and when
+  is_publicly_openable: false }
+```
+
+**An attestation names a person and a date instead of a SHA. It is not a weaker `verified`,
+it is a different kind of fact, and the two must never be merged.** The honest sentence is
+"the client's operations lead stated X on this date", never "X". If the attesting person
+will not be named on the record, that is a reason to keep the claim off the record, not a
+reason to anonymize the attestation.
+
+Do not back-fill attestations from memory, from a meeting you did not take notes in, or
+from an email that implies rather than states the figure.
 
 ---
 
@@ -367,6 +447,17 @@ blocked as an unbacked ROI claim.
 
 Safer: "the scheduler has an enabled runtime record", "the current count cannot be
 assigned to one process", "multiple processes operated in the same period".
+
+**Why the list is absolute today, and what should make it conditional.** Every one of
+these phrases describes an outcome, and until `attested` lands (§4) the only evidence a
+record can carry is a commit. A commit cannot prove a saving, so an unconditional ban is
+the correct rule for the evidence we actually have.
+
+Once `attested` is accepted, the ban should become **conditional: blocked without an
+attested evidence row on the same claim, permitted with one.** That is the intended end
+state and the reason the scanner should not simply be relaxed. Until then, do not write
+around the list — a blocked phrase means the claim is not yet evidenced, which is
+information, not an obstacle.
 
 ---
 
@@ -1280,6 +1371,34 @@ The tools and the step-by-step are `scripts/case-study-thumbnails/README.md`. Th
 - [ ] The live API's `heroImageUrl` and `walkthroughVideo.posterUrl` are the thumbnail
 - [ ] On all three surfaces the masthead poster is the thumbnail and the old cover is in
       the body, and no picture is drawn twice (the thumbnail not at all) inside the article
+
+## 8g. The submission PDF — because reviewers do not accept a URL
+
+Partner assessments, RFP response packages and procurement portals take **PDF, DOC, DOCX,
+PPT, PPTX**, typically five files at 20 MB. The OpenAI workbook is exactly this shape.
+
+We publish web pages, SVG visual stories and MP4 walkthroughs. Measured 2026-10-02 across
+the fourteen approved records: **nothing we hold is in an accepted format, and the
+walkthrough video — the single most persuasive artifact we make — cannot be submitted at
+all.**
+
+**Every record gets a PDF rendering**, built from the sections that already exist:
+`identity`, `situation`, `architecture` with its diagram, `decisions`, `measurement` with
+its charts, and `deployment` / `engagement` / `governance` from §3a.
+
+- **Render the published projection, never the draft**, so the PDF cannot say something the
+  live page does not.
+- **The walkthrough video becomes a titled still plus its public URL.** Do not pretend a
+  video is in the document; name it and link it.
+- **Carry the evidence.** Each figure keeps the sentence that lets a reader re-derive it.
+  A number in a PDF with no methodology is the format at its worst.
+- **Name it `<slug>-<YYYY-MM-DD>.pdf`** and attach it as a `case_study_artifacts` row of
+  type `submission_pdf`, so the next person assembling a package finds it instead of
+  rebuilding it.
+- **Check the page count and open the file** before calling it done. A PDF that renders
+  blank pages, or clips a chart at the margin, fails silently and ships.
+
+---
 
 ## 9. Record and snapshot must agree
 
