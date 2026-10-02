@@ -18,6 +18,7 @@ import {
   type ConnectedAccountLike,
 } from './channelChoices';
 import { mediaGateNote, setupShape } from './setupShape';
+import { canGenerateLinks, pruneDestination } from './landingPageChoices';
 import ComposerStepRail from './ComposerStepRail';
 import ComposerSummaryRail from './ComposerSummaryRail';
 import {
@@ -45,7 +46,7 @@ function trimPoll(poll: NonNullable<SetupValues['poll']>): NonNullable<SetupValu
   return { question: poll.question.trim(), options: poll.options.map((o) => o.trim()).filter((o) => o !== ''), durationDays: poll.durationDays };
 }
 
-const EMPTY_SETUP: SetupValues = { brand_id: '', campaign_id: '', title: '', destination_url: '', canonical_body: '', content_type: 'text', is_paid: false, has_offer: false, poll: null };
+const EMPTY_SETUP: SetupValues = { brand_id: '', campaign_id: '', title: '', landing_page_id: null, destination_url: '', canonical_body: '', content_type: 'text', is_paid: false, has_offer: false, poll: null };
 
 /** The next step in order, blocked or not - so the nav can say WHY there is no Next button. */
 const STEP_AFTER: Record<StepKey, StepKey | null> = {
@@ -119,6 +120,10 @@ export default function AdminContentComposerPage() {
       title: it.title,
       canonical_body: it.canonical_body ?? '',
       content_type: it.content_type,
+      // Restored from the row. Before these columns existed this was lost on every reload, which
+      // is the bug the picker would otherwise have inherited.
+      landing_page_id: it.landing_page_id ?? null,
+      destination_url: it.destination_url ?? '',
       is_paid: Boolean(it.metadata?.isPaid),
       has_offer: Boolean(it.metadata?.hasOffer),
       poll: (it.metadata?.poll as SetupValues['poll']) ?? null,
@@ -167,6 +172,29 @@ export default function AdminContentComposerPage() {
       .catch(() => { if (!cancelled) setBrandAccounts([]); });
     return () => { cancelled = true; };
   }, [setup.brand_id]);
+
+  /**
+   * This brand's landing pages, for the picker. Reloaded when the brand changes, and emptied on
+   * failure rather than left showing another brand's list.
+   */
+  const [landingPages, setLandingPages] = useState<composer.LandingPageSummary[]>([]);
+  useEffect(() => {
+    if (!setup.brand_id) { setLandingPages([]); return; }
+    let cancelled = false;
+    composer.listLandingPages(setup.brand_id)
+      .then((rows) => { if (!cancelled) setLandingPages(rows); })
+      .catch(() => { if (!cancelled) setLandingPages([]); });
+    return () => { cancelled = true; };
+  }, [setup.brand_id]);
+
+  /**
+   * A selection that is no longer valid must not survive a brand change, or the save fails with
+   * a message about a different brand that reads as a bug. `pruneDestination` returns the same
+   * object when nothing is dropped, so React bails out and this cannot loop.
+   */
+  useEffect(() => {
+    setSetup((v) => pruneDestination(v, landingPages));
+  }, [landingPages]);
 
   const choices = useMemo(
     () => channelChoices(providers, connectedProviders(brandAccounts), Boolean(setup.brand_id)),
@@ -247,6 +275,7 @@ export default function AdminContentComposerPage() {
         const created = await composer.createDraft({
           brand_id: setup.brand_id, campaign_id: setup.campaign_id || null, title: setup.title,
           canonical_body: setup.canonical_body, content_type: setup.content_type, is_paid: setup.is_paid, has_offer: setup.has_offer,
+          landing_page_id: setup.landing_page_id, destination_url: setup.destination_url || null,
           ...(setup.content_type === 'poll' && setup.poll ? { poll: trimPoll(setup.poll) } : {}),
         });
         say('success', 'Draft created.');
@@ -254,6 +283,7 @@ export default function AdminContentComposerPage() {
       } else {
         await composer.updateItem(item.id, {
           title: setup.title, canonical_body: setup.canonical_body, content_type: setup.content_type,
+          landing_page_id: setup.landing_page_id, destination_url: setup.destination_url || null,
           // A poll post sends its poll. Any other type sends null ONLY when a poll is left over
           // from a type change - sending null every time would count as a copy change and
           // invalidate the variants on a title-only save.
@@ -339,7 +369,9 @@ export default function AdminContentComposerPage() {
   }, 'The file could not be removed.')();
 
   const makeLinks = withItem(async (id) => {
-    const ls = await composer.generateLinks(id, setup.destination_url);
+    // No destination passed: the server reads the chosen page (or URL) off the item, which is
+    // the only way a page selection could drive a tracked link at all.
+    const ls = await composer.generateLinks(id);
     setLinks(ls);
     await reload(id);
     say('success', `${ls.length} tracked link${ls.length === 1 ? '' : 's'} ready.`);
@@ -432,6 +464,10 @@ export default function AdminContentComposerPage() {
             values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy}
             onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug}
             onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers}
+          landingPages={landingPages}
+          /* onCreateLandingPage is deliberately NOT passed yet: the authoring screen is not
+             routed, and a button to an unmounted route is worse than no button. The API exists
+             (PR #2905), so this is one line once that page lands. */
             mediaSlot={shape.mediaRole !== 'none' ? (
               // Inside the content-type column, directly under the type that asked for it.
               // It sat after the whole form until 2026-10-01: "why isn't the video upload closer
@@ -465,7 +501,7 @@ export default function AdminContentComposerPage() {
           </div>
           <div className="d-flex flex-wrap gap-2 mb-3">
             <button type="button" className="btn btn-sm btn-primary" disabled={!item || busy || selected.length === 0} onClick={generate}>Generate variants</button>
-            <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !setup.destination_url} onClick={makeLinks}>Generate tracked links</button>
+            <button type="button" className="btn btn-sm btn-outline-primary" disabled={!item || busy || variants.length === 0 || !canGenerateLinks(setup)} onClick={makeLinks}>Generate tracked links</button>
             <button type="button" className="btn btn-sm btn-outline-dark" disabled={!item || busy || variants.length === 0} onClick={validate}>Validate</button>
           </div>
           <ComposerVariants variants={variants} providers={providers} links={links} problems={problems} busy={busy} onSave={saveVariant} onRevert={revertVariant} />

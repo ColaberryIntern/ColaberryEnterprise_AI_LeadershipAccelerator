@@ -139,6 +139,7 @@ import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributio
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2646,6 +2647,10 @@ async function start(): Promise<void> {
   // the accounts table references brands.
   await ensureChannelAccountSchema();
   await ensureLandingPageSchema();
+  // AFTER landing_pages exists: this adds content_items.landing_page_id and its foreign key, so
+  // the composer can persist the page an operator picked. The column is also in the content_items
+  // CREATE body for fresh databases; this is what migrates the ones that already exist.
+  await ensureContentItemDestinationSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).

@@ -5,6 +5,10 @@ import ComposerPollEditor, { EMPTY_POLL } from './ComposerPollEditor';
 import { blockerSentence, canCreate } from './setupGate';
 import { setupShape } from './setupShape';
 import { checkVideoLink, excludedByContentType, linkPostNotice } from './videoSource';
+import {
+  applyDestination, destinationMode, externalUrlNote, pickerNote, selectablePages,
+  type LandingPageOption,
+} from './landingPageChoices';
 
 /**
  * Steps 1, 3 and 4: the choices that fix WHAT is being said and FOR WHOM.
@@ -25,6 +29,8 @@ export interface SetupValues {
   brand_id: string;
   campaign_id: string;
   title: string;
+  /** A landing page this platform built. Mutually exclusive with destination_url. */
+  landing_page_id: string | null;
   destination_url: string;
   canonical_body: string;
   content_type: ContentType;
@@ -52,6 +58,14 @@ export interface ComposerSetupProps {
   /** Connected networks, so a link post can name which of them it would exclude. */
   providers?: readonly ProviderSummary[];
   /**
+   * This brand's landing pages. Unfiltered on purpose: the picker shows the ones that can be
+   * chosen AND names the ones it is withholding with a reason, which a pre-filtered list could
+   * not do.
+   */
+  landingPages?: readonly LandingPageOption[];
+  /** Send the operator off to build one. Absent when there is nowhere to send them yet. */
+  onCreateLandingPage?: () => void;
+  /**
    * The upload control, rendered INSIDE the content-type column.
    *
    * It is a slot rather than a prop bundle because the upload needs the item id, the upload
@@ -66,7 +80,7 @@ const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thr
 
 export default function ComposerSetup({
   values, brands, campaigns, locked, busy, onChange, onSubmit, onAssignSlug, onDraftMessage, draftNotes,
-  providers = [], mediaSlot = null,
+  providers = [], mediaSlot = null, landingPages = [], onCreateLandingPage,
 }: ComposerSetupProps) {
   const [topic, setTopic] = React.useState('');
   /** 'upload' or 'link', for a video. Local: choosing it is not yet a change to the post. */
@@ -75,6 +89,7 @@ export default function ComposerSetup({
   const [videoLinkError, setVideoLinkError] = React.useState<string | null>(null);
 
   const set = <K extends keyof SetupValues>(k: K, v: SetupValues[K]) => onChange({ ...values, [k]: v });
+  const note = pickerNote(landingPages, values.brand_id);
   const visibleCampaigns = campaigns.filter((c) => !values.brand_id || !c.brand_id || c.brand_id === values.brand_id);
   const chosen = campaigns.find((c) => c.id === values.campaign_id);
   // What THIS content type needs. Drives the labels and which fields render at all.
@@ -161,7 +176,7 @@ export default function ComposerSetup({
                         // typo cannot silently turn the post into something else.
                         if (!check.ok) { setVideoLinkError(check.reason); return; }
                         setVideoLinkError(null);
-                        onChange({ ...values, content_type: 'link', destination_url: videoLink.trim() });
+                        onChange(applyDestination({ ...values, content_type: 'link' }, { kind: 'url', url: videoLink.trim() }));
                       }}
                     >
                       Use this link
@@ -187,7 +202,46 @@ export default function ComposerSetup({
         {shape.showLandingPage && (
         <div className="col-md-6">
           <label className="form-label small mb-1" htmlFor="composer-destination">Landing page (destination for tracked links)</label>
-          <input id="composer-destination" className="form-control form-control-sm" type="url" placeholder="https://" value={values.destination_url} disabled={busy} onChange={(e) => set('destination_url', e.target.value)} />
+          {/* A picker, not a text box. The text box was the whole problem: it could point a
+              tracked campaign anywhere, including at a page this platform cannot measure, and
+              what was typed was never stored. Only this brand's published, platform-built pages
+              are offered; a plain URL is still possible and says what it costs. */}
+          <select
+            id="composer-destination"
+            className="form-select form-select-sm"
+            value={destinationMode(values) === 'url' ? '__url__' : (values.landing_page_id ?? '')}
+            disabled={busy}
+            data-testid="landing-page-picker"
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '__url__') return onChange(applyDestination(values, { kind: 'url', url: values.destination_url || 'https://' }));
+              if (v === '') return onChange(applyDestination(values, { kind: 'none' }));
+              onChange(applyDestination(values, { kind: 'page', id: v }));
+            }}
+          >
+            <option value="">No landing page</option>
+            {selectablePages(landingPages, values.brand_id).map((p) => (
+              <option key={p.id} value={p.id}>{p.name} ({p.path ?? `/p/.../${p.slug}`})</option>
+            ))}
+            <option value="__url__">A URL we did not build...</option>
+          </select>
+          {note && <div className="form-text small text-warning-emphasis" data-testid="landing-page-note">{note}</div>}
+          {destinationMode(values) === 'url' && (
+            <>
+              <input
+                className="form-control form-control-sm mt-2" type="url" placeholder="https://"
+                value={values.destination_url} disabled={busy} aria-label="Destination URL"
+                data-testid="landing-page-url"
+                onChange={(e) => onChange(applyDestination(values, { kind: 'url', url: e.target.value }))}
+              />
+              <div className="form-text small text-warning-emphasis" data-testid="external-url-note">{externalUrlNote('url')}</div>
+            </>
+          )}
+          {onCreateLandingPage && (
+            <button type="button" className="btn btn-link btn-sm px-0 mt-1" disabled={busy} onClick={onCreateLandingPage} data-testid="build-landing-page">
+              Build a landing page for this brand
+            </button>
+          )}
         </div>
         )}
         <div className="col-12">
