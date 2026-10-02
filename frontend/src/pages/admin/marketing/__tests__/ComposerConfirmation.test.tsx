@@ -257,3 +257,55 @@ describe('poll', () => {
     expect(container.querySelector('[data-testid="confirm-poll"]')).toBeNull();
   });
 });
+
+/**
+ * The way out of a blocked step.
+ *
+ * Reported 2026-10-02: "I can't publish or schedule or send for approval." The buttons were
+ * correctly disabled and the ladder correctly said validation had not run - but it said "Press
+ * Validate under Channels", and the step rail had made Channels a separate screen. The reason was
+ * right there and there was no way to act on it.
+ */
+describe('a blocked step offers the way out', () => {
+  const needsValidation: ConfirmationSummary = {
+    ...SUMMARY,
+    validation: { ran: false, ok: false, blockerCount: 0, blockers: [] },
+  } as ConfirmationSummary;
+
+  function renderWithNav(summary: ConfirmationSummary, onGoToStep: (s: 'setup' | 'channels' | 'preview') => void) {
+    act(() => {
+      root.render(
+        <ComposerConfirmation summary={summary} busy={false} onAction={() => undefined} onGoToStep={onGoToStep} />,
+      );
+    });
+  }
+
+  it('offers a button to the step that clears it', () => {
+    renderWithNav(needsValidation, () => undefined);
+    const btn = container.querySelector('[data-testid="confirm-goto-validate"]');
+    expect(btn).not.toBeNull();
+    expect(btn!.textContent).toBe('Go to Channels and validate');
+  });
+
+  it('takes the operator to Channels, which is where Validate lives', () => {
+    const go = jest.fn();
+    renderWithNav(needsValidation, go);
+    act(() => { (container.querySelector('[data-testid="confirm-goto-validate"]') as HTMLButtonElement).click(); });
+    expect(go).toHaveBeenCalledWith('channels');
+  });
+
+  it('offers nothing once validation has passed - the rung is no longer current', () => {
+    renderWithNav(
+      { ...SUMMARY, validation: { ran: true, ok: true, blockerCount: 0, blockers: [] } } as ConfirmationSummary,
+      () => undefined,
+    );
+    expect(container.querySelector('[data-testid="confirm-goto-validate"]')).toBeNull();
+  });
+
+  it('renders exactly as before when no navigation handler is supplied', () => {
+    // The prop is optional: every existing caller and test must be unaffected.
+    render(needsValidation);
+    expect(container.querySelector('[data-testid="confirm-goto-validate"]')).toBeNull();
+    expect(container.querySelector('[data-testid="confirm-ladder"]')).not.toBeNull();
+  });
+});

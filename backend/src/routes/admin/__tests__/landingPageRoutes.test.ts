@@ -333,3 +333,52 @@ describe('the picker list', () => {
     expect((await request(app).get('/api/admin/landing-pages?published=true')).status).toBe(400);
   });
 });
+
+/**
+ * A failed build has to be readable back off the server.
+ *
+ * The first real "Build the page" in production answered 502, the operator saw a toast, and there
+ * was no server-side record of why - because an expected `WorkflowError` returned without logging
+ * anything. "The user can see it" is not the same as being able to read it back an hour later.
+ */
+describe('failures are logged, not only returned', () => {
+  let warn: jest.SpyInstance;
+  beforeEach(() => { warn = jest.spyOn(console, 'warn').mockImplementation(() => {}); });
+  afterEach(() => { warn.mockRestore(); });
+
+  function logged(): any | null {
+    const call = warn.mock.calls.find((c) => String(c[0]).includes('landing_page_create_failed'));
+    return call ? JSON.parse(String(call[0])) : null;
+  }
+
+  it('logs the reason when the generator refuses, and still returns it to the caller', async () => {
+    const err: any = new Error('The generated page did not match the page format, twice. sections.1.items.0.source: Required');
+    err.status = 502; err.errorClass = 'DraftUnavailable'; err.name = 'WorkflowError';
+    Object.setPrototypeOf(err, (require('../../../services/content/contentWorkflowService').WorkflowError).prototype);
+    draftLandingPage.mockRejectedValue(err);
+
+    const res = await request(app).post('/api/admin/landing-pages')
+      .send({ brand_id: BRAND, source: BRIEF, name: 'X' });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/did not match the page format/);
+
+    const entry = logged();
+    expect(entry).not.toBeNull();
+    expect(entry.error_class).toBe('DraftUnavailable');
+    expect(entry.context.status).toBe(502);
+    // The part that was missing: the actual reason, on the server.
+    expect(entry.context.message).toMatch(/sections\.1\.items\.0\.source/);
+  });
+
+  it('passes the dropped sections through so the UI can say the page is incomplete', async () => {
+    draftLandingPage.mockResolvedValue({
+      content: GOOD_CONTENT, placeholders: [], unverifiedClaims: [], model: 'm', repaired: true,
+      droppedSections: ['stats (section 2): Required'],
+    });
+    const res = await request(app).post('/api/admin/landing-pages')
+      .send({ brand_id: BRAND, source: BRIEF, name: 'X' });
+
+    expect(res.body.droppedSections).toEqual(['stats (section 2): Required']);
+  });
+});
