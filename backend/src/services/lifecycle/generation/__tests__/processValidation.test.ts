@@ -10,6 +10,8 @@
  * indistinguishable from a rule that is simply always on.
  */
 
+import { readFileSync } from 'fs';
+import path from 'path';
 import { validateProcess, processErrors, cyclingReworkEdges, tasksThatCannotTerminate, PROCESS_VALIDATION_CODES } from '../processValidation';
 import { factoryValidate, factoryErrors } from '../../../factory/factoryValidate';
 import type { FactoryProject, FactoryTask, Assignment } from '../../../factory/contracts/factoryContract';
@@ -68,23 +70,53 @@ describe('the premise: this fixture is CLEAN under factoryValidate yet loops for
     expect(cyclingReworkEdges(base()).map((e) => e.id)).toEqual(['e-rework']);
   });
 
-  it('adds exactly two codes, neither colliding with factoryValidate’s fourteen', () => {
-    const existing = new Set(
-      // Drive the full rule set out of the validator rather than hardcoding fourteen strings.
-      factoryValidate(brokenEveryWhichWay()).map((i) => i.code),
-    );
-    for (const c of PROCESS_VALIDATION_CODES) expect(existing.has(c)).toBe(false);
+  it('adds exactly two codes, neither colliding with factoryValidate’s DECLARED fourteen', () => {
+    // An earlier version of this test harvested its comparison set by running factoryValidate
+    // over one deliberately-broken fixture. The P3-T2 verifier measured that harvest: it reached
+    // 4 of the 14 codes, so a collision with any of the other 10 — LOOP, DECISION, END, START,
+    // BRANCH_KIND, SOURCE_COVERAGE, OVERSIGHT, DUPLICATE_ASSIGNMENT, EFFORT_EVIDENCE,
+    // STAGE_LIMIT — would have passed while the comment claimed the full rule set. The check now
+    // reads the DECLARED vocabulary off the validator's own err()/warn() call sites, so a code
+    // added upstream is compared whether or not any fixture happens to trip it.
+    const declared = declaredFactoryCodes();
+
+    expect(declared).toHaveLength(14);
+    for (const c of PROCESS_VALIDATION_CODES) expect(declared).not.toContain(c);
     expect([...PROCESS_VALIDATION_CODES]).toEqual(['REWORK_BOUND', 'TERMINATION']);
+  });
+
+  it('POSITIVE CONTROL: the vocabulary scan reads call sites, not prose', () => {
+    // factoryValidate.ts names its codes in comments too (`// PERFORMER — every TASK...`), so an
+    // unanchored [A-Z_]+ scan would over-match. This is the trap that caught three checks earlier
+    // in this run, one of which matched a doc comment explaining why NOT to do the thing checked
+    // for. Proven on a fixture rather than asserted.
+    const sample = [
+      '// PROSE_ONLY_CODE is mentioned here but never raised.',
+      "issues.push(err('REAL_CODE', 'x'));",
+      "if (n) issues.push(warn('REAL_WARNING', 'y'));",
+    ].join('\n');
+
+    expect(extractCodes(sample)).toEqual(['REAL_CODE', 'REAL_WARNING']);
+    expect(extractCodes(sample)).not.toContain('PROSE_ONLY_CODE');
   });
 });
 
-/** A project tripping many rules at once, used only to harvest the upstream code vocabulary. */
-function brokenEveryWhichWay(): FactoryProject {
-  const p = base();
-  p.tasks.push(task({ id: 't-orphan', kind: 'TASK', stage_id: 's9' }));
-  p.source_blocks.push({ id: 'blk-2', locator: 'L.2', text: '?', kind: 'unresolved' });
-  p.transitions.push({ id: 'e-bad', from_task_id: 'nope', to_task_id: 't-1', condition: null, is_rework: false });
-  return p;
+/** Code strings actually raised by `err(...)`/`warn(...)` call sites in a source text. */
+function extractCodes(source: string): string[] {
+  return [...new Set([...source.matchAll(/\b(?:err|warn)\('([A-Z_]+)'/g)].map((m) => m[1]))].sort();
+}
+
+/** factoryValidate's declared rule vocabulary, read from the module's own source. */
+function declaredFactoryCodes(): string[] {
+  // An explicit path, not `require.resolve` — under ts-jest that returns the .ts path but under a
+  // compiled run it returns .js, and papering over the difference with a string replace is the
+  // kind of cleverness that fails silently in one environment only.
+  const file = path.join(__dirname, '..', '..', '..', 'factory', 'factoryValidate.ts');
+  const codes = extractCodes(readFileSync(file, 'utf8'));
+  // Guard against the scan silently matching nothing — an impossible count is a bug in the
+  // check, not evidence about the code. My own first attempt at this grep returned 0.
+  if (codes.length === 0) throw new Error('vocabulary scan matched nothing; the pattern is wrong');
+  return codes;
 }
 
 describe('REWORK_BOUND — the gap LOOP leaves open by design', () => {
