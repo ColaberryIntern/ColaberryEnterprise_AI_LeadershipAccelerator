@@ -53,6 +53,7 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureZoomRequestLedgerSchema } from './db/ensureZoomRequestLedgerSchema';
 import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema';
+import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
@@ -2479,6 +2480,10 @@ async function start(): Promise<void> {
   // Zoom meeting idempotency ledger. Must exist before any booking provisions a
   // meeting, so it is ensured on boot like the rest, not behind a feature flag.
   await ensureZoomRequestLedgerSchema();
+  // The register of Zoom hosts meetings may be created as. Must exist BEFORE the
+  // slot schema, whose per-host exclusion constraint is what turns extra hosts
+  // into extra capacity.
+  await ensureZoomHostSchema();
   // Practice-slot reservations + the overlap exclusion constraint.
   await ensurePresentationSlotSchema();
   // Project Presentation Studio: 5 tables + 4 additive columns on `projects`
