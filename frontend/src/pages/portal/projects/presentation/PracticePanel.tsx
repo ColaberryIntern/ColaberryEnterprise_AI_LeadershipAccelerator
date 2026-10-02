@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import GetReadyPanel from './GetReadyPanel';
 import {
   fetchPracticeSession,
   startPractice,
@@ -62,8 +63,12 @@ export interface PracticePanelProps {
 type Load = 'loading' | 'ready' | 'error';
 
 /** The reserved slot, once there is one. */
-function BookedSlot({ session }: { session: PracticeSession }) {
+function BookedSlot(
+  { session, projectId, storyId, demo }:
+  { session: PracticeSession; projectId: string; storyId: string; demo?: boolean },
+) {
   return (
+    <>
     <div className="ps-card" data-testid="ps-practice-booked">
       <h3>Your practice room</h3>
       <dl className="ps-facts">
@@ -82,12 +87,25 @@ function BookedSlot({ session }: { session: PracticeSession }) {
           )}
         </dd>
       </dl>
-      <p className="ps-note ps-note--soft">
-        {session.meetingReady
-          ? 'Joining from this page arrives with the get-ready screen, which shows you who can see the room and whether it is recording before you are in it.'
-          : 'The room is being created. This usually takes a few seconds — reload the page to check.'}
-      </p>
+      {!session.meetingReady && (
+        <p className="ps-note ps-note--soft">
+          The room is being created. This usually takes a few seconds — reload the page to check.
+        </p>
+      )}
     </div>
+    {/* The get-ready step only appears once there is actually a room to go into.
+        Offering it earlier would be a consent screen for a door that is not there. */}
+    {session.meetingReady && (
+      <GetReadyPanel
+        projectId={projectId}
+        storyId={storyId}
+        attemptId={session.attemptId}
+        mode={session.mode}
+        recordingPolicy={session.recordingPolicy}
+        demo={demo}
+      />
+    )}
+    </>
   );
 }
 
@@ -155,7 +173,9 @@ export default function PracticePanel({ projectId, storyId, demo }: PracticePane
     return <p className="ps-note" data-testid="ps-practice-error">Could not load your practice room. Reload to try again.</p>;
   }
 
-  if (session && session.bookingId) return <BookedSlot session={session} />;
+  if (session && session.bookingId) {
+    return <BookedSlot session={session} projectId={projectId} storyId={storyId} demo={demo} />;
+  }
 
   return (
     <form className="ps-card" onSubmit={submit} data-testid="ps-practice-form">
