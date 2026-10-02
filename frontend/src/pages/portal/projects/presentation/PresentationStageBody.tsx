@@ -2,6 +2,7 @@ import React from 'react';
 import DemoEvidencePanel from '../DemoEvidencePanel';
 import PromptPanel from './PromptPanel';
 import PreparePanel from './PreparePanel';
+import PracticePanel from './PracticePanel';
 import LearnStage from './LearnStage';
 import { STAGE_META, type PresentationStage } from './presentationStages';
 
@@ -86,11 +87,11 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
         <PromptPanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
+      {/* Practice is live on every task that is not handing in here. Reserving a
+          room is real work on PREP-4 and equally real for a student on PREP-5 who
+          wants one more run before demo day. */}
       {stage === 'practice' && !onEvidenceStage && (
-        <Pending
-          what="Booking a practice room from this page is not wired up yet."
-          when="Session launch arrives in the next phase."
-        />
+        <PracticePanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
       {stage === 'present' && !isDemoDay && (
