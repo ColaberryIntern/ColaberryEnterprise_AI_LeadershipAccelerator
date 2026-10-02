@@ -229,3 +229,54 @@ export async function startPractice(
     throw err;
   }
 }
+
+/**
+ * What a student must be told BEFORE they are inside a recorded call.
+ * Mirrors the backend `LaunchBrief`.
+ */
+export interface LaunchBrief {
+  whoCanSee: string;
+  recordingAutomatic: boolean;
+  recordingPolicy: string;
+}
+
+export interface LaunchResponse {
+  join_url: string;
+  attempt_id: string;
+  brief: LaunchBrief;
+}
+
+/** The room is yours but not usable yet — a real state, not a failure. */
+export class LaunchNotReadyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LaunchNotReadyError';
+  }
+}
+
+/**
+ * Asks for the join link at the moment of launching.
+ *
+ * A POST on purpose. The server re-checks room entitlement on this call, so the
+ * link is never carried in a page payload where it would outlive the permission
+ * that produced it.
+ */
+export async function launchPractice(
+  projectId: string,
+  storyId: string,
+  attemptId: string,
+): Promise<LaunchResponse> {
+  try {
+    const { data } = await portalApi.post<LaunchResponse>(
+      taskPath(projectId, storyId, 'presentation-launch'),
+      { attempt_id: attemptId },
+    );
+    return data;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const message = err?.response?.data?.error;
+    if (status === 409) throw new LaunchNotReadyError(message || 'The room is not ready yet.');
+    if (status === 403) throw new Error(message || 'You are not authorized to join this session.');
+    throw err;
+  }
+}

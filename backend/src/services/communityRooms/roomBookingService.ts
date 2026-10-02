@@ -209,6 +209,18 @@ export async function rsvp(
 export async function joinBooking(
   ctx: RoomAccessContext,
   bookingId: string,
+  // `recognize: false` suppresses the attendance award ONLY. Authorization,
+  // attendance-intent and the join event are unaffected, because those are the
+  // security- and reporting-critical parts and no caller may opt out of them.
+  //
+  // WHY THIS EXISTS. The award is idempotent on `attend:<bookingId>:<enrollmentId>`,
+  // which is once per BOOKING. That is correct for a session someone else
+  // scheduled, and wrong for one the student can mint at will: the Presentation
+  // Studio lets a learner create a fresh solo rehearsal whenever they like, so
+  // without this each new room would pay another 5 points and 5 community XP.
+  // "Reliable Study Partner" also means showing up for someone else; a solo
+  // rehearsal has no partner to be reliable to.
+  opts: { recognize?: boolean } = {},
 ): Promise<{ join_url: string | null; state: RoomBookingState }> {
   const { booking, room } = await loadBookingWithRoom(bookingId);
   const membership = await membershipFor(room.id, ctx.enrollmentId);
@@ -239,7 +251,8 @@ export async function joinBooking(
   });
   log('info', 'booking_join', { booking_id: bookingId, enrollment_id: ctx.enrollmentId, outcome: 'authorized' });
   // Recognition: showing up counts (Reliable Study Partner), once per session.
-  try {
+  // Default stays ON so every existing caller behaves exactly as before.
+  if (opts.recognize !== false) try {
     await recordContribution(ctx.enrollmentId, {
       category: 'reliable_study_partner', action: 'attended', points: 5,
       roomId: room.id, bookingId: booking.id, idempotencyKey: `attend:${booking.id}:${ctx.enrollmentId}`,

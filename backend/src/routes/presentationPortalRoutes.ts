@@ -257,4 +257,41 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/presentation-practic
   } catch (e) { fail(res, e, next); }
 });
 
+// LAUNCH — the one place a join URL is ever issued.
+//
+// A POST, not a GET, and not a field on any read payload. `joinBooking` re-checks
+// the caller's room entitlement on this exact call, so a permission removed a minute
+// ago takes effect now rather than at the viewer's next page load. The provider's
+// privileged host URL is not involved anywhere in this backend; a guard test asserts
+// the string appears in no product source file.
+const launchSchema = z.object({
+  attempt_id: z.string().trim().uuid(),
+}).strict();
+
+router.post('/api/portal/projects/:projectId/tasks/:storyId/presentation-launch', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const body = launchSchema.parse(req.body || {});
+    const { launchAttempt } = await import('../services/presentation/presentationLaunchService');
+    const r = await launchAttempt({
+      enrollmentId: eid(req),
+      cohortId: req.participant?.cohort_id ?? null,
+      isStaff: req.participant?.isStaff === true,
+      projectId: String(req.params.projectId),
+      storyId: String(req.params.storyId),
+      attemptId: body.attempt_id,
+    });
+    if (!r.ok) {
+      // 409 for the two "yours, but not yet" states: the request was correct and
+      // permitted, the room simply is not usable at this instant.
+      if (r.reason === 'not_booked') return res.status(409).json({ error: 'This take has no room yet.' });
+      if (r.reason === 'not_ready') return res.status(409).json({ error: 'The room is still being created. Try again in a few seconds.' });
+      if (r.reason === 'not_authorized') return res.status(403).json({ error: 'You are not authorized to join this session.' });
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    res.json({ join_url: r.joinUrl, attempt_id: r.attemptId, brief: r.brief });
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;
