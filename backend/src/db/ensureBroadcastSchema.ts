@@ -22,6 +22,13 @@
  * Conventions this follows (and why):
  *  - Additive only. Every statement is CREATE ... IF NOT EXISTS; no existing table is altered. Asserted by
  *    __tests__/ensureBroadcastSchema.test.ts against this exact statement list.
+ *  - A COLUMN MAY STILL BE ADDED TO A CREATE BLOCK HERE *ONLY* WHILE THESE TABLES ARE
+ *    UNRELEASED. `CREATE TABLE IF NOT EXISTS` is a no-op against a database that already has
+ *    the table, so editing the block would silently skip the new column on every existing
+ *    deployment — the trap documented at ensureCaseStudySchema.ts:486-489. These tables have
+ *    never been deployed, so `batch_id` below is safe to add inline. The moment this ships,
+ *    that stops being true and a new column needs its own
+ *    `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` in a separate ensure file.
  *  - CHECK constraints are declared INLINE in CREATE TABLE rather than via the
  *    ALTER TABLE DROP CONSTRAINT / ADD CONSTRAINT pair used by ensureLiveSessionSchema. These are brand-new
  *    tables, so inline is sufficient and it keeps the additive-only guarantee literally true. A later state
@@ -151,6 +158,11 @@ export const BROADCAST_STATEMENTS: ReadonlyArray<string> = [
      source_id VARCHAR(200) NOT NULL,
      is_authoritative BOOLEAN NOT NULL DEFAULT true,
      linked_reason TEXT,
+     -- Stamped by a backfill run so the whole run is reversible with
+     -- DELETE ... WHERE batch_id = ?. Without it, undoing a bad backfill means
+     -- reconstructing which rows it touched from timestamps, which is how a cleanup
+     -- deletes something it did not create. NULL for rows created by normal operation.
+     batch_id VARCHAR(80),
      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
    )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_broadcast_source_ref
@@ -161,6 +173,11 @@ export const BROADCAST_STATEMENTS: ReadonlyArray<string> = [
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_broadcast_source_ref_authoritative
      ON broadcast_source_refs (occurrence_id)
      WHERE is_authoritative`,
+  // Reversal path for a backfill run. Partial, because the overwhelming majority of rows
+  // are created by normal operation and carry no batch.
+  `CREATE INDEX IF NOT EXISTS idx_broadcast_source_ref_batch
+     ON broadcast_source_refs (batch_id)
+     WHERE batch_id IS NOT NULL`,
 ];
 
 export async function ensureBroadcastSchema(): Promise<void> {
