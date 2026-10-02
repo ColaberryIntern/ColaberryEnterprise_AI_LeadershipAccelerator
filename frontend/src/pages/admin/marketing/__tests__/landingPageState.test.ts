@@ -153,6 +153,22 @@ describe('what to say about a generated draft', () => {
     expect(w[1]).toMatch(/does not support these, so check or remove them: figure 92%/);
   });
 
+  it('a dropped section is the LOUDEST problem, and comes first', () => {
+    // A hole to fill and a claim to check are both about content that is there. A dropped section
+    // means part of the brief is missing from the page entirely.
+    const w = draftWarnings({
+      placeholders: ['[price]'], unverifiedClaims: ['figure 92%'],
+      droppedSections: ['stats (section 2): Required'],
+    });
+    expect(w).toHaveLength(3);
+    expect(w[0]).toMatch(/could not be turned into a section and was left out: stats \(section 2\): Required/);
+    expect(w[0]).toMatch(/Re-run with a clearer brief, or add those parts by hand/);
+  });
+
+  it('says nothing about dropped sections on the normal path', () => {
+    expect(draftWarnings({ placeholders: [], unverifiedClaims: [], droppedSections: [] })).toEqual([]);
+  });
+
   it('lists every placeholder rather than counting them', () => {
     const w = draftWarnings({ placeholders: ['[price]', '[start date]'], unverifiedClaims: [] });
     expect(w[0]).toContain('[price], [start date]');

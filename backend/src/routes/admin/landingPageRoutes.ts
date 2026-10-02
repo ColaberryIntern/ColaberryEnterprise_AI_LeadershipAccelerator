@@ -76,8 +76,23 @@ function bad(res: Response, details: unknown): void {
   res.status(400).json({ error: 'Validation failed', error_class: 'ValidationError', details });
 }
 
+/**
+ * Report a failure to the caller AND to the log.
+ *
+ * A `WorkflowError` used to return silently - it is an expected, well-described failure, so it
+ * went to the browser and nowhere else. That is exactly how the first real "Build the page" in
+ * production became undiagnosable: `POST /api/admin/landing-pages` answered 502, the operator saw
+ * a toast, and there was no server-side record of WHY. An expected failure is still a failure
+ * somebody has to explain; "the user can see it" is not a substitute for being able to read it
+ * back an hour later. Both kinds are logged now, with the level separating them.
+ */
 function fail(res: Response, err: unknown, event: string): void {
   if (err instanceof WorkflowError) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'landing-pages', event,
+      outcome: 'failure', error_class: err.errorClass,
+      context: { status: err.status, message: String(err.message).slice(0, 400) },
+    }));
     res.status(err.status).json({ error: err.message, error_class: err.errorClass });
     return;
   }
@@ -164,6 +179,7 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
       unverifiedClaims: draft.unverifiedClaims,
       model: draft.model,
       repaired: draft.repaired,
+      droppedSections: draft.droppedSections,
     });
   } catch (err) { fail(res, err, 'landing_page_create_failed'); }
 });
@@ -201,6 +217,7 @@ router.post('/api/admin/landing-pages/:id/revise', requireAdmin, async (req: Req
       unverifiedClaims: draft.unverifiedClaims,
       model: draft.model,
       repaired: draft.repaired,
+      droppedSections: draft.droppedSections,
     });
   } catch (err) { fail(res, err, 'landing_page_revise_failed'); }
 });

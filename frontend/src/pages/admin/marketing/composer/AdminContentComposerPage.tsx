@@ -524,7 +524,7 @@ export default function AdminContentComposerPage() {
             </div>
           )}
           {confirmation
-            ? <ComposerConfirmation summary={confirmation} busy={busy} onAction={act} />
+            ? <ComposerConfirmation summary={confirmation} busy={busy} onAction={act} onGoToStep={goToStep} />
             : <p className="text-muted mb-0">Create the draft to see the confirmation.</p>}
           {item?.status === 'ready_for_review' && (
             <div className="d-flex flex-wrap gap-2 align-items-center mt-3 pt-3 border-top" data-testid="reviewer-actions">
