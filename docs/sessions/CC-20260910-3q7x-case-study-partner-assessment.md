@@ -132,3 +132,59 @@ Branch: `workstream/case-study-partner-assessment` (cut from `origin/main`).
   let unevidenced outcome language through.
 - **Backfilling the three new sections onto the fourteen approved records.** Each needs a
   person for the fields a repository cannot supply.
+
+---
+
+## The one code change: close the anonymized proof hole
+
+- [x] `ruleProofMetadata` demands an evidence pointer from `anonymized`, not only `verified`
+  - Date: 2026-10-02
+  - Session: CC-20260910-3q7x
+  - What changed: `caseStudyPublishRules.ts` gains `NEEDS_EVIDENCE`
+    (`verified` + `anonymized`). Until now the rule read
+    `v?.class === 'verified'`, so an `anonymized` metric — which
+    `types/caseStudy.ts` defines as "the client confirmed it but will not be named" —
+    could publish with no evidence pointer at all. Withholding a name is a presentation
+    choice, not grounds to skip proof. `illustrative` and `pending` are deliberately
+    excluded: each says on its face what it is, and demanding proof from them would be
+    demanding they stop saying the true thing they exist to say.
+  - Verification: `npx jest caseStudyPublicationService.test.ts caseStudyContracts.test.ts`
+    → **147 passed, 2 suites**, `JEST_EXIT=0`. `npx tsc --noEmit` → `TSC_EXIT=0`, zero
+    output lines. Both re-run AFTER the last edit.
+  - Mutation evidence: narrowing `NEEDS_EVIDENCE` back to `['verified']` failed exactly
+    one test, **by name** — "refuses an anonymized metric with no evidence pointer — a
+    withheld name is not a missing fact" — with 94 others still passing. Restored by edit,
+    never by `git checkout`; the `MUTATION` marker count is 0.
+  - Blast radius, measured on production before writing it: every metric on every approved
+    snapshot is class `verified`, `anonymized_without_evidenceId = 0`, and the only
+    verification methods in use across the whole library are `internal` and `repo`. This
+    tightens the gate and refuses nothing already published.
+  - Notes: three tests, not one — it fires; it does not fire when evidence is present; and
+    `illustrative` / `pending` are left alone.
+
+---
+
+## Escalation: `operational_result` needs a model nobody built
+
+`computeMaturity`'s own contract says `operational_result` "needs an outcome measured
+through an **approved measurement definition**" and `impact_case_study` "needs a
+client-confirmed business impact on top of that".
+
+Searched the backend for `measurementDefinition`, `measurement_definition` and
+`MeasurementDefinition`: **zero hits.** The concept is named in the contract and the
+comments and has never been built. That is the real reason `outcomeEvidence` is "empty by
+construction" — a stated precondition with nothing behind it.
+
+So teaching `computeMaturity` to read a verification method would be premature: there is
+nothing approved for it to read, and the only thing it could do is promote records on
+evidence nobody signed off, which is the exact failure the ladder exists to prevent.
+
+Two measurements that bear on the decision, both from production on 2026-10-02:
+
+- Every metric on every approved snapshot is class `verified`.
+- **`method: 'client'` has never been used once.** Methods in use: `internal`, `repo`.
+
+The vocabulary for a client-confirmed outcome has been present and unused the whole time.
+Building the measurement-definition model is a new schema plus an approval workflow, which
+is an architecture decision and sits with the DRI. Until it is made, the ladder stays
+capped at `capability_demonstration` and the §6 phrase ban stays absolute.
