@@ -50,6 +50,42 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
 ];
 
 /**
+ * Indexes that are not optimisations — they are the correctness guarantees.
+ *
+ * CHECKING TABLES IS NOT ENOUGH, and this list exists because of a measured result. The LC-13
+ * concurrency suite proved against a real Postgres that with `uq_blueprint_approval_revision`
+ * DROPPED, two concurrent approvals of the same revision write TWO rows; with it present, one.
+ * The application-level CAS is a read-then-compare and does not close the race on its own.
+ *
+ * So a schema assert that confirms the tables exist while an index is missing would report a
+ * healthy schema over a reopened production incident. Every name here is load-bearing:
+ *
+ *   uq_lifecycle_student_project / _delivery_project
+ *       One lifecycle per project. Without these, registration is not idempotent and a duplicate
+ *       request creates a second lifecycle for the same project.
+ *   uq_blueprint_manifest_revision_student / _delivery
+ *       One manifest per (tenant, project, revision) — the backstop behind the approval CAS.
+ *   uq_blueprint_approval_revision
+ *       One approval per manifest revision. This is the one the concurrency proof drops.
+ */
+export const REQUIRED_INDEXES: ReadonlyArray<string> = [
+  'uq_lifecycle_student_project',
+  'uq_lifecycle_delivery_project',
+  'uq_blueprint_manifest_revision_student',
+  'uq_blueprint_manifest_revision_delivery',
+  'uq_blueprint_approval_revision',
+];
+
+/**
+ * CHECK constraints that make "the two identity tables are not merged" a database invariant
+ * rather than a convention someone can forget.
+ */
+export const REQUIRED_CONSTRAINTS: ReadonlyArray<string> = [
+  'ck_lifecycle_exactly_one_project',
+  'ck_manifest_exactly_one_project',
+];
+
+/**
  * Every DDL statement, hoisted so a test can assert the whole set is additive — only
  * CREATE ... IF NOT EXISTS, never an ALTER or DROP of an existing table — and that FKs point
  * only at tables that already exist (tenants, projects, delivery_projects).
@@ -199,6 +235,28 @@ export async function assertProjectLifecycleSchema(): Promise<boolean> {
     );
     const row = (((rows as any[]) || [])[0] || {}) as Record<string, boolean>;
     REQUIRED_TABLES.forEach((t, i) => { if (!row[`t${i}`]) problems.push(`table ${t} missing`); });
+
+    // THE INDEXES, for the reason spelled out on REQUIRED_INDEXES: a table-only assert would
+    // report a healthy schema while the backstop behind the approval CAS was gone. Same
+    // bool_or-aliased single-row form, for the same raw-array quirk.
+    const idxSelects = REQUIRED_INDEXES.map((n, i) => `bool_or(indexname = '${n}') AS i${i}`).join(', ');
+    const [idxRows] = await sequelize.query(
+      `SELECT ${idxSelects} FROM pg_indexes WHERE schemaname = 'public'`,
+    );
+    const idxRow = (((idxRows as any[]) || [])[0] || {}) as Record<string, boolean>;
+    REQUIRED_INDEXES.forEach((n, i) => {
+      if (!idxRow[`i${i}`]) problems.push(`index ${n} missing (a correctness guarantee, not an optimisation)`);
+    });
+
+    // The CHECK constraints keeping the two identity tables unmerged.
+    const ckSelects = REQUIRED_CONSTRAINTS.map((n, i) => `bool_or(constraint_name = '${n}') AS c${i}`).join(', ');
+    const [ckRows] = await sequelize.query(
+      `SELECT ${ckSelects} FROM information_schema.table_constraints WHERE table_schema = 'public'`,
+    );
+    const ckRow = (((ckRows as any[]) || [])[0] || {}) as Record<string, boolean>;
+    REQUIRED_CONSTRAINTS.forEach((n, i) => {
+      if (!ckRow[`c${i}`]) problems.push(`check constraint ${n} missing`);
+    });
   } catch (err: any) {
     problems.push(`schema introspection failed: ${err?.message}`);
   }

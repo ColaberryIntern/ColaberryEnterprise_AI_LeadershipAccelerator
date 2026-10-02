@@ -153,7 +153,25 @@ describe('the invariants the approval ladder depends on', () => {
   });
 });
 
-describe('assertProjectLifecycleSchema reads the bool_or aggregate correctly', () => {
+describe('assertProjectLifecycleSchema checks tables, indexes AND constraints', () => {
+  /**
+   * The assert issues THREE queries now, so the double answers whichever it is handed by
+   * recovering the aliases from the SQL itself. A single canned reply would answer the tables
+   * query and leave the index aliases undefined — which is exactly how the first version of this
+   * test broke when index checking was added, and why deriving the answer is better than fixing
+   * three hard-coded responses in order.
+   */
+  function answerFrom(sql: string, absent: ReadonlyArray<string>): Record<string, boolean> {
+    const row: Record<string, boolean> = {};
+    for (const [, name, alias] of sql.matchAll(/bool_or\((?:\w+) = '([^']+)'\) AS (\w+)/g)) {
+      row[alias] = !absent.includes(name);
+    }
+    return row;
+  }
+  function answerAll(absent: ReadonlyArray<string> = []) {
+    queryMock.mockImplementation(async (sql: string) => [[answerFrom(String(sql), absent)]]);
+  }
+
   beforeEach(() => {
     queryMock.mockReset();
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -161,17 +179,15 @@ describe('assertProjectLifecycleSchema reads the bool_or aggregate correctly', (
   });
   afterEach(() => { jest.restoreAllMocks(); });
 
-  it('returns true when every table reports present', async () => {
-    const all: Record<string, boolean> = {};
-    REQUIRED_TABLES.forEach((_, i) => { all[`t${i}`] = true; });
-    queryMock.mockResolvedValue([[all]]);
+  it('returns true when every table, index and constraint reports present', async () => {
+    answerAll();
     await expect(assertProjectLifecycleSchema()).resolves.toBe(true);
+    // Three queries, not one: tables, indexes, constraints.
+    expect(queryMock).toHaveBeenCalledTimes(3);
   });
 
   it('POSITIVE CONTROL: returns false and names the table when one is absent', async () => {
-    const partial: Record<string, boolean> = {};
-    REQUIRED_TABLES.forEach((_, i) => { partial[`t${i}`] = i !== 2; }); // table index 2 missing
-    queryMock.mockResolvedValue([[partial]]);
+    answerAll([REQUIRED_TABLES[2]]);
     const errSpy = jest.spyOn(console, 'error');
     await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
     const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
@@ -179,20 +195,36 @@ describe('assertProjectLifecycleSchema reads the bool_or aggregate correctly', (
     expect(logged).toContain('project_lifecycle_schema_invariant_violated');
   });
 
+  it('returns false and names the INDEX when one is absent — tables alone are not a green light', async () => {
+    // A missing unique index does not surface as an error. It surfaces as two approved rows for
+    // one revision, which the LC-13 concurrency suite measured against a real Postgres.
+    answerAll(['uq_blueprint_approval_revision']);
+    const errSpy = jest.spyOn(console, 'error');
+    await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
+    const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).toContain('uq_blueprint_approval_revision');
+    expect(logged).toContain('correctness guarantee');
+  });
+
+  it('returns false and names the CHECK constraint when one is absent', async () => {
+    answerAll(['ck_manifest_exactly_one_project']);
+    const errSpy = jest.spyOn(console, 'error');
+    await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join('\n')).toContain('ck_manifest_exactly_one_project');
+  });
+
   it('returns false when introspection itself throws, rather than reporting success', async () => {
     queryMock.mockRejectedValue(new Error('connection refused'));
     await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
   });
 
-  it('asks for one bool_or alias per required table', async () => {
-    const all: Record<string, boolean> = {};
-    REQUIRED_TABLES.forEach((_, i) => { all[`t${i}`] = true; });
-    queryMock.mockResolvedValue([[all]]);
+  it('asks for one bool_or alias per required name, across all three queries', async () => {
+    answerAll();
     await assertProjectLifecycleSchema();
-    const sql = String(queryMock.mock.calls[0][0]);
-    REQUIRED_TABLES.forEach((t, i) => {
-      expect(sql).toContain(`bool_or(table_name = '${t}') AS t${i}`);
-    });
-    expect(sql).toContain("table_schema = 'public'");
+    const sqls = queryMock.mock.calls.map((c) => String(c[0]));
+    REQUIRED_TABLES.forEach((t, i) => expect(sqls[0]).toContain(`bool_or(table_name = '${t}') AS t${i}`));
+    expect(sqls[0]).toContain("table_schema = 'public'");
+    expect(sqls[1]).toContain('pg_indexes');
+    expect(sqls[2]).toContain('table_constraints');
   });
 });

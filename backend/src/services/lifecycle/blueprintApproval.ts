@@ -31,9 +31,20 @@
  */
 import { createHash } from 'crypto';
 import { Op, type Transaction } from 'sequelize';
-import { sequelize } from '../../config/database';
-import OperatingBlueprintManifest from '../../models/OperatingBlueprintManifest';
-import BlueprintApproval from '../../models/BlueprintApproval';
+import type OperatingBlueprintManifestType from '../../models/OperatingBlueprintManifest';
+import type BlueprintApprovalType from '../../models/BlueprintApproval';
+
+/**
+ * MODELS AND THE CONNECTION ARE LAZY-LOADED INSIDE `approveBlueprint`, never imported here.
+ *
+ * This is the pattern `factoryApproval.ts:125` already uses, and the reason is documented at
+ * `routes/admin/factoryRoutes.ts:9-11`: a static model import triggers Sequelize init at MODULE
+ * LOAD, so any route importing this file would initialise the ORM just by being imported. That
+ * breaks every route test that stubs `config/database` — the failure surfaces as
+ * `Model.init … reading 'define'` inside product code that is perfectly fine.
+ *
+ * The two `import type` lines above are erased at compile time and cost nothing at runtime.
+ */
 
 export type ApprovalScope = 'documented' | 'full';
 
@@ -106,7 +117,7 @@ export function manifestContentHash(parts: {
 }
 
 /** The project this manifest belongs to, whichever identity table it lives in. */
-function projectIdOf(m: OperatingBlueprintManifest): string {
+function projectIdOf(m: OperatingBlueprintManifestType): string {
   const id = m.student_project_id ?? m.delivery_project_id;
   if (!id) throw new Error('ManifestInvariantViolation: manifest has neither project id');
   return id;
@@ -128,7 +139,7 @@ export interface ApproveBlueprintInput {
 }
 
 export interface ApproveBlueprintResult {
-  approval: BlueprintApproval;
+  approval: BlueprintApprovalType;
   /**
    * True when this revision was already approved and the ORIGINAL record is being returned.
    * Re-stamping would quietly change who approved what, and when.
@@ -144,6 +155,11 @@ export interface ApproveBlueprintResult {
  * issues) -> separation of duty (403) -> idempotent hit (200 with the original) -> write.
  */
 export async function approveBlueprint(input: ApproveBlueprintInput): Promise<ApproveBlueprintResult> {
+  // Lazy, for the reason in the header note.
+  const { sequelize } = await import('../../config/database');
+  const { default: OperatingBlueprintManifest } = await import('../../models/OperatingBlueprintManifest');
+  const { default: BlueprintApproval } = await import('../../models/BlueprintApproval');
+
   return sequelize.transaction(async (tx: Transaction) => {
     // Tenant is part of the lookup, not a check applied afterwards. A row check that runs after
     // an unscoped read has already leaked the row's existence.
