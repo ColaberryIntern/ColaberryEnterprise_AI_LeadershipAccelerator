@@ -364,7 +364,7 @@ export interface QualificationRecord {
   requirements_json?: { established?: EstablishedRequirement[]; reviewedDocuments?: ReviewedDocument[] } | null;
 }
 /** The resolved, honest source state (mirrors the server gate). */
-export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed';
+export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed' | 'zip_workspace';
 export interface GovQualificationWorkspace {
   canonicalOpportunityId: string;
   /** false today: OP's live v2 detail endpoint is not wired, so the source is a labeled fixture. */
@@ -381,6 +381,8 @@ export interface GovQualificationWorkspace {
   changedSource: boolean;
   /** Server's verdict on whether an approval is currently permitted (source approvable + current + covered + unblocked). */
   canApprove: boolean;
+  /** Decoupled (discovery-ZIP) workspace only: the clicked discovery row's title/agency (display). Null on the canonical path. */
+  provenance?: { title: string | null; agency: string | null } | null;
 }
 
 /** A reviewer-established, cited applicable requirement (same shape the server coverage/blocking gate evaluates). */
@@ -404,8 +406,9 @@ export async function getGovQualificationWorkspace(canonicalOpportunityId: strin
 const qUrl = (canonicalOpportunityId: string, suffix = ''): string =>
   `/api/admin/factory/qualification/${encodeURIComponent(canonicalOpportunityId)}${suffix}`;
 
-/** Open (create) a pending_review qualification, bound server-side to the re-fetched source snapshot. Idempotent. */
-export async function createGovQualification(canonicalOpportunityId: string, body: { biddingEntity: string; deliveryProjectId?: string }): Promise<{ qualification: QualificationRecord }> {
+/** Open (create) a pending_review qualification. Canonical path: bound to the re-fetched source snapshot. Decoupled
+ *  (gws) path: bound to no snapshot; `from`/`agency` carry the clicked discovery row's provenance. Idempotent. */
+export async function createGovQualification(canonicalOpportunityId: string, body: { biddingEntity: string; deliveryProjectId?: string; from?: string; agency?: string }): Promise<{ qualification: QualificationRecord }> {
   const { data } = await api.post(qUrl(canonicalOpportunityId), body);
   return data;
 }

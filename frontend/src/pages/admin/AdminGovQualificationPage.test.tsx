@@ -320,4 +320,54 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(container.textContent ?? '').toContain('Open the qualification');
     expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Establish selected'))).toBe(false);
   });
+
+  // ── Decoupled (discovery-ZIP) workspace: source:null, keyed off a gws:<uuid> ──
+  const GWS = 'gws:11111111-1111-4111-a111-111111111111';
+  const decoupledWs = (over: Partial<GovQualificationWorkspace> = {}): GovQualificationWorkspace => ({
+    canonicalOpportunityId: GWS,
+    sourceLive: false,
+    sourceState: 'zip_workspace',
+    sourceStateLabel: 'ZIP workspace',
+    sourceAvailable: false,
+    sourceSnapshotVersion: null,
+    snapshotRecorded: false,
+    source: null,
+    evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+    coverage: { sufficient: false, reasons: ['pursuit_approval_not_enabled_on_this_path'] },
+    qualification: null,
+    changedSource: false,
+    canApprove: false,
+    provenance: { title: 'RFP AI-based IVR Solution', agency: 'City of Fort Worth' },
+    ...over,
+  });
+
+  it('decoupled (gws) workspace: capture UI renders on source:null — Extract card + Open-qualification enabled, no Source-facts, no "labeled sample" banner', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    await renderAt(`?gws=${encodeURIComponent(GWS)}&from=${encodeURIComponent('RFP AI-based IVR Solution')}&agency=Fort%20Worth`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(factoryApi.getGovQualificationWorkspace).toHaveBeenCalledWith(GWS, 'colaberry'); // keyed off the gws id
+    expect(text).toContain('Extract requirements from the solicitation ZIP'); // capture UI renders despite source:null
+    expect(text).not.toContain('labeled sample');                             // OP-only banner is absent
+    expect(text).not.toContain('Server-fetched by canonical id');             // Source-facts card hidden on decoupled
+    const openBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open qualification')) as HTMLButtonElement;
+    expect(openBtn).toBeTruthy();
+    expect(openBtn.disabled).toBe(false);                                      // enabled even though sourceAvailable:false
+  });
+
+  it('decoupled (gws) workspace with established requirements: "what they want" lists them, requirements-by-due-stage renders, Approve is deferred (not an OP-source block)', async () => {
+    const established = [{ id: 'RQ1', text: 'Offeror shall be registered in SAM.', applicability: 'always' as const, dueStage: 'submission' as const, bindingStatus: 'binding_solicitation_requirement' }];
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established } },
+      evaluation: { evals: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Offeror shall be registered in SAM.'); // "what they want" lists the established requirement (not the empty-state)
+    expect(text).toContain('Requirements by due stage');           // renders from evaluation on the decoupled path
+    const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+    expect(text).toContain('Pursuit approval and evidence attestation come in a later step'); // honest deferred note, not an OP-source block
+  });
 });
