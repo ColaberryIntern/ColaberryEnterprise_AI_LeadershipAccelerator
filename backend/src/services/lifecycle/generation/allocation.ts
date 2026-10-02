@@ -92,6 +92,7 @@ export const ALLOCATION_CODES = [
   'ALLOCATION_ACCOUNTABLE',
   'PERFORMER_SINGULAR',
   'SENSITIVITY_AUTONOMY',
+  'ALLOCATION_CONTRADICTS_ASSIGNMENTS',
   'TASK_FIELDS',
 ] as const;
 export type AllocationCode = (typeof ALLOCATION_CODES)[number];
@@ -265,6 +266,44 @@ export function validateAllocation(
       }
       if (r.execution_class === 'ai_autonomous' && IRREVERSIBLE_AUTHORITY.has(t.decision_authority)) {
         issues.push(err('SENSITIVITY_AUTONOMY', `task ${t.id} carries '${t.decision_authority}' decision authority and is allocated 'ai_autonomous'. A high-consequence decision may not be reclassified into autonomy.`, t.id));
+      }
+    }
+
+
+    // ALLOCATION_CONTRADICTS_ASSIGNMENTS — the stated row against the assignment graph.
+    //
+    // The model is asked for the whole row even though three of its four fields are derivable,
+    // because `rationale` is not. That means there are now two accounts of who does this work:
+    // what the model SAID and what the assignments SHOW. They must agree, and a disagreement is
+    // a finding rather than a tie to break by preferring one side.
+    //
+    // ONE DIRECTION IS WORSE THAN THE OTHER, and the message says which. Stating
+    // `ai_with_approval` where the graph derives `ai_autonomous` claims a human approves work
+    // that no human is assigned to approve - a reviewer reads the reassuring label and the
+    // oversight does not exist. The reverse understates the oversight actually in place, which
+    // is wrong but not dangerous.
+    const derivedClass = deriveExecutionClass(byTask.get(t.id) ?? []);
+    for (const r of rows) {
+      if (derivedClass === null || r.execution_class === 'deterministic_software') {
+        // No executor type expresses "deterministic software", so the graph cannot confirm or
+        // contradict it. Exempt from this comparison rather than failed by it - but it still
+        // needs a rationale, which ALLOCATION_RATIONALE above enforces.
+        continue;
+      }
+      if (r.execution_class !== derivedClass) {
+        const overstated = r.execution_class === 'ai_with_approval' && derivedClass === 'ai_autonomous';
+        const claimsHuman = r.execution_class === 'human' && derivedClass !== 'human';
+        issues.push(err(
+          'ALLOCATION_CONTRADICTS_ASSIGNMENTS',
+          `task ${t.id} is stated as '${r.execution_class}' but its assignments derive '${derivedClass}'.`
+          + (overstated
+            ? ' This claims a human approver that no assignment provides: the label reassures a'
+              + ' reviewer while the oversight does not exist.'
+            : claimsHuman
+              ? ' This claims a person does work an agent is assigned to perform.'
+              : ' The stated allocation and the assignment graph disagree about who does this work.'),
+          t.id,
+        ));
       }
     }
 

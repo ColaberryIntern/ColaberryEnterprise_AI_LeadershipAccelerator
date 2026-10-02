@@ -17,6 +17,8 @@ import {
   FACTORY_PROCESS_JSON_SCHEMA,
   FACTORY_TRANSITION_JSON_SCHEMA,
   FACTORY_ROLE_JSON_SCHEMA,
+  FACTORY_ALLOCATION_JSON_SCHEMA,
+  FACTORY_ROLE_MAP_JSON_SCHEMA,
   FACTORY_DECOMPOSITION_JSON_SCHEMA,
 } from '../factoryContractSchema';
 import { buildSampleContractProject } from '../../sample/sampleContractProject';
@@ -104,13 +106,18 @@ describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the five record schemas', (
     expect([...FACTORY_DECOMPOSITION_JSON_SCHEMA.required].sort())
       .toEqual(['assignments', 'processes', 'roles', 'tasks', 'transitions']);
     const props = FACTORY_DECOMPOSITION_JSON_SCHEMA.properties;
-    expect(Object.keys(props).sort()).toEqual(['assignments', 'processes', 'roles', 'tasks', 'transitions']);
+    // P3-T3 added allocation and role_map to `properties` but NOT to `required`, so a
+    // decomposition stored before P3-T3 still parses. Updated to the new EXACT set rather
+    // than relaxed to a subset check: the exactness is what makes this test worth having.
+    expect(Object.keys(props).sort()).toEqual(['allocation', 'assignments', 'processes', 'role_map', 'roles', 'tasks', 'transitions']);
     // every property is an array whose items reference the matching frozen/added record schema
     expect(props.processes.items).toBe(FACTORY_PROCESS_JSON_SCHEMA);
     expect(props.tasks.items).toBe(FACTORY_TASK_JSON_SCHEMA);
     expect(props.assignments.items).toBe(FACTORY_ASSIGNMENT_JSON_SCHEMA);
     expect(props.transitions.items).toBe(FACTORY_TRANSITION_JSON_SCHEMA);
     expect(props.roles.items).toBe(FACTORY_ROLE_JSON_SCHEMA);
+    expect(props.allocation.items).toBe(FACTORY_ALLOCATION_JSON_SCHEMA);
+    expect(props.role_map.items).toBe(FACTORY_ROLE_MAP_JSON_SCHEMA);
     expect((FACTORY_DECOMPOSITION_JSON_SCHEMA as any).additionalProperties).toBe(false);
   });
 });

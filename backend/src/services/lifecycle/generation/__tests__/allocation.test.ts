@@ -85,7 +85,8 @@ describe('the gap: allocation is absent, not merely incomplete', () => {
   it('every code this module adds is new', () => {
     expect([...ALLOCATION_CODES]).toEqual([
       'ALLOCATION_MISSING', 'ALLOCATION_DUPLICATE', 'ALLOCATION_CLASS', 'ALLOCATION_RATIONALE',
-      'ALLOCATION_ACCOUNTABLE', 'PERFORMER_SINGULAR', 'SENSITIVITY_AUTONOMY', 'TASK_FIELDS',
+      'ALLOCATION_ACCOUNTABLE', 'PERFORMER_SINGULAR', 'SENSITIVITY_AUTONOMY',
+      'ALLOCATION_CONTRADICTS_ASSIGNMENTS', 'TASK_FIELDS',
     ]);
   });
 
@@ -317,6 +318,77 @@ describe('SENSITIVITY_AUTONOMY — connecting a field that was always required t
     p.tasks.find((t) => t.id === 't-1')!.decision_authority = 'decide_full';
     // Both reasons fire: the data AND the authority. Reclassifying is refused twice over.
     expect(codes(p, autoRow).filter((c) => c === 'SENSITIVITY_AUTONOMY')).toHaveLength(2);
+  });
+});
+
+
+describe('ALLOCATION_CONTRADICTS_ASSIGNMENTS — the stated row against the graph', () => {
+  const row = (cls: AllocationRow['execution_class'], over: Partial<AllocationRow> = {}): AllocationRow[] => ([{
+    task_id: 't-1', execution_class: cls, rationale: 'stated by the model',
+    accountable_role_id: 'r-1', ...over,
+  }]);
+
+  it('THE DANGEROUS DIRECTION: ai_with_approval stated where no human approver is assigned', () => {
+    // The reassuring label with nothing behind it. A reviewer reads "a human approves this"
+    // and no assignment provides one.
+    const p = agentPerformed();
+    p.assignments = p.assignments.filter((a) => a.responsibility !== 'APPROVER');
+
+    const issues = validateAllocation(p, row('ai_with_approval'));
+    const clash = issues.filter((i) => i.code === 'ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+    expect(clash).toHaveLength(1);
+    expect(clash[0].stepId).toBe('t-1');
+    expect(clash[0].message).toContain('the oversight does not exist');
+  });
+
+  it('PASSING COUNTERPART: ai_with_approval stated WITH a human approver assigned', () => {
+    expect(allocationErrors(agentPerformed(), row('ai_with_approval'))).toEqual([]);
+  });
+
+  it('refuses human stated where an agent is assigned to perform', () => {
+    const issues = validateAllocation(agentPerformed(), row('human'));
+    const clash = issues.filter((i) => i.code === 'ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+    expect(clash).toHaveLength(1);
+    expect(clash[0].message).toContain('a person does work an agent is assigned to perform');
+  });
+
+  it('refuses an AI class stated where a human is assigned to perform', () => {
+    expect(codes(base(), row('ai_autonomous'))).toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+  });
+
+  it('flags understating oversight too, but without the dangerous-direction wording', () => {
+    // ai_autonomous stated where a human approver IS assigned: wrong, but it understates the
+    // oversight in place rather than inventing oversight that is absent.
+    const issues = validateAllocation(agentPerformed(), row('ai_autonomous'));
+    const clash = issues.filter((i) => i.code === 'ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+    expect(clash).toHaveLength(1);
+    expect(clash[0].message).not.toContain('the oversight does not exist');
+    expect(clash[0].message).toContain('disagree about who does this work');
+  });
+
+  it('EXEMPTS deterministic_software, which no executor type can express', () => {
+    // ExecutorType is person | team | agent. There is no "software", so the graph can neither
+    // confirm nor contradict the claim. Exempt from the comparison, not failed by it - and
+    // still required to carry a rationale.
+    expect(codes(base(), row('deterministic_software'))).not.toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+    const blank = row('deterministic_software', { rationale: '  ' });
+    expect(codes(base(), blank)).toContain('ALLOCATION_RATIONALE');
+  });
+
+  it('says nothing when the class cannot be derived at all', () => {
+    // No performer means no second account to compare against. ALLOCATION_MISSING is not the
+    // right code either, since a row WAS stated - the unknown surfaces via the derivation.
+    const p = base();
+    p.assignments = [];
+    expect(codes(p, row('human'))).not.toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+  });
+
+  it('a derived allocation never contradicts itself', () => {
+    // The derivation is one of the two accounts, so feeding it back must agree by construction.
+    // If this ever fails, deriveAllocation and the comparison have drifted apart.
+    for (const p of [base(), agentPerformed()]) {
+      expect(codes(p, deriveAllocation(p))).not.toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
+    }
   });
 });
 

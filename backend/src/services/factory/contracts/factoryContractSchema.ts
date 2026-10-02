@@ -118,6 +118,59 @@ export const FACTORY_ROLE_JSON_SCHEMA = {
 } as const;
 
 /**
+ * One row of the human/AI allocation matrix (P3-T3).
+ *
+ * WHY THE MODEL IS ASKED FOR THIS AT ALL, when three of the four fields are DERIVABLE from the
+ * assignments: `task_id`, `execution_class` and `accountable_role_id` can each be read off the
+ * PERFORMER/ACCOUNTABLE/APPROVER assignments, and
+ * `services/lifecycle/generation/allocation.ts` does exactly that. `rationale` cannot be. It is
+ * the judgement - WHY this work sits on this side of the line - and a derived rationale is a
+ * restatement of the structure, not a reason.
+ *
+ * So the model states the whole row and the derivation CROSS-CHECKS it. Asking for only the
+ * rationale would have been simpler, but a stated allocation that disagrees with the assignment
+ * graph is itself a finding: it means the narrative and the structure have diverged, which is
+ * the kind of incoherence this phase exists to catch rather than average away.
+ */
+export const FACTORY_ALLOCATION_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['task_id', 'execution_class', 'rationale', 'accountable_role_id'],
+  properties: {
+    task_id: { type: 'string' },
+    // The four classes AllocationRow already declares. An enum, not a free string: a model
+    // inventing a fifth class is how "mostly automated" becomes unreviewable.
+    execution_class: {
+      type: 'string',
+      enum: ['human', 'ai_with_approval', 'ai_autonomous', 'deterministic_software'],
+    },
+    rationale: { type: 'string' },
+    // Nullable because purely human work needs no separate accountable role - the performer
+    // IS the accountability. AI work without one is refused downstream, not here.
+    accountable_role_id: { type: ['string', 'null'] },
+  },
+} as const;
+
+/**
+ * One row of the old->new role map (P3-T3).
+ *
+ * Unlike allocation, NONE of this is derivable. What a displaced function became, which part
+ * the AI now contributes, and what the person retains are facts about a job, and nothing in the
+ * assignment graph encodes them. This is the only part of P3-T3 the model is the sole source of.
+ */
+export const FACTORY_ROLE_MAP_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['previous_function', 'ai_contribution', 'new_role_id', 'retained_responsibilities'],
+  properties: {
+    previous_function: { type: 'string' },
+    ai_contribution: { type: 'string' },
+    new_role_id: { type: 'string' },
+    retained_responsibilities: { type: 'array', items: { type: 'string' } },
+  },
+} as const;
+
+/**
  * The full decomposition the Phase-2 LLM returns in one structured-output call. factoryAssemble
  * (T5) then attaches the deterministic source_blocks/requirements/tracks from the input and derives
  * idempotent assignment/edge ids, producing a FactoryProject factoryValidate can gate. Every array
@@ -133,5 +186,11 @@ export const FACTORY_DECOMPOSITION_JSON_SCHEMA = {
     assignments: { type: 'array', items: FACTORY_ASSIGNMENT_JSON_SCHEMA },
     transitions: { type: 'array', items: FACTORY_TRANSITION_JSON_SCHEMA },
     roles: { type: 'array', items: FACTORY_ROLE_JSON_SCHEMA },
+    // DELIBERATELY ABSENT FROM `required`. Adding them there would make every decomposition
+    // stored before P3-T3 fail to parse, which is a migration dressed as a schema tweak.
+    // Their absence is caught by lifecyclePrerequisites.allocation_unknown instead, where it
+    // blocks full approval while still permitting a draft.
+    allocation: { type: 'array', items: FACTORY_ALLOCATION_JSON_SCHEMA },
+    role_map: { type: 'array', items: FACTORY_ROLE_MAP_JSON_SCHEMA },
   },
 } as const;
