@@ -56,6 +56,7 @@ const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/A
 const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
 const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
 const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
+const AdminLandingPagesPage = lazy(() => import('../pages/admin/marketing/AdminLandingPagesPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -247,6 +248,11 @@ const adminRoutes = (
           {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
           <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
           <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
+          {/* Landing page authoring: brief -> page -> preview -> publish at /p/:brand/:slug.
+              Inside the marketing shell so it reads the brand from the bar rather than asking
+              again, and inside /admin/marketing so it inherits section `campaigns` by prefix -
+              the API side maps /api/admin/landing-pages the same way. */}
+          <Route path="/admin/marketing/landing-pages" element={<AdminLandingPagesPage />} />
         </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
