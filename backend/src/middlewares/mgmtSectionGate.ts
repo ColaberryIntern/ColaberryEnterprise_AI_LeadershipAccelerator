@@ -41,6 +41,10 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/content', 'campaigns'],
   // Publishing queue and receipts (T026): the same surface the composer submits into.
   ['/api/admin/publishing', 'campaigns'],
+  // Landing page authoring (brief -> draft -> preview -> publish at /p/:brand/:slug). Mapped the
+  // day the routes landed, for the reason the brands row above gives: these are the destinations
+  // campaigns point at, so they belong to the same section rather than a new key.
+  ['/api/admin/landing-pages', 'campaigns'],
   // Explorer Growth OS Command Center (spec §27; §1381 assigns it
   // `section: 'campaigns'` explicitly, so no new section key is needed).
   //

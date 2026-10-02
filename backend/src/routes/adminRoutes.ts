@@ -11,6 +11,7 @@ import leadRoutes from './admin/leadRoutes';
 import organizationRoutes from './admin/organizationRoutes';
 import brandRoutes from './admin/brandRoutes';
 import contentComposerRoutes from './admin/contentComposerRoutes';
+import landingPageRoutes from './admin/landingPageRoutes';
 import publishingRoutes from './admin/publishingRoutes';
 import channelAccountRoutes from './admin/channelAccountRoutes';
 import contentMediaRoutes from './admin/contentMediaRoutes';
@@ -143,6 +144,8 @@ router.use(leadRoutes);
 router.use(organizationRoutes);
 router.use(brandRoutes);
 router.use(contentComposerRoutes);
+// Landing page authoring: the destinations the composer points campaigns at.
+router.use(landingPageRoutes);
 router.use(publishingRoutes);
 router.use(channelAccountRoutes);
 router.use(contentMediaRoutes);
