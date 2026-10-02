@@ -21,6 +21,12 @@ export interface CreateMeetingInput {
   // Stable id used as the conference createRequest id so retries do not spawn
   // duplicate conferences (idempotency at the provider layer).
   requestId: string;
+  /**
+   * Which provider-side host to create under. Absent means the configured default,
+   * so every existing caller is unaffected. Only the Zoom adapter honours it —
+   * Google Meet has no equivalent and ignores it rather than pretending.
+   */
+  hostEmail?: string;
 }
 
 export interface MeetingResult {
@@ -211,6 +217,9 @@ export class ZoomMeetAdapter implements MeetingProvider {
       startDateTime: instantToWallClock(input.startAt, timezone),
       durationMinutes,
       timezone,
+      // Passed through so the ledger records which host this request used, which is
+      // what a later reconcile has to ask.
+      hostEmail: input.hostEmail,
     });
     return { providerEventId: result.meetingId, joinUrl: result.joinUrl };
   }
