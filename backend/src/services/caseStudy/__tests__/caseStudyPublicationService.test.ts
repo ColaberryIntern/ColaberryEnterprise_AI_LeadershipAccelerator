@@ -726,6 +726,61 @@ describe('AC7 — required proof metadata is missing', () => {
     );
   });
 
+  it('refuses an anonymized metric with no evidence pointer — a withheld name is not a missing fact', () => {
+    const content = publishableContent();
+    const metric = {
+      ...PROOF_POINT, key: 'calls_recovered', label: 'Calls recovered',
+      valueDisplay: '312 calls recovered',
+      metricType: 'business_outcome' as const,
+      verification: { class: 'anonymized' as const, method: 'client' as const },
+    };
+    (content as any).heroMetrics = [metric];
+    (content as any).measurement = { ...content.measurement, metrics: [metric] };
+    const decision = evaluate({ content });
+    expect(decision.allowed).toBe(false);
+    expect(withCode(decision, 'proof_metadata_missing').map((b) => b.message)).toContain(
+      'headline metric "312 calls recovered" is labelled anonymized but has no evidence',
+    );
+  });
+
+  it('accepts an anonymized metric that DOES carry an evidence pointer', () => {
+    const content = publishableContent();
+    const metric = {
+      ...PROOF_POINT, key: 'calls_recovered', label: 'Calls recovered',
+      valueDisplay: '312 calls recovered',
+      metricType: 'business_outcome' as const,
+      verification: {
+        class: 'anonymized' as const, method: 'client' as const,
+        evidenceId: '0f3b8c2a-11d4-4b77-9d1e-2a6f5c8e9b03',
+      },
+    };
+    (content as any).heroMetrics = [metric];
+    (content as any).measurement = { ...content.measurement, metrics: [metric] };
+    const decision = evaluate({ content });
+    expect(
+      withCode(decision, 'proof_metadata_missing')
+        .filter((b) => b.field.endsWith('.verification.evidenceId')),
+    ).toEqual([]);
+  });
+
+  it('does NOT demand evidence from illustrative or pending — each says what it is', () => {
+    for (const cls of ['illustrative', 'pending'] as const) {
+      const content = publishableContent();
+      const metric = {
+        ...PROOF_POINT, key: `demo_${cls}`, label: 'Demo figure',
+        valueDisplay: '41% fewer stockouts',
+        verification: { class: cls, method: 'internal' as const },
+      };
+      (content as any).heroMetrics = [metric];
+      (content as any).measurement = { ...content.measurement, metrics: [metric] };
+      const decision = evaluate({ content });
+      expect(
+        withCode(decision, 'proof_metadata_missing')
+          .filter((b) => b.field.endsWith('.verification.evidenceId')),
+      ).toEqual([]);
+    }
+  });
+
   it('refuses a headline metric with no baseline, sample or methodology', () => {
     const content = publishableContent();
     const metric = { ...PROOF_POINT, measurement: { limitations: [] } };

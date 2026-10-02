@@ -213,38 +213,51 @@ match the one the record is pinned to (`metric_collected_sha_mismatch`).
 
 The hand-written block above is for figures the repository cannot compute.
 
-### `attested` — the class for what a repository can never prove
+### What a repository can never prove: use `method`, do NOT invent a class
 
-**Status: specified here, NOT yet accepted by the gate. Do not use it on a record you
-intend to publish until the code below lands.**
+**There is no `attested` verification class, and adding one is a mistake.** An earlier
+draft of this section specified one. It was wrong, and the vocabulary already in the
+codebase is better.
 
-`verification_class` is a `varchar`, not an enum, so no migration is required; the
-constraint lives in application code. Two places decide:
-`backend/src/services/caseStudy/caseStudyPublishRules.ts` and
-`backend/src/services/caseStudy/caseStudyPublishMaturityRule.ts`.
+`CaseStudyVerificationClass` is exactly four members — `verified`, `anonymized`,
+`illustrative`, `pending` — and `caseStudyContracts.test.ts` reads
+`frontend/src/components/publicV2/Claim.tsx` **as text** and asserts the same members in
+the same order, `toHaveLength(4)`. A fifth member fails that test by design. The order is a
+tripwire for exactly this: somebody editing one list without looking at the other.
 
-The gap it closes: `verified` means *pinned to a commit*. A user count, an engagement date
-and a client-confirmed outcome have no commit to pin to, so today they cannot be evidenced
-at all — which is why `computeMaturity` can never return `operational_result` or
-`impact_case_study` from a build, and why `outcomeEvidence` is empty by construction.
+**Class and method are two orthogonal axes, not a hierarchy** (`backend/src/types/caseStudy.ts`):
+
+| axis | question it answers | members |
+|---|---|---|
+| `class` | how much of this claim may be shown | `verified` · `anonymized` · `illustrative` · `pending` |
+| `method` | who established it | `client` · `repo` · `platform` · `internal` · `self` · `manual` |
+
+So the thing the earlier draft wanted already exists:
 
 ```js
-{ source_type: 'attestation', source_ref: '<person, role, organisation>',
-  source_commit_sha: null,               // there is none, and that is the point
-  verification_class: 'attested',
-  title, description,                    // what was asked, and the answer given verbatim
-  reviewed_by, reviewed_at,              // REQUIRED: who heard it, and when
-  is_publicly_openable: false }
+{ class: 'verified',   method: 'client' }   // the client confirmed it and may be named
+{ class: 'anonymized', method: 'client' }   // the client confirmed it, will not be named
+{ class: 'verified',   method: 'repo'   }   // a commit proves it
 ```
 
-**An attestation names a person and a date instead of a SHA. It is not a weaker `verified`,
-it is a different kind of fact, and the two must never be merged.** The honest sentence is
-"the client's operations lead stated X on this date", never "X". If the attesting person
-will not be named on the record, that is a reason to keep the claim off the record, not a
-reason to anonymize the attestation.
+Putting "who said it" into the "how much may be shown" vocabulary collapses the two axes
+and loses the distinction that makes either useful. Do not do it.
 
-Do not back-fill attestations from memory, from a meeting you did not take notes in, or
-from an email that implies rather than states the figure.
+For a figure no repository can produce — a user count, an engagement date, an outcome in
+use — write `method: 'client'` (or `'platform'` where our own telemetry produced it), pin
+`reviewed_by` and `reviewed_at` on the evidence row, and keep `source_commit_sha` null.
+The honest sentence is "the client's operations lead stated X on this date", never "X".
+
+Do not back-fill a client-method claim from memory, from a meeting nobody took notes in,
+or from an email that implies rather than states the figure.
+
+**The real gap is in code, not vocabulary.** `computeMaturity`
+(`backend/src/services/sbp/caseStudyFoundation.ts`) counts verified stories, merged
+enrichments and demonstration references — **it never reads a verification method at all.**
+That is why `operational_result` is unreachable: not because the vocabulary is missing, but
+because nothing teaches the ladder that a client-confirmed outcome is different from a
+passing test. Until that lands, a `method: 'client'` row is recordable and correct, and
+still will not move the rung.
 
 ---
 
@@ -449,14 +462,14 @@ Safer: "the scheduler has an enabled runtime record", "the current count cannot 
 assigned to one process", "multiple processes operated in the same period".
 
 **Why the list is absolute today, and what should make it conditional.** Every one of
-these phrases describes an outcome, and until `attested` lands (§4) the only evidence a
-record can carry is a commit. A commit cannot prove a saving, so an unconditional ban is
-the correct rule for the evidence we actually have.
+these phrases describes an outcome, and in practice the only evidence a published record
+carries is a commit. A commit cannot prove a saving, so an unconditional ban is the
+correct rule for the evidence we actually have.
 
-Once `attested` is accepted, the ban should become **conditional: blocked without an
-attested evidence row on the same claim, permitted with one.** That is the intended end
-state and the reason the scanner should not simply be relaxed. Until then, do not write
-around the list — a blocked phrase means the claim is not yet evidenced, which is
+The intended end state is **conditional: blocked without a `method: 'client'` evidence row
+on the same claim, permitted with one** (§4). That depends on the ladder learning to read
+the verification method, which it does not yet do — so until then the list stays absolute.
+Do not write around it. A blocked phrase means the claim is not yet evidenced, which is
 information, not an obstacle.
 
 ---

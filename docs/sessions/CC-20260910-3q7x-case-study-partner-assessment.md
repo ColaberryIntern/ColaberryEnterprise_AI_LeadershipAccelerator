@@ -1,4 +1,4 @@
-# Session CC-20260910-3q7x (build-case-study: the three sections a partner assessment asks for, an attested evidence class, and a submission PDF)
+# Session CC-20260910-3q7x (build-case-study: the three sections a partner assessment asks for, the two-axis verification model, and a submission PDF)
 
 Per-PR session log (kept separate from PROGRESS.md to avoid union-merge conflicts).
 
@@ -70,29 +70,34 @@ Branch: `workstream/case-study-partner-assessment` (cut from `origin/main`).
   - Notes: these add no claim and relax no gate. `applyHumanOverride` already creates
     arbitrary whole sections (§3), so all three are usable with no code change.
 
-- [x] §4: the `attested` evidence class, specified and explicitly NOT yet live
+- [x] §4: how to evidence what a repository cannot prove — and a correction
   - Date: 2026-10-02
   - Session: CC-20260910-3q7x
-  - What changed: documents `verification_class: 'attested'` for facts a repository cannot
-    prove (a user count, an engagement date, a client-confirmed outcome), pinned to a named
-    person and date instead of a commit SHA, with `reviewed_by` and `reviewed_at` required.
-    Marked **"specified here, NOT yet accepted by the gate"** so nobody uses it on a record
-    they intend to publish before the code lands.
-  - Verification: `case_study_evidence.verification_class` is `character varying`, not an
-    enum (checked against production `information_schema`), and the values in use are
-    `pending` and `verified`. **No migration is required**; the constraint is in
-    application code at `caseStudyPublishRules.ts` and `caseStudyPublishMaturityRule.ts`,
-    both named in the skill.
-  - Notes: this is the change that would let `computeMaturity` reach `operational_result`
-    honestly instead of it being unreachable by construction. The backend work is
-    deliberately NOT in this PR.
+  - What changed: an earlier draft of this section specified a new
+    `verification_class: 'attested'`. **That was wrong and has been removed.** The
+    codebase already models this, and models it better: `class` (how much may be shown:
+    `verified` / `anonymized` / `illustrative` / `pending`) and `method` (who established
+    it: `client` / `repo` / `platform` / `internal` / `self` / `manual`) are **orthogonal
+    axes**, declared together in `backend/src/types/caseStudy.ts`. A client-confirmed
+    outcome is `class: 'verified', method: 'client'`, or `anonymized` + `client` where the
+    client will not be named. §4 now documents that, with `reviewed_by` / `reviewed_at`
+    pinned and `source_commit_sha` null.
+  - Verification: `backend/src/types/__tests__/caseStudyContracts.test.ts` reads
+    `frontend/src/components/publicV2/Claim.tsx` **as text**, asserts the class union
+    matches member-for-member in the same order, and asserts `toHaveLength(4)`. A fifth
+    class fails that test by design and would need a coordinated frontend change. The
+    type's own header warns against exactly the conflation the draft committed.
+  - Notes: caught by reading the type before writing the code, not after. The skill now
+    states plainly that there is no `attested` class and that adding one is a mistake, so
+    the next reader does not repeat it.
 
 - [x] §6: why the banned-phrase list is absolute today, and what makes it conditional
   - Date: 2026-10-02
   - Session: CC-20260910-3q7x
   - What changed: the list is unchanged. Added the reasoning — a commit cannot prove a
     saving, so an unconditional ban is correct for the evidence we have — and the intended
-    end state: blocked without an attested row on the same claim, permitted with one.
+    end state: blocked without a `method: 'client'` evidence row on the same claim,
+    permitted with one.
   - Verification: no behaviour change; the scanner is untouched.
   - Notes: written this way on purpose so the next reader does not simply relax the
     scanner. A blocked phrase means the claim is not yet evidenced, which is information.
@@ -114,10 +119,72 @@ Branch: `workstream/case-study-partner-assessment` (cut from `origin/main`).
 
 ## Not in this PR, and why
 
-- **The backend change for `attested`.** `caseStudyPublishRules.ts` and
-  `caseStudyPublishMaturityRule.ts` must accept the class and the maturity ladder must
-  honour it before the class is usable. Specified in §4, not implemented.
+- **Teaching the ladder to read `method`.** `computeMaturity`
+  (`backend/src/services/sbp/caseStudyFoundation.ts:123`) counts verified stories, merged
+  enrichments and demonstration references and **never reads a verification method at
+  all**. That, not the vocabulary, is why `operational_result` is unreachable. Specified
+  in §4, not implemented.
+- **A proof hole worth closing with it.** `ruleProofMetadata`
+  (`caseStudyPublishRules.ts:452`) requires an `evidenceId` only when
+  `class === 'verified'`, so a `client`-method figure recorded as `anonymized` carries no
+  proof requirement at all.
 - **Making the §6 ban conditional.** Depends on the above; relaxing the scanner first would
   let unevidenced outcome language through.
 - **Backfilling the three new sections onto the fourteen approved records.** Each needs a
   person for the fields a repository cannot supply.
+
+---
+
+## The one code change: close the anonymized proof hole
+
+- [x] `ruleProofMetadata` demands an evidence pointer from `anonymized`, not only `verified`
+  - Date: 2026-10-02
+  - Session: CC-20260910-3q7x
+  - What changed: `caseStudyPublishRules.ts` gains `NEEDS_EVIDENCE`
+    (`verified` + `anonymized`). Until now the rule read
+    `v?.class === 'verified'`, so an `anonymized` metric — which
+    `types/caseStudy.ts` defines as "the client confirmed it but will not be named" —
+    could publish with no evidence pointer at all. Withholding a name is a presentation
+    choice, not grounds to skip proof. `illustrative` and `pending` are deliberately
+    excluded: each says on its face what it is, and demanding proof from them would be
+    demanding they stop saying the true thing they exist to say.
+  - Verification: `npx jest caseStudyPublicationService.test.ts caseStudyContracts.test.ts`
+    → **147 passed, 2 suites**, `JEST_EXIT=0`. `npx tsc --noEmit` → `TSC_EXIT=0`, zero
+    output lines. Both re-run AFTER the last edit.
+  - Mutation evidence: narrowing `NEEDS_EVIDENCE` back to `['verified']` failed exactly
+    one test, **by name** — "refuses an anonymized metric with no evidence pointer — a
+    withheld name is not a missing fact" — with 94 others still passing. Restored by edit,
+    never by `git checkout`; the `MUTATION` marker count is 0.
+  - Blast radius, measured on production before writing it: every metric on every approved
+    snapshot is class `verified`, `anonymized_without_evidenceId = 0`, and the only
+    verification methods in use across the whole library are `internal` and `repo`. This
+    tightens the gate and refuses nothing already published.
+  - Notes: three tests, not one — it fires; it does not fire when evidence is present; and
+    `illustrative` / `pending` are left alone.
+
+---
+
+## Escalation: `operational_result` needs a model nobody built
+
+`computeMaturity`'s own contract says `operational_result` "needs an outcome measured
+through an **approved measurement definition**" and `impact_case_study` "needs a
+client-confirmed business impact on top of that".
+
+Searched the backend for `measurementDefinition`, `measurement_definition` and
+`MeasurementDefinition`: **zero hits.** The concept is named in the contract and the
+comments and has never been built. That is the real reason `outcomeEvidence` is "empty by
+construction" — a stated precondition with nothing behind it.
+
+So teaching `computeMaturity` to read a verification method would be premature: there is
+nothing approved for it to read, and the only thing it could do is promote records on
+evidence nobody signed off, which is the exact failure the ladder exists to prevent.
+
+Two measurements that bear on the decision, both from production on 2026-10-02:
+
+- Every metric on every approved snapshot is class `verified`.
+- **`method: 'client'` has never been used once.** Methods in use: `internal`, `repo`.
+
+The vocabulary for a client-confirmed outcome has been present and unused the whole time.
+Building the measurement-definition model is a new schema plus an approval workflow, which
+is an architecture decision and sits with the DRI. Until it is made, the ladder stays
+capped at `capability_demonstration` and the §6 phrase ban stays absolute.
