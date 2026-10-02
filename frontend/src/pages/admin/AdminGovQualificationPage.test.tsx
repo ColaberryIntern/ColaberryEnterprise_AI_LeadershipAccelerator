@@ -100,6 +100,18 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(container.textContent ?? '').toContain('Digital Evidence');
   });
 
+  it('arriving from a discovery "Qualify" click names the clicked proposal and explains the pick-the-solicitation step', async () => {
+    (factoryApi.getGovOpportunityCandidates as jest.Mock).mockResolvedValue({ available: true, candidates: [{ canonicalOpportunityId: CANON, title: 'Digital Evidence', agency: 'City', noticeType: 'solicitation' }], sourceLive: true });
+    await renderAt('?from=One%20(1)%20Wood%20Chipper&agency=PEI%20Dept%20of%20Finance');
+    const text = container.textContent ?? '';
+    expect(text).toContain('Pick the matching solicitation');   // contextual title, not the generic "pick a candidate"
+    expect(text).toContain('One (1) Wood Chipper');             // the clicked proposal is named (not a generic list)
+    expect(text).toContain('PEI Dept of Finance');
+    expect(text).toContain('one click straight');               // explains the real one-click fix is coming
+    expect(text).toContain('Digital Evidence');                 // the trusted v2 list is still shown to pick from
+    expect(factoryApi.getGovQualificationWorkspace as jest.Mock).not.toHaveBeenCalled(); // still no canonical established
+  });
+
   it('clean workspace → source facts render and Approve is enabled', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     await renderAt(`?canonical=${CANON}`);

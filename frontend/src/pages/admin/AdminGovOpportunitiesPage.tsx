@@ -546,7 +546,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                               onClick={() => handleDismiss(o)} title="Hide this from the whole team's feed (reversible)">
                               <i className="ri-eye-off-line" aria-hidden="true" /><span className="visually-hidden">Dismiss</span>
                             </button>
-                            <button type="button" className="btn btn-danger btn-sm" onClick={() => navigate('/admin/gov-qualification')}
+                            <button type="button" className="btn btn-danger btn-sm" onClick={() => navigate(`/admin/gov-qualification?from=${encodeURIComponent(o.title)}&agency=${encodeURIComponent(o.agency ?? '')}`)}
                               title="Qualify this opportunity (review source evidence before a pursuit)">
                               Qualify <i className="ri-arrow-right-line" aria-hidden="true" />
                             </button>
@@ -602,7 +602,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
           opp={detailsOf}
           dismissing={dismissingKey === detailsOf.uuid}
           onClose={() => setDetailsOf(null)}
-          onQualify={() => { setDetailsOf(null); navigate('/admin/gov-qualification'); }}
+          onQualify={() => { setDetailsOf(null); navigate(`/admin/gov-qualification?from=${encodeURIComponent(detailsOf.title)}&agency=${encodeURIComponent(detailsOf.agency ?? '')}`); }}
           onDismiss={() => handleDismiss(detailsOf)}
         />
       )}
