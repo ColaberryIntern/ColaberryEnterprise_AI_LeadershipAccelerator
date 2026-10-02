@@ -86,7 +86,7 @@ describe('the gap: allocation is absent, not merely incomplete', () => {
     expect([...ALLOCATION_CODES]).toEqual([
       'ALLOCATION_MISSING', 'ALLOCATION_DUPLICATE', 'ALLOCATION_CLASS', 'ALLOCATION_RATIONALE',
       'ALLOCATION_ACCOUNTABLE', 'PERFORMER_SINGULAR', 'SENSITIVITY_AUTONOMY',
-      'ALLOCATION_CONTRADICTS_ASSIGNMENTS', 'TASK_FIELDS',
+      'ALLOCATION_CONTRADICTS_ASSIGNMENTS', 'ALLOCATION_UNVERIFIABLE', 'TASK_FIELDS',
     ]);
   });
 
@@ -415,6 +415,60 @@ describe('ALLOCATION_CONTRADICTS_ASSIGNMENTS — the stated row against the grap
     for (const p of [base(), agentPerformed()]) {
       expect(codes(p, deriveAllocation(p))).not.toContain('ALLOCATION_CONTRADICTS_ASSIGNMENTS');
     }
+  });
+});
+
+
+describe('ALLOCATION_UNVERIFIABLE \u2014 a class stated over an unknown executor', () => {
+  /** A PERFORMER with no executor. Legal: the contract says null means unknown. */
+  function noExecutor(): FactoryProject {
+    const p = base();
+    p.assignments = [asg({ id: 'a-1', task_id: 't-1', role_id: 'r-1', responsibility: 'PERFORMER', executor: null })];
+    const t = p.tasks.find((x) => x.id === 't-1')!;
+    t.data_sensitivity = 'regulated';
+    t.decision_authority = 'decide_full';
+    return p;
+  }
+  const row = (cls: AllocationRow['execution_class']): AllocationRow[] => ([{
+    task_id: 't-1', execution_class: cls, rationale: 'stated by the model', accountable_role_id: null,
+  }]);
+
+  it('the premise: this project passes factoryValidate cleanly', () => {
+    expect(factoryErrors(noExecutor())).toEqual([]);
+  });
+
+  it.each(['human', 'deterministic_software'] as const)(
+    'CLOSES A MEASURED ZERO-ERROR PATH: %s stated over a null executor is refused', (cls) => {
+      // Measured by the P3-T3 attempt-2 verifier: on a regulated, decide_full task this produced
+      // ZERO errors and a zero unknown count. The omit-and-count mechanism only protected the
+      // DERIVED path; once the model states rows, an unverifiable claim counted as a decision.
+      const p = noExecutor();
+      const issues = validateAllocation(p, row(cls));
+      const unver = issues.filter((i) => i.code === 'ALLOCATION_UNVERIFIABLE');
+      expect(unver).toHaveLength(1);
+      expect(unver[0].stepId).toBe('t-1');
+      expect(unver[0].message).toContain('no executor');
+    },
+  );
+
+  it('counts it as UNKNOWN too, so allocation_unknown can block full approval', () => {
+    // A row is not enough: "unknown" means the project cannot corroborate who does the work.
+    expect(unknownAllocationCount(noExecutor(), row('human'))).toBe(1);
+  });
+
+  it('PASSING COUNTERPART: give the performer an executor and both clear', () => {
+    const p = noExecutor();
+    p.assignments[0].executor = { type: 'person', id: 'p-1' };
+    expect(allocationErrors(p, row('human'))).toEqual([]);
+    expect(unknownAllocationCount(p, row('human'))).toBe(0);
+  });
+
+  it('does not mask the AI-class rules, which still fire on the same project', () => {
+    // ai_autonomous over a null executor is unverifiable AND sensitive AND unaccountable. The new
+    // code must not swallow the others by short-circuiting first.
+    const codesOut = codes(noExecutor(), row('ai_autonomous'));
+    expect(codesOut).toContain('ALLOCATION_ACCOUNTABLE');
+    expect(codesOut).toContain('SENSITIVITY_AUTONOMY');
   });
 });
 

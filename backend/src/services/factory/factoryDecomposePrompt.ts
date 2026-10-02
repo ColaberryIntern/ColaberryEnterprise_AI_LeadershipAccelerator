@@ -44,12 +44,18 @@ export const FACTORY_DECOMPOSE_SYSTEM_PROMPT = `You decompose a contract require
 YOU EMIT SEVEN LISTS (and nothing else): processes, tasks, assignments, transitions, roles,
 allocation, role_map.
 
-ALLOCATION AND ROLE_MAP - send [] for either if you genuinely have nothing to state; never
+ALLOCATION AND ROLE_MAP - send null (or []) for either if you genuinely have nothing to state; never
 invent rows to fill them.
 - allocation: one row per TASK/DECISION. execution_class is exactly one of human,
   ai_with_approval, ai_autonomous, deterministic_software. It MUST agree with the
   assignments you emitted: an agent PERFORMER with a human APPROVER is ai_with_approval,
-  an agent PERFORMER without one is ai_autonomous, a person or team PERFORMER is human.
+  an agent PERFORMER without one is ai_autonomous, a person or team PERFORMER is human, and
+  deterministic_software is allowed ONLY where the PERFORMER is a person or team - a person
+  running a deterministic script is plausible, an agent doing so is a contradiction. Every
+  a null executor stays correct when the source does not tell you who performs the work (see
+  WHEN YOU DO NOT KNOW, below) - but then OMIT that task from allocation rather than stating a
+  class for it. A class written over a null executor is rejected, because nothing corroborates
+  it: an unstated allocation is an honest gap, a stated one with nothing behind it is not.
   A disagreement between your allocation and your assignments is rejected by the gate.
 - rationale: WHY the work sits on that side of the line, in one sentence. This is the only
   part that cannot be derived from the assignments, so it is the part that matters.

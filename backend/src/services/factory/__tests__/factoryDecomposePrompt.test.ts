@@ -28,6 +28,38 @@ const inputs: FactoryDecomposeInputs = {
 
 describe('FACTORY_DECOMPOSE_SYSTEM_PROMPT states every gate rule the model must satisfy', () => {
   const P = FACTORY_DECOMPOSE_SYSTEM_PROMPT;
+  it('asks for SEVEN lists, including allocation and role_map', () => {
+    // P3-T3 made allocation emittable in the schema. Without this assertion the prompt could be
+    // reverted to "FIVE LISTS (and nothing else)" and every other test would stay green, which
+    // is the exact defect class the gate exists to prevent: a contract change that no test sees.
+    expect(P).toMatch(/SEVEN LISTS/i);
+    expect(P).toMatch(/allocation/);
+    expect(P).toMatch(/role_map/);
+  });
+
+  it('states the allocation rules the gate actually enforces, and no others', () => {
+    // Each line here maps to a rule in services/lifecycle/generation/allocation.ts. A prompt that
+    // promises a rule the gate does not enforce - or forbids something the gate permits - is its
+    // own defect, because the model is being graded against the gate and not against the prose.
+    expect(P).toMatch(/ai_with_approval/);          // derived from agent PERFORMER + human APPROVER
+    expect(P).toMatch(/ai_autonomous/);             // agent PERFORMER with no human approver
+    expect(P).toMatch(/deterministic_software/);    // permitted only where the performer is human
+    expect(P).toMatch(/confidential or\s+regulated/i); // SENSITIVITY_AUTONOMY
+    expect(P).toMatch(/decide_bounded or decide_full/i);
+    // ALLOCATION_UNVERIFIABLE. Phrased as 'omit rather than state', which is what the code does
+    // and what keeps this consistent with the prompt's existing 'a null executor is correct
+    // when the source does not tell you' guidance.
+    expect(P).toMatch(/OMIT that task from allocation/i);
+    expect(P).toMatch(/nothing corroborates/i);
+    expect(P).toMatch(/at\s+most one row per previous_function/i);  // wraps a line in the prompt
+  });
+
+  it('tells the model how to say nothing, in the form the schema accepts', () => {
+    // Strict mode sends the key either way, so 'omit it' would be wrong advice. The schema types
+    // both as ['array','null'], and the prompt must not name only one of them.
+    expect(P).toMatch(/send null \(or \[\]\)/i);
+    expect(P).toMatch(/never\s+invent rows/i);
+  });
   it('states the granularity rule', () => {
     expect(P).toMatch(/one verb, one object, one outcome, one performer/i);
   });

@@ -109,9 +109,9 @@ describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the seven record schemas', 
     expect([...FACTORY_DECOMPOSITION_JSON_SCHEMA.required].sort())
       .toEqual(['allocation', 'assignments', 'processes', 'role_map', 'roles', 'tasks', 'transitions']);
     const props = FACTORY_DECOMPOSITION_JSON_SCHEMA.properties;
-    // P3-T3 added allocation and role_map to `properties` but NOT to `required`, so a
-    // decomposition stored before P3-T3 still parses. Updated to the new EXACT set rather
-    // than relaxed to a subset check: the exactness is what makes this test worth having.
+    // CORRECTED: an earlier version of this comment said allocation and role_map were
+    // deliberately absent from `required`. That was wrong and broke strict-mode parity. They
+    // are in `required` and NULLABLE instead. Pinned as an exact set, never a subset check.
     expect(Object.keys(props).sort()).toEqual(['allocation', 'assignments', 'processes', 'role_map', 'roles', 'tasks', 'transitions']);
     // every property is an array whose items reference the matching frozen/added record schema
     expect(props.processes.items).toBe(FACTORY_PROCESS_JSON_SCHEMA);

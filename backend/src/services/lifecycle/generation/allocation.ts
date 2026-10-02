@@ -93,6 +93,7 @@ export const ALLOCATION_CODES = [
   'PERFORMER_SINGULAR',
   'SENSITIVITY_AUTONOMY',
   'ALLOCATION_CONTRADICTS_ASSIGNMENTS',
+  'ALLOCATION_UNVERIFIABLE',
   'TASK_FIELDS',
 ] as const;
 export type AllocationCode = (typeof ALLOCATION_CODES)[number];
@@ -190,12 +191,24 @@ export function unknownAllocationCount(
   project: FactoryProject,
   allocation: ReadonlyArray<AllocationRow>,
 ): number {
+  const byTask = assignmentsByTask(project);
   const allocated = new Set(
     allocation
       .filter((r) => (EXECUTION_CLASSES as ReadonlyArray<string>).includes(r.execution_class))
       .map((r) => r.task_id),
   );
-  return workTasks(project).filter((t) => !allocated.has(t.id)).length;
+  // A row is not enough. "Unknown" means the project cannot CORROBORATE who does the work, and a
+  // stated class over a performer with no executor is a claim with nothing behind it.
+  //
+  // The P3-T3 attempt-2 verifier measured the gap this closes: a PERFORMER with `executor: null`
+  // (legal - the contract says "exactly one of these, or null when unknown") on a regulated,
+  // decide_full task, stated as 'human' or 'deterministic_software', produced ZERO errors and a
+  // zero unknown count. The omit-and-count mechanism only ever protected the DERIVED path; once
+  // the model states rows, an unverifiable claim counted as a decision.
+  return workTasks(project).filter((t) => {
+    if (!allocated.has(t.id)) return true;
+    return deriveExecutionClass(byTask.get(t.id) ?? []) === null;
+  }).length;
 }
 
 /**
@@ -298,7 +311,20 @@ export function validateAllocation(
       // software performed by an agent is a contradiction worth naming.
       const softwareClaimPlausible = r.execution_class === 'deterministic_software'
         && derivedClass === 'human';
-      if (derivedClass === null || softwareClaimPlausible) {
+      if (derivedClass === null) {
+        // A stated class the project cannot corroborate. Not a contradiction - there is
+        // nothing to contradict - but not a decision either, so it gets its own code
+        // rather than silently passing the comparison.
+        issues.push(err(
+          'ALLOCATION_UNVERIFIABLE',
+          `task ${t.id} is stated as '${r.execution_class}' but its PERFORMER has no executor, `
+          + 'so nothing corroborates the claim. Assign a person, team or agent, or leave the '
+          + 'allocation unstated: a class written over an unknown executor is not a decision.',
+          t.id,
+        ));
+        continue;
+      }
+      if (softwareClaimPlausible) {
         // Either nothing to compare against, or a plausible software claim. Still subject
         // to ALLOCATION_RATIONALE, which requires it to say why.
         continue;
