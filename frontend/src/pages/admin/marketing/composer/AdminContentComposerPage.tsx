@@ -465,9 +465,7 @@ export default function AdminContentComposerPage() {
             onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug}
             onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers}
           landingPages={landingPages}
-          /* onCreateLandingPage is deliberately NOT passed yet: the authoring screen is not
-             routed, and a button to an unmounted route is worse than no button. The API exists
-             (PR #2905), so this is one line once that page lands. */
+          onCreateLandingPage={() => navigate('/admin/marketing/landing-pages')}
             mediaSlot={shape.mediaRole !== 'none' ? (
               // Inside the content-type column, directly under the type that asked for it.
               // It sat after the whole form until 2026-10-01: "why isn't the video upload closer

@@ -77,6 +77,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/marketing/content', label: 'Content', icon: 'list-check-2' },
     { path: '/admin/marketing/calendar', label: 'Calendar', icon: 'calendar-2-line' },
     { path: '/admin/marketing/publishing', label: 'Publishing', icon: 'send-plane-line' },
+    { path: '/admin/marketing/landing-pages', label: 'Landing pages', icon: 'layout-masonry-line' },
     { path: '/admin/marketing/brands', label: 'Brands', icon: 'price-tag-3-line' },
     { path: '/admin/marketing/performance', label: 'Performance', icon: 'line-chart-line' },
   ]},
