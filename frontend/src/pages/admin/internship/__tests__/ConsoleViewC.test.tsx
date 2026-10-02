@@ -24,6 +24,7 @@ jest.mock('../../../../services/adminInternConsoleApi', () => ({
   fetchConsoleRoster: (...a: unknown[]) => mockFetchRoster(...a),
   fetchInternDetail: (...a: unknown[]) => mockFetchDetail(...a),
   transitionIntern: (...a: unknown[]) => mockTransition(...a),
+  nudgeIntern: jest.fn(),
   // The drawer imports this CONSTANT from the same module. A mock that lists only the functions
   // leaves it undefined and the drawer throws on first render — which is how this was found.
   ONE_WAY_ACTIONS: ['complete', 'withdraw', 'remove'],
@@ -381,7 +382,12 @@ describe('the focus panel', () => {
     const drawer = container.querySelector('.aint-drawer')!;
     expect(drawer).toBeTruthy();
     const labels = Array.from(drawer.querySelectorAll('button')).map((b) => b.textContent);
-    expect(labels).toEqual(expect.arrayContaining(['Pause', 'Mark complete', 'Withdraw', 'Remove', 'Nudge', 'Note']));
+    // Nudge is no longer a single button: it is a template picker with Preview and Send, so that a
+    // manager sees the subject and the recipient before anything reaches a student.
+    expect(labels).toEqual(expect.arrayContaining([
+      'Pause', 'Mark complete', 'Withdraw', 'Remove', 'Preview', 'Send nudge', 'Note',
+    ]));
+    expect(drawer.querySelector('select[aria-label="Nudge template"]')).toBeTruthy();
   });
 
   it('shows an error with a retry when the detail fetch fails', async () => {

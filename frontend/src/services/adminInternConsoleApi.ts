@@ -193,3 +193,27 @@ export async function transitionIntern(
   );
   return data;
 }
+
+/** The fixed server-side template list. The client never supplies the words. */
+export type NudgeTemplate = 'quiet_check_in' | 'weeks_1_3_reminder' | 'project_start';
+
+export interface NudgeResult { outcome: string; subject?: string; to?: string; reason?: string; }
+
+/**
+ * Send, or preview, one nudge.
+ *
+ * `send` defaults to false on the server too — a request without it previews. The console asks for
+ * the preview first and only sends on a second, explicit click, so the manager sees the subject and
+ * recipient before anything leaves.
+ */
+export async function nudgeIntern(
+  applicationId: string,
+  template: NudgeTemplate,
+  opts: { note?: string; send?: boolean } = {},
+): Promise<NudgeResult> {
+  const { data } = await api.post<NudgeResult>(
+    `/api/admin/internship/applications/${encodeURIComponent(applicationId)}/nudge`,
+    { template, ...(opts.note ? { note: opts.note } : {}), ...(opts.send ? { send: true } : {}) },
+  );
+  return data;
+}
