@@ -133,6 +133,26 @@ export function evaluateEvidenceCoverage(
   return { sufficient: reasons.length === 0, reasons };
 }
 
+/**
+ * DECOUPLED (discovery-ZIP) coverage: the uploaded solicitation ZIP is the evidence of record (there is NO OP
+ * snapshot). Sufficient to approve a pursuit only when the reviewer has established >=1 applicable requirement AND
+ * attested the ZIP (a recorded, non-empty server sha256). Missing evidence never silently passes: empty established
+ * → `no_requirements_established` (an empty list is not "no requirements"); no attested ZIP → `no_zip_attested`.
+ * Both reasons can accumulate. Pure, total, never throws.
+ */
+export function evaluateZipCoverage(
+  establishedRequirements: any[] | null | undefined,
+  reviewedDocuments: any[] | null | undefined,
+): EvidenceCoverage {
+  const reasons: string[] = [];
+  const established = Array.isArray(establishedRequirements) ? establishedRequirements : [];
+  if (established.length === 0) reasons.push('no_requirements_established');
+  const docs = Array.isArray(reviewedDocuments) ? reviewedDocuments : [];
+  const hasZip = docs.some((d) => d && d.method === 'solicitation_zip' && typeof d.sha256 === 'string' && d.sha256.length > 0);
+  if (!hasZip) reasons.push('no_zip_attested');
+  return { sufficient: reasons.length === 0, reasons };
+}
+
 // ── Persistence ──────────────────────────────────────────────────────────────
 async function loadCurrent(canonicalOpportunityId: string, biddingEntity: string): Promise<any | null> {
   const { default: GovQualification } = await import('../../models/GovQualification');
@@ -196,9 +216,10 @@ export async function createDecoupledQualification(input: CreateDecoupledQualifi
 }
 
 /**
- * The read view for a DECOUPLED (discovery-ZIP) workspace: NO OP source re-fetch (source is null). The uploaded
- * ZIP is the evidence source; evaluation runs over the reviewer-established requirements. Pursuit approval is a
- * later, coordinator-gated slice, so canApprove is always false here and coverage carries an honest reason.
+ * The read view for a DECOUPLED (discovery-ZIP) workspace: NO OP source re-fetch (source is null). The uploaded ZIP
+ * is the evidence source. Coverage + canApprove are computed from the established requirements AND whether the ZIP
+ * has been attested (evaluateZipCoverage) — so pursuit approval is offered ONLY when requirements are established,
+ * the ZIP is attested, and no requirement blocks. No OP snapshot is ever fabricated.
  */
 export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, biddingEntity?: string): Promise<any> {
   const { default: GovQualification } = await import('../../models/GovQualification');
@@ -208,6 +229,10 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   const recordJson = record ? record.get() : null;
   const established = (recordJson && recordJson.requirements_json && recordJson.requirements_json.established) || [];
   const provenance = (recordJson && recordJson.requirements_json && recordJson.requirements_json.provenance) || null;
+  const reviewedDocuments = (recordJson && recordJson.requirements_json && recordJson.requirements_json.reviewedDocuments) || [];
+  const zipAttestation = (Array.isArray(reviewedDocuments) ? reviewedDocuments : []).find((d: any) => d && d.method === 'solicitation_zip') || null;
+  const evaluation = evaluateRequirements(established);
+  const coverage = evaluateZipCoverage(established, reviewedDocuments);
   return {
     canonicalOpportunityId: gwsKey,
     sourceLive: false,
@@ -217,13 +242,44 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     sourceSnapshotVersion: null,
     snapshotRecorded: false,
     source: null,
-    evaluation: evaluateRequirements(established),
-    coverage: { sufficient: false, reasons: ['pursuit_approval_not_enabled_on_this_path'] },
+    evaluation,
+    coverage,
     qualification: recordJson,
     provenance,
+    zipAttestation,
     changedSource: false,
-    canApprove: false,
+    canApprove: evaluation.canApproveBid && coverage.sufficient,
   };
+}
+
+export interface RecordZipAttestationInput {
+  gwsKey: string; biddingEntity: string; expectedVersion: number; reviewerIdentityId: string;
+  mode: 'add' | 'revoke'; filename?: string | null; sha256?: string | null; sizeBytes?: number | null;
+}
+
+/**
+ * Attest (or revoke) the uploaded solicitation ZIP as the EVIDENCE OF RECORD for a DECOUPLED (gws) qualification.
+ * Unlike recordDocumentReview (which validates each coveredDocId against the OP snapshot), a decoupled record has NO
+ * OP snapshot — the uploaded ZIP IS the authoritative package — so there is no docId check: it records ONE synthetic
+ * `solicitation_zip` reviewedDocuments entry (the server-computed sha256 + filename; bytes are NEVER stored),
+ * idempotent (re-attest overwrites), with 'revoke' as the recovery path. Fork-on-edit preserves established/provenance.
+ */
+export async function recordZipAttestation(input: RecordZipAttestationInput): Promise<any> {
+  const current = await loadCurrent(input.gwsKey, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  const existing: any[] = (current.requirements_json && Array.isArray(current.requirements_json.reviewedDocuments))
+    ? current.requirements_json.reviewedDocuments : [];
+  const kept = existing.filter((e) => e && e.method !== 'solicitation_zip'); // single synthetic ZIP entry (idempotent)
+  const reviewedDocuments = input.mode === 'revoke' ? kept : [...kept, {
+    docId: 'solicitation_zip', role: 'solicitation_zip', method: 'solicitation_zip',
+    filename: input.filename ?? null, sha256: input.sha256 ?? null, sizeBytes: input.sizeBytes ?? null,
+    reviewedBy: input.reviewerIdentityId, reviewedAt: new Date().toISOString(),
+  }];
+  return forkNewVersion(current, {
+    reviewer_identity_id: input.reviewerIdentityId,
+    requirements_json: { ...(current.requirements_json || {}), reviewedDocuments },
+  });
 }
 
 async function forkNewVersion(current: any, patch: Record<string, any>): Promise<any> {
@@ -402,5 +458,53 @@ export async function approveGovQualification(input: ApproveQualificationInput):
     // Capture the approver in the immutable evidence, distinct from the reviewer, so the record shows WHO approved.
     evidence_json: { ...(input.evidence ?? current.evidence_json ?? {}), approvedBy: input.approverIdentityId },
     effort_cap: input.effortCap ?? current.effort_cap, reassessment_conditions: input.reassessmentConditions ?? current.reassessment_conditions,
+  });
+}
+
+export interface ApproveDecoupledQualificationInput {
+  gwsKey: string; biddingEntity: string; expectedVersion: number;
+  decision: 'approved_bid_pursuit' | 'rfi_response'; approverIdentityId: string;
+  rationale?: string | null; reviewedZipSha256?: string | null;
+}
+
+/**
+ * Pursuit approval for a DECOUPLED (gws) ZIP workspace — the SAME ordered gate as approveGovQualification, but the
+ * EVIDENCE is the attested ZIP, not a re-fetched OP snapshot (a decoupled record has none). NEVER calls the OP
+ * resolver and NEVER fabricates a source snapshot. Ordered gate:
+ *   1. CAS on expectedVersion (a re-attest/re-establish forks a new version → stale → QualificationConflictError 409,
+ *      which drives the "Review changes" re-review — this is the primary changed-evidence guard);
+ *   2. separation of duties: the reviewer may not approve their own pursuit (SelfApprovalError 403);
+ *   3. optional attested-hash check: if the caller passed the ZIP hash it reviewed and it no longer matches →
+ *      ChangedSourceError 409 (belt-and-suspenders on top of the CAS);
+ *   4. ZIP coverage sufficient — established >=1 AND the ZIP attested — else EvidenceInsufficientError 422;
+ *   5. no blocking requirement (evaluateRequirements) else QualificationBlockedError 422;
+ *   6. fork an approved version bound to the attested ZIP sha256 + the established set + the approver identity;
+ *      source stays null (source_available:false) — honest, no OP snapshot invented.
+ * Authorizes RESEARCH only — a build still needs a SEPARATE (held) build authorization.
+ */
+export async function approveDecoupledQualification(input: ApproveDecoupledQualificationInput): Promise<any> {
+  if (!APPROVAL_DECISIONS.includes(input.decision)) throw new Error('approveDecoupledQualification only records approval decisions');
+  const current = await loadCurrent(input.gwsKey, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  if (input.approverIdentityId && current.reviewer_identity_id && input.approverIdentityId === current.reviewer_identity_id) {
+    throw new SelfApprovalError();
+  }
+  const established = (current.requirements_json && current.requirements_json.established) || [];
+  const reviewedDocuments = (current.requirements_json && current.requirements_json.reviewedDocuments) || [];
+  const zip = (Array.isArray(reviewedDocuments) ? reviewedDocuments : []).find((d: any) => d && d.method === 'solicitation_zip' && d.sha256) || null;
+  if (input.reviewedZipSha256 && zip && input.reviewedZipSha256 !== zip.sha256) {
+    throw new ChangedSourceError(null, 0); // the attested ZIP changed after review — renewed review required
+  }
+  const coverage = evaluateZipCoverage(established, reviewedDocuments);
+  if (!coverage.sufficient) throw new EvidenceInsufficientError(coverage.reasons);
+  const evaluation = evaluateRequirements(established);
+  if (!evaluation.canApproveBid) throw new QualificationBlockedError(evaluation.blocking.map((b) => `${b.id}:${b.reason}`));
+  return forkNewVersion(current, {
+    decision: input.decision, reviewer_identity_id: current.reviewer_identity_id,
+    source_snapshot: null, source_snapshot_version: null, source_available: false, // decoupled: no OP snapshot invented
+    requirements_json: { ...(current.requirements_json || {}), established, evaluation, coverage },
+    rationale: input.rationale ?? current.rationale,
+    evidence_json: { ...(current.evidence_json ?? {}), approvedBy: input.approverIdentityId, attestedZipSha256: zip ? zip.sha256 : null },
   });
 }
