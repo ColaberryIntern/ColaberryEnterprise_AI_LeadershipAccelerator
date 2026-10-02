@@ -123,6 +123,13 @@ describe('AgentDetailLayout — sidebar nav', () => {
     expect(props.onTabChange).toHaveBeenCalledWith('work');
   });
 
+  it('the "Talk to" nav label uses the REAL current agent\'s displayName, not a hardcoded "Reese" (this page is shared by every agent, e.g. Dara)', async () => {
+    await render(baseProps({ displayName: 'Dara' }));
+
+    expect(findButton(container, 'Talk to Dara')).toBeTruthy();
+    expect(() => findButton(container, 'Talk to Reese')).toThrow();
+  });
+
   it('the active tab is marked aria-selected', async () => {
     await render(baseProps({ activeTab: 'decisions' }));
     const activeBtn = findButton(container, 'Decisions & evidence');
