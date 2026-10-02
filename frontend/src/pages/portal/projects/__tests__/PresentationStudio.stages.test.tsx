@@ -18,6 +18,18 @@ jest.mock('../projectSync', () => ({ refreshProjectsFromBackend: jest.fn().mockR
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const portalApi = require('../../../../utils/portalApi').default as { get: jest.Mock; patch: jest.Mock };
 
+const TEMPLATES_OK = {
+  data: [
+    { id: 'project_introduction', label: 'Project introduction', prominent: true, outcome: 'Explain value clearly.', speaking_seconds: 90, qa_seconds: 0 },
+    { id: 'ai_visual_presentation', label: 'AI visual presentation', prominent: true, outcome: 'Present a visual argument.', speaking_seconds: 300, qa_seconds: 120 },
+    { id: 'working_system_demo', label: 'Working-system demo', prominent: true, outcome: 'Demonstrate one outcome.', speaking_seconds: 420, qa_seconds: 180 },
+    { id: 'final_showcase', label: 'Final showcase', prominent: true, outcome: 'Story, proof and judgement.', speaking_seconds: 480, qa_seconds: 300 },
+    { id: 'architecture_review', label: 'Architecture review', prominent: false, outcome: 'Explain tradeoffs.', speaking_seconds: 480, qa_seconds: 300 },
+    { id: 'stakeholder_update', label: 'Stakeholder update', prominent: false, outcome: 'Communicate progress.', speaking_seconds: 180, qa_seconds: 120 },
+    { id: 'client_handoff', label: 'Client handoff', prominent: false, outcome: 'Teach ownership.', speaking_seconds: 420, qa_seconds: 300 },
+  ],
+};
+
 const LESSON_OK = {
   data: {
     id: 'ai_visual_presentation',
@@ -81,7 +93,9 @@ beforeEach(() => {
   // Route by URL: the Studio calls three different GET endpoints.
   portalApi.get.mockImplementation((url: string) => {
     if (url.includes('presentation-assignment')) return Promise.resolve(ASSIGNMENT_OK);
-    if (url.includes('presentation-templates')) return Promise.resolve(LESSON_OK);
+    // The LIST endpoint has no id segment; the lesson read does. Order matters.
+    if (url.endsWith('/presentation-templates')) return Promise.resolve(TEMPLATES_OK);
+    if (url.includes('presentation-templates/')) return Promise.resolve(LESSON_OK);
     return Promise.resolve(PROMPT_OK);
   });
   portalApi.patch.mockResolvedValue({ data: { ...ASSIGNMENT_OK.data, audience: 'Hiring managers', prepState: 'preparing' } });
@@ -407,6 +421,63 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     const status = container.querySelector('[data-testid="ps-save-state"]')!;
     expect(status.getAttribute('role')).toBe('status');
     expect(status.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('Prepare offers a template chooser — without it a student is locked to one type', async () => {
+    // The gap this closes: someone on PREP-3 preparing for the Capstone Expo could only
+    // ever generate a 5-minute visual presentation, never the 8-minute final showcase.
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+    expect(container.querySelector('[data-testid="ps-chooser"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ps-choice-final_showcase"]')).not.toBeNull();
+  });
+
+  it('leads with the four prominent types and hides the rest behind "more"', async () => {
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+    // Seven exist; four prominent are shown (the current selection is among them).
+    expect(container.querySelectorAll('.ps-choice')).toHaveLength(4);
+    expect(container.querySelector('[data-testid="ps-choice-architecture_review"]')).toBeNull();
+
+    click(container.querySelector('[data-testid="ps-chooser-more"]'));
+    expect(container.querySelectorAll('.ps-choice')).toHaveLength(7);
+    expect(container.querySelector('[data-testid="ps-choice-architecture_review"]')).not.toBeNull();
+  });
+
+  it('marks the current type with aria-checked, not colour alone', async () => {
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+    const current = container.querySelector('[data-testid="ps-choice-ai_visual_presentation"]')!;
+    expect(current.getAttribute('aria-checked')).toBe('true');
+    expect(current.getAttribute('role')).toBe('radio');
+    // Exactly one selected at a time.
+    expect(container.querySelectorAll('[aria-checked="true"]')).toHaveLength(1);
+  });
+
+  it('switching the type saves IMMEDIATELY — a click is a choice, not typing', async () => {
+    // Debouncing a deliberate click by 700ms reads as the control being broken, and the
+    // response rewrites the checklist on screen.
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+
+    click(container.querySelector('[data-testid="ps-choice-final_showcase"]'));
+    await flush();
+
+    expect(portalApi.patch).toHaveBeenCalledTimes(1);
+    expect(portalApi.patch.mock.calls[0][1]).toEqual({ template: 'final_showcase' });
+  });
+
+  it('clicking the already-selected type does not fire a pointless save', async () => {
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+    click(container.querySelector('[data-testid="ps-choice-ai_visual_presentation"]'));
+    await flush();
+    expect(portalApi.patch).not.toHaveBeenCalled();
   });
 
   it('every stage button is reachable and labelled for assistive tech', () => {

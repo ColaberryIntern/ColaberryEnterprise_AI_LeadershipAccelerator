@@ -75,13 +75,16 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     expect(text).toContain('legacy, unevidenced (weak)');
   });
 
-  it('"Qualify" routes to the qualification workspace (no canonical id derived from the title)', async () => {
+  it('"Qualify" routes to the qualification workspace carrying the clicked title as a DISPLAY hint (no canonical id derived from the title)', async () => {
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue(liveFeed);
     await renderPage();
     const qualify = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Qualify'));
     expect(qualify).toBeDefined();
     await act(async () => { qualify!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
-    expect(mockNavigate).toHaveBeenCalledWith('/admin/gov-qualification');
+    const target = (mockNavigate as jest.Mock).mock.calls[0][0] as string;
+    expect(target).toContain('/admin/gov-qualification?gws=gws%3A');  // opens the ZIP workspace keyed off the discovery row uuid
+    expect(target).toContain('from=');                                // carries the clicked proposal for display
+    expect(target).not.toContain('canonical=');                       // but NEVER a title-derived canonical id
   });
 
   it('row: unverified value, Source link, deadline warning; live pill in the header', async () => {

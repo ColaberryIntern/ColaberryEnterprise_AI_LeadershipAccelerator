@@ -116,6 +116,12 @@ describe('two things the database refuses rather than one service remembering to
   });
 });
 
+/**
+ * The content_items -> landing_pages foreign key is NOT here. It is owned by
+ * ensureContentItemDestinationSchema, which runs after this file, because the column it
+ * constrains belongs to content_items and that table is created earlier in the boot.
+ * See ensureContentItemDestinationSchema.test.ts.
+ */
 describe('content is structured, not markup', () => {
   it('is JSONB rather than TEXT', () => {
     // A renderer that accepts HTML is a way to put arbitrary markup on our own origin.

@@ -9,6 +9,7 @@ import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContai
 // The qualification services lazy-load their models inside their functions, so these imports never init the ORM.
 import {
   createQualification, recordDecision, approveGovQualification, recordDocumentReview,
+  createDecoupledQualification, getDecoupledWorkspace,
   evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom,
   QUALIFICATION_DECISIONS, APPROVAL_DECISIONS,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
@@ -38,6 +39,14 @@ import { fetchGovOpportunityCandidatesV2 } from '../../services/factory/opportun
 const router = Router();
 
 const canonicalParam = z.object({ canonicalOpportunityId: z.string().regex(/^op:gov:[0-9a-f]{32}$/) });
+// A DECOUPLED (discovery-ZIP) workspace key: `gws:<discovery uuid>`. Disjoint from the canonical `op:gov:` namespace,
+// so branching on isGwsKey is unambiguous and a canonical key never takes the decoupled branch (and vice-versa).
+const GWS_RE = /^gws:[0-9a-f-]{36}$/;
+const isGwsKey = (k: string): boolean => GWS_RE.test(k);
+// The shared key param for the routes that serve BOTH paths (GET, create, approve, decision, extract-requirements):
+// accepts a canonical id OR a gws key; anything else → 400. The handlers branch on isGwsKey. The write routes that
+// are canonical-only by design (link, authorize-build, review-documents) keep `canonicalParam` (a gws key → 400 there).
+const qualKeyParam = z.object({ canonicalOpportunityId: z.string().regex(/^(op:gov:[0-9a-f]{32}|gws:[0-9a-f-]{36})$/) });
 const biddingEntityField = z.string().min(1).max(120);
 
 function logFail(event: string, err: any, context: Record<string, unknown>): void {
@@ -84,12 +93,22 @@ function mapQualificationError(res: Response, err: any): boolean {
  * under a prior review, and whether an approval is currently allowed. Never mutates.
  */
 router.get('/api/admin/factory/qualification/:canonicalOpportunityId', requireSection('program'), async (req: Request, res: Response) => {
-  const p = canonicalParam.safeParse(req.params);
-  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
   const be = biddingEntityField.safeParse((req.query.biddingEntity as string) ?? '');
   const { canonicalOpportunityId } = p.data;
   const scope = await scopeOrFail(res, 'gov_qualification_view_scope', { canonicalOpportunityId });
   if (!scope) return;
+  // DECOUPLED (discovery-ZIP) workspace: no OP source re-fetch; the uploaded ZIP is the evidence source.
+  if (isGwsKey(canonicalOpportunityId)) {
+    try {
+      res.json(await getDecoupledWorkspace(scope.tenantId, canonicalOpportunityId, be.success && be.data ? be.data : undefined));
+    } catch (err: any) {
+      logFail('gov_qualification_decoupled_view_failed', err, { canonicalOpportunityId });
+      res.status(500).json({ error: 'Could not load the qualification workspace.' });
+    }
+    return;
+  }
   try {
     // Server-authoritative source-state (available / degraded / snapshot_unrecorded / unavailable / auth_failed /
     // malformed). The browser never supplies source facts, and the approve control is only offered when the
@@ -148,18 +167,39 @@ router.get('/api/admin/factory/qualification-candidates', requireSection('progra
   res.json({ ...result, sourceLive: isLiveOpDetailConfigured() });
 });
 
-const createBody = z.object({ biddingEntity: biddingEntityField, deliveryProjectId: z.string().uuid().optional() });
+const createBody = z.object({
+  biddingEntity: biddingEntityField, deliveryProjectId: z.string().uuid().optional(),
+  // Decoupled-workspace provenance (display only; the clicked discovery row's title/agency). Ignored on the canonical path.
+  from: z.string().max(400).optional(), agency: z.string().max(200).optional(),
+});
 
-/** POST /api/admin/factory/qualification/:canonicalOpportunityId — create a pending_review record, bound to a
- *  SERVER-fetched source snapshot (browser non-authoritative). Fails closed (503) when the source is unavailable. */
+/** POST /api/admin/factory/qualification/:canonicalOpportunityId — create a pending_review record. Canonical path:
+ *  bound to a SERVER-fetched source snapshot (fails closed 503 when unavailable). Decoupled (gws) path: bound to NO
+ *  snapshot — the uploaded ZIP is the evidence source. */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId', requireSection('program'), async (req: Request, res: Response) => {
-  const p = canonicalParam.safeParse(req.params);
-  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
   const b = createBody.safeParse(req.body ?? {});
   if (!b.success) { res.status(400).json({ error: 'Invalid create body.', issues: b.error.issues }); return; }
   const { canonicalOpportunityId } = p.data;
   const scope = await scopeOrFail(res, 'gov_qualification_create_scope', { canonicalOpportunityId });
   if (!scope) return;
+  // DECOUPLED (discovery-ZIP) create: no OP snapshot binding; store workspace_kind + provenance from the discovery row.
+  if (isGwsKey(canonicalOpportunityId)) {
+    try {
+      const q = await createDecoupledQualification({
+        tenantId: scope.tenantId, organizationId: scope.orgId, biddingEntity: b.data.biddingEntity,
+        gwsKey: canonicalOpportunityId, reviewerIdentityId: actorIdentity(req),
+        provenance: { uuid: canonicalOpportunityId.slice(4), title: b.data.from ?? null, agency: b.data.agency ?? null },
+      });
+      res.status(201).json({ qualification: q });
+    } catch (err: any) {
+      if (mapQualificationError(res, err)) return;
+      logFail('gov_qualification_decoupled_create_failed', err, { canonicalOpportunityId });
+      res.status(500).json({ error: 'Could not create the qualification.' });
+    }
+    return;
+  }
   try {
     // Research/draft is permitted whenever the source is READABLE (available/degraded/snapshot_unrecorded); only
     // an unreadable source (unavailable/auth_failed/malformed) fails closed. Pursuit APPROVAL is gated separately
@@ -207,8 +247,8 @@ const decisionBody = z.object({
 
 /** POST /api/admin/factory/qualification/:canonicalOpportunityId/decision — record a NON-approval decision. */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/decision', requireSection('program'), async (req: Request, res: Response) => {
-  const p = canonicalParam.safeParse(req.params);
-  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
   const b = decisionBody.safeParse(req.body ?? {});
   if (!b.success) { res.status(400).json({ error: 'Invalid decision body.', issues: b.error.issues }); return; }
   const { canonicalOpportunityId } = p.data;
@@ -241,8 +281,10 @@ const approveBody = z.object({
 /** POST /api/admin/factory/qualification/:canonicalOpportunityId/approve — the server-side, source-bound approval.
  *  The approver is the request identity (enforced != reviewer in the service). */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/approve', requireSection('program'), async (req: Request, res: Response) => {
-  const p = canonicalParam.safeParse(req.params);
-  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  // Pursuit approval on the DECOUPLED (ZIP) path is a later, coordinator-gated slice — never runs OP approval logic here.
+  if (isGwsKey(p.data.canonicalOpportunityId)) { res.status(409).json({ decoupledApprovalUnavailable: true, error: 'Pursuit approval is not enabled on the ZIP workspace path yet.' }); return; }
   const b = approveBody.safeParse(req.body ?? {});
   if (!b.success) { res.status(400).json({ error: 'Invalid approval body.', issues: b.error.issues }); return; }
   const { canonicalOpportunityId } = p.data;
@@ -383,8 +425,8 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/review-doc
  * the /decision establish path. Program-gated; multer in-memory ZIP (bytes hashed/parsed in memory, never stored).
  */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-requirements', requireSection('program'), uploadDocumentZip, async (req: Request, res: Response) => {
-  const p = canonicalParam.safeParse(req.params);
-  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
   const file: any = (req as any).file;
   if (!file || !file.buffer) { res.status(400).json({ error: 'No document file uploaded (field "document").' }); return; }
   try {

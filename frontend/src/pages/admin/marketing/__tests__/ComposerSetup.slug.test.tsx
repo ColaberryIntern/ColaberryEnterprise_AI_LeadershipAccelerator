@@ -13,7 +13,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 const VALUES: SetupValues = {
-  brand_id: 'b-1', campaign_id: 'c-1', title: '', destination_url: '', canonical_body: '',
+  brand_id: 'b-1', campaign_id: 'c-1', title: '', landing_page_id: null, destination_url: '', canonical_body: '',
   content_type: 'text', is_paid: false, has_offer: false, poll: null,
 };
 const CAMPAIGNS: CampaignOption[] = [

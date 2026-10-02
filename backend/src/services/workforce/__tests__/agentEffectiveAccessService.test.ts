@@ -449,7 +449,7 @@ describe('resolveEffectiveAccess', () => {
   });
 
   describe('R201 — buildInventoryDriftReport() surfaces the real A09 findings', () => {
-    it('surfaces all 3 named A09 findings: Reese’s tools_granted gap, Dara’s escalate_to_human ungated status, and the ProofDesk hardcoded-enabled disconnect', async () => {
+    it('surfaces both remaining named A09 findings: Reese’s tools_granted gap and the ProofDesk hardcoded-enabled disconnect (Dara’s 2 execution-gating findings closed by T12 completion, 2026-10-02)', async () => {
       const agents: Record<string, any> = {
         'id-reese': { id: 'id-reese', agent_name: 'Reese', tools_granted: [], enabled: true },
         'id-dara': { id: 'id-dara', agent_name: 'Dara', tools_granted: [], enabled: true },
@@ -466,21 +466,19 @@ describe('resolveEffectiveAccess', () => {
       expect(
         report.findings.some((f) => f.agentName === 'Reese' && f.description.includes('read_attachments') && f.description.includes('absent from tools_granted')),
       ).toBe(true);
-      // Finding 2: Dara's escalate_to_human ungated status — the
-      // hand-curated execution-gating-gap list, since this is NOT derivable
-      // from the 10 grant sources alone.
-      expect(
-        report.findings.some((f) => f.agentName === 'Dara' && f.description.includes('escalate_to_human') && f.description.includes('zero authorization')),
-      ).toBe(true);
-      // The curated finding's agentId is resolved against the real fleet
-      // list, not left null when a real match exists.
-      const daraEscalateFinding = report.findings.find((f) => f.agentName === 'Dara' && f.description.includes('escalate_to_human'));
-      expect(daraEscalateFinding?.agentId).toBe('id-dara');
-      // Finding 3: the ProofDesk capabilityRegistry.ts hardcoded-enabled
+      // Finding 2: the ProofDesk capabilityRegistry.ts hardcoded-enabled
       // disconnect, surfaced from the resolver's own agent-level mismatches.
       expect(
         report.findings.some((f) => f.agentName === 'CurriculumArchitectAgent' && f.description.includes('hardcoded enabled:true literal')),
       ).toBe(true);
+      // Dara's 2 former execution-gating findings are genuinely gone now
+      // (checked by their unique curated-description text, not just the
+      // tool name — a real, still-valid, DIFFERENT finding about her
+      // tools_granted registry gap also legitimately mentions
+      // 'escalate_to_human' by name, so that substring alone isn't a safe
+      // check here).
+      expect(report.findings.some((f) => f.agentName === 'Dara' && f.description.includes('zero authorization'))).toBe(false);
+      expect(report.findings.some((f) => f.agentName === 'Dara' && f.description.includes('zero kill-switch'))).toBe(false);
     });
 
     it('an agent with zero mismatches contributes zero findings (no fabricated drift)', async () => {
@@ -495,15 +493,15 @@ describe('resolveEffectiveAccess', () => {
       expect(report.findings.some((f) => f.agentName === 'CleanAgent')).toBe(false);
     });
 
-    it("a curated finding's agentId is honestly null when no real agent named 'Dara' exists in the fleet (never guessed)", async () => {
-      mockAiAgentFindAll.mockResolvedValue([]); // no agents at all, real or named 'Dara'
+    it("a curated finding's agentId is honestly null when no real agent named 'CurriculumArchitectAgent' exists in the fleet (never guessed)", async () => {
+      mockAiAgentFindAll.mockResolvedValue([]); // no agents at all, real or named 'CurriculumArchitectAgent'
       mockAiAgentFindByPk.mockResolvedValue(null);
 
       const report = await buildInventoryDriftReport();
 
-      const daraFinding = report.findings.find((f) => f.agentName === 'Dara');
-      expect(daraFinding).toBeDefined();
-      expect(daraFinding?.agentId).toBeNull();
+      const cqaFinding = report.findings.find((f) => f.agentName === 'CurriculumArchitectAgent');
+      expect(cqaFinding).toBeDefined();
+      expect(cqaFinding?.agentId).toBeNull();
     });
   });
 

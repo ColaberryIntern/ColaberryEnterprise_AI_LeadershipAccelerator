@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intern Console Designs</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --sunken:#eef0f4; --border:#e2e6ec; --muted:#6b7280; --strong:#182231; --text:#2b3443;
+  --primary:#FB2832; --primary-bg:#fff0f0; --berry:#367895; --berry-bg:#EAF2F6;
+  --green:#10b981; --yellow:#e5a50a; --orange:#f97316; --red:#ef4444; --black:#334155; --unknown:#a3aab6;
+  --h1:#e8f0fb; --h2:#bcd3f2; --h3:#7ea8e3; --h4:#3f78cc; --h5:#1d4f9c;
+  --shadow:0 1px 2px rgba(16,24,40,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f141b; --card:#171e27; --sunken:#1f2833; --border:#2a3441; --muted:#94a0b1; --strong:#eef2f7; --text:#cfd6e0;
+    --primary-bg:#3a1517; --berry-bg:#16303c; --black:#cbd5e1; --unknown:#5b6573;
+    --h1:#1b2a40; --h2:#1f3f6b; --h3:#2c5ea3; --h4:#4a86d8; --h5:#8fb8f0; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --card:#171e27; --sunken:#1f2833; --border:#2a3441; --muted:#94a0b1; --strong:#eef2f7; --text:#cfd6e0;
+  --primary-bg:#3a1517; --berry-bg:#16303c; --black:#cbd5e1; --unknown:#5b6573;
+  --h1:#1b2a40; --h2:#1f3f6b; --h3:#2c5ea3; --h4:#4a86d8; --h5:#8fb8f0; --shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Roboto,system-ui,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+.mono{font-family:"Roboto Mono",monospace}
+.wrap{max-width:1360px;margin:0 auto;padding:20px 16px 80px}
+.crumb{color:var(--muted);font-size:13px}
+h1{font-size:24px;color:var(--strong);margin:4px 0 2px;display:flex;align-items:center;gap:8px}
+h1 i{color:var(--primary)}
+.sub{color:var(--muted);margin:0 0 16px}
+h2{font-size:16px;color:var(--strong);margin:0;display:flex;align-items:center;gap:8px}
+h2 i{color:var(--primary)}
+h3{font-size:13px;color:var(--strong);margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em}
+.muted{color:var(--muted)} .small{font-size:12px} .strong{color:var(--strong);font-weight:500}
+
+/* design switcher */
+.switch{display:flex;gap:6px;background:var(--sunken);border-radius:999px;padding:4px;width:fit-content;flex-wrap:wrap;margin-bottom:6px}
+.switch button{border:0;background:transparent;border-radius:999px;padding:7px 14px;font-weight:500;color:var(--muted)}
+.switch button.on{background:var(--card);color:var(--strong);box-shadow:var(--shadow)}
+.switch b{color:var(--primary);margin-right:4px}
+.pitch{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--primary);border-radius:10px;padding:10px 14px;margin:12px 0 18px;font-size:13px}
+.pitch strong{color:var(--strong)}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
+.card-h{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-b{padding:14px 16px}
+.section{margin-top:18px}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;border-top:3px solid var(--border)}
+.kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+.kpi .v{font-size:23px;font-weight:700;color:var(--strong);margin-top:2px}
+.kpi .n{font-size:12px;color:var(--muted)}
+.kpi.alert{border-top-color:var(--red)} .kpi.ok{border-top-color:var(--green)} .kpi.info{border-top-color:var(--berry)} .kpi.warn{border-top-color:var(--orange)}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:500;color:var(--muted)}
+.chip.on{border-color:var(--primary);color:var(--primary);background:var(--primary-bg)}
+
+.btn{border:1px solid var(--border);background:var(--card);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{border-color:var(--primary);color:var(--primary)}
+.btn.solid{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn.danger{color:var(--red);border-color:color-mix(in srgb,var(--red) 50%,var(--border))}
+
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.lv-green{background:var(--green)} .lv-yellow{background:var(--yellow)} .lv-orange{background:var(--orange)} .lv-red{background:var(--red)} .lv-black{background:var(--black)} .lv-unknown{background:var(--unknown)}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:500;background:var(--sunken);color:var(--muted);white-space:nowrap}
+.pill.active{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.pill.paused{background:color-mix(in srgb,var(--orange) 15%,transparent);color:var(--orange)}
+.pill.stage{background:var(--berry-bg);color:var(--berry)}
+.pill.none{background:transparent;border:1px dashed var(--border)}
+.tag{font-size:10px;font-weight:500;border-radius:4px;padding:1px 5px;background:color-mix(in srgb,var(--yellow) 20%,transparent);color:color-mix(in srgb,var(--yellow) 70%,var(--strong));white-space:nowrap}
+
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:500;text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--sunken)}
+.tbl{overflow-x:auto}
+.name{font-weight:500;color:var(--strong);white-space:nowrap}
+.bar{height:6px;background:var(--sunken);border-radius:3px;overflow:hidden;min-width:60px}
+.bar>span{display:block;height:100%;background:var(--berry);border-radius:3px}
+.weeks{display:flex;gap:2px}
+.wk{width:14px;height:18px;border-radius:3px;background:var(--h1);position:relative}
+.wk.done::after{content:"";position:absolute;left:3px;right:3px;bottom:2px;height:2px;border-radius:1px;background:var(--card);opacity:.9}
+.wk.gate{outline:1.5px solid var(--primary);outline-offset:1px}
+
+/* B board */
+.lanes{display:grid;grid-template-columns:repeat(5,minmax(220px,1fr));gap:10px;overflow-x:auto;padding-bottom:4px}
+.lane{background:var(--sunken);border-radius:12px;padding:10px;min-height:120px}
+.lane-h{display:flex;align-items:center;gap:6px;font-weight:500;color:var(--strong);margin-bottom:8px;font-size:13px}
+.lane-h .c{margin-left:auto;color:var(--muted);font-size:12px}
+.icard{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
+.icard .top{display:flex;align-items:center;gap:8px}
+.av{width:30px;height:30px;border-radius:50%;background:var(--berry-bg);color:var(--berry);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+.trk{display:grid;grid-template-columns:62px 1fr 34px;gap:6px;align-items:center;font-size:11px;color:var(--muted);margin-top:6px}
+.trk .bar{min-width:0}
+.trk b{font-weight:500;color:var(--strong);text-align:right}
+.seg{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--sunken)}
+.seg span{display:block;height:100%}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dist{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dist-row{display:grid;grid-template-columns:110px 1fr 24px;gap:8px;align-items:center;font-size:12px;margin:5px 0}
+.dist-row b{text-align:right;color:var(--strong)}
+
+/* stage pipeline */
+.pipe{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:10px;overflow-x:auto}
+.pipe-col h4{margin:0 0 8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;gap:6px}
+.pcard{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.empty{border:1px dashed var(--border);border-radius:10px;padding:14px;text-align:center;color:var(--muted);font-size:12px}
+
+/* project deep dive */
+.proj{border:1px solid var(--border);border-radius:12px;background:var(--card);margin-bottom:10px;overflow:hidden}
+.proj-h{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;flex-wrap:wrap}
+.proj-h .t{font-weight:700;color:var(--strong)}
+.proj-b{border-top:1px solid var(--border);padding:14px 16px;display:none}
+.proj.open .proj-b{display:block}
+.proj.open .chev{transform:rotate(90deg)}
+.chev{transition:transform .15s;color:var(--muted)}
+.stepper{display:flex;gap:4px;margin:4px 0 14px}
+.step{flex:1;text-align:center;font-size:11px;color:var(--muted)}
+.step i{display:block;height:6px;border-radius:3px;background:var(--sunken);margin-bottom:5px}
+.step.done i{background:var(--berry)} .step.cur i{background:var(--primary)} .step.cur{color:var(--strong);font-weight:500}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.mini{background:var(--sunken);border-radius:10px;padding:10px 12px}
+.mini .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.mini .v{font-size:18px;font-weight:700;color:var(--strong)}
+
+/* C */
+.cgrid{display:grid;grid-template-columns:260px 1fr;gap:14px;align-items:start}
+.roster{position:sticky;top:12px}
+.ritem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+.ritem:hover{background:var(--sunken)}
+.ritem.sel{background:var(--primary-bg);border-color:color-mix(in srgb,var(--primary) 35%,transparent)}
+.ritem .nm{font-weight:500;color:var(--strong);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.heat{display:grid;grid-template-columns:150px repeat(28,minmax(12px,1fr));gap:2px;align-items:center;font-size:11px;min-width:640px}
+.heat .hc{height:16px;border-radius:3px;background:var(--h1);position:relative;cursor:pointer}
+.heat .hc.att::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;transform:translate(-50%,-50%);border-radius:50%;border:2px solid var(--primary);background:var(--card)}
+.heat .rn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--strong);font-weight:500;padding-right:6px;cursor:pointer}
+.heat .rn.sel{color:var(--primary)}
+.heat .dh{color:var(--muted);text-align:center;font-size:10px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.wkrow{display:grid;grid-template-columns:54px 1fr 38px;gap:8px;align-items:center;font-size:12px;margin:4px 0}
+.bk{display:flex;gap:2px;height:10px}
+.bk span{flex:1;border-radius:2px;background:var(--h1)}
+.actbar{display:flex;gap:6px;flex-wrap:wrap}
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:grid;grid-template-columns:22px 1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;align-items:center}
+.feed li:last-child{border:0}
+.feed i{color:var(--berry)}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,15,25,.35);opacity:0;pointer-events:none;transition:.2s;z-index:20}
+.drawer{position:fixed;top:0;right:0;height:100%;width:min(460px,100%);background:var(--card);border-left:1px solid var(--border);transform:translateX(100%);transition:.22s;z-index:21;display:flex;flex-direction:column}
+body.dopen .scrim{opacity:1;pointer-events:auto} body.dopen .drawer{transform:none}
+.d-h{padding:16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center}
+.d-b{padding:6px 16px 30px;overflow-y:auto;flex:1}
+.d-sec{padding:14px 0;border-bottom:1px solid var(--border)}
+.d-sec:last-child{border:0}
+.d-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+select,textarea,input{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 8px}
+textarea{width:100%;min-height:60px;resize:vertical}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--strong);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;z-index:30;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+.notes{font-size:13px}
+.notes table td,.notes table th{font-size:12px;padding:6px 8px}
+.notes code{font-family:"Roboto Mono",monospace;font-size:11.5px;background:var(--sunken);padding:1px 4px;border-radius:4px}
+
+@media (max-width:900px){
+  .cgrid{grid-template-columns:1fr} .roster{position:static}
+  .three,.dist{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb">Admin / AI Internship / Intern Console</div>
+  <h1><i class="ri-user-star-line"></i> Intern Console</h1>
+  <p class="sub">Three ways to arrange training, certification and project work for active interns. Sample data, today is Oct 1, 2026.</p>
+
+  <div class="switch" id="switch">
+    <button data-v="A" class="on"><b>A</b>Command Center</button>
+    <button data-v="B"><b>B</b>Triage Board</button>
+    <button data-v="C"><b>C</b>Activity Timeline</button>
+    <button data-v="N"><i class="ri-database-2-line"></i> Data mapping</button>
+  </div>
+  <div class="pitch" id="pitch"></div>
+  <div id="view"></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Manage intern"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+const TODAY = new Date('2026-10-01T09:00:00-05:00');
+const DAY = 864e5;
+const STAGES = ['discovery','architecture','implementation','portfolio','complete'];
+const BUCKETS = ['pre_class','learn','practice','build','reflect','share','advance'];
+const BUCKET_LABEL = {pre_class:'Pre',learn:'Learn',practice:'Prac',build:'Build',reflect:'Refl',share:'Share',advance:'Adv'};
+const PASS = 720; // CertTrack.passing_scaled_score (sample)
+
+function rng(seed){let s=seed;return()=> (s=(s*16807)%2147483647)/2147483647}
+
+// weeks: completion % per curriculum week 0..10 (TimelineCardProgress completed / published cards)
+const RAW = [
+ {id:1,name:'Quincy Nkwain Ninying',email:'quincy.n@example.com',state:'active',joined:84,last:0,src:'GitHub commit',sess:9,exp:12,
+  weeks:[62,74,66,58,50,44,40,35,30,22,10],cert:{scores:[540,610,668,705,742],mode:'mock',state:'approaching',uploaded:'none',dom:[78,70,74,66,81]},
+  project:{name:'HosPulse',stage:'implementation',req:85,stories:[14,22],repo:true,commits:11,health:78,approval:'approved',cs:'draft',industry:'Healthcare ops'}},
+ {id:2,name:'Kalkidan Bezabeh',email:'kalkidan.b@example.com',state:'active',joined:41,last:2,src:'Card: Week 1 Reflect',sess:2,exp:6,
+  weeks:[40,45,22,10,4,0,0,0,0,0,0],cert:{scores:[520],mode:'diagnostic',state:'building',uploaded:'none',dom:[55,48,52,40,58]},project:null},
+ {id:3,name:'Megan Dimiyo-Mbenoun',email:'megan.dm@example.com',state:'active',joined:39,last:12,src:'Card: Week 0 Learn',sess:0,exp:6,
+  weeks:[18,8,0,0,0,0,0,0,0,0,0],cert:{scores:[],state:'not_measured',uploaded:'none',dom:[]},project:null},
+ {id:4,name:'Ali Muwwakkil',email:'ali.m@example.com',state:'active',joined:55,last:1,src:'Internship meeting',sess:5,exp:8,
+  weeks:[24,20,15,12,8,0,0,0,0,0,0],cert:{scores:[560,610],mode:'practice',state:'building',uploaded:'none',dom:[60,58,66,49,62]},
+  project:{name:'Regional Medical Courier System',stage:'architecture',req:40,stories:[3,18],repo:true,commits:4,health:61,approval:'pending_approval',cs:'none',industry:'Logistics'}},
+ {id:5,name:'Harpreet Kaur',email:'harpreet.k@example.com',state:'active',joined:34,last:5,src:'Card: Week 1 Learn',sess:0,exp:5,
+  weeks:[26,12,0,0,0,0,0,0,0,0,0],cert:{scores:[],state:'not_measured',uploaded:'none',dom:[]},project:null},
+ {id:6,name:'Aki Wam',email:'aki.w@example.com',state:'active',joined:30,last:3,src:'Cert diagnostic',sess:1,exp:4,
+  weeks:[28,22,6,0,0,0,0,0,0,0,0],cert:{scores:[480],mode:'diagnostic',state:'building',uploaded:'none',dom:[50,44,47,38,52]},project:null},
+ {id:7,name:'OBI, ANAMELECHI. K',email:'obi.a@example.com',state:'active',joined:33,last:8,src:'Card: Week 0 Pre-class',sess:0,exp:5,
+  weeks:[14,5,0,0,0,0,0,0,0,0,0],cert:{scores:[],state:'not_measured',uploaded:'none',dom:[]},project:null},
+ {id:8,name:'Omolola Makinde',email:'omolola.m@example.com',state:'active',joined:36,last:0,src:'Card: Week 3 Practice',sess:3,exp:5,
+  weeks:[29,27,24,18,6,0,0,0,0,0,0],cert:{scores:[590,630,655],mode:'practice',state:'building',uploaded:'none',dom:[68,62,70,55,66]},project:null},
+ {id:9,name:'SAmrawit mekonen',email:'samrawit.m@example.com',state:'active',joined:4,last:null,src:'',sess:0,exp:1,
+  weeks:[0,0,0,0,0,0,0,0,0,0,0],cert:{scores:[],state:'not_measured',uploaded:'none',dom:[]},project:null},
+ {id:10,name:'Sarbjit Kaur',email:'sarbjit.k@example.com',state:'paused',joined:47,last:15,src:'Card: Week 1 Build',sess:1,exp:7,
+  weeks:[22,16,4,0,0,0,0,0,0,0,0],cert:{scores:[],state:'not_measured',uploaded:'none',dom:[]},project:null},
+];
+const DOMAINS = ['Agent architecture','Tool design & MCP','Claude Code workflows','Prompt & context eng.','Reliability & eval'];
+
+const interns = RAW.map(r=>{
+  const R = rng(r.id*997);
+  const scheduled = Math.min(10, Math.floor(r.joined/7));
+  const done = r.weeks.map(p=>p>=30);
+  const gate = [1,2,3].filter(w=>done[w]).length;
+  const weeksDone = done.filter(Boolean).length;
+  // 28-day activity grid: events per day; nothing after last activity
+  const days = [];
+  for(let d=27; d>=0; d--){
+    let v = 0;
+    if(d < r.joined && r.last!==null && d >= r.last){
+      const base = r.weeks.reduce((a,b)=>a+b,0)/300;
+      v = R() < .35+base*.5 ? Math.ceil(R()*(2+base*6)) : 0;
+      if(d===r.last) v = Math.max(v,2);
+    }
+    days.push({d, v, att:false});
+  }
+  // place attended meetings
+  let placed = 0;
+  const attendWindow = days.filter(x=>x.v>0);
+  for(let i=attendWindow.length-1;i>=0 && placed<Math.min(r.sess,6);i-=2){attendWindow[i].att=true;placed++}
+  const buckets = r.weeks.map(p=>BUCKETS.map((b,i)=>Math.max(0,Math.min(100,Math.round(p*(1.25-i*.15)+(R()*10-5))))));
+  return {...r, scheduled, done, gate, weeksDone, pace: weeksDone - scheduled, days, buckets,
+    trainingPct: Math.round(r.weeks.slice(0,Math.max(1,scheduled+1)).reduce((a,b)=>a+b,0)/Math.max(1,scheduled+1)),
+    attPct: r.exp? Math.round(r.sess/r.exp*100):0, notes:[], audit:[
+      {at:r.joined, t:`activation_pending → active`, by:'system'},
+      {at:r.joined+2, t:`documents_verified → payment_pending`, by:'reviewer'}
+    ]};
+});
+
+function level(i){
+  if(i.last===null) return 'unknown';
+  let l = i.last===0?'green':i.last<=3?'yellow':i.last<=6?'orange':i.last<=9?'red':'black';
+  if(i.joined<=30 && ['orange','red','black'].includes(l)) l='yellow'; // 30-day grace cap
+  return l;
+}
+const LV = {green:'Active today',yellow:'1–3 days',orange:'4–6 days',red:'7–9 days',black:'Gone dark 10+',unknown:'No activity yet'};
+const ago = d => d===null?'never':d===0?'today':d===1?'yesterday':`${d}d ago`;
+const certBest = i => i.cert.scores.length? Math.max(...i.cert.scores):null;
+const certPct = i => certBest(i)? Math.round(certBest(i)/PASS*100):0;
+const projPct = i => i.project? Math.round((STAGES.indexOf(i.project.stage)+ i.project.req/100)/STAGES.length*100):0;
+const initials = n => n.replace(/[^A-Za-z ]/g,'').split(' ').filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join('');
+const heatColor = p => p===0?'var(--h1)':p<10?'var(--h2)':p<20?'var(--h3)':p<32?'var(--h4)':'var(--h5)';
+const stagePill = i => i.project?`<span class="pill stage">${i.project.stage}</span>`:`<span class="pill none">no project</span>`;
+const statePill = i => `<span class="pill ${i.state}">${i.state}</span>`;
+const certState = s => ({not_measured:'Not started',building:'Building',approaching:'Approaching',sustained:'Exam ready'})[s];
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+
+function weekStrip(i){
+  return `<div class="weeks" title="Weeks 0–10 completion. Underline = week done (≥30% of published cards). Red outline = weeks 1–3 project gate.">${
+    i.weeks.map((p,w)=>`<div class="wk ${i.done[w]?'done':''} ${w>=1&&w<=3?'gate':''}" style="background:${heatColor(p)}" title="Week ${w}: ${p}%"></div>`).join('')}</div>`;
+}
+
+function kpiRow(){
+  const act = interns.filter(i=>i.state==='active');
+  const dark = interns.filter(i=>['red','black'].includes(level(i)));
+  const avgAtt = Math.round(interns.reduce((a,i)=>a+i.attPct,0)/interns.length);
+  const gateDone = interns.filter(i=>i.gate===3).length;
+  const certActive = interns.filter(i=>i.cert.scores.length).length;
+  const noProj = act.filter(i=>!i.project).length;
+  const ready = act.filter(i=>i.gate===3 && !i.project).length;
+  return `<div class="kpis">
+    <div class="kpi info"><div class="l">Active interns</div><div class="v">${act.length}</div><div class="n">${interns.length-act.length} paused</div></div>
+    <div class="kpi alert"><div class="l">Gone quiet 7d+</div><div class="v">${dark.length}</div><div class="n">no card, meeting or commit</div></div>
+    <div class="kpi warn"><div class="l">Avg attendance</div><div class="v">${avgAtt}%</div><div class="n">meetings joined / held since start</div></div>
+    <div class="kpi ok"><div class="l">Cleared weeks 1–3</div><div class="v">${gateDone}/${interns.length}</div><div class="n">${ready} ready for a project</div></div>
+    <div class="kpi info"><div class="l">Cert practice started</div><div class="v">${certActive}/${interns.length}</div><div class="n">CCA-F, pass at ${PASS}</div></div>
+    <div class="kpi"><div class="l">Active, no project</div><div class="v">${noProj}</div><div class="n">${interns.filter(i=>i.project).length} projects underway</div></div>
+  </div>`;
+}
+
+/* ---------------- DESIGN A ---------------- */
+let filterA = 'all';
+function renderA(){
+  const F = {
+    all:()=>true,
+    attention:i=>['orange','red','black','unknown'].includes(level(i)) || i.pace<=-2,
+    noproj:i=>!i.project,
+    paused:i=>i.state==='paused'
+  };
+  const rows = interns.filter(F[filterA]).sort((a,b)=>(b.last??99)-(a.last??99));
+  return `${kpiRow()}
+  <div class="card section">
+    <div class="card-h"><h2><i class="ri-team-line"></i>Active interns</h2>
+      <div class="chips">${[['all','All'],['attention','Needs attention'],['noproj','No project'],['paused','Paused']].map(([k,l])=>`<button class="chip ${filterA===k?'on':''}" data-fa="${k}">${l}</button>`).join('')}</div>
+    </div>
+    <div class="tbl"><table>
+      <thead><tr><th>Intern</th><th>Last active</th><th>Attendance</th><th>Training · weeks 0–10</th><th>Pace</th><th>Certification</th><th>Project</th><th></th></tr></thead>
+      <tbody>${rows.map(i=>`<tr>
+        <td><div class="name">${esc(i.name)}</div><div class="small muted">${statePill(i)} day ${i.joined}</div></td>
+        <td><div style="display:flex;align-items:center;gap:6px"><span class="dot lv-${level(i)}"></span><span class="strong">${ago(i.last)}</span></div><div class="small muted">${esc(i.src)||'—'}</div></td>
+        <td><div class="strong">${i.sess}<span class="muted">/${i.exp}</span> · ${i.attPct}%</div><div class="bar" style="margin-top:4px"><span style="width:${i.attPct}%"></span></div></td>
+        <td>${weekStrip(i)}<div class="small muted" style="margin-top:3px">Wk 1–3 gate ${i.gate}/3 · ${i.weeksDone} weeks done</div></td>
+        <td>${paceBadge(i)}</td>
+        <td>${certBest(i)?`<div class="strong mono">${certBest(i)}</div><div class="small muted">${certState(i.cert.state)} · ${i.cert.scores.length} tries</div>`:`<span class="muted small">Not started</span>`}</td>
+        <td>${i.project?`<div class="strong" style="white-space:nowrap">${esc(i.project.name)}</div>${stagePill(i)}`:`<button class="btn pri" data-act="start" data-id="${i.id}"><i class="ri-flag-line"></i>Start a project</button>`}</td>
+        <td><button class="btn solid" data-manage="${i.id}"><i class="ri-settings-3-line"></i>Manage</button></td>
+      </tr>`).join('') || `<tr><td colspan="8" class="muted" style="text-align:center;padding:20px">No interns match this filter.</td></tr>`}</tbody>
+    </table></div>
+  </div>
+  ${projectsDeepDive()}`;
+}
+function paceBadge(i){
+  const p=i.pace, c = p>=2?'var(--green)':p>=0?'var(--green)':p===-1?'var(--yellow)':'var(--red)';
+  const l = p>=2?'Ahead':p>=0?'On pace':p===-1?'1 wk behind':`${-p} wks behind`;
+  return `<span class="pill" style="color:${c};background:color-mix(in srgb,${c} 13%,transparent)">${l}</span>`;
+}
+
+/* ---------------- DESIGN B ---------------- */
+function renderB(){
+  const order = ['green','yellow','orange','red','black','unknown'];
+  const counts = Object.fromEntries(order.map(l=>[l,interns.filter(i=>level(i)===l).length]));
+  const total = interns.length;
+  const lanes = [
+    {k:'green',t:'Active today',lv:['green']},
+    {k:'yellow',t:'Recent · 1–3 days',lv:['yellow']},
+    {k:'orange',t:'Slipping · 4–6 days',lv:['orange']},
+    {k:'red',t:'At risk · 7+ days',lv:['red','black']},
+    {k:'unknown',t:'New · no activity yet',lv:['unknown']},
+  ];
+  const certDist = ['not_measured','building','approaching','sustained'].map(s=>[certState(s),interns.filter(i=>i.cert.state===s).length]);
+  const trainDist = [0,1,2,3].map(n=>[`Wk 1–3: ${n}/3`,interns.filter(i=>i.gate===n).length]);
+  const projDist = [['No project',interns.filter(i=>!i.project).length], ...STAGES.map(s=>[s[0].toUpperCase()+s.slice(1),interns.filter(i=>i.project?.stage===s).length])];
+  const distBlock = (title,icon,rows)=>`<div class="card card-b"><h3><i class="${icon}"></i> ${title}</h3>${rows.map(([l,n])=>`<div class="dist-row"><span>${l}</span><div class="bar"><span style="width:${n/total*100}%"></span></div><b>${n}</b></div>`).join('')}</div>`;
+  return `
+  <div class="card card-b">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+      <h2><i class="ri-pulse-line"></i>Pulse · when did each intern last show up</h2>
+      <span class="small muted">Latest of: card progress, meeting join, cert attempt, commit</span>
+    </div>
+    <div class="seg" style="margin-top:12px">${order.map(l=>counts[l]?`<span class="lv-${l}" style="width:${counts[l]/total*100}%" title="${LV[l]}: ${counts[l]}"></span>`:'').join('')}</div>
+    <div class="legend">${order.map(l=>`<span><i class="dot lv-${l}"></i>${LV[l]} <b class="strong">${counts[l]}</b></span>`).join('')}</div>
+  </div>
+  <div class="dist section">
+    ${distBlock('Training','ri-book-open-line',trainDist)}
+    ${distBlock('Certification','ri-award-line',certDist)}
+    ${distBlock('Projects','ri-flag-line',projDist)}
+  </div>
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <h2><i class="ri-layout-column-line"></i>Triage board</h2>
+      <button class="btn pri" data-act="nudge-all"><i class="ri-mail-send-line"></i>Nudge everyone 4+ days quiet</button>
+    </div>
+    <div class="lanes">${lanes.map(L=>{
+      const list = interns.filter(i=>L.lv.includes(level(i)));
+      return `<div class="lane"><div class="lane-h"><span class="dot lv-${L.k}"></span>${L.t}<span class="c">${list.length}</span></div>
+        ${list.map(i=>`<div class="icard">
+          <div class="top"><div class="av">${initials(i.name)}</div><div style="min-width:0"><div class="name" style="overflow:hidden;text-overflow:ellipsis">${esc(i.name)}</div><div class="small muted">${ago(i.last)} · ${i.sess}/${i.exp} meetings</div></div></div>
+          <div class="trk"><span>Training</span><div class="bar"><span style="width:${Math.min(100,i.gate/3*100)}%"></span></div><b>${i.gate}/3</b></div>
+          <div class="trk"><span>Cert</span><div class="bar"><span style="width:${Math.min(100,certPct(i))}%;background:var(--orange)"></span></div><b>${certBest(i)??'—'}</b></div>
+          <div class="trk"><span>Project</span><div class="bar"><span style="width:${projPct(i)}%;background:var(--green)"></span></div><b>${projPct(i)||'—'}${i.project?'%':''}</b></div>
+          <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
+            ${i.state==='paused'?`<span class="pill paused">paused</span>`:''}
+            <button class="btn" data-act="nudge" data-id="${i.id}"><i class="ri-mail-line"></i>Nudge</button>
+            <button class="btn solid" data-manage="${i.id}">Manage</button>
+          </div>
+        </div>`).join('') || `<div class="empty">Nobody here</div>`}
+      </div>`;}).join('')}
+    </div>
+  </div>
+  <div class="section">
+    <h2 style="margin-bottom:10px"><i class="ri-git-branch-line"></i>Project pipeline</h2>
+    <div class="pipe">${STAGES.map(s=>{
+      const list = interns.filter(i=>i.project?.stage===s);
+      return `<div class="pipe-col"><h4>${s}<span>${list.length}</span></h4>${list.map(i=>`<div class="pcard">
+        <div class="strong">${esc(i.project.name)}</div><div class="small muted">${esc(i.name)} · ${esc(i.project.industry)}</div>
+        <div class="trk"><span>Reqs</span><div class="bar"><span style="width:${i.project.req}%"></span></div><b>${i.project.req}%</b></div>
+        <div class="trk"><span>Stories</span><div class="bar"><span style="width:${i.project.stories[0]/i.project.stories[1]*100}%;background:var(--green)"></span></div><b>${i.project.stories[0]}/${i.project.stories[1]}</b></div>
+        <div class="small muted" style="margin-top:6px"><i class="ri-github-line"></i> ${i.project.commits} commits 7d · health ${i.project.health}</div>
+      </div>`).join('') || `<div class="empty">No projects</div>`}</div>`;}).join('')}
+    </div>
+  </div>
+  <div class="section">${projectsDeepDive(true)}</div>`;
+}
+
+/* ---------------- DESIGN C ---------------- */
+let selC = 1;
+function renderC(){
+  const i = interns.find(x=>x.id===selC);
+  const dayLabels = Array.from({length:28},(_,k)=>{const d=new Date(TODAY-(27-k)*DAY);return d.getDay()===1?`${d.getMonth()+1}/${d.getDate()}`:''});
+  const hv = v => v===0?'var(--h1)':v<2?'var(--h2)':v<4?'var(--h3)':v<6?'var(--h4)':'var(--h5)';
+  return `${kpiRow()}
+  <div class="card section">
+    <div class="card-h"><h2><i class="ri-calendar-2-line"></i>Last 28 days of activity</h2>
+      <div class="legend" style="margin:0"><span><i class="wk" style="width:12px;height:12px;background:var(--h2)"></i>Low</span><span><i class="wk" style="width:12px;height:12px;background:var(--h5)"></i>High</span><span><i class="dot" style="border:2px solid var(--primary);background:transparent"></i>Attended meeting</span></div>
+    </div>
+    <div class="card-b tbl"><div class="heat">
+      <div></div>${dayLabels.map(l=>`<div class="dh">${l}</div>`).join('')}
+      ${interns.map(x=>`<div class="rn ${x.id===selC?'sel':''}" data-sel="${x.id}"><span class="dot lv-${level(x)}"></span> ${esc(x.name)}</div>${x.days.map(d=>`<div class="hc ${d.att?'att':''}" style="background:${hv(d.v)}" data-sel="${x.id}" title="${ago(d.d)}: ${d.v} events${d.att?' · attended meeting':''}"></div>`).join('')}`).join('')}
+    </div></div>
+  </div>
+  <div class="cgrid section">
+    <div class="card roster"><div class="card-h"><h2>Interns</h2><span class="small muted">sorted by quiet</span></div>
+      <div style="padding:6px">${[...interns].sort((a,b)=>(b.last??-1)-(a.last??-1)).map(x=>`<div class="ritem ${x.id===selC?'sel':''}" data-sel="${x.id}"><span class="dot lv-${level(x)}"></span><div style="min-width:0;flex:1"><div class="nm">${esc(x.name)}</div><div class="small muted">${ago(x.last)}${x.state==='paused'?' · paused':''}</div></div>${x.project?'<i class="ri-flag-fill" style="color:var(--berry)"></i>':''}</div>`).join('')}</div>
+    </div>
+    <div>${focusPanel(i)}</div>
+  </div>
+  <div class="section">${projectsDeepDive()}</div>`;
+}
+function focusPanel(i){
+  const scores = i.cert.scores;
+  const w=260,h=90,pad=8;
+  const yy = s => h-pad-((s-400)/(1000-400))*(h-2*pad);
+  const xx = k => pad + (scores.length>1? k/(scores.length-1):.5)*(w-2*pad);
+  const line = scores.length? `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Cert practice scores">
+      <line x1="0" x2="${w}" y1="${yy(PASS)}" y2="${yy(PASS)}" stroke="var(--primary)" stroke-dasharray="4 3"/>
+      <text x="${w-2}" y="${yy(PASS)-4}" text-anchor="end" font-size="10" fill="var(--primary)">pass ${PASS}</text>
+      <polyline fill="none" stroke="var(--berry)" stroke-width="2" points="${scores.map((s,k)=>`${xx(k)},${yy(s)}`).join(' ')}"/>
+      ${scores.map((s,k)=>`<circle cx="${xx(k)}" cy="${yy(s)}" r="3.5" fill="var(--berry)"><title>Attempt ${k+1}: ${s}</title></circle>`).join('')}
+    </svg>` : `<div class="empty">No diagnostic or practice attempts yet</div>`;
+  const feed = [
+    i.last!==null && {ic:'ri-checkbox-circle-line',t:esc(i.src),at:i.last},
+    i.project && {ic:'ri-github-line',t:`${i.project.commits} commits pushed to ${esc(i.project.name)}`,at:Math.max(0,(i.last??0))},
+    scores.length && {ic:'ri-award-line',t:`Cert ${i.cert.mode} scored ${scores.at(-1)}`,at:(i.last??0)+2},
+    i.sess && {ic:'ri-vidicon-line',t:`Joined internship meeting (${i.sess} total)`,at:(i.last??0)+1},
+    {ic:'ri-user-add-line',t:'Became active intern',at:i.joined},
+  ].filter(Boolean).sort((a,b)=>a.at-b.at);
+  return `<div class="card">
+    <div class="card-h">
+      <div style="display:flex;gap:10px;align-items:center"><div class="av" style="width:40px;height:40px;font-size:13px">${initials(i.name)}</div>
+        <div><div class="name" style="font-size:17px">${esc(i.name)}</div><div class="small muted">${esc(i.email)} · ${statePill(i)} · day ${i.joined} · <span class="dot lv-${level(i)}"></span> ${ago(i.last)}</div></div></div>
+      <div class="actbar">
+        <button class="btn" data-act="nudge" data-id="${i.id}"><i class="ri-mail-line"></i>Nudge</button>
+        <button class="btn" data-act="note" data-id="${i.id}"><i class="ri-sticky-note-line"></i>Note</button>
+        ${i.state==='active'?`<button class="btn" data-act="pause" data-id="${i.id}"><i class="ri-pause-line"></i>Pause</button>`:`<button class="btn" data-act="resume" data-id="${i.id}"><i class="ri-play-line"></i>Resume</button>`}
+        <button class="btn solid" data-manage="${i.id}"><i class="ri-settings-3-line"></i>Manage</button>
+      </div>
+    </div>
+    <div class="card-b">
+      <div class="grid4" style="margin-bottom:14px">
+        <div class="mini"><div class="l">Attendance</div><div class="v">${i.attPct}%</div><div class="small muted">${i.sess} of ${i.exp} meetings</div></div>
+        <div class="mini"><div class="l">Weeks 1–3 gate</div><div class="v">${i.gate}/3</div><div class="small muted">${paceBadge(i)}</div></div>
+        <div class="mini"><div class="l">Best cert score</div><div class="v mono">${certBest(i)??'—'}</div><div class="small muted">${certState(i.cert.state)}</div></div>
+        <div class="mini"><div class="l">Project</div><div class="v" style="font-size:14px">${i.project?esc(i.project.name):'None yet'}</div><div class="small muted">${i.project?i.project.stage:'eligible after weeks 1–3'}</div></div>
+      </div>
+      <div class="three">
+        <div><h3><i class="ri-book-open-line"></i> Training</h3>
+          ${i.weeks.map((p,w)=> w<=Math.max(3,i.scheduled)?`<div class="wkrow"><span class="${w>=1&&w<=3?'strong':''}">Week ${w}</span><div class="bk">${i.buckets[w].map((b,k)=>`<span style="background:${heatColor(b)}" title="${BUCKETS[k]}: ${b}%"></span>`).join('')}</div><span class="small ${i.done[w]?'strong':'muted'}">${p}%</span></div>`:'').join('')}
+          <div class="small muted" style="margin-top:4px">Segments: ${BUCKETS.map(b=>BUCKET_LABEL[b]).join(' · ')}</div>
+        </div>
+        <div><h3><i class="ri-award-line"></i> Certification · CCA-F</h3>${line}
+          ${i.cert.dom.length?DOMAINS.map((d,k)=>`<div class="trk" style="grid-template-columns:1fr 70px 28px"><span>${d}</span><div class="bar"><span style="width:${i.cert.dom[k]}%;background:var(--orange)"></span></div><b>${i.cert.dom[k]}</b></div>`).join(''):''}
+          <div class="small muted" style="margin-top:8px">Uploaded certificate: ${i.cert.uploaded}</div>
+        </div>
+        <div><h3><i class="ri-flag-line"></i> Project</h3>${i.project?projectBody(i,true):`<div class="empty">No project assigned.<br><button class="btn pri" style="margin-top:8px" data-act="start" data-id="${i.id}"><i class="ri-flag-line"></i>Start a project</button></div>`}</div>
+      </div>
+      <h3 style="margin-top:18px">Recent activity</h3>
+      <ul class="feed">${feed.map(f=>`<li><i class="${f.ic}"></i><span>${f.t}</span><span class="small muted">${ago(f.at)}</span></li>`).join('')}</ul>
+    </div>
+  </div>`;
+}
+
+/* ---------------- shared project deep dive ---------------- */
+function projectBody(i,compact){
+  const p=i.project, si=STAGES.indexOf(p.stage);
+  return `<div class="stepper">${STAGES.map((s,k)=>`<div class="step ${k<si?'done':k===si?'cur':''}"><i></i>${compact?s.slice(0,4):s}</div>`).join('')}</div>
+  <div class="grid4">
+    <div class="mini"><div class="l">Requirements</div><div class="v">${p.req}%</div></div>
+    <div class="mini"><div class="l">Verified stories</div><div class="v">${p.stories[0]}/${p.stories[1]}</div></div>
+    ${compact?'':`<div class="mini"><div class="l">Commits · 7d</div><div class="v">${p.commits}</div></div>
+    <div class="mini"><div class="l">Health</div><div class="v">${p.health}</div></div>`}
+  </div>
+  <div class="small muted" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">
+    <span><i class="ri-github-line"></i> ${p.repo?'Repo connected':'No repo'}</span>
+    <span><i class="ri-shield-check-line"></i> ${p.approval.replace(/_/g,' ')}</span>
+    <span><i class="ri-trophy-line"></i> Case study: ${p.cs}</span>
+  </div>`;
+}
+function projectsDeepDive(){
+  const list = interns.filter(i=>i.project);
+  return `<div class="card section">
+    <div class="card-h"><h2><i class="ri-flag-line"></i>Projects · deep dive</h2><span class="small muted">${list.length} underway · ${interns.filter(i=>i.state==='active'&&!i.project).length} active interns without one</span></div>
+    <div class="card-b">${list.map((i,k)=>`<div class="proj ${k===0?'open':''}">
+      <div class="proj-h" data-toggle>
+        <i class="ri-arrow-right-s-line chev"></i>
+        <span class="t">${esc(i.project.name)}</span><span class="muted">${esc(i.name)}</span>${stagePill(i)}
+        <span style="margin-left:auto;display:flex;gap:10px;align-items:center" class="small muted"><span class="dot lv-${level(i)}"></span>${ago(i.last)} · ${i.project.req}% reqs</span>
+      </div>
+      <div class="proj-b">${projectBody(i)}
+        <div class="d-row" style="margin-top:12px">
+          <button class="btn"><i class="ri-external-link-line"></i>Open project</button>
+          <button class="btn"><i class="ri-github-line"></i>View repo</button>
+          ${i.project.approval!=='approved'?`<button class="btn pri" data-act="approve" data-id="${i.id}"><i class="ri-check-line"></i>Approve plan</button>`:''}
+          <button class="btn" data-manage="${i.id}"><i class="ri-settings-3-line"></i>Manage intern</button>
+        </div>
+      </div></div>`).join('')}</div>
+  </div>`;
+}
+
+/* ---------------- manage drawer ---------------- */
+function openDrawer(id){
+  const i = interns.find(x=>x.id===id);
+  const NEW = `<span class="tag" title="State machine supports it; no admin route or button yet">needs endpoint</span>`;
+  document.getElementById('drawer').innerHTML = `
+  <div class="d-h"><div class="av" style="width:38px;height:38px">${initials(i.name)}</div>
+    <div style="flex:1;min-width:0"><div class="name">${esc(i.name)}</div><div class="small muted">${statePill(i)} <span class="dot lv-${level(i)}"></span> ${ago(i.last)} · ${esc(i.src)||'no activity'}</div></div>
+    <button class="btn" id="dclose" aria-label="Close"><i class="ri-close-line"></i></button></div>
+  <div class="d-b">
+    <div class="d-sec"><h3>Status ${NEW}</h3>
+      <div class="d-row">
+        ${i.state==='active'?`<button class="btn" data-act="pause" data-id="${i.id}"><i class="ri-pause-line"></i>Pause</button>`:`<button class="btn" data-act="resume" data-id="${i.id}"><i class="ri-play-line"></i>Resume</button>`}
+        <button class="btn" data-act="complete" data-id="${i.id}"><i class="ri-graduation-cap-line"></i>Mark completed</button>
+        <button class="btn" data-act="withdraw" data-id="${i.id}">Withdrawn</button>
+        <button class="btn danger" data-act="remove" data-id="${i.id}"><i class="ri-user-unfollow-line"></i>Remove</button>
+      </div>
+      <div class="d-row" style="margin-top:8px"><label class="small muted">Reason</label><select><option>Inactive 10+ days</option><option>Requested by intern</option><option>Found full-time role</option><option>Policy violation</option><option>Program finished</option></select></div>
+      <div class="small muted" style="margin-top:6px">Each change writes an InternshipStatusEvent with actor = reviewer.</div>
+    </div>
+    <div class="d-sec"><h3>Project</h3>
+      ${i.project?`<div class="strong">${esc(i.project.name)}</div><div class="small muted" style="margin-bottom:8px">${i.project.stage} · ${i.project.req}% requirements · ${i.project.approval.replace(/_/g,' ')}</div>
+        <div class="d-row"><button class="btn">Open project</button><button class="btn" data-act="approve" data-id="${i.id}">Approve plan</button><button class="btn" data-act="start" data-id="${i.id}">Start another</button></div>`
+      :`<div class="small muted" style="margin-bottom:8px">${i.gate===3?'Cleared weeks 1–3, ready for a project.':`Weeks 1–3 gate at ${i.gate}/3. You can still start one early.`}</div>
+        <div class="d-row"><button class="btn pri" data-act="start" data-id="${i.id}"><i class="ri-flag-line"></i>Start project interview</button><button class="btn">Assign existing project</button><button class="btn">Import from repo</button></div>`}
+    </div>
+    <div class="d-sec"><h3>Training</h3>${weekStrip(i)}
+      <div class="d-row" style="margin-top:8px"><select id="wksel">${i.weeks.map((p,w)=>`<option value="${w}">Week ${w} · ${p}%</option>`).join('')}</select><button class="btn" data-act="weekdone" data-id="${i.id}">Mark week done</button>${NEW}</div>
+    </div>
+    <div class="d-sec"><h3>Attendance</h3>
+      <div class="small"><b class="strong">${i.sess}</b> of ${i.exp} internship meetings joined (${i.attPct}%)</div>
+      <div class="d-row" style="margin-top:8px"><input type="date" value="2026-10-01"><select><option>Present</option><option>Late</option><option>Excused</option><option>Absent</option></select><button class="btn" data-act="att" data-id="${i.id}">Record</button>${NEW}</div>
+    </div>
+    <div class="d-sec"><h3>Reach out ${NEW}</h3>
+      <div class="d-row" style="margin-bottom:8px"><select><option>Checking in, haven't seen you lately</option><option>Weeks 1–3 reminder</option><option>Start your cert diagnostic</option><option>Join today's standup</option></select></div>
+      <div class="d-row"><button class="btn pri" data-act="nudge" data-id="${i.id}"><i class="ri-mail-send-line"></i>Send email</button><button class="btn" data-act="pausenotif" data-id="${i.id}">Pause notifications</button></div>
+    </div>
+    <div class="d-sec"><h3>Notes</h3>
+      ${i.notes.map(n=>`<div class="small" style="margin-bottom:6px"><b class="strong">You</b> · just now<br>${esc(n)}</div>`).join('')}
+      <textarea id="notetxt" placeholder="Private note about this intern"></textarea>
+      <div class="d-row" style="margin-top:6px"><button class="btn" data-act="savenote" data-id="${i.id}">Save note</button></div>
+    </div>
+    <div class="d-sec"><h3>Audit trail</h3><ul class="feed">${i.audit.slice().sort((a,b)=>a.at-b.at).map(a=>`<li><i class="ri-history-line"></i><span>${esc(a.t)} <span class="muted small">by ${a.by}</span></span><span class="small muted">${ago(a.at)}</span></li>`).join('')}</ul></div>
+  </div>`;
+  document.body.classList.add('dopen');
+}
+function closeDrawer(){document.body.classList.remove('dopen')}
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),2200)}
+
+function act(a,id){
+  const i = interns.find(x=>x.id===+id);
+  const log = (t)=>i&&i.audit.push({at:0,t,by:'reviewer'});
+  switch(a){
+    case 'pause': i.state='paused'; log('active → paused'); toast(`${i.name} paused`); break;
+    case 'resume': i.state='active'; log('paused → active'); toast(`${i.name} resumed`); break;
+    case 'complete': log('active → completed'); toast(`${i.name} would move to completed`); break;
+    case 'withdraw': log('active → withdrawn'); toast(`${i.name} would move to withdrawn`); break;
+    case 'remove': log('active → removed'); toast(`${i.name} would be removed`); break;
+    case 'nudge': toast(`Nudge queued for ${i.name}`); break;
+    case 'nudge-all': toast(`${interns.filter(x=>['orange','red','black'].includes(level(x))).length} nudges queued`); break;
+    case 'start': toast(`Opening project interview for ${i.name}`); break;
+    case 'approve': if(i.project){i.project.approval='approved'} toast('Project plan approved'); break;
+    case 'att': i.sess++; i.attPct=Math.round(i.sess/i.exp*100); toast('Attendance recorded'); break;
+    case 'weekdone': { const w=+document.getElementById('wksel').value; i.weeks[w]=Math.max(30,i.weeks[w]); i.done[w]=true; i.gate=[1,2,3].filter(k=>i.done[k]).length; i.weeksDone=i.done.filter(Boolean).length; log(`week ${w} marked done`); toast(`Week ${w} marked done`); break; }
+    case 'pausenotif': toast('Notifications paused'); break;
+    case 'note': selC=i.id; openDrawer(i.id); setTimeout(()=>document.getElementById('notetxt')?.focus(),250); return;
+    case 'savenote': { const v=document.getElementById('notetxt').value.trim(); if(!v) return; i.notes.unshift(v); toast('Note saved'); break; }
+  }
+  render();
+  if(document.body.classList.contains('dopen') && i) openDrawer(i.id);
+}
+
+/* ---------------- data notes ---------------- */
+function renderN(){
+  const rows = [
+    ['Last active','No stored field. Take the latest of TimelineCardProgress.completed_at / started_at, InternshipMeetingAttendance.joined_at, CertSession.started_at and GitHubConnection.last_sync_at.','Add a computed <code>last_activity_at</code> + <code>last_activity_source</code> on Enrollment, refreshed by a job.'],
+    ['Activity level','Same bands as internActivityTracker.js: 0d green, 1–3 yellow, 4–6 orange, 7–9 red, 10+ black. New interns inside 30 days cap at yellow.','Reuse the script logic in the API so the console and Basecamp nudges agree.'],
+    ['Attendance %','InternshipMeetingAttendance only stores joins (count + last_attended_at). There is no list of expected meetings, so no denominator.','Add an internship meeting schedule (or reuse LiveSession) so “joined / held” is real.'],
+    ['Training','TimelineCard + TimelineCardProgress. Week done = completed / published (status=active) ≥ 30%. Weeks 1–3 is the project gate.','Already available via internActivity().training.'],
+    ['Pace','curriculumCompletionService pace bands: weeks done minus scheduled week (≥+2 gold, ≥0 green, −1 yellow, ≤−2 red).','Scheduled week here = weeks since activation, not the cohort week.'],
+    ['Certification','CertSession (diagnostic / practice / mock, scaled_score), CertReadinessSnapshot.overall_state, StudentCertification for uploaded certs.','internship cert summary exists; the KPI <code>cert_practice_inactive</code> is hard-coded to 0 today.'],
+    ['Projects','Project.project_stage, requirements_completion_pct, health_score, approval_state; stories from the activity summary; GitHubConnection / StudentGithubActivity.commits_last_7d; CaseStudy.status.','Already joined in internActivity().project.'],
+    ['Pause / complete / withdraw / remove','internshipStateMachine allows these from active for a reviewer.','No admin route or button. Needs a transition endpoint that writes InternshipStatusEvent.'],
+    ['Mark week done, record attendance, nudge','Not exposed for interns. Attendance marking exists only for the Accelerator (AttendanceRecord). Nudges run from scripts.','New endpoints, marked “needs endpoint” in the drawer.'],
+  ];
+  return `<div class="card notes"><div class="card-h"><h2><i class="ri-database-2-line"></i>Where each number comes from</h2><span class="small muted">From the repo, backend/src</span></div>
+    <div class="tbl"><table><thead><tr><th>Element</th><th>Source today</th><th>Gap / build note</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td class="strong" style="white-space:nowrap">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+/* ---------------- shell ---------------- */
+const PITCH = {
+  A:'<strong>Command Center.</strong> One dense table, one row per intern, all three tracks side by side. Best when you scan everyone daily and act from the row. The week strip shows weeks 0–10 at a glance with the weeks 1–3 project gate outlined.',
+  B:'<strong>Triage Board.</strong> Interns are grouped by how recently they showed up, so the people who need you are in their own column. Each card shows training, cert and project as three bars. Projects below move through stages like a kanban.',
+  C:'<strong>Activity Timeline.</strong> A 28-day heatmap of every intern with meetings circled, so patterns (weekend-only, dropped off after week 1) jump out. Click anyone to open a full profile with training by section, cert score trend and project.',
+  N:'<strong>Data mapping.</strong> What each element reads from the codebase today and what is missing to make it live.'
+};
+let view='A';
+function render(){
+  document.getElementById('pitch').innerHTML = PITCH[view];
+  document.getElementById('view').innerHTML = view==='A'?renderA():view==='B'?renderB():view==='C'?renderC():renderN();
+}
+document.addEventListener('click',e=>{
+  const t = e.target.closest('button,[data-sel],[data-toggle]');
+  if(!t) return;
+  if(t.closest('#switch') && t.dataset.v){view=t.dataset.v;document.querySelectorAll('#switch button').forEach(b=>b.classList.toggle('on',b===t));render();return}
+  if(t.dataset.fa){filterA=t.dataset.fa;render();return}
+  if(t.dataset.manage){openDrawer(+t.dataset.manage);return}
+  if(t.dataset.act){act(t.dataset.act,t.dataset.id);return}
+  if(t.dataset.sel){selC=+t.dataset.sel;render();return}
+  if(t.hasAttribute('data-toggle')){t.parentElement.classList.toggle('open');return}
+  if(t.id==='dclose'){closeDrawer()}
+});
+document.getElementById('scrim').onclick=closeDrawer;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});
+render();
+</script>
+</body>
+</html>

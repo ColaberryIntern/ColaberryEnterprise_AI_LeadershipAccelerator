@@ -359,16 +359,11 @@ export interface InventoryDriftReport {
  * ASK) — if a future phase closes one, remove it here too, or this report
  * starts lying by omission in the other direction. */
 const KNOWN_EXECUTION_GATING_GAPS: Array<Omit<DriftFinding, 'agentId'>> = [
-  {
-    agentName: 'Dara',
-    description:
-      "escalate_to_human (daraTools.ts's escalateToHumanTool — a real side-effecting handoff-ticket creation) has zero authorization or kill-switch check before it executes. Not closed this phase: fixing it means adding Reese-style blocking enforcement to Dara for the first time, a real governance decision flagged for Ali, not an implementation default.",
-  },
-  {
-    agentName: 'Dara',
-    description:
-      "Dara's reply path (daraReplyService.ts's maybeTriggerDaraReply) has zero authorization call AND zero kill-switch check of any kind — no isDaraEnabled() function exists anywhere in this codebase. Same STOP-AND-ASK as escalate_to_human above.",
-  },
+  // T12 completion (2026-10-02) closed Dara's 2 gaps that used to be listed
+  // here (escalate_to_human and the reply path both now call
+  // authorizeTicketDispatch() and isDaraEnabled(), mirroring Reese's exact
+  // pattern) — removed per this array's own header comment: a closed finding
+  // left here would lie by omission in the other direction.
   ...Array.from(PROOFDESK_AGENT_NAMES).map((agentName) => ({
     agentName,
     description:

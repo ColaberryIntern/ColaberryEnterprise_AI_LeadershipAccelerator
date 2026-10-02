@@ -73,6 +73,11 @@ function RequirementRow({ r }: { r: QualRequirementEval }): React.ReactElement {
 /** The no-canonical landing: a trusted candidate picker, or the gap when v2 is unavailable. */
 function CandidatePicker(): React.ReactElement {
   const navigate = useNavigate();
+  const [sp] = useSearchParams();
+  // When the user arrives from a discovery-row "Qualify" click we carry the clicked proposal's title/agency (display
+  // only — the canonical id is still chosen from the trusted list, never derived from the title).
+  const fromTitle = sp.get('from');
+  const fromAgency = sp.get('agency');
   const [result, setResult] = useState<GovCandidatesResult | null>(null);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -92,8 +97,40 @@ function CandidatePicker(): React.ReactElement {
       </SectionCard>
     );
   }
+  // Is the clicked discovery proposal actually present in the trusted qualification feed? Normalized title compare,
+  // DISPLAY ONLY — it decides which honest message to show, never derives a canonical id. Today the discovery and
+  // qualification feeds are disjoint sets, so this is normally false; it flips true once OP aligns the feeds.
+  const norm = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const fromNorm = norm(fromTitle);
+  const inFeed = !!fromNorm && result.candidates.some((c) => {
+    const t = norm(c.title);
+    return !!t && (t === fromNorm || t.includes(fromNorm) || fromNorm.includes(t));
+  });
   return (
-    <SectionCard title="Start a qualification — pick a candidate" icon="search-line" subtitle="Canonical ids from the Opportunity Pulse v2 list (trusted mapping).">
+    <SectionCard
+      title={!fromTitle ? 'Start a qualification — pick a candidate' : inFeed ? 'Pick the matching solicitation' : "This proposal isn't in the qualification feed yet"}
+      icon="search-line"
+      subtitle="The qualification workspace needs the verified solicitation id, which lives in this trusted list (Opportunity Pulse v2).">
+      {fromTitle && inFeed && (
+        <div className="alert alert-info d-flex align-items-start gap-2" role="status">
+          <i className="ri-links-line mt-1" aria-hidden="true" />
+          <div>
+            You're qualifying <strong>{fromTitle}</strong>{fromAgency ? ` (${fromAgency})` : ''}. The discovery list and the
+            qualification catalog use different ids, so pick the matching solicitation below to begin — one click straight
+            through is coming once the two lists are linked.
+          </div>
+        </div>
+      )}
+      {fromTitle && !inFeed && (
+        <div className="alert alert-warning d-flex align-items-start gap-2" role="status">
+          <i className="ri-error-warning-line mt-1" aria-hidden="true" />
+          <div>
+            You're qualifying <strong>{fromTitle}</strong>{fromAgency ? ` (${fromAgency})` : ''}, but it isn't in the
+            qualification feed yet — that feed currently lists a different set of opportunities than discovery. It's been
+            flagged for the source team to add. In the meantime you can open any solicitation below to try the workspace.
+          </div>
+        </div>
+      )}
       {result.candidates.length === 0 && <div className="text-secondary">No candidates returned.</div>}
       <ul className="list-unstyled mb-0">
         {result.candidates.map((c) => (
@@ -114,7 +151,11 @@ function CandidatePicker(): React.ReactElement {
 
 export default function AdminGovQualificationPage(): React.ReactElement {
   const [params] = useSearchParams();
-  const canonical = params.get('canonical') ?? '';
+  // Active workspace key: a canonical OP id, OR a decoupled discovery-ZIP key (`gws:<uuid>`). The whole body is
+  // key-agnostic; `isDecoupled` (below) drives the source:null re-gating.
+  const canonical = params.get('canonical') ?? params.get('gws') ?? '';
+  const fromParam = params.get('from') ?? '';
+  const agencyParam = params.get('agency') ?? '';
   const [biddingEntity, setBiddingEntity] = useState(params.get('biddingEntity') ?? 'colaberry');
   const [ws, setWs] = useState<GovQualificationWorkspace | null>(null);
   const [loading, setLoading] = useState(false);
@@ -150,23 +191,27 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
   useEffect(() => { void load(); }, [load]);
 
-  // Advisory service suggestions for this opportunity (deterministic matcher). Best-effort; feeds no gate.
+  // Advisory service suggestions for this opportunity (deterministic matcher). Best-effort; feeds no gate. Runs for
+  // the canonical path (source present) AND the decoupled ZIP path (source:null), matching on the established
+  // requirements and the provenance/clicked title.
   useEffect(() => {
-    if (!ws?.source) { setSvcMatches(null); return; }
+    if (!ws) { setSvcMatches(null); return; }
+    const decoupled = ws.sourceState === 'zip_workspace';
+    if (!ws.source && !decoupled) { setSvcMatches(null); return; }
     const src = ws.source;
     const established = ws.qualification?.requirements_json?.established ?? [];
-    const needs = established.length ? established : src.requirements;
+    const needsList = src ? (established.length ? established : src.requirements) : established;
+    const title = src
+      ? `${src.publisher.leadBuyer.name} — ${src.notice.noticeType.value} ${src.notice.procurementType.value}`
+      : (ws.provenance?.title || fromParam || 'opportunity');
     let active = true;
     setSvcMatchLoading(true);
-    matchServicesToOpportunity({
-      title: `${src.publisher.leadBuyer.name} — ${src.notice.noticeType.value} ${src.notice.procurementType.value}`,
-      requirements: needs.map((r) => r.text),
-    })
+    matchServicesToOpportunity({ title, requirements: needsList.map((r: { text: string }) => r.text) })
       .then((r) => { if (active) setSvcMatches(r.matches); })
       .catch(() => { if (active) setSvcMatches([]); })
       .finally(() => { if (active) setSvcMatchLoading(false); });
     return () => { active = false; };
-  }, [ws]);
+  }, [ws, fromParam]);
 
   // Every write runs one at a time (in-flight guard → no duplicate qualification/decision from repeated clicks),
   // reloads the server truth, and maps its error to a recoverable state.
@@ -212,10 +257,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
   const record = ws?.qualification ?? null;
   const version = record?.version ?? 0;
-  // The source's needs for the "what they want vs what we offer" panel: the reviewer-established requirements when
-  // any exist, otherwise the source's own requirements (empty for live v2 until a reviewer establishes them).
+  // Decoupled (discovery-ZIP) workspace: source is null, the uploaded ZIP is the evidence source. Drives the
+  // re-gating so the capture UI (Extract/establish/matcher/requirements) renders even though ws.source is null.
+  const isDecoupled = ws?.sourceState === 'zip_workspace';
+  // The "what they want" needs: the reviewer-established requirements when any exist, else (canonical only) the
+  // source's own requirements. On the decoupled path there is no source, so it is purely the established set.
   const established = ws?.qualification?.requirements_json?.established ?? [];
-  const needs: Array<{ id: string; text: string }> = ws?.source ? (established.length ? established : ws.source.requirements) : [];
+  const needs: Array<{ id: string; text: string }> = ws?.source ? (established.length ? established : ws.source.requirements) : (isDecoupled ? established : []);
 
   const selectedCandidateCount = candidates ? candidates.filter((c) => candRows[c.id]?.checked).length : 0;
   // Confirm the checked candidates into established requirements: map with the per-row applicability/due-stage,
@@ -250,10 +298,16 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
       {ws && (
         <>
-          {!ws.sourceLive && (
+          {!ws.sourceLive && !isDecoupled && (
             <div className="alert alert-warning d-flex align-items-center gap-2" role="status">
               <i className="ri-flask-line" aria-hidden="true" />
               <span>Source is a <strong>labeled sample</strong>, not live Opportunity Pulse data (v2 is not wired). Approvals stay blocked while the source cannot be confirmed live.</span>
+            </div>
+          )}
+          {isDecoupled && (
+            <div className="alert alert-info d-flex align-items-start gap-2" role="status">
+              <i className="ri-folder-zip-line mt-1" aria-hidden="true" />
+              <span>ZIP workspace{fromParam ? <> for <strong>{fromParam}</strong>{agencyParam ? ` (${agencyParam})` : ''}</> : ''}. Upload the solicitation ZIP below to pull in the requirements and work the proposal. Pursuit approval and evidence attestation come in a later step (pending sign-off).</span>
             </div>
           )}
 
@@ -299,7 +353,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          {ws.source && (
+          {(ws.source || isDecoupled) && (
             <SectionCard title="Extract requirements from the solicitation ZIP" icon="file-search-line"
               subtitle="Upload the solicitation package (the Bonfire ZIP). The extractor lists the requirements it detects as CANDIDATES — confirm the real ones to establish them. It reads the file in memory and stores nothing; a candidate is not a requirement until you confirm it.">
               <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -362,7 +416,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          {ws.evaluation && ws.source && (
+          {ws.evaluation && (ws.source || isDecoupled) && (
             <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
               {ws.evaluation.evals.length === 0 && <div className="text-secondary small">No requirements established yet. Opportunity Pulse supplies none — establish the applicable, cited requirements below before a pursuit can be approved.</div>}
               {STAGE_ORDER.filter((s) => (ws.evaluation!.byDueStage[s]?.length ?? 0) > 0).map((stage) => (
@@ -377,7 +431,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          {ws.source && (
+          {(ws.source || isDecoupled) && (
             <SectionCard title="What they want vs what we offer" icon="scales-3-line"
               subtitle="Advisory suggestion from Our Services — a starting point to confirm, not a verified fit. Feeds no gate.">
               <div className="row g-3">
@@ -469,8 +523,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <input className="form-control form-control-sm" value={biddingEntity} onChange={(e) => setBiddingEntity(e.target.value)} />
               </label>
               {!record && (
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy || !ws.sourceAvailable}
-                  onClick={() => run(() => createGovQualification(canonical, { biddingEntity }), 'Qualification opened.')}>
+                <button type="button" className="btn btn-primary btn-sm" disabled={busy || (!ws.sourceAvailable && !isDecoupled)}
+                  onClick={() => run(() => createGovQualification(canonical, { biddingEntity, from: fromParam || undefined, agency: agencyParam || undefined }), 'Qualification opened.')}>
                   <i className="ri-add-line me-1" aria-hidden="true" />Open qualification
                 </button>
               )}
@@ -521,7 +575,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.')}>
                     <i className="ri-shield-check-line me-1" aria-hidden="true" />Approve bid pursuit
                   </button>
-                  {!ws.canApprove && <span className="small text-secondary">{ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
+                  {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? 'Pursuit approval and evidence attestation come in a later step (pending sign-off).' : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
                 </div>
               </>
             )}

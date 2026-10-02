@@ -546,8 +546,8 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
                               onClick={() => handleDismiss(o)} title="Hide this from the whole team's feed (reversible)">
                               <i className="ri-eye-off-line" aria-hidden="true" /><span className="visually-hidden">Dismiss</span>
                             </button>
-                            <button type="button" className="btn btn-danger btn-sm" onClick={() => navigate('/admin/gov-qualification')}
-                              title="Qualify this opportunity (review source evidence before a pursuit)">
+                            <button type="button" className="btn btn-danger btn-sm" onClick={() => navigate(`/admin/gov-qualification?gws=${encodeURIComponent('gws:' + o.uuid)}&from=${encodeURIComponent(o.title)}&agency=${encodeURIComponent(o.agency ?? '')}`)}
+                              title="Qualify this opportunity (open its ZIP workspace to upload the solicitation and pull in the requirements)">
                               Qualify <i className="ri-arrow-right-line" aria-hidden="true" />
                             </button>
                           </div>
@@ -602,7 +602,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
           opp={detailsOf}
           dismissing={dismissingKey === detailsOf.uuid}
           onClose={() => setDetailsOf(null)}
-          onQualify={() => { setDetailsOf(null); navigate('/admin/gov-qualification'); }}
+          onQualify={() => { setDetailsOf(null); navigate(`/admin/gov-qualification?gws=${encodeURIComponent('gws:' + detailsOf.uuid)}&from=${encodeURIComponent(detailsOf.title)}&agency=${encodeURIComponent(detailsOf.agency ?? '')}`); }}
           onDismiss={() => handleDismiss(detailsOf)}
         />
       )}

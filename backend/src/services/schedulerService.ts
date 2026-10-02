@@ -2007,6 +2007,25 @@ export function startScheduler(): void {
     });
   });
 
+  // Reese ticket follow-up (2026-10-02) — daily sweep of open student_support
+  // tickets that have gone quiet (Reese spoke last, no reply for 3+ days).
+  // Registered in agentRegistrySeed.ts ('ReeseTicketFollowUpSweep') for the
+  // same instrumentCronJob() pause/kill-switch reason as the three crons
+  // above. Runs an hour after the supersession resolver so all four of
+  // Reese's crons stay sequential and never collide.
+  cron.schedule('0 18 * * *', () => {
+    instrumentCronJob('ReeseTicketFollowUpSweep', async () => {
+      const { processDueReeseTicketFollowUps } = await import('./reese/reeseTicketFollowUpService');
+      const result = await processDueReeseTicketFollowUps();
+      console.log('[Scheduler] Reese ticket follow-ups:', {
+        evaluated: result.evaluated, sent: result.sent, escalated: result.escalated,
+        dailyCapDeferred: result.dailyCapDeferred, heldForApproval: result.heldForApproval,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese ticket follow-up sweep error:', err);
+    });
+  });
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(

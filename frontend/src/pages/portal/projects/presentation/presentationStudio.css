@@ -235,6 +235,48 @@
 /* Big enough to hit on a phone without zooming. */
 .ps-check input[type='checkbox'] { margin-top: 3px; width: 16px; height: 16px; flex: 0 0 auto; }
 
+/* ── template chooser ─────────────────────────────────────────────────────── */
+
+.ps-choices { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+@media (min-width: 720px) {
+  .ps-choices { grid-template-columns: 1fr 1fr; }
+}
+
+.ps-choice {
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: var(--ps-surface);
+  border: 1px solid var(--ps-line);
+  border-radius: 9px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--ps-ink);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.ps-choice:hover:not(:disabled) { background: var(--ps-surface-alt); }
+.ps-choice:disabled { opacity: .6; cursor: default; }
+
+/* The selected type is marked by a border and a weight change, not colour alone —
+ * colour alone fails for anyone who cannot distinguish it. aria-checked carries the
+ * same fact to assistive technology. */
+.ps-choice.is-on {
+  border-color: var(--ps-accent);
+  border-width: 2px;
+  padding: 9px 11px;
+  background: var(--ps-surface-alt);
+}
+
+.ps-choice.is-on .ps-choice-label { font-weight: 700; }
+
+.ps-choice-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.ps-choice-label { font-size: 0.92rem; font-weight: 600; }
+.ps-choice-time { font-size: 0.76rem; color: var(--ps-ink-soft); white-space: nowrap; }
+.ps-choice-outcome { display: block; margin-top: 3px; font-size: 0.82rem; color: var(--ps-ink-soft); }
+
 /* ── prompt panel ─────────────────────────────────────────────────────────── */
 
 .ps-acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; }

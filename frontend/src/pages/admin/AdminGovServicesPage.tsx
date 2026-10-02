@@ -4,6 +4,7 @@ import {
   listServiceOfferings, createServiceOffering, updateServiceOffering, retireServiceOffering,
   type ServiceOffering, type ServiceOfferingInput,
 } from '../../services/factoryApi';
+import ServiceEvidencePanel from '../../components/admin/ServiceEvidencePanel';
 
 /**
  * AdminGovServicesPage — "Our Services": the catalog of what Colaberry offers, so a government opportunity can be
@@ -108,6 +109,8 @@ export default function AdminGovServicesPage(): React.ReactElement {
   const [filter, setFilter] = useState<StatusFilter>('active');
   const [editing, setEditing] = useState<Editing>(null);
   const [saving, setSaving] = useState(false);
+  /** The service whose case-study evidence is open, if any. */
+  const [evidenceFor, setEvidenceFor] = useState<ServiceOffering | null>(null);
 
   const load = useCallback(async (status: StatusFilter) => {
     setLoading(true);
@@ -194,7 +197,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
                   <th>Keywords</th>
                   <th style={{ width: 140 }}>NAICS</th>
                   <th style={{ width: 140 }}>Owner</th>
-                  <th style={{ width: 150 }}>Actions</th>
+                  <th style={{ width: 250 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -210,6 +213,9 @@ export default function AdminGovServicesPage(): React.ReactElement {
                     <td className="small text-secondary">{s.owner || '—'}</td>
                     <td>
                       <div className="d-flex gap-1">
+                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setEvidenceFor(s)} title="Case studies offered as evidence for this service">
+                          <i className="ri-links-line me-1" aria-hidden="true" />Evidence
+                        </button>
                         <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setEditing(s)}><i className="ri-edit-line me-1" aria-hidden="true" />Edit</button>
                         {s.status === 'active' && (
                           <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleRetire(s)} title="Hide this service (reversible: edit keeps its data)">
@@ -233,6 +239,14 @@ export default function AdminGovServicesPage(): React.ReactElement {
           saving={saving}
           onCancel={() => setEditing(null)}
           onSave={handleSave}
+        />
+      )}
+
+      {evidenceFor && (
+        <ServiceEvidencePanel
+          serviceId={evidenceFor.id}
+          serviceName={evidenceFor.name}
+          onClose={() => setEvidenceFor(null)}
         />
       )}
     </div>

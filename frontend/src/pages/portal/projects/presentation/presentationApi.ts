@@ -62,6 +62,21 @@ export async function fetchTemplateLesson(templateId: string): Promise<TemplateL
   return data;
 }
 
+/** One row of the template chooser. The full lesson is a separate, heavier read. */
+export interface TemplateSummary {
+  id: string;
+  label: string;
+  prominent: boolean;
+  outcome: string;
+  speaking_seconds: number;
+  qa_seconds: number;
+}
+
+export async function fetchTemplates(): Promise<TemplateSummary[]> {
+  const { data } = await portalApi.get<TemplateSummary[]>('/api/portal/presentation-templates');
+  return data;
+}
+
 /** The learner's saved Prepare answers for one task. */
 export interface PresentationAssignment {
   storyId: string;
@@ -122,4 +137,146 @@ export async function fetchPresentationPrompt(
     `/api/portal/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(storyId)}/presentation-prompt${qs ? `?${qs}` : ''}`,
   );
   return data;
+}
+
+/**
+ * One practice take and the room it happens in. Mirrors the backend `SessionView`;
+ * the backend stays the single source of truth.
+ *
+ * THERE IS NO URL FIELD HERE AND THAT IS DELIBERATE. The server returns
+ * `meetingReady` only. Entitlement to join is re-checked at the moment a student
+ * asks to join, so a link carried in a page payload would outlive the permission
+ * that produced it.
+ */
+export interface PracticeSession {
+  attemptId: string;
+  attemptNo: number;
+  mode: string;
+  attemptState: string;
+  recordingState: string;
+  bookingId: string | null;
+  roomId: string | null;
+  title: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  timezone: string | null;
+  bookingState: string | null;
+  meetingReady: boolean;
+  recordingPolicy: string | null;
+}
+
+const taskPath = (projectId: string, storyId: string, leaf: string) =>
+  `/api/portal/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(storyId)}/${leaf}`;
+
+export async function fetchPracticeSession(projectId: string, storyId: string): Promise<PracticeSession | null> {
+  const { data } = await portalApi.get<{ session: PracticeSession | null }>(
+    taskPath(projectId, storyId, 'presentation-session'),
+  );
+  return data.session;
+}
+
+export async function fetchPracticeSessions(projectId: string, storyId: string): Promise<PracticeSession[]> {
+  const { data } = await portalApi.get<{ sessions: PracticeSession[] }>(
+    taskPath(projectId, storyId, 'presentation-sessions'),
+  );
+  return data.sessions;
+}
+
+/**
+ * The host is busy. Carries the truthful next-available instant so the student can
+ * be told when they CAN practise, not only that they cannot now.
+ */
+export class SlotUnavailableError extends Error {
+  readonly why: string;
+  readonly nextAvailable: string | null;
+  constructor(message: string, why: string, nextAvailable: string | null) {
+    super(message);
+    this.name = 'SlotUnavailableError';
+    this.why = why;
+    this.nextAvailable = nextAvailable;
+  }
+}
+
+export interface StartPracticeBody {
+  /** ISO-8601 instants. A naive local string would be read in the server's zone. */
+  start_at: string;
+  end_at: string;
+  mode?: 'practice_solo' | 'practice_peer';
+  new_attempt?: boolean;
+}
+
+export async function startPractice(
+  projectId: string,
+  storyId: string,
+  body: StartPracticeBody,
+): Promise<PracticeSession> {
+  try {
+    const { data } = await portalApi.post<PracticeSession>(
+      taskPath(projectId, storyId, 'presentation-practice'),
+      body,
+    );
+    return data;
+  } catch (err: any) {
+    // 409 is not a failure of the request — it is a real answer about the room.
+    if (err?.response?.status === 409) {
+      const d = err.response.data || {};
+      throw new SlotUnavailableError(
+        d.error || 'That time is already taken.',
+        d.why || 'taken',
+        d.next_available ?? null,
+      );
+    }
+    throw err;
+  }
+}
+
+/**
+ * What a student must be told BEFORE they are inside a recorded call.
+ * Mirrors the backend `LaunchBrief`.
+ */
+export interface LaunchBrief {
+  whoCanSee: string;
+  recordingAutomatic: boolean;
+  recordingPolicy: string;
+}
+
+export interface LaunchResponse {
+  join_url: string;
+  attempt_id: string;
+  brief: LaunchBrief;
+}
+
+/** The room is yours but not usable yet — a real state, not a failure. */
+export class LaunchNotReadyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LaunchNotReadyError';
+  }
+}
+
+/**
+ * Asks for the join link at the moment of launching.
+ *
+ * A POST on purpose. The server re-checks room entitlement on this call, so the
+ * link is never carried in a page payload where it would outlive the permission
+ * that produced it.
+ */
+export async function launchPractice(
+  projectId: string,
+  storyId: string,
+  attemptId: string,
+): Promise<LaunchResponse> {
+  try {
+    const { data } = await portalApi.post<LaunchResponse>(
+      taskPath(projectId, storyId, 'presentation-launch'),
+      { attempt_id: attemptId },
+    );
+    return data;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const message = err?.response?.data?.error;
+    if (status === 409) throw new LaunchNotReadyError(message || 'The room is not ready yet.');
+    if (status === 403) throw new Error(message || 'You are not authorized to join this session.');
+    throw err;
+  }
 }

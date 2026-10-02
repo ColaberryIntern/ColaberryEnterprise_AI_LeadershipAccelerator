@@ -94,6 +94,8 @@ export const LANDING_PAGE_SCHEMA_STATEMENTS: readonly string[] = [
      ALTER TABLE landing_pages ADD CONSTRAINT landing_pages_published_needs_content
        CHECK (status <> 'published' OR content <> '{}'::jsonb);
    EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+
+
 ];
 
 const REQUIRED_COLUMNS: readonly string[] = [

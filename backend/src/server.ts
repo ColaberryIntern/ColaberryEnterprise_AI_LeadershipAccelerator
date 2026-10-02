@@ -52,6 +52,7 @@ import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureZoomRequestLedgerSchema } from './db/ensureZoomRequestLedgerSchema';
+import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
@@ -75,6 +76,7 @@ import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema'
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
+import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -83,6 +85,7 @@ import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
+import { ensureReeseTicketFollowUpSchema } from './db/ensureReeseTicketFollowUpSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
@@ -138,6 +141,7 @@ import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributio
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -2475,6 +2479,8 @@ async function start(): Promise<void> {
   // Zoom meeting idempotency ledger. Must exist before any booking provisions a
   // meeting, so it is ensured on boot like the rest, not behind a feature flag.
   await ensureZoomRequestLedgerSchema();
+  // Practice-slot reservations + the overlap exclusion constraint.
+  await ensurePresentationSlotSchema();
   // Project Presentation Studio: 5 tables + 4 additive columns on `projects`
   // (idempotent DDL). Runs unconditionally, not behind PRESENTATION_STUDIO_ENABLED:
   // the tables must exist before the flag can be turned on, and empty unread tables
@@ -2643,6 +2649,10 @@ async function start(): Promise<void> {
   // the accounts table references brands.
   await ensureChannelAccountSchema();
   await ensureLandingPageSchema();
+  // AFTER landing_pages exists: this adds content_items.landing_page_id and its foreign key, so
+  // the composer can persist the page an operator picked. The column is also in the content_items
+  // CREATE body for fresh databases; this is what migrates the ones that already exist.
+  await ensureContentItemDestinationSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).
@@ -2761,6 +2771,14 @@ async function start(): Promise<void> {
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).
   await ensureServiceOfferingSchema();
+  // Which case studies evidence which services (case_study_service_links). A single additive NEW join table, so a
+  // bid can answer "what proves you can do this" with a record rather than prose. Unlike its siblings it DOES carry
+  // foreign keys, both ON DELETE CASCADE: deleting a case study on 2026-10-02 rolled back on an undeclared FK, and
+  // cascade means a future deletion can neither orphan a link nor be blocked by one. A link is born `suggested`
+  // and only a person moves it to `confirmed`, because these feed past-performance claims.
+  // MUST run after ensureCaseStudySchema and ensureServiceOfferingSchema: its REFERENCES name both parents, and a
+  // foreign key to a table that does not exist yet is a boot error, not a no-op.
+  await ensureCaseStudyServiceLinkSchema();
   // AI Project Factory: the executor/accountable/skills/judgment/confidence/source-evidence
   // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
   // pattern). Existing rows are untouched and unset until the factory populates them.
@@ -2793,6 +2811,9 @@ async function start(): Promise<void> {
   // Reese's first-login welcome ledger — also the "has this student logged in
   // before" marker, since enrollments carry no last_login_at.
   await ensureReeseWelcomeSchema();
+  // Reese's follow-up tracking for quiet student_support tickets (idempotent DDL,
+  // additive only — see reeseTicketFollowUpService.ts).
+  await ensureReeseTicketFollowUpSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).

@@ -20,23 +20,13 @@ import {
 import { setTaskStatus, setTaskStatusByStory, importProject, type ImportProjectInput } from '../services/projects/projectWriteService';
 import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { z } from 'zod';
+// Shared with presentationPortalRoutes, which split out of this file when it
+// crossed the 500-line ceiling. One copy, because `gate` decides whether a whole
+// API surface exists and two drifting copies of that is how one router keeps
+// serving a feature the other has turned off.
+import { eid, gate, fail } from './portalRouteHelpers';
 
 const router = Router();
-const eid = (req: Request) => req.participant!.sub;
-
-function gate(res: Response): boolean {
-  if (!env.projectApiEnabled) {
-    res.status(404).json({ error: 'Projects API not enabled' });
-    return false;
-  }
-  res.set('Cache-Control', 'no-store');
-  return true;
-}
-function fail(res: Response, err: any, next: NextFunction) {
-  if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
-  if (err && typeof err.status === 'number') return res.status(err.status).json({ error: err.message });
-  return next(err);
-}
 
 // `complete` stays in the enum on purpose. Zod's job here is shape — "is this a
 // status this system knows about" — and the service decides who may set which.
@@ -200,160 +190,6 @@ router.post('/api/portal/projects/:projectId/tasks/:taskKey/demo-evidence', requ
     const r = await submitDemoEvidence(eid(req), String(req.params.projectId), String(req.params.taskKey), input);
     if (!r) return res.status(404).json({ error: 'Task not found' });
     res.json(r);
-  } catch (e) { fail(res, e, next); }
-});
-
-// PRESENTATION STUDIO — the personalised deck prompt for one prep task.
-//
-// Read-only, and every value in the returned prompt is resolved SERVER-SIDE from the
-// learner's own project. The client supplies only the template id and presentation
-// options (audience, purpose, style), all allowlisted or length-capped below — it can
-// never put project content into the prompt it gets back.
-//
-// Behind the Studio flag as well as the projects gate: with the Studio off this route
-// does not exist, matching the convention that a flagged-off feature 404s rather than
-// 403s. Ownership is the service's job and a miss is a 404, not a 403 — see the note
-// on the task routes above for why.
-const presentationPromptQuery = z.object({
-  template: z.string().trim().max(80).optional(),
-  audience: z.string().trim().max(200).optional(),
-  purpose: z.string().trim().max(200).optional(),
-  style: z.string().trim().max(120).optional(),
-  theme: z.string().trim().max(120).optional(),
-  presenters: z.string().trim().max(300).optional(),
-  duration_seconds: z.coerce.number().int().positive().max(7200).optional(),
-}).strict();
-router.get('/api/portal/projects/:projectId/tasks/:storyId/presentation-prompt', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!gate(res)) return;
-    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
-    const q = presentationPromptQuery.parse(req.query || {});
-    // Dynamic import, like the other service imports in this file, so the router stays
-    // importable without the template content and its dependencies.
-    const { buildPresentationPrompt } = await import('../services/presentation/presentationPromptService');
-    const r = await buildPresentationPrompt({
-      enrollmentId: eid(req),
-      projectId: String(req.params.projectId),
-      storyId: String(req.params.storyId),
-      templateId: q.template ?? null,
-      options: {
-        audience: q.audience ?? null,
-        purpose: q.purpose ?? null,
-        style: q.style ?? null,
-        theme: q.theme ?? null,
-        presenters: q.presenters ?? null,
-        durationSeconds: q.duration_seconds ?? null,
-      },
-    });
-    if (!r.ok) {
-      // An unknown template is the caller's mistake and is worth saying plainly; a
-      // missing/unowned project is deliberately indistinguishable.
-      if (r.reason === 'unknown_template') return res.status(400).json({ error: 'Unknown presentation template' });
-      return res.status(404).json({ error: 'Project not found' });
-    }
-    res.json({
-      prompt: r.prompt.text,
-      template_id: r.prompt.templateId,
-      template_version: r.prompt.templateVersion,
-      template_label: r.template.label,
-      speaking_seconds: r.template.defaultSeconds,
-      qa_seconds: r.template.qaSeconds,
-      // Surfaced so the UI can tell the student what is missing instead of letting
-      // them paste a prompt full of "(not supplied)" without noticing.
-      missing: r.prompt.missing,
-    });
-  } catch (e) { fail(res, e, next); }
-});
-
-// PRESENTATION STUDIO — the authored lesson for one presentation template.
-//
-// NOT project-scoped, deliberately: a template lesson is curriculum content and is the
-// same for every learner, so there is no project to own and nothing to check beyond
-// being a participant. It lives in this file with the rest of the Studio routes rather
-// than on its own, because splitting one read across two routers would be worse.
-router.get('/api/portal/presentation-templates', requireParticipant, async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!gate(res)) return;
-    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
-    const { PRESENTATION_TEMPLATES } = await import('../services/presentation');
-    // The chooser needs only the spine; the full lesson is a separate read.
-    res.json(PRESENTATION_TEMPLATES.map((t) => ({
-      id: t.id,
-      label: t.label,
-      prominent: t.prominent,
-      outcome: t.outcome,
-      speaking_seconds: t.defaultSeconds,
-      qa_seconds: t.qaSeconds,
-    })));
-  } catch (e) { fail(res, e, next); }
-});
-
-router.get('/api/portal/presentation-templates/:templateId', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!gate(res)) return;
-    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
-    const { templateById } = await import('../services/presentation');
-    const t = templateById(String(req.params.templateId));
-    if (!t) return res.status(404).json({ error: 'Unknown presentation template' });
-    res.json(t);
-  } catch (e) { fail(res, e, next); }
-});
-
-// PRESENTATION STUDIO — the learner's Prepare answers for one task.
-//
-// These feed the deck prompt and an instructor's readiness view, which is why they are
-// a row rather than browser storage: losing them to a cleared cache would cost real
-// work. `prep_state` is DERIVED server-side from what the learner has actually filled
-// in — a client cannot declare itself ready — and nothing on this route can complete a
-// task — the canonical completion writer in services/projects/projectWriteService.ts
-// remains the only thing that may do that.
-//
-// That writer's name is deliberately NOT spelled out anywhere in this directory.
-// `projectTaskStatusGuard.test.ts` asserts no file under backend/src/routes/ contains
-// the symbol, and it does a plain substring match over the whole file INCLUDING
-// comments. That bluntness is the point — it is a tripwire on the one path that can
-// grant completion, and it should stay blunt rather than be taught to ignore prose.
-// Naming the function here, even to say this route never calls it, fails that test.
-const assignmentPatchSchema = z.object({
-  template: z.string().trim().max(80).optional(),
-  audience: z.string().trim().max(200).nullable().optional(),
-  purpose: z.string().trim().max(500).nullable().optional(),
-  // Checklist ticks: an allowlisted map of boolean flags, capped so a crafted body
-  // cannot grow the row without bound.
-  checklist: z.record(z.string().max(200), z.boolean()).optional(),
-}).strict();
-
-router.get('/api/portal/projects/:projectId/tasks/:storyId/presentation-assignment', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!gate(res)) return;
-    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
-    const { getOrCreateAssignment } = await import('../services/presentation/presentationAssignmentService');
-    const r = await getOrCreateAssignment(eid(req), String(req.params.projectId), String(req.params.storyId), req.participant?.cohort_id ?? null);
-    if (!r.ok) {
-      if (r.reason === 'unknown_template') return res.status(409).json({ error: 'This task points at a template that no longer exists' });
-      return res.status(404).json({ error: 'Project not found' });
-    }
-    res.json(r.view);
-  } catch (e) { fail(res, e, next); }
-});
-
-router.patch('/api/portal/projects/:projectId/tasks/:storyId/presentation-assignment', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!gate(res)) return;
-    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
-    const body = assignmentPatchSchema.parse(req.body || {});
-    const { updateAssignment } = await import('../services/presentation/presentationAssignmentService');
-    const r = await updateAssignment(eid(req), String(req.params.projectId), String(req.params.storyId), {
-      templateId: body.template ?? null,
-      audience: body.audience,
-      purpose: body.purpose,
-      checklist: body.checklist,
-    }, req.participant?.cohort_id ?? null);
-    if (!r.ok) {
-      if (r.reason === 'unknown_template') return res.status(400).json({ error: 'Unknown presentation template' });
-      return res.status(404).json({ error: 'Project not found' });
-    }
-    res.json(r.view);
   } catch (e) { fail(res, e, next); }
 });
 
