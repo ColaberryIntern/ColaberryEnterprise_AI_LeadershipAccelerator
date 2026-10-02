@@ -268,10 +268,19 @@ describe('integrity report covers BOTH directions, which compareSourceSets alone
     }));
     const report = reportHandoffIntegrity(b, [...sixTraced, ...eighteenInvented]);
 
+    const after = [...sixTraced, ...eighteenInvented];
+    expect(after).toHaveLength(24);            // what the plan came back with
     expect(report.ok).toBe(false);
     expect(report.lost).toHaveLength(24);      // 30 stated, 6 traced through
     expect(report.invented).toHaveLength(18);  // the fabricated remainder
-    expect(sixTraced.length + eighteenInvented.length).toBe(24); // what the plan came back with
+
+    // Reconcile against the REPORT rather than against test-local arithmetic. An earlier draft
+    // asserted `6 + 18 === 24`, which compares two constants declared three lines above and is
+    // insensitive to every line of production code.
+    const beforeIds = new Set(b.map((i) => i.id));
+    expect(report.invented.every((id) => !beforeIds.has(id))).toBe(true);
+    const afterIds = new Set(after.map((i) => i.id));
+    expect(report.lost.every((id) => !afterIds.has(id))).toBe(true);
   });
 
   it('surfaces unrecorded provenance without guessing it', () => {
@@ -307,10 +316,12 @@ describe('untrusted source text stays data', () => {
     // this result is an assembled instruction string.
     const result = buildSourceHandoff([item('requirements', INJECTION)]);
 
-    expect(typeof result.items[0].item.text).toBe('string');
-    expect(result).not.toHaveProperty('prompt');
-    expect(result).not.toHaveProperty('systemPrompt');
+    // The result's whole surface is these three keys. If a prompt string is ever assembled in
+    // here, this fails — which is the actual contract, where a `typeof === 'string'` check
+    // (an earlier draft) would have passed for a fully-assembled prompt.
     expect(Object.keys(result).sort()).toEqual(['items', 'overflow', 'refusedReason']);
+    expect(Object.keys(result.items[0]).sort())
+      .toEqual(['classification', 'dimension', 'item', 'sourceQuote']);
   });
 
   it('never lets injected text reach a confirmed state', () => {
