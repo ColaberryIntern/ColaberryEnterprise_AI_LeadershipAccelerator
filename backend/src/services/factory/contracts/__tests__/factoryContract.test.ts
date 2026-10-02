@@ -175,7 +175,8 @@ describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the seven record schemas', 
 
   it('allocation and role_map are NULLABLE, so required parity costs the model nothing', () => {
     // Strict mode forces them into `required`; `null` is how a model says "nothing to state"
-    // without inventing rows. Absence is still caught by allocation_unknown downstream.
+    // without inventing rows. Absence is MEANT to be caught by allocation_unknown downstream,
+    // which is not live yet - see the note in factoryContractSchema.ts. T6 wires it.
     const props = FACTORY_DECOMPOSITION_JSON_SCHEMA.properties;
     expect(props.allocation.type).toEqual(['array', 'null']);
     expect(props.role_map.type).toEqual(['array', 'null']);

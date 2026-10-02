@@ -119,8 +119,11 @@ function assignmentsByTask(project: FactoryProject): Map<string, Assignment[]> {
  *
  * Returns `null` — not a guess — when there is no performer or no executor. An unknown allocation
  * must stay visible: `lifecyclePrerequisites`' `allocation_unknown` rule exists precisely so an
- * unknown blocks full approval while still permitting a draft, and defaulting to `human` here
- * would make a blank look like a decision somebody took.
+ * unknown is INTENDED to block full approval while still permitting a draft. That path is not
+ * live yet - `lifecycleStatus.ts:144` hardcodes `unknownAllocationCount: 0` in
+ * `gatherEvidence`, so the rule cannot fire until T6 loads a real project there. The count
+ * this module returns is correct and tested at both ends; only the middle is stubbed.
+ * Defaulting to `human` here would make a blank look like a decision somebody took.
  */
 export function deriveExecutionClass(assignments: ReadonlyArray<Assignment>): ExecutionClass | null {
   const performer = assignments.find((a) => a.responsibility === 'PERFORMER');

@@ -51,8 +51,8 @@ invent rows to fill them.
   assignments you emitted: an agent PERFORMER with a human APPROVER is ai_with_approval,
   an agent PERFORMER without one is ai_autonomous, a person or team PERFORMER is human, and
   deterministic_software is allowed ONLY where the PERFORMER is a person or team - a person
-  running a deterministic script is plausible, an agent doing so is a contradiction. Every
-  a null executor stays correct when the source does not tell you who performs the work (see
+  running a deterministic script is plausible, an agent doing so is a contradiction.
+- A null executor stays correct when the source does not tell you who performs the work (see
   WHEN YOU DO NOT KNOW, below) - but then OMIT that task from allocation rather than stating a
   class for it. A class written over a null executor is rejected, because nothing corroborates
   it: an unstated allocation is an honest gap, a stated one with nothing behind it is not.
