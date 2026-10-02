@@ -356,7 +356,7 @@ describe('AdminGovQualificationPage — journey', () => {
   });
 
   it('decoupled (gws) workspace with established requirements: "what they want" lists them, requirements-by-due-stage renders, Approve is deferred (not an OP-source block)', async () => {
-    const established = [{ id: 'RQ1', text: 'Offeror shall be registered in SAM.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }];
+    const established = [{ id: 'RQ1', text: 'Offeror shall be registered in SAM.', applicability: 'always' as const, dueStage: 'submission' as const, bindingStatus: 'binding_solicitation_requirement' }];
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established } },
       evaluation: { evals: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], award: [], delivery: [], unknown: [] }, canApproveBid: true },
