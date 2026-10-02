@@ -1,8 +1,9 @@
+import crypto from 'crypto';
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
-import { getDaraEnrollmentId, getDaraAdminUserId, getDaraAgentId } from './daraIdentitySeed';
+import { getDaraEnrollmentId, getDaraAdminUserId, getDaraAgentId, isDaraEnabled, DARA_AGENT_NAME, DARA_RISK_TIER } from './daraIdentitySeed';
 import { buildDaraSystemPrompt } from './daraSystemPrompt';
 import { ensureDaraTicketForRoom, logDaraExchangeActivity } from './daraTicketLinkService';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
@@ -10,6 +11,7 @@ import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
 import type { AttachmentRef } from '../agents/tools/types';
 import { executeDaraTool, DARA_TOOLS } from './daraTools';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
 
 // Dara v2 Phase 3 — the ONLY place a Dara-authored student DM message is ever
 // produced. Reactive, guarded, never proactive — mirrors reeseReplyService.ts
@@ -95,6 +97,13 @@ function attachmentRefsOf(message: RoomMessage): AttachmentRef[] {
  */
 export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: string): Promise<void> {
   try {
+    // T12 completion (2026-10-02) — the parent AiAgent row's own `enabled`
+    // flag previously stopped nothing here: an admin disabling Dara in
+    // Admin > Agents had no effect on this path. Checked before any
+    // DB/network work beyond the flag read itself, same position as
+    // Reese's own equivalent check (reeseReplyService.ts).
+    if (!(await isDaraEnabled())) return;
+
     const daraEnrollmentId = await getDaraEnrollmentId();
     if (!daraEnrollmentId) return; // identity not seeded yet — nothing to reply as
 
@@ -204,6 +213,37 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
 
     const reply = completion.choices[0]?.message?.content?.trim();
     if (!reply) return;
+
+    // T12 completion (2026-10-02) — this function's FIRST authorization call
+    // ever (mirrors reeseReplyService.ts's exact "gate ahead of the action"
+    // ordering: evaluated after the reply is generated, before the real
+    // send). Only when a real ticketId exists — a missing ticketId (ticket-
+    // linking already failed and was swallowed above) skips this call and
+    // sends exactly as today, the same deliberate "a ticket-layer problem
+    // never blocks the reply" posture this file already has (see the
+    // existing "ProofDesk linkage boundary" test).
+    if (ticketId) {
+      const authResult = await authorizeTicketDispatch({
+        eventId: crypto.randomUUID(),
+        ticketId,
+        agentName: DARA_AGENT_NAME,
+        action: 'dara_dm_reply',
+        riskTier: DARA_RISK_TIER,
+        preparedAction: { roomId, content: reply },
+      });
+
+      // allowed is the real, mode-aware signal (unconditionally true in
+      // shadow mode). A held reply returns here, before the real send — an
+      // honest hold, not a silent drop: the student's message was received,
+      // Dara's reply is just not released yet.
+      if (!authResult.allowed) {
+        console.warn(JSON.stringify({
+          level: 'warn', service: 'dara', event: 'reply_held_for_approval',
+          room_id: roomId, ticket_id: ticketId, reason: authResult.reason,
+        }));
+        return;
+      }
+    }
 
     // Dynamic import breaks the dmService.ts <-> daraReplyService.ts circular
     // dependency, same convention reeseReplyService.ts uses.
