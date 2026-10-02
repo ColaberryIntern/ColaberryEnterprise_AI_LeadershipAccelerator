@@ -4,7 +4,7 @@ import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../.
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
-  extractGovQualificationRequirements, getGovOpportunityDetail,
+  extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
   type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity,
 } from '../../services/factoryApi';
@@ -45,6 +45,7 @@ const BLOCK_REASON: Record<string, string> = {
 };
 const COVERAGE_REASON: Record<string, string> = {
   no_requirements_established: 'No applicable requirements have been established yet (an empty list is not "no requirements")',
+  no_zip_attested: 'The solicitation ZIP has not been attested yet — attest it below before a pursuit can be approved',
   no_authoritative_source: 'The authoritative solicitation was not established/reviewed',
   authoritative_package_unreviewed: 'An amendment or the base solicitation has not been reviewed',
   document_coverage_unknown: 'Document coverage is unknown or inaccessible',
@@ -183,6 +184,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [extractError, setExtractError] = useState<string | null>(null);
   // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
   const [oppDetail, setOppDetail] = useState<OppDetail | null>(null);
+  const [attestFile, setAttestFile] = useState<File | null>(null); // the solicitation ZIP to attest as evidence (decoupled path)
 
   const load = useCallback(async () => {
     if (!canonical) return;
@@ -326,7 +328,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {isDecoupled && (
             <div className="alert alert-info d-flex align-items-start gap-2" role="status">
               <i className="ri-folder-zip-line mt-1" aria-hidden="true" />
-              <span>ZIP workspace{fromParam ? <> for <strong>{fromParam}</strong>{agencyParam ? ` (${agencyParam})` : ''}</> : ''}. Upload the solicitation ZIP below to pull in the requirements and work the proposal. Pursuit approval and evidence attestation come in a later step (pending sign-off).</span>
+              <span>ZIP workspace{fromParam ? <> for <strong>{fromParam}</strong>{agencyParam ? ` (${agencyParam})` : ''}</> : ''}. Upload the solicitation ZIP to pull in the requirements, establish the real ones, attest the ZIP as evidence, then you can approve the bid pursuit.</span>
             </div>
           )}
 
@@ -466,6 +468,29 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     </div>
                   )}
                 </>
+              )}
+            </SectionCard>
+          )}
+
+          {isDecoupled && record && (
+            <SectionCard title="Attest the solicitation ZIP (evidence of record)" icon="file-shield-2-line"
+              subtitle="Record the uploaded solicitation ZIP as the evidence of record (the server stores only a hash, never the bytes). Required, with established requirements, before a bid pursuit can be approved.">
+              {ws.zipAttestation && ws.zipAttestation.sha256 ? (
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                  <span className="badge bg-success-subtle text-success-emphasis"><i className="ri-checkbox-circle-line me-1" aria-hidden="true" />Attested</span>
+                  <span className="small text-secondary">{ws.zipAttestation.filename ?? 'solicitation.zip'} · {ws.zipAttestation.sha256.slice(0, 12)}…</span>
+                  <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
+                    onClick={() => run(() => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'revoke' }), 'ZIP attestation revoked.')}>Revoke</button>
+                </div>
+              ) : (
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                  <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
+                    onChange={(e) => setAttestFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                  <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !attestFile}
+                    onClick={() => run(() => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'add', file: attestFile }), 'Solicitation ZIP attested as evidence.')}>
+                    <i className="ri-upload-2-line me-1" aria-hidden="true" />Attest ZIP
+                  </button>
+                </div>
               )}
             </SectionCard>
           )}
@@ -658,7 +683,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.')}>
                     <i className="ri-shield-check-line me-1" aria-hidden="true" />Approve bid pursuit
                   </button>
-                  {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? 'Pursuit approval and evidence attestation come in a later step (pending sign-off).' : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
+                  {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.') : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
                 </div>
               </>
             )}

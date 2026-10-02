@@ -337,7 +337,8 @@ describe('AdminGovQualificationPage — journey', () => {
     snapshotRecorded: false,
     source: null,
     evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
-    coverage: { sufficient: false, reasons: ['pursuit_approval_not_enabled_on_this_path'] },
+    coverage: { sufficient: false, reasons: ['no_requirements_established'] },
+    zipAttestation: null,
     qualification: null,
     changedSource: false,
     canApprove: false,
@@ -364,6 +365,7 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established } },
       evaluation: { evals: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+      coverage: { sufficient: false, reasons: ['no_zip_attested'] }, // established, but the ZIP isn't attested yet
     }));
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
@@ -372,7 +374,7 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Requirements by due stage');           // renders from evaluation on the decoupled path
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(text).toContain('Pursuit approval and evidence attestation come in a later step'); // honest deferred note, not an OP-source block
+    expect(text).toContain('solicitation ZIP has not been attested yet'); // honest coverage reason, not an OP-source block
   });
 
   // ── Discovery details card + Source link + Gaps panel (decoupled only) ──
@@ -426,5 +428,47 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).not.toContain('Discovery details');
     expect(text).not.toContain('Gaps / potential disqualifiers');
     expect(factoryApi.getGovOpportunityDetail).not.toHaveBeenCalled(); // canonical path never fetches the discovery detail
+  });
+
+  // ── Step 4: attest the ZIP + enable pursuit approval on the decoupled path ──
+  it('decoupled: the "Attest the solicitation ZIP" card renders (with a record) and uploading calls attestSolicitationZip', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
+      zipAttestation: null,
+    }));
+    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('Attest the solicitation ZIP');
+    const fileInputs = Array.from(container.querySelectorAll('input[type=file]')) as HTMLInputElement[]; // extract card first, attest card last
+    const attestInput = fileInputs[fileInputs.length - 1];
+    const file = new File(['zip'], 'sol.zip', { type: 'application/zip' });
+    Object.defineProperty(attestInput, 'files', { value: [file], configurable: true });
+    await act(async () => { attestInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Attest ZIP');
+    const call = (factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0];
+    expect(call[0]).toBe(GWS);
+    expect(call[1].mode).toBe('add');
+    expect(call[1].file).toBeTruthy();
+  });
+
+  it('decoupled: when the server says canApprove (requirements + attested ZIP), Approve is ENABLED and calls approveGovQualification', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'RQ1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }] } },
+      evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+      coverage: { sufficient: true, reasons: [] },
+      zipAttestation: { sha256: 'f'.repeat(64), filename: 'sol.zip', reviewedBy: 'rev', reviewedAt: 't' },
+      canApprove: true,
+    }));
+    (factoryApi.approveGovQualification as jest.Mock).mockResolvedValue({ qualification: { id: 'q2' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('Attested'); // the attested badge replaces the upload
+    const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
+    expect(approve.disabled).toBe(false);
+    await clickButton('Approve bid pursuit');
+    const call = (factoryApi.approveGovQualification as jest.Mock).mock.calls[0];
+    expect(call[0]).toBe(GWS);
+    expect(call[1].decision).toBe('approved_bid_pursuit');
   });
 });

@@ -23,9 +23,11 @@ const approveGovQualification = jest.fn();
 const recordDocumentReview = jest.fn();
 const createDecoupledQualification = jest.fn();
 const getDecoupledWorkspace = jest.fn();
+const recordZipAttestation = jest.fn();
+const approveDecoupledQualification = jest.fn();
 jest.mock('../../../services/factory/govQualification', () => {
   const actual = jest.requireActual('../../../services/factory/govQualification');
-  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a), createDecoupledQualification: (...a: any[]) => createDecoupledQualification(...a), getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a) };
+  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a), createDecoupledQualification: (...a: any[]) => createDecoupledQualification(...a), getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a), recordZipAttestation: (...a: any[]) => recordZipAttestation(...a), approveDecoupledQualification: (...a: any[]) => approveDecoupledQualification(...a) };
 });
 const authorizeBuild = jest.fn();
 jest.mock('../../../services/factory/buildAuthorization', () => {
@@ -63,7 +65,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(9);
+    expect(routeLines.length).toBe(10);
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -373,11 +375,23 @@ describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
     expect(getDecoupledWorkspace).not.toHaveBeenCalled();
   });
 
-  it('approve on a gws key → 409 decoupledApprovalUnavailable (never runs OP approval)', async () => {
+  it('approve on a gws key runs the DECOUPLED approval (200), not the canonical OP approval', async () => {
+    approveDecoupledQualification.mockResolvedValue({ id: 'q2', version: 2, decision: 'approved_bid_pursuit' });
     const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/approve`).send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'approved_bid_pursuit' });
-    expect(res.status).toBe(409);
-    expect(res.body.decoupledApprovalUnavailable).toBe(true);
-    expect(approveGovQualification).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(approveDecoupledQualification.mock.calls[0][0].approverIdentityId).toBe('reviewer@test');
+    expect(approveDecoupledQualification.mock.calls[0][0].gwsKey).toBe(GWS);
+    expect(approveGovQualification).not.toHaveBeenCalled(); // canonical OP approval never runs for a gws key
+  });
+
+  it('decoupled approve maps the gate errors (422 evidence-insufficient, 403 self-approval)', async () => {
+    approveDecoupledQualification.mockRejectedValueOnce(new EvidenceInsufficientError(['no_zip_attested']));
+    let res = await request(app).post(`/api/admin/factory/qualification/${GWS}/approve`).send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'approved_bid_pursuit' });
+    expect(res.status).toBe(422);
+    expect(res.body.evidenceInsufficient).toBe(true);
+    approveDecoupledQualification.mockRejectedValueOnce(new SelfApprovalError());
+    res = await request(app).post(`/api/admin/factory/qualification/${GWS}/approve`).send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'approved_bid_pursuit' });
+    expect(res.status).toBe(403);
   });
 
   it('extract-requirements accepts a gws key (proposal capture works on the decoupled path)', async () => {
@@ -401,6 +415,43 @@ describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
       .attach('document', Buffer.from('z'), 'p.zip');
     expect(res.status).toBe(400);
     expect(recordDocumentReview).not.toHaveBeenCalled();
+  });
+
+  it('attest-zip: a gws key records the ZIP attestation (201) with a SERVER-computed sha256', async () => {
+    recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .attach('document', Buffer.from('zip-bytes'), 'solicitation.zip');
+    expect(res.status).toBe(201);
+    const arg = recordZipAttestation.mock.calls[0][0];
+    expect(arg.gwsKey).toBe(GWS);
+    expect(arg.sha256).toMatch(/^[0-9a-f]{64}$/); // server-computed, not client-asserted
+    expect(arg.mode).toBe('add');
+    expect(arg.filename).toBe('solicitation.zip');
+    expect(arg.reviewerIdentityId).toBe('reviewer@test');
+  });
+
+  it('attest-zip: revoke needs no file (200)', async () => {
+    recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'revoke');
+    expect(res.status).toBe(200);
+    expect(recordZipAttestation.mock.calls[0][0].mode).toBe('revoke');
+  });
+
+  it('attest-zip: 400 when add has no file', async () => {
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add');
+    expect(res.status).toBe(400);
+    expect(recordZipAttestation).not.toHaveBeenCalled();
+  });
+
+  it('attest-zip: a CANONICAL key is rejected 400 (attestation is gws-only; canonical uses review-documents)', async () => {
+    const res = await request(app).post(`/api/admin/factory/qualification/${CLEAN_CANONICAL}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .attach('document', Buffer.from('z'), 's.zip');
+    expect(res.status).toBe(400);
+    expect(recordZipAttestation).not.toHaveBeenCalled();
   });
 });
 
