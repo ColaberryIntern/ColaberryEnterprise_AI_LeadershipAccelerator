@@ -167,6 +167,65 @@ export async function createQualification(input: CreateQualificationInput): Prom
   return row.get ? row.get() : row;
 }
 
+export interface CreateDecoupledQualificationInput {
+  tenantId: string; organizationId?: string | null; biddingEntity: string;
+  gwsKey: string; reviewerIdentityId: string;
+  provenance: { uuid: string; title: string | null; agency: string | null };
+}
+
+/**
+ * Create a pending_review qualification for a DECOUPLED (discovery-ZIP) workspace — NOT bound to an OP source
+ * snapshot. The uploaded ZIP is the evidence source; pursuit approval + evidence attestation are later, gated
+ * slices (canApprove stays false on this path). Idempotent per (gwsKey, bidding_entity).
+ */
+export async function createDecoupledQualification(input: CreateDecoupledQualificationInput): Promise<any> {
+  const existing = await loadCurrent(input.gwsKey, input.biddingEntity);
+  if (existing) return existing.get ? existing.get() : existing;
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const evaluation = evaluateRequirements([]);
+  const row: any = await GovQualification.create({
+    tenant_id: input.tenantId, organization_id: input.organizationId ?? null, bidding_entity: input.biddingEntity,
+    canonical_opportunity_id: input.gwsKey, delivery_project_id: null,
+    reviewer_identity_id: input.reviewerIdentityId, decision: 'pending_review',
+    requirements_json: { requirements: [], evaluation, workspace_kind: 'discovery_zip', provenance: input.provenance },
+    source_snapshot: null, source_snapshot_version: null, source_available: false,
+    status: 'active', version: 1,
+    content_sha256: contentHash(`${input.gwsKey}:${input.biddingEntity}:1`, input.provenance),
+  });
+  return row.get ? row.get() : row;
+}
+
+/**
+ * The read view for a DECOUPLED (discovery-ZIP) workspace: NO OP source re-fetch (source is null). The uploaded
+ * ZIP is the evidence source; evaluation runs over the reviewer-established requirements. Pursuit approval is a
+ * later, coordinator-gated slice, so canApprove is always false here and coverage carries an honest reason.
+ */
+export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, biddingEntity?: string): Promise<any> {
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const where: any = { canonical_opportunity_id: gwsKey, tenant_id: tenantId, status: 'active' };
+  if (biddingEntity) where.bidding_entity = biddingEntity;
+  const record: any = await GovQualification.findOne({ where, order: [['version', 'DESC']] });
+  const recordJson = record ? record.get() : null;
+  const established = (recordJson && recordJson.requirements_json && recordJson.requirements_json.established) || [];
+  const provenance = (recordJson && recordJson.requirements_json && recordJson.requirements_json.provenance) || null;
+  return {
+    canonicalOpportunityId: gwsKey,
+    sourceLive: false,
+    sourceState: 'zip_workspace',
+    sourceStateLabel: 'ZIP workspace',
+    sourceAvailable: false,
+    sourceSnapshotVersion: null,
+    snapshotRecorded: false,
+    source: null,
+    evaluation: evaluateRequirements(established),
+    coverage: { sufficient: false, reasons: ['pursuit_approval_not_enabled_on_this_path'] },
+    qualification: recordJson,
+    provenance,
+    changedSource: false,
+    canApprove: false,
+  };
+}
+
 async function forkNewVersion(current: any, patch: Record<string, any>): Promise<any> {
   const { default: GovQualification } = await import('../../models/GovQualification');
   const nextVersion = current.version + 1;

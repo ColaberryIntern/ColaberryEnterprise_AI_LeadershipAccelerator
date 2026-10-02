@@ -82,8 +82,9 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     expect(qualify).toBeDefined();
     await act(async () => { qualify!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
     const target = (mockNavigate as jest.Mock).mock.calls[0][0] as string;
-    expect(target).toContain('/admin/gov-qualification?from=');  // carries the clicked proposal for context
-    expect(target).not.toContain('canonical=');                  // but NEVER a title-derived canonical id
+    expect(target).toContain('/admin/gov-qualification?gws=gws%3A');  // opens the ZIP workspace keyed off the discovery row uuid
+    expect(target).toContain('from=');                                // carries the clicked proposal for display
+    expect(target).not.toContain('canonical=');                       // but NEVER a title-derived canonical id
   });
 
   it('row: unverified value, Source link, deadline warning; live pill in the header', async () => {

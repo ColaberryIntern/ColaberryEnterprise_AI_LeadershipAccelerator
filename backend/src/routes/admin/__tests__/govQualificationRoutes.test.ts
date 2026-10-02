@@ -21,9 +21,11 @@ const createQualification = jest.fn();
 const recordDecision = jest.fn();
 const approveGovQualification = jest.fn();
 const recordDocumentReview = jest.fn();
+const createDecoupledQualification = jest.fn();
+const getDecoupledWorkspace = jest.fn();
 jest.mock('../../../services/factory/govQualification', () => {
   const actual = jest.requireActual('../../../services/factory/govQualification');
-  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a) };
+  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a), createDecoupledQualification: (...a: any[]) => createDecoupledQualification(...a), getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a) };
 });
 const authorizeBuild = jest.fn();
 jest.mock('../../../services/factory/buildAuthorization', () => {
@@ -338,6 +340,67 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
       .field('biddingEntity', 'colaberry')
       .attach('document', Buffer.from('z'), 'p.zip');
     expect(res.status).toBe(500);
+  });
+});
+
+describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
+  const GWS = 'gws:11111111-1111-4111-a111-111111111111';
+
+  it('create: a gws key routes to createDecoupledQualification (bound to NO OP snapshot) with provenance; canonical create NOT called', async () => {
+    createDecoupledQualification.mockResolvedValue({ id: 'q1', version: 1, decision: 'pending_review', canonical_opportunity_id: GWS });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}`).send({ biddingEntity: 'colaberry', from: 'RFP AI-based IVR Solution', agency: 'City of Fort Worth' });
+    expect(res.status).toBe(201);
+    const arg = createDecoupledQualification.mock.calls[0][0];
+    expect(arg.gwsKey).toBe(GWS);
+    expect(arg.sourceSnapshot).toBeUndefined();          // decoupled: bound to NO OP source snapshot
+    expect(arg.provenance).toEqual({ uuid: '11111111-1111-4111-a111-111111111111', title: 'RFP AI-based IVR Solution', agency: 'City of Fort Worth' });
+    expect(createQualification).not.toHaveBeenCalled();  // not the canonical (snapshot-bound) create
+  });
+
+  it('GET: a gws key routes to getDecoupledWorkspace (source:null, zip_workspace, canApprove:false) — no OP re-fetch', async () => {
+    getDecoupledWorkspace.mockResolvedValue({ canonicalOpportunityId: GWS, source: null, sourceState: 'zip_workspace', sourceAvailable: false, canApprove: false, evaluation: { evals: [], blocking: [], byDueStage: {}, canApproveBid: true }, coverage: { sufficient: false, reasons: ['pursuit_approval_not_enabled_on_this_path'] }, qualification: null, provenance: null });
+    const res = await request(app).get(`/api/admin/factory/qualification/${GWS}?biddingEntity=colaberry`);
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBeNull();
+    expect(res.body.sourceState).toBe('zip_workspace');
+    expect(res.body.canApprove).toBe(false);
+    expect(getDecoupledWorkspace).toHaveBeenCalledWith('ten-1', GWS, 'colaberry');
+  });
+
+  it('400 on a key matching NEITHER the canonical nor the gws namespace', async () => {
+    const res = await request(app).get('/api/admin/factory/qualification/not-a-valid-key');
+    expect(res.status).toBe(400);
+    expect(getDecoupledWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('approve on a gws key → 409 decoupledApprovalUnavailable (never runs OP approval)', async () => {
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/approve`).send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'approved_bid_pursuit' });
+    expect(res.status).toBe(409);
+    expect(res.body.decoupledApprovalUnavailable).toBe(true);
+    expect(approveGovQualification).not.toHaveBeenCalled();
+  });
+
+  it('extract-requirements accepts a gws key (proposal capture works on the decoupled path)', async () => {
+    extractProposal.mockResolvedValue({ blocks: [], fileCount: 1, requirements: [{ canonicalReqId: 'RQ1', statement: 'Offeror shall be registered in SAM.', extractedText: '...', sourceDocument: 'rfp.pdf', section: 'L.1', kind: 'eligibility', priority: 'must' }] });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/extract-requirements`).attach('document', Buffer.from('zip'), 'rfp.zip');
+    expect(res.status).toBe(200);
+    expect(res.body.candidates).toHaveLength(1);
+  });
+
+  it('decision (establish) accepts a gws key (confirm requirements into the Proposal)', async () => {
+    recordDecision.mockResolvedValue({ id: 'q2', version: 2, decision: 'needs_evidence' });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/decision`)
+      .send({ biddingEntity: 'colaberry', expectedVersion: 1, decision: 'needs_evidence', establishedRequirements: [{ id: 'RQ1', text: 'Offeror shall be registered in SAM.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] });
+    expect(res.status).toBe(200);
+    expect(recordDecision.mock.calls[0][0].canonicalOpportunityId).toBe(GWS);
+  });
+
+  it('a gws key is REJECTED (400) on the canonical-only /review-documents route (decoupled attestation is a later slice)', async () => {
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/review-documents`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add').field('coveredDocIds', JSON.stringify(['DS1']))
+      .attach('document', Buffer.from('z'), 'p.zip');
+    expect(res.status).toBe(400);
+    expect(recordDocumentReview).not.toHaveBeenCalled();
   });
 });
 
