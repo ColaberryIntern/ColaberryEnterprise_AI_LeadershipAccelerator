@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presentation Studio — Class Walkthrough</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  :root{
+    --navy:#1a365d; --blue:#2b6cb0; --sky:#4299e1;
+    --green:#38a169; --teal:#319795; --purple:#805ad5;
+    --orange:#dd6b20; --amber:#d69e2e; --red:#e53e3e; --pink:#d53f8c;
+    --bg:#f7fafc; --surface:#ffffff;
+    --text:#2d3748; --muted:#718096; --line:#e2e8f0;
+  }
+  body{background:
+        radial-gradient(1200px 500px at 10% -5%, #e6f0ff 0%, transparent 55%),
+        radial-gradient(900px 450px at 95% 5%, #f0e6ff 0%, transparent 50%),
+        var(--bg);
+       color:var(--text);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       padding-bottom:3rem;}
+
+  .doc-header{background:linear-gradient(120deg,#1a365d 0%,#2b6cb0 45%,#805ad5 100%);
+       color:#fff;padding:2.8rem 2rem;border-radius:16px;margin:1.5rem 0;
+       box-shadow:0 10px 30px rgba(26,54,93,.25);position:relative;overflow:hidden;}
+  .doc-header::after{content:"";position:absolute;right:-60px;top:-60px;width:260px;height:260px;
+       background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%);border-radius:50%;}
+  .doc-header h1{font-weight:750;letter-spacing:-.6px;margin:0 0 .4rem;font-size:2.3rem;}
+  .chip{display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);
+       border-radius:999px;padding:.26rem .8rem;font-size:.82rem;margin:.4rem .35rem 0 0;font-weight:600;}
+
+  .summary-bar{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+       padding:1.3rem 1.5rem;margin-bottom:1.6rem;box-shadow:0 4px 14px rgba(0,0,0,.05);}
+  .stat{text-align:center;padding:.5rem 0;}
+  .stat .n{font-size:2.1rem;font-weight:750;line-height:1.1;}
+  .stat .e{font-size:1.5rem;display:block;margin-bottom:.1rem;}
+  .stat .l{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:650;}
+  .c-navy{color:var(--navy)} .c-green{color:var(--green)} .c-purple{color:var(--purple)}
+  .c-orange{color:var(--orange)} .c-blue{color:var(--blue)} .c-pink{color:var(--pink)}
+
+  .stop{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+       padding:1.6rem;margin-bottom:1.6rem;box-shadow:0 4px 14px rgba(0,0,0,.05);
+       border-top:5px solid var(--blue);}
+  .stop.learn{border-top-color:var(--purple)}
+  .stop.prepare{border-top-color:var(--teal)}
+  .stop.build{border-top-color:var(--orange)}
+  .stop.soon{border-top-color:var(--amber)}
+  .stop.ref{border-top-color:var(--sky)}
+  .stop.phone{border-top-color:var(--pink)}
+  .stop.ask{border-top-color:var(--green)}
+
+  .stop h2{font-size:1.35rem;font-weight:700;color:var(--navy);margin:0 0 .3rem;}
+  .stop .kicker{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;
+       color:var(--muted);font-weight:700;}
+
+  .say{background:linear-gradient(90deg,#eef5ff,#f7fbff);border-left:4px solid var(--blue);
+       padding:.95rem 1.15rem;border-radius:0 10px 10px 0;margin:1rem 0;font-size:.97rem;}
+  .say b{color:var(--navy);}
+  .say.hot{background:linear-gradient(90deg,#fff5f5,#fffafa);border-left-color:var(--red);}
+  .say.go{background:linear-gradient(90deg,#f0fff4,#f8fffa);border-left-color:var(--green);}
+
+  .shot{width:100%;border:1px solid var(--line);border-radius:10px;margin-top:1rem;
+       box-shadow:0 6px 20px rgba(0,0,0,.09);}
+
+  .pill{border-radius:999px;padding:.24rem .75rem;font-size:.75rem;font-weight:700;
+        display:inline-block;vertical-align:middle;}
+  .pill-live{background:#def7ec;color:#03543f;border:1px solid #84e1bc;}
+  .pill-soon{background:#fdf6b2;color:#723b13;border:1px solid #faca15;}
+
+  table{font-size:.93rem;}
+  th{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;}
+  .tpl-star{background:#fffbeb;}
+  code{background:#edf2f7;padding:.12rem .4rem;border-radius:5px;color:var(--navy);font-size:.88em;font-weight:600;}
+
+  .honest{border-left:4px solid var(--amber);background:linear-gradient(90deg,#fffbeb,#fffdf5);
+          padding:1.1rem 1.25rem;border-radius:0 10px 10px 0;}
+  ol.steps{font-size:1rem;padding-left:1.1rem}
+  ol.steps li{margin-bottom:.55rem}
+  footer{color:var(--muted);font-size:.84rem;text-align:center;padding:2rem 0;}
+  @media print{ body{background:#fff} .stop{break-inside:avoid} }
+</style>
+</head>
+<body>
+<div class="container" style="max-width:1060px">
+
+  <div class="doc-header">
+    <h1>🎤 Presentation Studio</h1>
+    <div style="opacity:.95;font-size:1.12rem">
+      Your demo-prep cards just became somewhere you <em>learn to present</em> ✨
+    </div>
+    <div>
+      <span class="chip">📅 Week 10 · Build Day</span>
+      <span class="chip">🗓️ 2026-10-01</span>
+      <span class="chip">🏁 Capstone Expo: Oct 12 &amp; 15</span>
+    </div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="row align-items-center">
+      <div class="col-md-3 stat"><span class="e">🪜</span><div class="n c-navy">6</div><div class="l">Stages per card</div></div>
+      <div class="col-md-3 stat"><span class="e">🎭</span><div class="n c-purple">7</div><div class="l">Presentation templates</div></div>
+      <div class="col-md-3 stat"><span class="e">✅</span><div class="n c-green">3</div><div class="l">Live right now</div></div>
+      <div class="col-md-3 stat"><span class="e">🚧</span><div class="n c-orange">3</div><div class="l">Coming next</div></div>
+    </div>
+  </div>
+
+  <div class="stop">
+    <div class="kicker">💡 The change in one sentence</div>
+    <h2>A demo-prep card used to be a title and a box. Now it teaches you to present.</h2>
+    <p style="color:var(--muted)">
+      Open any <code>PREP-1</code>…<code>PREP-6</code> task and you land in a six-stage workspace —
+      <b>🎓 Learn → 🎯 Prepare → 🛠️ Build → 🎙️ Practice → 🚀 Present → 🔄 Reflect &amp; Share</b> —
+      opening on the stage that matches what that task actually asks for.
+    </p>
+    <p class="mb-0" style="color:var(--muted)">
+      Everything that worked before still works: 📥 same hand-in box, same rules, same points.
+      👩‍🏫 Demo Day is still marked by staff.
+    </p>
+    <div class="say">
+      🗣️ <b>Say to the class:</b> “You're about to prepare a presentation of your own project.
+      You're not being asked to be a great speaker. You're being asked to explain what you built,
+      to a named audience, in a fixed time, without hiding behind jargon.”
+    </div>
+  </div>
+
+  <div class="stop learn">
+    <div class="kicker">🧭 Stop 1 · opens on the stage your task needs</div>
+    <h2>🎓 Learn — what good <em>and bad</em> actually look like <span class="pill pill-live">● LIVE</span></h2>
+    <p style="color:var(--muted)">
+      The lesson for that card's presentation type: 🎯 the objective, 📦 what to hand in, ⏱️ a timed
+      outline, 🔤 vocabulary your audience may not know, 🏋️ a drill, and 📊 the rubric with its weights.
+    </p>
+    <div class="say">
+      ⭐ <b>The part worth pausing on:</b> there's a worked ✅ <b>good</b> example and a worked
+      ❌ <b>bad</b> one, each annotated. <b>The bad one is the teaching.</b> A good example alone only
+      teaches imitation — the counter-example teaches judgement, and judgement is what you're hired for.
+    </div>
+    <img class="shot" src="screenshots/2026-10-01-presentation-studio/learn-1440-light.png"
+         alt="The Learn stage showing objective, worked good and bad examples with annotations, the timed outline, vocabulary and rubric.">
+  </div>
+
+  <div class="stop prepare">
+    <div class="kicker">🧭 Stop 2 · the question that changes the whole deck</div>
+    <h2>🎯 Prepare — who is this <em>for</em>? <span class="pill pill-live">● LIVE</span></h2>
+    <p style="color:var(--muted)">
+      Two questions and a checklist, 💾 saved as you type. The checklist comes from the template
+      you're on — so it's the checklist for <em>that</em> kind of presentation, not a generic one.
+    </p>
+    <div class="say hot">
+      🔥 <b>Say to the class:</b> “‘Hiring managers who've never seen this’ and ‘my team’ are two
+      completely different decks. Pick one. 👉 The prompt in the next stage <em>reads this answer</em>,
+      so being vague here costs you twice.”
+    </div>
+    <img class="shot" src="screenshots/2026-10-01-presentation-studio/prepare-1440-light.png"
+         alt="The Prepare stage with audience and purpose filled in, a template checklist with items ticked, and the task sidebar.">
+  </div>
+
+  <div class="stop build">
+    <div class="kicker">🧭 Stop 3 · the one they'll use tonight</div>
+    <h2>🛠️ Build — a deck prompt built from <em>their</em> project <span class="pill pill-live">● LIVE</span></h2>
+    <p style="color:var(--muted)">
+      📋 Copy or ⬇️ download it, paste into Claude Code in their own project folder. Out comes
+      <code>presentation.html</code>, <code>speaker-notes.md</code>, <code>demo-runbook.md</code>,
+      and a rehearsal checklist with 5 likely audience questions.
+    </p>
+    <div class="say hot">
+      ⚠️ <b>Point at the warning box:</b> it lists what the prompt could <em>not</em> fill from their
+      project. That's deliberate. Paste a prompt full of gaps without noticing and you get a deck full
+      of invented detail — numbers you can't defend when someone asks <em>“how do you know?”</em>
+    </div>
+    <img class="shot" src="screenshots/2026-10-01-presentation-studio/build-1440-light.png"
+         alt="The Build stage showing the generated deck prompt, copy and download buttons, and a warning listing fields the prompt could not fill.">
+  </div>
+
+  <div class="stop soon">
+    <div class="kicker">🙋 Say this out loud</div>
+    <h2>🚧 What is <em>not</em> live yet <span class="pill pill-soon">◐ NEXT PHASE</span></h2>
+    <div class="honest">
+      <p class="mb-2">🎙️ <b>Practice</b>, 🚀 <b>Present</b> and 🔄 <b>Reflect &amp; Share</b> aren't wired up.
+      They show a plain sentence saying so, and deliberately offer <b>no buttons</b> — a control that
+      looks live and does nothing teaches you the platform is broken.</p>
+      <p class="mb-0">📆 Booking a practice room, joining your slot from the card, and having your
+      recording attach itself to the task all land next. Until then: book rooms the way you do today,
+      and hand in evidence through the same box as always. ✅</p>
+    </div>
+    <div class="say">
+      🤝 <b>Why it's worth saying:</b> it's the same honesty the rubric asks of <em>you</em> in a demo.
+      Name the limit precisely instead of implying everything works.
+    </div>
+  </div>
+
+  <div class="stop ref">
+    <div class="kicker">📚 Reference</div>
+    <h2>🎭 The seven templates</h2>
+    <p style="color:var(--muted)">
+      ⭐ The first four are the ones most of you need. Your card already opens on the right one.
+    </p>
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Template</th><th>⏱️ Time</th><th>What it's for</th><th>Shape</th></tr></thead>
+      <tbody>
+        <tr class="tpl-star"><td>⭐ <b>Project introduction</b></td><td>90 sec</td><td>The lift answer. You'll give this more than any other.</td><td>Person &amp; problem → cost → what changes → next milestone</td></tr>
+        <tr class="tpl-star"><td>⭐ <b>AI visual presentation</b></td><td>5 min</td><td>A visual argument someone could follow with the sound off 🔇</td><td>Problem shown → before/after → workflow → evidence → next step</td></tr>
+        <tr class="tpl-star"><td>⭐ <b>Working-system demo</b></td><td>7 min</td><td>One complete outcome, live — including what happens when it fails 💥</td><td>Starting state → action → result → control &amp; failure path</td></tr>
+        <tr class="tpl-star"><td>⭐ <b>Final showcase</b></td><td>8 min + Q&amp;A</td><td>🏁 The portfolio one. Capstone Expo.</td><td>Problem → live proof → AI/human control → results → limits → next step</td></tr>
+        <tr><td>🏗️ Architecture review</td><td>8 min</td><td>Defending choices without becoming defensive.</td><td>Components → data flow → alternatives → permissions → recovery</td></tr>
+        <tr><td>📈 Stakeholder update</td><td>3 min</td><td>Leave with a decision, not another meeting.</td><td>Done w/ evidence → blocker → proposal → decision needed</td></tr>
+        <tr><td>🤝 Client handoff</td><td>7 min</td><td>Teaching someone to own it Monday without calling you.</td><td>Workflow → responsibilities → exceptions → recovery → support</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="stop phone">
+    <div class="kicker">📱 It works on a phone</div>
+    <h2>Same workspace, stacked</h2>
+    <div class="row">
+      <div class="col-md-4"><img class="shot" src="screenshots/2026-10-01-presentation-studio/prepare-390-light.png" alt="Prepare stage at phone width, stacked single column."></div>
+      <div class="col-md-8">
+        <p style="color:var(--muted)">
+          📐 The stage rail wraps, the side panel moves below the content, and the checkboxes are big
+          enough to hit without zooming. 🌙 Dark mode supported throughout.
+        </p>
+        <div class="say mb-0">
+          ♿ <b>Worth mentioning:</b> every stage change, save result and copy confirmation is announced
+          to screen readers. If you present with assistive technology, the workspace <em>tells you</em>
+          what changed instead of changing silently.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stop ask">
+    <div class="kicker">🎯 The ask</div>
+    <h2>✅ What to do before the Expo</h2>
+    <ol class="steps">
+      <li>📖 Open your <b>PREP-3</b> card and read the <b>Learn</b> stage end to end. ~15 minutes.</li>
+      <li>🎯 Fill in <b>Prepare</b> — a <em>specific</em> audience, and what you want to happen afterwards.</li>
+      <li>📋 Copy the prompt from <b>Build</b>, run it in Claude Code, and look at what it produced.</li>
+      <li>🔍 Fix the gaps it flagged. Don't let it invent a number you can't defend.</li>
+      <li>🗣️ Say it out loud once, <b>timed</b>, before you show anyone.</li>
+    </ol>
+    <div class="say go mb-0">
+      🏁 <b>Closing line:</b> “The Capstone Expo is the 12th and the 15th. The hardest sentence in your
+      whole demo is the one where you say what it does <em>not</em> do. 💪 Write that one first.”
+    </div>
+  </div>
+
+  <footer>
+    📸 Screenshots are real renders of the shipped components and stylesheet, captured 2026-10-01.<br>
+    🚧 Practice / Present / Reflect &amp; Share are not yet functional and are labelled as such above.
+  </footer>
+
+</div>
+</body>
+</html>
