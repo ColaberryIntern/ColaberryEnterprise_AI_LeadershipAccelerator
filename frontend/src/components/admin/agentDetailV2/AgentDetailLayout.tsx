@@ -90,7 +90,7 @@ export default function AgentDetailLayout({
               className={`adv2-sidebar-navbtn${activeTab === tab.key ? ' active' : ''}`}
               onClick={() => onTabChange(tab.key)}
             >
-              {tab.label}
+              {tab.key === 'talk' ? `Talk to ${displayName}` : tab.label}
             </button>
           ))}
         </nav>
