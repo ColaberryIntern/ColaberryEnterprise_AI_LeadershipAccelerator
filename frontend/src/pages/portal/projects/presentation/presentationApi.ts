@@ -62,6 +62,21 @@ export async function fetchTemplateLesson(templateId: string): Promise<TemplateL
   return data;
 }
 
+/** One row of the template chooser. The full lesson is a separate, heavier read. */
+export interface TemplateSummary {
+  id: string;
+  label: string;
+  prominent: boolean;
+  outcome: string;
+  speaking_seconds: number;
+  qa_seconds: number;
+}
+
+export async function fetchTemplates(): Promise<TemplateSummary[]> {
+  const { data } = await portalApi.get<TemplateSummary[]>('/api/portal/presentation-templates');
+  return data;
+}
+
 /** The learner's saved Prepare answers for one task. */
 export interface PresentationAssignment {
   storyId: string;
