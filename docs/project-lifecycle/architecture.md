@@ -200,4 +200,11 @@ Enforcement ships behind a narrowly scoped flag, default **OFF** until Phase 8 a
 - `entry-point-matrix.md` — the 14 creation paths and 3 chokepoints
 - `blueprint-contract.md` — the manifest's fields and invariants
 - `approval-and-change-policy.md` — approval binding, invalidation, impact sets
-- `acceptance-evidence.md` — LC-01…LC-18 evidence table (populated as phases land)
+- `reference-fixtures.md` — the fixtures every phase runs against, and the required corpus cases
+- `owner-testing-guide.md` — the 6 non-developer tests, run by P1-T7 at Phase 8
+- `carried-forward-obligations.md` — **read before starting Phase 6 or 7.** Decisions and measured
+  findings from Phase 3 that bind later phases, including why an r0 keyword rule does not work and
+  why a new r0 gate rule must ship advisory. Kept here because the run directory it was first
+  written in is gitignored.
+- `acceptance-evidence.md` — LC-01…LC-18 evidence table. **NOT YET CREATED**; Phase 8 owns it.
+  Listed here since Phase 1 as a forward reference, which is why it reads as though it exists.
