@@ -149,6 +149,44 @@ landing it a phase before its writer is what lets Phase 8 verify it against the 
 
 ---
 
+## Open question for the owner: who approves a STAFF-INITIATED student build?
+
+Raised by a peer session from the entry-point matrix, and recorded here rather than left to be
+discovered when Phase 6 wires those routes. **Not decided.** It has been put to Ali as a product
+question; this is the engineering shape of it so the answer can be applied without re-deriving
+the problem.
+
+`architecture.md` §5.1 draws the line as **"the owner approves what gets built; the student
+receives what was approved"**. That cleanly covers two of the three shapes:
+
+- **Portal self-serve** (rows 2, 3, 4) — the student initiates, the owner approves. Clear.
+- **Client delivery** (rows 6, 8, 11) — staff initiate for a paying client. Clear.
+- **Staff-initiated STUDENT build** (row 5 internship, and row 6 where flotation intake targets a
+  student project) — staff initiate, a student receives, and nobody in the current line is
+  obviously the approver. This is the gap.
+
+One concrete asymmetry already in the matrix, which the decision should probably resolve rather
+than inherit: **row 5 (internship) honours no review hold at all**, while **row 6 (flotation
+intake) honours `holdForReview`**. Two staff-initiated paths, two different answers to "may this
+reach the student unreviewed", and no recorded reason for the difference.
+
+What each answer would imply for Phase 6:
+
+- *Staff are the owner for this path* — row 5 needs a hold like row 6 has, and the approving
+  identity is the initiating staff member. Cheapest, but it means the person who asked for the
+  build also approves it, which is the self-approval shape `govQualification`s
+  `SelfApprovalError` exists to refuse elsewhere.
+- *The programme owner approves, not the initiating staff member* — row 5 and row 6 both route
+  through the same hold, and separation of duty is preserved. More correct, and it adds a human
+  step to a path that currently has none.
+- *A staff-initiated student build is a different lifecycle* — honest if the stages genuinely
+  differ, but it means a second set of stage definitions, and `PROJECT_APPROVAL_GATE`'s removal
+  already established that students get no say in the build, so the student is not the approver
+  under any option.
+
+Whatever is chosen, it must be stated in `architecture.md` §5.1 rather than only implemented,
+because the current wording reads as though it already covers every case.
+
 ## Phase 7 (hardening) gaps
 
 Each is a place a gate is thinner than it reads. None collapses a blocking set, which is why they
