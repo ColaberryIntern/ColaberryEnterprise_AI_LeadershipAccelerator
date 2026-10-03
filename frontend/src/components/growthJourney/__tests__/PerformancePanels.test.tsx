@@ -360,8 +360,22 @@ describe('the mechanical accessibility rules on all three panels', () => {
   });
 
   it('by-journey passes with a not-running row, whose cell spans the table', async () => {
+    /*
+     * The title used to claim more than the body checked. `expectNoA11yViolations` does
+     * not inspect `colSpan` - `a11yRules.ts` has no rule that can see one - so the
+     * attempt-3 verifier changed `colSpan={7}` to `colSpan={2}` and this cell passed
+     * while the not-running row's explanation stopped covering the table. Either assert
+     * the span or drop the clause; asserting it is better, because a short span leaves
+     * the remaining columns as empty cells, which reads as missing data rather than as
+     * "this programme has not started".
+     */
     api.getByJourney.mockResolvedValue(byJourney({ journeys: [notRunning()] }));
     await renderByJourney();
+    const spanned = container.querySelector('tbody td[colspan]');
+    expect(spanned).not.toBeNull();
+    const headerCols = container.querySelectorAll('thead th').length;
+    // The row's own <th> holds the programme, so the message covers the rest.
+    expect(Number(spanned!.getAttribute('colspan'))).toBe(headerCols - 1);
     expectNoA11yViolations(container);
   });
 });

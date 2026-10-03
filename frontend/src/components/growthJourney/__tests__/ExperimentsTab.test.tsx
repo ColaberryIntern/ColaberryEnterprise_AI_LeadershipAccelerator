@@ -62,7 +62,9 @@ const page = (over: Partial<ExperimentsResponse> = {}): ExperimentsResponse => (
 
 let container: HTMLDivElement;
 let root: Root;
-const render = async () => { await act(async () => { root.render(<ExperimentsTab />); }); };
+const render = async (props: { brandId?: string } = {}) => {
+  await act(async () => { root.render(<ExperimentsTab {...props} />); });
+};
 const text = () => (container.textContent ?? '').replace(/\s+/g, ' ');
 
 beforeEach(() => {
@@ -210,6 +212,27 @@ describe('the context an operator needs to read the number', () => {
     api.listExperiments.mockRejectedValue(new Error('experiments exploded'));
     await render();
     expect(text()).toContain('experiments exploded');
+  });
+
+  /*
+   * The brand boundary on THIS tab's read. The attempt-3 verifier dropped `brand_id`
+   * from `listExperiments` and every cell here stayed green, so the tab would have gone
+   * on showing another brand's holdout results with the brand selector set - and lift
+   * numbers from the wrong brand are worse than no numbers, because they are plausible.
+   * The sibling gap on `getRates`/`getMetrics` is closed in PerformanceTab.test.tsx.
+   */
+  it('scopes the read to the brand it was given', async () => {
+    await render({ brandId: 'b-9' });
+    expect(api.listExperiments).toHaveBeenCalledWith(
+      expect.objectContaining({ brand_id: 'b-9' }),
+    );
+  });
+
+  it('and sends no brand at all when given none, rather than a literal "undefined"', async () => {
+    await render();
+    expect(api.listExperiments).toHaveBeenCalledWith(
+      expect.objectContaining({ brand_id: undefined }),
+    );
   });
 });
 

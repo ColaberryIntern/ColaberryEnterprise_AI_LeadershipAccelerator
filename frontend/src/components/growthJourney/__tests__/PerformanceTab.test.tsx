@@ -365,6 +365,35 @@ describe('THE THREE PANELS ARE COMPOSED, and that is now executable', () => {
     expect(api.getOutcomes).toHaveBeenCalledWith(expect.objectContaining({ brand_id: 'b-9' }));
     expect(api.getByJourney).toHaveBeenCalledWith(expect.objectContaining({ brand_id: 'b-9' }));
   });
+
+  /*
+   * ── AND THE TAB'S OWN TWO READS, WHICH I ASSERTED ON THE CHILDREN AND NOT HERE ──
+   *
+   * The attempt-3 verifier deleted `brand_id` from `getRates` and from `getMetrics` and
+   * all 358 cells plus the full 3,946-test suite stayed green. The comment on the cell
+   * directly above calls an unscoped read "the brand-boundary failure this whole phase
+   * exists to prevent" - and it was true of the three children and unasserted for the
+   * two reads 240 lines up in the same component. The attempt-2 verifier had already
+   * raised exactly this for `listControls`; I fixed that one instance and not its
+   * siblings. One line each, so there is no excuse for the gap.
+   */
+  it('scopes the tab’s OWN rates read to the brand it was given', async () => {
+    await render({ brandId: 'b-9' });
+    expect(api.getRates).toHaveBeenCalledWith(expect.objectContaining({ brand_id: 'b-9' }));
+  });
+
+  it('scopes the tab’s OWN metrics read to the brand it was given', async () => {
+    await render({ brandId: 'b-9' });
+    expect(api.getMetrics).toHaveBeenCalledWith(expect.objectContaining({ brand_id: 'b-9' }));
+  });
+
+  it('and sends no brand at all when it was given none, rather than a literal "undefined"', async () => {
+    // The positive control for the two cells above: `brandId || undefined` must yield a
+    // key the server treats as absent, not the string "undefined" in a query.
+    await render();
+    expect(api.getRates).toHaveBeenCalledWith(expect.objectContaining({ brand_id: undefined }));
+    expect(api.getMetrics).toHaveBeenCalledWith(expect.objectContaining({ brand_id: undefined }));
+  });
 });
 
 describe('the mechanical accessibility rules', () => {

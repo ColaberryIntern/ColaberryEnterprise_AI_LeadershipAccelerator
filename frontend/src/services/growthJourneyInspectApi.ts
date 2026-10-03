@@ -219,40 +219,33 @@ export const getClassificationWhy = (id: string): Promise<JourneyWhy> =>
 export const getDecisionWhy = (id: string): Promise<JourneyWhy> =>
   api.get<JourneyWhy>(`${BASE}/decisions/${id}/why`).then((r) => r.data);
 
-// ─── decisions/snapshots (T607) ──────────────────────────────────────────────
-
-export interface SnapshotScores {
-  summary: number | null;
-  dimensions: { key: string; value: number }[];
-  /**
-   * Keys whose stored value was NOT a finite number. These are not zeros, and
-   * rendering them as 0 would invent a score the model never produced.
-   */
-  non_numeric_keys: string[];
-}
-
-export interface SnapshotRow {
-  id: string;
-  brand_id: string;
-  subject_ref: string;
-  /** DATEONLY. */
-  as_of_date: string;
-  state: string | null;
-  scores: SnapshotScores;
-  /** Capped at 50 entries server-side, each already through `safeKey`. */
-  score_gaps: string[];
-  created_at: string;
-}
-
-export interface SnapshotsResponse extends JourneyPage {
-  rows: SnapshotRow[];
-  scope: JourneyScope;
-}
-
-export const listSnapshots = (
-  q: JourneyPagedQuery & { subject_ref?: string } = {},
-): Promise<SnapshotsResponse> =>
-  api.get<SnapshotsResponse>(`${BASE}/decisions/snapshots${params(q)}`).then((r) => r.data);
+// ─── decisions/snapshots (T607) — DELIBERATELY NOT SHIPPED ───────────────────
+//
+// `listSnapshots`, `SnapshotRow`, `SnapshotScores` and `SnapshotsResponse` stood here
+// from T614 until T615's close, with ZERO consumers anywhere in `frontend/src` — not a
+// component, not a test, only their own declarations. They are removed rather than
+// given a panel, and the reason is a fact about the backend, not a scheduling excuse:
+//
+//   NOTHING WRITES `growth_journey_score_snapshots`. The table, the model
+//   (`backend/src/models/GrowthJourneyScoreSnapshot.ts`), the schema statements and the
+//   read service (`services/growthJourney/reads/decisionReadsAdmin.ts`) all exist, and
+//   a grep for `GrowthJourneyScoreSnapshot.{create,bulkCreate,upsert,findOrCreate}`
+//   across `backend/src` returns nothing. The writer is a carried-forward item.
+//
+// So a snapshots panel could only ever render "no snapshots", and an operator reading
+// that would conclude nothing had happened when the truth is that nothing CAN be
+// written yet. That is this phase's own null-versus-zero error promoted to a whole tab:
+// "nobody arrived" and "the feature has no writer" are opposite findings.
+//
+// Same treatment as the `/admin/agents/<id>` manager-inbox link T615 dropped for the
+// same class of reason (no `AiAgent.id` is selected, so the link could only 404): a
+// plan deliverable that cannot work is DISCLOSED AND DROPPED, never faked. Restoring
+// this is three lines plus its types once a writer lands, and the backend route is
+// untouched and still tested.
+//
+// Found by T615's attempt-3 verifier, outside T615's own diff. T615's dead-export sweep
+// is scoped to T615's symbols and so could not see it; the sweep now covers all five
+// journey clients, which is what stops the next one.
 
 // ─── decisions/transitions (T607) ────────────────────────────────────────────
 
