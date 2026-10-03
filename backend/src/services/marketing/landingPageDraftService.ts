@@ -125,7 +125,18 @@ RULES, in order of importance:
 4. Write like a person, not a brochure. No "unlock", "supercharge", "game-changing", "dive into", "transform your career", "in today's fast-paced world". No em-dashes anywhere.
 5. Structure follows the brief. A typical order is hero, who it is for, the problem, what you get, proof, logistics, FAQ, close - but only include what the brief supports. Between 3 and 10 sections.
 6. One CTA label, used consistently. If the brief names no destination, use "/apply" as the href so a human can correct it.
-7. Headlines are specific and short. No rhetorical questions.`;
+7. THE HEADLINE CARRIES A CONCRETE DETAIL FROM THE BRIEF. A hero headline that would fit any
+   course on any subject is a failed headline. Take the most specific thing the brief actually
+   gives you - a duration, a format, the artefact someone leaves with, who reviews it - and put it
+   in the words. Never a rhetorical question.
+   Weak, because it fits anything:  "Build Your First AI Project"
+   Strong, because only this brief could produce it:  "Ship an AI project in six weeks, reviewed
+   by a mentor"
+   The same applies to every section heading: say the thing, do not label the box. "What you get"
+   is a label; "A working project in your own repo" is the thing.
+8. DO NOT PUT THE BRAND NAME IN THE TITLE. The page already displays it. A title of
+   "Acme Training: Data Course for Analysts" wastes the only line that shows in a search result
+   and a link preview. Use that line for the promise instead.`;
 
 function userMessage(input: LandingPageDraftRequest, brandName: string): string {
   const parts = [`Brand: ${brandName}`, '', 'BRIEF:', input.source.trim()];
@@ -173,7 +184,7 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
   if (!brand) throw new WorkflowError('Brand not found', 404, 'NotFound');
 
   const client = getInstrumentedOpenAI(
-    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v1' },
+    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v2' },
     { timeout: TIMEOUT_MS, maxRetries: 1 },
   );
 

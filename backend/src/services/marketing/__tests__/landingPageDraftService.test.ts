@@ -247,6 +247,41 @@ describe('the prompt states the rules it is relied on for', () => {
     expect(system).toMatch(/Do not write "\[source\]" to satisfy the field/);
   });
 
+  it('demands a concrete detail in the headline, with a worked weak/strong pair', async () => {
+    // Measured on the live model 2026-10-03: without this, 1 of 3 runs put any fact from the
+    // brief in the hero ("Build Your First AI Project"); with it, 3 of 3 did.
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    const system = create.mock.calls[0][0].messages[0].content;
+    expect(system).toMatch(/THE HEADLINE CARRIES A CONCRETE DETAIL FROM THE BRIEF/);
+    expect(system).toMatch(/would fit any\s+course on any subject is a failed headline/);
+    // The pair is the part that works; an abstract instruction alone did not.
+    expect(system).toMatch(/Weak, because it fits anything/);
+    expect(system).toMatch(/Strong, because only this brief could produce it/);
+  });
+
+  it('forbids the brand name in the title, because the page already shows it', async () => {
+    // Measured: 3 of 3 v1 runs began the title "Colaberry Training: ...", spending the only
+    // line a search result and a link preview show.
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(create.mock.calls[0][0].messages[0].content).toMatch(/DO NOT PUT THE BRAND NAME IN THE TITLE/);
+  });
+
+  it('is recorded as a new prompt version, so the telemetry can tell the two apart', async () => {
+    // Changing a prompt without changing its version makes every before/after comparison in the
+    // instrumentation a blend of the two.
+    const { getInstrumentedOpenAI } = require('../../openaiInstrumented');
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(getInstrumentedOpenAI).toBeDefined();
+    const svc = require('fs').readFileSync(
+      require('path').resolve(__dirname, '..', 'landingPageDraftService.ts'), 'utf8',
+    );
+    expect(svc).toContain("prompt_version: 'landing-page-draft-v2'");
+    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v1'");
+  });
+
   it('lists every section type the schema allows, and no others', async () => {
     create.mockResolvedValueOnce(reply(GOOD_PAGE));
     await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
