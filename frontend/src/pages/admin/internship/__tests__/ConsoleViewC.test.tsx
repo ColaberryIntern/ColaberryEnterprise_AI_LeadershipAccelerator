@@ -30,9 +30,13 @@ jest.mock('../../../../services/adminInternConsoleApi', () => ({
   ONE_WAY_ACTIONS: ['complete', 'withdraw', 'remove'],
 }));
 
-const days = (counts: number[]) => counts.map((events, i) => ({
+/** Days default to TRAINING, which is what most real activity is. */
+const days = (counts: number[], track = 'training') => counts.map((events, i) => ({
   date: `2026-09-${String(4 + i).padStart(2, '0')}`,
   events,
+  by_category: {
+    training: 0, project: 0, certification: 0, community: 0, other: 0, [track]: events,
+  },
 }));
 
 /** 28 days, all quiet unless given. 2026-09-07 is a Monday, so labels land predictably. */
@@ -157,7 +161,9 @@ describe('the heatmap', () => {
     expect(first.getAttribute('aria-label')).not.toContain('1 events');
   });
 
-  it('gives a busier day a higher heat step', async () => {
+  it('colours a cell by the track and shades it by volume', async () => {
+    // Colour says WHAT they did, opacity says how much. A day with nothing has no track at all and
+    // must keep the empty-cell grey rather than take a track colour at zero intensity.
     await render({
       interns: [intern({ activity: { ...intern().activity, days: days([0, 1, 3, 5, 9, ...Array.from({ length: 23 }, () => 0)]) } })],
       counts: counts(),
@@ -165,11 +171,55 @@ describe('the heatmap', () => {
     });
 
     const cells = Array.from(container.querySelectorAll('.aint-heat .aint-hc'));
-    expect(cells[0].className).toContain('hs-0');
-    expect(cells[1].className).toContain('hs-1');
-    expect(cells[2].className).toContain('hs-2');
-    expect(cells[3].className).toContain('hs-3');
-    expect(cells[4].className).toContain('hs-4');
+    expect(cells[0].className).toContain('hs-0');       // nothing that day: no track
+    expect(cells[0].className).not.toContain('tr-');
+    expect(cells[1].className).toContain('tr-training s1');
+    expect(cells[2].className).toContain('tr-training s2');
+    expect(cells[3].className).toContain('tr-training s3');
+    expect(cells[4].className).toContain('tr-training s4');
+  });
+
+  it('colours the day by whichever track the intern actually spent it on', async () => {
+    await render({
+      interns: [intern({
+        activity: {
+          ...intern().activity,
+          days: [
+            { date: '2026-09-28', events: 3, by_category: { training: 0, project: 3, certification: 0, community: 0, other: 0 } },
+            { date: '2026-09-29', events: 2, by_category: { training: 0, project: 0, certification: 2, community: 0, other: 0 } },
+            { date: '2026-09-30', events: 5, by_category: { training: 0, project: 0, certification: 0, community: 5, other: 0 } },
+            ...days(Array.from({ length: 25 }, () => 0)),
+          ],
+        },
+      })],
+      counts: counts(),
+      stages: [],
+    });
+
+    const cells = Array.from(container.querySelectorAll('.aint-heat .aint-hc'));
+    expect(cells[0].className).toContain('tr-project');
+    expect(cells[1].className).toContain('tr-certification');
+    expect(cells[2].className).toContain('tr-community');
+  });
+
+  it('names the tracks in the cell label, so colour is not the only carrier', async () => {
+    await render({
+      interns: [intern({
+        activity: {
+          ...intern().activity,
+          days: [
+            { date: '2026-09-28', events: 4, by_category: { training: 3, project: 1, certification: 0, community: 0, other: 0 } },
+            ...days(Array.from({ length: 27 }, () => 0)),
+          ],
+        },
+      })],
+      counts: counts(),
+      stages: [],
+    });
+
+    const first = container.querySelector('.aint-heat .aint-hc')!;
+    expect(first.getAttribute('aria-label')).toContain('Training 3');
+    expect(first.getAttribute('aria-label')).toContain('Project work 1');
   });
 
   it('marks no attendance on any heat cell', async () => {

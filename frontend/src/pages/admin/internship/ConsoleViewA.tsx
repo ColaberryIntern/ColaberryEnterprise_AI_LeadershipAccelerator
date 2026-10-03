@@ -1,8 +1,37 @@
 import React from 'react';
 import { InternRow } from '../../../services/adminInternConsoleApi';
 import {
-  ago, certLabel, paceLabel, stripCells, gateCleared, LEVEL_LABEL,
+  ago, certLabel, paceLabel, stripCells, gateCleared, LEVEL_LABEL, trackStrip, hasTrackActivity,
+  TRACK_LABEL,
 } from './consoleFormat';
+import { ActivityCategory } from '../../../services/adminInternConsoleApi';
+
+/**
+ * Seven days of one track, under the cell it belongs to.
+ *
+ * **Only drawn when there is something to draw.** Ali's rule for the project strip — "don't show the
+ * squares if they don't have a project" — generalises: an empty seven-square strip reads as "they
+ * did nothing", when the truth is usually "there is nothing here to do yet".
+ */
+const TrackStrip: React.FC<{ row: InternRow; track: ActivityCategory }> = ({ row, track }) => {
+  const days = trackStrip(row, track);
+  if (days.length === 0) return null;
+  return (
+    <div
+      className={`aint-tstrip tr-${track}`}
+      role="img"
+      aria-label={`${TRACK_LABEL[track]}, last 7 days: ${days.map((d) => `${d.date} ${d.events}`).join(', ')}`}
+    >
+      {days.map((d) => (
+        <span
+          key={`${track}-${d.date}`}
+          className={d.events > 0 ? 'on' : ''}
+          title={`${d.date}: ${d.events} ${d.events === 1 ? 'event' : 'events'}`}
+        />
+      ))}
+    </div>
+  );
+};
 
 /**
  * View A — the Command Center.
@@ -112,7 +141,10 @@ const InternTableRow: React.FC<{ row: InternRow; onOpen: (applicationId: string)
           : <span className="aint-sub">{pace.text}</span>}
       </td>
 
-      <td className={cert.muted ? 'aint-sub' : 'aint-strong'}>{cert.text}</td>
+      <td>
+        <div className={cert.muted ? 'aint-sub' : 'aint-strong'}>{cert.text}</div>
+        {hasTrackActivity(row, 'certification') && <TrackStrip row={row} track="certification" />}
+      </td>
 
       <td>
         {row.project
@@ -120,6 +152,10 @@ const InternTableRow: React.FC<{ row: InternRow; onOpen: (applicationId: string)
             <>
               <div className="aint-strong aint-nowrap">{row.project.name ?? 'Untitled project'}</div>
               <div className="aint-sub">{row.project.stage} · {row.project.tasks_pct}% of {row.project.tasks_total} tasks</div>
+              {/* Ali: "Don't show the squares if they don't have a project." Days here are days a
+                  build task was verified from a commit — the same evidence the project gate runs on,
+                  since the repo-activity poller has never had a usable token. */}
+              <TrackStrip row={row} track="project" />
             </>
           )
           : <span className="aint-sub">No project</span>}

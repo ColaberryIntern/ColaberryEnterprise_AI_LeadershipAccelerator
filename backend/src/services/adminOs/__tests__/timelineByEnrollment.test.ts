@@ -68,15 +68,16 @@ describe('scoping one branch to a single lateral enrollment', () => {
 });
 
 describe('every real branch survives the rewrite', () => {
-  it('builds the query for learning + community without throwing, unioning all ten', async () => {
-    // The guard is only worth having if the live branch array passes it. Nine UNION ALLs join ten
-    // branches — the count is asserted so that a branch silently dropped from the array (or newly
-    // excluded by the domain filter) fails here rather than quietly shrinking what counts as
-    // activity.
+  it('builds the query for learning + community without throwing, unioning all fourteen', async () => {
+    // The guard is only worth having if the live branch array passes it. Thirteen UNION ALLs join
+    // fourteen branches — the count is asserted so that a branch silently dropped from the array (or
+    // newly excluded by the domain filter) fails here rather than quietly shrinking what counts as
+    // activity. It went from ten to fourteen on 2026-10-02 when cert sittings, verified build tasks,
+    // comments and reactions were added; updating this number is the point of having it.
     await activityDaysByEnrollment({ enrollmentIds: ENRS, domains: ['learning', 'community'] });
 
     const sql = String(mockQuery.mock.calls[0][0]);
-    expect(sql.match(/UNION ALL/g)).toHaveLength(9);
+    expect(sql.match(/UNION ALL/g)).toHaveLength(13);
     expect(sql).not.toContain('IN (:enrollmentIds)');
   });
 
@@ -84,8 +85,27 @@ describe('every real branch survives the rewrite', () => {
     await activityDaysByEnrollment({ enrollmentIds: ENRS, domains: ['learning', 'community'] });
 
     const sql = String(mockQuery.mock.calls[0][0]);
-    // Ten branches, ten scopings. A branch with no `= enr.id` would be returning everyone.
-    expect(sql.match(/\.enrollment_id = enr\.id/g)).toHaveLength(10);
+    // Fourteen branches, fourteen scopings. A branch with no `= enr.id` would be returning everyone
+    // — which is exactly what the four new sources had to be checked for.
+    expect(sql.match(/\.enrollment_id = enr\.id/g)).toHaveLength(14);
+  });
+
+  it('includes the four sources the console colours by', async () => {
+    // A count alone would stay green if one of these were swapped for another branch.
+    await activityDaysByEnrollment({ enrollmentIds: ENRS, domains: ['learning', 'community'] });
+
+    const sql = String(mockQuery.mock.calls[0][0]);
+    for (const source of ['cert_sessions', 'student_tasks', 'community_comments', 'community_likes']) {
+      expect(sql).toContain(`'${source}' AS source`);
+    }
+  });
+
+  it('scopes the verified-task branch through the PROJECT, which is where the enrollment lives', async () => {
+    await activityDaysByEnrollment({ enrollmentIds: ENRS, domains: ['learning'] });
+
+    const sql = String(mockQuery.mock.calls[0][0]);
+    expect(sql).toContain('JOIN projects p ON p.id = st.project_id');
+    expect(sql).toContain('p.enrollment_id = enr.id');
   });
 
   it('takes only enrollment-keyed branches — a lead-keyed one has no enrollment to scope', async () => {
@@ -163,6 +183,14 @@ describe('the rows it returns', () => {
 
     expect(out.filter((r) => r.enrollmentId === ENRS[0])).toHaveLength(2);
     expect(out.filter((r) => r.enrollmentId === ENRS[1])).toHaveLength(1);
+  });
+
+  it('groups by SOURCE as well as day, so a day can be coloured by category', async () => {
+    // Collapsing to one row per day throws the category away before anyone can use it.
+    await activityDaysByEnrollment({ enrollmentIds: ENRS, domains: ['learning'] });
+
+    const sql = String(mockQuery.mock.calls[0][0]);
+    expect(sql).toContain("GROUP BY enr.id, date_trunc('day', t.occurred_at), t.source");
   });
 
   it('is not time-bounded — a long silence must still carry its real last date', async () => {

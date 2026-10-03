@@ -314,3 +314,27 @@
 .aint-confirm-btns { display: flex; gap: var(--space-xs); }
 .aint-nudge select{border:1px solid var(--color-border);border-radius:var(--r-6, 6px);padding:6px 10px;font-size:var(--font-size-md);background:var(--color-bg);color:var(--color-text);max-width:420px}
 .aint-nudge select:focus-visible{outline:3px solid var(--color-primary-light);outline-offset:2px}
+
+/* The four tracks. Colour says WHAT they did; opacity says how much. Intensity as opacity over one
+ * hue keeps a busy training day and a busy project day equally legible, which a per-track five-step
+ * ramp could not do without twenty hand-picked colours. */
+.tr-training { background: var(--track-training); }
+.tr-project { background: var(--track-project); }
+.tr-certification { background: var(--track-certification); }
+.tr-community { background: var(--track-community); }
+.tr-other { background: var(--track-other); }
+
+.aint-hc.s0 { opacity: 0.18; }
+.aint-hc.s1 { opacity: 0.40; }
+.aint-hc.s2 { opacity: 0.60; }
+.aint-hc.s3 { opacity: 0.80; }
+.aint-hc.s4 { opacity: 1; }
+
+/* The seven-day strips under the project and certification cells. */
+.aint-tstrip { display: flex; gap: 2px; margin-top: 4px; background: none; }
+.aint-tstrip > span {
+  width: 10px; height: 10px; border-radius: 2px;
+  background: var(--color-bg-alt); border: 1px solid var(--color-border);
+}
+.aint-tstrip.tr-project > span.on { background: var(--track-project); border-color: var(--track-project); }
+.aint-tstrip.tr-certification > span.on { background: var(--track-certification); border-color: var(--track-certification); }

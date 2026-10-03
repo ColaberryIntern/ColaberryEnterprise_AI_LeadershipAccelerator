@@ -20,9 +20,19 @@ import api from '../utils/api';
 export type ActivityLevel = 'green' | 'yellow' | 'orange' | 'red' | 'black' | 'unknown';
 export type PaceBand = 'gold' | 'green' | 'yellow' | 'red';
 
+/** The four tracks, plus `other` for a source the server does not recognise. */
+export type ActivityCategory = 'training' | 'project' | 'certification' | 'community' | 'other';
+
+// TRACK_ORDER and TRACK_LABEL deliberately live in `consoleFormat`, not here. A component that
+// imports a runtime CONSTANT from this module gets `undefined` in any test that mocks the client —
+// which is every component test — and throws on first render. Types are safe because they erase;
+// values are not. This cost two debugging rounds before it was moved.
+
 export interface ActivityDay {
   date: string;
   events: number;
+  /** The same total split by track. Always all five keys, computed server-side. */
+  by_category: Record<ActivityCategory, number>;
 }
 
 export interface ActivitySignal {
