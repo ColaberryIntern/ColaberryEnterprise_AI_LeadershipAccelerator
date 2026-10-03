@@ -550,7 +550,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             const gaps = derivePotentialDisqualifiers(established, ws.evaluation, svcMatches ?? []);
             return (
               <SectionCard title="Gaps / potential disqualifiers" icon="error-warning-line" collapsible defaultOpen={false}
-                subtitle="Requirements that could keep us from winning — to verify or resolve before bidding.">
+                subtitle="Eligibility & qualification gates that could disqualify a bid — a focused risk view, not a copy of the full checklist above. Verify or resolve before bidding.">
                 <div className="alert alert-warning py-2 small" role="status">
                   <i className="ri-alert-line me-1" aria-hidden="true" />Advisory only — not a verified pass/fail. Deeper eligibility verification (SAM/registration/set-asides/clearances) is a later step.
                 </div>
