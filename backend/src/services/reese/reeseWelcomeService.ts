@@ -268,9 +268,14 @@ async function sendOnce(
     // Ledger. Fail-open (emitReeseLedgerEvent's own contract) and never
     // awaited-to-block: this must never be the thing that makes a login slow
     // or fail, matching this file's own design decision 5.
+    // Approval-correlation fix (2026-10-02) — thread the same eventId/
+    // decisionId the authorization check above already generated, instead
+    // of a fresh, disconnected traceId.
     const reeseAdminUserId = await getReeseAdminUserId();
     emitReeseLedgerEvent({
       ticketId: null,
+      eventId,
+      authorizationDecisionId: authResult.decisionId,
       traceId: crypto.randomUUID(),
       actorType: 'ai_staff',
       actorId: reeseAdminUserId || 'Reese',

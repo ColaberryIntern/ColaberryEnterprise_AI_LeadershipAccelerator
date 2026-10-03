@@ -40,6 +40,11 @@ export interface LandingPageDraft {
   model: string;
   /** The first generation failed validation and the repair attempt succeeded. */
   repaired: boolean;
+  /**
+   * Sections dropped because they would not validate. Non-empty means the page is usable but
+   * INCOMPLETE - say so rather than letting it look finished.
+   */
+  droppedSections?: string[];
 }
 
 export interface CreateLandingPageInput {

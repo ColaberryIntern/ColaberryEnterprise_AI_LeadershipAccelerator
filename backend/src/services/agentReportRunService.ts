@@ -5,6 +5,12 @@ import AgentReportRun, { AgentReportRunStatus } from '../models/AgentReportRun';
 import OrgMember from '../models/OrgMember';
 import { getAgentDetail } from './reese/agentDetailService';
 import { sendRawEmail } from './emailService';
+import { env } from '../config/env';
+import {
+  resolveAgentIdentity, getOpenTicketBreakdownByType, getTicketFollowUpCounts,
+  getTopAuthorizationReasons, getTokensAndModel, getErrorCount, resolveRecipientDisplayName,
+} from './agentReportStatsService';
+import { renderReportHtml, renderReportText, ReportData } from './agentReportTemplateService';
 
 // AI Workforce Management, Checkpoint D — the report-generation/delivery
 // worker that AgentReportSubscription's own PR explicitly deferred.
@@ -69,75 +75,156 @@ export function computePeriodKey(cadence: AgentReportCadence, now: Date, timezon
 
 interface RenderedReport {
   subject: string;
+  agentName: string;
   html: string;
   text: string;
   snapshot: Record<string, unknown>;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export interface RenderReportOptions {
+  /** Real, committed subscription's id — threaded through so "since last
+   * report" can diff against the prior real AgentReportRun. Omitted by
+   * handleReportPreview() (previewing a subscription that may not even be
+   * saved yet, per this function's own real callers) — the delta is then
+   * honestly omitted, never fabricated as "+0". */
+  subscriptionId?: string;
+  cadence?: AgentReportCadence;
+  timezone?: string;
+  recipientEmail?: string;
 }
+
+const DEFAULT_CADENCE: AgentReportCadence = 'daily';
+const DEFAULT_TIMEZONE = 'America/Chicago';
+const STATS_WINDOW_DAYS = 30;
 
 /**
  * Builds the real report content for exactly the requested sections, from
- * a single getAgentDetail() call. `null` when the agent no longer exists
- * (the subscription outlived its agent) — the caller records this as a
- * failed run, never a silently-skipped one.
+ * a single getAgentDetail() call plus a handful of report-specific queries
+ * (agentReportStatsService.ts) for stats getAgentDetail() doesn't already
+ * compute. `null` when the agent no longer exists (the subscription
+ * outlived its agent) — the caller records this as a failed run, never a
+ * silently-skipped one. Delegates all HTML/text rendering to
+ * agentReportTemplateService.ts (pure, no I/O, independently testable).
  */
-export async function renderReportContent(agentId: string, contentScope: AgentReportContentSection[]): Promise<RenderedReport | null> {
+export async function renderReportContent(
+  agentId: string, contentScope: AgentReportContentSection[], options: RenderReportOptions = {},
+): Promise<RenderedReport | null> {
   const detail = await getAgentDetail(agentId);
   if (!detail) return null;
 
-  const snapshot: Record<string, unknown> = {};
-  const htmlParts: string[] = [];
-  const textParts: string[] = [];
-
-  if (contentScope.includes('cost')) {
-    const cost = detail.cost_summary;
-    snapshot.cost = cost;
-    const line = cost ? `$${cost.cost_usd.toFixed(4)} over ${cost.runs} run(s), last 30 days` : 'No tracked cost in the last 30 days';
-    htmlParts.push(`<h3>Cost</h3><p>${escapeHtml(line)}</p>`);
-    textParts.push(`Cost: ${line}`);
-  }
-
-  if (contentScope.includes('activity')) {
-    const tc = detail.trust_contract;
-    snapshot.activity = {
-      runCount: tc.run_count,
-      errorCount: tc.error_count,
-      lastRunAt: tc.last_run_at,
-      avgDurationMs: tc.avg_duration_ms,
-      lastActivityAt: tc.last_activity_at,
-    };
-    const line = `${tc.run_count} run(s), ${tc.error_count} error(s). Last run: ${tc.last_run_at ? tc.last_run_at.toISOString() : 'never (event-driven agent)'}.`;
-    htmlParts.push(`<h3>Activity</h3><p>${escapeHtml(line)}</p>`);
-    textParts.push(`Activity: ${line}`);
-  }
-
-  if (contentScope.includes('trust')) {
-    const auth = detail.authorization_summary;
-    snapshot.trust = auth;
-    const line = `${auth.allow}/${auth.total} allowed, ${auth.approval}/${auth.total} required approval, ${auth.block}/${auth.total} would block (${auth.enforced_count} under real enforce mode), last ${auth.window_days} days.`;
-    htmlParts.push(`<h3>Trust</h3><p>${escapeHtml(line)}</p>`);
-    textParts.push(`Trust: ${line}`);
-  }
-
-  if (contentScope.includes('tickets')) {
-    const breakdown = detail.ticket_breakdown;
-    snapshot.tickets = { openTicketCount: detail.open_ticket_count, breakdown };
-    const line = `${detail.open_ticket_count} open ticket(s). ${breakdown.map((b) => `${b.type}: ${b.count}`).join(', ') || 'no ticket history'}.`;
-    htmlParts.push(`<h3>Tickets</h3><p>${escapeHtml(line)}</p>`);
-    textParts.push(`Tickets: ${line}`);
-  }
-
+  const identity = await resolveAgentIdentity(agentId);
   const agentName = detail.agent.agent_name;
-  const subject = `Agent report: ${agentName}`;
-  const html = `<h2>${escapeHtml(agentName)}</h2>${htmlParts.join('')}`;
-  const text = `${agentName}\n\n${textParts.join('\n')}`;
-  snapshot.agentName = agentName;
-  snapshot.generatedAt = new Date().toISOString();
+  const now = new Date();
 
-  return { subject, html, text, snapshot };
+  let openTicketBreakdown: Awaited<ReturnType<typeof getOpenTicketBreakdownByType>> = [];
+  let followUpCounts = { needsReply: 0, pastDue: 0 };
+  if (contentScope.includes('tickets') && identity?.adminUser) {
+    [openTicketBreakdown, followUpCounts] = await Promise.all([
+      getOpenTicketBreakdownByType(identity.adminUser.id, identity.agent),
+      getTicketFollowUpCounts(identity.adminUser.id, identity.agent),
+    ]);
+  }
+
+  let topReasons: Awaited<ReturnType<typeof getTopAuthorizationReasons>> = [];
+  if (contentScope.includes('trust')) {
+    topReasons = await getTopAuthorizationReasons(detail.agent.id, agentName, detail.authorization_summary.window_days);
+  }
+
+  let tokensAndModel: Awaited<ReturnType<typeof getTokensAndModel>> | null = null;
+  if (contentScope.includes('cost')) {
+    tokensAndModel = await getTokensAndModel(detail.agent.id, agentName, STATS_WINDOW_DAYS);
+  }
+
+  let errorCount30d: number | null = null;
+  if (contentScope.includes('activity')) {
+    errorCount30d = await getErrorCount(detail.agent.id, agentName, STATS_WINDOW_DAYS);
+  }
+
+  // "Since last report" — only when this is a real, committed subscription
+  // (never fabricated for a preview of one that doesn't exist yet).
+  let openTicketDelta: number | null = null;
+  if (options.subscriptionId) {
+    const priorRun = await AgentReportRun.findOne({
+      where: { subscription_id: options.subscriptionId, delivery_status: 'sent' },
+      order: [['generated_at', 'DESC']],
+    });
+    const priorOpenCount = (priorRun?.content_snapshot as any)?.tickets?.openTicketCount;
+    if (typeof priorOpenCount === 'number') openTicketDelta = detail.open_ticket_count - priorOpenCount;
+  }
+
+  const recipient = options.recipientEmail
+    ? { displayName: await resolveRecipientDisplayName(options.recipientEmail), email: options.recipientEmail }
+    : null;
+
+  const scheduledOn = detail.related_tasks.filter((t) => t.enabled).length;
+  const scheduledOff = detail.related_tasks.filter((t) => !t.enabled).length;
+
+  const reportData: ReportData = {
+    agentId,
+    agentName,
+    cadenceLabel: (options.cadence ?? DEFAULT_CADENCE).toUpperCase() as 'DAILY' | 'WEEKLY',
+    generatedAt: now,
+    timezone: options.timezone ?? DEFAULT_TIMEZONE,
+    triggerTypeLabel: detail.trust_contract.trigger_type ?? 'unknown',
+    abacMode: detail.agent.abac_effective_mode,
+    sections: contentScope,
+
+    openTicketCount: detail.open_ticket_count,
+    openTicketDelta,
+    completedTicketCount30d: detail.completed_ticket_count_30d,
+    allTimeTicketBreakdown: detail.ticket_breakdown,
+    openTicketBreakdown,
+    needsReplyCount: followUpCounts.needsReply,
+    pastDueCount: followUpCounts.pastDue,
+    verifiedResolutionCount: detail.verified_resolution_count,
+    ownedTicketCountAllTime: detail.owned_ticket_count_all_time,
+    oldestOpenTicketAgeDays: detail.oldest_open_ticket_age_days,
+    lastTicketActivityAt: detail.trust_contract.last_activity_at,
+
+    authSummary: contentScope.includes('trust') ? {
+      windowDays: detail.authorization_summary.window_days,
+      total: detail.authorization_summary.total,
+      allow: detail.authorization_summary.allow,
+      approval: detail.authorization_summary.approval,
+      block: detail.authorization_summary.block,
+      enforcedCount: detail.authorization_summary.enforced_count,
+    } : null,
+    topReasons,
+
+    // Honest null, same as before this redesign: cost_summary is null when
+    // nothing has been tracked yet, never fabricated as a real-looking $0.
+    costUsd: contentScope.includes('cost') ? (detail.cost_summary?.cost_usd ?? null) : null,
+    costRuns: contentScope.includes('cost') ? (detail.cost_summary?.runs ?? null) : null,
+    totalTokens: tokensAndModel?.totalTokens ?? null,
+    topModel: tokensAndModel?.topModel ?? null,
+    errorCount30d,
+
+    scheduledTasksOn: scheduledOn,
+    scheduledTasksOff: scheduledOff,
+
+    recipient,
+    agentPageUrl: `${env.frontendUrl}/admin/agents/${agentId}`,
+  };
+
+  const html = renderReportHtml(reportData);
+  const text = renderReportText(reportData);
+  const subject = `Agent report: ${agentName}`;
+  const snapshot: Record<string, unknown> = {
+    agentName,
+    generatedAt: now.toISOString(),
+    tickets: { openTicketCount: detail.open_ticket_count, breakdown: detail.ticket_breakdown },
+    trust: contentScope.includes('trust') ? detail.authorization_summary : undefined,
+    cost: contentScope.includes('cost') ? detail.cost_summary : undefined,
+    activity: contentScope.includes('activity') ? {
+      runCount: detail.trust_contract.run_count,
+      errorCount: detail.trust_contract.error_count,
+      lastRunAt: detail.trust_contract.last_run_at,
+      avgDurationMs: detail.trust_contract.avg_duration_ms,
+      lastActivityAt: detail.trust_contract.last_activity_at,
+    } : undefined,
+  };
+
+  return { subject, agentName, html, text, snapshot };
 }
 
 async function resolveRecipientEmail(subscription: AgentReportSubscription): Promise<string> {
@@ -186,19 +273,29 @@ export async function dispatchDueReportRuns(now: Date = new Date()): Promise<Dis
     }
 
     try {
-      const rendered = await renderReportContent(subscription.agent_id, subscription.content_scope);
+      const recipientEmail = await resolveRecipientEmail(subscription);
+      const rendered = await renderReportContent(subscription.agent_id, subscription.content_scope, {
+        subscriptionId: subscription.id,
+        cadence: subscription.cadence,
+        timezone: subscription.timezone,
+        recipientEmail,
+      });
       if (!rendered) {
         await run.update({ delivery_status: 'failed', error_message: 'Agent no longer exists' });
         result.failed++;
         continue;
       }
 
-      const recipientEmail = await resolveRecipientEmail(subscription);
+      // Report redesign (2026-10-02) — real, found-while-redesigning bug fix:
+      // this send never passed fromName, so every agent's report arrived
+      // "From: Cory - AI Operations" regardless of which agent it was about
+      // (sendRawEmail()'s own documented default). Now attributed honestly.
       const sendResult = await sendRawEmail({
         to: [recipientEmail],
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
+        fromName: `${rendered.agentName} - Agent Reports`,
         tag: 'agent_report_subscription',
       });
 

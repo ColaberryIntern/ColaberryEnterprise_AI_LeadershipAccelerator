@@ -222,15 +222,22 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
     // sends exactly as today, the same deliberate "a ticket-layer problem
     // never blocks the reply" posture this file already has (see the
     // existing "ProofDesk linkage boundary" test).
+    // Approval-correlation fix (2026-10-02) — lifted out of the authorization
+    // call below so the SAME id can also be threaded into the ledger write
+    // for Dara's own reply further down.
+    const replyEventId = crypto.randomUUID();
+    let replyAuthorizationDecisionId: string | null | undefined;
+
     if (ticketId) {
       const authResult = await authorizeTicketDispatch({
-        eventId: crypto.randomUUID(),
+        eventId: replyEventId,
         ticketId,
         agentName: DARA_AGENT_NAME,
         action: 'dara_dm_reply',
         riskTier: DARA_RISK_TIER,
         preparedAction: { roomId, content: reply },
       });
+      replyAuthorizationDecisionId = authResult.decisionId;
 
       // allowed is the real, mode-aware signal (unconditionally true in
       // shadow mode). A held reply returns here, before the real send — an
@@ -268,7 +275,12 @@ export async function maybeTriggerDaraReply(roomId: string, senderEnrollmentId: 
     if (ticketId) {
       const daraAdminUserId = await getDaraAdminUserId();
       if (daraAdminUserId) {
-        await logDaraExchangeActivity(ticketId, 'ai_staff', daraAdminUserId, replyMessage.id, reply);
+        // Approval-correlation fix (2026-10-02) — thread the same
+        // eventId/decisionId the authorization check above generated.
+        await logDaraExchangeActivity(
+          ticketId, 'ai_staff', daraAdminUserId, replyMessage.id, reply,
+          replyEventId, replyAuthorizationDecisionId,
+        );
       }
     }
   } catch (e: any) {

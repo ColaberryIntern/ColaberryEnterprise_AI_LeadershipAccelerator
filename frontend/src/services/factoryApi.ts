@@ -190,6 +190,19 @@ export async function listGovOpportunities(): Promise<GovOpportunityFeed> {
   return data;
 }
 
+/** One discovery opportunity's display details (the Details-popup data) for the decoupled Qualify workspace, so it
+ *  can show why-it-surfaced + the project overview + the Source link without going back. 404 (aged out of the feed,
+ *  or feed degraded dark) → { opportunity: null } so the caller renders an honest empty state instead of throwing. */
+export async function getGovOpportunityDetail(uuid: string): Promise<{ opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null; snapshotReason?: SnapshotReason | null }> {
+  try {
+    const { data } = await api.get(`/api/admin/factory/opportunities/${encodeURIComponent(uuid)}`);
+    return data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { opportunity: null, source: 'snapshot', snapshotDate: null };
+    throw err;
+  }
+}
+
 /** A persisted team dismissal row (one per tenant+opportunity). restoredAt null => active (hidden). */
 export interface GovOpportunityDismissal {
   opportunity_key: string;
@@ -383,6 +396,8 @@ export interface GovQualificationWorkspace {
   canApprove: boolean;
   /** Decoupled (discovery-ZIP) workspace only: the clicked discovery row's title/agency (display). Null on the canonical path. */
   provenance?: { title: string | null; agency: string | null } | null;
+  /** Decoupled workspace only: the attested solicitation ZIP (evidence of record), or null if not yet attested. */
+  zipAttestation?: { sha256: string | null; filename: string | null; reviewedBy: string | null; reviewedAt: string | null } | null;
 }
 
 /** A reviewer-established, cited applicable requirement (same shape the server coverage/blocking gate evaluates). */
@@ -451,6 +466,20 @@ export async function reviewGovQualificationDocuments(canonicalOpportunityId: st
   form.append('coveredDocIds', JSON.stringify(args.coveredDocIds));
   if (args.file) form.append('document', args.file);
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/review-documents'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+
+/** DECOUPLED (gws) workspace: attest ('add') or revoke the uploaded solicitation ZIP as the evidence of record. The
+ *  server computes the sha256 (bytes never stored). This is what lets pursuit approval clear on the ZIP path. */
+export async function attestSolicitationZip(canonicalOpportunityId: string, args: {
+  biddingEntity: string; expectedVersion: number; mode: 'add' | 'revoke'; file?: File | null;
+}): Promise<{ qualification: QualificationRecord }> {
+  const form = new FormData();
+  form.append('biddingEntity', args.biddingEntity);
+  form.append('expectedVersion', String(args.expectedVersion));
+  form.append('mode', args.mode);
+  if (args.file) form.append('document', args.file);
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/attest-zip'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
   return data;
 }
 

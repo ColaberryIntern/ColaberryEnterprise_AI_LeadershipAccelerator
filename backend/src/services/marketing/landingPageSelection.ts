@@ -19,7 +19,7 @@ import { WorkflowError } from '../content/contentWorkflowService';
  *     means the post goes out pointing at a 404.
  *
  * THE URL IS DERIVED, NEVER STORED TWICE. `content_items.landing_page_id` is the fact;
- * `/p/:brandSlug/:slug` is computed from it. Storing the URL alongside the id would be two
+ * `/lp/:brandSlug/:slug` is computed from it. Storing the URL alongside the id would be two
  * sources of truth that disagree the moment a slug is edited.
  *
  * ABSOLUTE, BECAUSE A TRACKED LINK NEEDS IT. `generateItemLinks` re-validates its destination
@@ -42,7 +42,7 @@ export interface SelectablePage {
 
 /** The public path of a hosted page. Relative - see `absoluteLandingPageUrl` for the tracked form. */
 export function landingPagePath(brandSlug: string, pageSlug: string): string {
-  return `/p/${brandSlug}/${pageSlug}`;
+  return `/lp/${brandSlug}/${pageSlug}`;
 }
 
 /**

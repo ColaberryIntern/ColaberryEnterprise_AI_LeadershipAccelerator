@@ -53,6 +53,7 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureZoomRequestLedgerSchema } from './db/ensureZoomRequestLedgerSchema';
 import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema';
+import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
@@ -126,6 +127,7 @@ import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotific
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureAgentWorkLifecycleFieldsSchema } from './db/ensureAgentWorkLifecycleFieldsSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
+import { ensureApprovalRequestsEventIdFix } from './db/ensureApprovalRequestsEventIdFix';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
@@ -2479,6 +2481,10 @@ async function start(): Promise<void> {
   // Zoom meeting idempotency ledger. Must exist before any booking provisions a
   // meeting, so it is ensured on boot like the rest, not behind a feature flag.
   await ensureZoomRequestLedgerSchema();
+  // The register of Zoom hosts meetings may be created as. Must exist BEFORE the
+  // slot schema, whose per-host exclusion constraint is what turns extra hosts
+  // into extra capacity.
+  await ensureZoomHostSchema();
   // Practice-slot reservations + the overlap exclusion constraint.
   await ensurePresentationSlotSchema();
   // Project Presentation Studio: 5 tables + 4 additive columns on `projects`
@@ -2546,6 +2552,10 @@ async function start(): Promise<void> {
   // Nothing that reads this table gates a real action yet — see
   // agentActionAuthorizationBridge.ts's header.
   await ensureApprovalRequestsSchema();
+  // Approval-correlation fix (2026-10-02): drops approval_requests.event_id's FK,
+  // which was unsatisfiable by construction (see ensureApprovalRequestsEventIdFix.ts's
+  // own header) and was causing every approval_requests write to silently fail.
+  await ensureApprovalRequestsEventIdFix();
   // Business accounts: organizations.status / status_changed_at / status_changed_by /
   // lead_id, plus the org_cohorts join table (idempotent DDL, additive only).
   // Before this, `organizations` had no lifecycle column, so an account could not be

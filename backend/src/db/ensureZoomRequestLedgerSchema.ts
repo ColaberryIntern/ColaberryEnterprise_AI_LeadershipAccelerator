@@ -39,6 +39,7 @@ export const ZOOM_REQUEST_LEDGER_STATEMENTS: string[] = [
      meeting_id VARCHAR(60),
      join_url TEXT,
      topic TEXT,
+     host_email VARCHAR(190) NOT NULL DEFAULT '',
      attempts INTEGER NOT NULL DEFAULT 1,
      last_error TEXT,
      reconciled_at TIMESTAMPTZ,
@@ -50,6 +51,12 @@ export const ZOOM_REQUEST_LEDGER_STATEMENTS: string[] = [
   `ALTER TABLE zoom_meeting_requests ADD COLUMN IF NOT EXISTS meeting_id VARCHAR(60)`,
   `ALTER TABLE zoom_meeting_requests ADD COLUMN IF NOT EXISTS join_url TEXT`,
   `ALTER TABLE zoom_meeting_requests ADD COLUMN IF NOT EXISTS topic TEXT`,
+  // WHICH HOST THE MEETING WAS CREATED AS. Reconciling a lost response means
+  // listing that host's meetings and looking for the request marker. List the
+  // WRONG host and Zoom truthfully answers "no such meeting" about a meeting that
+  // exists — and that answer is precisely what licenses a duplicate. Empty means
+  // the default `ZOOM_HOST_EMAIL`, which is every row written before multi-host.
+  `ALTER TABLE zoom_meeting_requests ADD COLUMN IF NOT EXISTS host_email VARCHAR(190) NOT NULL DEFAULT ''`,
   `ALTER TABLE zoom_meeting_requests ADD COLUMN IF NOT EXISTS attempts INTEGER DEFAULT 1`,
   `ALTER TABLE zoom_meeting_requests ADD COLUMN IF NOT EXISTS last_error TEXT`,
   `ALTER TABLE zoom_meeting_requests ADD COLUMN IF NOT EXISTS reconciled_at TIMESTAMPTZ`,

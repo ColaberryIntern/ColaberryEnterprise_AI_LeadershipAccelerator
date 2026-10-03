@@ -3,6 +3,8 @@ import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { WorkflowError } from '../content/contentWorkflowService';
 import { findInventedSpecifics } from '../content/composerDraftService';
 import {
+  landingPageContentSchema,
+  landingPageSectionSchema,
   parseLandingPageContent,
   type LandingPageContentShape,
 } from '../../schemas/landingPageContentSchema';
@@ -59,6 +61,13 @@ export interface LandingPageDraftResult {
   model: string;
   /** True when the first attempt failed validation and the repair attempt succeeded. */
   repaired: boolean;
+  /**
+   * Sections dropped because they would not validate, after both attempts failed. Empty on the
+   * normal path. Non-empty means the page came back usable but incomplete, and the operator is
+   * told which parts are missing rather than being handed a working page that quietly lost a
+   * third of the brief.
+   */
+  droppedSections: string[];
 }
 
 /** `[like this]` — the visible hole the prompt asks for instead of an invented fact. */
@@ -192,16 +201,26 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
     }
   };
 
-  /** Parse the model's JSON. A syntax error is treated exactly like a schema failure. */
-  const attempt = (raw: string): { ok: true; content: LandingPageContentShape } | { ok: false; problems: string[] } => {
-    if (raw === '') return { ok: false, problems: ['the model returned nothing'] };
+  /**
+   * Parse the model's JSON. A syntax error is treated exactly like a schema failure.
+   *
+   * The parsed object is kept even when validation fails, so a document that is mostly right can
+   * be salvaged section by section rather than thrown away whole.
+   */
+  type Attempt =
+    | { ok: true; content: LandingPageContentShape; json: unknown }
+    | { ok: false; problems: string[]; json: unknown };
+
+  const attempt = (raw: string): Attempt => {
+    if (raw === '') return { ok: false, problems: ['the model returned nothing'], json: null };
     let json: unknown;
     try {
       json = JSON.parse(raw);
     } catch {
-      return { ok: false, problems: ['the response was not valid JSON'] };
+      return { ok: false, problems: ['the response was not valid JSON'], json: null };
     }
-    return parseLandingPageContent(json);
+    const parsed = parseLandingPageContent(json);
+    return parsed.ok ? { ok: true, content: parsed.content, json } : { ok: false, problems: parsed.problems, json };
   };
 
   const first = attempt(await ask());
@@ -227,12 +246,30 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
     repaired = result.ok;
   }
 
+  /**
+   * Salvage: keep the sections that ARE valid rather than throwing the page away.
+   *
+   * Both attempts failing used to be a dead end - a 502 and nothing to show for it, which is what
+   * the first real brief in production hit. Usually only one section is wrong (a `stats` item with
+   * no `source`, a `quote` with no attribution), and discarding the other seven helps nobody. So
+   * each section is validated on its own, the good ones are kept, and the dropped ones are NAMED
+   * in the result so the operator sees an incomplete page described as incomplete rather than a
+   * complete-looking page that quietly lost part of the brief.
+   *
+   * Nothing is repaired or invented here - a section either validates untouched or it is dropped.
+   */
+  let droppedSections: string[] = [];
   if (!result.ok) {
-    throw new WorkflowError(
-      `The generated page did not match the page format, twice. ${result.problems.slice(0, 3).join('; ')}`,
-      502,
-      'DraftUnavailable',
-    );
+    const salvaged = salvageSections(result.json);
+    if (salvaged === null) {
+      throw new WorkflowError(
+        `The generated page did not match the page format, twice, and no part of it could be used. ${result.problems.slice(0, 3).join('; ')}`,
+        502,
+        'DraftUnavailable',
+      );
+    }
+    result = { ok: true, content: salvaged.content, json: result.json };
+    droppedSections = salvaged.dropped;
   }
 
   const content = stripEmDashes(result.content);
@@ -245,5 +282,47 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
     unverifiedClaims: findInventedSpecifics(text, `${source} ${brand.name}`),
     model: MODEL,
     repaired,
+    droppedSections,
   };
+}
+
+/**
+ * Keep whichever sections validate on their own.
+ *
+ * Returns null when nothing usable survives - a page with no sections cannot be stored (the
+ * schema requires at least one) and would fail at publish time anyway, so that is still an error.
+ */
+function salvageSections(json: unknown): { content: LandingPageContentShape; dropped: string[] } | null {
+  if (!json || typeof json !== 'object') return null;
+  const raw = json as { title?: unknown; description?: unknown; socialImage?: unknown; sections?: unknown };
+  if (!Array.isArray(raw.sections)) return null;
+
+  const kept: unknown[] = [];
+  const dropped: string[] = [];
+  raw.sections.forEach((section, i) => {
+    const parsed = landingPageSectionSchema.safeParse(section);
+    if (parsed.success) {
+      kept.push(section);
+      return;
+    }
+    const type = (section && typeof section === 'object' && 'type' in section)
+      ? String((section as { type: unknown }).type)
+      : 'unknown';
+    // Named by type and position, with the first reason - enough for an operator to decide
+    // whether to re-run with a clearer brief or write the section by hand.
+    dropped.push(`${type} (section ${i + 1}): ${parsed.error.issues[0]?.message ?? 'did not validate'}`);
+  });
+
+  if (kept.length === 0) return null;
+
+  // Re-validate the whole document: the title, description and social image have to survive too,
+  // and dropping those is better than returning something the public route would refuse.
+  for (const candidate of [
+    { title: raw.title, description: raw.description, socialImage: raw.socialImage, sections: kept },
+    { sections: kept },
+  ]) {
+    const parsed = landingPageContentSchema.safeParse(candidate);
+    if (parsed.success) return { content: parsed.data, dropped };
+  }
+  return null;
 }

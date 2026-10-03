@@ -93,7 +93,7 @@ beforeEach(() => {
   brandsById[BRAND] = { id: BRAND, slug: 'colaberry-training', name: 'Colaberry Training', tenant_id: 't-1', default_theme_key: 'training' };
   rows.push(makeRow({
     id: PAGE, tenant_id: 't-1', brand_id: BRAND, kind: 'hosted', status: 'draft',
-    name: 'Six-week build', slug: 'six-week-build', path: '/p/colaberry-training/six-week-build',
+    name: 'Six-week build', slug: 'six-week-build', path: '/lp/colaberry-training/six-week-build',
     site_slug: 'training', content: GOOD_CONTENT, published_at: null, repo_path: null,
     repo_commit: null, updated_at: new Date(),
   }));
@@ -234,7 +234,7 @@ describe('publishing', () => {
     const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
 
     expect(res.status).toBe(200);
-    expect(res.body.url).toBe('/p/colaberry-training/six-week-build');
+    expect(res.body.url).toBe('/lp/colaberry-training/six-week-build');
     expect(rows[0].status).toBe('published');
     expect(rows[0].published_at).toBeInstanceOf(Date);
   });
@@ -259,7 +259,7 @@ describe('publishing', () => {
     rows[0].slug = null;
     const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({ slug: 'november-cohort' });
     expect(res.status).toBe(200);
-    expect(res.body.url).toBe('/p/colaberry-training/november-cohort');
+    expect(res.body.url).toBe('/lp/colaberry-training/november-cohort');
   });
 
   it('explains a slug clash instead of letting the unique index 500', async () => {
@@ -267,7 +267,7 @@ describe('publishing', () => {
     const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
     expect(res.status).toBe(409);
     expect(res.body.error_class).toBe('SlugTaken');
-    expect(res.body.error).toContain('/p/colaberry-training/six-week-build');
+    expect(res.body.error).toContain('/lp/colaberry-training/six-week-build');
   });
 
   it('409s an external_path row', async () => {
@@ -300,7 +300,7 @@ describe('hand-editing', () => {
 
   it('keeps the legacy path column in step with a new slug', async () => {
     await request(app).patch(`/api/admin/landing-pages/${PAGE}`).send({ slug: 'new-slug' });
-    expect(rows[0].path).toBe('/p/colaberry-training/new-slug');
+    expect(rows[0].path).toBe('/lp/colaberry-training/new-slug');
   });
 });
 
@@ -331,5 +331,54 @@ describe('the picker list', () => {
 
   it('rejects an unknown filter rather than ignoring it', async () => {
     expect((await request(app).get('/api/admin/landing-pages?published=true')).status).toBe(400);
+  });
+});
+
+/**
+ * A failed build has to be readable back off the server.
+ *
+ * The first real "Build the page" in production answered 502, the operator saw a toast, and there
+ * was no server-side record of why - because an expected `WorkflowError` returned without logging
+ * anything. "The user can see it" is not the same as being able to read it back an hour later.
+ */
+describe('failures are logged, not only returned', () => {
+  let warn: jest.SpyInstance;
+  beforeEach(() => { warn = jest.spyOn(console, 'warn').mockImplementation(() => {}); });
+  afterEach(() => { warn.mockRestore(); });
+
+  function logged(): any | null {
+    const call = warn.mock.calls.find((c) => String(c[0]).includes('landing_page_create_failed'));
+    return call ? JSON.parse(String(call[0])) : null;
+  }
+
+  it('logs the reason when the generator refuses, and still returns it to the caller', async () => {
+    const err: any = new Error('The generated page did not match the page format, twice. sections.1.items.0.source: Required');
+    err.status = 502; err.errorClass = 'DraftUnavailable'; err.name = 'WorkflowError';
+    Object.setPrototypeOf(err, (require('../../../services/content/contentWorkflowService').WorkflowError).prototype);
+    draftLandingPage.mockRejectedValue(err);
+
+    const res = await request(app).post('/api/admin/landing-pages')
+      .send({ brand_id: BRAND, source: BRIEF, name: 'X' });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/did not match the page format/);
+
+    const entry = logged();
+    expect(entry).not.toBeNull();
+    expect(entry.error_class).toBe('DraftUnavailable');
+    expect(entry.context.status).toBe(502);
+    // The part that was missing: the actual reason, on the server.
+    expect(entry.context.message).toMatch(/sections\.1\.items\.0\.source/);
+  });
+
+  it('passes the dropped sections through so the UI can say the page is incomplete', async () => {
+    draftLandingPage.mockResolvedValue({
+      content: GOOD_CONTENT, placeholders: [], unverifiedClaims: [], model: 'm', repaired: true,
+      droppedSections: ['stats (section 2): Required'],
+    });
+    const res = await request(app).post('/api/admin/landing-pages')
+      .send({ brand_id: BRAND, source: BRIEF, name: 'X' });
+
+    expect(res.body.droppedSections).toEqual(['stats (section 2): Required']);
   });
 });

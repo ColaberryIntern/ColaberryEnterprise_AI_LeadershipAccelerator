@@ -227,7 +227,13 @@ async function sendNewOutreach(
     await emitReeseLedgerEvent({
       ticketId: ticket.id,
       workUnitId,
-      traceId: eventId,
+      // Approval-correlation fix (2026-10-02) — `eventId` (not `traceId`, a
+      // separate field) is the real correlation id the authorization check
+      // above already generated; `traceId` keeps its own fresh id, the
+      // distributed-tracing field this was previously, mistakenly reusing.
+      eventId,
+      authorizationDecisionId: authResult.decisionId,
+      traceId: crypto.randomUUID(),
       actorType: 'ai_staff',
       actorId: reeseAdminUserId,
       intent: 'reese.autonomous_outreach',

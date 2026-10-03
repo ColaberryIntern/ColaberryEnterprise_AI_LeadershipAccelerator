@@ -60,7 +60,7 @@ const BRAND = { id: 'b-1', slug: 'colaberry-training', name: 'Colaberry Training
 function page(over: Record<string, unknown> = {}) {
   return {
     id: 'lp-1', name: 'Six-week build', kind: 'hosted', status: 'draft',
-    slug: 'six-week-build', path: '/p/colaberry-training/six-week-build',
+    slug: 'six-week-build', path: '/lp/colaberry-training/six-week-build',
     brand_id: 'b-1', site_slug: 'training', published_at: null,
     repo_path: null, repo_commit: null, updated_at: '2026-10-02T12:00:00.000Z',
     ...over,
@@ -166,7 +166,7 @@ describe('building from a brief', () => {
     await act(async () => {
       type(name, 'November Cohort');
     });
-    expect(text()).toContain('/p/colaberry-training/november-cohort');
+    expect(text()).toContain('/lp/colaberry-training/november-cohort');
   });
 
   it('surfaces placeholders and unsupported claims as two separate problems', async () => {
@@ -198,13 +198,13 @@ describe('building from a brief', () => {
 
 describe('publishing', () => {
   it('publishes with the slug in the form', async () => {
-    mockPublishLandingPage.mockResolvedValue({ page: page({ status: 'published' }), url: '/p/colaberry-training/six-week-build' });
+    mockPublishLandingPage.mockResolvedValue({ page: page({ status: 'published' }), url: '/lp/colaberry-training/six-week-build' });
     await render();
     await act(async () => { q('lp-select-lp-1')!.click(); });
     await act(async () => { (q('lp-publish') as HTMLButtonElement).click(); });
 
     expect(mockPublishLandingPage).toHaveBeenCalledWith('lp-1', 'six-week-build');
-    expect(text()).toMatch(/Live at \/p\/colaberry-training\/six-week-build/);
+    expect(text()).toMatch(/Live at \/lp\/colaberry-training\/six-week-build/);
   });
 
   it('is blocked with a reason when there is no slug anywhere', async () => {

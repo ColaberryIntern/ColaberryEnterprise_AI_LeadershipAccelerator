@@ -24,7 +24,7 @@ const OTHER = 'b-ent';
 function page(over: Partial<LandingPageOption> = {}): LandingPageOption {
   return {
     id: 'lp-1', name: 'Six-week build', slug: 'six-week-build', kind: 'hosted',
-    status: 'published', brand_id: BRAND, path: '/p/colaberry-training/six-week-build', ...over,
+    status: 'published', brand_id: BRAND, path: '/lp/colaberry-training/six-week-build', ...over,
   };
 }
 

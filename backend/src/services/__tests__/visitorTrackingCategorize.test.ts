@@ -105,24 +105,39 @@ describe('categorizePagePath - the pre-existing map is untouched', () => {
  */
 describe('categorizePagePath - hosted landing pages', () => {
   it('categorises a landing page under its brand', () => {
-    expect(categorizePagePath('/p/colaberry-training/six-week-build')).toBe('landing_page');
+    expect(categorizePagePath('/lp/colaberry-training/six-week-build')).toBe('landing_page');
   });
 
   it('survives the normalisation, including the UTM query a real click carries', () => {
-    expect(categorizePagePath('/p/colaberry-training/six-week-build/')).toBe('landing_page');
-    expect(categorizePagePath('/p/colaberry-training/six-week-build?utm_source=li')).toBe('landing_page');
+    expect(categorizePagePath('/lp/colaberry-training/six-week-build/')).toBe('landing_page');
+    expect(categorizePagePath('/lp/colaberry-training/six-week-build?utm_source=li')).toBe('landing_page');
   });
 
   it.each([
     '/portfolio',
     '/pricing',
     '/program',
+    '/lpanel',
   ])('%s is not a landing page - the trailing slash in the prefix is load-bearing', (path) => {
-    // A bare startsWith('/p') would swallow every route beginning with the letter p.
+    // A bare startsWith('/lp') would swallow every route beginning with those letters.
     expect(categorizePagePath(path)).not.toBe('landing_page');
   });
 
-  it('does not claim a bare /p', () => {
-    expect(categorizePagePath('/p')).not.toBe('landing_page');
+  /**
+   * THE COLLISION THIS GUARDS. The rule shipped as `/p/` and `/p/` is the public career
+   * portfolio route - so every portfolio view was being counted as a landing page view. It
+   * wrote no bad rows (zero `landing_page` events in production on 2026-10-02) only because no
+   * portfolio view happened to be tracked first.
+   */
+  it.each([
+    '/p/jane-doe',
+    '/p/jane-doe/',
+    '/p/jane-doe?ref=li',
+  ])('%s is a CAREER PORTFOLIO, not a landing page', (path) => {
+    expect(categorizePagePath(path)).not.toBe('landing_page');
+  });
+
+  it('does not claim a bare /lp', () => {
+    expect(categorizePagePath('/lp')).not.toBe('landing_page');
   });
 });

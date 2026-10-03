@@ -185,8 +185,13 @@ async function escalate(row: ReeseOutreach): Promise<{ escalated: boolean }> {
   await row.update({ status: 'escalated', next_follow_up_due_at: null } as any);
 
   // Phase 2 (2026-09-18) — escalation never wrote to the real Work Ledger.
+  // Approval-correlation fix (2026-10-02) — thread the same eventId/decisionId
+  // the authorization check above already generated, instead of a fresh,
+  // disconnected traceId.
   await emitReeseLedgerEvent({
     ticketId: row.ticket_id,
+    eventId,
+    authorizationDecisionId: authResult.decisionId,
     traceId: crypto.randomUUID(),
     actorType: 'ai_staff',
     actorId,
@@ -252,9 +257,14 @@ async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, 
   } as any);
 
   // Phase 2 (2026-09-18) — follow-up sends never wrote to the real Work Ledger.
+  // Approval-correlation fix (2026-10-02) — thread the same eventId/decisionId
+  // the authorization check above already generated, instead of a fresh,
+  // disconnected traceId.
   const reeseAdminUserId = await getReeseAdminUserId();
   await emitReeseLedgerEvent({
     ticketId: row.ticket_id,
+    eventId,
+    authorizationDecisionId: authResult.decisionId,
     traceId: crypto.randomUUID(),
     actorType: 'ai_staff',
     actorId: reeseAdminUserId || 'Reese',

@@ -4,10 +4,15 @@ import { PageHeader, SectionCard, StatCard, StatusBadge, EmptyState } from '../.
 import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
-  extractGovQualificationRequirements,
+  extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
-  type ServiceMatch, type ExtractedRequirementCandidate,
+  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity,
 } from '../../services/factoryApi';
+import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
+import { derivePotentialDisqualifiers } from './govGaps';
+
+/** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
+type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
 
 /** Per-candidate reviewer choices while confirming extracted requirements into established ones. */
 interface CandidateRow { checked: boolean; applicability: string; dueStage: string; }
@@ -40,6 +45,7 @@ const BLOCK_REASON: Record<string, string> = {
 };
 const COVERAGE_REASON: Record<string, string> = {
   no_requirements_established: 'No applicable requirements have been established yet (an empty list is not "no requirements")',
+  no_zip_attested: 'The solicitation ZIP has not been attested yet — attest it below before a pursuit can be approved',
   no_authoritative_source: 'The authoritative solicitation was not established/reviewed',
   authoritative_package_unreviewed: 'An amendment or the base solicitation has not been reviewed',
   document_coverage_unknown: 'Document coverage is unknown or inaccessible',
@@ -176,6 +182,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
+  // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
+  const [oppDetail, setOppDetail] = useState<OppDetail | null>(null);
+  const [attestFile, setAttestFile] = useState<File | null>(null); // the solicitation ZIP to attest as evidence (decoupled path)
 
   const load = useCallback(async () => {
     if (!canonical) return;
@@ -212,6 +221,18 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       .finally(() => { if (active) setSvcMatchLoading(false); });
     return () => { active = false; };
   }, [ws, fromParam]);
+
+  // Decoupled (ZIP) workspace: fetch the clicked discovery row's details by its uuid (the gws key), so the page
+  // shows the Details-popup info + the Source link without going back. Best-effort; a 404 degrades to an honest note.
+  useEffect(() => {
+    if (!canonical.startsWith('gws:')) { setOppDetail(null); return; }
+    const uuid = canonical.slice(4);
+    let active = true;
+    getGovOpportunityDetail(uuid)
+      .then((r) => { if (active) setOppDetail(r); })
+      .catch(() => { if (active) setOppDetail({ opportunity: null, source: 'snapshot', snapshotDate: null }); });
+    return () => { active = false; };
+  }, [canonical]);
 
   // Every write runs one at a time (in-flight guard → no duplicate qualification/decision from repeated clicks),
   // reloads the server truth, and maps its error to a recoverable state.
@@ -307,7 +328,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {isDecoupled && (
             <div className="alert alert-info d-flex align-items-start gap-2" role="status">
               <i className="ri-folder-zip-line mt-1" aria-hidden="true" />
-              <span>ZIP workspace{fromParam ? <> for <strong>{fromParam}</strong>{agencyParam ? ` (${agencyParam})` : ''}</> : ''}. Upload the solicitation ZIP below to pull in the requirements and work the proposal. Pursuit approval and evidence attestation come in a later step (pending sign-off).</span>
+              <span>ZIP workspace{fromParam ? <> for <strong>{fromParam}</strong>{agencyParam ? ` (${agencyParam})` : ''}</> : ''}. Upload the solicitation ZIP to pull in the requirements, establish the real ones, attest the ZIP as evidence, then you can approve the bid pursuit.</span>
             </div>
           )}
 
@@ -343,13 +364,48 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {ws.source && (
-            <SectionCard title="Source facts" icon="government-line" subtitle="Server-fetched by canonical id — not editable here.">
+            <SectionCard title="Source facts" icon="government-line" collapsible defaultOpen={false} subtitle="Server-fetched by canonical id — not editable here.">
               <dl className="row mb-0">
                 <dt className="col-sm-3">Buyer</dt><dd className="col-sm-9">{ws.source.publisher.leadBuyer.name} <span className="text-secondary">({ws.source.publisher.leadBuyer.jurisdiction})</span></dd>
                 <dt className="col-sm-3">Notice</dt><dd className="col-sm-9">{ws.source.notice.noticeType.value} · {ws.source.notice.procurementType.value}</dd>
                 <dt className="col-sm-3">Deadline</dt><dd className="col-sm-9">{ws.source.deadline.originalText ?? 'unstated'} <StatusBadge label={`confidence: ${ws.source.deadline.utcConfidence}`} tone={ws.source.deadline.utcConfidence === 'high' ? 'success' : 'warning'} /></dd>
                 <dt className="col-sm-3">Documents</dt><dd className="col-sm-9">{ws.source.documents.coverage} · {ws.source.documents.counts.parsed}/{ws.source.documents.counts.listed} parsed{ws.source.documents.counts.inaccessible > 0 ? `, ${ws.source.documents.counts.inaccessible} inaccessible` : ''}</dd>
               </dl>
+            </SectionCard>
+          )}
+
+          {isDecoupled && (
+            <SectionCard title="Discovery details" icon="information-line" collapsible defaultOpen={false}
+              subtitle="Why this opportunity surfaced + the source posting. Legacy scores are advisory (not a verified fit); the overview is preliminary and unverified.">
+              {oppDetail === null ? (
+                <div className="text-secondary small">Loading discovery details…</div>
+              ) : oppDetail.opportunity ? (
+                <>
+                  <div className="row g-3 mb-2">
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Priority (legacy)</div><span className={`badge ${subtle(band(oppDetail.opportunity.priorityScore).tone)}`}>{oppDetail.opportunity.priorityScore ?? '—'} {band(oppDetail.opportunity.priorityScore).label}</span></div>
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Fit (legacy)</div><span className={`badge ${subtle(band(oppDetail.opportunity.fitScore).tone)}`}>{oppDetail.opportunity.fitScore ?? '—'} {band(oppDetail.opportunity.fitScore).label}</span></div>
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Est. value</div><div className="fw-semibold">{fmtValue(oppDetail.opportunity.estimatedValue)} <span className="small text-secondary">unverified</span></div></div>
+                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Closes</div><div>{closeLabel(oppDetail.opportunity.closeDate)}{daysLeft(oppDetail.opportunity.closeDate) !== null ? ` · ${daysLeft(oppDetail.opportunity.closeDate)} days` : ''} <span className="small text-secondary">(verify tz on portal)</span></div></div>
+                  </div>
+                  {oppDetail.opportunity.sourceUrl && (
+                    <a className="btn btn-outline-secondary btn-sm mb-2" href={oppDetail.opportunity.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      <i className="ri-external-link-line me-1" aria-hidden="true" />Open source posting (download the ZIP here)
+                    </a>
+                  )}
+                  {oppDetail.opportunity.preliminarySummary ? (
+                    <>
+                      <div className="alert alert-warning py-2 small mb-2" role="status"><i className="ri-draft-line me-1" aria-hidden="true" />Preliminary, unverified — not confirmed requirements. Qualify from the uploaded ZIP below.</div>
+                      <p className="small mb-0">{oppDetail.opportunity.preliminarySummary}</p>
+                    </>
+                  ) : (
+                    <p className="small text-secondary mb-0">No preliminary overview available.</p>
+                  )}
+                </>
+              ) : (
+                <div className="text-secondary small">
+                  <i className="ri-information-line me-1" aria-hidden="true" />This opportunity is no longer in the live discovery feed. Open the source posting from Gov Opportunities, or just work from the uploaded ZIP below.
+                </div>
+              )}
             </SectionCard>
           )}
 
@@ -416,6 +472,29 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
+          {isDecoupled && record && (
+            <SectionCard title="Attest the solicitation ZIP (evidence of record)" icon="file-shield-2-line"
+              subtitle="Record the uploaded solicitation ZIP as the evidence of record (the server stores only a hash, never the bytes). Required, with established requirements, before a bid pursuit can be approved.">
+              {ws.zipAttestation && ws.zipAttestation.sha256 ? (
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                  <span className="badge bg-success-subtle text-success-emphasis"><i className="ri-checkbox-circle-line me-1" aria-hidden="true" />Attested</span>
+                  <span className="small text-secondary">{ws.zipAttestation.filename ?? 'solicitation.zip'} · {ws.zipAttestation.sha256.slice(0, 12)}…</span>
+                  <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
+                    onClick={() => run(() => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'revoke' }), 'ZIP attestation revoked.')}>Revoke</button>
+                </div>
+              ) : (
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                  <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
+                    onChange={(e) => setAttestFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                  <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !attestFile}
+                    onClick={() => run(() => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'add', file: attestFile }), 'Solicitation ZIP attested as evidence.')}>
+                    <i className="ri-upload-2-line me-1" aria-hidden="true" />Attest ZIP
+                  </button>
+                </div>
+              )}
+            </SectionCard>
+          )}
+
           {ws.evaluation && (ws.source || isDecoupled) && (
             <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
               {ws.evaluation.evals.length === 0 && <div className="text-secondary small">No requirements established yet. Opportunity Pulse supplies none — establish the applicable, cited requirements below before a pursuit can be approved.</div>}
@@ -432,7 +511,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {(ws.source || isDecoupled) && (
-            <SectionCard title="What they want vs what we offer" icon="scales-3-line"
+            <SectionCard title="What they want vs what we offer" icon="scales-3-line" collapsible defaultOpen={false}
               subtitle="Advisory suggestion from Our Services — a starting point to confirm, not a verified fit. Feeds no gate.">
               <div className="row g-3">
                 <div className="col-md-6">
@@ -466,6 +545,35 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
+          {/* ── Gaps / potential disqualifiers (advisory; surfaces, never decides) ─ */}
+          {isDecoupled && (() => {
+            const gaps = derivePotentialDisqualifiers(established, ws.evaluation, svcMatches ?? []);
+            return (
+              <SectionCard title="Gaps / potential disqualifiers" icon="error-warning-line" collapsible defaultOpen={false}
+                subtitle="Requirements that could keep us from winning — to verify or resolve before bidding.">
+                <div className="alert alert-warning py-2 small" role="status">
+                  <i className="ri-alert-line me-1" aria-hidden="true" />Advisory only — not a verified pass/fail. Deeper eligibility verification (SAM/registration/set-asides/clearances) is a later step.
+                </div>
+                {gaps.empty === 'no_requirements' ? (
+                  <p className="text-secondary small mb-0">No requirements established yet — establish the cited requirements above to surface potential disqualifiers. An empty list is not evidence of "no requirements".</p>
+                ) : gaps.empty === 'none_flagged' ? (
+                  <p className="text-secondary small mb-0">No potential disqualifiers detected from the established requirements. This is advisory; verify eligibility before bidding.</p>
+                ) : (
+                  <ul className="list-unstyled mb-0">{gaps.items.map((g) => (
+                    <li key={g.kind + g.id} className="py-2 border-bottom">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className={`badge ${g.kind === 'blocking' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}`}>{g.kind === 'blocking' ? 'blocking' : 'verify / resolve'}</span>
+                        <span className="fw-semibold small">{g.id}</span>
+                      </div>
+                      <div className="small">{g.text}</div>
+                      <div className="small text-secondary">{g.reason} · {g.basis}</div>
+                    </li>
+                  ))}</ul>
+                )}
+              </SectionCard>
+            );
+          })()}
+
           {/* ── Manual document review (the Bonfire ZIP is downloaded by hand) ─── */}
           {ws.source && record && (() => {
             const items = (ws.source.documents.items ?? []).filter((it) => AUTHORITATIVE_ROLES.includes(it.role));
@@ -476,7 +584,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             const toCover = notDownloaded.map((it) => it.docId);
             if (items.length === 0) return null;
             return (
-              <SectionCard title="Manual document review" icon="folder-download-line"
+              <SectionCard title="Manual document review" icon="folder-download-line" collapsible defaultOpen={false}
                 subtitle="Bonfire gates the ZIP behind a portal login — download it by hand, then upload it here to attest the authoritative package was reviewed. The server records a hash of the file; it never stores the bytes.">
                 <ul className="list-unstyled mb-3">
                   {items.map((it) => {
@@ -575,14 +683,14 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.')}>
                     <i className="ri-shield-check-line me-1" aria-hidden="true" />Approve bid pursuit
                   </button>
-                  {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? 'Pursuit approval and evidence attestation come in a later step (pending sign-off).' : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
+                  {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.') : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
                 </div>
               </>
             )}
           </SectionCard>
 
           {/* ── SEPARATE build authorization ────────────────────────────────── */}
-          <SectionCard title="Authorize a build (separate)" icon="tools-line" subtitle="A pursuit approval is NOT a build authorization. Recording this does not run any build; the autonomous builder stays parked.">
+          <SectionCard title="Authorize a build (separate)" icon="tools-line" collapsible defaultOpen={false} subtitle="A pursuit approval is NOT a build authorization. Recording this does not run any build; the autonomous builder stays parked.">
             <div className="d-flex flex-wrap gap-2 align-items-end">
               <input className="form-control form-control-sm" style={{ maxWidth: 260 }} placeholder="delivery project id (uuid)" value={build.deliveryProjectId} onChange={(e) => setBuild({ ...build, deliveryProjectId: e.target.value })} />
               <input className="form-control form-control-sm" style={{ maxWidth: 180 }} placeholder="scope" value={build.scope} onChange={(e) => setBuild({ ...build, scope: e.target.value })} />
