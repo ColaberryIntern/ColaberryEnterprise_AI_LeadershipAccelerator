@@ -65,6 +65,7 @@ export const EFFORT_CODES = [
   'EFFORT_NEGATIVE',
   'APPROVAL_EFFORT_MISSING',
   'EFFORT_DUPLICATE_TASK',
+  'IMPOSSIBLE_SHARE',
   'BELOW_TARGET_UNEXPLAINED',
 ] as const;
 export type EffortCode = (typeof EFFORT_CODES)[number];
@@ -139,7 +140,13 @@ function exclusionReason(a: EffortAssessment): EffortIssue | null {
   if (a.occurrencesPerMonth === null) {
     return { code: 'EFFORT_UNASSESSED', subject: a.taskId, message: `task ${a.taskId} has no declared occurrences per month. FactoryTask.frequency is free text ("per case") and carries no number, so a monthly total cannot be computed without a declaration — and guessing one is how an invented multiplier becomes a headline figure.` };
   }
-  if (a.minutesPerOccurrence < 0 || a.occurrencesPerMonth < 0) {
+  // approvalMinutesPerOccurrence is in this guard because it was LEFT OUT of it, and the
+  // omission was the one field whose entire reason for existing is to stop the hybrid class
+  // flattering itself. A negative approval value produced a 300% AI share, a negative human
+  // share, ZERO issues and belowTarget: false - which reads as "target met".
+  if (a.minutesPerOccurrence < 0
+    || a.occurrencesPerMonth < 0
+    || (a.approvalMinutesPerOccurrence ?? 0) < 0) {
     return { code: 'EFFORT_NEGATIVE', subject: a.taskId, message: `task ${a.taskId} has a negative quantity. Negative effort is not a saving; it is a data error, and averaging it away would shift every share above.` };
   }
   if (a.executionClass === 'ai_with_approval'
@@ -193,11 +200,35 @@ export function measureAutomation(
 
   const total = aiMinutes + humanMinutes + deterministicMinutes;
   const aiShare = share(aiMinutes, total);
+  const deterministicShare = share(deterministicMinutes, total);
+  const humanShare = share(humanMinutes, total);
+
+  // A SELF-CHECK, because the input guards above are exactly what failed once.
+  //
+  // Any share outside 0..1 is arithmetically impossible for non-negative minutes, so if one
+  // appears the bug is in this module rather than in the data - and an impossible number
+  // that renders as a confident percentage is worse than a refusal. This closes the CLASS
+  // of defect the approval-minutes gap was one instance of, rather than only that instance.
+  for (const [name, sh] of [
+    ['aiShare', aiShare],
+    ['deterministicShare', deterministicShare],
+    ['humanShare', humanShare],
+  ] as Array<[string, Share]>) {
+    if (sh.fraction !== null && (sh.fraction < 0 || sh.fraction > 1)) {
+      issues.push({
+        code: 'IMPOSSIBLE_SHARE',
+        subject: name,
+        message: `${name} computed to ${sh.fraction}, which is outside 0..1 and therefore `
+          + 'impossible for non-negative minutes. This is a defect in the measure, not a '
+          + 'property of the project: treat the figure as unusable rather than reporting it.',
+      });
+    }
+  }
 
   return {
     aiShare,
-    deterministicShare: share(deterministicMinutes, total),
-    humanShare: share(humanMinutes, total),
+    deterministicShare,
+    humanShare,
     coverage: { assessedTasks, totalTasks: assessments.length },
     belowTarget: aiShare.fraction === null ? null : aiShare.fraction < AI_SHARE_TARGET,
     issues,
@@ -219,11 +250,14 @@ export function checkTargetDisclosure(
   if (acceptance && acceptance.rationale.trim() !== '' && acceptance.acceptedBy.trim() !== '') {
     return [];
   }
+  // WITH its scale. An earlier version emitted a bare "50%" here - in the one module whose
+  // argument is that a percentage without a denominator is the dangerous kind.
   const pct = Math.round((measure.aiShare.fraction as number) * 100);
+  const scale = renderShare(measure.aiShare, measure.coverage);
   return [{
     code: 'BELOW_TARGET_UNEXPLAINED',
     subject: `${pct}%`,
-    message: `the AI share is ${pct}% against a ${Math.round(AI_SHARE_TARGET * 100)}% target, with no `
+    message: `the AI share is ${scale}, against a ${Math.round(AI_SHARE_TARGET * 100)}% target, with no `
       + 'rationale and no recorded owner acceptance. Below target is a disclosure requirement, not a '
       + 'failure — but an undisclosed shortfall is how a target quietly becomes a threshold nobody '
       + 'admits missing.',

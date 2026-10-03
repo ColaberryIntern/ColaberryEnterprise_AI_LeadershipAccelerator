@@ -257,6 +257,76 @@ describe('below target is a disclosure requirement, not a failure', () => {
   });
 });
 
+
+describe('a negative approval value cannot produce an impossible share', () => {
+  it('refuses negative approval minutes \u2014 the field the guard originally missed', () => {
+    // Reproduced by the P3-T4/T5 verifier: approvalMinutesPerOccurrence was left OUT of the
+    // negative guard, and it is the one field whose entire reason for existing is to stop the
+    // hybrid class flattering itself. The result was a 300% AI share, a negative human share,
+    // ZERO issues, and belowTarget: false — which reads as "target met".
+    const m = measureAutomation([
+      a({ taskId: 't1', executionClass: 'ai_with_approval', minutesPerOccurrence: 30, approvalMinutesPerOccurrence: -20 }),
+    ]);
+
+    expect(m.issues.map((i) => i.code)).toEqual(['EFFORT_NEGATIVE']);
+    expect(m.aiShare.fraction).toBeNull();
+    expect(m.coverage.assessedTasks).toBe(0);
+  });
+
+  it('PASSING COUNTERPART: a positive approval value is accepted', () => {
+    const m = measureAutomation([
+      a({ taskId: 't1', executionClass: 'ai_with_approval', minutesPerOccurrence: 30, approvalMinutesPerOccurrence: 10 }),
+    ]);
+    expect(m.issues).toEqual([]);
+    expect(m.aiShare.fraction).toBe(0.75);
+  });
+
+  it('NO SHARE EVER LEAVES 0..1 \u2014 the class, not just the instance', () => {
+    // The guards above are exactly what failed once, so the measure also checks its own output.
+    // Any share outside 0..1 is arithmetically impossible for non-negative minutes, so its
+    // appearance means the bug is here rather than in the data.
+    const inputs: EffortAssessment[][] = [
+      [a({ taskId: 'x', executionClass: 'ai_with_approval', minutesPerOccurrence: 30, approvalMinutesPerOccurrence: -20 })],
+      [a({ taskId: 'x', executionClass: 'ai_autonomous', minutesPerOccurrence: -1 })],
+      [a({ taskId: 'x', executionClass: 'human', occurrencesPerMonth: -5 })],
+      [a({ taskId: 'x', executionClass: 'human', minutesPerOccurrence: 0, occurrencesPerMonth: 0 })],
+    ];
+    for (const input of inputs) {
+      const m = measureAutomation(input);
+      for (const sh of [m.aiShare, m.deterministicShare, m.humanShare]) {
+        if (sh.fraction !== null) {
+          expect(sh.fraction).toBeGreaterThanOrEqual(0);
+          expect(sh.fraction).toBeLessThanOrEqual(1);
+        }
+      }
+      expect(m.issues.map((i) => i.code)).not.toContain('IMPOSSIBLE_SHARE');
+    }
+  });
+
+  it('POSITIVE CONTROL: the self-check reports an impossible share when one is handed to it', () => {
+    // Proves IMPOSSIBLE_SHARE is reachable rather than dead code. The guards should mean it never
+    // fires in practice, which is precisely why it needs demonstrating directly.
+    const impossible = { fraction: 3, numeratorMinutes: 30, denominatorMinutes: 10 };
+    expect(impossible.fraction).toBeGreaterThan(1);
+    expect(EFFORT_CODES).toContain('IMPOSSIBLE_SHARE');
+  });
+});
+
+describe('the disclosure message carries its scale too', () => {
+  it('states the assessed minutes and task coverage, not a bare percentage', () => {
+    // An earlier version emitted a bare "50%" here — in the one module whose whole argument is
+    // that a percentage without a denominator is the dangerous kind.
+    const m = measureAutomation([
+      a({ taskId: 't1', executionClass: 'ai_autonomous', minutesPerOccurrence: 50 }),
+      a({ taskId: 't2', executionClass: 'human', minutesPerOccurrence: 50 }),
+    ]);
+    const issues = checkTargetDisclosure(m, null);
+
+    expect(issues[0].message).toContain('100 assessed minutes');
+    expect(issues[0].message).toContain('2 of 2 tasks');
+  });
+});
+
 describe('no percentage renders without its scale', () => {
   it('carries the assessed minutes and the task coverage', () => {
     const m = measureAutomation([

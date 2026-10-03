@@ -49,6 +49,7 @@ export const SCOPING_CODES = [
   'AGENT_OWNS_NOTHING',
   'AGENT_PER_STORY',
   'AGENT_NAMESPACE_COLLISION',
+  'CAPABILITY_LABEL_UNDECLARED',
 ] as const;
 export type ScopingCode = (typeof SCOPING_CODES)[number];
 
@@ -169,6 +170,31 @@ export function validateAgentScoping(
     ...checkOwnership(stories, agents),
     ...checkConsolidation(stories, agents),
   ];
+
+  // THE CONSOLIDATION ESCAPE HAD NO PRICE, AND NOW IT HAS ONE.
+  //
+  // checkConsolidation stands down when every agent claims a distinct `capability`, which is
+  // right in principle: a genuinely diverse system should not be punished for being large.
+  // But `capability` was free text validated against NOTHING, so the P3-T4 verifier evaded
+  // AGENT_PER_STORY entirely with a 12-agent 1:1 roster labelled slice-0..slice-11 - one
+  // token of output per agent, and the roster passed clean.
+  //
+  // Requiring the label to be a DECLARED capability does not make the escape impossible, and
+  // claiming otherwise would be the same overstatement the plan made. It makes it cost a
+  // declaration entry per agent, which is a thing a reviewer can see and count, rather than
+  // a string nobody checks. The remaining same-author weakness is recorded for T6.
+  const permittedLabels = new Set(declaration.permitted);
+  for (const a of agents) {
+    if (!permittedLabels.has(a.capability)) {
+      scoping.push({
+        code: 'CAPABILITY_LABEL_UNDECLARED',
+        subject: a.id,
+        message: `agent ${a.id} claims capability '${a.capability}', which this blueprint never `
+          + 'declared. An undeclared label cannot excuse a roster from consolidation: that is '
+          + 'how one agent per story passes by inventing one capability name per agent.',
+      });
+    }
+  }
 
   if (refs) {
     for (const id of checkRefIntegrity(refs).agentNamespaceCollisions) {

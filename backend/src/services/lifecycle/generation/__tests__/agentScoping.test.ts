@@ -27,7 +27,12 @@ import {
 import { DENIED_CAPABILITIES } from '../../../delivery/execution/executionPolicy';
 import { DENIED_TOOLS } from '../../../delivery/execution/claudeAgentSdkProvider';
 
-const DECL: CapabilityDeclaration = { permitted: ['read_repository', 'draft_email', 'run_tests'] };
+// 'intake' and 'generic' are in here because agent CAPABILITY LABELS are now checked against the
+// declaration too, not only their `requires`. See "the consolidation escape now costs a
+// declaration" below for why that changed.
+const DECL: CapabilityDeclaration = {
+  permitted: ['read_repository', 'draft_email', 'run_tests', 'intake', 'generic'],
+};
 
 const agent = (over: Partial<ScopedAgent> & Pick<ScopedAgent, 'id'>): ScopedAgent => ({
   owns: [], capability: 'generic', ...over,
@@ -235,6 +240,43 @@ describe('SBP’s post-gate ordering is NOT changed by this task', () => {
     // The Files line claims it; the orchestrator still has no import from the generation tree.
     expect(orchestrator).not.toContain('generation/agentScoping');
     expect(orchestrator).not.toContain('generation/capabilityRegistry');
+  });
+});
+
+
+describe('the consolidation escape now costs a declaration', () => {
+  const twelve = Array.from({ length: 12 }, (_, n) => `S${n + 1}`);
+  const oneEach = twelve.map((story, n) => agent({
+    id: `a${n}`, owns: [story], capability: `slice-${n}`,
+  }));
+
+  it('refuses a 12-agent 1:1 roster whose capability labels were never declared', () => {
+    // The P3-T4 verifier evaded AGENT_PER_STORY entirely with exactly this roster: `capability`
+    // was free text validated against nothing, so twelve distinct labels — one token of output
+    // per agent — bought a clean pass.
+    const r = validateAgentScoping(twelve, oneEach, { permitted: [] });
+
+    expect(r.ok).toBe(false);
+    expect(r.scoping.filter((v) => v.code === 'CAPABILITY_LABEL_UNDECLARED')).toHaveLength(12);
+  });
+
+  it('IS STILL EVADABLE IF ALL TWELVE LABELS ARE DECLARED \u2014 recorded, not claimed otherwise', () => {
+    // The honest limit of this fix, asserted so nobody reads the rule as stronger than it is.
+    // Requiring declaration does not make the escape impossible; it makes it cost twelve entries
+    // a reviewer can see and count, instead of a string nobody checks. Closing it properly needs
+    // the declaration to come from an earlier stage than the roster, which is T6’s to wire.
+    const declared = { permitted: twelve.map((_, n) => `slice-${n}`) };
+    expect(validateAgentScoping(twelve, oneEach, declared).ok).toBe(true);
+  });
+
+  it('PASSING COUNTERPART: three declared capabilities across twelve stories is accepted', () => {
+    const roster = [
+      agent({ id: 'a1', owns: twelve.slice(0, 4), capability: 'intake' }),
+      agent({ id: 'a2', owns: twelve.slice(4, 8), capability: 'review' }),
+      agent({ id: 'a3', owns: twelve.slice(8), capability: 'export' }),
+    ];
+    const declared = { permitted: ['intake', 'review', 'export'] };
+    expect(validateAgentScoping(twelve, roster, declared).ok).toBe(true);
   });
 });
 
