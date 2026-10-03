@@ -20,9 +20,14 @@ jest.mock('../../models/AgentReportSubscription', () => ({
 
 const mockRunCreate = jest.fn();
 const mockRunFindAll = jest.fn();
+const mockRunFindOne = jest.fn();
 jest.mock('../../models/AgentReportRun', () => ({
   __esModule: true,
-  default: { create: (...a: any[]) => mockRunCreate(...a), findAll: (...a: any[]) => mockRunFindAll(...a) },
+  default: {
+    create: (...a: any[]) => mockRunCreate(...a),
+    findAll: (...a: any[]) => mockRunFindAll(...a),
+    findOne: (...a: any[]) => mockRunFindOne(...a),
+  },
 }));
 
 const mockAiAgentFindByPk = jest.fn();
@@ -45,6 +50,30 @@ jest.mock('../reese/agentDetailService', () => ({
 const mockSendRawEmail = jest.fn();
 jest.mock('../emailService', () => ({
   sendRawEmail: (...a: any[]) => mockSendRawEmail(...a),
+}));
+
+// Report redesign (2026-10-02) — the new report-specific queries this
+// service's renderReportContent() now calls, wholesale-mocked at the module
+// boundary (same convention this codebase uses throughout for a clean
+// sibling-service dependency) rather than mocking every individual model
+// (Ticket/TicketActivity/sequelize/OrgMember/Enrollment) those functions use
+// internally — agentReportStatsService.ts has its own dedicated test file for
+// that.
+const mockResolveAgentIdentity = jest.fn();
+const mockGetOpenTicketBreakdownByType = jest.fn();
+const mockGetTicketFollowUpCounts = jest.fn();
+const mockGetTopAuthorizationReasons = jest.fn();
+const mockGetTokensAndModel = jest.fn();
+const mockGetErrorCount = jest.fn();
+const mockResolveRecipientDisplayName = jest.fn();
+jest.mock('../agentReportStatsService', () => ({
+  resolveAgentIdentity: (...a: any[]) => mockResolveAgentIdentity(...a),
+  getOpenTicketBreakdownByType: (...a: any[]) => mockGetOpenTicketBreakdownByType(...a),
+  getTicketFollowUpCounts: (...a: any[]) => mockGetTicketFollowUpCounts(...a),
+  getTopAuthorizationReasons: (...a: any[]) => mockGetTopAuthorizationReasons(...a),
+  getTokensAndModel: (...a: any[]) => mockGetTokensAndModel(...a),
+  getErrorCount: (...a: any[]) => mockGetErrorCount(...a),
+  resolveRecipientDisplayName: (...a: any[]) => mockResolveRecipientDisplayName(...a),
 }));
 
 import { UniqueConstraintError } from 'sequelize';
@@ -80,15 +109,33 @@ describe('computePeriodKey', () => {
 });
 
 const AGENT_DETAIL = {
-  agent: { agent_name: 'CoryBrain' },
+  agent: { id: 'agent-1', agent_name: 'CoryBrain', abac_effective_mode: 'shadow' as const },
   cost_summary: { cost_usd: 12.5, runs: 40 },
-  trust_contract: { run_count: 40, error_count: 2, last_run_at: new Date('2026-08-30T00:00:00Z'), avg_duration_ms: 1200, last_activity_at: new Date('2026-08-30T00:00:00Z') },
+  trust_contract: {
+    run_count: 40, error_count: 2, last_run_at: new Date('2026-08-30T00:00:00Z'),
+    avg_duration_ms: 1200, last_activity_at: new Date('2026-08-30T00:00:00Z'), trigger_type: 'cron',
+  },
   authorization_summary: { window_days: 30, total: 100, allow: 90, approval: 8, block: 2, enforced_count: 0 },
   open_ticket_count: 3,
+  completed_ticket_count_30d: 5,
   ticket_breakdown: [{ type: 'follow_up', count: 3, by_signal: [] }],
+  verified_resolution_count: 2,
+  owned_ticket_count_all_time: 10,
+  oldest_open_ticket_age_days: 4,
+  related_tasks: [{ enabled: true }, { enabled: true }, { enabled: false }],
 };
 
 describe('renderReportContent — honest, section-scoped, single real data source', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockResolveAgentIdentity.mockResolvedValue({ agent: AGENT_DETAIL.agent, adminUser: { id: 'admin-1' } });
+    mockGetOpenTicketBreakdownByType.mockResolvedValue([{ type: 'follow_up', count: 2 }]);
+    mockGetTicketFollowUpCounts.mockResolvedValue({ needsReply: 1, pastDue: 0 });
+    mockGetTopAuthorizationReasons.mockResolvedValue([]);
+    mockGetTokensAndModel.mockResolvedValue({ totalTokens: 500, topModel: 'gpt-4o-mini' });
+    mockGetErrorCount.mockResolvedValue(0);
+  });
+
   it('happy path: includes only the requested sections', () => {
     mockGetAgentDetail.mockResolvedValueOnce(AGENT_DETAIL);
     return renderReportContent('agent-1', ['cost', 'tickets']).then((rendered) => {
@@ -136,6 +183,14 @@ describe('dispatchDueReportRuns', () => {
     mockGetAgentDetail.mockResolvedValue(AGENT_DETAIL);
     mockOrgMemberFindByPk.mockResolvedValue({ email: 'manager@colaberry.com' });
     mockSendRawEmail.mockResolvedValue({ ok: true, messageId: 'msg-1' });
+    mockResolveAgentIdentity.mockResolvedValue({ agent: AGENT_DETAIL.agent, adminUser: { id: 'admin-1' } });
+    mockGetOpenTicketBreakdownByType.mockResolvedValue([]);
+    mockGetTicketFollowUpCounts.mockResolvedValue({ needsReply: 0, pastDue: 0 });
+    mockGetTopAuthorizationReasons.mockResolvedValue([]);
+    mockGetTokensAndModel.mockResolvedValue({ totalTokens: 0, topModel: null });
+    mockGetErrorCount.mockResolvedValue(0);
+    mockResolveRecipientDisplayName.mockResolvedValue('Manager Name');
+    mockRunFindOne.mockResolvedValue(null); // no prior report — delta honestly omitted
   });
 
   it('happy path: a subscription whose local hour matches gets dispatched and marked sent', async () => {
