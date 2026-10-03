@@ -11,13 +11,33 @@ const match = (over: Partial<ServiceMatch>): ServiceMatch => ({
 }) as ServiceMatch;
 
 describe('derivePotentialDisqualifiers (pure gaps classifier — advisory, surfaces never decides)', () => {
-  it('passes server BLOCKING requirements through verbatim (mapped reason, kind blocking)', () => {
-    const established = [req({ id: 'R1', text: 'Provide a plan.' })];
-    const res = derivePotentialDisqualifiers(established, { blocking: [{ id: 'R1', reason: 'applicability_unknown' }] }, []);
-    const b = res.items.find((i) => i.id === 'R1');
+  it('does NOT echo a non-eligibility blocking requirement (the full blocking set lives in "Requirements by due stage"; this panel no longer re-lists it)', () => {
+    // Regression guard for the "I see them all twice" duplication: right after extraction every requirement
+    // is blocking (no evidence yet). A generic, non-eligibility blocking requirement must NOT appear here.
+    const established = [req({ id: 'R1', text: 'Provide a project plan.' })];
+    const res = derivePotentialDisqualifiers(established, { blocking: [{ id: 'R1', reason: 'submission_prerequisite_no_evidence' }] }, []);
+    expect(res.items).toHaveLength(0);
+    expect(res.empty).toBe('none_flagged');
+  });
+
+  it('an ELIGIBILITY gate that is also blocking is surfaced once (kind blocking), annotating the server reason', () => {
+    const established = [req({ id: 'E0', text: 'Offeror must be registered in SAM.gov.' })];
+    const res = derivePotentialDisqualifiers(established, { blocking: [{ id: 'E0', reason: 'applicability_unknown' }] }, []);
+    expect(res.items).toHaveLength(1);
+    const b = res.items.find((i) => i.id === 'E0');
     expect(b?.kind).toBe('blocking');
-    expect(b?.reason).toContain('Applicability unknown');
-    expect(res.empty).toBeNull();
+    expect(b?.basis).toContain('Applicability unknown');      // server reason annotated into the basis
+    expect(b?.basis).toContain('no evidence attached');
+  });
+
+  it('an ELIGIBILITY gate that is evidenced AND capable but still blocking (non-evidence reason) is surfaced', () => {
+    const matches = [match({ strength: 'strong', matchedKeywords: ['registered'] })];
+    const established = [req({ id: 'E9', text: 'Offeror must be registered in SAM.gov.', evidenceRef: { docId: 'D9' } })];
+    const res = derivePotentialDisqualifiers(established, { blocking: [{ id: 'E9', reason: 'not_applicable_unevidenced' }] }, matches);
+    const b = res.items.find((i) => i.id === 'E9');
+    expect(b?.kind).toBe('blocking');
+    expect(b?.basis).not.toContain('no evidence attached');   // it IS evidenced
+    expect(b?.basis).toContain('Marked not applicable');      // surfaced only because the server blocks it
   });
 
   it('flags an eligibility requirement with NO evidence', () => {
