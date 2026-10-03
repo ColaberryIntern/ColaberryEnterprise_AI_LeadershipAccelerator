@@ -46,6 +46,37 @@ jest.mock('../../../services/growthJourneyApi', () => ({
  * ask whether the page reaches them at all, so every read here resolves to an
  * empty page - the cheapest payload that still lets a tab render its heading.
  */
+jest.mock('../../../services/growthJourneyQueueApi', () => ({
+  listHandoffQueue: jest.fn(),
+  listExperiments: jest.fn(),
+}));
+
+/*
+ * ALL FIVE performance reads are stubbed, not just the two the tab calls directly.
+ * Attempt 2 stubbed `getRates` and `getMetrics` and spread the rest from `actual`,
+ * so mounting `?tab=performance` ran the REAL `getReceipts`/`getOutcomes`/
+ * `getByJourney` from the three new child panels - an unmocked request out of a
+ * test, which this project forbids outright. The cells still passed, because they
+ * only assert the tab's heading and the rejected read renders as an error panel.
+ * Nothing in this universe may reach the network.
+ */
+jest.mock('../../../services/growthJourneyPerformanceApi', () => {
+  const actual = jest.requireActual('../../../services/growthJourneyPerformanceApi');
+  return {
+    ...actual,
+    getRates: jest.fn(),
+    getMetrics: jest.fn(),
+    getReceipts: jest.fn(),
+    getOutcomes: jest.fn(),
+    getByJourney: jest.fn(),
+  };
+});
+
+jest.mock('../../../services/growthJourneyControlsApi', () => {
+  const actual = jest.requireActual('../../../services/growthJourneyControlsApi');
+  return { ...actual, listControls: jest.fn(), createPause: jest.fn(), createRollout: jest.fn(), clearPause: jest.fn(), clearRollout: jest.fn() };
+});
+
 jest.mock('../../../services/growthJourneyInspectApi', () => ({
   listClassifications: jest.fn(),
   listDecisions: jest.fn(),
@@ -66,6 +97,12 @@ const api = require('../../../services/growthJourneyApi') as {
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const inspect = require('../../../services/growthJourneyInspectApi') as Record<string, jest.Mock>;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const queue = require('../../../services/growthJourneyQueueApi') as Record<string, jest.Mock>;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const perf = require('../../../services/growthJourneyPerformanceApi') as Record<string, jest.Mock>;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const ctrl = require('../../../services/growthJourneyControlsApi') as Record<string, jest.Mock>;
 
 /**
  * EVERY IMPLEMENTATION IS SET PER TEST, NEVER IN THE FACTORY.
@@ -131,6 +168,22 @@ beforeEach(() => {
   });
   inspect.listOfferPolicies.mockResolvedValue({ ...emptyPage, scope });
   inspect.listContentRules.mockResolvedValue({ ...emptyPage, scope });
+
+  // T615's four tabs, each with ITS OWN envelope. An "empty payload" here is four
+  // different shapes, which is the clearest evidence that no generic table could
+  // have served this surface.
+  queue.listHandoffQueue.mockResolvedValue({ ...emptyPage, status: 'open', owner_queue: null });
+  queue.listExperiments.mockResolvedValue({
+    brands: [], window_days: 30, policy_type: 'holdout', conversion_outcomes: [], scope,
+  });
+  perf.getRates.mockResolvedValue({
+    brands: [], window_days: 30, max_handoffs_per_brand: 5000, max_outcomes_per_brand: 10000, scope,
+  });
+  perf.getMetrics.mockResolvedValue({ metrics: [], computed_at: '2026-10-01T08:00:00.000Z', scope });
+  perf.getReceipts.mockResolvedValue({ ...emptyPage, scope });
+  perf.getOutcomes.mockResolvedValue({ ...emptyPage, scope });
+  perf.getByJourney.mockResolvedValue({ journeys: [], scope: { ...scope, start: null, end: null } });
+  ctrl.listControls.mockResolvedValue({ controls: [], count: 0 });
 });
 
 afterEach(() => {
@@ -218,16 +271,43 @@ describe('loaded', () => {
     }
   });
 
-  it('names an unbuilt tab as unbuilt rather than rendering an empty panel', async () => {
-    await act(async () => {
-      root.render(
-        <MemoryRouter initialEntries={['/admin/growth-journey?tab=experiments']}>
-          <GrowthJourneyPage />
-        </MemoryRouter>,
-      );
-    });
-    expect(text()).toContain('not built yet');
-  });
+  /*
+   * This cell USED to assert that `?tab=experiments` rendered "not built yet".
+   * T615 built the last four, so that assertion is now false and keeping it would
+   * have been a test asserting the absence of work that exists. What replaces it is
+   * the invariant that actually matters: every key the tab strip offers has a view
+   * behind it. The fallback panel stays in the page as defence, but nothing should
+   * reach it - and if someone adds a tenth tab to TABS without a view, this fails
+   * rather than the operator finding out.
+   *
+   * ── WHY IT IS `it.each` AND NOT A LOOP, WHICH IS HOW IT WAS SHIPPED ─────────
+   *
+   * Attempt 2 wrote this as a `for` loop re-rendering the same `<MemoryRouter
+   * initialEntries={[…]}>` into the same root. `MemoryRouter` builds its history
+   * ONCE, in a ref - react-router/dist/react-router.development.js:993,
+   * `if (historyRef.current == null) { historyRef.current = createMemoryHistory(…) }`
+   * - so a changed `initialEntries` on a re-render is ignored and all nine
+   * iterations rendered `?tab=overview`. The cell PASSED with `performance` removed
+   * from TAB_VIEWS and the page rendering "Performance is not built yet", and the
+   * session log claimed it as the replacement invariant. It could not fail.
+   *
+   * One cell per key gets a fresh root from the outer `beforeEach`, hence a fresh
+   * MemoryRouter, hence the URL the cell is named for.
+   */
+  it.each(['overview', 'classification', 'decisions', 'shadow', 'content',
+    'handoffs', 'experiments', 'performance', 'controls'])(
+    '?tab=%s has a view behind it, so the fallback panel is unreachable',
+    async (key) => {
+      await act(async () => {
+        root.render(
+          <MemoryRouter initialEntries={[`/admin/growth-journey?tab=${key}`]}>
+            <GrowthJourneyPage />
+          </MemoryRouter>,
+        );
+      });
+      expect(text()).not.toContain('not built yet');
+    },
+  );
 
   /*
    * EVERY BUILT TAB IS MOUNTED FROM THE PAGE HERE, and the reason is this phase's
@@ -246,6 +326,10 @@ describe('loaded', () => {
     ['decisions', 'What was decided'],
     ['shadow', 'Did the shadow runs happen?'],
     ['content', 'What may be said'],
+    ['handoffs', 'Who is waiting for a human'],
+    ['experiments', 'Did withholding content change anything?'],
+    ['performance', 'How the handoff pipeline is performing'],
+    ['controls', 'Pauses and rollouts'],
   ])('mounts the %s tab from the page itself', async (tabKey, heading) => {
     await act(async () => {
       root.render(

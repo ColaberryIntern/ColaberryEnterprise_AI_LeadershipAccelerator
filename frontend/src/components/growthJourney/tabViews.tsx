@@ -4,6 +4,10 @@ import ClassificationTab from './ClassificationTab';
 import DecisionsTab from './DecisionsTab';
 import ShadowTab from './ShadowTab';
 import ContentTab from './ContentTab';
+import HandoffsTab from './HandoffsTab';
+import ExperimentsTab from './ExperimentsTab';
+import PerformanceTab from './PerformanceTab';
+import ControlsTab from './ControlsTab';
 import type { JourneyTerminology } from './journeyWords';
 import type { TabKey } from './tabKeys';
 
@@ -42,7 +46,10 @@ import type { TabKey } from './tabKeys';
 
 export interface TabContext {
   words: JourneyTerminology;
+  /** The resolved display name, for a sentence an operator reads. */
   brandName: string | null;
+  /** The raw uuid, for a request that scopes by id. Both are needed, for different jobs. */
+  brandId: string;
   unseeded: boolean;
   programId: string;
 }
@@ -62,4 +69,15 @@ export const TAB_VIEWS: Partial<Record<TabKey, (ctx: TabContext) => React.ReactN
   ),
   shadow: () => <ShadowTab />,
   content: (c) => <ContentTab brandName={c.brandName} unseeded={c.unseeded} />,
+  handoffs: (c) => (
+    <HandoffsTab words={c.words} brandName={c.brandName} unseeded={c.unseeded} />
+  ),
+  experiments: (c) => <ExperimentsTab brandId={c.brandId} />,
+  performance: (c) => <PerformanceTab brandId={c.brandId} programId={c.programId} />,
+  // The only writing tab. It takes the raw ids rather than the resolved brand NAME,
+  // because a pause or a rollout names a scope by uuid and a display name would be
+  // the wrong thing to put in a request body.
+  controls: (c) => (
+    <ControlsTab brandId={c.brandId} programId={c.programId} unseeded={c.unseeded} />
+  ),
 };

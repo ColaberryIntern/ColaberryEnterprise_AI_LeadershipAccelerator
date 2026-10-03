@@ -157,6 +157,24 @@ describe('the status/registry payload, mirrored from its controller', () => {
 });
 
 describe('the base path reaches the backend', () => {
+  it.each([
+    ['../growthJourneyApi.ts', 'the status and handoff-move client'],
+    ['../growthJourneyInspectApi.ts', 'the nine inspect reads'],
+    ['../growthJourneyQueueApi.ts', 'the queue and experiments reads'],
+    ['../growthJourneyControlsApi.ts', 'the only write client'],
+    ['../growthJourneyPerformanceApi.ts', 'the performance reads'],
+  ])('%s (%s) carries the /api prefix', (rel) => {
+    // FIVE clients now reach this surface and every one needs the prefix. The
+    // T615 split dropped the constant from a new file entirely, which tsc caught -
+    // but a file with a WRONG prefix compiles fine and fails only in a browser, so
+    // each one is pinned by name here rather than by whichever happened to exist
+    // when this test was written.
+    const src = read(path.resolve(__dirname, rel));
+    const m = /const BASE = '([^']+)'/.exec(src);
+    expect(m).not.toBeNull();
+    expect(m![1].startsWith('/api/admin/growth-journey')).toBe(true);
+  });
+
   it('carries the /api prefix nginx proxies, like every sibling admin service', () => {
     // The other half of the T613 defect, and the one no component test can see:
     // BASE was '/admin/growth-journey', which nginx (`location /api/`) does not

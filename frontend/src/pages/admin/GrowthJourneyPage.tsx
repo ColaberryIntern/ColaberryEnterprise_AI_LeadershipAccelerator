@@ -245,7 +245,7 @@ export default function GrowthJourneyPage() {
           title={`${TABS.find((t) => t.key === tab)?.label} is not built yet`}
           description="The backend reads for this tab exist; the panel is a later task in this phase."
         />
-      )))({ words, brandName: brandName_, unseeded, programId })}
+      )))({ words, brandName: brandName_, brandId, unseeded, programId })}
     </div>
   );
 }
