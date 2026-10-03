@@ -149,12 +149,23 @@ landing it a phase before its writer is what lets Phase 8 verify it against the 
 
 ---
 
-## Open question for the owner: who approves a STAFF-INITIATED student build?
+## DECIDED 2026-10-03: who approves a staff-initiated student build
 
-Raised by a peer session from the entry-point matrix, and recorded here rather than left to be
-discovered when Phase 6 wires those routes. **Not decided.** It has been put to Ali as a product
-question; this is the engineering shape of it so the answer can be applied without re-deriving
-the problem.
+**Answered: the initiating staff member approves, and the control is the hash-bound review hold
+rather than a second identity.** The decision and its reasoning are in `architecture.md` §5.1a.
+Ali settled the premise — the initiating staff member and the programme owner are the same person
+— which rules out separation of duty for this path entirely: a second approver is the same human
+clicking twice.
+
+**And the asymmetry described below does not exist.** I wrote that row 5 honoured no hold while
+row 6 did. Both always hold: `holdForReview: true` is hardcoded in `startInternProjectBuild` and
+at both flotation admin doors. What defaults off is `buildFromUnderstanding`, for the **public**
+door, deliberately — a student's own build should publish the moment it is good. The repo had
+already converged on "staff-initiated holds, self-serve publishes"; I read my own table instead of
+the code, and reported the non-existent asymmetry to a peer session and in a commit message.
+Corrected in the matrix too.
+
+The three options are kept below, because they are the record of why the answer is what it is.
 
 `architecture.md` §5.1 draws the line as **"the owner approves what gets built; the student
 receives what was approved"**. That cleanly covers two of the three shapes:

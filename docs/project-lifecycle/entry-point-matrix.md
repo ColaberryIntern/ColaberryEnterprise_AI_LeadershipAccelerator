@@ -24,8 +24,8 @@ These are **not** merged. See `architecture.md` §2.
 | 2 | Portal participant self-serve | `routes/projectRoutes.ts:579`, `:588` | `createProjectForEnrollment()` → `startArchitectBuild()` | `projects` | none |
 | 3 | Portal (second path) | `routes/projectRoutes.ts:8880` | `createProjectForEnrollment()` | `projects` | none |
 | 4 | Project route (admin/other) | `routes/projectRoutes.ts:108` | `createProjectForEnrollment()` | `projects` | none |
-| 5 | Internship application → build | `routes/admin/internshipRoutes.ts:479` | `startInternProjectBuild()` | `projects` | none |
-| 6 | Flotation intake → build | `routes/admin/flotationIntakeRoutes.ts:154` | `startBuildFromUnderstanding()` | `projects` | honours `holdForReview` |
+| 5 | Internship application → build | `routes/admin/internshipRoutes.ts:479` | `startInternProjectBuild()` | `projects` | **always held** — `holdForReview: true` hardcoded |
+| 6 | Flotation intake → build | `routes/admin/flotationIntakeRoutes.ts:154` | `startBuildFromUnderstanding()` | `projects` | **always held** at both admin doors (`:155`, `:229`); `buildFromUnderstanding` defaults OFF for the public door |
 | 7 | **Enrollment side effect (×3 call sites)** | `services/enrollmentService.ts:58`, `:87`, `:250` | `createProjectForEnrollment()` | `projects` | none |
 | 8 | Delivery project intake | `services/delivery/projectIntake.ts:210` | `startBuildFromUnderstanding()` | `projects` | inherits param |
 | 9 | **Repo import** | `services/delivery/repoProjectImport.ts:210` | `startBuild()` | `projects` | none |
@@ -101,3 +101,18 @@ Two notes on the audit itself, because they affect whether it can be trusted:
 
 **Re-run this audit before Phase 6 wires anything.** One drift in a day means the table decays
 at a measurable rate, and its whole value is being the place you do not have to re-derive.
+
+### Correction, 2026-10-03: rows 5 and 6 understated the review hold
+
+Row 5 read **none** and row 6 read *honours `holdForReview`*. Both were wrong, and the error ran
+in the direction that matters: it made a control look absent when it is unconditional.
+
+`startInternProjectBuild` passes `holdForReview: true` **hardcoded**, under a section headed "THE
+REVIEW HOLD IS THE POINT" (`internshipProjectGeneration.ts:42-51`). Both flotation admin doors do
+the same (`flotationIntakeRoutes.ts:155` and `:229`). What defaults OFF is
+`buildFromUnderstanding` itself — deliberately, "so the public door keeps behaving exactly as it
+did", because a student's own build should publish the moment it is good.
+
+So the repo had already converged on the rule: **staff-initiated builds are held; self-serve
+builds publish.** I reported an asymmetry between rows 5 and 6 to a peer session and in a commit
+message on 2026-10-02; there is none. The error was reading my own table instead of the code.
