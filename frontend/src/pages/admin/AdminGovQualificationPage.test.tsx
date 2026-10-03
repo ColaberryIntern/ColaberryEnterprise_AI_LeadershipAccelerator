@@ -377,6 +377,26 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('solicitation ZIP has not been attested yet'); // honest coverage reason, not an OP-source block
   });
 
+  it('Requirements by due stage caps a long list to a few and expands on "Show all"', async () => {
+    const mk = (n: number) => ({ id: `REQ-${String(n).padStart(3, '0')}`, dueStage: 'submission' as const, applicability: 'always' as const, blocking: true, reason: 'submission_prerequisite_no_evidence' });
+    const evals = Array.from({ length: 8 }, (_, i) => mk(i + 1));
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      evaluation: { evals, blocking: evals.map((e) => ({ id: e.id, reason: e.reason })), deliveryObligations: [], byDueStage: { submission: evals, award: [], delivery: [], unknown: [] }, canApproveBid: false },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    let text = container.textContent ?? '';
+    expect(text).toContain('REQ-006');                 // first 6 shown
+    expect(text).not.toContain('REQ-008');             // 7th/8th hidden behind the toggle
+    expect(text).toContain('Show all 8 (2 more)');
+    const moreBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Show all 8')) as HTMLButtonElement;
+    expect(moreBtn).toBeTruthy();
+    await act(async () => { moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    text = container.textContent ?? '';
+    expect(text).toContain('REQ-008');                 // now visible after expand
+    expect(text).toContain('Show fewer');
+  });
+
   // ── Discovery details card + Source link + Gaps panel (decoupled only) ──
   it('decoupled workspace shows the Discovery details card (why-surfaced + overview + Source link)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
