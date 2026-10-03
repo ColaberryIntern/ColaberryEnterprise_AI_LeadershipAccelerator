@@ -18,6 +18,39 @@ someone concludes the system is broken when it is dark, or healthy when it is st
 Extracted from the runbook so each file holds one responsibility, and because the runbook
 was over its size budget with this inline.
 
+**Purpose.** Establish what the Growth Journey OS is currently doing — and would do on its
+next run — without changing anything, so that an operator diagnosing it never has to
+guess, and never has to touch a control to find out.
+
+**Inputs.** An admin token for §2–§4; shell access to the backend container for §1 and the
+liveness probe; a `tenant_memberships` row covering the brand if you pass a `brand_id`
+(see the runbook §8 — without it a brand-scoped read is a 403, not an empty answer).
+
+**Steps.** The four sections below, in that order. §1 first: it answers the question people
+usually mean.
+
+**Outputs.** None. Every read here writes nothing, creates nothing and flips nothing. The
+CLIs print to stdout, `--json` emits one document, and no output carries an email address.
+
+**Verification — that these reads are working, not just answering.** A read returning `200`
+with an empty body looks identical to a dark system, so check a *pair* rather than a
+status: `GET .../status/registry` with an admin token returns `flags.master === false`
+*while* `GET .../participations` with the same token returns 404. That combination proves
+the status router is mounted above the master-flag gate, which a 200 alone does not. Then
+readiness must list 17 items, and the probe must print a mode and a reason for every scope
+— dark means every reason is `flag_master_off`. Any of the three answering differently
+means the read is wrong, not the system.
+
+**Edge cases.** A `truncated` health read is a floor, not a total. A `403` on a
+brand-scoped read usually means no membership row. A `404` under the journey namespace is
+ambiguous by design (off, not yours, or absent) — `status/registry` is never gated, so ask
+it first. A green `ledger_indexes` does not prove the indexes are *valid* (runbook §14).
+
+**Safety constraints.** Read-only, and safe against production at any time. Nothing here
+sends, and nothing here needs `GROWTH_JOURNEY_EXECUTION_ENABLED`. Do not reorder the
+status-router mounts (§2–§3) — their position above the master-flag gate is the only
+reason they answer while the system is dark.
+
 ---
 ## 1. The probe — what the next run will do
 

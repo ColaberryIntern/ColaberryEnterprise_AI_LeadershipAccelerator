@@ -19,11 +19,15 @@ A person partway through a Colaberry Training course and a company evaluating a
 consulting engagement are not the same kind of person, and the workspace does not pretend
 they are. Each programme carries its own vocabulary and the screens use it:
 
-| Programme kind | The person is a… | Their commitment is an… | Their track is a… |
-|---|---|---|---|
-| Learner (CPN, Colaberry Training) | **learner** | **enrolment** | **path** |
-| Business (Colaberry Business) | **lead** | **account** | **opportunity** |
-| Consulting (Colaberry Business, AI Flotation) | **lead** | **engagement** | **project** |
+| Programme kind | Brands running it | The person is a… | Their commitment is an… | Their track is a… |
+|---|---|---|---|---|
+| Learner | CPN, Colaberry Training | **learner** | **enrolment** | **path** |
+| Business | Colaberry Business | **lead** | **account** | **opportunity** |
+| Consulting | AI Flotation | **lead** | **engagement** | **project** |
+
+One programme per brand today, so the brand you pick decides the words you see. **You
+will not see "engagement" or "project" on a Colaberry Business screen** — that brand runs
+a *business* programme, so it says account and opportunity.
 
 So the same column reads "learner" on a CPN programme and "lead" on a consulting one.
 Deliberate — and if you see the wrong word for the programme you are on, report it. With
@@ -179,7 +183,7 @@ someone who asked not to be contacted puts them back in the machine.
 
 ### Reading the queue honestly
 
-- The ordering is **not** strictly "highest value first.** A handoff with no value
+- The ordering is **not** strictly "highest value first". A handoff with no value
   recorded sorts above valued ones inside its urgency group, so the top of the list is not
   the most valuable item. The screen says so.
 - **Paging is not stable.** Page 2 is another sample, not the remainder of page 1 — rows

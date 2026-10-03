@@ -1,9 +1,13 @@
 # Growth Journey reason codes — the troubleshooting index
 
 **Companion to `directives/growth-journey-operations.md`.** That directive is the
-procedure; this is the lookup table it sends you to. Split out because a reason index is
-a reference consulted by symptom, not a set of steps read in order — and because the
-runbook was over this repo's 500-line ceiling with it inline.
+procedure; this is the lookup table it sends you to.
+
+It lives in `docs/` rather than `directives/` deliberately. A reason index is consulted by
+symptom, not executed in order, so it fails `directives/CLAUDE.md`'s own test — "if you
+can't name it as verb-object, it isn't a directive" — and it carries none of the seven
+sections a directive owes. It shipped in `directives/` on the first pass and was moved
+here when the verifier pointed that out.
 
 **How to use it:** almost everything this system declines to do, it declines *by name*.
 Find the code in the symptom group below, then act on the row. A code you cannot find

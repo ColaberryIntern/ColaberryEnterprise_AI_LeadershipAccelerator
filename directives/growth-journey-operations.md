@@ -4,8 +4,9 @@
 and nothing has ever contacted a person through this path. This directive is how it is
 read, switched on one notch at a time, and switched off again.
 
-The reason-code index lives in `directives/growth-journey-reason-codes.md`; the operator
-workspace is described for non-engineers in `docs/GROWTH_JOURNEY_TRAINING_GUIDE.md`.
+Reading state: `directives/read-growth-journey-state.md`. Reason codes:
+`docs/GROWTH_JOURNEY_REASON_CODES.md`. The workspace for non-engineers:
+`docs/GROWTH_JOURNEY_TRAINING_GUIDE.md`.
 
 ---
 
@@ -120,10 +121,8 @@ never "that id does not exist". Indistinguishable on purpose, so an id cannot be
 
 ### 5.1 Pause — stop one scope
 
-```
-POST .../execution/pauses
-{ "brand_id": "<uuid>", "channel": "email", "reason": "why, 1-500 chars" }
-```
+`POST .../execution/pauses` with
+`{ "brand_id": "<uuid>", "channel": "email", "reason": "why, 1-500 chars" }`.
 
 A pause may name a brand, programme, channel, subject or any combination, but **must name
 at least one**. An all-wildcard pause is refused twice — by the schema and again in the
@@ -137,17 +136,14 @@ platform super-admin.
 A pause **reaches work already in flight** — the right lever when something is going out
 that should not be.
 
-Clear with `POST .../execution/pauses/:id/clear` and body `{}`. A clear carries nothing.
-A second clear returns `200 already_cleared` and writes nothing. Rows are cleared, never
-edited or deleted, so who paused what survives.
+Clear with `POST .../execution/pauses/:id/clear` and body `{}` — a clear carries nothing,
+a second returns `200 already_cleared` and writes nothing, and rows are cleared rather
+than deleted, so who paused what survives.
 
 ### 5.2 Rollout — widen one scope
 
-```
-POST .../execution/rollouts
-{ "brand_id": "<uuid>", "program_id": "<uuid>", "channel": "email",
-  "mode": "review", "reason": "why" }
-```
+`POST .../execution/rollouts` with `{ "brand_id": "<uuid>", "program_id": "<uuid>",
+"channel": "email", "mode": "review", "reason": "why" }`.
 
 `brand_id` and `program_id` are **required** — no dimension may be wildcarded — and any
 rollout requires platform super-admin.
@@ -183,10 +179,8 @@ Disposition takes `disposition` ∈ `qualified`, `not_ready`, `nurture`, `no_con
 
 ### 5.4 Classification override
 
-```
-POST .../classifications/:id/override
-{ "lock": true, "reason": "at least 8 characters", "primary_path": "..." }
-```
+`POST .../classifications/:id/override` with
+`{ "lock": true, "reason": "at least 8 characters", "primary_path": "..." }`.
 
 `lock` is required — you must say whether your override pins the classification against
 re-classification. This is the only override on the surface.
@@ -195,21 +189,16 @@ re-classification. This is the only override on the surface.
 
 ## 6. Reading the system
 
-Four read-only ways to see what this system is doing, all safe against production and all
-described in **`directives/read-growth-journey-state.md`**:
+Four read-only ways to see what this system is doing, all safe against production. Each is
+a section of **`directives/read-growth-journey-state.md`**, which also says why picking
+the wrong one is how a dark system reads as broken:
 
-- **The probe** (`growthJourneyExecutionStatus.js`) - what the next run will actually do
-  for every brand x programme x channel, from the same resolver the planner uses, plus
-  every active control **whether or not the flags are on**. Run this first.
-- **Readiness** (`GET .../status/readiness`) - 17 ordered items; `ready` is three-state,
-  and `null` means "cannot be known from here". Order is the product: work it top down.
-- **Health** (`GET .../status/health`) - counts and reasons for a window. Mind the two
-  different things called `max_age_hours`, and treat any `truncated` read as a floor.
-- **Liveness** - `GET /health`, **never `/api/health`**, which answers 401 on a healthy
-  backend.
-
-All three status reads stay readable while the system is dark, because they are mounted
-above the master-flag gate. Do not reorder those mounts.
+| Read | Answers | Section |
+|---|---|---|
+| The probe | what the next run will actually do, per scope | §1 — run this first |
+| Readiness | what is left before it can be switched on | §2 |
+| Health | what happened in a window, as counts and reasons | §3 |
+| Liveness | whether the process and database are up — `GET /health`, **never `/api/health`** | §4 |
 
 ## 7. The setup script
 
@@ -238,24 +227,26 @@ Before it, legacy admin screens fall back to cross-tenant reads and log it; afte
 admin with no row is denied. No flag to remember, no way to linger in the permissive
 state.
 
-So the script prints how many admins will hold **no** membership after the write and
-refuses `--confirm-production` unless `--acknowledge-lockout` names that exact number — a
-stale number from an older roster does not count. It also refuses when a platform
-super-admin's admin row is linked to a different identity, because that write would grant
-them nothing and close the ramp with the operator behind it. Super-admins are written
-first. Emails are counted, never printed.
+So it prints how many admins will hold **no** membership after the write and refuses
+`--confirm-production` unless `--acknowledge-lockout` names that exact number; a stale
+number from an older roster does not count. It also refuses when a platform super-admin's
+admin row is linked to a different identity, because that write would grant them nothing
+and close the ramp with the operator behind it. Super-admins go first, and emails are
+counted, never printed.
 
 ### The part the script's own header does not tell you
 
 Its header says that while `tenant_memberships` is empty "every admin reads every
 tenant". **That is true of the legacy screens and NOT of the journey reads.**
 
-The ramp lives in `adminTenantScope` / `intelligenceScopeForAdmin`. The journey reads do
-not use it — they call `contextFromAdminRequest` directly, and the context builder will
-not grant a brand without a resolved tenant. With the table empty there is no resolved
-tenant, so **naming a `brand_id` is a hard 403.** The readiness item states the operative
-rule here: *"no tenant memberships exist, so every brand-scoped journey read returns
-nothing for every admin."*
+The ramp lives in `adminTenantScope` / `intelligenceScopeForAdmin`
+(`backend/src/modules/tenancy/adminScopeBridge.ts`). The journey reads do not use it —
+`growthJourneyController.scopedContext` calls `contextFromAdminRequest` directly, and
+`buildRequestContext` (`modules/tenancy/tenantAuthorization.ts:128-131`) will not grant a
+brand without a resolved tenant. With the table empty there is none, so **naming a
+`brand_id` is a hard 403.** The readiness item states the operative rule:
+*"no tenant memberships exist, so every brand-scoped journey read returns nothing for
+every admin."*
 
 **Operator consequence:** select a brand in the workspace before memberships are seeded
 and every tab fails. It is not broken, it is fail-closed. Seed memberships first.
@@ -267,8 +258,13 @@ you are reading one of them, this section is the reconciliation.
 
 ## 9. The digest
 
-`GrowthJourneyHandoffDigest`, `30 12 * * 1-5` UTC. It mails **staff only** about open
-handoffs assigned to them, and carries no lead name, address or message body.
+All three schedules, since "when does it next run?" should be answerable here (all UTC,
+all shipping `enabled: false`): `GrowthJourneyShadowDecisions` `20 4 * * *`;
+`GrowthJourneyExecutor` `*/15 14-22 * * 1-5`; `GrowthJourneyHandoffDigest`
+`30 12 * * 1-5`.
+
+The digest mails **staff only** about open handoffs assigned to them, and carries no lead
+name, address or message body.
 
 Gates in order: a disabled registry row is a logged skip; then the master and handoffs
 flags; then "nothing open ⇒ no mail"; then a once-per-mailbox-per-Central-date slot claim;
@@ -284,9 +280,9 @@ One `system_settings` row, key `system_kill_switch`. **There is exactly one glob
 by design** — a second is "two switches that can disagree silently".
 
 Activating it sets the row `true`, pauses every `active` campaign, disables every
-`ai_agents` row in the outbound categories (covering `GrowthJourneyExecutor` and
-`GrowthJourneyHandoffDigest`), blocks every send at the safety gate's **step 0** before
-campaign, lead, consent, brand or recipient are read, and logs a `CRITICAL_SYSTEM_EVENT`.
+`ai_agents` row in the outbound categories (covering the executor and the digest), blocks
+every send at the safety gate's **step 0** before campaign, lead, consent, brand or
+recipient are read, and logs a `CRITICAL_SYSTEM_EVENT`.
 
 What it does **not** do — each of these has caught someone:
 
@@ -344,8 +340,8 @@ In order. Each has an observable signal, not an impression.
 ## 13. Troubleshooting by reason string
 
 Almost everything this system declines to do, it declines **by name**. The full index,
-grouped by symptom, is `directives/growth-journey-reason-codes.md`. The five you will meet
-most often:
+grouped by symptom, is `docs/GROWTH_JOURNEY_REASON_CODES.md`. The five you will meet most
+often:
 
 | Reason | Meaning | Move |
 |---|---|---|
@@ -355,9 +351,8 @@ most often:
 | `no_rollout` | no rollout for this scope | create one (§5.2) |
 | `no_denominator` | nothing to divide by — an absence, **not** a zero | nothing to fix |
 
-Three rules for reading any of them: a composed reason is **cut, never rejected** (several
-columns cap at 64 characters); `'unknown'` is a machine placeholder for an empty field;
-`'redacted'` means the value held an address and was masked, with a flag saying which.
+A composed reason is **cut, never rejected** — several columns cap at 64 characters, so a
+long one arrives truncated. For `'unknown'` and `'redacted'`, see §11.
 
 ---
 
@@ -369,7 +364,12 @@ columns cap at 64 characters); `'unknown'` is a machine placeholder for an empty
   `status/registry`, which is never gated, before concluding a route is missing.
 - **A 403 on a brand-scoped read usually means no membership row** (§8).
 - **An interrupted `CREATE INDEX CONCURRENTLY` leaves an invalid index** that
-  `IF NOT EXISTS` then skips forever. Readiness checks validity, not just presence.
+  `IF NOT EXISTS` then skips forever — **and readiness will not catch it.** The
+  `ledger_indexes` item queries `SELECT indexname FROM pg_indexes` and checks only that
+  the three *names* appear; an invalid index appears there like any other. The
+  `pg_index.indisvalid` check belongs to the production verifier, not to readiness. So a
+  green `ledger_indexes` does not rule out this hazard: confirm validity yourself before
+  trusting it.
 - **Unknown capacity does not block** — only `full` suppresses assignment.
 - **A future timestamp reads as `stale`, not `fresh`.**
 - **The nightly decisions cron keeps running under the kill switch** (§10).
@@ -393,20 +393,18 @@ Reach for the smallest lever that covers the blast radius.
 
 Turning a cron on or off is the registry toggle plus the flags — **never a redeploy.**
 
-**Reverting the code is the last resort, not the first.** Revert the PR and redeploy from
-the registry. The schema needs no rollback: every DDL statement in this phase is additive,
-`IF NOT EXISTS` and contains no `DROP`, the two new decision columns are nullable and
-inert, the three ledger indexes additive, and a control row is cleared rather than deleted
-— so operator history survives a code rollback. Deploy only through the documented deploy
-script, and never run two concurrently.
+**Reverting the code is the last resort.** Revert the PR and redeploy from the registry.
+The schema needs no rollback: every DDL statement in this phase is additive,
+`IF NOT EXISTS` and free of `DROP`; the two new decision columns are nullable and inert;
+the three ledger indexes additive; and a control row is cleared rather than deleted, so
+operator history survives. Deploy only through the documented script, never two at once.
 
 ---
 
 ## 16. Safety constraints
 
 - **Nothing in this directive sends anything** except the staff digest in §9.
-- `GROWTH_JOURNEY_EXECUTION_ENABLED` is the DRI's switch; do not enable it as part of any
-  procedure here.
+- `GROWTH_JOURNEY_EXECUTION_ENABLED` is the DRI's switch; do not enable it here.
 - **SMS and voice are refused by name**, not merely unimplemented — they exist in the
   channel vocabulary so they can be rejected as `channel_not_authorized`, and neither
   operator schema accepts them.
@@ -424,7 +422,5 @@ script, and never run two concurrently.
 
 ## Related
 
-- `directives/growth-journey-reason-codes.md` — every reason code, grouped by symptom.
-- `docs/GROWTH_JOURNEY_TRAINING_GUIDE.md` — the workspace, tab by tab, in operator words.
 - `directives/rotate-jwt-secret.md` — token rotation, and the same `/health` rule.
 - `docs/sessions/CC-20260812-k4m9.md` — the build record for every phase of this system.
