@@ -364,7 +364,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {ws.source && (
-            <SectionCard title="Source facts" icon="government-line" subtitle="Server-fetched by canonical id — not editable here.">
+            <SectionCard title="Source facts" icon="government-line" collapsible defaultOpen={false} subtitle="Server-fetched by canonical id — not editable here.">
               <dl className="row mb-0">
                 <dt className="col-sm-3">Buyer</dt><dd className="col-sm-9">{ws.source.publisher.leadBuyer.name} <span className="text-secondary">({ws.source.publisher.leadBuyer.jurisdiction})</span></dd>
                 <dt className="col-sm-3">Notice</dt><dd className="col-sm-9">{ws.source.notice.noticeType.value} · {ws.source.notice.procurementType.value}</dd>
@@ -375,7 +375,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {isDecoupled && (
-            <SectionCard title="Discovery details" icon="information-line"
+            <SectionCard title="Discovery details" icon="information-line" collapsible defaultOpen={false}
               subtitle="Why this opportunity surfaced + the source posting. Legacy scores are advisory (not a verified fit); the overview is preliminary and unverified.">
               {oppDetail === null ? (
                 <div className="text-secondary small">Loading discovery details…</div>
@@ -511,7 +511,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {(ws.source || isDecoupled) && (
-            <SectionCard title="What they want vs what we offer" icon="scales-3-line"
+            <SectionCard title="What they want vs what we offer" icon="scales-3-line" collapsible defaultOpen={false}
               subtitle="Advisory suggestion from Our Services — a starting point to confirm, not a verified fit. Feeds no gate.">
               <div className="row g-3">
                 <div className="col-md-6">
@@ -549,7 +549,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {isDecoupled && (() => {
             const gaps = derivePotentialDisqualifiers(established, ws.evaluation, svcMatches ?? []);
             return (
-              <SectionCard title="Gaps / potential disqualifiers" icon="error-warning-line"
+              <SectionCard title="Gaps / potential disqualifiers" icon="error-warning-line" collapsible defaultOpen={false}
                 subtitle="Requirements that could keep us from winning — to verify or resolve before bidding.">
                 <div className="alert alert-warning py-2 small" role="status">
                   <i className="ri-alert-line me-1" aria-hidden="true" />Advisory only — not a verified pass/fail. Deeper eligibility verification (SAM/registration/set-asides/clearances) is a later step.
@@ -584,7 +584,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             const toCover = notDownloaded.map((it) => it.docId);
             if (items.length === 0) return null;
             return (
-              <SectionCard title="Manual document review" icon="folder-download-line"
+              <SectionCard title="Manual document review" icon="folder-download-line" collapsible defaultOpen={false}
                 subtitle="Bonfire gates the ZIP behind a portal login — download it by hand, then upload it here to attest the authoritative package was reviewed. The server records a hash of the file; it never stores the bytes.">
                 <ul className="list-unstyled mb-3">
                   {items.map((it) => {
@@ -690,7 +690,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </SectionCard>
 
           {/* ── SEPARATE build authorization ────────────────────────────────── */}
-          <SectionCard title="Authorize a build (separate)" icon="tools-line" subtitle="A pursuit approval is NOT a build authorization. Recording this does not run any build; the autonomous builder stays parked.">
+          <SectionCard title="Authorize a build (separate)" icon="tools-line" collapsible defaultOpen={false} subtitle="A pursuit approval is NOT a build authorization. Recording this does not run any build; the autonomous builder stays parked.">
             <div className="d-flex flex-wrap gap-2 align-items-end">
               <input className="form-control form-control-sm" style={{ maxWidth: 260 }} placeholder="delivery project id (uuid)" value={build.deliveryProjectId} onChange={(e) => setBuild({ ...build, deliveryProjectId: e.target.value })} />
               <input className="form-control form-control-sm" style={{ maxWidth: 180 }} placeholder="scope" value={build.scope} onChange={(e) => setBuild({ ...build, scope: e.target.value })} />
