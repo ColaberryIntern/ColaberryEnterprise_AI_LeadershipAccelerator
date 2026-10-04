@@ -76,6 +76,23 @@ describe('evaluateRequirements (PURE) — missing evidence never silently passes
     expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[CLEAN_CANONICAL].requirements).canApproveBid).toBe(true);
     expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[BLOCKING_CANONICAL].requirements).canApproveBid).toBe(false);
   });
+
+  it('PURSUIT SPLIT: an un-evidenced binding submission requirement fails the FULL bar but PASSES the pursuit bar (open item)', () => {
+    const e = evaluateRequirements([req({ evidenceRef: null })]); // applicable binding submission, no evidence
+    expect(e.canApproveBid).toBe(false);                 // full submission-ready bar still fails
+    expect(e.canApprovePursuit).toBe(true);              // pursuit/research bar passes
+    expect(e.pursuitBlocking).toHaveLength(0);
+    expect(e.openSubmissionRequirements).toHaveLength(1);
+    expect(e.openSubmissionRequirements[0].reason).toBe('submission_prerequisite_no_evidence');
+  });
+
+  it('PURSUIT SPLIT: a true disqualifier (unknown applicability) blocks BOTH bars', () => {
+    const e = evaluateRequirements([req({ applicability: 'unknown' })]);
+    expect(e.canApproveBid).toBe(false);
+    expect(e.canApprovePursuit).toBe(false);
+    expect(e.pursuitBlocking).toHaveLength(1);
+    expect(e.openSubmissionRequirements).toHaveLength(0);
+  });
 });
 
 describe('evaluateEvidenceCoverage (PURE) — missing evidence never silently passes', () => {
@@ -527,5 +544,15 @@ describe('approveDecoupledQualification — ZIP-evidence gate; never calls OP; c
     expect(out.source_snapshot).toBeNull();
     expect(out.evidence_json.approvedBy).toBe('approver-2');
     expect(out.evidence_json.attestedZipSha256).toBe('f'.repeat(64));
+  });
+  it('PURSUIT SPLIT: un-evidenced binding submission requirements (the IVR case) no longer block a pursuit once the ZIP is attested', async () => {
+    const unevidenced = [{ id: 'R1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }]; // no evidenceRef
+    findOne.mockResolvedValue(current({ established: unevidenced, reviewedDocuments: [zip] }));
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const out = await approveDecoupledQualification(input());
+    expect(out.decision).toBe('approved_bid_pursuit');                           // approved under the pursuit bar
+    expect(out.requirements_json.evaluation.canApprovePursuit).toBe(true);
+    expect(out.requirements_json.evaluation.canApproveBid).toBe(false);          // full bar still fails (gates submission)
+    expect(out.requirements_json.evaluation.openSubmissionRequirements).toHaveLength(1); // carried as an open item
   });
 });

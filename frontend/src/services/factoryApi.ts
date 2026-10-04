@@ -350,9 +350,16 @@ export interface QualRequirementEval { id: string; dueStage: string; applicabili
 export interface QualRequirementsEvaluation {
   evals: QualRequirementEval[];
   blocking: QualRequirementEval[];
+  /** Disqualifiers that block a PURSUIT decision (unknown applicability / un-evidenced dismissal). */
+  pursuitBlocking?: QualRequirementEval[];
+  /** Applicable submission requirements still needing evidence — block SUBMISSION, not the pursuit. */
+  openSubmissionRequirements?: QualRequirementEval[];
   deliveryObligations: QualRequirementEval[];
   byDueStage: Record<string, QualRequirementEval[]>;
+  /** Submission-ready bar (every requirement evidenced). */
   canApproveBid: boolean;
+  /** Pursuit/research bar — no disqualifier (un-evidenced submission prerequisites are expected here). */
+  canApprovePursuit?: boolean;
 }
 /** The server-authoritative source detail (a gov-opportunity.v1 subset). Advisory-only fields (legacy fit,
  *  legacyVerdict) are shown labeled as advisory — the qualification depends on evidence, not on OP's verdict. */

@@ -32,7 +32,8 @@ This is the end-to-end process for taking a government opportunity from discover
 
 ### 5 — Attest evidence & approve the pursuit (live)
 - Record the uploaded ZIP as the **evidence of record** (a server-side hash; the bytes are never stored).
-- Approval is **gated**: at least one applicable requirement established, the ZIP attested, no blocking requirement, and the **approver must not be the reviewer**. Unknown applicability or an empty requirement set never passes.
+- Approval is **gated**, scoped to what a pursuit decision actually warrants (it authorizes **research**, not a submission): at least one applicable requirement established, the ZIP attested, the **approver ≠ reviewer**, and **no disqualifier** — nothing of unknown applicability, and no "not applicable" dismissed without evidence. An empty requirement set never passes.
+- Applicable submission requirements that merely lack evidence are **open items**, not blockers: they are surfaced ("N still need evidence") and carried into the build, and the **full evidence bar is enforced at bid submission (step 8)**, not here. This split keeps the pursuit decision honest without demanding bid-ready evidence before any work is done.
 
 ### 6 — Two projects (built; ships dark)
 - On approval, the system creates (idempotently) one **government delivery project** with a **Proposal** track (the customer's established requirements) and a **Build** track (our solution); the established requirements are written into the compliance matrix on both tracks (`evidence_state: unassessed` — nothing fabricated). *Coordinator-approved and built; ships behind `ENABLE_GOV_INGESTION` (default off) and activates when that flag is flipped on. Creating the project does NOT authorize a build — that stays the separate step-7 gate.*
@@ -41,6 +42,7 @@ This is the end-to-end process for taking a government opportunity from discover
 - Record a **bounded build authorization** (scope + resource limit), then run the build to produce the demo + screenshots. *The autonomous builder stays parked; it runs only on an explicit, separate go.*
 
 ### 8–9 — Submit & bank (future)
+- The **full evidence bar is enforced here**: every applicable submission requirement must be evidenced (the `canApproveBid` bar) before a bid can be submitted — the open items from the pursuit stage are closed out now.
 - Attach the build screenshots to the proposal and submit. Win or lose, the built capability is added to **Our Services**.
 
 ---
