@@ -221,3 +221,61 @@ action needed"). Ali, 2026-10-02, after I showed him the audit row: the rule is 
   - Still to do: this needs a **prod deploy** to take effect, and only affects mail classified
     afterwards. Kes is holding a drill (a real-shaped alert carrying `X-Cora-Alert-Drill: true`)
     until the rule is live.
+
+---
+
+## Inbox COS: two more classes taken out of the LLM's hands
+
+Ali, 2026-10-04: a Protective Life application email he was looking for had been archived, and the
+weekly session reminders he had "deleted at least 3 times" kept reappearing.
+
+**A correction I made to myself mid-investigation.** I first read the stored `confidence` as the
+classifier's certainty and called 0 / 15 / 20 "filing mail it has no conviction about". Wrong.
+`llmClassificationService.ts` scores **how likely the mail needs Ali's personal attention**, and
+`confidenceToState` maps `>=75 INBOX / >=50 ASK_USER / >=25 SILENT_HOLD / <25 AUTOMATION`. A 0 is a
+confident "he does not need this", not an absent judgement. The "confidence floor" fix I had in mind
+was void, and the real answer was to take two classes of mail out of the scorer's hands.
+
+- [x] `financial_application_0i` — an application waiting on Ali stays in the inbox
+  - Date: 2026-10-04
+  - Session: CC-20260910-3q7x
+  - What changed: new `isFinancialApplicationMail(subject, body)` and rule `0i`. Requires **both**
+    halves: a subject asking you to complete / sign / submit something (or "action required"), AND a
+    body naming an open file (policy / application / claim / member / contract / account number, or
+    "underwriting", or "application packet"). Either half alone is ordinary marketing language.
+  - Evidence it was needed: Protective Life policy `LU6202903`, archived **twice** (10-02 15:30 at
+    score 0, 10-03 10:01 at score 20), both times reasoned as "a marketing communication". It said
+    underwriting could not begin until the application was registered, completed and signed.
+  - Deliberately NOT a list of carrier domains: that is the sender-by-sender patching that let the
+    account-security defect recur four times before rule `0g` matched on shape.
+
+- [x] `event_reminder_34` — recurring countdown reminders are archived deterministically
+  - Date: 2026-10-04
+  - Session: CC-20260910-3q7x
+  - What changed: new `isRecurringEventReminder(subject)` matching a trailing `(N <unit> out)`
+    parenthetical, and rule `3.4` placed **after** the VIP (1), name (2) and family-keyword (3)
+    checks so any of them can still rescue the mail.
+  - Evidence: `discussions@school.colaberry.com` sends three notices per event and the event
+    recurs weekly, so nothing was being resurrected — each week's are new messages. The LLM gave
+    IDENTICAL mail a different verdict almost every week (Oct 1 week-out INBOX, Sep 24 week-out
+    AUTOMATION; Oct 1 hour-out AUTOMATION, Sep 24 hour-out INBOX) because the score sits on the
+    25-point boundary. Roughly one in three reached the inbox at random.
+
+- [x] Fixed a mock that had been disabling every VIP assertion in the suite
+  - Date: 2026-10-04
+  - Session: CC-20260910-3q7x
+  - What changed: `jest.mock('../../../models/InboxVip')` now provides a `sequelize` stub with
+    `where` / `fn` / `col`. The VIP check builds its WHERE through those; without them it threw, its
+    own `catch` swallowed the error, and execution fell through to the next rule.
+  - How it surfaced: a new test asserting "a VIP sender overrides the event-reminder rule" **failed
+    against correct code**. Every prior VIP assertion in this file had been testing the ABSENCE of
+    the VIP path rather than its presence.
+  - Verification: `npx jest hardRuleEngine.test.ts` → **87 passed, 1 suite, exit 0**.
+    `npx tsc --noEmit` → exit 0, zero output lines. Both re-run after the last edit.
+  - Mutation evidence: guarding both new rules with `if (false && ...)` failed **exactly seven
+    tests** — the two financial positives and the five countdown positives — while every negative
+    stayed green. Restored by edit; `diff` against a pre-mutation copy reported identical, and the
+    MUT marker count is 0.
+  - Note on what is NOT evidence: a `ts-node` spot-check of the two predicates printed nothing and
+    is not cited. The proof is the jest case that feeds the rule the **exact** archived subject and
+    body, `POLICY NUMBER: LU6202903` included.

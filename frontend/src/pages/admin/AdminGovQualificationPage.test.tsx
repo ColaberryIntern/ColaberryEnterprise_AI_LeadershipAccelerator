@@ -419,6 +419,26 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(container.textContent ?? '').toContain('no longer in the live discovery feed');
   });
 
+  it('Deadline card: a live days countdown + the close date + the honest date-only caveat (decoupled)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: { uuid: '11111111-1111-4111-a111-111111111111', title: 'IVR', agency: 'Fort Worth', closeDate: '2099-12-31', fitScore: null, priorityScore: null, estimatedValue: null, valueBasis: null, sourceUrl: null, preliminarySummary: null }, source: 'live', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Submission deadline');
+    expect(text).toContain('days left');            // a far-future date is always a positive countdown
+    expect(text).toContain('Dec 31, 2099');         // the absolute close date (UTC, en-US)
+    expect(text).toContain('the daily Bonfire sync'); // the honest date-only caveat
+  });
+
+  it('Deadline card: honest empty state when no close date is captured (decoupled)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: { uuid: '11111111-1111-4111-a111-111111111111', title: 'IVR', agency: 'Fort Worth', closeDate: null, fitScore: null, priorityScore: null, estimatedValue: null, valueBasis: null, sourceUrl: null, preliminarySummary: null }, source: 'live', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No submission deadline captured yet');
+  });
+
   it('Gaps panel: advisory banner + a flagged eligibility gap (SAM registration, no evidence, no matching capability)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'E1', text: 'Offeror must be registered in SAM.gov.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },

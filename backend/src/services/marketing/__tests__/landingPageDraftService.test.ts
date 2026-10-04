@@ -260,6 +260,26 @@ describe('the prompt states the rules it is relied on for', () => {
     expect(system).toMatch(/Strong, because only this brief could produce it/);
   });
 
+  it('requires the title and the hero to be different sentences, with a worked pair', async () => {
+    // v2 produced the SAME sentence for both in 5/5 live runs - caused by rule 8's own wording
+    // ("use that line for the promise"), since the hero is also the promise. v3 names the two
+    // jobs and shows a pair. Measured 2026-10-04: identical in 0/5.
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    const system = create.mock.calls[0][0].messages[0].content;
+    expect(system).toMatch(/THE TITLE AND THE HERO HEADLINE ARE DIFFERENT SENTENCES/);
+    expect(system).toMatch(/Never\s+return the same sentence for both/);
+    // The distinction that makes it actionable, not just the prohibition.
+    expect(system).toMatch(/The title says what it IS\. The headline says what you GET\./);
+  });
+
+  it('no longer tells the title to carry the promise, which is the job of the hero', async () => {
+    // This exact phrase in rule 8 is what induced the duplication.
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(create.mock.calls[0][0].messages[0].content).not.toMatch(/Use that line for the promise instead/);
+  });
+
   it('forbids the brand name in the title, because the page already shows it', async () => {
     // Measured: 3 of 3 v1 runs began the title "Colaberry Training: ...", spending the only
     // line a search result and a link preview show.
@@ -278,8 +298,8 @@ describe('the prompt states the rules it is relied on for', () => {
     const svc = require('fs').readFileSync(
       require('path').resolve(__dirname, '..', 'landingPageDraftService.ts'), 'utf8',
     );
-    expect(svc).toContain("prompt_version: 'landing-page-draft-v2'");
-    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v1'");
+    expect(svc).toContain("prompt_version: 'landing-page-draft-v3'");
+    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v2'");
   });
 
   it('lists every section type the schema allows, and no others', async () => {

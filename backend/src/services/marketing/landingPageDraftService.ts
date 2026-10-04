@@ -136,7 +136,16 @@ RULES, in order of importance:
    is a label; "A working project in your own repo" is the thing.
 8. DO NOT PUT THE BRAND NAME IN THE TITLE. The page already displays it. A title of
    "Acme Training: Data Course for Analysts" wastes the only line that shows in a search result
-   and a link preview. Use that line for the promise instead.`;
+   and a link preview.
+9. THE TITLE AND THE HERO HEADLINE ARE DIFFERENT SENTENCES, because they are read by different
+   people in different places. The title is read by someone who has NOT seen the page - in a
+   search result or a shared link - so it names the thing plainly: the format, and who it is for.
+   The hero headline is read by someone who has just arrived, so it makes the promise. Never
+   return the same sentence for both.
+   For the six-week cohort brief above, a good pair is:
+     title: "Six-week AI project cohort for working data analysts"
+     hero : "Ship an AI project in six weeks, reviewed by a mentor"
+   The title says what it IS. The headline says what you GET.`;
 
 function userMessage(input: LandingPageDraftRequest, brandName: string): string {
   const parts = [`Brand: ${brandName}`, '', 'BRIEF:', input.source.trim()];
@@ -184,7 +193,7 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
   if (!brand) throw new WorkflowError('Brand not found', 404, 'NotFound');
 
   const client = getInstrumentedOpenAI(
-    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v2' },
+    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v3' },
     { timeout: TIMEOUT_MS, maxRetries: 1 },
   );
 
