@@ -22,23 +22,22 @@ they are. Each programme carries its own vocabulary and the screens use it:
 | Programme kind | Brands running it | The person is a… | Their commitment is an… | Their track is a… |
 |---|---|---|---|---|
 | Learner | CPN, Colaberry Training | **learner** | **enrolment** | **path** |
-| Business | Colaberry Business | **lead** | **account** | **opportunity** |
+| Business | Colaberry Business ("Colaberry Enterprise" in the dropdown) | **lead** | **account** | **opportunity** |
 | Consulting | AI Flotation | **lead** | **engagement** | **project** |
 
-One programme per brand today, so the brand you pick decides the words you see. **You
-will not see "engagement" or "project" on a Colaberry Business screen** — that brand runs
-a *business* programme, so it says account and opportunity.
-
-So the same column reads "learner" on a CPN programme and "lead" on a consulting one.
-Deliberate — and if you see the wrong word for the programme you are on, report it. With
-no programme selected the wording is neutral, because there is no single right word yet.
+One programme per brand today, so the brand you pick decides the words. **You will not see
+"engagement" or "project" on a Colaberry Business screen** — it runs a *business*
+programme, so it says account and opportunity. With no programme selected the wording is
+neutral, because there is no single right word yet. If a screen uses the wrong word for
+the programme you are on, report it.
 
 ### The brand boundary, which matters more than it looks
 
 - **CPN** and **Colaberry Training** — learner journeys only.
-- **Colaberry Business** — business training, consulting, workflow automation, app
-  builds, general AI.
-- **AI Flotation** — the same as Colaberry Business **except business training**.
+- **Colaberry Business** — business training, consulting, workflow automation, app builds,
+  general AI. **In the brand dropdown this reads "Colaberry Enterprise"** — same brand,
+  older name, and the one the screen shows.
+- **AI Flotation** — the same offers **except business training**.
 
 **Business-training content must never be routed into an AI Flotation journey.** The
 system enforces this and the Content tab shows you the rule that did it. If you ever see
@@ -150,21 +149,17 @@ higher than the cost of saying nothing.
 **The tab most of you will live in.** A handoff is the system saying "a human should take
 this one."
 
-**Creating a handoff notifies nobody.** It puts a row in a queue. You come to the queue;
-it does not come to you — except for the weekday digest email, which lists what is
-already assigned to you and contains no personal details about the people in it.
+**Creating a handoff notifies nobody.** It puts a row in a queue — you come to the queue,
+it does not come to you, except for the weekday digest email, which lists what is already
+assigned to you and carries no personal details about the people in it.
 
 ### Working the queue
 
-Three moves, in order:
-
-1. **Accept** — you are taking it. Do this before you contact anyone, so two people do
-   not work the same person.
-2. **Disposition** — you are done, and you say what happened. Requires a real reason, not
-   a word.
-3. **Release** — you are handing it back, because it is not yours or you cannot get to
-   it. Releasing is a normal, good move. An unworked row sitting on your name is worse
-   than a released one.
+1. **Accept** — you are taking it. Do this before you contact anyone, so two people do not
+   work the same person.
+2. **Disposition** — you are done, and you say what happened. Requires a real reason.
+3. **Release** — you are handing it back. Releasing is a normal, good move: an unworked row
+   sitting on your name is worse than a released one.
 
 ### The dispositions, and what each one actually does
 
@@ -201,12 +196,12 @@ someone who asked not to be contacted puts them back in the machine.
 **What it answers:** does withholding our messaging change anything?
 
 Some people are deliberately left alone — a **control group** — so the team can tell
-whether the system's messages actually help, rather than assuming they do.
+whether the messages actually help rather than assuming they do.
 
-The number to read is the **lift**, and it comes with an interval. **The interval is the
-finding, not the point estimate.** A lift of "5%, somewhere between −1% and +12%" has not
-established anything yet; it means keep collecting. When the system cannot yet tell, it
-says so instead of printing a number — by design, there is no figure to misread.
+The number to read is the **lift**, and **the interval is the finding, not the point
+estimate.** A lift of "5%, somewhere between −1% and +12%" has established nothing yet; it
+means keep collecting. When the system cannot tell, it says so rather than printing a
+number.
 
 Four reasons a brand shows nothing here, kept separate because only one needs a person:
 
@@ -226,18 +221,15 @@ No experiment is running today.
 Rates for acceptance, connection, meetings, qualification, proposals and conversion, plus
 how long each stage takes.
 
-**The most important thing on this page is that a dash is not a zero.**
+**The most important thing on this page is that a dash is not a zero.** **0%** means it
+happened and the answer was zero — every handoff refused, which is a crisis. **—** means
+there was nothing to measure, no handoff created, which is a quiet week. A screen printing
+0% for both would tell you the opposite of the truth, so every dash carries its specific
+reason: nothing was created, nothing was accepted so nothing could follow, or the window
+was too wide and the figures were **refused rather than approximated** — narrow it and ask
+again.
 
-- **0%** means it happened and the answer was zero — every handoff was refused. That is a
-  crisis.
-- **—** means there was nothing to measure — no handoff was created. That is a quiet week.
-
-A screen that printed 0% for both would tell you the opposite of the truth, so every dash
-carries the specific reason beside it: nothing was created, nothing was accepted so
-nothing could follow, or the window was too wide and the figures were **refused rather
-than approximated** — narrow the window and ask again.
-
-Timings behave the same way. A median needs at least three samples; with fewer the page
+Timings behave the same way. A median needs at least three samples; with fewer, the page
 shows how many it had rather than a misleading average.
 
 Below the rates are three more panels:

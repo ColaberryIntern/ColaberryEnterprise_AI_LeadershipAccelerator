@@ -33,7 +33,7 @@ here, read the reason beside it.
 | Input | Where |
 |---|---|
 | Six journey switches | backend environment, parsed once in `backend/src/config/env.ts` |
-| Nine Explorer switches (two consulted by the ladder) | `backend/src/config/explorerGrowthFlags.ts` |
+| Ten Explorer switches — one master + nine features, two of the nine consulted by the ladder | `backend/src/config/explorerGrowthFlags.ts` |
 | Global kill switch | one `system_settings` row, key `system_kill_switch` |
 | Scoped pauses and rollouts | `growth_journey_execution_controls`, written only through §5 |
 | Agent on/off | `ai_agents` registry rows, toggled in Admin → Agents |
@@ -94,7 +94,7 @@ than an estimate. Modes, least to most active: `off` → `observe` → `shadow` 
 | 5 | kill switch unreadable | `off` | `kill_switch_unreadable` |
 | 6 | a pause covers this scope | `off` | `pause:<dims>`, e.g. `pause:brand+channel` |
 | 7 | no rollout for this scope | `shadow` | `no_rollout` |
-| 7 | channel is review-only (`ali_outreach`) | `review` | `review_only_channel` |
+| 7 | channel is review-only (`ali_outreach`) | `review` | `review_only_channel` on a `limited` rollout, else `rollout` |
 | 7 | rollout present | `review` / `limited` | `rollout` |
 | 7 | subject not in the cohort | `shadow` | `not_in_cohort` |
 | 7 | the day's limit is spent | `review` | `daily_limit_reached` |
@@ -364,12 +364,13 @@ long one arrives truncated. For `'unknown'` and `'redacted'`, see §11.
   `status/registry`, which is never gated, before concluding a route is missing.
 - **A 403 on a brand-scoped read usually means no membership row** (§8).
 - **An interrupted `CREATE INDEX CONCURRENTLY` leaves an invalid index** that
-  `IF NOT EXISTS` then skips forever — **and readiness will not catch it.** The
-  `ledger_indexes` item queries `SELECT indexname FROM pg_indexes` and checks only that
-  the three *names* appear; an invalid index appears there like any other. The
-  `pg_index.indisvalid` check belongs to the production verifier, not to readiness. So a
-  green `ledger_indexes` does not rule out this hazard: confirm validity yourself before
-  trusting it.
+  `IF NOT EXISTS` then skips forever — **and nothing in this system catches it.** The
+  `ledger_indexes` readiness item queries `SELECT indexname FROM pg_indexes` and checks
+  only that the three *names* appear; an invalid index appears there like any other.
+  `ensureMultiTenantSchema.ts:393` says a check should read `pg_index.indisvalid` for
+  these three, but **no such check is implemented anywhere in the repo.** So a green
+  `ledger_indexes` does not rule out this hazard, and no other gate will: query
+  `pg_index.indisvalid` yourself before trusting it.
 - **Unknown capacity does not block** — only `full` suppresses assignment.
 - **A future timestamp reads as `stale`, not `fresh`.**
 - **The nightly decisions cron keeps running under the kill switch** (§10).
@@ -409,9 +410,8 @@ operator history survives. Deploy only through the documented script, never two 
   channel vocabulary so they can be rejected as `channel_not_authorized`, and neither
   operator schema accepts them.
 - `ali_outreach` can be **paused** here and cannot be **started** here.
-- Every write is `.strict()`, idempotent and bounded: cohort ≤ 50, daily limit ≤ 25,
-  reason ≤ 500 characters, 120 requests/minute/caller. A pause with no brand, and every
-  rollout, require platform super-admin.
+- Every write is `.strict()`, idempotent and bounded (§5 has the numbers). A pause with
+  no brand, and every rollout, require platform super-admin.
 - **No email address may appear** in a ledger payload, API response, receipt, packet or
   log line.
 - The all-wildcard pause is refused in two independent places. **Do not add a third global
