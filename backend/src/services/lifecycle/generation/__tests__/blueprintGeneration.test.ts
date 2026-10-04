@@ -15,6 +15,7 @@ import {
   type BlueprintGenerationInput,
 } from '../blueprintGeneration';
 import { itemsByLocator, buildSourceHandoff, reportHandoffIntegrity } from '../sourceHandoff';
+import type { UnderstandingItem } from '../../../delivery/projectUnderstanding';
 import { MAX_REPAIR_ATTEMPTS } from '../../../sbp/planRepair';
 import {
   manualOnlyUnderstanding, manualOnlyProject, manualOnlyAllocation,
@@ -137,8 +138,14 @@ describe('a failure leaves a recoverable draft and NEVER advances the stage', ()
     // and weaker claim. A mutation proved the old `every stage name is a declared stage` test
     // could not fail at all - `stage` is typed GenerationStage, so no typechecking change could
     // break a toContain over that union - and it has been deleted rather than reworded.
-    expect(generateBlueprintOnce(fixtureD()).ok).toBe(true);
-    expect(GENERATION_STAGES).toContain(generateBlueprintOnce(fixtureD()).stage);
+    // The GENERATION_STAGES re-assertion that used to sit here was the same dead check the
+    // comment above says was deleted - `stage` is typed, so no typechecking mutation can break
+    // a toContain over its own union. Deleting the test and keeping the assertion was not a
+    // deletion. What is asserted instead is the thing that can actually differ: the stage
+    // reached on a clean run.
+    const d = generateBlueprintOnce(fixtureD());
+    expect(d.ok).toBe(true);
+    expect(d.stage).toBe('complete');
   });
 
 
@@ -250,7 +257,20 @@ describe('reconciliation \u2014 the stages are a pipeline, not five calls in a r
 describe('OBLIGATION: a revised requirement keeps its id and BUMPS its revision', () => {
   const corrected = () => {
     const u = manualOnlyUnderstanding();
-    u[0] = { ...u[0], value: 'Every contract over \u00a3100k must be read by a qualified solicitor.' };
+    // A real correction DECLARES its prior wording in `history`, and that declaration is now what
+    // makes it a revision rather than a delete-plus-add. Position alone cannot tell those apart,
+    // and guessing let a never-before-stated requirement inherit an existing id.
+    u[0] = {
+      ...u[0],
+      value: 'Every contract over \u00a3100k must be read by a qualified solicitor.',
+      history: [{
+        value: u[0].value,
+        classification: u[0].classification,
+        provenance: u[0].provenance,
+        replaced_at: '2026-10-04T00:00:00.000Z',
+        replaced_by: 'correction' as const,
+      }],
+    };
     return u;
   };
 
@@ -329,6 +349,145 @@ describe('Fixture D\u2019s documented failure cases are enforced, not just descr
     expect(d.stage).toBe('allocation');
     const sens = d.refusals.filter((r) => r.code === 'SENSITIVITY_AUTONOMY');
     expect(sens).toHaveLength(2);
+  });
+});
+
+
+describe('replay identity is TEXT-first, so a reorder is safe and a swap is loud', () => {
+  const r = (value: string, priorWording?: string): UnderstandingItem => ({
+    dimension: 'requirements', classification: 'FACT', provenance: 'source_document', value,
+    ...(priorWording ? {
+      history: [{
+        value: priorWording, classification: 'FACT' as const,
+        provenance: 'source_document' as const,
+        replaced_at: '2026-10-04T00:00:00.000Z', replaced_by: 'correction' as const,
+      }],
+    } : {}),
+  });
+
+  const replay = (first: ReturnType<typeof buildSourceHandoff>, next: UnderstandingItem[]) => {
+    const second = buildSourceHandoff(next, itemsByLocator(first));
+    return {
+      second,
+      report: reportHandoffIntegrity(
+        first.items.map((i) => i.item),
+        second.items.map((i) => i.item),
+      ),
+    };
+  };
+
+  it('REORDERING two requirements keeps every id on its own statement', () => {
+    // Measured before this fix: `ok: true, revised: 2` with both identities swapped onto the
+    // wrong statements. Before the id work at all, a reorder minted fresh ids and produced a
+    // LOUD 3-lost/3-invented false positive - noisy but safe. It had become silent.
+    const first = buildSourceHandoff([r('AAA'), r('BBB')]);
+    const { second, report } = replay(first, [r('BBB'), r('AAA')]);
+
+    expect(report.ok).toBe(true);
+    expect(report.revised).toEqual([]);
+    expect(report.lost).toEqual([]);
+    expect(report.invented).toEqual([]);
+    // The id that carried AAA still carries AAA, at its new position.
+    const aaa = second.items.find((i) => i.item.text === 'AAA')!;
+    expect(aaa.item.id).toBe(first.items[0].item.id);
+  });
+
+  it('DELETE ONE AND ADD ONE is LOUD: 1 lost, 1 invented, and NOT a revision', () => {
+    // Measured before this fix: `ok: true, lost: 0, invented: 0, revised: 2` - a
+    // never-before-stated requirement inheriting an existing id, provenance and history. That is
+    // the founding incident in miniature.
+    const first = buildSourceHandoff([r('AAA'), r('BBB')]);
+    const { report } = replay(first, [r('BBB'), r('CCC never stated before')]);
+
+    expect(report.ok).toBe(false);
+    expect(report.lost).toEqual([first.items[0].item.id]);
+    expect(report.invented).toHaveLength(1);
+    expect(report.revised).toEqual([]);
+  });
+
+  it('a DECLARED correction is a revision \u2014 the discriminator is in the data', () => {
+    // Position cannot tell "AAA was reworded to CCC" from "AAA deleted, CCC added". A real
+    // correction carries its prior wording in `history`, so a revision happens when the item
+    // SAYS it is one. Declared, not inferred.
+    const first = buildSourceHandoff([r('AAA'), r('BBB')]);
+    const { report } = replay(first, [r('AAA'), r('BBB, corrected', 'BBB')]);
+
+    expect(report.ok).toBe(true);
+    expect(report.revised).toEqual([first.items[1].item.id]);
+    expect(report.lost).toEqual([]);
+    expect(report.invented).toEqual([]);
+  });
+
+  it('POSITIVE CONTROL: the same correction WITHOUT the declaration is loud instead', () => {
+    // The pair that proves the declaration is load-bearing rather than decorative.
+    const first = buildSourceHandoff([r('AAA'), r('BBB')]);
+    const { report } = replay(first, [r('AAA'), r('BBB, corrected')]);
+
+    expect(report.ok).toBe(false);
+    expect(report.lost).toHaveLength(1);
+    expect(report.invented).toHaveLength(1);
+  });
+
+  it('DELETING an item reports it lost, rather than shifting ids up', () => {
+    const first = buildSourceHandoff([r('AAA'), r('BBB')]);
+    const { report } = replay(first, [r('AAA')]);
+
+    expect(report.ok).toBe(false);
+    expect(report.lost).toEqual([first.items[1].item.id]);
+    expect(report.invented).toEqual([]);
+  });
+
+  it('the handoff keeps the understanding\u2019s INPUT order, not a per-dimension grouping', () => {
+    // Resolving identity needs a per-dimension view; the OUTPUT must not inherit that grouping.
+    // Restructuring for the fix silently reordered it, which a locator test caught.
+    const mixed: UnderstandingItem[] = [
+      r('first requirement'),
+      { dimension: 'problem', classification: 'FACT', provenance: 'source_message', value: 'a problem' },
+      r('second requirement'),
+    ];
+    const h = buildSourceHandoff(mixed);
+    expect(h.items.map((i) => i.dimension)).toEqual(['requirements', 'problem', 'requirements']);
+  });
+});
+
+describe('the effort reconciliation runs BOTH ways', () => {
+  it('refuses an effort row for a task the process graph does not declare', () => {
+    // Measured before this fix: one ghost row took the manual-only fixture from a measured 0% AI
+    // share to 97.9% (10000/10210), reported coverage 3/3, and flipped belowTarget from true to
+    // FALSE - clearing BELOW_TARGET_UNEXPLAINED entirely. One fabricated row turned a
+    // deliberately-manual blueprint into an almost-fully-automated one that passed every gate.
+    const d = generateBlueprintOnce(fixtureD({
+      effort: [...manualOnlyEffort(), {
+        taskId: 't-ghost', executionClass: 'ai_autonomous',
+        minutesPerOccurrence: 500, basis: 'MEASURED', occurrencesPerMonth: 20,
+      }],
+    }));
+
+    expect(d.ok).toBe(false);
+    expect(d.stage).toBe('effort');
+    expect(d.refusals.map((x) => x.code)).toEqual(['EFFORT_TASK_UNKNOWN']);
+    expect(d.refusals[0].subject).toBe('t-ghost');
+    // And no share was computed at all, so the inflated figure never existed.
+    expect(d.measures).toBeNull();
+  });
+
+  it('refuses an effort row whose class disagrees with its allocation row', () => {
+    // Otherwise the AI share is computed from a classification the allocation gate - where
+    // SENSITIVITY_AUTONOMY lives - never approved.
+    const effort = manualOnlyEffort().map((e, i) => (
+      i === 1 ? { ...e, executionClass: 'ai_autonomous' as const } : e
+    ));
+    const d = generateBlueprintOnce(fixtureD({ effort }));
+
+    expect(d.ok).toBe(false);
+    expect(d.refusals.map((x) => x.code)).toEqual(['EFFORT_CLASS_DISAGREES']);
+  });
+
+  it('PASSING COUNTERPART: a matching effort list still measures 0% honestly', () => {
+    const d = generateBlueprintOnce(fixtureD());
+    expect(d.ok).toBe(true);
+    expect(d.measures!.aiShare.fraction).toBe(0);
+    expect(d.measures!.belowTarget).toBe(true);
   });
 });
 

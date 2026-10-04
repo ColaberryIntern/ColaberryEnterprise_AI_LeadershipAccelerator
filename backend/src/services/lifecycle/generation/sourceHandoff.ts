@@ -164,55 +164,40 @@ export function buildSourceHandoff(
   understanding: ReadonlyArray<UnderstandingItem>,
   prior: ReadonlyMap<string, SourceItem> = new Map(),
 ): HandoffResult {
-  const perDimensionCount = new Map<UnderstandingDimension, number>();
   const staged: HandoffItem[] = [];
   let totalChars = 0;
 
+  // Prior items grouped by dimension. The locator encodes the dimension, so this reads the
+  // grouping back out of the map the caller threaded in.
+  const priorByDimension = new Map<string, SourceItem[]>();
+  for (const [locator, item] of prior) {
+    const dim = locator.split('#')[0];
+    (priorByDimension.get(dim) ?? priorByDimension.set(dim, []).get(dim)!).push(item);
+  }
+
+  // One pass per dimension, because identity resolution needs to see the whole set.
+  const byDimension = new Map<UnderstandingDimension, UnderstandingItem[]>();
   for (const it of understanding) {
-    const ordinal = (perDimensionCount.get(it.dimension) ?? 0) + 1;
-    perDimensionCount.set(it.dimension, ordinal);
+    (byDimension.get(it.dimension) ?? byDimension.set(it.dimension, []).get(it.dimension)!).push(it);
+  }
 
-    // REPLAY: reuse the prior ITEM, and revise it when the wording changed.
-    //
-    // The P3-T1 verifier found that minting a fresh uuid per call meant a REPLAYED handoff over
-    // an unchanged understanding would read to reportHandoffIntegrity as 30 lost and 30 invented
-    // - the integrity check firing on a correct replay.
-    //
-    // THE FIRST FIX FOR THAT TRADED A LOUD FALSE POSITIVE FOR A SILENT FALSE NEGATIVE, which is
-    // strictly worse. Carrying the id alone meant a CORRECTED requirement came back with the
-    // same id and `revision: 1`, so `reportHandoffIntegrity` reported ok/0 lost/0 invented for
-    // text that had materially changed. A reviewer would have been told nothing happened.
-    //
-    // So the replay map carries the prior ITEMS, and a wording change goes through
-    // `reviseSourceItem` - same id, next revision - which is what it exists for. An absent
-    // entry still mints, so first runs are unchanged.
-    const locator = `${it.dimension}#${ordinal}`;
-    const priorItem = prior.get(locator);
-
-    const item = mintSourceItem({
-      text: it.value,
-      // Always `heard`: see toSourceProvenance for why a confirmed provenance does not
-      // become a confirmed state.
-      state: 'heard',
-      provenance: toSourceProvenance(it, it.dimension, ordinal),
-      // Our reading of an ambiguous statement is kept separate from the statement itself.
-      interpretation: null,
+  // Identity is resolved per dimension, because the algorithm needs to see the whole set - but the
+  // OUTPUT stays in the understanding's own input order. Grouping the output by dimension would
+  // silently reorder the handoff, and a reviewer reading it expects the order they wrote.
+  const resolvedByItem = new Map<UnderstandingItem, SourceItem>();
+  for (const [dimension, items] of byDimension) {
+    const priors = [...(priorByDimension.get(dimension) ?? [])];
+    const resolved = resolveIdentities(items, priors);
+    items.forEach((it, index) => {
+      const identity = resolved[index] ?? mintFor(it, dimension, index + 1);
+      resolvedByItem.set(it, identity);
     });
+  }
 
-    // Three outcomes, and the middle one is the whole point:
-    //   no prior        -> the freshly minted item
-    //   prior, same text -> the prior item unchanged, id AND revision preserved
-    //   prior, new text  -> reviseSourceItem: same id, revision + 1, state dropped if it had
-    //                       been confirmed, because re-wording something is not re-confirming it
-    const stable = !priorItem
-      ? item
-      : priorItem.text === it.value
-        ? priorItem
-        : reviseSourceItem(priorItem, it.value);
-
+  for (const it of understanding) {
     totalChars += it.value.length;
     staged.push({
-      item: stable,
+      item: resolvedByItem.get(it)!,
       dimension: it.dimension,
       classification: it.classification,
       sourceQuote: it.source_quote ?? null,
@@ -238,6 +223,83 @@ export function buildSourceHandoff(
   return { items: staged, overflow: null, refusedReason: null };
 }
 
+/** Mint a fresh item for one understanding entry. */
+function mintFor(
+  it: UnderstandingItem,
+  dimension: UnderstandingDimension,
+  ordinal: number,
+): SourceItem {
+  return mintSourceItem({
+    text: it.value,
+    // Always `heard`: see toSourceProvenance for why a confirmed provenance does not become a
+    // confirmed state.
+    state: 'heard',
+    provenance: toSourceProvenance(it, dimension, ordinal),
+    interpretation: null,
+  });
+}
+
+/**
+ * Decide, for one dimension, which prior item (if any) each new item IS.
+ *
+ * TEXT FIRST, POSITION ONLY WHEN UNAMBIGUOUS. The previous version keyed on position alone, and
+ * the P3-T6 attempt-2 verifier measured what that cost:
+ *
+ *   - REORDERING two requirements reported `ok: true, revised: 2` with both identities swapped
+ *     onto the wrong statements. Before the id-stability work a reorder minted fresh ids and
+ *     produced a LOUD 3-lost/3-invented false positive: noisy, but safe.
+ *   - DELETE ONE AND ADD ONE in the same dimension reported `ok: true, lost: 0, invented: 0`,
+ *     with a never-before-stated requirement inheriting an existing id.
+ *
+ * Both are the founding incident in miniature - a requirement nobody stated arriving as though
+ * somebody had - so position alone is not good enough.
+ *
+ * The rule:
+ *   1. An exact TEXT match is the same statement, wherever it sits. Reuse it unchanged. This is
+ *      what makes a reorder safe.
+ *   2. Otherwise, reuse by position ONLY when exactly one prior and exactly one new item are left
+ *      unmatched - then it is unambiguously that item's wording being corrected.
+ *   3. Otherwise MINT. The unmatched priors then surface in `lost` and the new items in
+ *      `invented`, which is loud and correct rather than quiet and wrong.
+ */
+function resolveIdentities(
+  items: ReadonlyArray<UnderstandingItem>,
+  priors: ReadonlyArray<SourceItem>,
+): Array<SourceItem | null> {
+  const out: Array<SourceItem | null> = items.map(() => null);
+  const claimed = new Set<string>();
+
+  // 1. exact text matches, in order, each prior claimed at most once
+  items.forEach((it, i) => {
+    const hit = priors.find((p) => p.text === it.value && !claimed.has(p.id));
+    if (hit) { out[i] = hit; claimed.add(hit.id); }
+  });
+
+  // 2. A DECLARED correction, never an inferred one.
+  //
+  // Position alone cannot tell "AAA was reworded into CCC" from "AAA was deleted and CCC was
+  // added" - the data is identical. An earlier version assumed the first, which meant a
+  // never-before-stated requirement inherited an existing id, provenance and history. That is the
+  // founding incident in miniature.
+  //
+  // The discriminator is already in the data: a genuine correction carries the prior wording in
+  // `UnderstandingItem.history`. So a revision happens when the item SAYS it is one. Everything
+  // else mints, and the prior then surfaces in `lost` while the new one surfaces in `invented` -
+  // loud and correct rather than quiet and wrong. Declared, not inferred.
+  const openPriors = priors.filter((p) => !claimed.has(p.id));
+  const openIndexes = out.map((v, i) => (v === null ? i : -1)).filter((i) => i >= 0);
+  for (const i of openIndexes) {
+    const declaredPrior = openPriors.find((p) => !claimed.has(p.id)
+      && (items[i].history ?? []).some((h) => h.value === p.text));
+    if (declaredPrior) {
+      out[i] = reviseSourceItem(declaredPrior, items[i].value);
+      claimed.add(declaredPrior.id);
+    }
+  }
+
+  // 3. everything else mints, which the caller does when it sees null
+  return out;
+}
 /**
  * Which items would not fit, and whether any of them are unrecoverable.
  *
@@ -315,12 +377,16 @@ export function reportHandoffIntegrity(
  * requirement from a re-worded one - and that needs the prior TEXT. Exists so a caller never
  * has to know how a locator is built.
  *
- * KNOWN LIMIT, recorded rather than hidden: the locator is POSITIONAL
- * (`${dimension}#${ordinal}`), which the plan prescribed, so deleting an item shifts every
- * later item in that dimension onto its predecessor's locator. `reportHandoffIntegrity`
- * surfaces that as a revision rather than silently reassigning identity, but the attribution
- * is wrong in that case. A stable per-item id on `UnderstandingItem` is the real fix and does
- * not exist yet.
+ * IDENTITY IS RESOLVED TEXT-FIRST, not by position - see `resolveIdentities`. An earlier
+ * version keyed on position alone, and this paragraph used to claim the resulting drift
+ * "surfaces as a revision rather than silently reassigning identity". Measured, it did
+ * silently reassign identity with `ok: true`, so the paragraph asserted the opposite of the
+ * behaviour. A reorder is now safe and a delete-plus-add is now loud.
+ *
+ * What remains genuinely unresolvable without a stable per-item id on `UnderstandingItem`:
+ * two items in one dimension changing wording in the SAME replay. That is ambiguous by
+ * construction, so both mint and both surface as lost+invented - loud and safe, at the cost
+ * of losing the revision history on those two.
  */
 export function itemsByLocator(result: HandoffResult): Map<string, SourceItem> {
   const out = new Map<string, SourceItem>();

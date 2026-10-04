@@ -236,6 +236,50 @@ export function generateBlueprintOnce(input: BlueprintGenerationInput): Blueprin
     .map((t) => t.id);
   const assessed = new Set(input.effort.map((e) => e.taskId));
   const unaccounted = workTaskIds.filter((id) => !assessed.has(id));
+  // THE MIRROR OF THE LINE ABOVE, and the direction that inflates the headline number.
+  //
+  // Measured by the attempt-2 verifier: a single effort row for a task that exists NOWHERE in
+  // the project took the manual-only fixture from a measured 0% AI share to 97.9%, reported
+  // coverage as 3/3, and flipped `belowTarget` from true to false - clearing the below-target
+  // disclosure entirely. One fabricated row turned a deliberately-manual blueprint into an
+  // almost-fully-automated one that passed every gate.
+  //
+  // And a row whose class disagrees with its allocation row let the AI share be computed from
+  // a classification the allocation gate - where SENSITIVITY_AUTONOMY lives - never approved.
+  const declaredWork = new Set(workTaskIds);
+  const allocByTask = new Map(input.allocation.map((r) => [r.task_id, r]));
+  const effortProblems: Refusal[] = [];
+  for (const e of input.effort) {
+    if (!declaredWork.has(e.taskId)) {
+      effortProblems.push({
+        stage: 'effort',
+        code: 'EFFORT_TASK_UNKNOWN',
+        subject: e.taskId,
+        message: `effort is assessed for task ${e.taskId}, which the process graph does not `
+          + 'declare. Minutes attributed to a task that does not exist land in the denominator '
+          + 'and the numerator both, so they move every share while assessing nothing.',
+      });
+      continue;
+    }
+    const row = allocByTask.get(e.taskId);
+    if (row && row.execution_class !== e.executionClass) {
+      effortProblems.push({
+        stage: 'effort',
+        code: 'EFFORT_CLASS_DISAGREES',
+        subject: e.taskId,
+        message: `task ${e.taskId} is allocated '${row.execution_class}' but its effort is `
+          + `assessed as '${e.executionClass}'. The AI share would be computed from a `
+          + 'classification the allocation gate never approved.',
+      });
+    }
+  }
+  if (effortProblems.length) {
+    return {
+      ...base, handoff, idsByLocator: ids, ok: false, stage: 'effort', advanced: false,
+      refusals: effortProblems,
+    };
+  }
+
   if (unaccounted.length) {
     return {
       ...base, handoff, idsByLocator: ids, ok: false, stage: 'effort', advanced: false,
