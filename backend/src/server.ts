@@ -15,6 +15,7 @@ import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import unsubscribeRoutes from './routes/unsubscribeRoutes';
 import broadcastRoutes from './routes/broadcastRoutes';
+import broadcastMediaRoutes from './routes/broadcastMediaRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
@@ -202,6 +203,11 @@ app.use(communityRoomsRoutes);
 // adminRoutes: anything below that guard answers 401 to an ordinary participant, which is
 // the bug /r/ and /i/ each hit in production.
 app.use(broadcastRoutes);
+// Colaberry Live — signed inline replay playback (/bm/broadcast/...). A <video src> cannot
+// send a Bearer header, so this route authenticates from the HMAC in the URL. Same rule as
+// /r/, /i/ and /m/: above adminRoutes or the unscoped guard 401s every viewer. Pinned by
+// broadcastMediaRoutes.test.ts, which builds both mount orders.
+app.use(broadcastMediaRoutes);
 app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
