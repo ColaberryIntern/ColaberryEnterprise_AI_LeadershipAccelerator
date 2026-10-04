@@ -29,9 +29,10 @@
 
 import {
   buildSourceHandoff,
-  idsByLocator,
+  itemsByLocator,
   type HandoffResult,
 } from './sourceHandoff';
+import type { SourceItem } from '../sourceIdentity';
 import { validateProcess, type ReworkBounds } from './processValidation';
 import { validateAllocation, unknownAllocationCount } from './allocation';
 import { validateAgentScoping, type ScopedAgent } from './agentScoping';
@@ -86,7 +87,7 @@ export interface BlueprintGenerationInput {
   declaration: DeclarationSource;
   reworkBounds?: ReworkBounds;
   /** `(locator -> id)` from a previous run. Absent on a first run. */
-  priorIds?: ReadonlyMap<string, string>;
+  priorIds?: ReadonlyMap<string, SourceItem>;
   targetAcceptance?: TargetAcceptance | null;
   refs?: ManifestRefs;
 }
@@ -109,8 +110,18 @@ export interface BlueprintDraft {
   handoff: HandoffResult | null;
   measures: AutomationMeasure | null;
   /** Feed into the next run's `priorIds` so a replay is identity-stable. */
-  idsByLocator: Map<string, string>;
+  idsByLocator: Map<string, SourceItem>;
+  /**
+   * ATTEMPTS MADE, which is not the same as the attempt that produced this draft.
+   *
+   * The P3-T6 verifier found these had been conflated: on a repair that regressed, the kept
+   * draft was produced on attempt 1 and returned carrying `attempt: 3`. Both numbers are
+   * worth having and only one field existed, so `producedOnAttempt` now carries the other.
+   * Acceptance item 2's word is "attributable", and a single ambiguous number is not.
+   */
   attempt: number;
+  /** The attempt whose output this draft actually is. Equals `attempt` on a clean run. */
+  producedOnAttempt: number;
 }
 
 const toRefusals = (stage: GenerationStage, issues: ReadonlyArray<ValidationIssue>): Refusal[] =>
@@ -129,8 +140,9 @@ export function generateBlueprintOnce(input: BlueprintGenerationInput): Blueprin
   const base = {
     handoff: null as HandoffResult | null,
     measures: null as AutomationMeasure | null,
-    idsByLocator: new Map<string, string>(),
+    idsByLocator: new Map<string, SourceItem>(),
     attempt: 1,
+    producedOnAttempt: 1,
   };
 
   // Obligation 3: a declaration produced alongside the roster cannot gate it.
@@ -152,7 +164,7 @@ export function generateBlueprintOnce(input: BlueprintGenerationInput): Blueprin
 
   // ── handoff (T1) ────────────────────────────────────────────────────────────
   const handoff = buildSourceHandoff(input.understanding, input.priorIds ?? new Map());
-  const ids = idsByLocator(handoff);
+  const ids = itemsByLocator(handoff);
   if (handoff.overflow) {
     return {
       ...base,
@@ -210,6 +222,34 @@ export function generateBlueprintOnce(input: BlueprintGenerationInput): Blueprin
     return { ...base, handoff, idsByLocator: ids, ok: false, stage: 'agents', advanced: false, refusals };
   }
 
+  // ── reconciliation ──────────────────────────────────────────────────────────
+  //
+  // THE STAGES SHARED AN INPUT BUNDLE AND WERE NEVER RECONCILED, which the P3-T6 verifier
+  // demonstrated: removing one of two effort assessments produced `coverage {assessed: 1,
+  // total: 1}`, `ok: true`, no refusals. A work task simply left out of the effort list read as
+  // 100% coverage, because T5 can only measure what it is handed and has no view of the project.
+  //
+  // That made this a sequence of five calls rather than a pipeline. The reconciliation is what
+  // makes it one: the effort list must account for every work task the process graph declares.
+  const workTaskIds = input.project.tasks
+    .filter((t) => t.kind === 'TASK' || t.kind === 'DECISION')
+    .map((t) => t.id);
+  const assessed = new Set(input.effort.map((e) => e.taskId));
+  const unaccounted = workTaskIds.filter((id) => !assessed.has(id));
+  if (unaccounted.length) {
+    return {
+      ...base, handoff, idsByLocator: ids, ok: false, stage: 'effort', advanced: false,
+      refusals: unaccounted.map((id) => ({
+        stage: 'effort' as const,
+        code: 'EFFORT_TASK_UNACCOUNTED',
+        subject: id,
+        message: `task ${id} is in the process graph but absent from the effort list, so it would `
+          + 'be invisible to the coverage denominator. Omitting a task is not the same as assessing '
+          + 'it and finding nothing: the first inflates every share, the second lowers coverage.',
+      })),
+    };
+  }
+
   // ── effort (T5) ─────────────────────────────────────────────────────────────
   const measures = measureAutomation(input.effort);
   // Obligation 4: `!== true`, never falsy. `null` means unmeasurable, not "target met".
@@ -253,10 +293,13 @@ export function generateBlueprint(
     // Identity must survive a repair too, or the integrity check fires on a successful fix.
     const candidate = generateBlueprintOnce({ ...revised, priorIds: best.idsByLocator });
     candidate.attempt = attempt;
+    candidate.producedOnAttempt = attempt;
 
     if (candidate.ok) return candidate;
     if (candidate.refusals.length < best.refusals.length) best = candidate;
-    else best.attempt = attempt;  // kept the better draft; record that the attempt happened
+    // Kept the better (earlier) draft. `attempt` records that the work happened;
+    // `producedOnAttempt` keeps pointing at the run this draft actually came from.
+    else best.attempt = attempt;
   }
   return best;
 }

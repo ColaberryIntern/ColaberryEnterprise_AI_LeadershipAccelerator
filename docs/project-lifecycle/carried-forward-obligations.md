@@ -96,6 +96,48 @@ Phase 3's allocation work is enforced at module level only, never through `unmet
 
 ## T6 (blueprint generation orchestration) obligations
 
+**Status after T6, attempt 2 (2026-10-04).** Four of six discharged, one still open, one
+partially met and deferred with its reason. Recorded explicitly because the T6 commit first
+claimed "FOUR OBLIGATIONS … EACH DISCHARGED", silently renumbering a committed set of six — the
+verifier caught it, and the machinery for recording a deviation had been used carefully three
+paragraphs earlier in the same message for `gateAndRepair`, so there was no excuse for not using
+it here.
+
+| # | Obligation | Status |
+|---|---|---|
+| 1 | ID stability on replay | **Discharged.** With its positive control: without the prior map the same replay still reads as total loss. |
+| 2 | Revised requirement keeps id, bumps revision | **Discharged on attempt 2.** Attempt 1 made this *worse* — see below. |
+| 3 | Auto-rationale must not self-certify | **Discharged.** Two behavioural tests plus a (weaker, evadable) source-text check. |
+| 4 | Declaration not from the same model turn | **Discharged.** Refused before any stage runs. |
+| 5 | `role_map` write/read round-trip | **STILL OPEN.** Nothing reads or writes `blueprint_role_map`. Needs a persisted manifest, which is Phase 6. |
+| 6 | `belowTarget` tri-state | **Discharged.** Read as `!== true` at the only call site. |
+
+**Obligation 2 is worth reading in full, because attempt 1 made the system worse.** Carrying the
+id alone fixed the noisy failure (a correct replay reading as "30 lost and 30 invented") and
+introduced a silent one: a *corrected* requirement came back at the same id with `revision: 1`,
+so `reportHandoffIntegrity` reported `ok: true, 0 lost, 0 invented` for text that had materially
+changed. A reviewer would have been told nothing happened. **A loud false positive traded for a
+silent false negative is a regression, not a fix.** The replay map now carries the prior *items*,
+a wording change goes through `reviseSourceItem` (same id, next revision), and the integrity
+report gained two directions: `revised` (legitimate, reported, does not fail) and
+`rewrittenWithoutRevision` (text changed with no bump — history rewritten in place, and a
+failure).
+
+**A known limit, recorded rather than hidden:** the locator is positional
+(`${dimension}#${ordinal}`), which the plan prescribed, so deleting an item shifts every later
+item in that dimension onto its predecessor's locator. That now surfaces as a revision rather
+than a silent identity reassignment, but the attribution is wrong in that case. A stable
+per-item id on `UnderstandingItem` is the real fix and does not exist.
+
+**§7 corpus cases:** two of three run through the orchestrator (multiple roles held by one
+person; a low-information interview yielding an empty handoff rather than an invented one). The
+third — a blueprint changed while generation is in flight — needs a store and a revision to
+compare against, and the orchestrator is a pure function with neither. The CAS mechanism already
+exists at the Phase 2 approval gate (`uq_blueprint_approval_revision`, proven against a real
+Postgres); wiring generation to it is Phase 6's, when the orchestrator gains a persisted
+manifest. A test asserts the absence rather than faking the race.
+
+
 ### 1. ID stability across a replay
 
 `buildSourceHandoff` mints a fresh UUID per call — its suite asserts this deliberately. Harmless

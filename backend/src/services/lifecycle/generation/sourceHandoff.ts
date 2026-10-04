@@ -23,6 +23,7 @@
 
 import {
   mintSourceItem,
+  reviseSourceItem,
   compareSourceSets,
   itemsMissingProvenance,
   type SourceItem,
@@ -97,6 +98,21 @@ export interface HandoffReport extends SourceLossReport {
   invented: string[];
   /** Ids whose provenance was never recorded. Surfaced, never guessed. */
   missingProvenance: string[];
+  /**
+   * Ids present in both whose TEXT changed and whose revision was bumped.
+   *
+   * A legitimate wording correction. Reported so a reviewer sees it, but it does not make the
+   * report fail: correcting a requirement is allowed, doing it invisibly is not.
+   */
+  revised: string[];
+  /**
+   * Ids whose text changed with NO revision bump. History rewritten in place.
+   *
+   * This is the failure the id-stability fix originally introduced: a corrected requirement
+   * came back at the same id and the same revision, so the report said nothing had happened.
+   * Any entry here is a failure.
+   */
+  rewrittenWithoutRevision: string[];
 }
 
 export interface HandoffResult {
@@ -146,7 +162,7 @@ function toSourceProvenance(
  */
 export function buildSourceHandoff(
   understanding: ReadonlyArray<UnderstandingItem>,
-  priorIds: ReadonlyMap<string, string> = new Map(),
+  prior: ReadonlyMap<string, SourceItem> = new Map(),
 ): HandoffResult {
   const perDimensionCount = new Map<UnderstandingDimension, number>();
   const staged: HandoffItem[] = [];
@@ -156,14 +172,22 @@ export function buildSourceHandoff(
     const ordinal = (perDimensionCount.get(it.dimension) ?? 0) + 1;
     perDimensionCount.set(it.dimension, ordinal);
 
-    // REPLAY: reuse the id this locator already had, where the caller supplies one.
+    // REPLAY: reuse the prior ITEM, and revise it when the wording changed.
     //
     // The P3-T1 verifier found that minting a fresh uuid per call meant a REPLAYED handoff over
     // an unchanged understanding would read to reportHandoffIntegrity as 30 lost and 30 invented
-    // - the integrity check firing on a correct replay. T6 passes the prior map so a second run
-    // is identity-stable; an absent entry still mints, so first runs are unchanged.
+    // - the integrity check firing on a correct replay.
+    //
+    // THE FIRST FIX FOR THAT TRADED A LOUD FALSE POSITIVE FOR A SILENT FALSE NEGATIVE, which is
+    // strictly worse. Carrying the id alone meant a CORRECTED requirement came back with the
+    // same id and `revision: 1`, so `reportHandoffIntegrity` reported ok/0 lost/0 invented for
+    // text that had materially changed. A reviewer would have been told nothing happened.
+    //
+    // So the replay map carries the prior ITEMS, and a wording change goes through
+    // `reviseSourceItem` - same id, next revision - which is what it exists for. An absent
+    // entry still mints, so first runs are unchanged.
     const locator = `${it.dimension}#${ordinal}`;
-    const priorId = priorIds.get(locator);
+    const priorItem = prior.get(locator);
 
     const item = mintSourceItem({
       text: it.value,
@@ -175,9 +199,16 @@ export function buildSourceHandoff(
       interpretation: null,
     });
 
-    // mintSourceItem owns id generation, so the prior id is applied after minting rather than by
-    // passing it in: that keeps the "capture cannot claim confirmed" guard in one place.
-    const stable = priorId ? { ...item, id: priorId } : item;
+    // Three outcomes, and the middle one is the whole point:
+    //   no prior        -> the freshly minted item
+    //   prior, same text -> the prior item unchanged, id AND revision preserved
+    //   prior, new text  -> reviseSourceItem: same id, revision + 1, state dropped if it had
+    //                       been confirmed, because re-wording something is not re-confirming it
+    const stable = !priorItem
+      ? item
+      : priorItem.text === it.value
+        ? priorItem
+        : reviseSourceItem(priorItem, it.value);
 
     totalChars += it.value.length;
     staged.push({
@@ -247,15 +278,27 @@ export function reportHandoffIntegrity(
   after: ReadonlyArray<SourceItem>,
 ): HandoffReport {
   const base = compareSourceSets(before, after);
-  const beforeIds = new Set(before.map((i) => i.id));
-  const invented = [...new Set(after.filter((a) => !beforeIds.has(a.id)).map((a) => a.id))];
+  const beforeById = new Map(before.map((i) => [i.id, i]));
+  const invented = [...new Set(after.filter((a) => !beforeById.has(a.id)).map((a) => a.id))];
   const missingProvenance = itemsMissingProvenance(after);
+
+  // The direction a pure id-set comparison cannot see: same id, different words.
+  const revised: string[] = [];
+  const rewrittenWithoutRevision: string[] = [];
+  for (const a of after) {
+    const b = beforeById.get(a.id);
+    if (!b || b.text === a.text) continue;
+    if (a.revision > b.revision) revised.push(a.id);
+    else rewrittenWithoutRevision.push(a.id);
+  }
 
   return {
     ...base,
-    ok: base.ok && invented.length === 0,
+    ok: base.ok && invented.length === 0 && rewrittenWithoutRevision.length === 0,
     invented,
     missingProvenance,
+    revised,
+    rewrittenWithoutRevision,
   };
 }
 
@@ -266,20 +309,35 @@ export function reportHandoffIntegrity(
  * than against a total, which is the assertion the incident actually needed.
  */
 /**
- * The (locator -> id) map a later replay needs, read off a result.
+ * The (locator -> item) map a later replay needs, read off a result.
  *
- * Exists so a caller never has to know how a locator is built: pass this back into
- * buildSourceHandoff and the second run keeps the first run's identities.
+ * Carries the whole item, not just the id, because a replay has to tell an unchanged
+ * requirement from a re-worded one - and that needs the prior TEXT. Exists so a caller never
+ * has to know how a locator is built.
+ *
+ * KNOWN LIMIT, recorded rather than hidden: the locator is POSITIONAL
+ * (`${dimension}#${ordinal}`), which the plan prescribed, so deleting an item shifts every
+ * later item in that dimension onto its predecessor's locator. `reportHandoffIntegrity`
+ * surfaces that as a revision rather than silently reassigning identity, but the attribution
+ * is wrong in that case. A stable per-item id on `UnderstandingItem` is the real fix and does
+ * not exist yet.
  */
-export function idsByLocator(result: HandoffResult): Map<string, string> {
-  const out = new Map<string, string>();
+export function itemsByLocator(result: HandoffResult): Map<string, SourceItem> {
+  const out = new Map<string, SourceItem>();
   for (const h of result.items) {
     const loc = h.item.provenance?.locator;
-    if (loc) out.set(loc, h.item.id);
+    if (loc) out.set(loc, h.item);
   }
   return out;
 }
 
+/**
+ * The items of one dimension, in input order.
+ *
+ * Exists so a caller can assert "all thirty requirements arrived" against the dimension rather
+ * than against a total, which is the assertion the incident actually needed. A total can be
+ * satisfied by thirty copies of one item; a per-dimension list cannot.
+ */
 export function itemsForDimension(
   result: HandoffResult,
   dimension: UnderstandingDimension,

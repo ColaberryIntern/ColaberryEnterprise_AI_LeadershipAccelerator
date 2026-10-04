@@ -14,12 +14,19 @@ import {
   GENERATION_STAGES,
   type BlueprintGenerationInput,
 } from '../blueprintGeneration';
-import { idsByLocator, buildSourceHandoff, reportHandoffIntegrity } from '../sourceHandoff';
+import { itemsByLocator, buildSourceHandoff, reportHandoffIntegrity } from '../sourceHandoff';
 import { MAX_REPAIR_ATTEMPTS } from '../../../sbp/planRepair';
 import {
   manualOnlyUnderstanding, manualOnlyProject, manualOnlyAllocation,
   manualOnlyAgents, manualOnlyDeclaration, manualOnlyEffort, manualOnlyAcceptance,
 } from './fixtures/manualOnly';
+import { fixtureA, fixtureB, fixtureC } from './fixtures/referenceFixtures';
+
+const asgLike = (id: string, taskId: string, roleId: string, responsibility: string) => ({
+  id, task_id: taskId, role_id: roleId, responsibility,
+  executor: { type: 'person' as const, id: 'counsel-1' },
+  minutes: null, basis: 'UNKNOWN' as const, evidence_note: null,
+}) as unknown as ReturnType<typeof manualOnlyProject>['assignments'][number];
 
 function fixtureD(over: Partial<BlueprintGenerationInput> = {}): BlueprintGenerationInput {
   return {
@@ -124,18 +131,204 @@ describe('a failure leaves a recoverable draft and NEVER advances the stage', ()
     expect(d.measures).toBeNull();
   });
 
-  it('POSITIVE CONTROL: a deliberately missing branch is caught THROUGH the orchestrator', () => {
-    // Proves the gate is wired rather than bypassed: the same project passes when the branch is
-    // restored, so the refusal is caused by the defect and not by the orchestrator always refusing.
+  it('the SAME project passes once the branch is restored, so the refusal is caused by the defect', () => {
+    // Re-titled: this was labelled POSITIVE CONTROL but its body only re-asserts the happy path.
+    // The actual catch is the DECISION test above; this is its counterpart, which is a different
+    // and weaker claim. A mutation proved the old `every stage name is a declared stage` test
+    // could not fail at all - `stage` is typed GenerationStage, so no typechecking change could
+    // break a toContain over that union - and it has been deleted rather than reworded.
     expect(generateBlueprintOnce(fixtureD()).ok).toBe(true);
+    expect(GENERATION_STAGES).toContain(generateBlueprintOnce(fixtureD()).stage);
   });
 
-  it('every stage name is a declared stage', () => {
-    const project = manualOnlyProject();
+
+});
+
+
+describe('ALL FOUR fixtures run end to end \u2014 acceptance item 3', () => {
+  // A, B and C existed as prose in reference-fixtures.md and as no code anywhere in
+  // backend/src; the P3-T6 verifier confirmed that with a whole-tree search. A task titled
+  // "orchestrate the fixtures" was orchestrating one of four.
+  const cases = [
+    ['A proposal (two tracks, AI drafting under human approval)', fixtureA],
+    ['B admissions (human-heavy and below target, WITH an AI task)', fixtureB],
+    ['C service business (ai_autonomous where it is legitimate)', fixtureC],
+  ] as const;
+
+  const inputOf = (f: typeof fixtureA) => ({
+    understanding: f.understanding(),
+    project: f.project(),
+    allocation: f.allocation(),
+    agents: f.agents(),
+    effort: f.effort(),
+    declaration: { declaration: f.declaration(), origin: 'approved_blueprint' as const },
+    targetAcceptance: f.acceptance(),
+  });
+
+  it.each(cases)('%s completes', (_label, f) => {
+    const d = generateBlueprintOnce(inputOf(f));
+    expect(d.refusals).toEqual([]);
+    expect(d.ok).toBe(true);
+    expect(d.stage).toBe('complete');
+    expect(d.advanced).toBe(true);
+  });
+
+  it.each(cases)('%s refuses when its decision branch is severed', (_label, f) => {
+    // The pass/refuse pair Fixture D has. Without it, "it completes" could be true of a
+    // pipeline that accepts everything.
+    const project = f.project();
     project.transitions = project.transitions.filter((e) => e.id !== 'e-3');
-    for (const d of [generateBlueprintOnce(fixtureD()), generateBlueprintOnce(fixtureD({ project }))]) {
-      expect(GENERATION_STAGES).toContain(d.stage);
-    }
+    const d = generateBlueprintOnce({ ...inputOf(f), project });
+
+    expect(d.ok).toBe(false);
+    expect(d.stage).toBe('process');
+    expect(d.advanced).toBe(false);
+  });
+
+  it('A: an AI-drafted task reports an AI share BELOW 100%, because approval is human time', () => {
+    // 240 AI + 60 approval + 60 review = 360. 240/360 = 2/3, hand-computed.
+    const m = generateBlueprintOnce(inputOf(fixtureA)).measures!;
+    expect(m.aiShare.denominatorMinutes).toBe(360);
+    expect(m.aiShare.numeratorMinutes).toBe(240);
+    expect(m.humanShare.numeratorMinutes).toBe(120);
+  });
+
+  it('B is human-heavy but NOT manual-only \u2014 the distinction Fixture D exists for', () => {
+    // 5x40 = 200 AI; 2x40 = 80 approval; 25x40 = 1000 review. 200/1280.
+    const m = generateBlueprintOnce(inputOf(fixtureB)).measures!;
+    expect(m.aiShare.numeratorMinutes).toBe(200);
+    expect(m.aiShare.denominatorMinutes).toBe(1280);
+    expect(m.belowTarget).toBe(true);
+    // The difference from D: B HAS an AI-executed task. D has none at all.
+    expect(m.aiShare.fraction).toBeGreaterThan(0);
+    expect(generateBlueprintOnce(fixtureD()).measures!.aiShare.fraction).toBe(0);
+  });
+
+  it('C allows ai_autonomous on public data with no decision authority', () => {
+    // 2x400 = 800 AI; 20x20 = 400 human. 800/1200 = 2/3.
+    const m = generateBlueprintOnce(inputOf(fixtureC)).measures!;
+    expect(m.aiShare.numeratorMinutes).toBe(800);
+    expect(m.aiShare.denominatorMinutes).toBe(1200);
+  });
+
+  it('C REFUSES the same autonomous allocation once the data turns confidential', () => {
+    // The counterpart: ai_autonomous is not blanket-permitted, it is permitted where the task
+    // carries neither sensitive data nor decision authority.
+    const project = fixtureC.project();
+    project.tasks.find((t) => t.id === 't-draft')!.data_sensitivity = 'regulated';
+    const d = generateBlueprintOnce({ ...inputOf(fixtureC), project });
+
+    expect(d.ok).toBe(false);
+    expect(d.stage).toBe('allocation');
+    expect(d.refusals.map((r) => r.code)).toContain('SENSITIVITY_AUTONOMY');
+  });
+});
+
+describe('reconciliation \u2014 the stages are a pipeline, not five calls in a row', () => {
+  it('refuses a work task that the effort list omits', () => {
+    // Measured by the P3-T6 verifier: removing one of two assessments produced
+    // coverage {assessed: 1, total: 1}, ok: true, no refusals. A task left out read as 100%
+    // coverage, because T5 can only measure what it is handed and has no view of the project.
+    const d = generateBlueprintOnce(fixtureD({ effort: manualOnlyEffort().slice(0, 1) }));
+
+    expect(d.ok).toBe(false);
+    expect(d.stage).toBe('effort');
+    expect(d.refusals.map((r) => r.code)).toEqual(['EFFORT_TASK_UNACCOUNTED']);
+    expect(d.refusals[0].subject).toBe('t-review');
+  });
+
+  it('says why omitting differs from assessing and finding nothing', () => {
+    const d = generateBlueprintOnce(fixtureD({ effort: manualOnlyEffort().slice(0, 1) }));
+    expect(d.refusals[0].message).toContain('inflates every share');
+  });
+
+  it('PASSING COUNTERPART: a complete effort list is accepted', () => {
+    expect(generateBlueprintOnce(fixtureD()).ok).toBe(true);
+  });
+});
+
+describe('OBLIGATION: a revised requirement keeps its id and BUMPS its revision', () => {
+  const corrected = () => {
+    const u = manualOnlyUnderstanding();
+    u[0] = { ...u[0], value: 'Every contract over \u00a3100k must be read by a qualified solicitor.' };
+    return u;
+  };
+
+  it('round-trips as same id, next revision', () => {
+    const first = generateBlueprintOnce(fixtureD());
+    const second = generateBlueprintOnce(fixtureD({
+      understanding: corrected(), priorIds: first.idsByLocator,
+    }));
+
+    const a = first.handoff!.items[0].item;
+    const b = second.handoff!.items[0].item;
+    expect(b.id).toBe(a.id);
+    expect(b.revision).toBe(a.revision + 1);
+    expect(b.text).toContain('\u00a3100k');
+  });
+
+  it('and the integrity report NOTICES the change rather than reporting nothing', () => {
+    // The first id-stability fix traded a loud false positive for a SILENT FALSE NEGATIVE: a
+    // corrected requirement came back at the same id and revision 1, so the report said
+    // ok/0 lost/0 invented for text that had materially changed. A reviewer would have been
+    // told nothing happened. That is strictly worse than the noise it replaced.
+    const first = generateBlueprintOnce(fixtureD());
+    const second = generateBlueprintOnce(fixtureD({
+      understanding: corrected(), priorIds: first.idsByLocator,
+    }));
+    const report = reportHandoffIntegrity(
+      first.handoff!.items.map((i) => i.item),
+      second.handoff!.items.map((i) => i.item),
+    );
+
+    expect(report.revised).toHaveLength(1);
+    expect(report.rewrittenWithoutRevision).toEqual([]);
+    expect(report.lost).toEqual([]);
+    expect(report.invented).toEqual([]);
+    // A legitimate correction is reported, not failed: correcting is allowed, hiding it is not.
+    expect(report.ok).toBe(true);
+  });
+
+  it('POSITIVE CONTROL: text changed WITHOUT a revision bump fails the report', () => {
+    // The exact shape the earlier fix produced, constructed directly so the guard is proven
+    // reachable rather than assumed unreachable.
+    const first = generateBlueprintOnce(fixtureD());
+    const before = first.handoff!.items.map((i) => i.item);
+    const forged = before.map((i, n) => (n === 0 ? { ...i, text: 'silently different' } : i));
+    const report = reportHandoffIntegrity(before, forged);
+
+    expect(report.ok).toBe(false);
+    expect(report.rewrittenWithoutRevision).toEqual([before[0].id]);
+    expect(report.revised).toEqual([]);
+  });
+
+  it('an UNCHANGED replay reports no revision at all', () => {
+    const first = generateBlueprintOnce(fixtureD());
+    const second = generateBlueprintOnce(fixtureD({ priorIds: first.idsByLocator }));
+    const report = reportHandoffIntegrity(
+      first.handoff!.items.map((i) => i.item),
+      second.handoff!.items.map((i) => i.item),
+    );
+    expect(report.revised).toEqual([]);
+    expect(report.ok).toBe(true);
+  });
+});
+
+describe('Fixture D\u2019s documented failure cases are enforced, not just described', () => {
+  it('refuses ai_autonomous on the review task \u2014 TWICE over', () => {
+    // reference-fixtures.md states this; nothing tested it. t-review carries 'confidential'
+    // data AND decide_full authority, so both halves of SENSITIVITY_AUTONOMY fire.
+    const d = generateBlueprintOnce(fixtureD({
+      allocation: [{
+          task_id: 't-review', execution_class: 'ai_autonomous', accountable_role_id: 'role-counsel',
+          rationale: 'an attempt to automate the judgement',
+        }, manualOnlyAllocation()[0]],
+    }));
+
+    expect(d.ok).toBe(false);
+    expect(d.stage).toBe('allocation');
+    const sens = d.refusals.filter((r) => r.code === 'SENSITIVITY_AUTONOMY');
+    expect(sens).toHaveLength(2);
   });
 });
 
@@ -177,15 +370,15 @@ describe('OBLIGATION: id stability across a replay', () => {
     }];
     const second = generateBlueprintOnce(fixtureD({ understanding: extra, priorIds: first.idsByLocator }));
 
-    const firstIds = [...first.idsByLocator.values()];
+    const firstIds = [...first.idsByLocator.values()].map((i) => i.id);
     const secondIds = second.handoff!.items.map((i) => i.item.id);
     for (const id of firstIds) expect(secondIds).toContain(id);
     expect(secondIds).toHaveLength(4);
   });
 
-  it('idsByLocator keys on the locator, so a caller never builds one', () => {
+  it('itemsByLocator keys on the locator, so a caller never builds one', () => {
     const h = buildSourceHandoff(manualOnlyUnderstanding());
-    const map = idsByLocator(h);
+    const map = itemsByLocator(h);
     expect([...map.keys()].sort()).toEqual(['human_only_decisions#1', 'requirements#1', 'requirements#2']);
   });
 });
@@ -240,6 +433,100 @@ describe('OBLIGATION: the auto-rationale does not self-certify', () => {
     expect(unresolvedAllocation(input)).toBe(2);
     const d = generateBlueprintOnce(input);
     expect(d.refusals.map((r) => r.code)).toContain('ALLOCATION_MISSING');
+  });
+});
+
+
+describe('\u00a77 corpus cases \u2014 two of three; the third is recorded as deferred', () => {
+  it('MULTIPLE ROLES HELD BY ONE PERSON is accepted, not treated as a duplicate', () => {
+    // The same role_id carrying several responsibilities on one task is how a small
+    // organisation really works. DUPLICATE_ASSIGNMENT keys on (task, role, responsibility), so
+    // distinct responsibilities for one role must pass - and a reviewer needs to know the
+    // accountability is one person rather than three.
+    const project = manualOnlyProject();
+    project.assignments.push(asgLike('a-extra', 't-review', 'role-counsel', 'APPROVER'));
+
+    const d = generateBlueprintOnce(fixtureD({ project }));
+    expect(d.ok).toBe(true);
+  });
+
+  it('and a genuine duplicate is still refused', () => {
+    // The counterpart: one role holding the SAME responsibility twice is a real duplicate.
+    const project = manualOnlyProject();
+    project.assignments.push(asgLike('a-dupe', 't-review', 'role-counsel', 'PERFORMER'));
+
+    const d = generateBlueprintOnce(fixtureD({ project }));
+    expect(d.ok).toBe(false);
+    // DUPLICATE_ASSIGNMENT, at the PROCESS stage - not PERFORMER_SINGULAR at allocation, which is
+    // what I first asserted. factoryValidate keys duplicates on (task, role, responsibility) and
+    // runs inside validateProcess, so it fires earlier and more specifically. The expectation was
+    // wrong, not the code; asserting the real behaviour is also the better test, because it pins
+    // WHICH rule owns this case.
+    expect(d.stage).toBe('process');
+    expect(d.refusals.map((r) => r.code)).toContain('DUPLICATE_ASSIGNMENT');
+  });
+
+  it('A LOW-INFORMATION INTERVIEW yields an empty handoff, not an invented one', () => {
+    // The failure mode is a generator filling the silence. An understanding with nothing in it
+    // must produce nothing, and the emptiness must be visible downstream rather than papered
+    // over with plausible-looking requirements.
+    const d = generateBlueprintOnce(fixtureD({ understanding: [] }));
+
+    expect(d.handoff!.items).toEqual([]);
+    expect(d.handoff!.overflow).toBeNull();
+    // It does not refuse at the handoff: an empty understanding is a real state, and the
+    // project it was given is still coherent. What matters is that nothing was invented.
+    expect(d.ok).toBe(true);
+  });
+
+  it('and an empty understanding cannot be replayed into content', () => {
+    const first = generateBlueprintOnce(fixtureD({ understanding: [] }));
+    const second = generateBlueprintOnce(fixtureD({
+      understanding: [], priorIds: first.idsByLocator,
+    }));
+    expect(second.handoff!.items).toEqual([]);
+  });
+
+  it('THE THIRD CASE IS DEFERRED, and this test records why rather than faking it', () => {
+    // "A blueprint changed while generation is in flight" needs a stale-revision refusal, which
+    // needs a STORE and a revision to compare against. This module is a pure function with
+    // neither: it cannot hold a CAS, and a fake one here would assert nothing about the real
+    // race. The mechanism already exists at the Phase 2 approval CAS
+    // (uq_blueprint_approval_revision, proven against a real Postgres), and wiring generation to
+    // it belongs to Phase 6, where the orchestrator gains a persisted manifest.
+    //
+    // Asserted as a property of this module so the gap is visible in the suite rather than only
+    // in a document: there is no revision concept here to race on.
+    const d = generateBlueprintOnce(fixtureD());
+    expect(d).not.toHaveProperty('manifestRevision');
+    expect(Object.keys(d).sort()).toEqual([
+      'advanced', 'attempt', 'handoff', 'idsByLocator', 'measures', 'ok',
+      'producedOnAttempt', 'refusals', 'stage',
+    ]);
+  });
+});
+
+describe('`attempt` and `producedOnAttempt` are different numbers', () => {
+  it('a regressing repair keeps the earlier draft and says which attempt produced it', () => {
+    // The verifier found these conflated: the kept draft came from attempt 1 and was returned
+    // carrying attempt: 3.
+    const oneProblem = manualOnlyProject();
+    oneProblem.transitions = oneProblem.transitions.filter((e) => e.id !== 'e-3');
+    const worse = manualOnlyProject();
+    worse.transitions = worse.transitions.filter((e) => e.id !== 'e-3');
+    worse.tasks.push({ ...worse.tasks[1], id: 't-orphan-1', stage_id: 's9' });
+
+    const d = generateBlueprint(fixtureD({ project: oneProblem }), (_x, attempt) => (
+      attempt === 2 ? fixtureD({ project: worse }) : null
+    ));
+
+    expect(d.attempt).toBe(2);            // two attempts were made
+    expect(d.producedOnAttempt).toBe(1);  // the kept draft is the first one
+  });
+
+  it('they agree on a clean run', () => {
+    const d = generateBlueprintOnce(fixtureD());
+    expect(d.attempt).toBe(d.producedOnAttempt);
   });
 });
 
