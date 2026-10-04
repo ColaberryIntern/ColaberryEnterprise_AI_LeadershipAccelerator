@@ -296,6 +296,15 @@ describe('a verified link', () => {
     expect(res.headers['content-range']).toBe(`bytes */${SIZE}`);
   });
 
+  it('416s a bare `bytes=-`, which names no range at all', async () => {
+    // The verifier found that the explicit empty-empty guard could be deleted with nothing
+    // failing: Number('') is 0, so it fell through to the len <= 0 check and returned
+    // unsatisfiable anyway. The guard is gone now and this test is what holds the boundary.
+    const res = await request(app()).get(signedPath()).set('Range', 'bytes=-');
+    expect(res.status).toBe(416);
+    expect(res.headers['content-range']).toBe(`bytes */${SIZE}`);
+  });
+
   it('416s a malformed Range header', async () => {
     const res = await request(app()).get(signedPath()).set('Range', 'bytes=abc');
     expect(res.status).toBe(416);

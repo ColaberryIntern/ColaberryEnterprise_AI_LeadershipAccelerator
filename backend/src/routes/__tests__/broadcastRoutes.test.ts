@@ -30,6 +30,16 @@ jest.mock('../../controllers/broadcastController', () => ({
     res.json({ reached: 'playback', isStaff: req.participant?.isStaff ?? null }),
 }));
 
+// participantAuth calls logAuthFailure on every rejected token, which reaches
+// emitAiEvent -> AiEvent.create() -> a real database. With no DATABASE_URL that attempt
+// just logs and resolves, but it is unmocked I/O inside a route test: it made
+// "401s a token signed with the wrong secret" take ~1.9s alone and time out once under a
+// parallel 82-suite run. Mocked, so this suite tests routing and nothing else.
+jest.mock('../../middlewares/authFailureLog', () => ({
+  logAuthFailure: jest.fn(),
+  describeCaller: () => ({ forwarded_for: null, user_agent: null }),
+}));
+
 // The real one reads community_members from the database. What matters to the router is
 // that it runs on these two routes and nowhere else.
 jest.mock('../../middlewares/communityRoomsStaffContext', () => ({

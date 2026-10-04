@@ -64,13 +64,15 @@ export function setRecordingResolver(next: RecordingResolver): void {
  * what refuses it: `bytes=0-99,200-299` matches nothing, so it falls through as
  * unsatisfiable. An earlier version also tested `header.includes(',')` first; mutation
  * testing showed removing that line changed no outcome, so it is gone rather than left
- * there implying it does work the regex already does.
+ * there implying it does work the regex already does. An explicit `rawStart === '' &&
+ * rawEnd === ''` guard went the same way for the same reason, found by an independent
+ * verifier: `Number('')` is 0, so `bytes=-` already falls through to the `len <= 0` check.
+ * A test now pins that boundary instead of a second code path agreeing with the first.
  */
 function parseSingleRange(header: string, size: number): { start: number; end: number } | 'unsatisfiable' {
   const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
   if (!m) return 'unsatisfiable';
   const [, rawStart, rawEnd] = m;
-  if (rawStart === '' && rawEnd === '') return 'unsatisfiable';
 
   // A suffix range (`bytes=-500`) means the LAST 500 bytes, not bytes 0..500.
   if (rawStart === '') {
