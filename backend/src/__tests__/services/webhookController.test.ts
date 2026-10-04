@@ -554,8 +554,38 @@ describe('handleZoomWebhook', () => {
     expect(ingestRecordingForBooking).toHaveBeenCalledWith(booking, expect.objectContaining({
       downloadUrl: 'https://zoom.us/rec/booking',
       name: 'Study Group.mp4',
-    }));
+    // This fixture carries no uuid, so the occurrence is passed as empty and the
+    // ingest falls back to its booking-wide check. The next test covers the case
+    // that matters.
+    }), '');
     expect(ingestRecordingForSession).not.toHaveBeenCalled();
+  });
+
+  it('forwards the occurrence uuid to the booking ingest, so a later part is not hidden', async () => {
+    // The payload has always carried `object.uuid`; the booking path simply never
+    // received it. Without it the ingest cannot dedupe per occurrence, and the
+    // only remaining guard is the booking-wide one that made part 2 unreachable.
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+    const booking = { id: 'booking-9', title: 'Study Group', google_event_id: '456' };
+    (RoomBooking.findOne as jest.Mock).mockResolvedValue(booking);
+    (ingestRecordingForBooking as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r9' });
+
+    const event = {
+      event: 'recording.completed',
+      payload: {
+        object: {
+          id: 456, uuid: 'OCCURRENCE==', topic: 'Study Group',
+          recording_files: [{ file_type: 'MP4', file_size: 500, download_url: 'https://zoom.us/rec/booking' }],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(ingestRecordingForBooking).toHaveBeenCalledWith(booking, expect.any(Object), 'OCCURRENCE==');
   });
 
   it('does not look up a RoomBooking at all when a LiveSession already matched (avoids a redundant query)', async () => {

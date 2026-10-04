@@ -17,6 +17,7 @@ jest.mock('../../services/driveService', () => ({ findRecordingForSession: jest.
 jest.mock('../../services/zoomService', () => ({
   findRecordingForSession: jest.fn(),
   findRecordingByMeetingId: jest.fn(),
+  findRecordingInstancesByMeetingId: jest.fn(),
   findClassRecordingInstances: jest.fn(),
   extractZoomMeetingId: jest.fn(),
   streamZoomFile: jest.fn(),
@@ -32,7 +33,7 @@ import CommunityRoom from '../../models/CommunityRoom';
 import { ensureRoomForSession } from '../../services/communityRooms/roomService';
 import { emitRoomEvent } from '../../services/communityRooms/roomOutboxService';
 import { findRecordingForSession as findDriveMatch, streamDriveFile } from '../../services/driveService';
-import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, findClassRecordingInstances, extractZoomMeetingId, streamZoomFile } from '../../services/zoomService';
+import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, findRecordingInstancesByMeetingId, findClassRecordingInstances, extractZoomMeetingId, streamZoomFile } from '../../services/zoomService';
 import { sequelize } from '../../config/database';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom, findAlwaysOpenRoomForZoomMeeting } from '../../services/sessionRecordingService';
 
@@ -48,6 +49,7 @@ const streamDriveMock = streamDriveFile as jest.Mock;
 const findZoomMatchMock = findZoomMatch as jest.Mock;
 const findClassInstancesMock = findClassRecordingInstances as jest.Mock;
 const findByMeetingIdMock = findRecordingByMeetingId as jest.Mock;
+const findInstancesByMeetingIdMock = findRecordingInstancesByMeetingId as jest.Mock;
 const extractZoomMeetingIdMock = extractZoomMeetingId as jest.Mock;
 const streamZoomMock = streamZoomFile as jest.Mock;
 const transactionMock = sequelize.transaction as jest.Mock;
@@ -309,23 +311,73 @@ describe('ingestRecordingForBooking — general Room bookings (the "+ Book a ses
     expect(findOneResource).not.toHaveBeenCalled();
   });
 
-  it('no-ops when a recording resource already exists (idempotency, same guard as the session path)', async () => {
-    findOneResource.mockResolvedValue({ id: 'existing-resource' });
+  it('keys idempotency on the Zoom occurrence uuid, so a later part is still collected', async () => {
+    // THIS REPLACES A TEST THAT PINNED A DEFECT. It asserted that ANY existing
+    // recording on the booking short-circuits the whole function — which is
+    // exactly why part 2 of a split session could never be ingested, by this path
+    // or by the cron that calls it. The session path always keyed on the
+    // occurrence uuid; this is now the same rule.
+    findInstancesByMeetingIdMock.mockResolvedValue([
+      { uuid: 'occ-1', match: { downloadUrl: 'u1', name: 'a.mp4', mimeType: 'video/mp4', sizeBytes: 1 } },
+      { uuid: 'occ-2', match: { downloadUrl: 'u2', name: 'b.mp4', mimeType: 'video/mp4', sizeBytes: 2 } },
+    ]);
+    // Lookups happen in loop order: occ-1 is already stored, occ-2 is not.
+    findOneResource.mockResolvedValueOnce({ id: 'existing-part-1' }).mockResolvedValueOnce(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'new-part-2' });
+
     const result = await ingestRecordingForBooking(zoomBooking);
-    expect(result).toEqual({ status: 'already_present', resourceId: 'existing-resource' });
-    expect(findByMeetingIdMock).not.toHaveBeenCalled();
+
+    expect(result).toEqual({ status: 'ingested', resourceId: 'existing-part-1' });
+    // The second part WAS stored — the behaviour the old guard made impossible.
+    expect(createResource).toHaveBeenCalledTimes(1);
+    expect(createResource.mock.calls[0][0].title).toContain('Part 2 of 2');
+  });
+
+  it('titles the parts in order, so a split session plays back in the order it happened', async () => {
+    findInstancesByMeetingIdMock.mockResolvedValue([
+      { uuid: 'occ-1', match: { downloadUrl: 'u1', name: 'a.mp4', mimeType: 'video/mp4', sizeBytes: 1 } },
+      { uuid: 'occ-2', match: { downloadUrl: 'u2', name: 'b.mp4', mimeType: 'video/mp4', sizeBytes: 2 } },
+    ]);
+    findOneResource.mockResolvedValue(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValueOnce({ id: 'p1' }).mockResolvedValueOnce({ id: 'p2' });
+
+    const result = await ingestRecordingForBooking(zoomBooking);
+
+    expect(result).toEqual({ status: 'ingested', resourceId: 'p1' });
+    expect(createResource).toHaveBeenCalledTimes(2);
+    expect(createResource.mock.calls[0][0].title).toContain('Part 1 of 2');
+    expect(createResource.mock.calls[1][0].title).toContain('Part 2 of 2');
+  });
+
+  it('a single occurrence keeps its plain title, with no misleading "Part 1 of 1"', async () => {
+    findInstancesByMeetingIdMock.mockResolvedValue([
+      { uuid: 'occ-only', match: { downloadUrl: 'u', name: 'a.mp4', mimeType: 'video/mp4', sizeBytes: 1 } },
+    ]);
+    findOneResource.mockResolvedValue(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'solo' });
+
+    await ingestRecordingForBooking(zoomBooking);
+
+    expect(createResource.mock.calls[0][0].title).toBe('Study Group');
   });
 
   it('finds by exact meeting ID (using the booking start date as the day-window hint) and ingests', async () => {
     findOneResource.mockResolvedValue(null);
-    findByMeetingIdMock.mockResolvedValue({ downloadUrl: 'https://zoom.us/rec/download/booking', name: 'Study Group.mp4', mimeType: 'video/mp4', sizeBytes: 400 });
+    findInstancesByMeetingIdMock.mockResolvedValue([
+      { uuid: 'occ-1', match: { downloadUrl: 'https://zoom.us/rec/download/booking', name: 'Study Group.mp4', mimeType: 'video/mp4', sizeBytes: 400 } },
+    ]);
     streamZoomMock.mockResolvedValue(fakeSource());
     createResource.mockResolvedValue({ id: 'booking-resource' });
 
     const result = await ingestRecordingForBooking(zoomBooking);
 
     expect(result).toEqual({ status: 'ingested', resourceId: 'booking-resource' });
-    expect(findByMeetingIdMock).toHaveBeenCalledWith('987654321', '2026-08-04', 'Study Group');
+    // A one-day WINDOW, not a single day: a session that runs past midnight is
+    // listed by Zoom on the following date.
+    expect(findInstancesByMeetingIdMock).toHaveBeenCalledWith('987654321', '2026-08-04', '2026-08-05', 'Study Group');
     expect(createResource.mock.calls[0][0]).toMatchObject({
       room_id: 'room-zoom-1', booking_id: 'booking-zoom-1', resource_type: 'recording', mime_type: 'video/mp4',
     });
@@ -345,13 +397,13 @@ describe('ingestRecordingForBooking — general Room bookings (the "+ Book a ses
     const result = await ingestRecordingForBooking(zoomBooking, preResolvedMatch);
 
     expect(result).toEqual({ status: 'ingested', resourceId: 'booking-resource-2' });
-    expect(findByMeetingIdMock).not.toHaveBeenCalled();
+    expect(findInstancesByMeetingIdMock).not.toHaveBeenCalled();
     expect(streamZoomMock).toHaveBeenCalledWith(preResolvedMatch);
   });
 
   it('returns not_found cleanly when no recording matches (recording is still a manual toggle a host may not have used)', async () => {
     findOneResource.mockResolvedValue(null);
-    findByMeetingIdMock.mockResolvedValue(null);
+    findInstancesByMeetingIdMock.mockResolvedValue([]);
 
     const result = await ingestRecordingForBooking(zoomBooking);
 
