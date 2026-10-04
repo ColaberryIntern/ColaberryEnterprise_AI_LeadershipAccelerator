@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth Journey OS — Phase 6 review</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --bg:#ffffff; --bg-alt:#f7fafc;
+    --leaf:#77BB4A; --amber:#B7791F;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg-alt);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 1rem}
+  header{background:linear-gradient(135deg,#1a1f2b 0%,#2d3748 100%);color:#fff;padding:3rem 0 2.5rem}
+  header h1{margin:0 0 .5rem;font-size:2rem;font-weight:700;line-height:1.2}
+  header p{margin:0;color:#cbd5e0;max-width:70ch}
+  .dark-badge{display:inline-block;background:var(--cherry);color:#fff;font-size:.75rem;
+    font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:.25rem .6rem;
+    border-radius:3px;margin-bottom:1rem}
+  .bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+    background:var(--border);border:1px solid var(--border);margin:-1.25rem 0 2rem;
+    border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .bar div{background:#fff;padding:1rem;text-align:center}
+  .bar .n{font-size:1.5rem;font-weight:700;color:var(--cherry)}
+  .bar .l{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  h2{font-size:1.25rem;color:var(--cherry);margin:2.5rem 0 .75rem}
+  .note{background:var(--cherry-bg);border-left:4px solid var(--cherry);padding:1rem 1.25rem;
+    border-radius:0 4px 4px 0;margin:1rem 0}
+  .note strong{color:var(--cherry-deep)}
+  .screenshot{background:#fff;border:1px solid var(--border);border-radius:6px;
+    margin:0 0 2rem;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .screenshot .head{padding:1rem 1.25rem;border-bottom:1px solid var(--border)}
+  .screenshot .head h3{margin:0 0 .25rem;font-size:1rem}
+  .screenshot .head p{margin:0;font-size:.875rem;color:var(--muted)}
+  .screenshot img{display:block;width:100%;height:auto;border-top:1px solid var(--border)}
+  .look{padding:1rem 1.25rem;background:var(--bg-alt);font-size:.875rem}
+  .look ul{margin:.5rem 0 0;padding-left:1.25rem}
+  .look li{margin:.25rem 0}
+  .tag{display:inline-block;font-size:.6875rem;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;padding:.15rem .45rem;border-radius:3px;vertical-align:2px}
+  .tag.component{background:#edf2f7;color:#4a5568}
+  .tag.pending{background:#FEF3C7;color:var(--amber)}
+  .pending-body{padding:1.25rem;font-size:.9375rem;background:#FFFBEB}
+  table{width:100%;border-collapse:collapse;font-size:.875rem;background:#fff}
+  th,td{text-align:left;padding:.6rem .75rem;border-bottom:1px solid var(--border)}
+  th{background:var(--bg-alt);font-weight:600}
+  code{background:var(--bg-alt);padding:.1rem .3rem;border-radius:3px;font-size:.875em}
+  button{background:var(--cherry);color:#fff;border:0;border-radius:4px;padding:.6rem 1.1rem;
+    font-size:.9375rem;font-weight:600;cursor:pointer;font-family:inherit}
+  button:hover{background:var(--cherry-deep)}
+  #out{margin-top:1rem;padding:1rem;background:#fff;border:1px solid var(--border);
+    border-radius:4px;white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:.8125rem;
+    display:none}
+  footer{padding:2.5rem 0 3rem;color:var(--muted);font-size:.875rem}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="dark-badge">Nothing sends · system dark</span>
+    <h1>Growth Journey OS — Phase 6</h1>
+    <p>The admin surface, the hardening set and the operations runbook. Merged and deployed
+       on 4 October 2026. Every flag is off, all three journey crons ship disabled, and
+       nothing in this phase has contacted a person.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="bar">
+    <div><div class="n">16</div><div class="l">tasks</div></div>
+    <div><div class="n">170</div><div class="l">files</div></div>
+    <div><div class="n">0</div><div class="l">sends</div></div>
+    <div><div class="n">9</div><div class="l">tabs</div></div>
+    <div><div class="n">5</div><div class="l">images</div></div>
+  </div>
+
+  <div class="note">
+    <strong>Read the labels on the images.</strong> Five are <em>component</em> captures:
+    real components, really rendered, with fixture payloads and no admin session. They prove
+    layout and wording in states a dark system cannot reach — a null rate beside a real zero,
+    a handoff blocked at capacity, an active pause. They prove nothing about production
+    behaviour. The two <em>production</em> stops are <strong>pending</strong>: they need an
+    admin token, the previous one expired 43 hours ago, and this loop does not mint
+    credentials. They are listed rather than quietly omitted.
+  </div>
+
+  <h2>What to look at</h2>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>The dark state <span class="tag component">component</span></h3>
+      <p>What an operator sees today, before anything is switched on.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-switched-off.png"
+         alt="The switched-off banner, naming the GROWTH_JOURNEY_ENABLED flag">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>The banner names the <em>flag</em>, not a symptom. A dark system and a broken
+            one look identical on every other screen, so this is the only thing that tells
+            them apart.</li>
+        <li>It says the page is showing configuration rather than activity.</li>
+        <li>It does <em>not</em> also claim memberships are missing — two different problems,
+            and showing both would send someone to run the wrong fix.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>The unseeded state <span class="tag component">component</span></h3>
+      <p>The other state that looks exactly like a working system.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-unseeded.png"
+         alt="The unseeded banner, naming the membership seed script">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>It names the seed script. In production <code>tenant_memberships</code> is empty,
+            so this is the state you will actually meet first.</li>
+        <li>The runbook's §8 explains why: the journey reads do not use the tenancy
+            migration ramp, so naming a brand before seeding is a hard 403 — fail-closed,
+            not broken.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>The handoff queue <span class="tag component">component</span></h3>
+      <p>The tab admissions, sales and solution architects will live in.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-handoffs.png"
+         alt="The handoff queue with a blocked assignment and a redacted reason">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>The first row has <strong>no ticket</strong> and says why: <code>capacity_full</code>.
+            A blocked assignment is stated, never silently dropped.</li>
+        <li>The second row's reason reads <strong>redacted</strong> — the column held an
+            address and the API masked it before it reached the screen, with a separate flag
+            saying which happened.</li>
+        <li>The caption says the ordering is <em>not</em> strictly highest-value-first and
+            that paging is unstable. Both are true of the SQL, and a column labelled
+            "highest value first" would be false exactly where it matters.</li>
+        <li><code>priority</code> has its own column and is <em>not</em> what the list sorts
+            by, so nobody infers otherwise.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Performance — a null is never a zero <span class="tag component">component</span></h3>
+      <p>The single most important distinction on the whole surface.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-performance.png"
+         alt="Acceptance rate 0.0% of 12 directly above expiry rate as an em dash with its reason">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li><strong>Acceptance rate <code>0.0%</code> "0 of 12"</strong> sits directly above
+            <strong>expiry rate <code>—</code></strong> "no handoff was created in this
+            window". A real zero means every handoff was refused, which is a crisis. An
+            absence means none existed, which is a quiet week. A screen printing 0% for both
+            would say the opposite of the truth.</li>
+        <li>Every absence carries its <em>own</em> reason — "nothing was accepted, so no
+            meeting could follow", "nothing reached qualified or converted", "no human has
+            ruled on anything yet". The API's bare <code>no_denominator</code> is not
+            actionable; these are.</li>
+        <li>Medians distinguish "no samples yet" from "only 2 samples — a median needs 3".
+            The API's single reason cannot tell those apart; the sample count can.</li>
+        <li>The freshness badge is <code>stale</code> with the API's own sentence. This is the
+            only journey read that carries a freshness verdict, so it is the only place a
+            badge is a fact rather than a guess.</li>
+        <li>The bottom table shows a running programme with real percentages and
+            <strong>AI Flotation Consulting as "Not running yet"</strong> — every figure
+            absent rather than zero, "because nobody has arrived to count".</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Controls — the only write surface <span class="tag component">component</span></h3>
+      <p>Everything else on this workspace reads.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-controls.png"
+         alt="The controls tab listing one active pause">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>An active pause is listed with its scope, its reason and who set it. Rows are
+            cleared, never deleted, so the history of who stopped what survives.</li>
+        <li>A pause must name a brand, a programme, a channel or a subject. An all-wildcard
+            pause is refused twice — by the schema and again in the service layer — because
+            it would be a second global kill switch, and this system deliberately has
+            exactly one.</li>
+        <li><code>ali_outreach</code> can be <em>paused</em> here and cannot be
+            <em>started</em> here. It is review-only by construction and has no rollout
+            route.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Pending: the two production stops</h2>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Live workspace and the handoff 404 <span class="tag pending">pending a token</span></h3>
+      <p>The only images that would evidence production behaviour.</p>
+    </div>
+    <div class="pending-body">
+      <p style="margin-top:0"><strong>Not captured.</strong> Both need an authenticated admin
+      session against the live app. The available token expired 43 hours before this run, and
+      this loop does not mint production credentials. The capture script detects the expiry
+      and refuses rather than photographing a login screen — an image that looks like
+      evidence and is not would be worse than none.</p>
+      <p style="margin-bottom:0">To produce them, with a fresh token:</p>
+      <pre style="background:#fff;border:1px solid var(--border);border-radius:4px;padding:.75rem;overflow-x:auto;font-size:.8125rem"><code>HARNESS_DIR=&lt;dump dir&gt; CAPTURE_HOST=https://www.refactored.ai \
+  CAPTURE_ADMIN_TOKEN=&lt;jwt&gt; node scripts/captureGrowthJourneyScreenshots.js</code></pre>
+    </div>
+  </div>
+
+  <h2>What was verified live instead</h2>
+
+  <p>Production evidence that needs no screenshot, gathered on the box on 4 October 2026:</p>
+
+  <table>
+    <tr><th>Check</th><th>Result</th></tr>
+    <tr><td>Phase 6 backend code inside the running container</td>
+        <td><code>memberships_populated</code> present in
+            <code>dist/controllers/growthJourneyStatusController.js</code>; all three journey
+            routers in <code>dist/routes/admin/</code></td></tr>
+    <tr><td>Phase 6 frontend inside the nginx image</td>
+        <td>3 chunks carry <code>GROWTH_JOURNEY_ENABLED</code>, 2 carry the performance
+            heading; negative control 0</td></tr>
+    <tr><td>Backend liveness</td><td><code>GET /health</code> → <strong>200</strong></td></tr>
+    <tr><td>Journey API, unauthenticated</td>
+        <td><strong>401</strong> on all four status paths — note this proves the guard
+            answers, <em>not</em> that the routes are mounted, because
+            <code>/api/admin</code> blanket-401s before routing</td></tr>
+    <tr><td>The three journey crons</td>
+        <td>all <code>enabled = false</code>, <code>last_run_at</code> never</td></tr>
+    <tr><td>The flags, as the container has them</td>
+        <td><code>GROWTH_JOURNEY_ENABLED</code> and
+            <code>GROWTH_JOURNEY_EXECUTION_ENABLED</code> both <strong>unset</strong></td></tr>
+    <tr><td>The three ledger indexes</td>
+        <td>present <strong>and <code>indisvalid = t</code></strong> — checked directly,
+            because readiness only checks their names</td></tr>
+    <tr><td><strong>Nothing sent</strong></td>
+        <td>executions 0 · in-app nudges 0 · outcomes 0 · decisions 0 · handoffs 0 ·
+            controls 0 · classifications 0 · <code>growth_journey.*</code> ledger events
+            <strong>0</strong> · scheduled emails held by a journey hold 0</td></tr>
+  </table>
+
+  <h2>Compile the review</h2>
+  <p>Collect every heading and bullet above into one block, to paste into a reply.</p>
+  <button type="button" id="compile">Compile review notes</button>
+  <div id="out" role="region" aria-live="polite"></div>
+</div>
+
+<footer class="wrap">
+  <p>Generated for Phase 6 of the Growth Journey OS multi-brand expansion. Images in
+     <code>docs/screenshots/2026-10-04-growth-journey-phase6-deploy/</code> with
+     <code>_summary.json</code>. Operations runbook:
+     <code>directives/growth-journey-operations.md</code>. Operator guide:
+     <code>docs/GROWTH_JOURNEY_TRAINING_GUIDE.md</code>.</p>
+</footer>
+
+<script>
+  document.getElementById('compile').addEventListener('click', function () {
+    var out = document.getElementById('out');
+    var lines = [];
+    document.querySelectorAll('.screenshot').forEach(function (card) {
+      var h = card.querySelector('.head h3');
+      if (!h) return;
+      lines.push('## ' + h.textContent.replace(/\s+/g, ' ').trim());
+      card.querySelectorAll('.look li, .pending-body p').forEach(function (li) {
+        lines.push('- ' + li.textContent.replace(/\s+/g, ' ').trim());
+      });
+      lines.push('');
+    });
+    out.textContent = lines.join('\n');
+    out.style.display = 'block';
+  });
+</script>
+</body>
+</html>

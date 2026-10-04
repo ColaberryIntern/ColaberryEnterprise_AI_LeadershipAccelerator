@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-10-04T18:34:31.988Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "name": "harness-switched-off",
+      "file": "harness-switched-off.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "The dark state: the banner names the flag, not a symptom"
+    },
+    {
+      "name": "harness-unseeded",
+      "file": "harness-unseeded.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "The unseeded state: it names the seed script"
+    },
+    {
+      "name": "harness-handoffs",
+      "file": "harness-handoffs.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "The queue - a blocked assignment, a redacted reason, unstable paging stated"
+    },
+    {
+      "name": "harness-performance",
+      "file": "harness-performance.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "A null rate beside a REAL zero, each absence with its own reason"
+    },
+    {
+      "name": "harness-controls",
+      "file": "harness-controls.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "The only write surface, with an active pause listed"
+    },
+    {
+      "name": "production",
+      "status": "skipped",
+      "why": "admin token expired 43h ago; a fresh one is needed"
+    }
+  ]
+}
