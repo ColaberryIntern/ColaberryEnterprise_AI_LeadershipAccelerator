@@ -65,6 +65,41 @@ All identities are **clearly labelled synthetic**. No fixture sends email, creat
 
 ---
 
+## Fixture D — Legal review (manual-only)
+
+**Why:** the exit condition names a **manual-only** example and there was not one. Fixture B is
+*human-heavy*, which is a different thing: B still has AI-assisted tasks and exists to prove the
+AI share is not inflated. D proves the opposite property — that a blueprint where **every task is
+explicitly `human`** reaches approval.
+
+The distinction the whole allocation design turns on: an **unallocated** project and a
+**deliberately manual** one are indistinguishable unless the second one says so. "All human" has
+to be a recorded decision, with a reason on every row, not an empty field that happens to look
+the same.
+
+**Required facts:** a contract-value threshold; a qualified human reviewer; a recorded reason for
+approval or rejection; an explicit statement that the decision is never delegated to software.
+
+**Human decisions:** the approve/reject itself, which is the entire process.
+
+**Failure cases:** an empty allocation must refuse (it is not the same as all-human); a rationale
+that merely restates the structure ("derived from the human PERFORMER assignment") must not
+satisfy the reason requirement; an `ai_autonomous` allocation on the review task must refuse
+twice over, because the task carries `confidential` data **and** `decide_full` authority.
+
+**Minimum coverage asserted:**
+- The AI share is **0%, measured** — 210 human minutes/month over 2 of 2 tasks assessed. Zero
+  because it was measured as zero, which is a different fact from "not assessed".
+- It is **below the 85% target, and that is the correct answer.** It therefore needs a visible
+  rationale and a named acceptor, and refuses without them. A manual-only blueprint is not a
+  shortfall to be waived or reclassified.
+- An **empty agent roster is correct here**, not a gap. A rule that demanded an agent would be
+  punishing the honest answer.
+
+Code: `backend/src/services/lifecycle/generation/__tests__/fixtures/manualOnly.ts`.
+
+---
+
 ## Required corpus cases (request §7)
 
 Some are variants of A-C rather than separate fixtures.
@@ -74,6 +109,7 @@ Some are variants of A-C rather than separate fixtures.
 | Ordinary AI service application | C | the common path works end to end |
 | Government project, linked proposal + solution tracks | A | track mappings preserved |
 | Human-heavy workflow | B | below-target is honest, not reclassified |
+| Manual-only workflow | D | "all human" is a recorded decision, not an empty allocation |
 | **Multiple roles held by one person** | B variant | one identity in several roles does **not** satisfy separation of duty — approver ≠ proposer must still fail when they are the same human wearing two role hats |
 | **Low-information interview** | C variant | unknowns stay `open`; coverage is reported as incomplete; **no fabricated zeros and no precise-looking percentage** |
 | **Source exceeding model input limits** | A variant | an explicit completeness check, chunking, or a **visible blocking overflow**. Today `decomposePrompt.ts:97-101` truncates with a label inside the prompt but has **no programmatic completeness check** — this case is what forces that work |

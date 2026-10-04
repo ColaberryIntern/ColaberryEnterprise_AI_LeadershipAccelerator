@@ -12,6 +12,17 @@
  *
  * FOUR THINGS WORTH KNOWING BEFORE EDITING THIS FILE.
  *
+ * MUST BE CALLED AFTER `ensureMultiTenantSchema()`. Every table here carries
+ * `tenant_id ... REFERENCES tenants(id)`, and two more reference `projects` / `delivery_projects`.
+ * The order holds today by position alone - `server.ts:2555` calls ensureMultiTenantSchema()
+ * before `:2744` calls this - and nothing states the requirement, so a boot-loop reordering
+ * would silently produce NOTHING on a fresh database: the loop below is warn-only, so all
+ * statements would be skipped with a console warning and no failure. Measured directly against
+ * Postgres 15.16 on 2026-10-02: on an empty database every statement warn-skips, cascading from
+ * `relation "tenants" does not exist`. `ensureGrowthJourneySchema.ts:22-24` records the same
+ * requirement for the same reason; this note exists so the ordering is a stated contract rather
+ * than an accident that currently works.
+ *
  * 1. Two project tables, deliberately not merged. `projects` (student/portal) and
  *    `delivery_projects` (client/delivery) are separate domain models and the request forbids
  *    collapsing them. A lifecycle row therefore carries TWO nullable FKs and a CHECK that
@@ -47,6 +58,7 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
   'operating_blueprint_manifests',
   'blueprint_approvals',
   'lifecycle_stage_failures',
+  'blueprint_role_map',
 ];
 
 /**
@@ -67,6 +79,11 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
  *       One manifest per (tenant, project, revision) — the backstop behind the approval CAS.
  *   uq_blueprint_approval_revision
  *       One approval per manifest revision. This is the one the concurrency proof drops.
+ *   uq_role_map_manifest_function
+ *       One role-map row per (manifest, previous_function). Without it the same displaced
+ *       function can appear twice under different new roles and the old->new mapping stops
+ *       being a mapping. Two answers to "what happened to this job" is worse than none,
+ *       because a reviewer reads whichever row the query happened to return first.
  */
 export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'uq_lifecycle_student_project',
@@ -74,6 +91,7 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'uq_blueprint_manifest_revision_student',
   'uq_blueprint_manifest_revision_delivery',
   'uq_blueprint_approval_revision',
+  'uq_role_map_manifest_function',
 ];
 
 /**
@@ -83,6 +101,7 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = [
 export const REQUIRED_CONSTRAINTS: ReadonlyArray<string> = [
   'ck_lifecycle_exactly_one_project',
   'ck_manifest_exactly_one_project',
+  'ck_role_map_retained_is_array',
 ];
 
 /**
@@ -203,6 +222,34 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_lifecycle_failures_state
      ON lifecycle_stage_failures (lifecycle_state_id)`,
+
+  // THE OLD->NEW ROLE MAP (P3-T3). What a displaced function became: which part the AI now
+  // contributes, which new role carries it, and what the person retains. Kept as its own table
+  // rather than a JSONB column on the manifest, because a role map is read and reviewed per row
+  // - "what happened to MY job" is a row lookup - and because a durable fact in a JSONB blob is
+  // how unrelated keys get erased by the next whole-object write.
+  //
+  // retained_responsibilities is JSONB rather than TEXT[]: the manifest's refs_json and
+  // measures_json are already JSONB, and a CHECK keeps it an ARRAY so a bare string cannot be
+  // stored where a list is read.
+  `CREATE TABLE IF NOT EXISTS blueprint_role_map (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     manifest_id UUID NOT NULL REFERENCES operating_blueprint_manifests(id) ON DELETE CASCADE,
+     previous_function TEXT NOT NULL,
+     ai_contribution TEXT NOT NULL,
+     new_role_id TEXT NOT NULL,
+     retained_responsibilities JSONB NOT NULL DEFAULT '[]'::jsonb,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     CONSTRAINT ck_role_map_retained_is_array CHECK (
+       jsonb_typeof(retained_responsibilities) = 'array'
+     )
+   )`,
+  // One row per (manifest, previous_function). See REQUIRED_INDEXES: two answers to "what
+  // happened to this job" is worse than none, because a reviewer reads whichever row came back
+  // first. Scoped by tenant for the same reason every other index here is.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_role_map_manifest_function
+     ON blueprint_role_map (tenant_id, manifest_id, previous_function)`,
 ];
 
 export async function ensureProjectLifecycleSchema(): Promise<void> {

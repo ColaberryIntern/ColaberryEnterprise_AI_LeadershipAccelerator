@@ -195,9 +195,51 @@ Enforcement ships behind a narrowly scoped flag, default **OFF** until Phase 8 a
 
 ---
 
+## 5.1a Staff-initiated student builds: who approves
+
+*Decided 2026-10-03. §5.1 draws the line as "the owner approves what gets built; the student
+receives what was approved", which covers portal self-serve and client delivery but not a third
+shape a peer session surfaced: **staff initiate, a student receives**. Rows 5 and 6 of the
+entry-point matrix are both this shape.*
+
+**The approver is the initiating staff member, and separation of duty is explicitly not claimed
+for this path.** The initiating staff member and the programme owner are the same person. A
+second-identity requirement would therefore be the same human clicking twice — ceremony that
+reads as a control — and a `SelfApprovalError`-style refusal, as `govQualification` applies
+elsewhere, would make the path unusable rather than safe. Saying so is better than implying a
+separation that does not exist.
+
+**The control that does work with one person is the hash-bound review hold.** The build rests at
+`drafted`; the reviewer reads it; the approval carries the reviewed plan's hash, so "the plan I
+read is the plan that shipped" is enforced by `publishPlan` rather than assumed. That separates
+the two acts in **time and content** rather than in identity, which is the only separation
+available here — and it catches the failure that can actually occur (the generator produced
+something wrong and it reached the student unread) rather than the one that cannot (an improper
+second party).
+
+**This is already implemented on every staff-initiated path**, and more strongly than this
+document previously described: `holdForReview: true` is hardcoded at `internshipProjectGeneration.ts` and at both flotation admin doors. `buildFromUnderstanding`
+defaults the hold OFF for the public self-serve door, which is correct — a student's own build
+should publish the moment it is good. The hold is a persisted column, so it survives a restart;
+that is LC-13, and it was a real incident rather than a hypothetical.
+
+**What Phase 6 owes this path is preservation, not addition.** Two specific obligations: the
+lifecycle's `release_review` must not become a second, redundant gate over a path that already
+holds — one human reading one plan once is the control, and a second prompt to the same person
+teaches them to click past both. And the approving identity must be recorded as the staff
+member, never as an AI identity and never as the student, since `PROJECT_APPROVAL_GATE`'s
+removal already settled that students get no say in the build.
+
 ## Related documents
 
 - `entry-point-matrix.md` — the 14 creation paths and 3 chokepoints
 - `blueprint-contract.md` — the manifest's fields and invariants
 - `approval-and-change-policy.md` — approval binding, invalidation, impact sets
-- `acceptance-evidence.md` — LC-01…LC-18 evidence table (populated as phases land)
+- `reference-fixtures.md` — the fixtures every phase runs against, and the required corpus cases
+- `owner-testing-guide.md` — the 6 non-developer tests, run by P1-T7 at Phase 8
+- `carried-forward-obligations.md` — **read before starting Phase 6 or 7.** Decisions and measured
+  findings from Phase 3 that bind later phases, including why an r0 keyword rule does not work and
+  why a new r0 gate rule must ship advisory. Kept here because the run directory it was first
+  written in is gitignored.
+- `acceptance-evidence.md` — LC-01…LC-18 evidence table. **NOT YET CREATED**; Phase 8 owns it.
+  Listed here since Phase 1 as a forward reference, which is why it reads as though it exists.

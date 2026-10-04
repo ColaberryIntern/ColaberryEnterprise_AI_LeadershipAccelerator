@@ -44,9 +44,13 @@ describe('a complete schema verifies', () => {
   });
 
   it('checks a non-trivial number of things, so a pass cannot be vacuous', () => {
-    expect(REQUIRED_TABLES.length).toBe(4);
-    expect(REQUIRED_INDEXES.length).toBe(5);
-    expect(REQUIRED_CONSTRAINTS.length).toBe(2);
+    // FLOORS, not exact counts. This test's purpose is that a pass cannot be vacuous, which a
+    // floor serves exactly as well — while an exact count breaks on every legitimate schema
+    // addition and teaches whoever hits it to update the number without reading why.
+    // P3-T3's blueprint_role_map is what tripped the literal 4/5/2 written in Phase 2.
+    expect(REQUIRED_TABLES.length).toBeGreaterThanOrEqual(5);
+    expect(REQUIRED_INDEXES.length).toBeGreaterThanOrEqual(6);
+    expect(REQUIRED_CONSTRAINTS.length).toBeGreaterThanOrEqual(3);
   });
 });
 

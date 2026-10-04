@@ -43,7 +43,7 @@ function isAdditive(sql: string): boolean {
 describe('ensureProjectLifecycleSchema is additive-only', () => {
   it('finds a non-trivial statement list, so the sweep cannot pass by scanning nothing', () => {
     expect(PROJECT_LIFECYCLE_STATEMENTS.length).toBeGreaterThanOrEqual(10);
-    expect(REQUIRED_TABLES.length).toBe(4);
+    expect(REQUIRED_TABLES.length).toBeGreaterThanOrEqual(5);
   });
 
   it('every statement is CREATE ... IF NOT EXISTS (no ALTER, no DROP, no TRUNCATE)', () => {
@@ -99,7 +99,10 @@ describe('the two identity tables stay separate, as a database invariant', () =>
 
   it('scopes every table to a tenant, so no row can exist outside a tenant', () => {
     const tables = PROJECT_LIFECYCLE_STATEMENTS.filter((s) => /CREATE TABLE/i.test(s));
-    expect(tables.length).toBe(4);
+    // Derived, not hardcoded: this cross-checks the STATEMENTS against the DECLARED list, so
+    // adding a table to one without the other fails here. A literal 4 drifted the moment
+    // P3-T3 added blueprint_role_map, and the count is not the property under test anyway.
+    expect(tables.length).toBe(REQUIRED_TABLES.length);
     for (const t of tables) {
       expect(t).toMatch(/tenant_id\s+UUID\s+NOT NULL\s+REFERENCES\s+tenants\(id\)/i);
     }
@@ -145,6 +148,45 @@ describe('the invariants the approval ladder depends on', () => {
     expect(states).not.toMatch(/condition\s+TEXT\s+NOT NULL/i);
   });
 
+  it('gives the old->new role map a table of its own, keyed to a manifest revision', () => {
+    // Its own table rather than a JSONB column on the manifest: a role map is read per row
+    // ("what happened to MY job"), and a durable fact inside a JSONB blob is how unrelated keys
+    // get erased by the next whole-object write.
+    expect(joined).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_role_map/i);
+    expect(joined).toMatch(/manifest_id\s+UUID\s+NOT NULL\s+REFERENCES\s+operating_blueprint_manifests\(id\)/i);
+    // Three explicit regex literals rather than a template-literal RegExp. The template
+    // version read '${col}\s+TEXT' and a collapsed escape turned \s into a literal
+    // "s", so it matched nothing while looking entirely correct.
+    expect(joined).toMatch(/previous_function\s+TEXT\s+NOT NULL/i);
+    expect(joined).toMatch(/ai_contribution\s+TEXT\s+NOT NULL/i);
+    expect(joined).toMatch(/new_role_id\s+TEXT\s+NOT NULL/i);
+  });
+
+  it('makes the role map a MAP: one row per (manifest, previous_function)', () => {
+    // Without this index the same displaced function can appear twice under different new roles.
+    // Two answers to "what happened to this job" is worse than none, because a reviewer reads
+    // whichever row the query returned first.
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_role_map_manifest_function/i);
+    expect(joined).toMatch(/ON blueprint_role_map \(tenant_id, manifest_id, previous_function\)/i);
+  });
+
+  it('keeps retained_responsibilities an ARRAY at the database level', () => {
+    // JSONB to match refs_json/measures_json, but a bare string must not be storable where a
+    // list is read, so the shape is a CHECK rather than a convention.
+    expect(joined).toMatch(/CONSTRAINT ck_role_map_retained_is_array CHECK/i);
+    expect(joined).toMatch(/jsonb_typeof\(retained_responsibilities\) = 'array'/i);
+  });
+
+  it('POSITIVE CONTROL: the role-map assertions are not satisfied by any other table', () => {
+    // Proves the three assertions above are actually reading the new table's statement and not
+    // matching text that happens to exist elsewhere in the set.
+    const others = PROJECT_LIFECYCLE_STATEMENTS
+      .filter((sql) => !/blueprint_role_map/i.test(sql))
+      .join(' ');
+    expect(others).not.toMatch(/uq_role_map_manifest_function/i);
+    expect(others).not.toMatch(/ck_role_map_retained_is_array/i);
+    expect(others).not.toMatch(/retained_responsibilities/i);
+  });
   it('gives exhausted retries somewhere to land', () => {
     const dl = PROJECT_LIFECYCLE_STATEMENTS.find((s) => /CREATE TABLE IF NOT EXISTS lifecycle_stage_failures/i.test(s))!;
     expect(dl).toMatch(/attempts\s+INTEGER\s+NOT NULL/i);
