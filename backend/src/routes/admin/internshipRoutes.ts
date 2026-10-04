@@ -8,6 +8,10 @@ import { assessApplicant } from '../../services/internship/internshipApplicantAs
 import { internActivity } from '../../services/internship/internshipActivityService';
 import { internshipProjectReview } from '../../services/internship/internshipProjectReview';
 import { authorAndAssignInternshipProject } from '../../services/internship/internshipProjectAuthoring';
+import {
+  internProjectQuestions, startInternProjectBuild, internProjectBuild,
+  assignGeneratedProject, assertNotGeneratedProject,
+} from '../../services/internship/internshipProjectGeneration';
 import { internshipProjectReadiness } from '../../services/internship/internshipProjectReadiness';
 import { InvalidInternshipTransitionError } from '../../services/internship/internshipStateMachine';
 import { REASON_CODES } from '../../services/internship/internshipReasonCodes';
@@ -18,6 +22,11 @@ import { documentsFor, outstandingRequirements, verifyDocument } from '../../ser
 import { activate, activeInternView, buildChecklist } from '../../services/internship/internshipActivationService';
 import { commitConversion, planConversion } from '../../services/internship/internshipConversionService';
 import { internshipKpis, internshipProfileSection } from '../../services/internship/internshipTrackingService';
+import { getConsoleRoster, consoleCounts } from '../../services/internship/internConsoleRoster';
+import { PROJECT_STAGES } from '../../services/projectDeliveryService';
+import { getInternConsoleDetail } from '../../services/internship/internConsoleDetail';
+import { transition } from '../../services/internship/internshipApplicationService';
+import { isTerminal, InternshipState } from '../../services/internship/internshipStateMachine';
 
 /**
  * Admin — AI Internship applications.
@@ -47,7 +56,8 @@ const router = Router();
 
 const BUCKETS: QueueBucket[] = [
   'awaiting_review', 'information_requested', 'waitlisted',
-  'interview_incomplete', 'calls_failed', 'approved_awaiting_documents', 'all_open',
+  'interview_incomplete', 'calls_failed', 'approved_awaiting_documents',
+  'onboarding', 'active_interns', 'converted', 'in_review',
 ];
 
 const queueQuerySchema = z.object({
@@ -73,6 +83,164 @@ const decideSchema = z.object({
   reviewer_notes: z.string().max(4000).nullish(),
   conditions: z.string().max(2000).nullish(),
 }).strict();
+
+/**
+ * GET /api/admin/internship/console
+ *
+ * One row per active intern for the Intern Console: identity, state, day N, activity, training
+ * with the weeks 1-3 gate, cert sitting counts, and their project if they have one.
+ *
+ * `requireSection('internship')` rather than `requireAdmin`, matching every route around it.
+ * Narrowing to admin-only would remove access that internship-scoped staff have today, which is
+ * a permissions regression dressed as a new feature.
+ *
+ * **There is no attendance field in this response, by product decision.** See
+ * `internConsoleRoster`'s header: 7 join rows existed across 2 interns and no denominator exists.
+ */
+router.get('/api/admin/internship/console', requireSection('internship'), async (_req: Request, res: Response) => {
+  try {
+    const interns = await getConsoleRoster();
+    // `stages` is served rather than hardcoded in the client so the pipeline's columns come from the
+    // same constant the `stage` values are produced from. A client with its own copy of the list
+    // silently drops a column the day a stage is added, and the projects in it vanish from the board.
+    res.json({ interns, counts: consoleCounts(interns), stages: PROJECT_STAGES });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_console_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load the intern console.' });
+  }
+});
+
+/**
+ * GET /api/admin/internship/console/:enrollmentId
+ *
+ * One intern in depth: their roster row, the per-section training breakdown, the cert attempt
+ * series with each sitting's item count, the readiness/claim pair, and their activity feed.
+ *
+ * **404 rather than 403 for someone who is not an active intern.** The enrollment id is not a
+ * secret, but whether a given person is an intern is not something this endpoint should confirm to
+ * a caller who cannot already see the roster — and the roster's own predicate is what decides, so
+ * the two surfaces cannot disagree about who exists.
+ */
+router.get('/api/admin/internship/console/:enrollmentId', requireSection('internship'), async (req: Request, res: Response) => {
+  const enrollmentId = String(req.params.enrollmentId ?? '');
+  try {
+    const detail = await getInternConsoleDetail(enrollmentId);
+    if (!detail) { res.status(404).json({ error: 'Not an active intern.' }); return; }
+    res.json(detail);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_console_detail_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not load this intern.' });
+  }
+});
+
+/**
+ * The five status actions the console's Manage drawer offers, mapped to states.
+ *
+ * A fixed allowlist, not a free-text state: a route that accepted any `InternshipState` would let a
+ * caller move an application to `documents_verified` or `active` and skip approval entirely. These
+ * five are the only moves a manager makes from the console.
+ */
+const CONSOLE_ACTIONS: Record<string, InternshipState> = {
+  pause: 'paused',
+  resume: 'active',
+  complete: 'completed',
+  withdraw: 'withdrawn',
+  remove: 'removed',
+};
+
+/** `complete`, `withdraw` and `remove` have NO reverse edge — see the state machine's terminal map. */
+const ONE_WAY = new Set(['complete', 'withdraw', 'remove']);
+
+const transitionSchema = z.object({
+  action: z.enum(['pause', 'resume', 'complete', 'withdraw', 'remove']),
+  reason: z.string().trim().min(1).max(2000).optional(),
+  /**
+   * Required for the three actions that cannot be undone: the caller must echo the action name.
+   * A typed confirmation is the only thing standing between a misclick and a terminal record that
+   * can never be reopened — reapplying opens a NEW application rather than reviving this one.
+   */
+  confirm: z.string().optional(),
+}).strict();
+
+/**
+ * POST /api/admin/internship/applications/:id/transition
+ *
+ * Thin by design. `transition()` in `internshipApplicationService` is the ONLY writer of
+ * `internship_applications.state`; it takes a row lock, asserts the move against the state machine
+ * and writes the audit event in the same transaction. This route adds the console's own rules —
+ * the five-action allowlist, the typed confirmation on one-way moves, and the actor — and nothing
+ * else. Re-implementing any of it here would create a second write path, which is exactly what the
+ * service's header says must not exist.
+ *
+ * **The actor comes from the verified session, never from the body.** A body-supplied actor would
+ * let a caller attribute their own decision to someone else in the permanent audit trail.
+ */
+router.post('/api/admin/internship/applications/:id/transition', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = transitionSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid transition request.', issues: parsed.error.issues });
+    return;
+  }
+  const { action, reason, confirm } = parsed.data;
+
+  if (ONE_WAY.has(action) && confirm !== action) {
+    res.status(400).json({
+      error: `"${action}" cannot be undone. Send confirm:"${action}" to proceed.`,
+      one_way: true,
+    });
+    return;
+  }
+
+  const applicationId = String(req.params.id);
+  try {
+    const current = await InternshipApplication.findByPk(applicationId);
+    if (!current) { res.status(404).json({ error: 'Application not found.' }); return; }
+
+    // Refused before the writer is even called, with the reason named. The state machine would also
+    // refuse it, but a terminal record is the one case worth answering precisely: "this application
+    // was completed on <date> and cannot be reopened" is actionable, "invalid transition" is not.
+    if (isTerminal(current.state as InternshipState)) {
+      res.status(409).json({
+        error: `This application is ${current.state} and cannot be changed. Reapplying opens a new application.`,
+        state: current.state,
+        terminal: true,
+      });
+      return;
+    }
+
+    const app = await transition(applicationId, CONSOLE_ACTIONS[action], {
+      actor: 'reviewer',
+      actorId: (req as any).admin?.email ?? null,
+      reason: reason ?? null,
+      evidenceSource: 'intern_console',
+    });
+
+    res.json({ application_id: app.id, state: app.state, action });
+  } catch (err: any) {
+    if (err instanceof InvalidInternshipTransitionError) {
+      // The state machine's own refusal, passed through with its message rather than flattened.
+      res.status(409).json({ error: err.message, refused_by: 'state_machine' });
+      return;
+    }
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_console_transition_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, action },
+    }));
+    res.status(500).json({ error: "Could not change this intern's status." });
+  }
+});
 
 /** GET /api/admin/internship/queue */
 router.get('/api/admin/internship/queue', requireSection('internship'), async (req: Request, res: Response) => {
@@ -210,9 +378,18 @@ router.post('/api/admin/internship/applications/:id/author-project', requireSect
     if (!application) { res.status(404).json({ error: 'Application not found.' }); return; }
     const parsed = authorProjectSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'Invalid project.', issues: parsed.error.issues }); return; }
+    // The manual form is the escape hatch, not a second writer. `importProject`
+    // writes NOTHING to a project that already has a published plan and returns
+    // the existing tree, so without this the reviewer is told their stories were
+    // saved when none were. Refuse loudly instead.
+    await assertNotGeneratedProject((application as any).enrollment_id);
     const result = await authorAndAssignInternshipProject((application as any).enrollment_id, parsed.data);
     res.json(result);
   } catch (err: any) {
+    if (typeof err?.status === 'number' && err.status < 500) {
+      res.status(err.status).json({ error: String(err.message) });
+      return;
+    }
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(),
       level: 'error', service: 'backend', event: 'internship_author_project_failed',
@@ -220,6 +397,163 @@ router.post('/api/admin/internship/applications/:id/author-project', requireSect
       context: { message: err?.message },
     }));
     res.status(500).json({ error: 'Could not author the project.' });
+  }
+});
+
+/**
+ * ── GENERATED PROJECTS ─────────────────────────────────────────────────────
+ *
+ * The admin door onto the Student Build Pipeline. Ali, 2026-09-28: "We will
+ * never build projects like this, one story at a time... This is where I need
+ * to put my idea process in here. The same process that already exists for
+ * creating projects."
+ *
+ * Every SBP route is participant-scoped and derives the enrollment from the
+ * student's own JWT, so a reviewer could not run one on an intern's behalf.
+ * These four are that entry, `requireSection('internship')` like the rest of
+ * this file, and they call the pipeline's own stages in the pipeline's own
+ * order. The sequence is: questions -> generate -> build (poll/review) ->
+ * assign.
+ */
+const projectQuestionsSchema = z.object({
+  idea: z.string().min(20).max(6000),
+  size: z.enum(['workflow', 'project', 'autonomous']).optional(),
+  name: z.string().max(200).nullish(),
+}).strict();
+
+const generateProjectSchema = projectQuestionsSchema.extend({
+  industry: z.string().max(120).nullish(),
+  answers: z.array(z.object({
+    id: z.string().max(60),
+    question: z.string().max(1000),
+    answer: z.string().max(6000),
+    angle: z.string().max(60).optional(),
+  })).max(20).optional(),
+  covered: z.array(z.object({
+    angle: z.string().max(60),
+    evidence: z.string().max(2000),
+  })).max(20).optional(),
+}).strict();
+
+const assignProjectSchema = z.object({
+  project_id: z.string().uuid(),
+  /** The hash of the plan the reviewer actually read. */
+  expected_sha256: z.string().regex(/^[0-9a-f]{64}$/).nullish(),
+}).strict();
+
+/** Log + answer, with the service's own status when it set one. */
+function generationFailure(res: Response, event: string, err: any, fallback: string): void {
+  const status = typeof err?.status === 'number' ? err.status : 500;
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: status >= 500 ? 'error' : 'warn', service: 'backend', event,
+    outcome: 'failure', error_class: err?.error_class ?? err?.constructor?.name ?? 'Error',
+    context: { message: err?.message },
+  }));
+  res.status(status).json({ error: status >= 500 ? fallback : String(err?.message ?? fallback) });
+}
+
+/**
+ * POST /api/admin/internship/applications/:id/project/questions
+ * The sharpening interview, for the reviewer. Creates nothing.
+ */
+router.post('/api/admin/internship/applications/:id/project/questions', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = projectQuestionsSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Describe the project first.', issues: parsed.error.issues }); return; }
+  try {
+    res.json(await internProjectQuestions(parsed.data));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_questions_failed', err, 'Could not generate the questions.');
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/project/generate
+ * Creates the project and starts generation, HELD FOR REVIEW. 202: the plan is
+ * not ready when this returns, and the intern cannot see anything yet.
+ */
+router.post('/api/admin/internship/applications/:id/project/generate', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = generateProjectSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid project brief.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await startInternProjectBuild({ applicationId: String(req.params.id), ...parsed.data });
+    res.status(202).json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_generate_failed', err, 'Could not start the generation.');
+  }
+});
+
+/**
+ * GET /api/admin/internship/applications/:id/project/:projectId/build
+ * Poll while it generates, then read what the reviewer is being asked to
+ * approve: the plan, its blocking violations and its advisory ones, split here
+ * rather than in the browser.
+ */
+router.get('/api/admin/internship/applications/:id/project/:projectId/build', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internProjectBuild(String(req.params.projectId)));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_build_failed', err, 'Could not load the generated plan.');
+  }
+});
+
+/**
+ * POST /api/admin/internship/applications/:id/project/assign
+ * The reviewer says yes: publish the reviewed plan, materialise the tasks, make
+ * it the intern's active project. `expected_sha256` makes "the plan I read is
+ * the plan that shipped" enforced rather than assumed.
+ */
+router.post('/api/admin/internship/applications/:id/project/assign', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = assignProjectSchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await assignGeneratedProject({
+      projectId: parsed.data.project_id,
+      expectedSha: parsed.data.expected_sha256,
+    });
+    res.json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_assign_failed', err, 'Could not assign the project.');
+  }
+});
+
+/**
+ * The review surface, addressed by the PROJECT rather than by an application.
+ *
+ *     "We will never build projects like this, one story at a time. We do not create
+ *      manually. This is where I need to put my idea process in here. The same process
+ *      that already exists for creating projects."  (Ali, 2026-09-29)
+ *
+ * The conversation intake creates a project for a student who may have no internship
+ * application at all, so the four `/applications/:id/project/...` routes above cannot serve
+ * it. These two are the same handlers with the honest scope: `internProjectBuild` and
+ * `assignGeneratedProject` never read `:id` — they take a project id and always have — so
+ * the application in those paths was decorative, and pretending otherwise here would mean
+ * inventing an application to satisfy a URL.
+ *
+ * `requireSection('internship')` deliberately, matching the routes above rather than the
+ * `requireAdmin` of the conversation door. Narrowing to `requireAdmin` would take the
+ * review away from internship-scoped staff who have it today.
+ */
+router.get('/api/admin/internship/projects/:projectId/build', requireSection('internship'), async (req: Request, res: Response) => {
+  try {
+    res.json(await internProjectBuild(String(req.params.projectId)));
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_build_failed', err, 'Could not load the generated plan.');
+  }
+});
+
+router.post('/api/admin/internship/projects/:projectId/assign', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = assignProjectSchema.safeParse({ ...(req.body ?? {}), project_id: String(req.params.projectId) });
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request.', issues: parsed.error.issues }); return; }
+  try {
+    const result = await assignGeneratedProject({
+      projectId: parsed.data.project_id,
+      expectedSha: parsed.data.expected_sha256,
+    });
+    res.json(result);
+  } catch (err: any) {
+    generationFailure(res, 'internship_project_assign_failed', err, 'Could not assign the project.');
   }
 });
 

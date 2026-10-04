@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import { env } from '../../config/env';
 import * as zoomService from '../zoomService';
+import { instantToWallClock } from '../centralDate';
+import { createMeetingIdempotent } from './zoomMeetingIdempotency';
 
 // Meeting provider adapter (spec §11) — a stable interface behind which the
 // actual video provider can be swapped without touching room/booking logic.
@@ -19,6 +21,12 @@ export interface CreateMeetingInput {
   // Stable id used as the conference createRequest id so retries do not spawn
   // duplicate conferences (idempotency at the provider layer).
   requestId: string;
+  /**
+   * Which provider-side host to create under. Absent means the configured default,
+   * so every existing caller is unaffected. Only the Zoom adapter honours it —
+   * Google Meet has no equivalent and ignores it rather than pretending.
+   */
+  hostEmail?: string;
 }
 
 export interface MeetingResult {
@@ -177,23 +185,54 @@ export class GoogleMeetAdapter implements MeetingProvider {
 export class ZoomMeetAdapter implements MeetingProvider {
   readonly name = 'zoom';
 
+  /**
+   * THE BUG THIS CONVERSION FIXES. `startAt` is a real instant. Zoom's API reads a
+   * `start_time` with no trailing `Z` as a wall clock IN the `timezone` field sent
+   * alongside it. The previous code did `startAt.toISOString().slice(0, 19)`, which
+   * takes the UTC wall clock and strips the only character saying it was UTC — so an
+   * instant of 18:30Z (13:30 Central) was handed to Zoom as "18:30, Central" and the
+   * meeting was created FIVE HOURS LATE. Every room booking and every `joinVideoRoom`
+   * went through this path.
+   *
+   * Slicing a `Z` off an ISO string converts nothing. `instantToWallClock` actually
+   * converts, via Intl, so a booking either side of a DST transition uses the offset
+   * really in force that day.
+   *
+   * The class path was never affected: `meetingService.ts` builds its string from the
+   * stored Central wall clock and never had an instant to mis-handle.
+   */
   async createMeeting(input: CreateMeetingInput): Promise<MeetingResult> {
     const durationMinutes = Math.max(1, Math.round((input.endAt.getTime() - input.startAt.getTime()) / 60000));
-    const result = await zoomService.createMeeting({
+    const timezone = input.timezone || DEFAULT_TZ;
+    // `requestId` is USED now, not dropped. It was part of this interface from the
+    // start — GoogleMeetAdapter has always passed it as the conference createRequest
+    // id — and this adapter silently ignored it, leaving the only duplicate protection
+    // a non-atomic `if (booking.meeting_link) return` in roomOutboxHandlers. Zoom has
+    // no idempotency key of its own, so createMeetingIdempotent supplies one via a
+    // ledger written before the call. See zoomMeetingIdempotency.ts.
+    const result = await createMeetingIdempotent({
+      requestId: input.requestId,
       topic: input.title,
       agenda: input.description,
-      startDateTime: input.startAt.toISOString().slice(0, 19),
+      startDateTime: instantToWallClock(input.startAt, timezone),
       durationMinutes,
-      timezone: input.timezone || DEFAULT_TZ,
+      timezone,
+      // Passed through so the ledger records which host this request used, which is
+      // what a later reconcile has to ask.
+      hostEmail: input.hostEmail,
     });
     return { providerEventId: result.meetingId, joinUrl: result.joinUrl };
   }
 
   async updateMeeting(providerEventId: string, patch: Partial<CreateMeetingInput>): Promise<void> {
+    // Same conversion as createMeeting. The timezone a patch is interpreted against is
+    // the one it carries, falling back to the adapter default — NOT whatever the
+    // meeting was created with, which this adapter cannot see.
+    const patchTz = patch.timezone || DEFAULT_TZ;
     await zoomService.updateMeeting(providerEventId, {
       ...(patch.title !== undefined ? { topic: patch.title } : {}),
       ...(patch.description !== undefined ? { agenda: patch.description } : {}),
-      ...(patch.startAt ? { startDateTime: patch.startAt.toISOString().slice(0, 19) } : {}),
+      ...(patch.startAt ? { startDateTime: instantToWallClock(patch.startAt, patchTz) } : {}),
       ...(patch.endAt && patch.startAt
         ? { durationMinutes: Math.max(1, Math.round((patch.endAt.getTime() - patch.startAt.getTime()) / 60000)) }
         : {}),

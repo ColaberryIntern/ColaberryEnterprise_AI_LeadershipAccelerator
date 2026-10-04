@@ -3,7 +3,7 @@ import AdminUser from '../../models/AdminUser';
 import AiAgent from '../../models/AiAgent';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
-import { Ticket } from '../../models';
+import { Ticket, TicketActionLink, WorkLedgerEvent, EvidenceLink } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
@@ -153,6 +153,82 @@ export async function countCompletedTicketsForAgent(adminUserId: string, agent: 
       ],
     },
   });
+}
+
+// Agent Detail polish round 5 (2026-09-30) — Ali, live: "Performance & Settings /
+// Results & Reports section needs to be redesigned and rebuilt." The mockup's
+// "Verified resolution" stat was deliberately NOT built in Track A1 above (no real
+// "verified" concept existed then). A real one now does:
+// summaryGeneratorService.ts's generateTicketSummary() only ever uses "verified"-
+// adjacent language when a real WorkLedgerEvent with result:'success' AND real
+// evidence (evidence_artifacts via evidence_links) both exist for a ticket — this
+// mirrors that exact gate as a lightweight aggregate COUNT, not by generating full
+// narrative text per ticket (needlessly expensive at scale).
+/** Same real match-list/scoping shape as `countOpenTicketsForAgent()`/
+ * `countCompletedTicketsForAgent()` above, but with NO status filter — "owned" here
+ * means every ticket ever assigned to or created by this agent, matching the
+ * mockup's own "N completed / N owned cases" wording literally. "verified" counts
+ * only tickets with a real success event AND real evidence — the identical honest
+ * gate `generateTicketSummary()` already enforces per-ticket.
+ * `mostRecentVerifiedTicketId` is the single most recently verified ticket (by its
+ * own latest real success event time) — `null` when none — so a caller (the
+ * Results & Reports manager-briefing card) can fetch that ONE ticket's real
+ * outcome sentence via the already-built `getTicketSummary()` rather than this
+ * function generating narrative text for every verified ticket. */
+export async function countVerifiedResolutionsForAgent(
+  adminUserId: string,
+  agent: AiAgent,
+): Promise<{ verified: number; owned: number; mostRecentVerifiedTicketId: string | null }> {
+  const matchList = buildCreatorIdMatchList(adminUserId, agent);
+  const ownedTickets = await Ticket.findAll({
+    attributes: ['id'],
+    where: {
+      [Op.or]: [
+        { assigned_to_type: 'ai_staff', assigned_to_id: { [Op.in]: matchList } },
+        { created_by_id: { [Op.in]: matchList } },
+      ],
+    },
+  });
+  const ticketIds = ownedTickets.map((t) => t.id);
+  if (ticketIds.length === 0) return { verified: 0, owned: 0, mostRecentVerifiedTicketId: null };
+
+  const links = await TicketActionLink.findAll({ where: { ticket_id: { [Op.in]: ticketIds } } });
+  const eventIds = links.map((l) => l.event_id);
+  const latestSuccessAtByTicketId = new Map<string, Date>();
+  if (eventIds.length > 0) {
+    const successEvents = await WorkLedgerEvent.findAll({
+      where: { event_id: { [Op.in]: eventIds }, result: 'success' },
+      attributes: ['event_id', 'occurred_at'],
+    });
+    const successEventTimeById = new Map(successEvents.map((e) => [e.event_id, e.occurred_at]));
+    for (const link of links) {
+      const occurredAt = successEventTimeById.get(link.event_id);
+      if (!occurredAt) continue;
+      const existing = latestSuccessAtByTicketId.get(link.ticket_id);
+      if (!existing || occurredAt > existing) latestSuccessAtByTicketId.set(link.ticket_id, occurredAt);
+    }
+  }
+
+  const successTicketIds = Array.from(latestSuccessAtByTicketId.keys());
+  const evidenceLinks = await EvidenceLink.findAll({
+    where: { ticket_id: { [Op.in]: successTicketIds } },
+    attributes: ['ticket_id'],
+  });
+  const evidenceTicketIds = new Set(evidenceLinks.map((l) => l.ticket_id));
+
+  let verified = 0;
+  let mostRecentVerifiedTicketId: string | null = null;
+  let mostRecentAt: Date | null = null;
+  for (const [id, occurredAt] of latestSuccessAtByTicketId) {
+    if (!evidenceTicketIds.has(id)) continue;
+    verified += 1;
+    if (!mostRecentAt || occurredAt > mostRecentAt) {
+      mostRecentAt = occurredAt;
+      mostRecentVerifiedTicketId = id;
+    }
+  }
+
+  return { verified, owned: ticketIds.length, mostRecentVerifiedTicketId };
 }
 
 /** Trust Contract fix (2026-08-24) — Ali, live, looking at Reese's real page: "Reese

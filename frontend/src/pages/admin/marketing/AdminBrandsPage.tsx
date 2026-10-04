@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import BrandReadinessPanel from './BrandReadinessPanel';
@@ -9,6 +9,7 @@ import {
   listChannelAccounts,
   listConnectors,
   revokeChannelAccount,
+  selectChannelAccount,
   startConnect,
   errorMessageOf,
   type ChannelAccount,
@@ -23,6 +24,11 @@ import {
   type BrandSendReadiness,
   type ScopeMode,
 } from '../../../services/adminBrandApi';
+import { useMarketingBrand } from './MarketingBrandContext';
+import { ALL_BRANDS } from './brandScope';
+import { BRAND_TABS, domainNotice, isBrandTab, setupSummary, type BrandSetupFacts, type BrandTabKey } from './brandSetup';
+import BrandSetupTabs from './BrandSetupTabs';
+import { listItems, type ContentItem } from '../../../services/contentComposerApi';
 
 /**
  * Brand administration — brands, their sending domains, and whether they can actually send.
@@ -41,7 +47,21 @@ function AdminBrandsPage() {
   const [scopeMode, setScopeMode] = useState<ScopeMode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+  const [selectedBrandId, setSelectedBrandIdLocal] = useState<string | null>(null);
+
+  /**
+   * This page needs ONE brand - an account connects to a brand, not to "all of them" - while the
+   * tab's shared scope may be all. So the two are kept in step rather than merged: choosing a
+   * brand here sets the tab's scope, and choosing one in the bar above selects it here.
+   */
+  const { brandId: scopeBrandId, setBrandId: setScopeBrand } = useMarketingBrand();
+  const setSelectedBrandId = useCallback((next: string | null) => {
+    setSelectedBrandIdLocal(next);
+    if (next) setScopeBrand(next);
+  }, [setScopeBrand]);
+  useEffect(() => {
+    if (scopeBrandId !== ALL_BRANDS) setSelectedBrandIdLocal(scopeBrandId);
+  }, [scopeBrandId]);
   const [readiness, setReadiness] = useState<BrandSendReadiness | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
@@ -50,7 +70,33 @@ function AdminBrandsPage() {
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [accountsBusy, setAccountsBusy] = useState(false);
+  /** What choosing a destination did, named rather than left to be inferred from the table. */
+  const [selectNotice, setSelectNotice] = useState<string | null>(null);
   const [connectors, setConnectors] = useState<ConnectorStatus[] | null>(null);
+
+  /**
+   * Which tab, in the URL (`?tab=channels`), so a link can open the right one - the same reason
+   * the composer keeps its step there.
+   */
+  const [tabParams, setTabParams] = useSearchParams();
+  const tab: BrandTabKey = isBrandTab(tabParams.get('tab')) ? (tabParams.get('tab') as BrandTabKey) : 'channels';
+  const goToTab = useCallback((next: BrandTabKey) => {
+    const q = new URLSearchParams(tabParams);
+    q.set('tab', next);
+    setTabParams(q, { replace: true });
+  }, [tabParams, setTabParams]);
+
+  /** Posts waiting for a human on this brand. The Approvals tab's content, and its count. */
+  const [awaiting, setAwaiting] = useState<ContentItem[] | null>(null);
+  useEffect(() => {
+    if (!selectedBrandId) { setAwaiting([]); return; }
+    let cancelled = false;
+    listItems({ brand_id: selectedBrandId, status: 'ready_for_review', limit: 50 })
+      .then((rows) => { if (!cancelled) setAwaiting(rows); })
+      // Null means "could not load", which the tab says rather than showing an empty list.
+      .catch(() => { if (!cancelled) setAwaiting(null); });
+    return () => { cancelled = true; };
+  }, [selectedBrandId]);
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
   const [connectNotice, setConnectNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
@@ -140,6 +186,27 @@ function AdminBrandsPage() {
     }
   }, [fetchAccounts]);
 
+  /**
+   * Choose which discovered destination this brand posts as. Disconnects the others, so what
+   * happened is reported by name rather than left for the operator to infer from the table.
+   */
+  const handleSelect = useCallback(async (accountId: string) => {
+    setAccountsBusy(true);
+    try {
+      const account = await selectChannelAccount(accountId);
+      const replaced = account.replaced ?? [];
+      setAccountsError(null);
+      setSelectNotice(replaced.length
+        ? `Now posting as ${account.display_name}. Disconnected: ${replaced.map((r) => r.display_name).join(', ')}.`
+        : `Now posting as ${account.display_name}.`);
+      await fetchAccounts();
+    } catch (err) {
+      setAccountsError(errorMessageOf(err, 'That account could not be chosen.'));
+    } finally {
+      setAccountsBusy(false);
+    }
+  }, [fetchAccounts]);
+
   const fetchBrands = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -150,7 +217,7 @@ function AdminBrandsPage() {
       setFetchedAt(new Date().toISOString());
       // Select the first brand so the panel has something to show, but only when the operator
       // has not already chosen one - re-selecting on every refresh would fight the user.
-      setSelectedBrandId((current) => current ?? rows[0]?.id ?? null);
+      setSelectedBrandIdLocal((current) => current ?? (scopeBrandId !== ALL_BRANDS ? scopeBrandId : rows[0]?.id ?? null));
     } catch {
       // The message matters: "could not load" and "you have no brands" are different facts and
       // the panel renders them differently.
@@ -199,48 +266,146 @@ function AdminBrandsPage() {
     }],
   }), [error, loading, fetchedAt, brands.length, scopeMode]);
 
+  const live = accounts.filter((a) => !a.revoked_at);
+  // An account still awaiting a choice is not yet a channel this brand can post on, so it does
+  // not count towards "connect a network" being done - it counts as something to attend to.
+  const chosen = live.filter((a) => a.status === 'connected');
+  const facts: BrandSetupFacts = {
+    channelCount: chosen.length,
+    channelsNeedingAttention: live.filter((a) => a.status === 'needs_selection' || a.health === 'expired' || a.health === 'unhealthy' || a.health === 'expiring').length,
+    domainCount: readiness ? readiness.domains.length : null,
+    verifiedDomainCount: readiness ? readiness.domains.filter((d) => d.verification_status === 'verified').length : 0,
+    pendingApprovals: awaiting?.length ?? 0,
+  };
+  const summary = setupSummary(facts);
+  const brandName = brands.find((b) => b.id === selectedBrandId)?.name ?? null;
+
   return (
     <>
       <PageHeader
-        title="Brands"
+        title={brandName ? `Brand setup: ${brandName}` : 'Brand setup'}
         icon="price-tag-3-line"
-        subtitle="Sending domains, sender profiles, and whether each brand can actually send."
-        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Brands' }]}
+        subtitle="Everything this brand needs in order to publish, in one place."
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing', to: '/admin/marketing' }, { label: 'Brands' }]}
         trust={trust}
       />
-      <SectionCard title="Send readiness" icon="mail-check-line" padded={false}>
-        <BrandReadinessPanel
-          loading={loading}
-          error={error}
-          brands={brands}
-          scopeMode={scopeMode}
-          selectedBrandId={selectedBrandId}
-          readiness={readiness}
-          readinessLoading={readinessLoading}
-          onSelectBrand={setSelectedBrandId}
-          onRetry={fetchBrands}
-        />
-      </SectionCard>
-      <SectionCard title="Connected accounts" icon="links-line" padded={false}>
-        {connectNotice && (
-          <div className={`alert alert-${connectNotice.tone} m-3 mb-0 py-2 small`} role="status" data-testid="linkedin-connect-notice">
-            {connectNotice.text}
-          </div>
+
+      {selectNotice && (
+        <div className="alert alert-success m-3 mb-0 py-2 small" role="status" data-testid="select-notice">
+          {selectNotice}
+        </div>
+      )}
+
+      {connectNotice && (
+        <div className={`alert alert-${connectNotice.tone} m-3 mb-0 py-2 small`} role="status" data-testid="linkedin-connect-notice">
+          {connectNotice.text}
+        </div>
+      )}
+
+      {/* What is left to do, so setting a brand up is a task with an end rather than a tour. */}
+      <div className={`px-3 py-2 small ${summary.done ? 'text-success' : 'text-warning-emphasis'}`} data-testid="brand-setup-summary">
+        {summary.text}
+      </div>
+
+      <BrandSetupTabs active={tab} counts={{ channels: live.length, approvals: facts.pendingApprovals }} onGo={goToTab} />
+
+      <div className="px-3 py-3">
+        {tab === 'channels' && (
+          <SectionCard title="Channels" subtitle={BRAND_TABS[0].hint} icon="links-line" padded={false}>
+            <ChannelAccountsPanel
+              loading={accountsLoading}
+              error={accountsError}
+              vault={vault}
+              accounts={accounts}
+              brandId={selectedBrandId}
+              connectors={connectors}
+              connectorsError={connectorsError}
+              busy={accountsBusy}
+              onConnect={handleConnect}
+              onRevoke={handleRevoke}
+              onSelect={handleSelect}
+              onRetry={fetchAccounts}
+            />
+          </SectionCard>
         )}
-        <ChannelAccountsPanel
-          loading={accountsLoading}
-          error={accountsError}
-          vault={vault}
-          accounts={accounts}
-          brandId={selectedBrandId}
-          connectors={connectors}
-          connectorsError={connectorsError}
-          busy={accountsBusy}
-          onConnect={handleConnect}
-          onRevoke={handleRevoke}
-          onRetry={fetchAccounts}
-        />
-      </SectionCard>
+
+        {tab === 'domains' && (
+          <SectionCard title="Sending domains" subtitle={BRAND_TABS[1].hint} icon="mail-check-line" padded={false}>
+            {/* Said before the table, because the table shows a "pending" column that looks like
+                something you could act on and is not. */}
+            <div className={`alert alert-${domainNotice(facts).tone} m-3 mb-0 py-2 small`} role="status" data-testid="domain-notice">
+              {domainNotice(facts).text}
+            </div>
+            <BrandReadinessPanel
+              loading={loading}
+              error={error}
+              brands={brands}
+              scopeMode={scopeMode}
+              selectedBrandId={selectedBrandId}
+              readiness={readiness}
+              readinessLoading={readinessLoading}
+              onSelectBrand={setSelectedBrandId}
+              onRetry={fetchBrands}
+            />
+          </SectionCard>
+        )}
+
+        {tab === 'approvals' && (
+          <SectionCard title="Waiting for approval" subtitle={BRAND_TABS[2].hint} icon="checkbox-circle-line">
+            {awaiting === null && <p className="text-danger small mb-0">The list could not be loaded. This is a failed request, not an empty queue.</p>}
+            {awaiting?.length === 0 && <p className="text-muted small mb-0">Nothing is waiting for approval on this brand.</p>}
+            {awaiting && awaiting.length > 0 && (
+              <ul className="list-unstyled mb-0">
+                {awaiting.map((it) => (
+                  <li key={it.id} className="d-flex align-items-center gap-2 py-1 border-bottom">
+                    <Link to={`/admin/marketing/composer/${it.id}?step=confirm`} className="flex-grow-1 text-truncate">
+                      {it.title || 'Untitled post'}
+                    </Link>
+                    <span className="small text-muted">revision {it.revision}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        )}
+
+        {tab === 'campaigns' && (
+          <SectionCard title="Campaigns and slugs" subtitle={BRAND_TABS[3].hint} icon="price-tag-3-line">
+            <p className="small mb-2">
+              Campaigns are shared across the whole admin, not owned by one brand, so they are
+              managed in one place rather than copied here.
+            </p>
+            <Link className="btn btn-sm btn-outline-primary" to="/admin/campaigns">Open campaigns</Link>
+          </SectionCard>
+        )}
+
+        {tab === 'details' && (
+          <SectionCard title="Details" subtitle={BRAND_TABS[4].hint} icon="information-line">
+            {(() => {
+              const brand = brands.find((b) => b.id === selectedBrandId);
+              if (!brand) return <p className="text-muted small mb-0">Choose a brand in the bar above.</p>;
+              return (
+                <>
+                  <dl className="row mb-3 small">
+                    <dt className="col-sm-3 text-muted">Name</dt><dd className="col-sm-9">{brand.name}</dd>
+                    <dt className="col-sm-3 text-muted">Slug</dt><dd className="col-sm-9"><code>{brand.slug}</code></dd>
+                    <dt className="col-sm-3 text-muted">Status</dt><dd className="col-sm-9">{brand.status}</dd>
+                    <dt className="col-sm-3 text-muted">Public address</dt>
+                    <dd className="col-sm-9">{brand.default_public_url ?? <span className="text-muted">not set</span>}</dd>
+                    <dt className="col-sm-3 text-muted">Support email</dt>
+                    <dd className="col-sm-9">{brand.support_email ?? <span className="text-muted">not set</span>}</dd>
+                  </dl>
+                  {/* Said plainly rather than implied by the absence of a form. */}
+                  <p className="small text-muted mb-0">
+                    These are read-only here: there is no API for editing a brand yet. Posting times
+                    are set per post in the composer, not as recurring slots.
+                  </p>
+                </>
+              );
+            })()}
+          </SectionCard>
+        )}
+      </div>
     </>
   );
 }
@@ -290,10 +455,23 @@ export function genericConnectNotice(params: URLSearchParams): { tone: 'success'
 
   if (connected) {
     const n = Number(params.get('count') ?? '1');
+    const choose = Number(params.get('choose') ?? '0');
+    const handoff = `Until direct publishing is switched on for ${name}, its posts are prepared for you to publish by hand.`;
+    // A sign-in that found several destinations on one network connects none of them - a brand
+    // posts as one account per network, so the decision is the operator's. Reporting those in
+    // the same number as the connected ones is how "3 accounts added" once meant one added and
+    // two silently revoked.
+    if (choose > 0) {
+      return {
+        tone: 'success',
+        text: `${name} signed in. ${choose} accounts were found on this network and a brand posts as one, `
+          + `so choose which below - the others will be disconnected.`,
+      };
+    }
     const accounts = `${n} account${n === 1 ? '' : 's'}`;
     return {
       tone: 'success',
-      text: `${name} connected: ${accounts} added to this brand. Until direct publishing is switched on for ${name}, its posts are prepared for you to publish by hand.`,
+      text: `${name} connected: ${accounts} added to this brand. ${handoff}`,
     };
   }
 

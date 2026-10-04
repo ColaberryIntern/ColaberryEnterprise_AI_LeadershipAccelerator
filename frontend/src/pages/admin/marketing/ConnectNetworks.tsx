@@ -18,13 +18,19 @@ import type { ConnectorKey, ConnectorStatus } from '../../../services/channelAcc
 export interface ConnectNetworksProps {
   connectors: ConnectorStatus[] | null;
   error: string | null;
+  /**
+   * What is already connected on this brand, by provider - so a row can warn BEFORE the click
+   * that connecting will replace it. One account per network per brand is the rule; being told
+   * afterwards would make it feel like a bug.
+   */
+  connectedByProvider?: ReadonlyMap<string, string>;
   /** Why no network can be connected right now (no brand chosen, vault down), or null. */
   blockedReason: string | null;
   busy: boolean;
   onConnect: (key: ConnectorKey) => void;
 }
 
-export default function ConnectNetworks({ connectors, error, blockedReason, busy, onConnect }: ConnectNetworksProps) {
+export default function ConnectNetworks({ connectors, error, blockedReason, busy, onConnect, connectedByProvider }: ConnectNetworksProps) {
   if (error) return <div className="small text-danger" data-testid="connectors-error">{error}</div>;
   if (connectors === null) return <div className="small text-muted">Loading networks…</div>;
 
@@ -44,6 +50,12 @@ export default function ConnectNetworks({ connectors, error, blockedReason, busy
               {c.configured
                 ? <span className="small text-success">Ready to connect</span>
                 : <span className="small text-muted">Not set up yet</span>}
+              {(() => {
+                const existing = c.providers.map((p) => connectedByProvider?.get(p)).find(Boolean);
+                return existing
+                  ? <span className="small text-warning-emphasis" data-testid={`connect-replaces-${c.key}`}>Connecting replaces {existing}</span>
+                  : null;
+              })()}
               <span className="ms-auto">
                 {c.configured && (
                   <button

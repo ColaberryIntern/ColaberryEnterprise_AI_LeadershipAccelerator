@@ -77,6 +77,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/marketing/content', label: 'Content', icon: 'list-check-2' },
     { path: '/admin/marketing/calendar', label: 'Calendar', icon: 'calendar-2-line' },
     { path: '/admin/marketing/publishing', label: 'Publishing', icon: 'send-plane-line' },
+    { path: '/admin/marketing/landing-pages', label: 'Landing pages', icon: 'layout-masonry-line' },
     { path: '/admin/marketing/brands', label: 'Brands', icon: 'price-tag-3-line' },
     { path: '/admin/marketing/performance', label: 'Performance', icon: 'line-chart-line' },
   ]},
@@ -146,12 +147,22 @@ export const NAV_GROUPS: NavGroup[] = [
     // so every existing deep link, bookmark and ?tab= link keeps working.
     { path: '/admin/orchestration', label: 'Curriculum', icon: 'flow-chart' },
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
+    // Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide tool/
+    // capability catalog, reconciled read-only across every real authority
+    // source. Sibling to "AI Organization" (agents), not nested under it.
+    { path: '/admin/tools', label: 'Tools', icon: 'tools-line' },
     // AI Project Factory Command Center (Phase 3). A delivery contract is program-domain work; the
     // backend mgmtSectionGate maps /api/admin/factory to 'program', so the nav and the API agree.
     { path: '/admin/factory', label: 'Project Factory', icon: 'node-tree' },
     // Gov-contract entry page (Phase 5 slice 1): best-fit proposals -> start -> the Command Center.
     // Same 'program' section as /admin/factory (backend mgmtSectionGate covers /api/admin/factory/*).
     { path: '/admin/gov-opportunities', label: 'Gov Opportunities', icon: 'government-line' },
+    // Gov qualification workspace (Phase 2): review an opportunity's source evidence before a bid pursuit is
+    // approved. Same 'program' section (backend mgmtSectionGate covers /api/admin/factory/qualification/*).
+    { path: '/admin/gov-qualification', label: 'Gov Qualification', icon: 'shield-check-line' },
+    // Our Services: Colaberry's own offering catalog, matched (advisory) against opportunities. Same 'program'
+    // section (backend mgmtSectionGate covers /api/admin/factory/services).
+    { path: '/admin/gov-services', label: 'Our Services', icon: 'service-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

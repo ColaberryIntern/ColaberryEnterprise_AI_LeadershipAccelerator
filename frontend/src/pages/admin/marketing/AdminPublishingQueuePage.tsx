@@ -4,6 +4,7 @@ import { PageHeader, SectionCard, StatusBadge } from '../../../components/admin/
 import api from '../../../utils/api';
 import { cancelJob, errorMessage, retryJob, runQueueNow, type PublishingJob } from '../../../services/contentComposerApi';
 import { formatCentral } from './centralTime';
+import { useMarketingBrand } from './MarketingBrandContext';
 
 /**
  * The publishing queue across every item: what is due, what is retrying, what dead-lettered
@@ -25,6 +26,7 @@ function tone(state: PublishingJob['state']): 'success' | 'warning' | 'danger' |
 }
 
 export default function AdminPublishingQueuePage() {
+  const { params: brandParams } = useMarketingBrand();
   const [params, setParams] = useSearchParams();
   const stateParam = params.get('state');
   const state = (STATES as string[]).includes(stateParam ?? '') ? (stateParam as PublishingJob['state']) : null;
@@ -41,7 +43,7 @@ export default function AdminPublishingQueuePage() {
     setError(null);
     try {
       const res = await api.get('/api/admin/publishing/jobs', {
-        params: { limit: 200, ...(state ? { state } : {}), ...(deadLettered ? { dead_lettered: 'true' } : {}) },
+        params: { limit: 200, ...(brandParams ?? {}), ...(state ? { state } : {}), ...(deadLettered ? { dead_lettered: 'true' } : {}) },
       });
       setJobs(res.data.jobs ?? []);
     } catch (err) {
@@ -50,7 +52,7 @@ export default function AdminPublishingQueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [state, deadLettered]);
+  }, [state, deadLettered, brandParams]);
 
   useEffect(() => { void load(); }, [load]);
 

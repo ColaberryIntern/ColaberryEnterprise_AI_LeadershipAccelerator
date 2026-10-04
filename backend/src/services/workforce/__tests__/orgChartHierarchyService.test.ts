@@ -36,7 +36,10 @@ import {
   InvalidDepartmentError,
   resolveHumanDownstreamAgents,
   isAgentInHumanDownstream,
+  scopeOrgChartToHuman,
+  emptyOrgChartResponse,
 } from '../orgChartHierarchyService';
+import type { OrgChartResponse, OrgChartHuman, OrgChartLeadershipAgent, OrgChartStaffAgent } from '../orgChartService';
 
 const mockMemberFindByPk = OrgMember.findByPk as unknown as jest.Mock;
 const mockAgentFindAll = AiAgent.findAll as unknown as jest.Mock;
@@ -184,5 +187,138 @@ describe('isAgentInHumanDownstream', () => {
     // human-3's.
     await expect(isAgentInHumanDownstream('human-3', 'lead-human4')).resolves.toBe(false);
     await expect(isAgentInHumanDownstream('human-3', 'staff-human4')).resolves.toBe(false);
+  });
+});
+
+// Track B (2026-09-22) — the "My team" scoping filter. Pure, synchronous,
+// no mocks needed: every fixture below is a plain object literal.
+describe('scopeOrgChartToHuman', () => {
+  function human(overrides: Partial<OrgChartHuman> = {}): OrgChartHuman {
+    return {
+      id: 'human-1', name: 'Taiwo', email: 'taiwo@colaberry.com', team: 'Operations',
+      department: 'Operations', role: 'manager', leadership_agent_ids: [], staff_count: 0,
+      task: null, hierarchy_color: '#123456', ...overrides,
+    };
+  }
+  function leadershipAgent(overrides: Partial<OrgChartLeadershipAgent> = {}): OrgChartLeadershipAgent {
+    return {
+      id: 'lead-1', agent_name: 'lead_1', display_name: 'Lead One', reports_to_human_id: 'human-1',
+      reports_to_summary: 'Reports to: Taiwo', staff_ids: [], open_ticket_count: 0,
+      hierarchy_color: '#123456', enabled: true, ...overrides,
+    };
+  }
+  function staffAgent(overrides: Partial<OrgChartStaffAgent> = {}): OrgChartStaffAgent {
+    return {
+      id: 'staff-1', agent_name: 'staff_1', display_name: 'Staff One', reports_to_agent_id: 'lead-1',
+      reports_to_summary: 'Reports to: Lead One', open_ticket_count: 0, hierarchy_color: '#123456',
+      enabled: true, ...overrides,
+    };
+  }
+  function chart(overrides: Partial<OrgChartResponse> = {}): OrgChartResponse {
+    return {
+      organization: { id: 'org-1', name: 'Colaberry' },
+      humans: [human()], leadership: [], staff: [], unresolved: [],
+      generated_at: new Date('2026-09-22T00:00:00Z'), ...overrides,
+    };
+  }
+
+  it('returns exactly this human, their real leadership, and their real staff — not more, not fewer', () => {
+    const otherHuman = human({ id: 'human-2', name: 'Kes', email: 'kes@colaberry.com' });
+    const myLead = leadershipAgent({ id: 'lead-mine' });
+    const otherLead = leadershipAgent({ id: 'lead-other', reports_to_human_id: 'human-2' });
+    const myStaff = staffAgent({ id: 'staff-mine', reports_to_agent_id: 'lead-mine' });
+    const otherStaff = staffAgent({ id: 'staff-other', reports_to_agent_id: 'lead-other' });
+    const c = chart({
+      humans: [human(), otherHuman],
+      leadership: [myLead, otherLead],
+      staff: [myStaff, otherStaff],
+    });
+
+    const result = scopeOrgChartToHuman(c, { id: 'human-1' } as OrgMember, {
+      leadership: [{ id: 'lead-mine' }] as AiAgent[],
+      staff: [{ id: 'staff-mine' }] as AiAgent[],
+    });
+
+    expect(result.humans.map((h) => h.id)).toEqual(['human-1']);
+    expect(result.leadership.map((l) => l.id)).toEqual(['lead-mine']);
+    expect(result.staff.map((s) => s.id)).toEqual(['staff-mine']);
+    expect(result.unresolved).toEqual([]);
+    expect(result.organization).toEqual(c.organization);
+  });
+
+  // The real bug caught in plan-audit before any code was written: an
+  // individual-contributor agent (no subordinates of its own) is level-1 in
+  // resolveHumanDownstreamAgents()'s structural walk (so it lands in
+  // downstream.leadership), but orgChartService.ts buckets it into
+  // chart.staff (not chart.leadership) since it has no subordinates. A
+  // filter that checked chart.leadership against downstream.leadership and
+  // chart.staff against downstream.staff as two SEPARATE sets would drop
+  // this agent from BOTH output arrays. The real shape: Taiwo's direct
+  // reports FinanceIntelligenceArchitect/StudentSuccessArchitect.
+  it('includes an individual-contributor direct report in the scoped staff array, even though it is level-1 (structural "leadership") and has no subordinates of its own', () => {
+    const financeArchitect = staffAgent({
+      id: 'finance-architect', display_name: 'FinanceIntelligenceArchitect',
+      reports_to_agent_id: null, reports_to_summary: 'Reports to: Taiwo',
+    });
+    const c = chart({ leadership: [], staff: [financeArchitect] });
+
+    const result = scopeOrgChartToHuman(c, { id: 'human-1' } as OrgMember, {
+      // Structural walk: this agent is level-1 (reports_to_type='human'), so
+      // resolveHumanDownstreamAgents() puts it in `leadership`, not `staff` —
+      // exactly the real, current shape.
+      leadership: [{ id: 'finance-architect' }] as AiAgent[],
+      staff: [] as AiAgent[],
+    });
+
+    expect(result.staff.map((s) => s.id)).toEqual(['finance-architect']);
+    expect(result.leadership).toEqual([]); // never in chart.leadership — orgChartService.ts put it in chart.staff
+  });
+
+  it('a human with zero downstream returns leadership/staff/unresolved empty, but the human row itself still present', () => {
+    const c = chart();
+
+    const result = scopeOrgChartToHuman(c, { id: 'human-1' } as OrgMember, { leadership: [], staff: [] });
+
+    expect(result.humans.map((h) => h.id)).toEqual(['human-1']);
+    expect(result.leadership).toEqual([]);
+    expect(result.staff).toEqual([]);
+    expect(result.unresolved).toEqual([]);
+  });
+
+  it('a human not present in chart.humans returns an empty humans array too, never a crash', () => {
+    const c = chart({ humans: [] });
+
+    const result = scopeOrgChartToHuman(c, { id: 'human-not-in-chart' } as OrgMember, { leadership: [], staff: [] });
+
+    expect(result.humans).toEqual([]);
+  });
+
+  it('unresolved is always empty in the scoped view, regardless of the unscoped chart', () => {
+    const c = chart({ unresolved: [{ id: 'ghost-1', agent_name: 'ghost', reason: 'dangling chain' }] });
+
+    const result = scopeOrgChartToHuman(c, { id: 'human-1' } as OrgMember, { leadership: [], staff: [] });
+
+    expect(result.unresolved).toEqual([]);
+  });
+});
+
+describe('emptyOrgChartResponse', () => {
+  it('returns the same organization/generated_at with every array empty — an honest empty state, not an error', () => {
+    const c: OrgChartResponse = {
+      organization: { id: 'org-1', name: 'Colaberry' },
+      humans: [{ id: 'human-1' } as OrgChartHuman],
+      leadership: [{ id: 'lead-1' } as OrgChartLeadershipAgent],
+      staff: [{ id: 'staff-1' } as OrgChartStaffAgent],
+      unresolved: [{ id: 'ghost-1', agent_name: 'ghost', reason: 'dangling chain' }],
+      generated_at: new Date('2026-09-22T00:00:00Z'),
+    };
+
+    const result = emptyOrgChartResponse(c);
+
+    expect(result).toEqual({
+      organization: c.organization,
+      humans: [], leadership: [], staff: [], unresolved: [],
+      generated_at: c.generated_at,
+    });
   });
 });

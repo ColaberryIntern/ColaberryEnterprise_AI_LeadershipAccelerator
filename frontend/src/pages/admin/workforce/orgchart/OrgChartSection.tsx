@@ -129,18 +129,21 @@ const OrgChartSection: React.FC = () => {
   const [selectedLeadership, setSelectedLeadership] = useState<OrgChartLeadershipAgent | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const chartCardRef = useRef<HTMLElement>(null);
+  // Track B (2026-09-22) — "My team" scoped view. Deliberately session-only,
+  // no persistence — same precedent as this page's dark-mode toggle.
+  const [scope, setScope] = useState<'all' | 'mine'>('all');
 
   const load = useCallback(async () => {
     setBusy(true);
     setError('');
     try {
-      setData(await getOrgChart());
+      setData(await getOrgChart(scope === 'mine' ? 'mine' : undefined));
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Could not load the org chart.');
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -240,6 +243,31 @@ const OrgChartSection: React.FC = () => {
 
   return (
     <>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button
+          type="button"
+          className={`wf-btn xs${scope === 'all' ? ' pri' : ''}`}
+          aria-pressed={scope === 'all'}
+          onClick={() => setScope('all')}
+        >
+          Full org chart
+        </button>
+        <button
+          type="button"
+          className={`wf-btn xs${scope === 'mine' ? ' pri' : ''}`}
+          aria-pressed={scope === 'mine'}
+          onClick={() => setScope('mine')}
+        >
+          My team
+        </button>
+      </div>
+
+      {scope === 'mine' && data.humans.length === 0 && (
+        <p className="wf-muted" style={{ marginTop: -4, marginBottom: 12 }}>
+          No org_members profile matches your admin login — nothing to show in "My team."
+        </p>
+      )}
+
       <div className="wf-lab section">Human Employees · {data.humans.length}</div>
       <p className="wf-muted" style={{ marginTop: -6, marginBottom: 12 }}>
         Per company policy, the entire human team reports to Ali Muwwakkil.

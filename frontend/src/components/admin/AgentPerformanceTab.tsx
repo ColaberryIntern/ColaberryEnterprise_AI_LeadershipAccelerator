@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
+import { adv2PillClass } from './agentDetailV2/adv2PillTone';
 import { AgentGoal, GoalMetricKey, GoalComparison, listGoals, createGoal, archiveGoal } from '../../services/agentGoalApi';
 import { AgentOneOnOne, listOneOnOnes, createOneOnOne, completeOneOnOne } from '../../services/agentOneOnOneApi';
 
@@ -10,6 +10,10 @@ import { AgentOneOnOne, listOneOnOnes, createOneOnOne, completeOneOnOne } from '
 // this same checkpoint after being caught live) and real 1:1 check-ins
 // (only agenda + outcome notes exist today — no separate wins/challenges/
 // mistakes/lessons/commitments fields, so none are fabricated here).
+//
+// Track A2 (2026-09-22) — reflowed from SectionCard/StatusBadge/Bootstrap to
+// this page's adv2-* visual language. Zero change to any API call or the
+// honest null-handling above — restyle only.
 
 interface Props {
   agentId: string;
@@ -23,8 +27,8 @@ function metricLabel(key: GoalMetricKey): string {
 }
 
 function goalStatusBadge(goal: AgentGoal) {
-  if (goal.met === null) return <StatusBadge label="Unmeasured" tone="neutral" icon="question-line" />;
-  return goal.met ? <StatusBadge label="Met" tone="success" /> : <StatusBadge label="Not met" tone="warning" />;
+  if (goal.met === null) return <span className={adv2PillClass('neutral')}>Unmeasured</span>;
+  return goal.met ? <span className={adv2PillClass('success')}>Met</span> : <span className={adv2PillClass('warning')}>Not met</span>;
 }
 
 export default function AgentPerformanceTab({ agentId }: Props) {
@@ -129,94 +133,98 @@ export default function AgentPerformanceTab({ agentId }: Props) {
 
   return (
     <>
-      <SectionCard title="Goals" icon="flag-2-line" padded={false}>
-        {goalsError && <div className="p-3"><div className="alert alert-warning py-2 mb-0 small">{goalsError}</div></div>}
-        {goalsLoading && <div className="p-3 text-muted small">Loading…</div>}
-        {!goalsLoading && goals.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No goals set for this agent yet.</p>
-        )}
-        {!goalsLoading && goals.map((goal, i) => (
-          <div key={goal.id} className={`d-flex align-items-start justify-content-between gap-2 p-3 ${i < goals.length - 1 ? 'border-bottom' : ''}`}>
-            <div>
-              {goalStatusBadge(goal)}
-              <span className="ms-2 fw-semibold">{metricLabel(goal.metricKey)} {goal.comparison === 'at_most' ? '≤' : '≥'} {goal.targetValue}</span>
-              <div className="text-muted small mt-1">
-                Current: {goal.currentValue === null ? 'No underlying data to evaluate' : goal.currentValue} · Set by {goal.createdByEmail}, {timeAgo(goal.createdAt)}
+      <div className="adv2-card" style={{ marginTop: 22 }}>
+        <h2>Goals</h2>
+        <div>
+          {goalsError && <p className="adv2-body" style={{ color: 'var(--adv2-bad)' }}>{goalsError}</p>}
+          {goalsLoading && <p className="adv2-body adv2-muted">Loading…</p>}
+          {!goalsLoading && goals.length === 0 && (
+            <p className="adv2-body adv2-muted">No goals set for this agent yet.</p>
+          )}
+          {!goalsLoading && goals.map((goal) => (
+            <div key={goal.id} className="adv2-task">
+              <div>
+                {goalStatusBadge(goal)}
+                <span style={{ marginLeft: 8, fontWeight: 600 }}>{metricLabel(goal.metricKey)} {goal.comparison === 'at_most' ? '≤' : '≥'} {goal.targetValue}</span>
+                <p className="adv2-muted" style={{ marginTop: 4 }}>
+                  Current: {goal.currentValue === null ? 'No underlying data to evaluate' : goal.currentValue} · Set by {goal.createdByEmail}, {timeAgo(goal.createdAt)}
+                </p>
               </div>
+              <button className="adv2-btn" disabled={archivingId === goal.id} onClick={() => handleArchive(goal.id)}>
+                {archivingId === goal.id ? 'Working…' : 'Archive'}
+              </button>
             </div>
-            <button className="btn btn-outline-secondary btn-sm flex-shrink-0" disabled={archivingId === goal.id} onClick={() => handleArchive(goal.id)}>
-              {archivingId === goal.id ? 'Working…' : 'Archive'}
-            </button>
-          </div>
-        ))}
+          ))}
 
-        <div className="p-3 border-top">
-          {goalCreateError && <div className="alert alert-danger py-2 small">{goalCreateError}</div>}
-          <div className="row g-2 align-items-end">
-            <div className="col-auto">
-              <label className="form-label small fw-semibold">Metric</label>
-              <select className="form-select form-select-sm" value={goalMetric} onChange={(e) => setGoalMetric(e.target.value as GoalMetricKey)}>
-                {METRIC_KEYS.map((k) => <option key={k} value={k}>{metricLabel(k)}</option>)}
-              </select>
-            </div>
-            <div className="col-auto">
-              <label className="form-label small fw-semibold">Comparison</label>
-              <select className="form-select form-select-sm" value={goalComparison} onChange={(e) => setGoalComparison(e.target.value as GoalComparison)}>
-                {COMPARISONS.map((c) => <option key={c} value={c}>{c === 'at_most' ? 'At most' : 'At least'}</option>)}
-              </select>
-            </div>
-            <div className="col-auto">
-              <label className="form-label small fw-semibold">Target</label>
-              <input type="number" min={0} className="form-control form-control-sm" style={{ width: '7rem' }} value={goalTarget} onChange={(e) => setGoalTarget(Number(e.target.value))} />
-            </div>
-            <div className="col-auto">
-              <button className="btn btn-primary btn-sm" disabled={creatingGoal} onClick={handleCreateGoal}>
+          <div className="adv2-body" style={{ borderTop: '1px solid var(--adv2-rule)' }}>
+            {goalCreateError && <p style={{ color: 'var(--adv2-bad)' }}>{goalCreateError}</p>}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label className="adv2-muted" style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Metric</label>
+                <select value={goalMetric} onChange={(e) => setGoalMetric(e.target.value as GoalMetricKey)}>
+                  {METRIC_KEYS.map((k) => <option key={k} value={k}>{metricLabel(k)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="adv2-muted" style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Comparison</label>
+                <select value={goalComparison} onChange={(e) => setGoalComparison(e.target.value as GoalComparison)}>
+                  {COMPARISONS.map((c) => <option key={c} value={c}>{c === 'at_most' ? 'At most' : 'At least'}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="adv2-muted" style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Target</label>
+                <input type="number" min={0} style={{ width: '7rem' }} value={goalTarget} onChange={(e) => setGoalTarget(Number(e.target.value))} />
+              </div>
+              <button className="adv2-btn adv2-primary" disabled={creatingGoal} onClick={handleCreateGoal}>
                 {creatingGoal ? 'Setting…' : 'Set Goal'}
               </button>
             </div>
           </div>
         </div>
-      </SectionCard>
+      </div>
 
-      <SectionCard title="1:1 Check-ins" icon="user-voice-line" subtitle="Only agenda and outcome notes exist today — no separate wins/challenges/lessons/commitments fields." padded={false}>
-        {oneOnOnesError && <div className="p-3"><div className="alert alert-warning py-2 mb-0 small">{oneOnOnesError}</div></div>}
-        {oneOnOnesLoading && <div className="p-3 text-muted small">Loading…</div>}
-        {!oneOnOnesLoading && oneOnOnes.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No 1:1 check-ins scheduled or held yet.</p>
-        )}
-        {!oneOnOnesLoading && oneOnOnes.map((item, i) => (
-          <div key={item.id} className={`p-3 ${i < oneOnOnes.length - 1 ? 'border-bottom' : ''}`}>
-            <StatusBadge label={item.status} tone={item.status === 'completed' ? 'success' : 'info'} />
-            <span className="ms-2 fw-semibold">{item.agenda}</span>
-            <div className="text-muted small mt-1">Set by {item.createdByEmail}, {timeAgo(item.createdAt)}{item.heldAt ? ` · Held ${timeAgo(item.heldAt)}` : ''}</div>
-            {item.status === 'completed' ? (
-              <p className="small mt-2 mb-0"><strong>Outcome:</strong> {item.outcomeNotes}</p>
-            ) : (
-              <div className="d-flex gap-2 mt-2">
-                <input
-                  className="form-control form-control-sm"
-                  placeholder="Outcome notes to complete this 1:1…"
-                  value={outcomeDrafts[item.id] || ''}
-                  onChange={(e) => setOutcomeDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                />
-                <button className="btn btn-outline-primary btn-sm flex-shrink-0" disabled={completingId === item.id || !(outcomeDrafts[item.id] || '').trim()} onClick={() => handleComplete(item.id)}>
-                  {completingId === item.id ? 'Working…' : 'Complete'}
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
+      <div className="adv2-card" style={{ marginTop: 22 }}>
+        <h2>1:1 Check-ins<span className="adv2-hint">Only agenda and outcome notes exist today — no separate wins/challenges/lessons/commitments fields.</span></h2>
+        <div>
+          {oneOnOnesError && <p className="adv2-body" style={{ color: 'var(--adv2-bad)' }}>{oneOnOnesError}</p>}
+          {oneOnOnesLoading && <p className="adv2-body adv2-muted">Loading…</p>}
+          {!oneOnOnesLoading && oneOnOnes.length === 0 && (
+            <p className="adv2-body adv2-muted">No 1:1 check-ins scheduled or held yet.</p>
+          )}
+          {!oneOnOnesLoading && oneOnOnes.map((item) => (
+            <div key={item.id} className="adv2-body" style={{ borderTop: '1px solid var(--adv2-rule)' }}>
+              <span className={adv2PillClass(item.status === 'completed' ? 'success' : 'info')}>{item.status}</span>
+              <span style={{ marginLeft: 8, fontWeight: 600 }}>{item.agenda}</span>
+              <p className="adv2-muted" style={{ marginTop: 4 }}>Set by {item.createdByEmail}, {timeAgo(item.createdAt)}{item.heldAt ? ` · Held ${timeAgo(item.heldAt)}` : ''}</p>
+              {item.status === 'completed' ? (
+                <p style={{ marginTop: 8, marginBottom: 0 }}><strong>Outcome:</strong> {item.outcomeNotes}</p>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <input
+                    placeholder="Outcome notes to complete this 1:1…"
+                    style={{ flex: 1 }}
+                    value={outcomeDrafts[item.id] || ''}
+                    onChange={(e) => setOutcomeDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                  />
+                  <button className="adv2-btn" disabled={completingId === item.id || !(outcomeDrafts[item.id] || '').trim()} onClick={() => handleComplete(item.id)}>
+                    {completingId === item.id ? 'Working…' : 'Complete'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
 
-        <div className="p-3 border-top">
-          <label className="form-label small fw-semibold">Agenda</label>
-          <div className="d-flex gap-2">
-            <input className="form-control form-control-sm" placeholder="What should this 1:1 cover?" value={agendaText} onChange={(e) => setAgendaText(e.target.value)} />
-            <button className="btn btn-primary btn-sm flex-shrink-0" disabled={creatingOneOnOne || !agendaText.trim()} onClick={handleScheduleOneOnOne}>
-              {creatingOneOnOne ? 'Scheduling…' : 'Schedule'}
-            </button>
+          <div className="adv2-body" style={{ borderTop: '1px solid var(--adv2-rule)' }}>
+            <label className="adv2-muted" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Agenda</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input placeholder="What should this 1:1 cover?" style={{ flex: 1 }} value={agendaText} onChange={(e) => setAgendaText(e.target.value)} />
+              <button className="adv2-btn adv2-primary" disabled={creatingOneOnOne || !agendaText.trim()} onClick={handleScheduleOneOnOne}>
+                {creatingOneOnOne ? 'Scheduling…' : 'Schedule'}
+              </button>
+            </div>
           </div>
         </div>
-      </SectionCard>
+      </div>
     </>
   );
 }

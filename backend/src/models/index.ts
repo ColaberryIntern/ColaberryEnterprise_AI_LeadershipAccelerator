@@ -359,6 +359,11 @@ import RoomMembership from './RoomMembership';
 import Friendship from './Friendship'; // portal Contacts rail friend graph
 import RoomBooking from './RoomBooking';
 import RoomBookingAttendee from './RoomBookingAttendee';
+import PresentationAssignment from './PresentationAssignment';
+import PresentationAttempt from './PresentationAttempt';
+import PresentationRecording from './PresentationRecording';
+import PresentationFeedback from './PresentationFeedback';
+import PresentationShowcase from './PresentationShowcase';
 import RoomMessage from './RoomMessage';
 import RoomResource from './RoomResource';
 import RoomOutboxEvent from './RoomOutboxEvent';
@@ -462,6 +467,10 @@ import ContractTrack from './ContractTrack';
 import ContractRequirement from './ContractRequirement';
 import ContractProcessDocument from './ContractProcessDocument';
 import ContractProcessReview from './ContractProcessReview';
+import ProjectLifecycleState from './ProjectLifecycleState';
+import OperatingBlueprintManifest from './OperatingBlueprintManifest';
+import BlueprintApproval from './BlueprintApproval';
+import LifecycleStageFailure from './LifecycleStageFailure';
 import CapstoneReviewApproval from './CapstoneReviewApproval';
 import CohortMembership from './CohortMembership';
 import InternshipApplication from './InternshipApplication';
@@ -1554,6 +1563,11 @@ export {
   RoomMembership,
   RoomBooking,
   RoomBookingAttendee,
+  PresentationAssignment,
+  PresentationAttempt,
+  PresentationRecording,
+  PresentationFeedback,
+  PresentationShowcase,
   RoomMessage,
   RoomResource,
   RoomOutboxEvent,
@@ -1649,6 +1663,12 @@ export {
   ContractRequirement,
   ContractProcessDocument,
   ContractProcessReview,
+
+  // Unified project lifecycle (docs/project-lifecycle/architecture.md)
+  ProjectLifecycleState,
+  OperatingBlueprintManifest,
+  BlueprintApproval,
+  LifecycleStageFailure,
 
   // Living Career Portfolio (Gate 10 — versioned publication)
   CapstoneReviewApproval,

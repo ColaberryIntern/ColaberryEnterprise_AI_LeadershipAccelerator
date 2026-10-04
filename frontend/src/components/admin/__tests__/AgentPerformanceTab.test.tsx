@@ -84,7 +84,7 @@ describe('AgentPerformanceTab — Goals honesty', () => {
     // Precise element check, not a loose substring match — the form label
     // "Metric" itself contains the substring "Met" and would false-positive
     // a naive container.textContent.not.toContain('Met') check.
-    const badge = container.querySelector('.admin-status-badge');
+    const badge = container.querySelector('.adv2-pill');
     expect(badge?.textContent?.trim()).toBe('Unmeasured');
   });
 

@@ -13,6 +13,13 @@ export interface AgentRoleCharter {
   kpis: string[];
   updatedByEmail: string;
   updatedAt: string;
+  /** Track A2 (2026-09-22) — the real authority tiers the backend has served
+   * since R4/R5 but no frontend consumer read until now. null means the
+   * charter predates versioned authority (version < 2) or was never given
+   * one — the honest empty state, never a fabricated tier. */
+  authorityAutonomous: string[] | null;
+  authorityApprovalRequired: string[] | null;
+  authorityForbidden: string[] | null;
 }
 
 export interface AgentRoleCharterView {

@@ -50,7 +50,7 @@ import { Schedule } from './buildSchedule';
 import { scheduleForEnrollment } from './scheduleForEnrollment';
 import { hashPlan } from './planHash';
 import {
-  saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
+  saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, firstPublishedAt, StoredPlan, BuildIntake,
   listIntakesByStatus,
 } from './planStore';
 import { getProvisionQueue } from './boundedQueue';
@@ -119,6 +119,19 @@ export interface StartBuildInput {
    * rather than losing the one thing that made the short interview honest.
    */
   covered?: Array<{ angle: string; evidence: string }>;
+  /**
+   * Hold the finished plan at `drafted` for a human to read before anyone else
+   * sees it. Default (undefined) keeps the student path exactly as it was:
+   * auto-publish on, governed by `SBP_AUTO_PUBLISH`.
+   *
+   * This is the review step `autoPublishEnabled`'s own comment anticipated, per
+   * build rather than per deployment. A reviewer-initiated build must not
+   * materialise onto the person's Projects page the moment generation ends,
+   * because then the reviewer is approving something the intern is already
+   * looking at. The publish route is how the reviewer says yes, and it takes
+   * `expected_sha256` so the plan they read is provably the plan that ships.
+   */
+  holdForReview?: boolean;
 }
 
 /**
@@ -198,6 +211,10 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
     answers: input.answers ?? null,
     correlation_id: correlationId,
     status: 'generating',
+    // WRITTEN DOWN, because a deploy kills the queue but not the row. `recoverStrandedBuilds`
+    // rebuilds the job from here, so a hold that existed only on this in-memory input was a
+    // hold the next restart quietly dropped - and the build published itself to the student.
+    hold_for_review: input.holdForReview === true,
   });
   log('sbp_build_started', correlationId, 'success', { projectId: input.projectId, idea_chars: input.idea.length });
 
@@ -350,7 +367,15 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
     // actually see. A plan with blocking violations deliberately falls through:
     // it stays `gate_failed` with its violations stored, and the poll endpoint
     // hands the student the reason.
-    if (publishable) {
+    if (publishable && input.holdForReview) {
+      // Deliberately NOT a failure. The plan is gate-clean and durable; it is
+      // waiting on a person, which is the one reading of `drafted` that is not
+      // a defect. Logged so a build resting here is distinguishable from the
+      // `sbp_autopublish_failed` kind at a glance.
+      log('sbp_held_for_review', correlationId, 'success', {
+        projectId: input.projectId, version: draft.version, sha256: draft.plan_sha256,
+      });
+    } else if (publishable) {
       await autoPublish(input.projectId, input.enrollmentId, draft.plan_sha256, correlationId);
     }
   } catch (err: any) {
@@ -548,6 +573,9 @@ function inputFromIntake(intake: BuildIntake, enrollmentId: string): StartBuildI
     doneDefinition: intake.done_definition ?? undefined,
     targetWeeks: intake.target_weeks != null ? Number(intake.target_weeks) : undefined,
     answers: (intake.answers ?? undefined) as StartBuildInput['answers'],
+    // Restored from the row. Without this the resumed generation is identical to the
+    // original EXCEPT that it publishes, which is the one difference that matters.
+    holdForReview: intake.hold_for_review === true,
   };
 }
 
@@ -669,6 +697,21 @@ export async function publishBuild(
   }
 
   const published = await publishPlan(projectId, draft.version, opts.expectedSha);
+
+  // THE WINDOW BELONGS TO THE BUILD, NOT TO THIS VERSION.
+  //
+  // The schedule floors on when the plan existed, so a plan published after its
+  // cohort's start is not born overdue. Passing THIS version's timestamp made
+  // that floor today on every republish: a build revised on 2026-09-29 had all
+  // fifteen stories re-dated onto 2026-10-01, collapsing a staggered plan onto
+  // one day. Hit twice in one afternoon, both times after adding a single story
+  // for a student who asked for it.
+  //
+  // The first publish is the build's origin; later versions are revisions of the
+  // same work. `due_baseline_on` survives a rematerialize (it is only set on
+  // create), which is why the damage was recoverable, but the live dates are
+  // what the student actually sees.
+  const windowOrigin = (await firstPublishedAt(projectId)) ?? published.published_at;
   const correlationId = published.correlation_id;
 
   // Second and last chance to name the project. Five of the twenty live builds
@@ -687,7 +730,7 @@ export async function publishBuild(
     // exact failure this pipeline was built to fix. Prompts fall back to
     // inlining their context instead of citing paths (FR-031).
     const schedule = await scheduleFor(
-      opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+      opts.enrollmentId, published.plan as BuildPlan, correlationId, windowOrigin,
     );
     const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, { schedule });
     await makeActiveProject(opts.enrollmentId, projectId, correlationId);
@@ -710,7 +753,7 @@ export async function publishBuild(
   // lands after its cohort's week-4 Thursday is dated from the plan's own
   // existence rather than from a date that has already gone by.
   const schedule = await scheduleFor(
-    opts.enrollmentId, published.plan as BuildPlan, correlationId, published.published_at,
+    opts.enrollmentId, published.plan as BuildPlan, correlationId, windowOrigin,
   );
 
   // What the platform already knows about this build, mirrored into the repo so

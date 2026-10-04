@@ -51,6 +51,7 @@ const DETAIL: AgentDetail = {
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null,
     autonomy_level_source: null,
+    reports_to_type: null, reports_to_id: null,
     abac_mode_override: null,
     abac_mode_override_set_at: null,
     abac_mode_override_set_by: null,
@@ -61,6 +62,9 @@ const DETAIL: AgentDetail = {
   live_status: 'unknown',
   open_ticket_count: 0,
   completed_ticket_count_30d: 0,
+  verified_resolution_count: 0,
+  owned_ticket_count_all_time: 0,
+  most_recent_verified_ticket_id: null,
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],
@@ -235,6 +239,9 @@ describe('AgentAtAGlanceTab — Role Charter tile', () => {
       kpis: ['Real KPI.'],
       updatedByEmail: 'ali@colaberry.com',
       updatedAt: '2026-09-10T15:48:53.702Z',
+      authorityAutonomous: null,
+      authorityApprovalRequired: null,
+      authorityForbidden: null,
     };
     getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter });
     await renderTab();

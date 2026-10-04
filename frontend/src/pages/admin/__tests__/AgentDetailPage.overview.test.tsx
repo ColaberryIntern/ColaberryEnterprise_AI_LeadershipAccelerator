@@ -5,6 +5,15 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AgentDetailPage from '../AgentDetailPage';
 import { AgentDetail } from '../../../services/agentDetailApi';
 
+// Chat formatting fix (2026-09-29) — AgentTalkTab (rendered by this page's
+// Talk tab) now imports react-markdown, which is pure ESM with a large
+// transitive dependency tree Jest can't resolve under this repo's pinned
+// react-scripts 5 (a real, pre-existing gap — see AgentTalkTab.test.tsx's
+// own comment for the full explanation). Mocked here too since this file
+// imports AgentDetailPage, which imports AgentTalkTab transitively.
+jest.mock('react-markdown', () => ({ __esModule: true, default: ({ children }: { children: string }) => children }));
+jest.mock('remark-gfm', () => ({ __esModule: true, default: () => {} }));
+
 // Checkpoint I (2026-09-11) — Ali pasted a full mockup and asked to match
 // its format for Overview. Replaces the Checkpoint H sub-tabbed version:
 // Overview is now one flowing page (AgentOverviewV2), so every section's
@@ -18,11 +27,13 @@ import { AgentDetail } from '../../../services/agentDetailApi';
 // this comment update since it was previously (correctly, at the time)
 // stated as inbox-independent.
 
-jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn(), setReeseBehaviourSwitch: jest.fn() }));
-jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn() }));
+jest.mock('../../../services/agentDetailApi', () => ({ getAgentDetail: jest.fn(), setReeseBehaviourSwitch: jest.fn(), setAgentAbacOverride: jest.fn(), setAgentReportsTo: jest.fn() }));
+jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn(), approveInboxItem: jest.fn(), getInboxItemInspector: jest.fn() }));
+jest.mock('../../../services/ticketSummaryApi', () => ({ getTicketSummary: jest.fn() }));
 jest.mock('../../../services/workforceOrgChartApi', () => ({
   resetAgents: jest.fn(),
   reactivateAgent: jest.fn(),
+  getOrgChart: jest.fn(),
   AUTONOMY_LEVELS: ['observe', 'suggest', 'act_audited', 'communicate'],
   AUTONOMY_LEVEL_DESCRIPTIONS: {
     observe: 'Read only.', suggest: 'May propose actions.', act_audited: 'May write, audited.', communicate: 'May send outbound comms.',
@@ -61,6 +72,7 @@ const DETAIL: AgentDetail = {
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null,
     autonomy_level_source: null,
+    reports_to_type: null, reports_to_id: null,
     abac_mode_override: null,
     abac_mode_override_set_at: null,
     abac_mode_override_set_by: null,
@@ -71,6 +83,9 @@ const DETAIL: AgentDetail = {
   live_status: 'unknown',
   open_ticket_count: 1,
   completed_ticket_count_30d: 0,
+  verified_resolution_count: 0,
+  owned_ticket_count_all_time: 0,
+  most_recent_verified_ticket_id: null,
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],
@@ -172,6 +187,23 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     expect(getManagerInboxItems).toHaveBeenCalledTimes(1);
   });
 
+  // Agent Detail polish round 5 (2026-09-30) — Ali, live: "work explained
+  // should be in the top right section of 'Needs Ali' section." Both real
+  // sections now render together, in the same new .adv2-needs-row, above
+  // the main 2-column grid — not buried mid-stack in the main column
+  // anymore.
+  it('"Needs Ali" and "Work, explained" render together in the same row, above the main grid', async () => {
+    getManagerInboxItems.mockResolvedValue([]);
+    getAgentExplainability.mockResolvedValue({ agentId: 'agent-cory', agentName: 'corybrain', events: [], proposedActions: [] });
+    await renderAgentPage();
+    await openOverviewTab();
+
+    const row = container.querySelector('.adv2-needs-row');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('Needs Ali');
+    expect(row!.textContent).toContain('Work, explained');
+  });
+
   // AI Employee Consolidation Program (2026-09-15/16) — mission Section 13:
   // legacy workflows appear inside the employee's own "Capabilities &
   // Automations" area, real ownership via owned_behaviors (parent_agent_id),
@@ -269,10 +301,31 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       });
     }
 
+    // Agent Detail polish round 3 (2026-09-29) — AgentOverviewV2EmployeeFacts.tsx
+    // collapses each behaviour row by default; tools/scheduled-work link/
+    // decomposed status facts/last-ticket link/shared-switch note all now
+    // live behind a per-row "Show details" toggle. The ON/OFF switch itself
+    // and any per-key error stay always-visible (a considered design
+    // decision — a failed toggle must never be hidden by a collapsed row),
+    // so clickBehaviourToggle above needs no change.
+    async function expandBehaviourRow(name: string) {
+      const nameSpan = Array.from(container.querySelectorAll('span')).find((el) => el.textContent === name);
+      const rowDiv = nameSpan?.closest('.adv2-behaviour-row');
+      const toggle = rowDiv?.querySelector('.adv2-behaviour-expand-toggle');
+      if (!toggle) throw new Error(`Expand toggle for "${name}" not found`);
+      await act(async () => {
+        toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
     it('shows the real tool correlation and the Scheduled work link', async () => {
       getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
       await renderAgentPage();
       await openOverviewTab();
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Health assessment');
+      await expandBehaviourRow('Autonomous outreach sweep');
 
       expect(container.textContent).toContain('uses: respond_to_dm');
       expect(container.textContent).toContain('uses: assess_student_health');
@@ -282,7 +335,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
     // Phase 1 workspace mission, R11 (2026-09-18) — Ali's new mission doc:
     // "Show whether each action is model-selected, rule-triggered, or
     // human-directed. Show callable, configured, authorized, enabled, and
-    // healthy as distinct facts."
+    // healthy as distinct facts." The trigger-mode chip is always-visible
+    // (collapsed view); the decomposed status facts are behind expand.
     it('shows trigger mode and decomposed status facts per behaviour, with an honest dash when healthy is unknown', async () => {
       getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
       await renderAgentPage();
@@ -290,6 +344,10 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
 
       expect(container.textContent).toContain('Model-selected');
       expect(container.textContent).toContain('Rule-triggered');
+
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Autonomous outreach sweep');
+
       expect(container.textContent).toContain('Healthy: yes');
       expect(container.textContent).toContain('Healthy: —');
     });
@@ -316,6 +374,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       });
       await renderAgentPage();
       await openOverviewTab();
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Autonomous outreach sweep');
 
       const link = container.querySelector('a[href="/admin/tickets?open=ticket-7"]');
       expect(link).not.toBeNull();
@@ -328,6 +388,8 @@ describe('AgentDetailPage — Overview tab (V2, flowing layout)', () => {
       getAgentDetail.mockResolvedValue(EMPLOYEE_FACTS_DETAIL);
       await renderAgentPage();
       await openOverviewTab();
+      await expandBehaviourRow('Reactive DM reply');
+      await expandBehaviourRow('Health assessment');
 
       expect(container.textContent).toContain("Shares Reese's own on/off switch with Health assessment.");
       expect(container.textContent).toContain("Shares Reese's own on/off switch with Reactive DM reply.");

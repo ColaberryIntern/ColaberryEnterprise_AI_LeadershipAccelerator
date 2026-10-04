@@ -207,7 +207,7 @@ function ManagementPreviewPage() {
   return (
     <div className="te-shell">
       <header className="te-top">
-        <div className="te-brand te-brand--site"><img className="te-mark" src="/colaberry-logo-transparent.png" alt="Colaberry" width={291} height={82} /><span>AI Systems Architect Accelerator</span></div>
+        <div className="te-brand te-brand--site"><img className="te-mark" src="/colaberry-horizontal.png" alt="Colaberry" width={436} height={102} /><span>AI Systems Architect Accelerator</span></div>
         <div className="te-top-right">
           <div className="te-rail">
             <span className="te-cd class" title="Next class"><span className="ic">{Ic.class}</span><span className="tx"><span className="lbl">Next class</span><span className="when mono">3d 11h</span></span></span>

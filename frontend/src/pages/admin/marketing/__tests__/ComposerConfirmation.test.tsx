@@ -183,13 +183,37 @@ describe('actions follow the server readiness verdict', () => {
     expect(seen).toEqual(['publish_now']);
   });
 
-  it('a refusal prints its reasons next to the buttons', () => {
+  it('a refusal prints its reasons AT THE TOP, not under the buttons', () => {
+    // This read `confirm-reasons` - a muted list below the four buttons, at the very bottom of
+    // the longest section on the page. Ali set a time, found every button dead, and could not
+    // see why: "section 4 is very very busy. I can't see all what's going on." The reasons now
+    // sit in the status block above everything, which is where the question is asked.
     render({
       ...SUMMARY,
       readiness: { canSaveDraft: true, canSendForApproval: true, canSchedule: false, canPublishNow: false, publishLabel: 'Publish now', reasons: ['Publishing needs an approved item; this one is draft.'] },
     });
     expect(buttons()['Publish now'].disabled).toBe(true);
-    expect(block('confirm-reasons').textContent).toContain('Publishing needs an approved item; this one is draft.');
+    expect(block('confirm-blockers').textContent).toContain('Publishing needs an approved item; this one is draft.');
+    // And the status block comes before the action row in the document, not after it.
+    const status = block('confirm-status');
+    const actions = block('confirm-actions');
+    expect(status.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('names where the post stands and the one step to take next', () => {
+    // The shared fixture is an APPROVED item; this case is Ali's real one - a draft whose
+    // validation never ran - so status and approval are pinned here too rather than inherited.
+    render({
+      ...SUMMARY,
+      item: { ...SUMMARY.item, status: 'draft' },
+      approval: { label: 'Not requested', itemStatus: 'draft', humanApproved: false, request: null },
+      validation: { ran: false, ok: false, blockerCount: 0, blockers: [] },
+      readiness: { canSaveDraft: true, canSendForApproval: false, canSchedule: false, canPublishNow: false, publishLabel: 'Publish now', reasons: ['Validation has not been run for this revision.'] },
+    });
+    expect(block('confirm-headline').textContent).toMatch(/Next: validate/);
+    // Validation is the current rung; approval and scheduling are explicitly blocked behind it.
+    expect(block('confirm-step-validate').getAttribute('data-state')).toBe('current');
+    expect(block('confirm-step-approve').getAttribute('data-state')).toBe('blocked');
   });
 
   it('the publish button carries the server label, so seven handoffs never read as Publish', () => {
@@ -231,5 +255,57 @@ describe('poll', () => {
   it('shows no poll field for a post that is not a poll', () => {
     render(SUMMARY);
     expect(container.querySelector('[data-testid="confirm-poll"]')).toBeNull();
+  });
+});
+
+/**
+ * The way out of a blocked step.
+ *
+ * Reported 2026-10-02: "I can't publish or schedule or send for approval." The buttons were
+ * correctly disabled and the ladder correctly said validation had not run - but it said "Press
+ * Validate under Channels", and the step rail had made Channels a separate screen. The reason was
+ * right there and there was no way to act on it.
+ */
+describe('a blocked step offers the way out', () => {
+  const needsValidation: ConfirmationSummary = {
+    ...SUMMARY,
+    validation: { ran: false, ok: false, blockerCount: 0, blockers: [] },
+  } as ConfirmationSummary;
+
+  function renderWithNav(summary: ConfirmationSummary, onGoToStep: (s: 'setup' | 'channels' | 'preview') => void) {
+    act(() => {
+      root.render(
+        <ComposerConfirmation summary={summary} busy={false} onAction={() => undefined} onGoToStep={onGoToStep} />,
+      );
+    });
+  }
+
+  it('offers a button to the step that clears it', () => {
+    renderWithNav(needsValidation, () => undefined);
+    const btn = container.querySelector('[data-testid="confirm-goto-validate"]');
+    expect(btn).not.toBeNull();
+    expect(btn!.textContent).toBe('Go to Channels and validate');
+  });
+
+  it('takes the operator to Channels, which is where Validate lives', () => {
+    const go = jest.fn();
+    renderWithNav(needsValidation, go);
+    act(() => { (container.querySelector('[data-testid="confirm-goto-validate"]') as HTMLButtonElement).click(); });
+    expect(go).toHaveBeenCalledWith('channels');
+  });
+
+  it('offers nothing once validation has passed - the rung is no longer current', () => {
+    renderWithNav(
+      { ...SUMMARY, validation: { ran: true, ok: true, blockerCount: 0, blockers: [] } } as ConfirmationSummary,
+      () => undefined,
+    );
+    expect(container.querySelector('[data-testid="confirm-goto-validate"]')).toBeNull();
+  });
+
+  it('renders exactly as before when no navigation handler is supplied', () => {
+    // The prop is optional: every existing caller and test must be unaffected.
+    render(needsValidation);
+    expect(container.querySelector('[data-testid="confirm-goto-validate"]')).toBeNull();
+    expect(container.querySelector('[data-testid="confirm-ladder"]')).not.toBeNull();
   });
 });

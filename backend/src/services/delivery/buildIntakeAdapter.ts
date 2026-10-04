@@ -43,8 +43,17 @@ import {
 /** The wizard's own bounds (`sbpRoutes.startSchema`), mirrored so they can be asserted on. */
 export const IDEA_MIN = 20;
 export const IDEA_MAX = 20_000;
+/**
+ * Per-answer ceiling. A dimension with more detail than this is SPLIT across
+ * several answers rather than clipped — see `packItems`.
+ */
 export const ANSWER_MAX = 4_000;
-export const ANSWERS_MAX = 20;
+/**
+ * Ceiling on answers carried. Raised from 20 on 2026-09-29: it used to be one
+ * answer per dimension and there are only 15 answerable dimensions, so it never
+ * bound. Now that a detailed dimension splits into several, it can.
+ */
+export const ANSWERS_MAX = 120;
 export const QUESTION_MAX = 500;
 export const NAME_MAX = 200;
 
@@ -99,6 +108,51 @@ export function phraseForBrief(item: UnderstandingItem): string {
 const clip = (s: string, max: number): string => (s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`);
 
 /**
+ * Pack a dimension's items into as many answers as it takes, WITHOUT cutting one.
+ *
+ *     "I heard from Swati today that she gave the process very detailed
+ *      requirements and it missed some of them... I would rather have all the
+ *      requirements there."  (Ali, 2026-09-29)
+ *
+ * This is where hers went. Every item in a dimension used to be joined into one
+ * string and clipped at ANSWER_MAX, so a detailed answer lost its tail silently
+ * — recorded as "(N items) clipped", which says THAT something was lost and
+ * never WHICH. Packing instead means a long dimension arrives as
+ * `constraints`, `constraints_2`, … and nothing is dropped for being late in
+ * the list.
+ *
+ * A single item longer than ANSWER_MAX on its own is still clipped, because
+ * there is nowhere else for it to go. That one IS reported, with its own text,
+ * so the loss is nameable rather than a count.
+ */
+export function packItems(phrases: readonly string[], max: number = ANSWER_MAX): {
+  chunks: string[];
+  clipped: string[];
+} {
+  const chunks: string[] = [];
+  const clipped: string[] = [];
+  let current = '';
+  for (const phrase of phrases) {
+    if (phrase.length > max) {
+      // Nothing to pack it with; it does not fit under any arrangement.
+      if (current) { chunks.push(current); current = ''; }
+      chunks.push(clip(phrase, max));
+      clipped.push(phrase);
+      continue;
+    }
+    const candidate = current ? `${current}\n${phrase}` : phrase;
+    if (candidate.length > max) {
+      chunks.push(current);
+      current = phrase;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) chunks.push(current);
+  return { chunks, clipped };
+}
+
+/**
  * Render the intake.
  *
  * Idea = the problem, outcome and pain in the customer's words. Answers = one per dimension
@@ -127,20 +181,38 @@ export function toBuildIntake(u: ProjectUnderstanding): BuildIntake {
     const items = itemsFor(u, dimension);
     if (!items.length) continue;
 
-    if (answers.length >= ANSWERS_MAX) {
-      items.forEach((it) => dropped.push({ dimension, value: it.value, reason: `more than ${ANSWERS_MAX} answers` }));
-      continue;
-    }
+    // PACKED, not clipped. A dimension with more detail than one answer holds
+    // arrives as several rather than losing its tail — this is the call that
+    // makes Swati's detailed requirements survive the crossing, and leaving it
+    // out is precisely how they went missing.
+    const { chunks, clipped } = packItems(items.map(phraseForBrief));
 
-    const answer = items.map(phraseForBrief).join('\n');
-    if (answer.length > ANSWER_MAX) {
-      dropped.push({ dimension, value: `(${items.length} items)`, reason: `answer over ${ANSWER_MAX} chars; clipped` });
-    }
+    // The only content loss left: one item too long to pack with anything. It is
+    // named by its own text, because a count says THAT something was lost and
+    // never WHICH.
+    clipped.forEach((value) => dropped.push({
+      dimension, value, reason: `single item over ${ANSWER_MAX} chars; clipped`,
+    }));
 
-    answers.push({
-      id: dimension,
-      question: clip(`${DIMENSION_LABELS[dimension]}?`, QUESTION_MAX),
-      answer: clip(answer, ANSWER_MAX),
+    chunks.forEach((chunk, i) => {
+      if (answers.length >= ANSWERS_MAX) {
+        dropped.push({ dimension, value: chunk, reason: `more than ${ANSWERS_MAX} answers` });
+        return;
+      }
+      answers.push({
+        // `constraints`, then `constraints_2`, … so the ids stay readable and a
+        // reader can see at a glance that one dimension ran long.
+        id: i === 0 ? dimension : `${dimension}_${i + 1}`,
+        question: clip(
+          // "(continued)" so the decomposer reads chunk two as more of the same
+          // question rather than as a different topic that happens to repeat.
+          i === 0 ? `${DIMENSION_LABELS[dimension]}?` : `${DIMENSION_LABELS[dimension]}? (continued)`,
+          QUESTION_MAX,
+        ),
+        // Already within ANSWER_MAX by construction; clipping here would hide a
+        // bug in `packItems` rather than fix one.
+        answer: chunk,
+      });
     });
   }
 

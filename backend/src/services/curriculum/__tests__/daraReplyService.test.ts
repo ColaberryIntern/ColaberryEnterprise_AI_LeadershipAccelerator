@@ -7,7 +7,11 @@
  */
 jest.mock('../../../models/RoomMembership', () => ({ findOne: jest.fn() }));
 jest.mock('../../../models/RoomMessage', () => ({ findAll: jest.fn() }));
-jest.mock('../daraIdentitySeed', () => ({ getDaraEnrollmentId: jest.fn(), getDaraAdminUserId: jest.fn(), getDaraAgentId: jest.fn() }));
+jest.mock('../daraIdentitySeed', () => ({
+  getDaraEnrollmentId: jest.fn(), getDaraAdminUserId: jest.fn(), getDaraAgentId: jest.fn(),
+  isDaraEnabled: jest.fn(), DARA_AGENT_NAME: 'Dara', DARA_RISK_TIER: 'R3',
+}));
+jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 jest.mock('../daraSystemPrompt', () => ({ buildDaraSystemPrompt: jest.fn() }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
@@ -23,7 +27,8 @@ jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActiv
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
-import { getDaraEnrollmentId, getDaraAdminUserId, getDaraAgentId } from '../daraIdentitySeed';
+import { getDaraEnrollmentId, getDaraAdminUserId, getDaraAgentId, isDaraEnabled } from '../daraIdentitySeed';
+import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { buildDaraSystemPrompt } from '../daraSystemPrompt';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { sendDmMessage } from '../../communityRooms/dmService';
@@ -37,6 +42,8 @@ const mockMessageFindAll = RoomMessage.findAll as unknown as jest.Mock;
 const mockGetDaraEnrollmentId = getDaraEnrollmentId as unknown as jest.Mock;
 const mockGetDaraAdminUserId = getDaraAdminUserId as unknown as jest.Mock;
 const mockGetDaraAgentId = getDaraAgentId as unknown as jest.Mock;
+const mockIsDaraEnabled = isDaraEnabled as unknown as jest.Mock;
+const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 const mockBuildDaraSystemPrompt = buildDaraSystemPrompt as unknown as jest.Mock;
 const mockGetInstrumentedOpenAI = getInstrumentedOpenAI as unknown as jest.Mock;
 const mockSendDmMessage = sendDmMessage as unknown as jest.Mock;
@@ -58,6 +65,8 @@ const mockCreateCompletion = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsDaraEnabled.mockResolvedValue(true);
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: null, verdict: 'would_allow', reason: 'ok', allowed: true });
   mockGetDaraEnrollmentId.mockResolvedValue(DARA_ID);
   mockGetDaraAdminUserId.mockResolvedValue(DARA_ADMIN_ID);
   mockGetDaraAgentId.mockResolvedValue(DARA_AGENT_ID);
@@ -105,7 +114,13 @@ describe('maybeTriggerDaraReply', () => {
     expect(mockEnsureTicket).toHaveBeenCalledWith(ROOM_ID, STUDENT_ID, 'Hi Dara, what does Module 3 cover?');
     expect(mockLogExchange).toHaveBeenCalledTimes(2);
     expect(mockLogExchange).toHaveBeenNthCalledWith(1, 'ticket-1', 'human', STUDENT_ID, 'student-msg-1', 'Hi Dara, what does Module 3 cover?');
-    expect(mockLogExchange).toHaveBeenNthCalledWith(2, 'ticket-1', 'ai_staff', DARA_ADMIN_ID, 'reply-msg-1', 'Module 3 covers supervised learning fundamentals.');
+    // Approval-correlation fix (2026-10-02) — ONLY Dara's own reply call gets
+    // the authorization eventId/decisionId threaded through (6th/7th args);
+    // the student's own message above is never gated, so it stays 5-arg.
+    expect(mockLogExchange).toHaveBeenNthCalledWith(
+      2, 'ticket-1', 'ai_staff', DARA_ADMIN_ID, 'reply-msg-1', 'Module 3 covers supervised learning fundamentals.',
+      expect.any(String), null,
+    );
   });
 
   it('ProofDesk linkage boundary: if ticket-ensure fails, the reply is still generated and sent (ticket layer never blocks messaging)', async () => {
@@ -297,5 +312,40 @@ describe('maybeTriggerDaraReply', () => {
     expect(roles[0]).toBe('system');
     expect(roles).toContain('assistant');
     expect(roles).toContain('user');
+  });
+
+  describe('kill switch + authorization (T12 completion)', () => {
+    it('kill switch off: an admin disabling Dara stops the reply before any DB/network work', async () => {
+      mockIsDaraEnabled.mockResolvedValue(false);
+
+      await maybeTriggerDaraReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockMembershipFindOne).not.toHaveBeenCalled();
+      expect(mockCreateCompletion).not.toHaveBeenCalled();
+      expect(mockSendDmMessage).not.toHaveBeenCalled();
+    });
+
+    it('authorization held: a held verdict stops the send and never logs a false success', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'decision-1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+
+      await maybeTriggerDaraReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(expect.objectContaining({
+        ticketId: 'ticket-1', agentName: 'Dara', action: 'dara_dm_reply', riskTier: 'R3',
+      }));
+      expect(mockSendDmMessage).not.toHaveBeenCalled();
+      expect(mockLogAgentActivity).not.toHaveBeenCalledWith(expect.objectContaining({ result: 'success' }));
+    });
+
+    it('authorization skipped when no ticket resolved: sends exactly as before (ticket-layer problems never block the reply)', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockEnsureTicket.mockRejectedValue(new Error('ticket service down'));
+
+      await maybeTriggerDaraReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
+      expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
+    });
   });
 });

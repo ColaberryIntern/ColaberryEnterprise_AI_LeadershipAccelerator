@@ -6,8 +6,14 @@ jest.mock('../../zoomService', () => ({
 }));
 jest.mock('googleapis', () => ({ google: { auth: { JWT: jest.fn() }, calendar: jest.fn() } }));
 jest.mock('../../../config/env', () => ({ env: {} }));
+// The adapter now routes creation through the idempotency ledger, which touches the
+// database. This suite's job is the adapter's MAPPING — timezone conversion, duration,
+// result shape — so the ledger is mocked at its boundary and has its own suite
+// (zoomMeetingIdempotency.test.ts) covering claim/replay/reconcile.
+jest.mock('../zoomMeetingIdempotency', () => ({ createMeetingIdempotent: jest.fn() }));
 
 import * as zoomService from '../../zoomService';
+import { createMeetingIdempotent } from '../zoomMeetingIdempotency';
 import { ZoomMeetAdapter, getMeetingProvider } from '../meetingProvider';
 
 /**
@@ -20,7 +26,8 @@ import { ZoomMeetAdapter, getMeetingProvider } from '../meetingProvider';
  * mocked; its own real-API behavior is covered by zoomService.test.ts.
  */
 
-const createMeetingMock = zoomService.createMeeting as jest.Mock;
+// createMeeting now goes through the ledger; updateMeeting still calls zoomService directly.
+const createMeetingMock = createMeetingIdempotent as unknown as jest.Mock;
 const updateMeetingMock = zoomService.updateMeeting as jest.Mock;
 const cancelMeetingMock = zoomService.cancelMeeting as jest.Mock;
 const getJoinUrlMock = zoomService.getMeetingJoinUrl as jest.Mock;
@@ -41,14 +48,56 @@ describe('ZoomMeetAdapter', () => {
       requestId: 'booking-1',
     });
 
+    // 18:30Z is 13:30 in Chicago on 2026-08-04 (CDT, UTC-5).
+    //
+    // THIS EXPECTATION USED TO READ '2026-08-04T18:30:00', which encoded the bug as
+    // correct: the adapter did `.toISOString().slice(0,19)`, stripping the `Z` and
+    // handing Zoom the UTC wall clock labelled Central — so every booking was created
+    // five hours late. The test passing is what let it survive. It asserts the real
+    // local time now.
+    // `requestId` is in this payload now. It was accepted by the interface and silently
+    // DROPPED by this adapter, which is why a retry could create a second real meeting.
+    // Asserting it here is what stops it being dropped again.
     expect(createMeetingMock).toHaveBeenCalledWith({
+      requestId: 'booking-1',
       topic: 'Study Group',
       agenda: 'Weekly review',
-      startDateTime: '2026-08-04T18:30:00',
+      startDateTime: '2026-08-04T13:30:00',
       durationMinutes: 90,
       timezone: 'America/Chicago',
     });
     expect(result).toEqual({ providerEventId: '123', joinUrl: 'https://zoom.us/j/123' });
+  });
+
+  it('createMeeting: converts to the TARGET zone, not just away from UTC', async () => {
+    createMeetingMock.mockResolvedValue({ meetingId: '2', joinUrl: null });
+    await adapter.createMeeting({
+      title: 'x',
+      startAt: new Date('2026-08-04T18:30:00Z'),
+      endAt: new Date('2026-08-04T19:00:00Z'),
+      timezone: 'Asia/Kolkata',          // UTC+5:30, and not a whole number of hours
+      requestId: 'b2',
+    });
+    // 18:30Z is 00:00 the NEXT DAY in Kolkata — so this also proves the date rolls,
+    // which a naive hour-offset fix would get wrong.
+    expect(createMeetingMock.mock.calls[0][0].startDateTime).toBe('2026-08-05T00:00:00');
+    expect(createMeetingMock.mock.calls[0][0].timezone).toBe('Asia/Kolkata');
+  });
+
+  it.each([
+    // Either side of the 2026 US DST transitions. The offset differs by an hour, so a
+    // hardcoded -5 or -6 passes one of these and fails the other.
+    ['2026-01-15T18:30:00Z', '2026-01-15T12:30:00'],  // CST, UTC-6
+    ['2026-07-15T18:30:00Z', '2026-07-15T13:30:00'],  // CDT, UTC-5
+  ])('createMeeting: %s converts correctly across the DST boundary', async (iso, expected) => {
+    createMeetingMock.mockResolvedValue({ meetingId: '3', joinUrl: null });
+    await adapter.createMeeting({
+      title: 'x',
+      startAt: new Date(iso),
+      endAt: new Date(new Date(iso).getTime() + 30 * 60000),
+      requestId: 'b3',
+    });
+    expect(createMeetingMock.mock.calls[0][0].startDateTime).toBe(expected);
   });
 
   it('createMeeting: honors an explicit timezone over the default', async () => {
@@ -66,9 +115,11 @@ describe('ZoomMeetAdapter', () => {
       startAt: new Date('2026-08-04T19:00:00Z'),
       endAt: new Date('2026-08-04T19:45:00Z'),
     });
+    // 19:00Z is 14:00 Central on this date. Same correction as createMeeting above —
+    // this expectation also used to assert the unconverted UTC wall clock.
     expect(updateMeetingMock).toHaveBeenCalledWith('123', {
       topic: 'New title',
-      startDateTime: '2026-08-04T19:00:00',
+      startDateTime: '2026-08-04T14:00:00',
       durationMinutes: 45,
     });
   });

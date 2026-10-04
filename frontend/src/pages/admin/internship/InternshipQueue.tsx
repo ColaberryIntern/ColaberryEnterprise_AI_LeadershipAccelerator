@@ -3,14 +3,22 @@ import { StatusBadge } from '../../../components/admin/shell';
 import { QueueBucket } from '../../../services/adminInternshipApi';
 import { useReview } from './reviewContext';
 
+/**
+ * Reading order is the lifecycle: still being decided, then accepted and
+ * finishing onboarding, then in the programme. "In review" deliberately ends at
+ * the decision, so an active intern never reads as an open application.
+ */
 const BUCKETS: Array<{ key: QueueBucket; label: string }> = [
-  { key: 'all_open', label: 'All open' },
+  { key: 'in_review', label: 'In review' },
   { key: 'awaiting_review', label: 'Awaiting review' },
   { key: 'information_requested', label: 'Info requested' },
   { key: 'interview_incomplete', label: 'Interview open' },
   { key: 'calls_failed', label: 'Calls failed' },
-  { key: 'approved_awaiting_documents', label: 'Docs pending' },
   { key: 'waitlisted', label: 'Waitlisted' },
+  { key: 'approved_awaiting_documents', label: 'Docs pending' },
+  { key: 'onboarding', label: 'Onboarding' },
+  { key: 'active_interns', label: 'Active interns' },
+  { key: 'converted', label: 'Converted' },
 ];
 
 /**
@@ -60,7 +68,7 @@ const InternshipQueue: React.FC = () => {
         )}
         {!r.queueLoading && !r.queueError && rows.length === 0 && (
           <p className="text-muted" style={{ padding: '14px', margin: 0, fontSize: 13 }}>
-            {counts && counts.all_open === 0
+            {counts && BUCKETS.every((b) => (counts[b.key] ?? 0) === 0)
               ? 'No internship applications have been started yet.'
               : term.trim()
                 ? 'No applicant here matches that search.'

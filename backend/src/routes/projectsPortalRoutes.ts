@@ -20,23 +20,13 @@ import {
 import { setTaskStatus, setTaskStatusByStory, importProject, type ImportProjectInput } from '../services/projects/projectWriteService';
 import { attachmentsSchema } from '../services/agents/tools/attachmentSchema';
 import { z } from 'zod';
+// Shared with presentationPortalRoutes, which split out of this file when it
+// crossed the 500-line ceiling. One copy, because `gate` decides whether a whole
+// API surface exists and two drifting copies of that is how one router keeps
+// serving a feature the other has turned off.
+import { eid, gate, fail } from './portalRouteHelpers';
 
 const router = Router();
-const eid = (req: Request) => req.participant!.sub;
-
-function gate(res: Response): boolean {
-  if (!env.projectApiEnabled) {
-    res.status(404).json({ error: 'Projects API not enabled' });
-    return false;
-  }
-  res.set('Cache-Control', 'no-store');
-  return true;
-}
-function fail(res: Response, err: any, next: NextFunction) {
-  if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
-  if (err && typeof err.status === 'number') return res.status(err.status).json({ error: err.message });
-  return next(err);
-}
 
 // `complete` stays in the enum on purpose. Zod's job here is shape — "is this a
 // status this system knows about" — and the service decides who may set which.

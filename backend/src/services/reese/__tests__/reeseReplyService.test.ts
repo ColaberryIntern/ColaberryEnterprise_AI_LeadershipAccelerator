@@ -30,6 +30,7 @@ jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActiv
 jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
 jest.mock('../../workGraph/workGraphService', () => ({ createWorkUnit: jest.fn(), updateWorkUnitStatus: jest.fn() }));
+jest.mock('../../../models/ReeseTicketFollowUp', () => ({ update: jest.fn() }));
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
@@ -44,6 +45,7 @@ import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
 import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
 import { createWorkUnit, updateWorkUnitStatus } from '../../workGraph/workGraphService';
+import ReeseTicketFollowUp from '../../../models/ReeseTicketFollowUp';
 import { maybeTriggerReeseReply } from '../reeseReplyService';
 
 const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
@@ -64,6 +66,7 @@ const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.M
 const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
 const mockCreateWorkUnit = createWorkUnit as unknown as jest.Mock;
 const mockUpdateWorkUnitStatus = updateWorkUnitStatus as unknown as jest.Mock;
+const mockFollowUpUpdate = ReeseTicketFollowUp.update as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_AGENT_ID = 'reese-agent-1';
@@ -108,6 +111,7 @@ beforeEach(() => {
   mockCreateWorkUnit.mockResolvedValue({ id: 'wu-1', update: jest.fn().mockResolvedValue(undefined) });
   mockUpdateWorkUnitStatus.mockResolvedValue(undefined);
   mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok', allowed: true });
+  mockFollowUpUpdate.mockResolvedValue([0]);
 });
 
 describe('maybeTriggerReeseReply', () => {
@@ -142,7 +146,13 @@ describe('maybeTriggerReeseReply', () => {
     // 6th arg is the real work unit id (Workspace mission, Phase 2 slice 1) —
     // createWorkUnit() resolves to { id: 'wu-1', ... } under the default mocks.
     expect(mockLogExchange).toHaveBeenNthCalledWith(1, 'ticket-1', 'human', STUDENT_ID, 'student-msg-1', 'Hi Reese, I am stuck on my project.', 'wu-1');
-    expect(mockLogExchange).toHaveBeenNthCalledWith(2, 'ticket-1', 'ai_staff', REESE_ADMIN_ID, 'reply-msg-1', 'Here is your next move.', 'wu-1');
+    // Approval-correlation fix (2026-10-02) — ONLY Reese's own reply call gets
+    // the authorization eventId/decisionId threaded through (7th/8th args);
+    // the student's own message above is never gated, so it stays 6-arg.
+    expect(mockLogExchange).toHaveBeenNthCalledWith(
+      2, 'ticket-1', 'ai_staff', REESE_ADMIN_ID, 'reply-msg-1', 'Here is your next move.', 'wu-1',
+      expect.any(String), 'auth-1',
+    );
   });
 
   it('ProofDesk linkage boundary: if ticket-ensure fails, the reply is still generated and sent (ticket layer never blocks messaging)', async () => {
@@ -157,6 +167,35 @@ describe('maybeTriggerReeseReply', () => {
     // nothing real to attach it to, and this must never become a new blocking path.
     expect(mockCreateWorkUnit).not.toHaveBeenCalled();
     expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalled();
+  });
+
+  it('ticket follow-up reset: a real student reply resets this ticket\'s follow-up attempt counter (T12 completion, 2026-10-02) — their silence streak genuinely broke', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockFollowUpUpdate).toHaveBeenCalledWith(
+      { attempt_count: 0, status: 'active' },
+      { where: { ticket_id: 'ticket-1' } },
+    );
+  });
+
+  it('ticket follow-up reset: a failure here is best-effort and never blocks the real reply', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockFollowUpUpdate.mockRejectedValue(new Error('db down'));
+
+    await expect(maybeTriggerReeseReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
+
+    expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('ticket follow-up reset: never attempted when ticket-ensure itself failed (no real ticketId to reset against)', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockEnsureTicket.mockRejectedValue(new Error('ticket service down'));
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockFollowUpUpdate).not.toHaveBeenCalled();
   });
 
   it('scope guard: a message in a room Reese is NOT a member of never invokes the LLM (cost + scope protection)', async () => {

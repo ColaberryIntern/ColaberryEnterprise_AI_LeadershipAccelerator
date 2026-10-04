@@ -122,6 +122,35 @@ export function useInternshipReview() {
 
   useEffect(() => { if (selected) void loadDetail(selected); }, [selected, loadDetail]);
 
+  /**
+   * Put the open applicant away and go back to the empty pane.
+   *
+   * Clears the per-applicant state rather than only the id: everything below is
+   * about ONE person, and leaving a decision draft or an assessment behind means
+   * the next applicant opens carrying the previous one's work for as long as
+   * their detail takes to load. `loadDetail` resets the same fields on open, so
+   * this is the same reset, run on the way out.
+   */
+  const closeApplicant = useCallback(() => {
+    setSelected(null);
+    setDetail(null);
+    setDetailError(null);
+    setAssessment(null);
+    setAssessError(null);
+    setActivity(null);
+    setActivityError(null);
+    setReview(null);
+    setReviewQuestion('');
+    setReasonCode('');
+    setStudentMessage('');
+    setReviewerNotes('');
+    setConditions('');
+    setDecisionError(null);
+    setDecisionNote(null);
+    setActivateBlockers(null);
+    setActivateNote(null);
+  }, []);
+
   const runAssessment = useCallback(async () => {
     if (!selected) return;
     setAssessing(true);
@@ -213,7 +242,7 @@ export function useInternshipReview() {
 
   return {
     bucket, setBucket, queue, kpis, queueError, queueLoading,
-    selected, setSelected, detail, detailError, detailLoading,
+    selected, setSelected, closeApplicant, detail, detailError, detailLoading,
     assessment, assessing, assessError, runAssessment,
     activity, activityError, reloadActivity,
     review, reviewing, reviewQuestion, setReviewQuestion, runProjectReview,

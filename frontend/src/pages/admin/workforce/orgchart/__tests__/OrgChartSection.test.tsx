@@ -216,6 +216,13 @@ describe('OrgChartSection — AI Leadership drawer', () => {
     // not a nested modal.
     const staffLinkInsideDrawer = container.querySelector('.wf-drawer a[href="/admin/agents/staff-1-id"]');
     expect(staffLinkInsideDrawer).toBeTruthy();
+
+    // Track B (2026-09-22) — the leadership agent's OWN profile now has a
+    // real link too, a real pre-existing gap this slice fixed (previously
+    // only the downstream Staff rows linked anywhere).
+    const ownProfileLink = container.querySelector('.wf-drawer a[href="/admin/agents/corybrain-id"]');
+    expect(ownProfileLink).toBeTruthy();
+    expect(ownProfileLink?.textContent).toContain('View full profile');
   });
 
   it('a Leadership agent with zero AI Staff shows the honest empty state, never a crash', async () => {
@@ -1103,5 +1110,60 @@ describe('OrgChartSection — inactive (deactivated) agents are visually distinc
     await render();
 
     expect(container.textContent).not.toContain('Inactive');
+  });
+});
+
+// Track B (2026-09-22) — the "My team" scoped-view toggle.
+describe('OrgChartSection — "My team" scope toggle', () => {
+  it('loads unscoped by default: getOrgChart called with no scope argument', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    expect(getOrgChart).toHaveBeenCalledWith(undefined);
+  });
+
+  it('clicking "My team" refetches with scope=mine and re-renders the scoped (smaller) response', async () => {
+    const SCOPED_CHART: OrgChartResponse = {
+      ...CHART,
+      humans: [CHART.humans[0]], // just Ali
+      leadership: [CHART.leadership[0]], // just Cory Brain
+      staff: CHART.staff, // Admissions Conversion Architect, reports through Cory Brain
+    };
+    getOrgChart.mockResolvedValueOnce(CHART).mockResolvedValueOnce(SCOPED_CHART);
+    await render();
+    expect(container.textContent).toContain('Taiwo Oludimimu'); // unscoped: everyone present
+
+    const myTeamButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'My team')!;
+    await act(async () => {
+      myTeamButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(getOrgChart).toHaveBeenLastCalledWith('mine');
+    expect(container.textContent).toContain('Ali Muwwakkil');
+    expect(container.textContent).not.toContain('Taiwo Oludimimu'); // scoped out
+  });
+
+  it('clicking back to "Full org chart" refetches with no scope', async () => {
+    getOrgChart.mockResolvedValue(CHART);
+    await render();
+
+    const myTeamButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'My team')!;
+    await act(async () => { myTeamButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+    const fullChartButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Full org chart')!;
+    await act(async () => { fullChartButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(getOrgChart).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('shows an honest empty-state sentence when "My team" scoping returns zero humans, never a blank panel', async () => {
+    const EMPTY_SCOPED: OrgChartResponse = { ...CHART, humans: [], leadership: [], staff: [], unresolved: [] };
+    getOrgChart.mockResolvedValueOnce(CHART).mockResolvedValueOnce(EMPTY_SCOPED);
+    await render();
+
+    const myTeamButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'My team')!;
+    await act(async () => { myTeamButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(container.textContent).toContain('No org_members profile matches your admin login');
   });
 });

@@ -26,7 +26,31 @@ export const DARA_DISPLAY_NAME = 'Dara';
 // Phase 2 (accountability contract approved as drafted, choice B).
 export const DARA_REPORTS_TO_ORG_MEMBER_ID = '5db87b51-4554-4e52-93d7-c61f9887352c';
 
+// T12 completion (2026-10-02) — same external_side_effect tier as Reese's own
+// RISK_TIER/REPLY_RISK_TIER ('R3' in reeseAutonomousOutreachService.ts /
+// reeseReplyService.ts): a real DM to a real student, and a real handoff
+// ticket a human will act on, are both genuinely R3 per
+// deliveryRiskLevels.ts's taxonomy — not a borrowed label, a correctly
+// applied one.
+export const DARA_RISK_TIER = 'R3';
+
 export type DaraIdentityIds = AgentIdentityIds;
+
+/**
+ * T12 completion (2026-10-02) — mirrors reeseIdentitySeed.ts's isReeseEnabled()
+ * exactly: the parent AiAgent row's own `enabled` flag previously stopped
+ * nothing on Dara's reply/escalation paths (an admin disabling her in
+ * Admin > Agents had no effect). Read fresh on every call, never cached, so
+ * a flip takes effect without a restart. Dara-only: queries by
+ * DARA_AGENT_NAME, not a generic agentBlueprint helper.
+ */
+export async function isDaraEnabled(): Promise<boolean> {
+  const agent = await AiAgent.findOne({ where: { agent_name: DARA_AGENT_NAME }, attributes: ['enabled'] });
+  // No row yet means identity isn't seeded — every other guard in the reply
+  // and tool paths already no-ops on that case before this would run, so
+  // failing open here is unreachable in practice, not a real safety gap.
+  return agent ? agent.enabled : true;
+}
 
 /** Memoized lookup of Dara's enrollment id. Delegates to the generic
  * per-email cache in agentBlueprint/agentIdentitySeed.ts. */

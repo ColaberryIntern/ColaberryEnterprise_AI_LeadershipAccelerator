@@ -6,6 +6,8 @@ import AgentOverviewV2Sidebar from './AgentOverviewV2Sidebar';
 import AgentOverviewV2Hero from './AgentOverviewV2Hero';
 import AgentOverviewV2Metrics from './AgentOverviewV2Metrics';
 import AgentOverviewV2NeedsAli from './AgentOverviewV2NeedsAli';
+import AgentOverviewV2WorkExplained from './AgentOverviewV2WorkExplained';
+import AgentOverviewV2OperationalState from './AgentOverviewV2OperationalState';
 import type { TabKey } from './AgentDetailV2Header';
 
 // Agent Detail V2, Overview (2026-09-11) — Ali pasted a full mockup and
@@ -28,27 +30,39 @@ import type { TabKey } from './AgentDetailV2Header';
 // existed before this run (6 in MainColumn, 5 in Sidebar) is UNCHANGED —
 // this run only touched the top-of-page composition and appended one new
 // static explainer card at the end of MainColumn.
+//
+// Agent Detail polish round 2 (2026-09-29) — "At a Glance"/"Live Status"
+// retired from the nav (AgentDetailV2Header.tsx); Live Status's 2 real
+// pieces with no other home (Operational state + reason, the evidenced
+// Attention Required list) fold in here, verbatim, via
+// AgentOverviewV2OperationalState.tsx — same derivation functions, same
+// props this page already receives, zero new fetch.
 
 interface Props {
   detail: AgentDetail;
   inboxItems: ManagerInboxItem[];
   inboxLoading: boolean;
+  inboxError: string | null;
+  onInboxChanged: () => void;
   onNavigate: (tab: TabKey) => void;
+  onReportsToChanged: () => void;
 }
 
-export default function AgentOverviewV2({ detail, inboxItems, inboxLoading, onNavigate }: Props) {
+export default function AgentOverviewV2({ detail, inboxItems, inboxLoading, inboxError, onInboxChanged, onNavigate, onReportsToChanged }: Props) {
   const agentDisplayName = detail.identity?.display_name || detail.agent.agent_name;
 
   return (
     <div className="adv2-wrap">
       <AgentOverviewV2Hero detail={detail} onNavigate={onNavigate} />
       <AgentOverviewV2Metrics detail={detail} inboxItems={inboxItems} onNavigate={onNavigate} />
-      <div style={{ marginBottom: 20 }}>
-        <AgentOverviewV2NeedsAli inboxItems={inboxItems} inboxLoading={inboxLoading} onNavigate={onNavigate} />
+      <div className="adv2-needs-row">
+        <AgentOverviewV2NeedsAli agentId={detail.agent.id} inboxItems={inboxItems} inboxLoading={inboxLoading} onInboxChanged={onInboxChanged} onNavigate={onNavigate} />
+        <AgentOverviewV2WorkExplained agentId={detail.agent.id} onNavigate={onNavigate} />
       </div>
+      <AgentOverviewV2OperationalState detail={detail} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} />
       <div className="adv2-grid">
         <AgentOverviewV2MainColumn detail={detail} onNavigate={onNavigate} />
-        <AgentOverviewV2Sidebar detail={detail} agentId={detail.agent.id} agentDisplayName={agentDisplayName} />
+        <AgentOverviewV2Sidebar detail={detail} agentId={detail.agent.id} agentDisplayName={agentDisplayName} onReportsToChanged={onReportsToChanged} />
       </div>
     </div>
   );

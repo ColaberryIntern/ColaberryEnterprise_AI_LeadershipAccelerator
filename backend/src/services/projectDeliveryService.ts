@@ -59,6 +59,24 @@ export interface ProjectReadiness {
   gaps: string[];
 }
 
+/**
+ * Which group a project's owner is in.
+ *
+ * AN INTERNSHIP OUTRANKS A CLASS SEAT, and that is the whole rule. An intern is normally
+ * enrolled in a class as well — the internship is a secondary `cohort_memberships` row and
+ * their enrollment still points at the class cohort — so reading `cohort_id` first would
+ * label every intern a class project and hide them from the board's default view. That is
+ * the same mistake `internsOnly` exists to avoid, one layer up.
+ *
+ * Pure, and exported, so the precedence is testable without standing up the query.
+ */
+export function audienceOf(
+  r: { is_intern?: boolean | null; cohort_id?: string | null },
+): ProjectRow['audience'] {
+  if (r.is_intern) return 'intern';
+  return r.cohort_id ? 'class' : 'unenrolled';
+}
+
 export interface ProjectRow {
   project_id: string;
   name: string | null;
@@ -69,6 +87,24 @@ export interface ProjectRow {
   cohort_name: string | null;
   stage: ProjectStage;
   maturity_score: number | null;
+  /**
+   * The owner holds an active internship. A column rather than a filter, so a board can
+   * put interns first and still show everyone — see the query for why that matters.
+   */
+  is_intern: boolean;
+  /**
+   * Who the project belongs to, as one word.
+   *
+   *     "in the Projects section, default it to active intern projects but allow the
+   *      ability to add class projects and unenrolled students projects."  (Ali, 2026-10-01)
+   *
+   * Derived rather than stored: an intern holds an active internship membership, a class
+   * student is anyone else sitting in a cohort, and unenrolled is a project whose owner is
+   * in neither — the prospect and guest builds that come out of the enquiry list. Three
+   * named groups beat three booleans at the call site, where the question is always "show
+   * me which of these".
+   */
+  audience: 'intern' | 'class' | 'unenrolled';
   has_repo: boolean;
   repo_url: string | null;
   /** Which store answered: 'connection' (the record), 'project_column' (legacy
@@ -198,7 +234,22 @@ export function computeReadiness(input: {
  * the readiness score is built from.
  */
 export async function getProjectDelivery(
-  opts: { cohortId?: string; enrollmentId?: string } = {},
+  opts: {
+    cohortId?: string;
+    enrollmentId?: string;
+    /**
+     * Scope to people holding an ACTIVE internship membership.
+     *
+     * Matched on `cohort_memberships`, never on `e.cohort_id`: an intern's
+     * enrollment still points at their CLASS cohort, because the internship is
+     * a secondary membership row — which is the whole reason
+     * internshipActivationService adds one instead of moving the pointer.
+     * Filtering on `e.cohort_id = <the internship cohort>` returns nothing at
+     * all, and an empty board reads as "no intern has a project" rather than as
+     * a wrong query.
+     */
+    internsOnly?: boolean;
+  } = {},
 ): Promise<ProjectRow[]> {
   const rows = await sequelize.query<any>(
     `SELECT p.id                AS project_id,
@@ -240,7 +291,28 @@ export async function getProjectDelivery(
             END                 AS repo_source,
             p.project_variables->>'command_center_url' AS command_center_url,
             p.archived_at,
-            (p.executive_summary IS NOT NULL AND p.executive_summary <> '') AS has_exec_summary
+            (p.executive_summary IS NOT NULL AND p.executive_summary <> '') AS has_exec_summary,
+            -- Whether this project's owner holds an internship, as a COLUMN rather than
+            -- only as a filter.
+            --
+            --     "All projects built moving fwd should be assigned to an intern above or
+            --      shown below with drill down. Either way, I should be able to drill down
+            --      into the projects."  (Ali, 2026-09-30)
+            --
+            -- The internsOnly filter answered that question by making the other projects
+            -- vanish, so a project built for a prospect from the enquiry list was not
+            -- merely unsorted on the internship board, it was absent. Same predicate,
+            -- selected instead of filtered, so a caller can order by it and still show
+            -- everything. (No backticks in here: this is inside a template literal, and
+            -- one would end the string - it has already happened once in this repo.)
+            EXISTS (
+              SELECT 1 FROM cohort_memberships m
+                JOIN cohorts ic ON ic.id = m.cohort_id
+               WHERE m.enrollment_id = p.enrollment_id
+                 AND m.membership_type = 'internship'
+                 AND m.status = 'active'
+                 AND ic.cohort_type = 'ai_internship'
+            )                   AS is_intern
        FROM projects p
        LEFT JOIN enrollments e ON e.id = p.enrollment_id
        LEFT JOIN cohorts co    ON co.id = e.cohort_id
@@ -257,7 +329,14 @@ export async function getProjectDelivery(
       WHERE p.name IS NOT NULL AND p.name <> ''
         AND (e.status IS NULL OR e.status NOT IN (:departed))
         ${opts.cohortId ? 'AND e.cohort_id = :cohortId' : ''}
-        ${opts.enrollmentId ? 'AND p.enrollment_id = :enrollmentId' : ''}`,
+        ${opts.enrollmentId ? 'AND p.enrollment_id = :enrollmentId' : ''}
+        ${opts.internsOnly ? `AND EXISTS (
+              SELECT 1 FROM cohort_memberships m
+                JOIN cohorts ic ON ic.id = m.cohort_id
+               WHERE m.enrollment_id = p.enrollment_id
+                 AND m.membership_type = 'internship'
+                 AND m.status = 'active'
+                 AND ic.cohort_type = 'ai_internship')` : ''}`,
     {
       replacements: {
         departed: [...DEPARTED_ENROLLMENT_STATUSES],
@@ -322,6 +401,8 @@ export async function getProjectDelivery(
       cohort_name: r.cohort_name,
       stage,
       maturity_score: r.maturity_score,
+      is_intern: !!r.is_intern,
+      audience: audienceOf({ is_intern: r.is_intern, cohort_id: r.cohort_id }),
       has_repo,
       repo_url: has_repo ? r.repo_url : null,
       repo_source: has_repo ? (r.repo_source as 'connection' | 'project_column') : 'none',

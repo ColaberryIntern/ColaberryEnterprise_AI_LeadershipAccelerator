@@ -13,11 +13,26 @@ import { requestChanges, ReviewValidationError } from '../../services/factory/fa
 // Gov-entry (Phase 5 slice 1): the best-fit opportunity feed (degrade-dark) + create-on-pick. The backfill
 // + gov container lazy-load their models inside their functions, so these imports don't init the ORM here.
 import { fetchBestFitOpportunities } from '../../services/factory/opportunities/oppPulseClient';
-import { backfillUnassessedContract } from '../../services/factory/factoryBackfill';
-import { resolveGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
+// NOTE (Phase 1 gov-qualification guard): backfillUnassessedContract (auto-create of an unassessed shell) stays
+// disabled until the Phase 2 qualification flow lands. The navigation-only start route uses the READ-ONLY,
+// tenant-scoped, fail-closed lookupGovContractsContainer (NOT the provisioning resolveGovContractsContainer,
+// which creates records) to scope the lookup to the fixed Government Contracts container.
+import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
+// Team-scoped dismissals: hide a discovered v1 candidate from the whole team's feed (reversible). The service
+// lazy-loads its model inside each function, so this import never inits the ORM here.
+import { dismissOpportunity, restoreOpportunity, listActiveDismissedKeys } from '../../services/factory/opportunities/govOpportunityDismissals';
+// Colaberry's service catalog (CRUD). Lazy-loads its model inside each function, so this import never inits the ORM.
+import {
+  createServiceOffering, updateServiceOffering, retireServiceOffering, listServiceOfferings,
+  ServiceOfferingNotFoundError,
+} from '../../services/factory/serviceCatalog';
+// The pure, deterministic opportunity->services matcher (advisory; writes nothing, gates nothing).
+import { matchServicesToOpportunity } from '../../services/factory/serviceMatcher';
 // Slice 2: upload a solicitation zip -> deterministic source-cited requirements (no LLM).
 import multer from 'multer';
 import { ingestProposal } from '../../services/factory/proposal/proposalIngest';
+// Slice 3: run the (flag-gated) generation engine -> a task graph the contract can be approved on.
+import { generateDecomposition } from '../../services/factory/factoryDecomposeRun';
 
 /**
  * Admin — AI Project Factory Command Center (READ ONLY, Phase 3).
@@ -209,11 +224,208 @@ router.post('/api/admin/factory/contract/:deliveryProjectId/request-changes', re
  */
 router.get('/api/admin/factory/opportunities', requireSection('program'), async (_req: Request, res: Response) => {
   try {
-    const feed = await fetchBestFitOpportunities(); // never throws
-    res.json(feed);
+    const feed = await fetchBestFitOpportunities(); // never throws (carries totalAvailable when live)
+    // Best-effort team-dismissal filter: hide opportunities this tenant has actively dismissed. Discovery must
+    // stay up even when the gov container isn't configured, so a missing/erroring container returns the feed
+    // UNFILTERED (unlike the dismiss/restore WRITE routes, which fail closed). dismissedCount reports how many
+    // rows this page hid so the UI can say "showing N of M · K dismissed".
+    let opportunities = feed.opportunities;
+    let dismissedCount = 0;
+    try {
+      const container = await lookupGovContractsContainer();
+      if (container) {
+        const dismissed = await listActiveDismissedKeys(container.tenant.id);
+        if (dismissed.size > 0) {
+          const before = opportunities.length;
+          opportunities = opportunities.filter((o) => !dismissed.has(o.uuid)); // new array; never mutate the feed
+          dismissedCount = before - opportunities.length;
+        }
+      }
+    } catch (filterErr: any) {
+      logFail('factory_opportunities_dismissal_filter_failed', filterErr, {}); // non-fatal: serve the unfiltered feed
+    }
+    res.json({ ...feed, opportunities, dismissedCount });
   } catch (err: any) {
     logFail('factory_opportunities_failed', err, {});
     res.status(500).json({ error: 'Could not load government opportunities.' });
+  }
+});
+
+/** The identity acting on the request (email preferred, sub fallback) — mirrors the gov-qualification routes. */
+function actorIdentity(req: Request): string {
+  return String((req as any).admin?.email ?? (req as any).admin?.sub ?? 'unknown-admin');
+}
+
+const dismissKeyParam = z.object({ key: z.string().min(1).max(200) });
+const dismissBody = z.object({
+  reason: z.string().max(500).optional(),
+  title: z.string().max(300).optional(),
+  agency: z.string().max(300).optional(),
+});
+
+/**
+ * POST /api/admin/factory/opportunities/:key/dismiss — hide a discovered v1 candidate from the WHOLE team's feed.
+ * Program-gated + tenant-scoped (fails closed 503 when the gov container is unresolvable). Idempotent: a re-dismiss
+ * reactivates the same row (service upsert), never a duplicate. `key` is OP's stable uuid — never a title.
+ */
+router.post('/api/admin/factory/opportunities/:key/dismiss', requireSection('program'), async (req: Request, res: Response) => {
+  const p = dismissKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const b = dismissBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid dismiss body.', issues: b.error.issues }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) {
+    logFail('factory_opportunity_dismiss_scope', new Error('gov container not resolvable'), { key: p.data.key });
+    res.status(503).json({ error: 'The government contracts workspace is not configured.' });
+    return;
+  }
+  try {
+    const dismissed = await dismissOpportunity({
+      tenantId: container.tenant.id, organizationId: container.org.id, opportunityKey: p.data.key,
+      title: b.data.title ?? null, agency: b.data.agency ?? null, reason: b.data.reason ?? null,
+      dismissedBy: actorIdentity(req),
+    });
+    res.json({ dismissed });
+  } catch (err: any) {
+    logFail('factory_opportunity_dismiss_failed', err, { key: p.data.key });
+    res.status(500).json({ error: 'Could not dismiss the opportunity.' });
+  }
+});
+
+/**
+ * POST /api/admin/factory/opportunities/:key/restore — un-hide a previously dismissed opportunity (recovery).
+ * Program-gated + tenant-scoped (503 when unconfigured). Idempotent: restoring a non-dismissed key is a no-op.
+ */
+router.post('/api/admin/factory/opportunities/:key/restore', requireSection('program'), async (req: Request, res: Response) => {
+  const p = dismissKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) {
+    logFail('factory_opportunity_restore_scope', new Error('gov container not resolvable'), { key: p.data.key });
+    res.status(503).json({ error: 'The government contracts workspace is not configured.' });
+    return;
+  }
+  try {
+    const restored = await restoreOpportunity({ tenantId: container.tenant.id, opportunityKey: p.data.key });
+    res.json({ restored });
+  } catch (err: any) {
+    logFail('factory_opportunity_restore_failed', err, { key: p.data.key });
+    res.status(500).json({ error: 'Could not restore the opportunity.' });
+  }
+});
+
+// ── Service catalog (Colaberry's own offerings) ──────────────────────────────
+// Program-gated + tenant-scoped (fail closed 503 when the gov container is unresolvable). The catalog is the store
+// the deterministic opportunity→services matcher (separate, advisory) will later read; nothing here feeds a gate.
+const serviceIdParam = z.object({ id: z.string().uuid() });
+const serviceStrArr = z.array(z.string().max(60)).max(50);
+const serviceCreateBody = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  category: z.string().max(80).optional(),
+  keywords: serviceStrArr.optional(),
+  naicsCodes: serviceStrArr.optional(),
+  pscCodes: serviceStrArr.optional(),
+  pastPerformance: z.string().max(4000).optional(),
+  owner: z.string().max(120).optional(),
+});
+const serviceUpdateBody = serviceCreateBody.partial();
+const serviceStatusQuery = z.object({ status: z.enum(['active', 'all']).optional() });
+
+/** GET /api/admin/factory/services?status=active|all — list the tenant's service offerings. */
+router.get('/api/admin/factory/services', requireSection('program'), async (req: Request, res: Response) => {
+  const q = serviceStatusQuery.safeParse(req.query ?? {});
+  if (!q.success) { res.status(400).json({ error: 'Invalid status filter.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_list_scope', new Error('gov container not resolvable'), {}); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const services = await listServiceOfferings({ tenantId: container.tenant.id, status: q.data.status });
+    res.json({ services });
+  } catch (err: any) {
+    logFail('factory_services_list_failed', err, {});
+    res.status(500).json({ error: 'Could not load the service catalog.' });
+  }
+});
+
+/** POST /api/admin/factory/services — add a service offering (tenant/org/createdBy from scope + token, not the body). */
+router.post('/api/admin/factory/services', requireSection('program'), async (req: Request, res: Response) => {
+  const b = serviceCreateBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid service body.', issues: b.error.issues }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_create_scope', new Error('gov container not resolvable'), {}); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const service = await createServiceOffering({
+      tenantId: container.tenant.id, organizationId: container.org.id, createdBy: actorIdentity(req),
+      name: b.data.name, description: b.data.description ?? null, category: b.data.category ?? null,
+      keywords: b.data.keywords, naicsCodes: b.data.naicsCodes, pscCodes: b.data.pscCodes,
+      pastPerformance: b.data.pastPerformance ?? null, owner: b.data.owner ?? null,
+    });
+    res.status(201).json({ service });
+  } catch (err: any) {
+    logFail('factory_services_create_failed', err, {});
+    res.status(500).json({ error: 'Could not add the service.' });
+  }
+});
+
+/** PATCH /api/admin/factory/services/:id — edit a service offering. */
+router.patch('/api/admin/factory/services/:id', requireSection('program'), async (req: Request, res: Response) => {
+  const p = serviceIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid service id.' }); return; }
+  const b = serviceUpdateBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid service body.', issues: b.error.issues }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_update_scope', new Error('gov container not resolvable'), { id: p.data.id }); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const service = await updateServiceOffering({ tenantId: container.tenant.id, id: p.data.id, patch: b.data });
+    res.json({ service });
+  } catch (err: any) {
+    if (err instanceof ServiceOfferingNotFoundError) { res.status(404).json({ error: 'That service was not found in this workspace.' }); return; }
+    logFail('factory_services_update_failed', err, { id: p.data.id });
+    res.status(500).json({ error: 'Could not update the service.' });
+  }
+});
+
+/** POST /api/admin/factory/services/:id/retire — soft-retire (status flip; idempotent). */
+router.post('/api/admin/factory/services/:id/retire', requireSection('program'), async (req: Request, res: Response) => {
+  const p = serviceIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid service id.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_retire_scope', new Error('gov container not resolvable'), { id: p.data.id }); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const service = await retireServiceOffering({ tenantId: container.tenant.id, id: p.data.id });
+    res.json({ service });
+  } catch (err: any) {
+    if (err instanceof ServiceOfferingNotFoundError) { res.status(404).json({ error: 'That service was not found in this workspace.' }); return; }
+    logFail('factory_services_retire_failed', err, { id: p.data.id });
+    res.status(500).json({ error: 'Could not retire the service.' });
+  }
+});
+
+const matchBody = z.object({
+  category: z.string().max(120).optional(),
+  title: z.string().max(300).optional(),
+  summary: z.string().max(4000).optional(),
+  requirements: z.array(z.string().max(2000)).max(200).optional(),
+  naics: z.array(z.string().max(20)).max(50).optional(),
+});
+
+/**
+ * POST /api/admin/factory/opportunities/match — ADVISORY suggested services for an opportunity. Runs the pure,
+ * deterministic matcher over the tenant's ACTIVE catalog and returns ranked, explainable suggestions. It writes
+ * nothing and gates nothing — a suggestion to confirm, never a verified fit. Program-gated + tenant-scoped (503).
+ */
+router.post('/api/admin/factory/opportunities/match', requireSection('program'), async (req: Request, res: Response) => {
+  const b = matchBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid match signals.', issues: b.error.issues }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) { logFail('factory_services_match_scope', new Error('gov container not resolvable'), {}); res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const catalog = await listServiceOfferings({ tenantId: container.tenant.id, status: 'active' });
+    const matches = matchServicesToOpportunity(b.data, catalog as any);
+    res.json({ matches, catalogSize: catalog.length });
+  } catch (err: any) {
+    logFail('factory_services_match_failed', err, {});
+    res.status(500).json({ error: 'Could not compute service matches.' });
   }
 });
 
@@ -221,11 +433,44 @@ const startBody = z.object({ title: z.string().max(300).optional(), agency: z.st
 const uuidParam = z.object({ uuid: z.string().uuid() });
 
 /**
- * POST /api/admin/factory/opportunities/:uuid/start — pick a gov opportunity and start working on it.
- * findOrCreate a `government_public_sector` delivery project on a deterministic slug (`gov-<uuid>`, so a
- * re-pick reuses it) under the Government Contracts container, then backfill an honest `unassessed` shell
- * (Phase 6) so the Command Center opens on it. The real requirements come from the proposal zip in a later
- * slice; for now the contract exists and renders as unassessed.
+ * GET /api/admin/factory/opportunities/:uuid — one discovery row's display details (the Details-popup data), so the
+ * decoupled Qualify (ZIP) workspace can show why-it-surfaced + the project overview + the Source link without going
+ * back to discovery. Program-gated + tenant-scoped (FAIL CLOSED 503 when the gov container is unconfigured — a
+ * single-row detail scopes to the tenant, unlike the UNFILTERED feed). Returns the ALREADY-ALLOWLISTED mapped row
+ * (never raw upstream); a uuid not in the live best-fit feed → 404 { found:false } (honest: it may have aged out of
+ * best-fit, or the feed degraded dark). Read-only; no dismissal filtering (you may open the detail of a row to qualify it).
+ */
+router.get('/api/admin/factory/opportunities/:uuid', requireSection('program'), async (req: Request, res: Response) => {
+  const p = uuidParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity id.' }); return; }
+  const container = await lookupGovContractsContainer();
+  if (!container) {
+    logFail('factory_opportunity_detail_scope', new Error('gov container not resolvable'), { uuid: p.data.uuid });
+    res.status(503).json({ error: 'The government contracts workspace is not configured.' });
+    return;
+  }
+  try {
+    const feed = await fetchBestFitOpportunities(); // never throws (degrades dark)
+    const opportunity = feed.opportunities.find((o) => o.uuid === p.data.uuid) ?? null;
+    if (!opportunity) { res.status(404).json({ error: 'Opportunity not found in the live discovery feed.', found: false }); return; }
+    res.json({ opportunity, source: feed.source, snapshotDate: feed.snapshotDate, snapshotReason: (feed as any).snapshotReason ?? null });
+  } catch (err: any) {
+    logFail('factory_opportunity_detail_failed', err, { uuid: p.data.uuid });
+    res.status(500).json({ error: 'Could not load the opportunity details.' });
+  }
+});
+
+/**
+ * POST /api/admin/factory/opportunities/:uuid/start — PHASE 1 TEMPORARY GUARD.
+ *
+ * Until the Phase 2 qualification record + approval flow lands, this route MUST NOT create a new government
+ * project or its tracks — an opportunity is a discovered candidate that still needs qualification. Enforced
+ * server-side (defense in depth, not just the UI):
+ *   - if the deterministic `gov-<uuid>` project ALREADY exists, return it (created:false) so the two existing
+ *     government projects stay navigable — this route neither creates nor modifies them here;
+ *   - otherwise return 409 { qualificationRequired: true } and create NOTHING (no project, no backfill).
+ * This is a narrowly-scoped control; Phase 2 replaces it with a usable research/qualification workflow. It does
+ * not touch commercial-client workflows, existing-project editing, or any other factory action.
  */
 router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('program'), async (req: Request, res: Response) => {
   const p = uuidParam.safeParse(req.params);
@@ -236,23 +481,34 @@ router.post('/api/admin/factory/opportunities/:uuid/start', requireSection('prog
   const slug = `gov-${uuid}`;
   try {
     const { default: DeliveryProject } = await import('../../models/DeliveryProject');
-    const { brandId, org, engagement } = await resolveGovContractsContainer();
-
-    let created = false;
-    let project: any = await DeliveryProject.findOne({ where: { slug } });
-    if (!project) {
-      project = await DeliveryProject.create({
-        engagement_id: engagement.id, tenant_id: engagement.tenant_id, organization_id: org.id,
-        brand_id: brandId,
-        name: (b.data.title && b.data.title.trim()) ? b.data.title.trim() : `Government contract ${uuid}`,
-        slug, status: 'building', project_class: 'government_public_sector',
-        business_problem: b.data.agency ? `Government solicitation from ${b.data.agency}.` : 'Government contract opportunity.',
-      });
-      created = true;
+    // Record-level tenant isolation: `slug` is unique only PER TENANT and the request carries no tenant claim,
+    // so a bare findOne({where:{slug}}) could resolve a gov-<uuid> project in another tenant. Resolve the fixed
+    // Government Contracts container READ-ONLY (no create) and scope the lookup to its tenant + org + the
+    // government class. If the container is not configured, FAIL CLOSED and create nothing.
+    const container = await lookupGovContractsContainer();
+    if (!container) {
+      logFail('factory_gov_container_unavailable', new Error('gov container not resolvable'), { uuid, slug });
+      res.status(503).json({ error: 'The government contracts workspace is not configured; cannot resolve or start a pursuit here.' });
+      return;
     }
-
-    await backfillUnassessedContract(project.id); // honest unassessed shell so /contract/:id renders
-    res.status(created ? 201 : 200).json({ deliveryProjectId: project.id, created });
+    const existing: any = await DeliveryProject.findOne({
+      where: {
+        slug,
+        tenant_id: container.tenant.id,
+        organization_id: container.org.id,
+        project_class: 'government_public_sector',
+      },
+    });
+    if (existing) {
+      // Existing government projects remain reachable; Phase 1 creates and changes nothing here.
+      res.status(200).json({ deliveryProjectId: existing.id, created: false });
+      return;
+    }
+    // No project yet → do NOT create an unqualified shell. Qualification (Phase 2) must come first.
+    res.status(409).json({
+      qualificationRequired: true,
+      error: 'Government pursuits now require qualification before a project is created. Review the source, then use the qualification step (coming in the next phase).',
+    });
   } catch (err: any) {
     logFail('factory_opportunity_start_failed', err, { uuid, slug });
     res.status(500).json({ error: 'Could not start this opportunity.' });
@@ -287,6 +543,32 @@ router.post('/api/admin/factory/contract/:deliveryProjectId/ingest-proposal', re
   } catch (err: any) {
     logFail('factory_ingest_proposal_failed', err, { deliveryProjectId, fileName });
     res.status(500).json({ error: 'Could not ingest the proposal.' });
+  }
+});
+
+/**
+ * POST /api/admin/factory/contract/:deliveryProjectId/generate — run the generation engine on the contract's
+ * requirements and, when the result is gate-clean, persist the task graph so the contract becomes approvable.
+ * A gate-dirty result is a 422 with the issue count (never persisted); the engine being off is a 409.
+ */
+router.post('/api/admin/factory/contract/:deliveryProjectId/generate', requireSection('program'), async (req: Request, res: Response) => {
+  const parsed = idParam.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid delivery project id.' }); return; }
+  const { deliveryProjectId } = parsed.data;
+  try {
+    const out = await generateDecomposition(deliveryProjectId);
+    if (out.status === 'disabled') {
+      res.status(409).json({ error: 'The generation engine is off.', generationDisabled: true });
+      return;
+    }
+    if (out.status === 'rejected') {
+      res.status(422).json({ error: 'The generated decomposition did not pass the gate.', errorCount: out.errorCount, issues: out.issues });
+      return;
+    }
+    res.json({ accepted: true, errorCount: 0 });
+  } catch (err: any) {
+    logFail('factory_generate_failed', err, { deliveryProjectId });
+    res.status(500).json({ error: 'Could not generate the decomposition.' });
   }
 });
 

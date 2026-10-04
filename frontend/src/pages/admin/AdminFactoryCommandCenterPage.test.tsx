@@ -145,4 +145,63 @@ describe('AdminFactoryCommandCenterPage', () => {
     expect((factoryApi.getFactoryContract as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2); // reloaded
     expect(container.textContent ?? '').toContain('Extracted 3 source-cited requirements');
   });
+
+  it('shows the Generate decomposition control for a real contract but NOT on the sample', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([{ deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 }]);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    await renderPage();
+    const generate = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Generate decomposition'));
+    expect(generate).toBeDefined();
+  });
+
+  it('does not show the Generate decomposition control on the read-only sample', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([]);
+    (factoryApi.getFactorySample as jest.Mock).mockResolvedValue(sampleView);
+    await renderPage();
+    const generate = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Generate decomposition'));
+    expect(generate).toBeUndefined();
+  });
+
+  it('clicking Generate decomposition calls generateDecomposition and reloads the contract', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([{ deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 }]);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    (factoryApi.generateDecomposition as jest.Mock).mockResolvedValue({ accepted: true, errorCount: 0 });
+    await renderPage();
+
+    const generate = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Generate decomposition'))!;
+    await act(async () => { generate.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(factoryApi.generateDecomposition).toHaveBeenCalledWith('dp-real');
+    expect((factoryApi.getFactoryContract as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2); // reloaded
+    expect(container.textContent ?? '').toContain('Generated a task graph');
+  });
+
+  it('surfaces the gate-dirty (422) message honestly and reports nothing was saved', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([{ deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 }]);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    (factoryApi.generateDecomposition as jest.Mock).mockRejectedValue({ response: { status: 422, data: { errorCount: 4 } } });
+    await renderPage();
+
+    const generate = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Generate decomposition'))!;
+    await act(async () => { generate.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await Promise.resolve(); });
+
+    const text = container.textContent ?? '';
+    expect(text).toContain('Generated 4 gate issues');
+    expect(text).toContain('Nothing was saved');
+  });
+
+  it('surfaces the engine-off (409) message when generation is disabled', async () => {
+    (factoryApi.listFactoryContracts as jest.Mock).mockResolvedValue([{ deliveryProjectId: 'dp-real', name: 'Demo', trackType: 'solution_build', status: 'draft', version: 1 }]);
+    (factoryApi.getFactoryContract as jest.Mock).mockResolvedValue(realView);
+    (factoryApi.generateDecomposition as jest.Mock).mockRejectedValue({ response: { status: 409, data: { generationDisabled: true } } });
+    await renderPage();
+
+    const generate = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Generate decomposition'))!;
+    await act(async () => { generate.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(container.textContent ?? '').toContain('The generation engine is off');
+  });
 });

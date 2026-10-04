@@ -187,6 +187,20 @@ describe('runReeseAutonomousOutreachSweep — GOALS scorecard activity logging (
     expect(result.sent).toBe(1);
     expect(mockLogAgentActivity).not.toHaveBeenCalled();
   });
+
+  it('approval-correlation fix (2026-10-02): the real ledger event carries the SAME eventId the authorization check used (on the real eventId field, not traceId), plus the real authorizationDecisionId', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    const [ledgerArgs] = mockEmitReeseLedgerEvent.mock.calls[0];
+    expect(ledgerArgs.eventId).toBe(authArgs.eventId);
+    expect(ledgerArgs.authorizationDecisionId).toBe('auth-1');
+    // traceId stays its OWN, separate, fresh id — never reused as the
+    // correlation id (that was the exact bug this fix closes).
+    expect(ledgerArgs.traceId).not.toBe(authArgs.eventId);
+  });
 });
 
 describe('runReeseAutonomousOutreachSweep — human-readable ticket text (Ali\'s live feedback: "reporting the id of the user is not helpful")', () => {

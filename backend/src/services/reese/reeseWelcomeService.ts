@@ -61,6 +61,8 @@ import Enrollment from '../../models/Enrollment';
 import Cohort from '../../models/Cohort';
 import { getReeseEnrollmentId, getReeseAdminUserId, isReeseEnabled } from './reeseIdentitySeed';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+import { RISK_TIER } from './reeseAutonomousOutreachService';
 
 export type WelcomeOutcome =
   | 'sent'
@@ -72,7 +74,11 @@ export type WelcomeOutcome =
   | 'reese_not_seeded'
   | 'is_reese'
   | 'enrollment_not_found'
-  | 'send_failed';
+  | 'send_failed'
+  /** Real-enforcement scoping, Phase 3 (R211, 2026-10-01) — the real ABAC
+   * check denied this send. Never retried later, per `ReeseWelcome.ts`'s
+   * own 'held' outcome doc comment. */
+  | 'held_for_approval';
 
 export interface WelcomeResult {
   kind: ReeseWelcomeKind;
@@ -222,6 +228,38 @@ async function sendOnce(
   }
 
   try {
+    // Real-enforcement scoping, Phase 3 (R211, 2026-10-01) — gated the same
+    // way Reese's other autonomous sends already are, evaluated BEFORE the
+    // real `initiateDm()` call below. Welcome sends have no ticket at all
+    // (unlike her other 3 gated paths), so this passes `resourceType`/
+    // `resourceId` instead of `ticketId` — the widened, additive
+    // `AuthorizeTicketDispatchInput` shape `agentActionAuthorizationBridge.ts`
+    // added specifically for this case.
+    const eventId = crypto.randomUUID();
+    const authResult = await authorizeTicketDispatch({
+      eventId,
+      ticketId: null,
+      resourceType: 'reese_welcome',
+      resourceId: enrollmentId,
+      agentName: 'Reese',
+      action: kind === 'student' ? 'reese_welcome_student' : 'reese_welcome_account',
+      riskTier: RISK_TIER,
+      preparedAction: { studentEnrollmentId: enrollmentId, kind },
+    });
+
+    if (!authResult.allowed) {
+      // Same finality as a real failure, per ReeseWelcome.ts's own 'held'
+      // doc comment — this claim is never retried later, even once/if a
+      // human approves the hold.
+      await claim.update({ outcome: 'held', detail: authResult.reason.slice(0, 500) }).catch(() => {});
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'info', service: 'reese_welcome',
+        event: 'welcome_held_for_approval', outcome: 'partial', correlation_id: eventId,
+        context: { enrollment_id: enrollmentId, kind, reason: authResult.reason },
+      }));
+      return { kind, outcome: 'held_for_approval' };
+    }
+
     const { initiateDm } = await import('./reeseInitiateDmService');
     const { roomId, messageId } = await initiateDm(enrollmentId, messageFor(kind, firstName, cohortName));
     await claim.update({ room_id: roomId, message_id: messageId }).catch(() => {});
@@ -230,9 +268,14 @@ async function sendOnce(
     // Ledger. Fail-open (emitReeseLedgerEvent's own contract) and never
     // awaited-to-block: this must never be the thing that makes a login slow
     // or fail, matching this file's own design decision 5.
+    // Approval-correlation fix (2026-10-02) — thread the same eventId/
+    // decisionId the authorization check above already generated, instead
+    // of a fresh, disconnected traceId.
     const reeseAdminUserId = await getReeseAdminUserId();
     emitReeseLedgerEvent({
       ticketId: null,
+      eventId,
+      authorizationDecisionId: authResult.decisionId,
       traceId: crypto.randomUUID(),
       actorType: 'ai_staff',
       actorId: reeseAdminUserId || 'Reese',

@@ -72,6 +72,49 @@ export function isSlackSender(fromAddress: string | null | undefined): boolean {
 }
 
 /**
+ * True when the sender is one of the K-12 platforms the kids' schools use.
+ * ParentSquare mints a per-message donotreply+<uuid>@parentsquare.com sender
+ * and Wylie ISD sends from do.not.reply@wylieisd.net, so both trip the noreply
+ * rule (section 5) and were archived — 66 of them in the 90 days to 2026-09-28,
+ * including two password resets Ali was actively waiting on. A rotating +<uuid>
+ * local part cannot be covered by an address-level VIP row; the domain is the
+ * stable identity. Same look-alike guard as isBasecampSender.
+ *
+ * Deliberately NOT a generic *.k12.*.us / Schoology / ClassDojo / PowerSchool
+ * list: only domains that have actually mailed Ali belong here. Add one when
+ * its mail shows up, not in anticipation.
+ */
+export function isSchoolNotificationSender(fromAddress: string | null | undefined): boolean {
+  return /@(?:[\w-]+\.)*(?:parentsquare\.com|wylieisd\.net)(?![\w.-])/i.test((fromAddress || '').trim());
+}
+
+/**
+ * True when the subject marks this as account-security mail the recipient
+ * asked for seconds ago: a password reset, a verification / one-time code, or
+ * a magic sign-in link. These are always user-initiated, always time-limited,
+ * and essentially always sent from a noreply address carrying List-Unsubscribe
+ * — the exact combination sections 4 and 5 archive. In the 90 days to
+ * 2026-09-28 that swallowed 103 of them, including eight Hetzner verification
+ * codes (the production VPS provider) and Ceipal password-reset OTPs.
+ *
+ * Subject-only on purpose, for the same reason the name check in section 2 is
+ * subject-only: a body-text match over-fires on any newsletter that happens to
+ * explain how to reset a password. Patterns are anchored on the phrasings that
+ * actually appeared in Ali's mail rather than a generic /verify/ substring, so
+ * "Verify your subscription preferences" style marketing does not qualify.
+ */
+export function isAccountSecurityMail(subject: string | null | undefined): boolean {
+  const s = (subject || '').trim();
+  if (!s) return false;
+  return (
+    /(?:reset|forgot|change)\b.{0,24}\bpassword|\bpassword\b.{0,24}\breset/i.test(s) ||
+    /verification code|security code|access code|login code|one[-\s]?time (?:code|password|pin)|\botp\b/i.test(s) ||
+    /magic link|sign[-\s]?in link|\b2fa\b|two[-\s]?factor/i.test(s) ||
+    /verify your\b.{0,30}\b(?:email|account|identity|address)|confirm your (?:email|account|identity)/i.test(s)
+  );
+}
+
+/**
  * True when a Basecamp notification is a person directly tagging or assigning
  * Ali — an @mention or a to-do assignment — rather than project-management
  * noise. Basecamp encodes both directly in the subject:
@@ -250,6 +293,36 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     return { matched: true, state: 'INBOX', rule_id: 'slack_0f', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
+  // --- 0g. Account-security mail (reset / code / magic link) → INBOX ---
+  // A password reset or one-time code is worthless the moment it is hidden:
+  // it is user-initiated, expires in minutes, and blocks whatever Ali was
+  // doing. Every one of these arrives from a noreply address, usually with a
+  // List-Unsubscribe header, so sections 4 and 5 archived them wholesale —
+  // 103 in the 90 days to 2026-09-28, including the ParentSquare reset Ali was
+  // waiting on and eight Hetzner codes for the production VPS account. This
+  // sits ahead of the VIP check and the LLM because neither helped: the LLM
+  // independently tagged Ceipal's "Reset Password OTP" as automation.
+  if (isAccountSecurityMail(email.subject)) {
+    const reason = 'Account-security mail (password reset, verification code, or magic link)';
+    console.log(`${LOG_PREFIX} Account security: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'account_security_0g', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0h. K-12 school platform mail → INBOX ---
+  // Whether the kids' school reached Ali was previously decided by accident:
+  // section 3's keyword list matched a ParentSquare daily digest only when the
+  // words "pta" or "field trip" happened to land in that day's body, so the
+  // Sep 24 and Sep 25 digests reached the inbox while the Sep 15 and Sep 16
+  // ones — same sender, same kind of message — were archived. An absence
+  // notification and the weekly grade updates were archived too. School mail
+  // runs 1-3 messages a day, which is not enough volume to be worth filtering
+  // against the cost of silently dropping one.
+  if (isSchoolNotificationSender(email.from_address)) {
+    const reason = 'K-12 school platform notification (ParentSquare / Wylie ISD)';
+    console.log(`${LOG_PREFIX} School: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'school_0h', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
   // --- 1. VIP Check ---
   try {
     const vip = await InboxVip.findOne({
@@ -298,9 +371,15 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   // 'school' was removed — Ali runs Colaberry's data school, so every internal
   // school-related email was triggering this. The remaining keywords are
   // unambiguously kid/family-related.
+  // A multi-word keyword tolerates any separator between its words: schools
+  // write "Parent/Teacher Conference" at least as often as "parent teacher",
+  // and the old literal-space match missed every slashed and hyphenated form.
   const priorityKeywords = ['daycare', 'sports league', 'parent teacher', 'pta', 'field trip'];
   for (const keyword of priorityKeywords) {
-    const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedKeyword = keyword
+      .split(' ')
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('[\\s/_-]+');
     const wordBoundaryRegex = new RegExp(`\\b${escapedKeyword}\\b`, 'i');
     if (wordBoundaryRegex.test(email.subject) || wordBoundaryRegex.test(email.body_text || '')) {
       const reason = `Contains priority keyword: ${keyword}`;

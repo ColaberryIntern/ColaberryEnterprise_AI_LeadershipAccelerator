@@ -42,6 +42,7 @@ const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStor
 const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
 const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrationPage'));
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
+const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
 const IntelligenceOSPage = lazy(() => import('../pages/admin/intelligence/IntelligenceOSPage'));
@@ -49,6 +50,7 @@ const IntelligenceDiscoveryPage = lazy(() => import('../pages/admin/intelligence
 const IntelligenceSettingsPage = lazy(() => import('../pages/admin/intelligence/IntelligenceSettingsPage'));
 const MissedOpportunitiesPage = lazy(() => import('../pages/admin/MissedOpportunitiesPage'));
 const AgentOrphansPage = lazy(() => import('../pages/admin/AgentOrphansPage'));
+const MarketingShell = lazy(() => import('../pages/admin/marketing/MarketingShell'));
 const AdminMarketingOverviewPage = lazy(() => import('../pages/admin/marketing/AdminMarketingOverviewPage'));
 const AdminMarketingPerformancePage = lazy(() => import('../pages/admin/marketing/AdminMarketingPerformancePage'));
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
@@ -56,6 +58,7 @@ const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/A
 const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
 const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
 const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
+const AdminLandingPagesPage = lazy(() => import('../pages/admin/marketing/AdminLandingPagesPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -66,6 +69,8 @@ const AdminCaseStudiesPage = lazy(() => import('../pages/admin/AdminCaseStudiesP
 const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPage'));
 const AdminFactoryCommandCenterPage = lazy(() => import('../pages/admin/AdminFactoryCommandCenterPage'));
 const AdminGovOpportunitiesPage = lazy(() => import('../pages/admin/AdminGovOpportunitiesPage'));
+const AdminGovQualificationPage = lazy(() => import('../pages/admin/AdminGovQualificationPage'));
+const AdminGovServicesPage = lazy(() => import('../pages/admin/AdminGovServicesPage'));
 const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
 const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
 const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
@@ -208,6 +213,9 @@ const adminRoutes = (
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        {/* Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide
+            read-only effective-access resolver + tool catalog. */}
+        <Route path="/admin/tools" element={<AdminToolsPage />} />
         {/* Real-enforcement scoping, Phase 1 (2026-09-20) — the first real UI
             for the already-real approval-requests backend routes. */}
         <Route path="/admin/approval-requests" element={<ApprovalRequestsPage />} />
@@ -219,27 +227,38 @@ const adminRoutes = (
         <Route path="/admin/intelligence/settings" element={<IntelligenceSettingsPage />} />
         <Route path="/admin/agent-orphans" element={<AgentOrphansPage />} />
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
-        <Route path="/admin/marketing" element={<AdminMarketingOverviewPage />} />
-        <Route path="/admin/marketing/performance" element={<AdminMarketingPerformancePage />} />
-        {/* Brands is a marketing surface and now lives under the marketing prefix with its
-            siblings. `/admin/brands` stays as a redirect rather than a deletion: it is in
-            bookmarks, it is where the LinkedIn OAuth callback returns the browser, and the
-            redirect preserves that callback's query string. */}
-        <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
+        {/* Every marketing page sits inside one frame that holds the chosen brand, the way
+            Loomly scopes every screen to a calendar. A layout route rather than a component
+            each page renders, so a new marketing page inherits the frame by being routed
+            here instead of by remembering to include it. */}
+        <Route element={<MarketingShell />}>
+          <Route path="/admin/marketing" element={<AdminMarketingOverviewPage />} />
+          <Route path="/admin/marketing/performance" element={<AdminMarketingPerformancePage />} />
+          {/* Brands is a marketing surface and now lives under the marketing prefix with its
+              siblings. `/admin/brands` stays as a redirect rather than a deletion: it is in
+              bookmarks, it is where the LinkedIn OAuth callback returns the browser, and the
+              redirect preserves that callback's query string. */}
+          <Route path="/admin/marketing/brands" element={<AdminBrandsPage />} />
+          {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
+              the detail page already carries the tabs the spec describes, and a second page would
+              be the duplicate destination the spec forbids. The marketing path exists so the IA
+              in the spec resolves; the canonical page is unchanged. */}
+          <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
+          <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
+          {/* Marketing composer (spec 8.1). Inherits section `campaigns` from /admin/marketing by
+              longest prefix; the API side maps /api/admin/content the same way. */}
+          <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
+          <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
+          {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
+          <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
+          <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
+          {/* Landing page authoring: brief -> page -> preview -> publish at /p/:brand/:slug.
+              Inside the marketing shell so it reads the brand from the bar rather than asking
+              again, and inside /admin/marketing so it inherits section `campaigns` by prefix -
+              the API side maps /api/admin/landing-pages the same way. */}
+          <Route path="/admin/marketing/landing-pages" element={<AdminLandingPagesPage />} />
+        </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
-        {/* Campaign 360 (spec section 4). Deliberately the SAME component as /admin/campaigns/:id -
-            the detail page already carries the tabs the spec describes, and a second page would
-            be the duplicate destination the spec forbids. The marketing path exists so the IA
-            in the spec resolves; the canonical page is unchanged. */}
-        <Route path="/admin/marketing/campaigns/:id" element={<AdminCampaignDetailPage />} />
-        <Route path="/admin/marketing/calendar" element={<AdminMarketingCalendarPage />} />
-        {/* Marketing composer (spec 8.1). Inherits section `campaigns` from /admin/marketing by
-            longest prefix; the API side maps /api/admin/content the same way. */}
-        <Route path="/admin/marketing/composer" element={<AdminContentComposerPage />} />
-        <Route path="/admin/marketing/composer/:id" element={<AdminContentComposerPage />} />
-        {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
-        <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
-        <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
         <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
@@ -258,6 +277,8 @@ const adminRoutes = (
         <Route path="/admin/internship" element={<AdminInternshipPage />} />
         <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
         <Route path="/admin/gov-opportunities" element={<AdminGovOpportunitiesPage />} />
+        <Route path="/admin/gov-qualification" element={<AdminGovQualificationPage />} />
+        <Route path="/admin/gov-services" element={<AdminGovServicesPage />} />
         <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import {
   getFactorySample, getFactoryContract, listFactoryContracts, approveFactoryContract, requestFactoryChanges,
-  ingestProposal,
+  ingestProposal, generateDecomposition,
   type FactoryCommandCenterView, type CcFlowNode,
 } from '../../services/factoryApi';
 
@@ -130,6 +130,25 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
     }
   }, [view, load]);
 
+  const handleGenerate = useCallback(async () => {
+    if (!view || view.isSample) return;
+    setSaving(true);
+    setError(null);
+    setActionNote(null);
+    try {
+      await generateDecomposition(view.deliveryProjectId);
+      await load(); // reload first (clears actionNote), then post the note
+      setActionNote('Generated a task graph from the requirements — the contract is ready to review.');
+    } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 409) setError('The generation engine is off — it needs to be enabled before you can generate.');
+      else if (status === 422) setError(`Generated ${e?.response?.data?.errorCount ?? 'some'} gate issues — the decomposition is not yet clean. Nothing was saved.`);
+      else setError(e?.response?.data?.error ?? 'Could not generate the decomposition.');
+    } finally {
+      setSaving(false);
+    }
+  }, [view, load]);
+
   return (
     <div className="admin-page">
       <PageHeader
@@ -171,7 +190,16 @@ export default function AdminFactoryCommandCenterPage(): React.ReactElement {
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) { void handleIngest(f); } e.target.value = ''; }}
                   />
                 </label>
-                <span className="small text-muted">Requirements are extracted verbatim from the proposal and stay unassessed until confirmed.</span>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={saving}
+                  onClick={() => { void handleGenerate(); }}
+                >
+                  <i className="ri-cpu-line me-1" aria-hidden="true" />
+                  {saving ? 'Working…' : 'Generate decomposition'}
+                </button>
+                <span className="small text-muted">Extract requirements from the proposal, then generate a task graph the contract can be reviewed and approved against.</span>
               </div>
               {actionNote && <div className="alert alert-success mt-3 mb-0" role="status">{actionNote}</div>}
             </SectionCard>

@@ -28,6 +28,7 @@ import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
+import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
@@ -50,6 +51,10 @@ import { ensureExplorerCampaignKeyIndex } from './db/ensureExplorerCampaignKeyIn
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
+import { ensureZoomRequestLedgerSchema } from './db/ensureZoomRequestLedgerSchema';
+import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema';
+import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
+import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
@@ -68,6 +73,11 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
+import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
+import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
+import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
+import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
+import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -76,6 +86,7 @@ import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
+import { ensureReeseTicketFollowUpSchema } from './db/ensureReeseTicketFollowUpSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
@@ -83,6 +94,7 @@ import { ensureAiAgentHierarchySchema } from './db/ensureAiAgentHierarchySchema'
 import { ensureAiAgentAutonomyLevelSchema } from './db/ensureAiAgentAutonomyLevelSchema';
 import { ensureAiAgentAutonomySourceSchema } from './db/ensureAiAgentAutonomySourceSchema';
 import { ensureAiAgentAbacOverrideSchema } from './db/ensureAiAgentAbacOverrideSchema';
+import { ensureAiAgentReportsToAuditSchema } from './db/ensureAiAgentReportsToAuditSchema';
 import { ensureAiAgentConsolidationSchema } from './db/ensureAiAgentConsolidationSchema';
 import { ensureAgentPersonaVersionHistorySchema } from './db/ensureAgentPersonaVersionHistorySchema';
 import { ensureAgentRoleCharterSchema } from './db/ensureAgentRoleCharterSchema';
@@ -103,6 +115,7 @@ import { ensureStudentAssessmentSchema } from './db/ensureStudentAssessmentSchem
 import { ensureChecklistInstanceSchema } from './db/ensureChecklistInstanceSchema';
 import { ensureAgentManagerConversationReliabilitySchema } from './db/ensureAgentManagerConversationReliabilitySchema';
 import { ensureAgentManagerConversationIntentSchema } from './db/ensureAgentManagerConversationIntentSchema';
+import { ensureAgentManagerConversationFocusedTicketSchema } from './db/ensureAgentManagerConversationFocusedTicketSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCaseStudySchema, assertCaseStudySchema } from './db/ensureCaseStudySchema';
 import {
@@ -114,6 +127,7 @@ import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotific
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureAgentWorkLifecycleFieldsSchema } from './db/ensureAgentWorkLifecycleFieldsSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
+import { ensureApprovalRequestsEventIdFix } from './db/ensureApprovalRequestsEventIdFix';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
@@ -128,6 +142,8 @@ import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
+import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -216,6 +232,11 @@ app.use(openclawShortLinkRoutes);
 // Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
 // Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
 app.use(mediaFetchRoutes);
+// Hosted landing pages (GET /p/:brand/:slug) - public server-rendered HTML, the destination of
+// social posts. Same rule as /r/ /i/ /m/ above: a visitor clicking a link in a post has no
+// session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
+// publicLandingPageRoutes.test.ts, which builds both orders and asserts 200 above / 404 below.
+app.use(publicLandingPageRoutes);
 // LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
 app.use(linkedInCallbackRoutes);
 // Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).
@@ -2457,6 +2478,20 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Live Sessions build-out: 5 live-session tables (idempotent DDL, sync is disabled).
   await ensureLiveSessionSchema();
+  // Zoom meeting idempotency ledger. Must exist before any booking provisions a
+  // meeting, so it is ensured on boot like the rest, not behind a feature flag.
+  await ensureZoomRequestLedgerSchema();
+  // The register of Zoom hosts meetings may be created as. Must exist BEFORE the
+  // slot schema, whose per-host exclusion constraint is what turns extra hosts
+  // into extra capacity.
+  await ensureZoomHostSchema();
+  // Practice-slot reservations + the overlap exclusion constraint.
+  await ensurePresentationSlotSchema();
+  // Project Presentation Studio: 5 tables + 4 additive columns on `projects`
+  // (idempotent DDL). Runs unconditionally, not behind PRESENTATION_STUDIO_ENABLED:
+  // the tables must exist before the flag can be turned on, and empty unread tables
+  // change no behaviour while it is off.
+  await ensurePresentationStudioSchema();
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
   // /inbox-zero commitment ledger (what Ali owes). Depends on inbox_cases above.
@@ -2517,6 +2552,10 @@ async function start(): Promise<void> {
   // Nothing that reads this table gates a real action yet — see
   // agentActionAuthorizationBridge.ts's header.
   await ensureApprovalRequestsSchema();
+  // Approval-correlation fix (2026-10-02): drops approval_requests.event_id's FK,
+  // which was unsatisfiable by construction (see ensureApprovalRequestsEventIdFix.ts's
+  // own header) and was causing every approval_requests write to silently fail.
+  await ensureApprovalRequestsEventIdFix();
   // Business accounts: organizations.status / status_changed_at / status_changed_by /
   // lead_id, plus the org_cohorts join table (idempotent DDL, additive only).
   // Before this, `organizations` had no lifecycle column, so an account could not be
@@ -2619,6 +2658,11 @@ async function start(): Promise<void> {
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
+  await ensureLandingPageSchema();
+  // AFTER landing_pages exists: this adds content_items.landing_page_id and its foreign key, so
+  // the composer can persist the page an operator picked. The column is also in the content_items
+  // CREATE body for fresh databases; this is what migrates the ones that already exist.
+  await ensureContentItemDestinationSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).
@@ -2716,6 +2760,35 @@ async function start(): Promise<void> {
   // the requirement link tables, and the versioned contract_process_documents). Additive NEW
   // tables that FK to delivery_projects (and projects) — no existing table is altered.
   await ensureContractTrackSchema();
+  // Unified project lifecycle: project_lifecycle_states, operating_blueprint_manifests,
+  // blueprint_approvals, lifecycle_stage_failures. Additive NEW tables only. Placed AFTER the
+  // contract tables because a manifest may FK to delivery_projects, and after the project
+  // approval schema because both describe the owner-side approval surface. NOTE: this DDL
+  // reaches production on the next backend deploy by ANY session, regardless of the
+  // ENABLE_PROJECT_LIFECYCLE flag — the code ships dark, the schema does not. The paired assert
+  // is what makes a failed migration visible, since the statement loop is warn-only.
+  await ensureProjectLifecycleSchema();
+  // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
+  // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
+  // (and the qualification table itself) — no existing table is altered; placed after the contract
+  // tables since build_authorizations references delivery_projects.
+  await ensureGovQualificationSchema();
+  // AI Project Factory: the team-scoped gov-opportunity dismissal record (gov_opportunity_dismissals). A single
+  // additive NEW table so a reviewer can hide a discovered v1 candidate from the whole team's feed (reversible).
+  // No existing table is altered; it FKs to nothing (keyed by tenant_id + OP's opportunity uuid).
+  await ensureGovOpportunityDismissalSchema();
+  // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
+  // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
+  // nothing (tenant-scoped by tenant_id).
+  await ensureServiceOfferingSchema();
+  // Which case studies evidence which services (case_study_service_links). A single additive NEW join table, so a
+  // bid can answer "what proves you can do this" with a record rather than prose. Unlike its siblings it DOES carry
+  // foreign keys, both ON DELETE CASCADE: deleting a case study on 2026-10-02 rolled back on an undeclared FK, and
+  // cascade means a future deletion can neither orphan a link nor be blocked by one. A link is born `suggested`
+  // and only a person moves it to `confirmed`, because these feed past-performance claims.
+  // MUST run after ensureCaseStudySchema and ensureServiceOfferingSchema: its REFERENCES name both parents, and a
+  // foreign key to a table that does not exist yet is a boot error, not a no-op.
+  await ensureCaseStudyServiceLinkSchema();
   // AI Project Factory: the executor/accountable/skills/judgment/confidence/source-evidence
   // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
   // pattern). Existing rows are untouched and unset until the factory populates them.
@@ -2748,6 +2821,9 @@ async function start(): Promise<void> {
   // Reese's first-login welcome ledger — also the "has this student logged in
   // before" marker, since enrollments carry no last_login_at.
   await ensureReeseWelcomeSchema();
+  // Reese's follow-up tracking for quiet student_support tickets (idempotent DDL,
+  // additive only — see reeseTicketFollowUpService.ts).
+  await ensureReeseTicketFollowUpSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
@@ -2830,6 +2906,10 @@ async function start(): Promise<void> {
   // Real-enforcement scoping, Phase 3 — abac_mode_override ('shadow'|'enforce'|null),
   // the per-agent switch Ali asked for. Additive, idempotent, no flag.
   await ensureAiAgentAbacOverrideSchema();
+  // Reports-to editor (2026-09-30) — reports_to_set_at/reports_to_set_by, the real audit
+  // trail for the new "change who this agent reports to" admin write. Additive, idempotent,
+  // no flag.
+  await ensureAiAgentReportsToAuditSchema();
   // AI Employee Consolidation Program, Phase 4 — record_kind/parent_agent_id/
   // migration_status, the program's legacy-item-to-employee ownership fields.
   // Additive, idempotent, no flag.
@@ -2910,6 +2990,9 @@ async function start(): Promise<void> {
   // intent-confirmation workflow's one new column (pending_intent_confirmation)
   // on the same table. Additive, idempotent, no flag.
   await ensureAgentManagerConversationIntentSchema();
+  // Reese manager-directed growth mission, Phase 2 — the real case a conversation is
+  // currently focused on (focused_ticket_id), on the same table. Additive, idempotent, no flag.
+  await ensureAgentManagerConversationFocusedTicketSchema();
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();

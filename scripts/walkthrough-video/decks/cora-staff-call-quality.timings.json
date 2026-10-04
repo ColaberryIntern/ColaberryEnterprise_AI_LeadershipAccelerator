@@ -1,0 +1,47 @@
+[
+ {
+  "index": 0,
+  "audio_seconds": 9.84,
+  "seconds": 11.3
+ },
+ {
+  "index": 1,
+  "audio_seconds": 11.3,
+  "seconds": 12.8
+ },
+ {
+  "index": 2,
+  "audio_seconds": 10.46,
+  "seconds": 12.0
+ },
+ {
+  "index": 3,
+  "audio_seconds": 12.1,
+  "seconds": 13.6
+ },
+ {
+  "index": 4,
+  "audio_seconds": 13.06,
+  "seconds": 14.6
+ },
+ {
+  "index": 5,
+  "audio_seconds": 15.53,
+  "seconds": 17.0
+ },
+ {
+  "index": 6,
+  "audio_seconds": 11.04,
+  "seconds": 12.5
+ },
+ {
+  "index": 7,
+  "audio_seconds": 10.7,
+  "seconds": 12.2
+ },
+ {
+  "index": 8,
+  "audio_seconds": 11.62,
+  "seconds": 13.1
+ }
+]

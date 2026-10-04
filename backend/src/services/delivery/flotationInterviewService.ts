@@ -37,6 +37,11 @@
 
 import { chatJson } from '../runtime/runtimeAi';
 import { interviewMethodLines } from './interviewMethod';
+import {
+  documentsForInterviewer,
+  documentsForTranscript,
+  type IntakeDocument,
+} from './intakeDocuments';
 
 export interface InterviewTurn {
   role: 'user' | 'assistant';
@@ -108,6 +113,12 @@ function transcriptFor(turns: InterviewTurn[]): string {
 export async function nextInterviewMessage(params: {
   turns: InterviewTurn[];
   facts?: InterviewFacts;
+  /**
+   * Documents the person handed over. Read BEFORE this turn's question, which is the
+   * whole point of being able to attach one: the next question should be about what the
+   * document leaves open, not about what is on its first page.
+   */
+  documents?: IntakeDocument[];
 }): Promise<InterviewResult> {
   const turns = (params.turns || []).filter((t) => t && typeof t.text === 'string' && t.text.trim());
   if (turns.length === 0) {
@@ -125,6 +136,10 @@ export async function nextInterviewMessage(params: {
   const system = buildInterviewPrompt(params.facts || {}, exchanges);
   const user = [
     turns.length === 1 ? OPENING_HINT : '',
+    // Documents BEFORE the transcript: what they wrote down is the ground the
+    // conversation stands on, and a model reads the earlier material as context for
+    // the later rather than the other way round.
+    documentsForInterviewer(params.documents || []),
     'THE CONVERSATION SO FAR:',
     transcriptFor(turns),
   ]
@@ -148,7 +163,15 @@ export async function nextInterviewMessage(params: {
   };
 }
 
-/** The transcript in the shape the extractor expects for `source: 'chat'`. */
-export function interviewTranscript(turns: InterviewTurn[]): string {
-  return transcriptFor(turns);
+/**
+ * The transcript in the shape the extractor expects for `source: 'chat'`.
+ *
+ * Documents are appended rather than interleaved, because they were handed over as a
+ * whole and there is no turn they belong after. This is the second half of the document
+ * contract: what the extractor reads here is what the understanding covers, and the
+ * understanding is what the requirements are built from — so a document left out of this
+ * string is a document that changed the interview and then vanished from the plan.
+ */
+export function interviewTranscript(turns: InterviewTurn[], documents: IntakeDocument[] = []): string {
+  return [transcriptFor(turns), documentsForTranscript(documents)].filter(Boolean).join('\n');
 }

@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import api from '../../../utils/api';
 import { groupByDay, type CalendarItem } from './calendarTime';
+import { useMarketingBrand } from './MarketingBrandContext';
 import { CENTRAL, toCentralInput } from './centralTime';
+import MonthView from './MonthView';
+import { monthRange } from './monthGrid';
 
 /**
  * The cross-brand, cross-channel calendar.
@@ -25,6 +28,7 @@ function isoDate(d: Date): string {
 }
 
 function AdminMarketingCalendarPage() {
+  const { params } = useMarketingBrand();
   const [start, setStart] = useState(() => isoDate(new Date()));
   const [end, setEnd] = useState(() => isoDate(new Date(Date.now() + 13 * 86_400_000)));
   const [items, setItems] = useState<CalendarItem[]>([]);
@@ -32,11 +36,39 @@ function AdminMarketingCalendarPage() {
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
 
+  /**
+   * List or month, and which month, in the URL - so "the calendar" someone sends a colleague is
+   * the view they were looking at. The same reason the composer keeps its step there.
+   */
+  const [viewParams, setViewParams] = useSearchParams();
+  const view = viewParams.get('view') === 'month' ? 'month' : 'list';
+  const month = /^\d{4}-\d{2}$/.test(viewParams.get('month') ?? '')
+    ? (viewParams.get('month') as string)
+    : isoDate(new Date()).slice(0, 7);
+
+  const setView = useCallback((next: 'list' | 'month', extra?: Record<string, string>) => {
+    const q = new URLSearchParams(viewParams);
+    q.set('view', next);
+    for (const [k, v] of Object.entries(extra ?? {})) q.set(k, v);
+    setViewParams(q, { replace: true });
+  }, [viewParams, setViewParams]);
+
+  /**
+   * What to ask the server for. A month view needs its OWN leading and trailing days, not just
+   * the 1st to the 30th - otherwise the cells either side of the month are always empty and read
+   * as "nothing scheduled" when something is.
+   */
+  const range = useMemo(
+    () => (view === 'month' ? monthRange(month) : { start, end }),
+    [view, month, start, end],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/api/admin/marketing/calendar', { params: { start, end } });
+      // The endpoint has always accepted brand_id; nothing sent it until the tab had one brand.
+      const res = await api.get('/api/admin/marketing/calendar', { params: { start: range.start, end: range.end, ...(params ?? {}) } });
       const rows = (res.data.items ?? []) as Array<CalendarItem & { channels: string[]; scheduledFor: string | null }>;
       setItems(rows
         .filter((r) => r.scheduledFor)
@@ -49,7 +81,7 @@ function AdminMarketingCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [start, end]);
+  }, [range.start, range.end, params]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -75,14 +107,38 @@ function AdminMarketingCalendarPage() {
       />
 
       <div className="d-flex flex-wrap align-items-end gap-3 px-3 py-2 border-bottom bg-light">
-        <div>
-          <label className="form-label small text-muted mb-1" htmlFor="cal-start">From</label>
-          <input id="cal-start" type="date" className="form-control form-control-sm" value={start} max={end} onChange={(e) => setStart(e.target.value)} />
+        {/* Month is the shape of the schedule; list is the detail of a stretch of it. */}
+        <div className="btn-group btn-group-sm" role="group" aria-label="Calendar view" data-testid="calendar-view-toggle">
+          <button
+            type="button"
+            className={`btn btn-outline-secondary ${view === 'month' ? 'active' : ''}`}
+            aria-pressed={view === 'month'}
+            onClick={() => setView('month', { month })}
+          >
+            Month
+          </button>
+          <button
+            type="button"
+            className={`btn btn-outline-secondary ${view === 'list' ? 'active' : ''}`}
+            aria-pressed={view === 'list'}
+            onClick={() => setView('list')}
+          >
+            List
+          </button>
         </div>
-        <div>
-          <label className="form-label small text-muted mb-1" htmlFor="cal-end">To</label>
-          <input id="cal-end" type="date" className="form-control form-control-sm" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
-        </div>
+
+        {view === 'list' && (
+          <>
+            <div>
+              <label className="form-label small text-muted mb-1" htmlFor="cal-start">From</label>
+              <input id="cal-start" type="date" className="form-control form-control-sm" value={start} max={end} onChange={(e) => setStart(e.target.value)} />
+            </div>
+            <div>
+              <label className="form-label small text-muted mb-1" htmlFor="cal-end">To</label>
+              <input id="cal-end" type="date" className="form-control form-control-sm" value={end} min={start} onChange={(e) => setEnd(e.target.value)} />
+            </div>
+          </>
+        )}
         <div className="ms-auto small text-muted">All times Central.</div>
       </div>
 
@@ -90,14 +146,24 @@ function AdminMarketingCalendarPage() {
         <SectionCard title="Scheduled" icon="calendar-check-line" padded={false}>
           {loading && <div className="text-muted small py-4 text-center">Loading the calendar...</div>}
           {error && <div className="alert alert-danger small m-3" role="alert">{error}</div>}
-          {!loading && !error && days.length === 0 && (
+          {/* A month with nothing in it still shows its grid - the empty squares ARE the answer,
+              and an empty state instead of them would hide the shape of the month. */}
+          {!loading && !error && view === 'month' && (
+            <MonthView
+              month={month}
+              items={items}
+              onMonth={(next) => setView('month', { month: next })}
+              onOpenDay={(day) => { setStart(day); setEnd(day); setView('list'); }}
+            />
+          )}
+          {!loading && !error && view === 'list' && days.length === 0 && (
             <div className="text-center py-5">
               <i className="ri-calendar-line d-block mb-1 text-muted" style={{ fontSize: '1.75rem' }} aria-hidden="true" />
               <div className="fw-semibold">Nothing scheduled in this range</div>
               <div className="small text-muted">The request succeeded and returned no items between {start} and {end}.</div>
             </div>
           )}
-          {!loading && !error && days.map((day) => (
+          {!loading && !error && view === 'list' && days.map((day) => (
             <div key={day.day} className="border-bottom">
               <div className="px-3 py-2 bg-light fw-semibold small">
                 {day.day === 'invalid' ? 'Invalid schedule' : day.day}

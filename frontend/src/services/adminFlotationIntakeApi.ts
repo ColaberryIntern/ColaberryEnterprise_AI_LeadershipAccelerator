@@ -17,7 +17,8 @@ export interface FlotationUnderstandingRow {
   confirmed_at: string | null;
   lead: { id: number; name: string | null; email: string; company: string | null } | null;
   enrollment: { id: string; tier: string; cohort_id: string | null } | null;
-  build: { project_id: string; started_at: string } | null;
+  /** `assigned` is the difference between a plan that exists and one they can see. */
+  build: { project_id: string; started_at: string; assigned: boolean } | null;
 }
 
 export interface StartedBuild {
@@ -93,12 +94,54 @@ export async function searchIntakeStudents(q: string): Promise<IntakeStudent[]> 
   return data.enrollments ?? [];
 }
 
-export async function sendIntakeTurn(params: { enrollmentId: string; sessionId: string; turns: IntakeTurn[] }): Promise<IntakeTurnResult> {
+/** A document the admin attached, once the server has read the text out of it. */
+export interface IntakeDocument {
+  name: string;
+  text: string;
+}
+
+export async function sendIntakeTurn(params: {
+  enrollmentId: string;
+  sessionId: string;
+  turns: IntakeTurn[];
+  /**
+   * Re-sent every turn, like the transcript, because the endpoint keeps nothing between
+   * turns. That is also what lets a reload resume the conversation with its documents.
+   */
+  documents?: IntakeDocument[];
+}): Promise<IntakeTurnResult> {
   const { data } = await api.post<IntakeTurnResult>('/api/admin/flotation/intake/turn', {
     enrollment_id: params.enrollmentId,
     session_id: params.sessionId,
     turns: params.turns,
+    ...(params.documents?.length ? { documents: params.documents } : {}),
   });
+  return data;
+}
+
+/**
+ * Read a document so the interview can use it.
+ *
+ *     "I should be able to add documents to this process that can be analyzed before
+ *      submitting the next question."  (Ali, 2026-09-29)
+ *
+ * Extraction happens here and only here: the server returns text and keeps nothing, so
+ * the caller holds it and sends it with each turn. Uploading BEFORE the next question is
+ * the point — the admin sees what was actually read before deciding what to type, rather
+ * than discovering a scanned PDF yielded nothing at the moment they expected an answer.
+ */
+export async function readIntakeDocument(file: File): Promise<{
+  document: IntakeDocument;
+  chars: number;
+  clipped: boolean;
+}> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post<{ document: IntakeDocument; chars: number; clipped: boolean }>(
+    '/api/admin/flotation/intake/document',
+    form,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
   return data;
 }
 

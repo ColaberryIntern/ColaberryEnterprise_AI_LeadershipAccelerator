@@ -90,6 +90,13 @@ export interface AgentDetailResult {
     max_proposals_per_run: number | null;
     autonomy_level_set_at: Date | null;
     autonomy_level_source: 'auto' | 'manual' | null;
+    /** Reports-to editor (2026-09-30) — the raw hierarchy columns, exposed alongside the
+     * already-resolved display chain (the page's own top-level `reports_to` field) so a
+     * write path can prefill from the real current value instead of guessing it from a
+     * derived chain that goes `null` on a dangling target even when `reports_to_type` is
+     * still set. */
+    reports_to_type: 'human' | 'agent' | null;
+    reports_to_id: string | null;
     /** Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce
      * switch Ali asked for. `abac_mode_override` is `null` for the real, untouched
      * default (every agent until an admin deliberately sets one); `abac_effective_mode`
@@ -125,6 +132,18 @@ export interface AgentDetailResult {
    * "verified" — nothing in this codebase verifies a ticket's outcome today,
    * see that function's own header comment. */
   completed_ticket_count_30d: number;
+  /** Agent Detail polish round 5 (2026-09-30) — Results & Reports' real
+   * "Verified resolution" stat, via `countVerifiedResolutionsForAgent()`.
+   * `verified_resolution_count` counts only tickets with a real
+   * WorkLedgerEvent (result: 'success') AND real linked evidence — the same
+   * honest gate `generateTicketSummary()` already enforces per-ticket.
+   * `owned_ticket_count_all_time` has no status filter — every ticket ever
+   * assigned to or created by this agent. `most_recent_verified_ticket_id`
+   * is the single most recently verified ticket's real id, or null. All
+   * three are 0/0/null when there's no linked `adminUser`. */
+  verified_resolution_count: number;
+  owned_ticket_count_all_time: number;
+  most_recent_verified_ticket_id: string | null;
   /** Dara v2 Phase 6 ("open-ticket accountability") — the oldest still-open
    * ticket's real age, via the shared `getOldestOpenTicketAge()` (same
    * match-list/open-status query as `open_ticket_count` above). Null when

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260921-p2k9 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, September 29, 2026 at 6:45 AM</div>
+    <div><span class="sid">CC-20260921-p2k9</span><span class="count">6 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**AI Project Factory, gov slice 3 - wire the dark generation engine (requirements -&gt; task graph), gate-honest**</h2>
+          <span class="badge">2026-09-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Slice 3 of the gov side, and the FIRST caller of the Phase-2 generation engine (it shipped dark + unwired). An admin on a gov contract whose requirements are extracted (slice 2) can now generate a task graph the contract is reviewed/approved against. Ali chose &quot;turn it on now (approve the LLM cost)&quot;. (T1) NEW services/factory/factoryDecomposeRun.ts - loadFactoryGenerateInput loads the persisted ContractTrack + ContractRequirement rows and maps them (canonical_req_id -&gt; id, extracted_text, evidence_state defaulted &#39;unassessed&#39;) into the FactoryGenerate input via INLINE toRequirement/toTrack mappers (NOT imported from factoryRoutes - that would be circular, since routes imports this service); generateDecomposition calls the DARK switch factoryGenerateIfEnabled (never raw factoryGenerate), and persists doc_json (8 members) to the solution_build v1 draft doc ONLY when result.accepted (gate-clean) - a not-accepted result returns {status:&#39;rejected&#39;,errorCount,issues} and persists NOTHING (no fake pass), the flag-off result returns {status:&#39;disabled&#39;} with no persist and no model call; persist is one sequelize.transaction with the established factoryId(&#39;contract_process_document&#39;,[dpid,&#39;solution_build&#39;,&#39;1&#39;]) + contentHash identity, overwrite-in-place-while-draft. (T2) routes/admin/factoryRoutes.ts: POST /api/admin/factory/contract/:id/generate (requireSection(&#39;program&#39;), Zod idParam) mapping generated-&gt;200 {accepted,errorCount:0} / rejected-&gt;422 {errorCount,issues} / disabled-&gt;409 {generationDisabled:true} / bad id-&gt;400 / 500 via logFail. (T3) frontend factoryApi.generateDecomposition + AdminFactoryCommandCenterPage.tsx &quot;Generate decomposition&quot; button (real contract only, hidden on sample) -&gt; handleGenerate reloads on success, maps 409-&gt;&quot;the generation engine is off&quot;, 422-&gt;&quot;Generated N gate issues ... Nothing was saved.&quot; (honest), else generic.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts - factoryDecomposeRun 4/4 (loader maps rows; accepted-&gt;persist one-txn; rejected-&gt;no persist; disabled-&gt;no persist) + factoryRoutes 26/26 (generate 200/422/409/400; guard-count 9) = 30/30. Frontend react-scripts test - AdminFactoryCommandCenterPage 11/11 (5 new: generate control present-on-real/absent-on-sample, click-&gt;generateDecomposition+reload, 422 honest message, 409 engine-off) + factoryApi unchanged; frontend tsc --noEmit exit 0. Whole slice-3 diff (7 files) graded PASS 12/12 by loop-task-verifier (separate agent, re-ran both suites itself, never self-graded). Plan audited 20/20 (loop-plan-auditor, cycle 1). CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency (the engine already exists). This wires an existing dark capability; it changes nothing on prod until ENABLE_FACTORY_GENERATION=true. RISK logged (deferred): the slice-2 extractor can emit up to 200 requirements but the decompose prompt targets 5-14 tasks and the gate requires each requirement cited by a task (SOURCE_COVERAGE) - a LARGE solicitation may return accepted:false; this is honest by construction (no fake pass, nothing persisted), and the demo contract (3 reqs) is expected gate-clean; coverage-at-scale mitigation deferred to a later slice. SBP student build (the gov solution_build DRIVING an SBP build via solution_student_project_id) DEFERRED. Deploy backend+nginx + FLIP ENABLE_FACTORY_GENERATION on prod + one live generation on the demo contract (d898d2cf) + approve v1-&gt;v2 + prod-verify pending Ali&#39;s merge. PR https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/2791</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Gov opportunities page: map the REAL Opportunity Pulse Bonfire list (cents-&gt;dollars, priority badge, pursuitStatus, sector tag)**</h2>
+          <span class="badge">2026-09-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali flagged the gov opportunities page showing the stale June snapshot instead of the live &quot;Top 10 Bonfire Contracts to Bid&quot; he sees in his Opportunity Pulse email. Discovery (cross-repo Explore of our gov-bid pipeline + the OP repo) found the live endpoint already exists and is deployed: GET https://op.colaberry.ai/api/v1/bonfire/opportunities?order=priority_desc&amp;limit=10 (Bearer admin token via /api/v1/auth/login; sourceUrl is returned ONLY for an admin account). No OP-repo code needed. Our slice-1 mapper (oppPulseClient.ts) had guessed the shape and had three real bugs against the actual BonfireOpportunity row: (1) estimatedValue arrives in BIGINT CENTS (ingest x100) -&gt; mapper now converts to dollars (was showing 100x, e.g. $50M for $500k); (2) priorityScore was never read -&gt; added priorityScore to GovOpportunity + mapper + the frontend &quot;Priority NN&quot; badge (the email&#39;s second badge, previously missing); (3) pursued read the wrong field -&gt; real field is pursuitStatus enum (&#39;none&#39;|&#39;pursuing&#39;|&#39;submitted&#39;), mapped as pursued = pursuitStatus !== &#39;none&#39;; also surface aiCategory as the sector tag (&quot;IT Services&quot;) beside the agency. Updated the header evidence-discipline note (shape is now KNOWN from the OP source). Frontend: priorityBadge helper (Bootstrap subtle tones, no hex), Priority badge next to Fit, &quot;agency . category&quot; line.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient 9/9 (real-shape live mapping asserts cents-&gt;dollars $1.0M, priorityScore surfaced, pursuitStatus-&gt;pursued, aiCategory-&gt;category; degrade-dark + login-retry + all fallbacks unchanged). Frontend react-scripts AdminGovOpportunitiesPage 5/5 (NEW: live card renders &quot;Priority 79&quot; + &quot;IT Services&quot; + &quot;$1.0M&quot; not $100M) + factoryApi 7/7. CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency. The LIVE data only appears once prod .env has OP_ADMIN_EMAIL=ali@colaberry.com + OP_ADMIN_PASSWORD (Ali&#39;s OP admin secret; only he sets it) + OPPORTUNITY_PULSE_BASE=https://op.colaberry.ai + OPPORTUNITY_PULSE_LIST_PATH=/api/v1/bonfire/opportunities?order=priority_desc&amp;limit=10, then backend recreate. Until then the page keeps showing the labeled snapshot (honest). Not byte-for-byte the email: the email&#39;s topBonfire adds a &gt;=10-day close floor + biddable-first rerank + hides no_bid/needs_review; order=priority_desc gives the same rows in priority order (endpoint hides already-closed by default). Exact digest parity (client-side filter) deferred. Deploy + set env + verify-live pending Ali&#39;s merge + his OP password.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**oppPulseClient: X-API-Key auth against /api/v1/bonfire/best-fit + 3 contract corrections from the OP team**</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The Opportunity Pulse Claude Code built exactly what we asked, but chose the cleaner design: instead of us logging in as Ali&#39;s personal admin (which would have handed a service account every admin write surface), they added a NARROW read-only scope: GET /api/v1/bonfire/best-fit?limit=10 authenticated by X-API-Key: op_&lt;64 hex&gt; (no login/refresh/expiry; writes stay 401 by construction; admin-level READ so sourceUrl is un-redacted). /best-fit delegates to richDigest.topBonfire, so it matches the &quot;Top 10 Bonfire Contracts to Bid&quot; email STRUCTURALLY (no client-side filter needed). Rewrote oppPulseClient.ts to that model: dropped the login()+Bearer flow and OP_ADMIN_EMAIL/PASSWORD; reads OPPORTUNITY_PULSE_API_KEY and sends X-API-Key; default OPPORTUNITY_PULSE_LIST_PATH=/api/v1/bonfire/best-fit?limit=10; one retry on network error; a 404 is logged as &#39;engine off / bad path&#39; (BONFIRE_ENGINE_ENABLED off returns 404 for all /bonfire/*), degrade not crash. Also applied the OP team&#39;s 3 contract corrections to mapOpportunity: (1) estimatedValue is BIGINT cents returned as a STRING -&gt; toNum coerces then /100 (comparisons on the raw would break); (2) pursuitStatus has FOUR values - only &#39;pursuing&#39;/&#39;submitted&#39; count as pursued (&#39;none&#39; and &#39;declined&#39; do not; was mapping &#39;declined&#39; as pursued); (3) closeDate is a full ISO timestamptz -&gt; truncate to YYYY-MM-DD for display. Trust body.data, not pagination.limit. .env.example documents the new keys.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient 11/11 (X-API-Key header sent to the /best-fit URL, no login round-trip; string-cents-&gt;dollars; declined &amp; none -&gt; not pursued, pursuing -&gt; pursued; timestamptz-&gt;date; 404-&gt;engine-off log; retry-once; all degrade-dark fallbacks). Frontend unchanged (page already renders priority/category/date). CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive - NO schema, NO new dependency. Ships degrade-dark: unset OPPORTUNITY_PULSE_API_KEY -&gt; labeled snapshot, so merging changes nothing until the key is configured. REMAINING (OP side, cannot do from our repo): OP must deploy their branch to op.colaberry.ai, confirm the api_keys table exists (migration defined but sync({alter:false}) won&#39;t create it), confirm BONFIRE_ENGINE_ENABLED=true, then MINT the key under a dedicated non-admin service user and hand it to Ali once (unrecoverable). THEN accelerator side: set OPPORTUNITY_PULSE_API_KEY on prod .env (replace the earlier OP_ADMIN_* attempt) + point list path at /best-fit + recreate backend + verify source:&#39;live&#39; matches the email. Rate limit 500/15min per IP, server-to-server allowed, no IP allowlist. Deploy + set key + verify-live pending Ali&#39;s merge + OP deploy + key mint.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**GOV-BUILD-PHASE-01-ENTERPRISE: preserve upstream source facts, reframe the entry page as discovered candidates, block new unqualified shells (server-enforced)**</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Coordinator-authorized Phase 1 (3-party gov effort; research rounds ENTERPRISE-RESEARCH-01/02 preceded). Additive, no schema, NOT deployed. (1) PRESERVE upstream: oppPulseClient.mapOpportunity now maps an EXPLICIT ALLOWLIST (never forwards the whole upstream row) retaining externalId, closeAt (full source timestamp, verbatim - never silently shifted; OP flagged a tz-stripping parser) alongside closeDate (display), the full pursuitStatus enum (none|pursuing|submitted|declined - declined stays DISTINCT from none, not collapsed to a boolean), vetVerdict + vetVerdictPresent (distinguishes ABSENT from null from populated; null = unassessed), valueBasis (defaults &#39;unverified&#39; - OP sends no provenance), and freshness (enrichedAt/attachmentsFetchedAt). Deliberately does NOT surface overview/strategy/submissionRequirements/rawText (unverified free text -&gt; must not become confirmed requirements). govOpportunity.ts widened (PursuitStatus/VetVerdict/ValueBasis/SnapshotReason types). GovOpportunityFeed gains snapshotReason so a configured feed that FAILED (&#39;source_failed&#39;) is not described as merely &#39;not_configured&#39;. (2) PAGE MEANING: AdminGovOpportunitiesPage reframed as &quot;discovered candidates requiring qualification&quot;; a &quot;Flagged for review - not recommended&quot; section holds vetVerdict no_bid/needs_review + pursuitStatus declined (never in candidates); null verdict shows &quot;Unassessed&quot;; value shows &quot;Value unverified&quot; (+ labeled legacy estimate, never revenue); deadline carries a source-verification warning; &quot;Start working&quot; (create) REPLACED with &quot;Review source&quot; (sourceUrl) + a pending-qualification note; three distinct source banners. (3) SERVER GUARD: POST /opportunities/:uuid/start now returns 409 {qualificationRequired:true} for a NEW pursuit (creates NOTHING - no project, no backfill) and 200 {created:false} for an EXISTING gov project (stays navigable); the auto-create imports (backfillUnassessedContract, resolveGovContractsContainer) were removed until Phase 2 restores them. (4) docs/factory/GOV_OPPORTUNITY_ADAPTER_BOUNDARY.md documents the allowlist, canonical-id-vs-title-alias, separate schema/snapshot/enrichment versions, the server-side snapshot-at-approval trust boundary (Phase 2, same phase as approval), and backward-compat (partial payload can be researched but not approved).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient + factoryRoutes = 39/39 (verdict populated survives all layers; null vs absent verdict; declined != none; valueBasis unverified; snapshotReason not_configured vs source_failed; closeAt preserved; DIRECT POST to legacy start -&gt; NEW=409 no-create/no-backfill, EXISTING=200 no-create). Frontend react-scripts AdminGovOpportunitiesPage + factoryApi = 12/12 (discovered framing; flagged-&gt;review section; unassessed; Value unverified; Review source not Start working; source_failed vs not_configured banners; deadline warning). Fixture-labeled visual preview in the run dir. loop-task-verifier graded the diff. CI authoritative. NOT deployed - stops at the Phase 1 checkpoint before merge/deploy/prod-data-change.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive only; the two existing gov projects (gov-e2935b8f Dallas, gov-2e287828 Harris) + their tracks are untouched; commercial-client workflows, existing-project editing, and unrelated factory actions unchanged; marketing claims + historical engagement labels NOT modified (later corrections documented in the research handoffs). Temporary control - Phase 2 replaces the start guard with the real research/qualification workflow (+ the qualification record, notice/procurement/vehicle fields, server-side evidence snapshot at approval). PRODUCTION IMPACT: NONE - nothing deployed, no prod data changed. Autonomous builder remains parked.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Enterprise Phase 1 correction: verdict explanation, absent-vs-null, legacy scores, existing-project nav, TENANT ISOLATION, nested verdict allowlist, doc + deploy-state correction**</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Coordinator-authorized bounded follow-up to the merged Phase 1 (parser/schema/bonfire items correctly identified as OP-repo, not touched). (1) Verdict explanation: VetVerdict widened to an explicit allowlist {status,label,reason,disqualifier,method,evidence}; the page shows the reason/label + method and marks a weak legacy assessment (title_regex or evidence:null -&gt; &quot;legacy, unevidenced (weak)&quot;). (2) Absent vs null: BOTH an absent and an explicitly-null verdict render &quot;Unassessed&quot; (distinction kept in data via vetVerdictPresent). (3) Legacy scores: Fit/Priority rendered in a single neutral tone, labeled &quot;(legacy)&quot; + a caption &quot;Legacy discovery scores - advisory, not verified company fit&quot;; removed the &quot;best fits&quot; wording. (4) Existing-project navigation: an &quot;Open project&quot; action reuses the guarded start route (existing -&gt; navigate to /admin/factory?contract=&lt;id&gt;; new -&gt; 409 message) WITHOUT restoring unqualified creation. (5) TENANT ISOLATION (real security fix): the request carries NO tenant claim (req.admin = {sub,email,role,...}); the start route&#39;s bare findOne({where:{slug}}) was cross-tenant (slug unique only per tenant). Now scoped to the resolved Government Contracts container (tenant_id + organization_id) + project_class=&#39;government_public_sector&#39;, so a same-slug project in another tenant/org/class can never be resolved. (6) Nested allowlist: mapVetVerdict validates + maps ONLY the supported verdict fields; unexpected nested props are dropped; a malformed verdict (non-object/array/no-signal) -&gt; null (unassessed), never an approval. Docs: GOV_OPPORTUNITY_ADAPTER_BOUNDARY.md corrected (Phase 1 preserves the LEGACY timestamp only - NOT OP&#39;s structured deadline.conflicts/candidate instants/conservativePlanningUtc; no blanket &quot;nothing lost at read layer&quot;; merge commit is ba250604, 2c13057b is the branch head) + a full gov-opportunity.v1 (OP commit 73f4e56a) field-to-consumer mapping with concrete incompatibilities (canonical key op:gov:&lt;hex&gt; vs our gov-&lt;uuid&gt; slug; verdict now under sourceAssessment.legacyVerdict; value.published vs modelEstimate; structured deadline; publisher split). DEPLOY-STATE CORRECTION: Phase 1 IS live in prod (contradicts my earlier &quot;not deployed&quot;) - merge ba250604 is an ancestor of prod HEAD f505649c, the running dist contains the guard, and an automated &quot;Build images&quot; workflow ran on main after the merge.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient + factoryRoutes = 42/42 (nested-allowlist drops injected props + malformed-&gt;null; CROSS-TENANT NEGATIVE: scoped lookup misses an other-tenant slug -&gt; 409; existing -&gt; 200 scoped; new -&gt; 409 no-create/no-backfill). Frontend react-scripts AdminGovOpportunitiesPage + factoryApi = 15/15 (verdict reason+method+weak-legacy; absent AND null -&gt; Unassessed; legacy score labels + no &quot;best fits&quot;; Open project navigate vs 409 note; source_failed banner). REAL-component screenshots (rendered via react-dom + fixtures) for unassessed/rejected-with-reason/source-failure/existing-project-nav in the run dir. loop-task-verifier graded the diff. NOT deployed - stops at the checkpoint before merging the follow-up.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive; the two existing gov projects + tracks untouched; commercial-client workflows, existing-project editing, unrelated factory actions unchanged; marketing claims + historical engagement labels NOT modified. Supersedes the inaccurate statements in PR #2818 (docs). Autonomous builder parked. Follow-up PR from current main; stop before merge/deploy.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Enterprise Phase 1 fix2: read-only fail-closed container lookup (no provisioning in a nav route) + real (unmocked) lookup tests + stricter verdict field validation**</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Coordinator flagged that PR #2822&#39;s tenant-isolation used resolveGovContractsContainer(), a PROVISIONING helper whose Organization.findOne filters only by name, whose engagement lookup filters only by organization_id, and whose missing branches CREATE records - and the route tests mocked it away, leaving that untested. (1) NEW lookupGovContractsContainer() in factoryDemoContainer.ts: READ-ONLY, tenant-scoped, FAIL-CLOSED, creates nothing. Resolves the FIXED refactored tenant by slug (trusted anchor - the request carries no tenant claim), looks up the gov org SCOPED to that tenant (a same-name org in another tenant can never be selected), validates the engagement&#39;s tenant+org relationship, and returns null on any missing/mismatched piece. The provisioning resolveFactoryContainer/resolveGovContractsContainer stays intact for the seed scripts (their only callers). (2) POST /opportunities/:uuid/start now uses lookupGovContractsContainer; a null container -&gt; 503 &quot;not configured&quot; + logFail, creating nothing and not even looking up a project; else the project findOne is scoped to container.tenant.id + container.org.id + project_class + slug. (3) Policy documented (code + adapter doc): the route is platform-admin only (requireSection(&#39;program&#39;)), no tenant-user path, fixed refactored container. (4) mapVetVerdict field coercion tightened: toStrOrNull now accepts STRINGS only (non-empty) - objects/arrays/booleans/numbers -&gt; null, never String()-coerced into &quot;[object Object]&quot;/&quot;true&quot;/&quot;1&quot;, so invalid data can never acquire an &quot;evidenced&quot;/verdict label.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest -c jest.ci.config.ts oppPulseClient + factoryRoutes + factoryDemoContainer = 51/51. NEW factoryDemoContainer.test.ts tests the REAL lookup (only models mocked, never the lookup): same-name org across tenants (scoped miss -&gt; null), org tenant_id mismatch -&gt; null, mismatched engagement tenant/org -&gt; null, missing tenant/org/engagement -&gt; null, valid -&gt; container; asserts Organization.create/DeliveryEngagement.create NEVER called (no provisioning). Route tests (lookup mocked at the boundary; the lookup itself unit-tested separately): NEW -&gt; 409 no create/backfill; EXISTING -&gt; 200 scoped; CROSS-TENANT -&gt; 409 scoped where; CONTAINER-UNAVAILABLE -&gt; 503 fail-closed, no findOne/create. Verdict tests: object/array/boolean field values -&gt; null (not stringified), all-junk verdict -&gt; null. loop-task-verifier graded the diff. CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Backend-only (frontend consumes the same shape - a 503 on a missing container shows the generic &quot;could not open&quot; note; no frontend change). Additive - no schema change; provisioning helpers + their seed callers untouched. DEPLOYMENT EVIDENCE (observed running code, NOT an HTTP test): #2822&#39;s merge c0063337 is NOT an ancestor of prod HEAD f505649c and the running dist has no project_class in the lookup, so #2822 (and this fix) are merged-to-main but NOT deployed to prod; only the earlier Phase-1 GUARD (409, from ba250604) is in the running dist. Autonomous builder parked. Follow-up PR from current main; stop before merge/deploy.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20260921-p2k9.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

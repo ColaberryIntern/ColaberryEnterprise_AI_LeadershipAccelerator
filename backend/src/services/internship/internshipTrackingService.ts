@@ -382,7 +382,10 @@ export async function internshipKpis(): Promise<InternshipKpi[]> {
     { key: 'documents_uploaded', label: 'Documents awaiting verification', count: documentsUploaded, drilldown: { state: 'signed_documents_uploaded' }, reliability: 'reliable' },
     { key: 'awaiting_activation', label: 'Verified, awaiting activation', count: awaitingActivation, drilldown: { state: 'documents_verified' }, reliability: 'reliable' },
     { key: 'active_interns', label: 'Active interns', count: active, drilldown: { state: 'active' }, reliability: 'reliable' },
-    { key: 'converted', label: 'Converted existing interns', count: converted, drilldown: { bucket: 'all_open' }, reliability: 'reliable' },
+    // Drills into the converted rows themselves. It used to point at `all_open`,
+    // which showed every open application rather than the converted ones, so the
+    // count and the list it opened disagreed.
+    { key: 'converted', label: 'Converted existing interns', count: converted, drilldown: { bucket: 'converted' }, reliability: 'reliable' },
   ];
 
   // Active interns with no project. Real, and worth chasing.

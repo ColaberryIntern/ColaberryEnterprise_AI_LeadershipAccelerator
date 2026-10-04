@@ -41,6 +41,20 @@ import ReleaseRow, {
  * dependency is a decision that belongs to the operator, not to this view.
  */
 
+/**
+ * Who a project belongs to. Interns are the default board; the other two are opt-in.
+ *
+ *     "default it to active intern projects but allow the ability to add class projects
+ *      and unenrolled students projects."  (Ali, 2026-10-01)
+ */
+type Audience = 'intern' | 'class' | 'unenrolled';
+
+const AUDIENCES: Array<{ key: Audience; label: string; hint: string }> = [
+  { key: 'intern', label: 'Interns', hint: 'Holds an active internship' },
+  { key: 'class', label: 'Class', hint: 'Enrolled in a class, not an intern' },
+  { key: 'unenrolled', label: 'Unenrolled', hint: 'In neither — prospect and guest builds' },
+];
+
 interface ReadinessComponent { key: string; label: string; score: number; weight: number; gap?: string }
 interface Readiness { score: number; ready: boolean; components: ReadinessComponent[]; gaps: string[] }
 
@@ -53,6 +67,10 @@ interface ProjectRow {
   cohort_name: string | null;
   stage: string;
   maturity_score: number | null;
+  /** The owner holds an active internship. Shown, not filtered on. */
+  is_intern: boolean;
+  /** Which group this project's owner is in. Drives the audience filter. */
+  audience: Audience;
   has_repo: boolean;
   repo_url: string | null;
   /** The student's Command Center — a GitHub Pages site at the root of their own repo.
@@ -82,6 +100,11 @@ interface GanttTask {
   id: string; title: string; status: string; release_key: string | null;
   due_on: string | null; due_baseline_on: string | null;
   slipped: boolean; overdue: boolean; blocked_by: string[];
+  /** The plan's own traceability: which requirements this story fulfils. */
+  fulfills?: string[];
+  /** What "done" means for it, in the plan's words. */
+  acceptance?: string[];
+  narrative?: string | null;
 }
 interface GanttRelease extends ReleaseSummaryLike {
   lands_when?: string | null;
@@ -92,15 +115,52 @@ interface GanttRelease extends ReleaseSummaryLike {
 interface Gantt {
   project_id: string;
   releases: GanttRelease[];
+  /** REQ id -> statement, from the newest plan. Empty for a project that has none. */
+  requirements?: Record<string, string>;
+  /**
+   * These releases came from the PLAN, not from materialised tasks — a build held for
+   * review. Said on screen rather than inferred, because stories with no dates would
+   * otherwise read as a schedule that went missing.
+   */
+  plan_only?: boolean;
   totals: { tasks: number; complete: number; overdue: number; undated: number };
 }
+
+/** The small uppercase label above a story's requirement and acceptance lists. */
+const STORY_LABEL: React.CSSProperties = {
+  color: 'var(--text-muted)', fontWeight: 600, fontSize: 11,
+  textTransform: 'uppercase', letterSpacing: '.04em',
+};
 
 interface Props {
   /** Scope to one cohort when opened from a drill-down; undefined = all cohorts. */
   cohortId?: string;
+  /**
+   * Scope to people holding an active internship membership.
+   *
+   * A separate flag rather than a cohort id on purpose: an intern's enrollment
+   * still points at their CLASS cohort, because the internship is a secondary
+   * `cohort_memberships` row. Passing the internship cohort as `cohortId` would
+   * quietly return nothing.
+   */
+  internsOnly?: boolean;
+  /**
+   * Offer the audience filter, defaulting to interns only.
+   *
+   *     "in the Projects section, default it to active intern projects but allow the
+   *      ability to add class projects and unenrolled students projects."
+   *      (Ali, 2026-10-01)
+   *
+   * A DEFAULT, not a restriction. `internsOnly` made the other projects unreachable, so a
+   * project built for a prospect from the enquiry list was absent from the only board that
+   * lists projects. This opens with interns and lets the rest be switched on.
+   */
+  audienceFilter?: boolean;
+  /** Hide the "enrolled with no project" panel where it is not the point. */
+  hideWithoutProject?: boolean;
 }
 
-export default function ProjectDeliveryView({ cohortId }: Props) {
+export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFilter, hideWithoutProject }: Props) {
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +168,9 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   const [gantt, setGantt] = useState<Record<string, Gantt>>({});
   const [ganttLoading, setGanttLoading] = useState<string | null>(null);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
+  // Opens on interns alone. Never allowed to reach empty: a board with every group
+  // switched off is a blank page that reads as "no projects" rather than as a filter.
+  const [shown, setShown] = useState<Audience[]>(['intern']);
   // Which question the list is answering. Readiness is the default because the
   // page's job is case-study conversion; attention is the inversion of it.
   const [sortMode, setSortMode] = useState<SortMode>('readiness');
@@ -127,12 +190,18 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   /** Which release row is expanded, keyed `projectId::releaseKey` so two projects
    *  cannot both think their R0 is open. */
   const [openRelease, setOpenRelease] = useState<string | null>(null);
+  /** The story whose requirements are open, keyed by task id. One at a time:
+   *  this sits inside an already-expanded release, and two open at once turns a
+   *  readable list into a wall. */
+  const [openStory, setOpenStory] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = cohortId ? { cohort_id: cohortId } : {};
+      const params: Record<string, string> = {};
+      if (cohortId) params.cohort_id = cohortId;
+      if (internsOnly) params.interns = '1';
       // Settled, not all: the delivery table is the page. If the without-project
       // panel fails, the board must still render rather than showing an error for
       // a supplementary panel.
@@ -142,13 +211,13 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
       ]);
       if (res.status === 'rejected') throw res.reason;
       setRows(res.value.data.projects || []);
-      setWithout(wp.status === 'fulfilled' ? wp.value.data : null);
+      setWithout(hideWithoutProject ? null : (wp.status === 'fulfilled' ? wp.value.data : null));
     } catch {
       setError('Could not load project delivery.');
     } finally {
       setLoading(false);
     }
-  }, [cohortId]);
+  }, [cohortId, internsOnly, hideWithoutProject]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -182,8 +251,15 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
   };
 
   const visible = useMemo(
-    () => sortRows(onlyOverdue ? rows.filter((r) => r.tasks_overdue > 0) : rows, sortMode),
-    [rows, onlyOverdue, sortMode]
+    () => {
+      const byAudience = audienceFilter ? rows.filter((r) => shown.includes(r.audience)) : rows;
+      const sorted = sortRows(onlyOverdue ? byAudience.filter((r) => r.tasks_overdue > 0) : byAudience, sortMode);
+      if (!audienceFilter) return sorted;
+      // Stable partition, so the chosen sort still decides the order WITHIN each group
+      // and the toggle keeps meaning what it says.
+      return [...sorted.filter((r) => r.is_intern), ...sorted.filter((r) => !r.is_intern)];
+    },
+    [rows, onlyOverdue, sortMode, audienceFilter, shown]
   );
 
   const totals = useMemo(() => ({
@@ -228,6 +304,30 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
               checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} />
             <label className="form-check-label small" htmlFor="only-overdue">Overdue only</label>
           </div>
+          {audienceFilter && (
+            <div className="btn-group btn-group-sm" role="group" aria-label="Which projects to show">
+              {AUDIENCES.map(({ key, label, hint }) => {
+                const on = shown.includes(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`btn btn-sm ${on ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                    aria-pressed={on}
+                    title={hint}
+                    onClick={() => setShown((cur) => {
+                      const next = cur.includes(key) ? cur.filter((a) => a !== key) : [...cur, key];
+                      // Turning the last one off would render an empty board that reads as
+                      // "there are no projects". Refuse rather than explain it afterwards.
+                      return next.length ? next : cur;
+                    })}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <button className="btn btn-sm btn-outline-secondary" onClick={load}>Refresh</button>
         </div>
       }
@@ -280,6 +380,23 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                 <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                   {r.student_name || '—'}{r.cohort_name ? ` · ${r.cohort_name}` : ''}
                 </span>
+                {/* Only on the boards that mix the two. Marking every intern on an
+                    all-intern board is a badge that carries no information. */}
+                {audienceFilter && shown.length > 1 && r.audience !== 'intern' && (
+                  <span
+                    className="ms-2"
+                    style={{
+                      fontSize: 10.5, fontWeight: 600, letterSpacing: '.03em',
+                      color: 'var(--text-muted)', border: '1px solid var(--border-subtle, #dee2e6)',
+                      borderRadius: 3, padding: '0 5px', textTransform: 'uppercase',
+                    }}
+                    title={r.audience === 'class'
+                      ? 'A class student, not an intern'
+                      : 'Not enrolled in a class or an internship'}
+                  >
+                    {r.audience}
+                  </span>
+                )}
                 <RiskPill risk={r.risk} />
                 {/* Both are public URLs the platform already stores, and each renders only
                     when detected so a row never shows a link that goes nowhere.
@@ -356,6 +473,22 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
 
                 {/* The release table. Each row expands to its stories, so the spine and
                     the work sit in one place rather than in separate panels. */}
+                {/* A build held for review has a plan and no tasks. Say which you are
+                    looking at: the stories are real, the absent dates are not a fault. */}
+                {g?.plan_only && (
+                  <div
+                    className="mb-2"
+                    style={{
+                      border: '0.5px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
+                      background: 'var(--surface-subtle, #f8f9fa)', padding: '7px 10px', fontSize: 12.5,
+                    }}
+                  >
+                    <strong>Not assigned yet.</strong> This is the plan as built — releases and
+                    stories, with the requirements each one fulfils. Dates and progress appear once
+                    it is assigned, and nobody but you can see it until then.
+                  </div>
+                )}
+
                 {g && g.totals.tasks > 0 && (
                   <div style={{
                     border: '0.5px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
@@ -398,28 +531,91 @@ export default function ProjectDeliveryView({ cohortId }: Props) {
                                   Lands when: {(rel as any).lands_when}
                                 </div>
                               )}
-                              {rel.tasks.map((t) => (
-                                <div key={t.id} style={{
-                                  fontSize: 12, color: 'var(--text-body)', padding: '3px 10px 3px 46px',
-                                  display: 'flex', justifyContent: 'space-between', gap: 12,
-                                }}>
-                                  <span style={t.status === 'complete'
-                                    ? { textDecoration: 'line-through', color: 'var(--text-muted)' } : undefined}>
-                                    {t.title}
-                                    {t.blocked_by.length > 0 && (
-                                      <span style={{ color: 'var(--text-muted)' }}> · blocked by {t.blocked_by.length}</span>
+                              {rel.tasks.map((t) => {
+                                // Normalised once: both columns are JSONB and absent on any
+                                // task the manual import path wrote, and reading them
+                                // through `?.` at five call sites invites exactly one of
+                                // them to be missed.
+                                const fulfills = t.fulfills ?? [];
+                                const acceptance = t.acceptance ?? [];
+                                // Only clickable when there is something behind it. A row
+                                // that opens to nothing teaches people the arrow lies.
+                                const hasDetail = Boolean(fulfills.length || acceptance.length || t.narrative);
+                                const storyOpen = openStory === t.id;
+                                return (
+                                  <React.Fragment key={t.id}>
+                                    <div
+                                      style={{
+                                        fontSize: 12, color: 'var(--text-body)', padding: '3px 10px 3px 46px',
+                                        display: 'flex', justifyContent: 'space-between', gap: 12,
+                                        cursor: hasDetail ? 'pointer' : undefined,
+                                      }}
+                                      onClick={hasDetail ? () => setOpenStory(storyOpen ? null : t.id) : undefined}
+                                      title={hasDetail ? 'Show what this story has to satisfy' : undefined}
+                                    >
+                                      <span style={t.status === 'complete'
+                                        ? { textDecoration: 'line-through', color: 'var(--text-muted)' } : undefined}>
+                                        {hasDetail && (
+                                          <i
+                                            className={storyOpen ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line'}
+                                            aria-hidden="true"
+                                            style={{ fontSize: 14, color: 'var(--text-muted)', marginRight: 2 }}
+                                          />
+                                        )}
+                                        {t.title}
+                                        {fulfills.length > 0 && (
+                                          <span style={{ color: 'var(--text-muted)' }}> · {fulfills.length} req</span>
+                                        )}
+                                        {t.blocked_by.length > 0 && (
+                                          <span style={{ color: 'var(--text-muted)' }}> · blocked by {t.blocked_by.length}</span>
+                                        )}
+                                      </span>
+                                      <span style={{
+                                        whiteSpace: 'nowrap',
+                                        color: t.overdue ? 'var(--status-danger)'
+                                          : t.status === 'complete' ? 'var(--text-muted)' : 'var(--text-body)',
+                                      }}>
+                                        {fmtReleaseDay(t.due_on)}
+                                        {t.slipped && <span title="moved later than its baseline"> &#9873;</span>}
+                                      </span>
+                                    </div>
+
+                                    {storyOpen && (
+                                      <div style={{ padding: '2px 10px 8px 62px', fontSize: 12 }}>
+                                        {t.narrative && (
+                                          <div style={{ color: 'var(--text-body)', fontStyle: 'italic', marginBottom: 6 }}>
+                                            {t.narrative}
+                                          </div>
+                                        )}
+                                        {fulfills.length > 0 && (
+                                          <div style={{ marginBottom: 6 }}>
+                                            <div style={STORY_LABEL}>Requirements it fulfils</div>
+                                            <ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+                                              {fulfills.map((reqId) => (
+                                                <li key={reqId}>
+                                                  <strong>{reqId}</strong>
+                                                  {/* The statement when the published plan carries one; the id
+                                                      alone otherwise, which is the honest answer for a
+                                                      hand-authored or pre-pipeline project rather than a blank. */}
+                                                  {g.requirements?.[reqId] ? ` — ${g.requirements[reqId]}` : ''}
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        {acceptance.length > 0 && (
+                                          <div>
+                                            <div style={STORY_LABEL}>Done when</div>
+                                            <ul style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+                                              {acceptance.map((line, i) => <li key={i}>{line}</li>)}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
-                                  </span>
-                                  <span style={{
-                                    whiteSpace: 'nowrap',
-                                    color: t.overdue ? 'var(--status-danger)'
-                                      : t.status === 'complete' ? 'var(--text-muted)' : 'var(--text-body)',
-                                  }}>
-                                    {fmtReleaseDay(t.due_on)}
-                                    {t.slipped && <span title="moved later than its baseline"> &#9873;</span>}
-                                  </span>
-                                </div>
-                              ))}
+                                  </React.Fragment>
+                                );
+                              })}
                             </div>
                           )}
                         </React.Fragment>

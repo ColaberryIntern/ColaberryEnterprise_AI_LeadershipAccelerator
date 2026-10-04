@@ -166,6 +166,66 @@ describe('AgentWorkDecisionsTab — decision inspector (Slice 2c)', () => {
   });
 });
 
+// Agent Detail redesign, Track E (2026-09-28) — the new 4-quadrant inspector.
+// Quadrants 1-2 have no real backing anywhere in this codebase and must
+// honestly disclose that, never invent a trigger or a "known facts" story.
+describe('AgentWorkDecisionsTab — 4-quadrant inspector honesty (Track E)', () => {
+  it('quadrant 1 ("What started this?") honestly discloses no trigger is tracked, never a fabricated one', async () => {
+    getInboxItemInspector.mockResolvedValue({ blastRadius: 'x', reversibility: 'y', expectedResult: 'z' });
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(container.textContent).toContain('What started this?');
+    expect(container.textContent).toContain('Not tracked — this codebase does not record what triggered this proposal.');
+    expect(container.textContent).toContain('scheduled_emails (email-1)');
+  });
+
+  it('quadrant 2 ("What does Reese know?") shows the real confidence/risk/impact/priority scores, honestly labeled as scores not facts', async () => {
+    getInboxItemInspector.mockResolvedValue({ blastRadius: 'x', reversibility: 'y', expectedResult: 'z' });
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(container.textContent).toContain('What does Reese know?');
+    expect(container.textContent).toContain('Not tracked as a facts list');
+    expect(container.textContent).toContain('Confidence 0.88 · Risk 0.2 · Impact 0.5 · Priority 0.7');
+  });
+
+  it('quadrants 3-4 still show the real reason/blast-radius/reversibility/expected-result data, honestly labeled "if approved"', async () => {
+    getInboxItemInspector.mockResolvedValue({
+      blastRadius: '1 recipient',
+      reversibility: 'Reversible — this email has not sent yet',
+      expectedResult: "Subject changes from 'Old' to 'New'.",
+    });
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(container.textContent).toContain('Why this next step?');
+    expect(container.textContent).toContain('Shift send window to 8am recipient-local');
+    expect(container.textContent).toContain('1 recipient');
+    expect(container.textContent).toContain('What actually happened?');
+    expect(container.textContent).toContain('Expected outcome if approved');
+    expect(container.textContent).toContain("Subject changes from 'Old' to 'New'.");
+  });
+
+  it('never renders the mockup-only fictional narrative — no fabricated trigger, no fabricated "known facts" list', async () => {
+    getInboxItemInspector.mockResolvedValue({ blastRadius: 'x', reversibility: 'y', expectedResult: 'z' });
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    // The mockup's own fictional per-case fields (trigger/known/unknown prose) never appear.
+    expect(container.textContent).not.toContain('Student reported');
+    expect(container.textContent).not.toContain('Unknown or excluded');
+  });
+});
+
 describe('AgentWorkDecisionsTab — approve/reject wiring', () => {
   it('approve calls the real API with agentId + proposalId, then refreshes inbox and journal', async () => {
     const onInboxChanged = jest.fn();
@@ -217,6 +277,34 @@ describe('AgentWorkDecisionsTab — Decision Journal', () => {
     expect(container.textContent).toContain('propose_content_rewrite');
     expect(container.textContent).toContain('Onboarding copy is stale');
     expect(container.textContent).toContain('confidence 0.74');
+  });
+
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "I don't
+  // understand Decision Journal - can we get more details on this so we can
+  // make sense... this page is pretty confusing." Purely additive labeling/
+  // framing of already-real data — zero change to the fetch or data shape.
+  it('labels an agent.authorization event as "Authorization check"', async () => {
+    await renderTab();
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((p) => p.textContent === 'Authorization check')).toBe(true);
+  });
+
+  it('labels a non-authorization event as "System event"', async () => {
+    await renderTab();
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((p) => p.textContent === 'System event')).toBe(true);
+  });
+
+  it('labels a proposed-action entry as "Proposal outcome"', async () => {
+    await renderTab();
+    const pills = Array.from(container.querySelectorAll('.adv2-pill'));
+    expect(pills.some((p) => p.textContent === 'Proposal outcome')).toBe(true);
+  });
+
+  it('the header hint plainly states this journal is agent-wide, not ticket-specific', async () => {
+    await renderTab();
+    expect(container.textContent).toContain('not specific to any one ticket');
+    expect(container.textContent).toContain('real recorded fact');
   });
 
   it('shows the honest empty state when there are zero events and zero proposed actions', async () => {

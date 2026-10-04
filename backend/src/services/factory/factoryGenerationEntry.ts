@@ -15,6 +15,7 @@ import {
   type FactoryGenerateResult,
 } from './factoryGenerate';
 import { assembleFactoryProject } from './factoryAssemble';
+import { assertBuildAuthorizedForProject } from './buildAuthorization';
 import type { ValidationIssue } from './factoryValidate';
 
 export const FACTORY_GENERATION_DISABLED: ValidationIssue = {
@@ -34,7 +35,17 @@ export function isFactoryGenerationEnabled(): boolean {
 
 /**
  * The dark-switch entry. When the flag is off, refuse without any model call (accepted:false,
- * FACTORY_GENERATION_DISABLED); when on, delegate to the real pipeline unchanged.
+ * FACTORY_GENERATION_DISABLED); when on, enforce the SEPARATE build-authorization gate before any build work
+ * runs, then delegate to the real pipeline unchanged.
+ *
+ * Two distinct refusals, deliberately different in shape:
+ *  - FACTORY_GENERATION_DISABLED is a SOFT, flag-controlled refusal (reversible by flipping the flag) and is
+ *    returned as a validation issue.
+ *  - BuildNotAuthorizedError is a HARD governance refusal (a pursuit approval is NOT a build authorization; a
+ *    named approver must have recorded a scoped, resource-limited build_authorizations row). It THROWS — mirror
+ *    of releaseGate.assertDeploymentAuthorized — and the route maps it to 403. Removing it is a code change with
+ *    a review attached, never a flag flip. This is what keeps the autonomous builder parked: the build path
+ *    refuses by construction until a human authorizes a specific project's build.
  */
 export async function factoryGenerateIfEnabled(
   input: FactoryGenerateInput,
@@ -52,5 +63,7 @@ export async function factoryGenerateIfEnabled(
     });
     return { project, issues: [FACTORY_GENERATION_DISABLED], accepted: false, decomposeAttempts: 0, repairAttempts: 0, repairRejected: 0 };
   }
+  // Real build work is about to run — refuse unless THIS project has a live, scoped, named build authorization.
+  await assertBuildAuthorizedForProject(input.deliveryProjectId);
   return factoryGenerate(input, opts);
 }

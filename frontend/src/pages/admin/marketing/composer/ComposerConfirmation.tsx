@@ -2,6 +2,7 @@ import React from 'react';
 import { StatusBadge } from '../../../../components/admin/shell';
 import type { ComposerAction, ConfirmationSummary } from '../../../../services/contentComposerApi';
 import { formatCentral } from '../centralTime';
+import { confirmLadder, type ConfirmStep } from './confirmSteps';
 
 /**
  * The final confirmation (spec 8.1 step 10). Pure: renders exactly what the server built.
@@ -26,6 +27,60 @@ export interface ComposerConfirmationProps {
   summary: ConfirmationSummary;
   busy: boolean;
   onAction: (action: ComposerAction) => void;
+  /**
+   * Go to the step that clears the current blocker.
+   *
+   * The ladder says "Press Validate under Channels" - which was fine when all five sections were
+   * one scrolling page, and became a dead end the moment the step rail made Channels a separate
+   * screen. Reported 2026-10-02: "I can't publish or schedule or send for approval." The buttons
+   * were correctly disabled and the reason was correctly displayed; there was simply no way to
+   * act on it from where the operator was standing.
+   */
+  onGoToStep?: (step: 'setup' | 'channels' | 'preview') => void;
+}
+
+/**
+ * Where the post stands, at the top, before any detail.
+ *
+ * The seven blocks below this are reference material - what will go out, to whom, when. The
+ * question an operator actually arrives with is "why can I not click anything?", and that used
+ * to be answered last and in grey.
+ */
+/** Which step a blocked rung is cleared on. The ladder names the action; this is where it lives. */
+const CLEARED_ON: Partial<Record<ConfirmStep['key'], { step: 'setup' | 'channels' | 'preview'; label: string }>> = {
+  validate: { step: 'channels', label: 'Go to Channels and validate' },
+};
+
+function Ladder({ steps, onGoToStep }: { steps: ConfirmStep[]; onGoToStep?: ComposerConfirmationProps['onGoToStep'] }) {
+  const mark = (state: ConfirmStep['state']) =>
+    state === 'done' ? '✓' : state === 'current' ? '→' : '·';
+  const tone = (state: ConfirmStep['state']) =>
+    state === 'done' ? 'text-success' : state === 'current' ? 'text-warning-emphasis fw-semibold' : 'text-muted';
+  return (
+    <ol className="list-unstyled mb-3" data-testid="confirm-ladder">
+      {steps.map((st) => (
+        <li key={st.key} className="d-flex gap-2 mb-1" data-testid={`confirm-step-${st.key}`} data-state={st.state}>
+          <span className={tone(st.state)} aria-hidden="true">{mark(st.state)}</span>
+          <span>
+            <span className={tone(st.state)}>{st.label}</span>
+            {st.detail && <span className="small text-muted ms-2">{st.detail}</span>}
+            {/* The way out, beside the reason. A blocker an operator cannot act on from where
+                they are reading it is just an explanation of being stuck. */}
+            {st.state === 'current' && onGoToStep && CLEARED_ON[st.key] && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary ms-2 py-0"
+                data-testid={`confirm-goto-${st.key}`}
+                onClick={() => onGoToStep(CLEARED_ON[st.key]!.step)}
+              >
+                {CLEARED_ON[st.key]!.label}
+              </button>
+            )}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function Field({ label, children, testId }: { label: string; children: React.ReactNode; testId: string }) {
@@ -44,12 +99,41 @@ function approvalTone(label: ConfirmationSummary['approval']['label']): 'success
   return 'neutral';
 }
 
-export default function ComposerConfirmation({ summary, busy, onAction }: ComposerConfirmationProps) {
+export default function ComposerConfirmation({ summary, busy, onAction, onGoToStep }: ComposerConfirmationProps) {
   const { brand, campaign, accounts, schedule, copy, assets, links, linkGaps, approval, validation, readiness } = summary;
   const poll = summary.item.poll;
+  const ladder = confirmLadder(summary);
 
   return (
     <div className="composer-confirmation">
+      {/* The answer to "why can I not click anything?" goes FIRST. Everything below is
+          reference material for a decision this tells you whether you can yet make. */}
+      <div className="border rounded p-3 mb-3 bg-light" data-testid="confirm-status">
+        <div className="fw-semibold mb-2" data-testid="confirm-headline">{ladder.headline}</div>
+        <Ladder steps={ladder.steps} onGoToStep={onGoToStep} />
+        {ladder.nextAction && (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={busy}
+            onClick={() => onAction(ladder.nextAction!)}
+            data-testid="confirm-next-action"
+          >
+            {ladder.nextLabel}
+          </button>
+        )}
+        {ladder.blockers.length > 0 && (
+          // Not muted, and not last. These are the sentences that explain the dead buttons.
+          <ul className="small text-warning-emphasis mb-0 mt-2" data-testid="confirm-blockers">
+            {ladder.blockers.map((r) => <li key={r}>{r}</li>)}
+          </ul>
+        )}
+      </div>
+
+      <details data-testid="confirm-details">
+        <summary className="small text-muted mb-3" style={{ cursor: 'pointer' }}>
+          What will go out, to whom, and when
+        </summary>
       <Field label="Brand" testId="confirm-brand">
         {brand ? (
           <>
@@ -151,6 +235,10 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
             )}
       </Field>
 
+      </details>
+
+      {/* The full set stays available - the ladder names the ONE to press, but an operator
+          who knows what they want should not have to follow a wizard to get there. */}
       <div className="d-flex flex-wrap gap-2 align-items-center mt-3" data-testid="confirm-actions">
         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !readiness.canSaveDraft} onClick={() => onAction('save_draft')}>Save draft</button>
         <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !readiness.canSendForApproval} onClick={() => onAction('send_for_approval')}>Send for approval</button>
@@ -160,11 +248,7 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
             does. Spec 8.2: never a fake Publish button. */}
         <button type="button" className="btn btn-danger btn-sm" disabled={busy || !readiness.canPublishNow} onClick={() => onAction('publish_now')}>{readiness.publishLabel}</button>
       </div>
-      {readiness.reasons.length > 0 && (
-        <ul className="small text-muted mt-2 mb-0" data-testid="confirm-reasons">
-          {readiness.reasons.map((r) => <li key={r}>{r}</li>)}
-        </ul>
-      )}
+
     </div>
   );
 }

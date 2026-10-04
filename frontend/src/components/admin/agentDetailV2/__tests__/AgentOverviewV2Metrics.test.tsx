@@ -18,6 +18,7 @@ const BASE_AGENT: AgentDetail['agent'] = {
   department: null, module: null, source_file: null,
   max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
   autonomy_level_set_at: null, autonomy_level_source: null,
+  reports_to_type: null, reports_to_id: null,
   abac_mode_override: null, abac_mode_override_set_at: null, abac_mode_override_set_by: null,
   abac_effective_mode: 'shadow', abac_global_default: 'shadow',
 };
@@ -39,6 +40,9 @@ function buildDetail(overrides: Partial<AgentDetail> = {}): AgentDetail {
     live_status: 'unknown',
     open_ticket_count: 0,
     completed_ticket_count_30d: 0,
+    verified_resolution_count: 0,
+    owned_ticket_count_all_time: 0,
+    most_recent_verified_ticket_id: null,
     tickets: [],
     ticket_breakdown: [],
     related_tasks: [],

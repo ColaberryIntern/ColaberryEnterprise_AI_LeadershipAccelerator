@@ -186,6 +186,17 @@ export const env = {
   // Project backend v2 — persisted student-projects read API (P1). Default OFF;
   // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
   projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Project Presentation Studio — the six-stage workspace a student opens from a
+  // demo-prep card (Learn/Prepare/Build/Practice/Present/Reflect & Share).
+  // SEPARATE from projectApiEnabled deliberately, for the same reason
+  // sbpPipelineEnabled is: projectApiEnabled is already true in production and
+  // shared with projectsPortalRoutes, so reusing it would make the Studio live the
+  // moment it deploys with no way to turn it off without breaking the existing
+  // projects API. Default OFF, and flag-off is byte-identical to today — the PREP
+  // cards keep rendering DemoEvidencePanel exactly as they do now. The Studio's
+  // tables are created at boot regardless (empty, unread tables change nothing),
+  // because the schema must exist before the flag can be turned on.
+  presentationStudioEnabled: process.env.PRESENTATION_STUDIO_ENABLED === 'true',
   // Cert Prep (Claude Certified Architect readiness). Default OFF: deploying the
   // routes changes nothing until this is set, and the Week 7 fence inside the
   // service is a SEPARATE, always-on control — this flag decides whether the

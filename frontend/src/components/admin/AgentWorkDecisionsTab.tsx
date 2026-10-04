@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
+import { adv2PillClass } from './agentDetailV2/adv2PillTone';
 import { ManagerInboxItem, approveInboxItem, rejectInboxItem, getInboxItemInspector, InboxItemInspector } from '../../services/managerInboxApi';
 import { getAgentExplainability, AgentExplainability } from '../../services/agentExplainabilityApi';
 
@@ -19,6 +19,22 @@ import { getAgentExplainability, AgentExplainability } from '../../services/agen
 // one item a manager actually opens). A per-proposal "policy reason
 // approval was required" still has no real backing anywhere and is still
 // deliberately NOT fabricated.
+//
+// Agent Detail redesign, Track E (2026-09-28) — reflowed to this page's
+// adv2-* visual language, and the flat inspector <dl> became a real
+// 4-quadrant card grid matching Ali's mockup (reusing .adv2-io-grid, already
+// proven elsewhere). Honestly filled per this run's own execution-contract.md:
+// quadrants 3-4 (why / what happened) are real, unchanged data; quadrants 1-2
+// (what started this / what Reese knows) have no real backing anywhere in
+// this codebase, so they disclose that plainly rather than inventing a
+// trigger or a "known facts" narrative — quadrant 2 shows the real
+// confidence/risk/impact/priority scores instead, honestly labeled as
+// scores, not narrated as facts. The Decision Journal is NOT forced into
+// this shape — ExplainabilityProposedAction (agentExplainabilityApi.ts) has
+// no `id` field, so a historical journal entry has no real inspector data to
+// show even if it were structured as a quadrant grid. Zero change to any
+// fetch/cache/approve/reject logic below — only what renders once data
+// arrives.
 
 interface Props {
   agentId: string;
@@ -116,165 +132,153 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
   }, [agentId, expandedId, inspectorById]);
 
   return (
-    <>
-      <SectionCard
-        title="Pending Approvals"
-        icon="list-check-3"
-        subtitle="Before you approve anything, this shows exactly what will (and won't) happen."
-        padded={false}
-      >
-        {inboxLoading && (
-          <div className="p-3 text-muted small">
-            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-            Loading pending approvals…
-          </div>
-        )}
-        {inboxError && (
-          <div className="p-3">
-            <div className="alert alert-warning py-2 mb-0 small">Could not load pending approvals: {inboxError}</div>
-          </div>
-        )}
-        {decisionError && (
-          <div className="p-3 pb-0">
-            <div className="alert alert-danger py-2 mb-0 small">{decisionError}</div>
-          </div>
-        )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div className="adv2-card">
+        <h2>
+          Pending Approvals
+          <span className="adv2-hint">Before you approve anything, this shows exactly what will (and won't) happen.</span>
+        </h2>
+        {inboxLoading && <p className="adv2-body adv2-muted">Loading pending approvals…</p>}
+        {inboxError && <p className="adv2-body" style={{ color: 'var(--adv2-warn)' }}>Could not load pending approvals: {inboxError}</p>}
+        {decisionError && <p className="adv2-body" style={{ color: 'var(--adv2-bad)' }}>{decisionError}</p>}
         {!inboxLoading && !inboxError && inboxItems.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No approvals waiting for review right now.</p>
+          <p className="adv2-body adv2-muted">No approvals waiting for review right now.</p>
         )}
-        {!inboxLoading && !inboxError && inboxItems.map((item, i) => {
+        {!inboxLoading && !inboxError && inboxItems.map((item) => {
           const hasRealExecutor = item.targetTable !== null && REAL_EXECUTOR_TARGET_TABLES.has(item.targetTable);
           return (
-            <div key={item.id} className={`p-3 ${i < inboxItems.length - 1 ? 'border-bottom' : ''}`}>
-              <div className="d-flex align-items-start justify-content-between gap-2 flex-wrap mb-2">
-                <div>
-                  <StatusBadge label="Pending" tone="warning" />
-                  <strong className="ms-2">{item.actionType}</strong>
+            <div key={item.id} className="adv2-task">
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <div>
+                    <span className={adv2PillClass('warning')}>Pending</span>
+                    <strong style={{ marginLeft: 8 }}>{item.actionType}</strong>
+                  </div>
+                  <span className={adv2PillClass(hasRealExecutor ? 'success' : 'warning')}>
+                    {hasRealExecutor ? 'Real executor wired' : 'No real executor yet'}
+                  </span>
                 </div>
-                {hasRealExecutor ? (
-                  <StatusBadge label="Real executor wired" tone="success" icon="check-double-line" />
-                ) : (
-                  <StatusBadge label="No real executor yet" tone="warning" icon="alert-line" />
-                )}
-              </div>
-              <dl className="row small mb-2">
-                <dt className="col-sm-3">Business object</dt>
-                <dd className="col-sm-9">{item.targetTable ? `${item.targetTable} (${item.targetId})` : 'Not tracked on this proposal'}</dd>
-                <dt className="col-sm-3">Reason given</dt>
-                <dd className="col-sm-9">{item.reason}</dd>
-                <dt className="col-sm-3">Confidence</dt>
-                <dd className="col-sm-9">{item.confidence}</dd>
-                <dt className="col-sm-3">Risk / impact / priority score</dt>
-                <dd className="col-sm-9">{item.riskScore ?? '—'} / {item.impactScore ?? '—'} / {item.priorityScore ?? '—'}</dd>
-                <dt className="col-sm-3">Expires</dt>
-                <dd className="col-sm-9">{item.expiresAt ? timeAgo(item.expiresAt) : 'No expiration set'}</dd>
-              </dl>
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary mb-2"
-                onClick={() => handleToggleDetails(item.id)}
-              >
-                {expandedId === item.id ? 'Hide details' : 'View details'}
-              </button>
-              {expandedId === item.id && (
-                <dl className="row small mb-2">
-                  {inspectorLoadingId === item.id && (
-                    <dd className="col-12 text-muted">
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                      Loading…
-                    </dd>
-                  )}
-                  {inspectorErrorId === item.id && (
-                    <dd className="col-12">
-                      <div className="alert alert-warning py-2 mb-0 small">Could not load these details.</div>
-                    </dd>
-                  )}
-                  {inspectorById[item.id] && (
-                    <>
-                      <dt className="col-sm-3">Blast radius</dt>
-                      <dd className="col-sm-9">{inspectorById[item.id].blastRadius}</dd>
-                      <dt className="col-sm-3">Reversibility</dt>
-                      <dd className="col-sm-9">{inspectorById[item.id].reversibility}</dd>
-                      <dt className="col-sm-3">Expected result</dt>
-                      <dd className="col-sm-9">{inspectorById[item.id].expectedResult}</dd>
-                    </>
-                  )}
+                <dl className="adv2-rows">
+                  <dt>Business object</dt>
+                  <dd>{item.targetTable ? `${item.targetTable} (${item.targetId})` : 'Not tracked on this proposal'}</dd>
+                  <dt>Reason given</dt>
+                  <dd>{item.reason}</dd>
+                  <dt>Confidence</dt>
+                  <dd>{item.confidence}</dd>
+                  <dt>Risk / impact / priority score</dt>
+                  <dd>{item.riskScore ?? '—'} / {item.impactScore ?? '—'} / {item.priorityScore ?? '—'}</dd>
+                  <dt>Expires</dt>
+                  <dd>{item.expiresAt ? timeAgo(item.expiresAt) : 'No expiration set'}</dd>
                 </dl>
-              )}
-              {hasRealExecutor ? (
-                <div className="alert alert-success py-2 small mb-2">
-                  <i className="ri-check-line" aria-hidden="true" /> If you approve, the {item.targetTable} record is updated immediately and automatically — a real, tested executor path.
-                </div>
-              ) : (
-                <div className="alert alert-warning py-2 small mb-2">
-                  <i className="ri-error-warning-line" aria-hidden="true" /> If you approve, only the decision status changes. This proposal type has no automatic downstream executor today.
-                </div>
-              )}
-              <div className="d-flex gap-2">
-                <button className="btn btn-primary btn-sm" disabled={decidingId === item.id} onClick={() => handleApprove(item.id)}>
-                  {decidingId === item.id ? 'Working…' : 'Approve'}
+                <button type="button" className="adv2-btn" style={{ marginTop: 12 }} onClick={() => handleToggleDetails(item.id)}>
+                  {expandedId === item.id ? 'Hide details' : 'View details'}
                 </button>
-                <button className="btn btn-outline-danger btn-sm" disabled={decidingId === item.id} onClick={() => handleReject(item.id)}>
-                  Reject
-                </button>
+                {expandedId === item.id && (
+                  <div style={{ marginTop: 14 }}>
+                    {inspectorLoadingId === item.id && <p className="adv2-muted">Loading…</p>}
+                    {inspectorErrorId === item.id && <p style={{ color: 'var(--adv2-warn)' }}>Could not load these details.</p>}
+                    {inspectorById[item.id] && (
+                      <div className="adv2-io-grid">
+                        <div className="adv2-card">
+                          <div className="adv2-body">
+                            <h3><span className="adv2-number">1</span>What started this?</h3>
+                            <p className="adv2-muted">Not tracked — this codebase does not record what triggered this proposal.</p>
+                            <p className="adv2-muted">{item.targetTable ? `Business object: ${item.targetTable} (${item.targetId})` : 'No business object recorded on this proposal.'}</p>
+                          </div>
+                        </div>
+                        <div className="adv2-card">
+                          <div className="adv2-body">
+                            <h3><span className="adv2-number">2</span>What does Reese know?</h3>
+                            <p className="adv2-muted">Not tracked as a facts list — the real structured signals behind this proposal:</p>
+                            <p className="adv2-muted">Confidence {item.confidence} · Risk {item.riskScore ?? '—'} · Impact {item.impactScore ?? '—'} · Priority {item.priorityScore ?? '—'}</p>
+                          </div>
+                        </div>
+                        <div className="adv2-card">
+                          <div className="adv2-body">
+                            <h3><span className="adv2-number">3</span>Why this next step?</h3>
+                            <p className="adv2-muted">{item.reason}</p>
+                            <p className="adv2-evidence"><strong>Blast radius:</strong> {inspectorById[item.id].blastRadius}<br /><strong>Reversibility:</strong> {inspectorById[item.id].reversibility}</p>
+                          </div>
+                        </div>
+                        <div className="adv2-card">
+                          <div className="adv2-body">
+                            <h3><span className="adv2-number">4</span>What actually happened?</h3>
+                            <p className="adv2-muted">Expected outcome if approved (this proposal is still pending — nothing has happened yet):</p>
+                            <p className="adv2-evidence">{inspectorById[item.id].expectedResult}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {hasRealExecutor ? (
+                  <p className="adv2-evidence" style={{ color: 'var(--adv2-ok)', marginTop: 12 }}>
+                    If you approve, the {item.targetTable} record is updated immediately and automatically — a real, tested executor path.
+                  </p>
+                ) : (
+                  <p className="adv2-evidence" style={{ color: 'var(--adv2-warn)', marginTop: 12 }}>
+                    If you approve, only the decision status changes. This proposal type has no automatic downstream executor today.
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button className="adv2-btn adv2-primary" disabled={decidingId === item.id} onClick={() => handleApprove(item.id)}>
+                    {decidingId === item.id ? 'Working…' : 'Approve'}
+                  </button>
+                  <button className="adv2-btn adv2-danger" disabled={decidingId === item.id} onClick={() => handleReject(item.id)}>
+                    Reject
+                  </button>
+                </div>
               </div>
             </div>
           );
         })}
-      </SectionCard>
+      </div>
 
-      <SectionCard
-        title="Decision Journal"
-        icon="file-list-3-line"
-        subtitle="Real recorded facts — business rationale and policy evidence, never a generated narrative or hidden reasoning trace."
-        padded={false}
-      >
-        {journalLoading && (
-          <div className="p-3 text-muted small">
-            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-            Loading the decision journal…
-          </div>
-        )}
-        {journalError && (
-          <div className="p-3">
-            <div className="alert alert-warning py-2 mb-0 small">Could not load the decision journal: {journalError}</div>
-          </div>
-        )}
+      <div className="adv2-card">
+        <h2>
+          Decision Journal
+          <span className="adv2-hint">A chronological log of Reese's own automated checks and proposals across all of her work — not specific to any one ticket. Every line is a real recorded fact, never a generated narrative or hidden reasoning trace.</span>
+        </h2>
+        {journalLoading && <p className="adv2-body adv2-muted">Loading the decision journal…</p>}
+        {journalError && <p className="adv2-body" style={{ color: 'var(--adv2-warn)' }}>Could not load the decision journal: {journalError}</p>}
         {!journalLoading && !journalError && explainability && explainability.events.length === 0 && explainability.proposedActions.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No events or proposals recorded for this agent yet.</p>
+          <p className="adv2-body adv2-muted">No events or proposals recorded for this agent yet.</p>
         )}
         {!journalLoading && !journalError && explainability && (explainability.events.length > 0 || explainability.proposedActions.length > 0) && (
-          <ul className="list-unstyled mb-0">
+          <div>
             {explainability.events.map((event, i) => (
-              <li key={`e${i}`} className="d-flex gap-3 p-3 border-bottom small">
-                <span className="text-muted flex-shrink-0" style={{ minWidth: '5.5rem', fontFamily: 'monospace', fontSize: '0.72rem' }}>{timeAgo(event.createdAt)}</span>
+              <div key={`e${i}`} className="adv2-body" style={{ display: 'flex', gap: 12, borderTop: i === 0 ? undefined : '1px solid var(--adv2-rule)' }}>
+                <span className="adv2-mono adv2-muted" style={{ flex: 'none', minWidth: 88, fontSize: 12.5 }}>{timeAgo(event.createdAt)}</span>
                 <div style={{ minWidth: 0 }}>
                   {event.authorization ? (
                     <>
-                      <StatusBadge label={event.authorization.verdict} tone={event.authorization.verdict === 'block' ? 'danger' : event.authorization.verdict === 'approval' ? 'warning' : 'success'} />
-                      <span className="ms-2">{shadowEnforceLine(event.authorization)}</span>
+                      <span className="adv2-pill adv2-neutral" style={{ marginRight: 8 }}>Authorization check</span>
+                      <span className={adv2PillClass(event.authorization.verdict === 'block' ? 'danger' : event.authorization.verdict === 'approval' ? 'warning' : 'success')}>{event.authorization.verdict}</span>
+                      <span style={{ marginLeft: 8 }}>{shadowEnforceLine(event.authorization)}</span>
                     </>
                   ) : (
                     <>
-                      <StatusBadge label={event.outcome} tone={event.outcome === 'success' ? 'success' : event.outcome === 'failure' ? 'danger' : 'neutral'} />
-                      <span className="ms-2 text-muted">{event.eventType}{event.model ? ` · ${event.model}` : ''}{event.costUsd !== null ? ` · $${event.costUsd.toFixed(4)}` : ''}{event.durationMs !== null ? ` · ${event.durationMs}ms` : ''}</span>
+                      <span className="adv2-pill adv2-neutral" style={{ marginRight: 8 }}>System event</span>
+                      <span className={adv2PillClass(event.outcome === 'success' ? 'success' : event.outcome === 'failure' ? 'danger' : 'neutral')}>{event.outcome}</span>
+                      <span className="adv2-muted" style={{ marginLeft: 8 }}>{event.eventType}{event.model ? ` · ${event.model}` : ''}{event.costUsd !== null ? ` · $${event.costUsd.toFixed(4)}` : ''}{event.durationMs !== null ? ` · ${event.durationMs}ms` : ''}</span>
                     </>
                   )}
                 </div>
-              </li>
+              </div>
             ))}
             {explainability.proposedActions.map((action, i) => (
-              <li key={`p${i}`} className="d-flex gap-3 p-3 border-bottom small">
-                <span className="text-muted flex-shrink-0" style={{ minWidth: '5.5rem', fontFamily: 'monospace', fontSize: '0.72rem' }}>{timeAgo(action.createdAt)}</span>
+              <div key={`p${i}`} className="adv2-body" style={{ display: 'flex', gap: 12, borderTop: '1px solid var(--adv2-rule)' }}>
+                <span className="adv2-mono adv2-muted" style={{ flex: 'none', minWidth: 88, fontSize: 12.5 }}>{timeAgo(action.createdAt)}</span>
                 <div style={{ minWidth: 0 }}>
-                  <StatusBadge label={action.status} tone={action.status === 'approved' || action.status === 'applied' ? 'success' : action.status === 'rejected' ? 'danger' : 'warning'} />
-                  <span className="ms-2">{action.actionType} — "{action.reason}" (confidence {action.confidence})</span>
+                  <span className="adv2-pill adv2-neutral" style={{ marginRight: 8 }}>Proposal outcome</span>
+                  <span className={adv2PillClass(action.status === 'approved' || action.status === 'applied' ? 'success' : action.status === 'rejected' ? 'danger' : 'warning')}>{action.status}</span>
+                  <span style={{ marginLeft: 8 }}>{action.actionType} — "{action.reason}" (confidence {action.confidence})</span>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
-      </SectionCard>
-    </>
+      </div>
+    </div>
   );
 }

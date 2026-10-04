@@ -22,11 +22,13 @@ const mockGetIntake = jest.fn();
 const mockSaveDraft = jest.fn();
 const mockGetPlan = jest.fn();
 const mockPublishPlan = jest.fn();
+const mockFirstPublishedAt = jest.fn().mockResolvedValue(null);
 const mockWriteDocs = jest.fn();
 const mockRepairCreate = jest.fn();
 const mockMaterialize = jest.fn();
 const mockRepoFor = jest.fn();
 const mockSequelizeQuery = jest.fn();
+const mockListByStatus = jest.fn();
 
 jest.mock('../decomposeService', () => ({ decomposeBuild: (...a: any[]) => mockDecompose(...a) }));
 jest.mock('../planStore', () => ({
@@ -35,6 +37,11 @@ jest.mock('../planStore', () => ({
   savePlanDraft: (...a: any[]) => mockSaveDraft(...a),
   getPlan: (...a: any[]) => mockGetPlan(...a),
   publishPlan: (...a: any[]) => mockPublishPlan(...a),
+  // The build window is floored on the FIRST publish, so publishBuild asks
+  // for it. Null here means "use this publish", which is what these fixtures
+  // want: a first publish.
+  firstPublishedAt: (...a: any[]) => mockFirstPublishedAt(...a),
+  listIntakesByStatus: (...a: any[]) => mockListByStatus(...a),
 }));
 jest.mock('../repoWriter', () => ({
   writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a),
@@ -58,7 +65,7 @@ jest.mock('../../../config/database', () => ({
   sequelize: { query: (...a: any[]) => mockSequelizeQuery(...a) },
 }));
 
-import { startBuild } from '../sbpOrchestrator';
+import { startBuild, recoverStrandedBuilds } from '../sbpOrchestrator';
 import { BuildPlan } from '../planContract';
 import { hashPlan } from '../planHash';
 
@@ -116,6 +123,7 @@ beforeEach(() => {
   delete process.env.SBP_AUTO_PUBLISH;
   mockGetIntake.mockResolvedValue({ project_id: PROJECT, idea: INPUT.idea, status: 'captured', correlation_id: 'corr-1' });
   mockSaveIntake.mockResolvedValue({ project_id: PROJECT, status: 'generating' });
+  mockListByStatus.mockResolvedValue([]);
   mockRepairCreate.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ stories: [] }) } }] });
   mockDecompose.mockResolvedValue({ plan: goodPlan, attempts: 1, model: 'gpt-4o', client: { create: mockRepairCreate } });
   mockSaveDraft.mockImplementation(async (_p: string, plan: BuildPlan) =>
@@ -259,5 +267,126 @@ describe('SBP_AUTO_PUBLISH=off', () => {
     expect(mockPublishPlan).not.toHaveBeenCalled();
     expect(mockSaveDraft).toHaveBeenCalled();
     expect(finalStatus()).toBe('drafted');
+  });
+});
+
+// ── 4. holdForReview: the same plan, waiting on a person ─────────────────────
+//
+// The admin door onto this pipeline (internshipProjectGeneration) generates a
+// project FOR someone. Auto-publishing it would mean the reviewer approves a
+// plan the intern is already looking at, which is not a review. `holdForReview`
+// is the per-build version of the kill switch `autoPublishEnabled`'s own comment
+// anticipated, and these hold the line that it changes WHO publishes and nothing
+// else about the plan.
+describe('a build held for review', () => {
+  it('does NOT publish, so nobody sees it before the reviewer does', async () => {
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(mockPublishPlan).not.toHaveBeenCalled();
+    expect(mockMaterialize).not.toHaveBeenCalled();
+  });
+
+  it('rests at drafted — the one reading of that status which is not a defect', async () => {
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(finalStatus()).toBe('drafted');
+  });
+
+  it('still writes the plan, so the reviewer has something to read', async () => {
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(mockSaveDraft).toHaveBeenCalledTimes(1);
+    const [, plan] = mockSaveDraft.mock.calls[0];
+    expect(plan).toEqual(goodPlan);
+  });
+
+  it('is distinguishable in the log from a publish that FAILED', async () => {
+    const logged: string[] = [];
+    (console.log as jest.Mock).mockImplementation((line: string) => {
+      try { logged.push(JSON.parse(line).event); } catch { /* not our line */ }
+    });
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    // A build resting at `drafted` is otherwise ambiguous: held on purpose, or
+    // auto-publish threw? The sweep that finds stranded plans has to tell them
+    // apart, so the hold says so explicitly.
+    expect(logged).toContain('sbp_held_for_review');
+    expect(logged).not.toContain('sbp_autopublish_failed');
+  });
+
+  it('leaves the student path untouched when the flag is absent', async () => {
+    await startBuild(INPUT as any);
+    await flush();
+    expect(mockPublishPlan).toHaveBeenCalledTimes(1);
+    expect(finalStatus()).toBe('published');
+  });
+
+  it('holds a blocking-gated plan exactly as it would without the flag', async () => {
+    // Belt and braces: the hold must not become a way to publish something the
+    // gate refused. A gapped plan is not publishable either way.
+    mockDecompose.mockResolvedValue({ plan: gappedPlan, attempts: 1, model: 'gpt-4o', client: { create: mockRepairCreate } });
+    mockRepairCreate.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ stories: [] }) } }] });
+    await startBuild({ ...INPUT, holdForReview: true } as any);
+    await flush();
+    expect(mockPublishPlan).not.toHaveBeenCalled();
+    expect(finalStatus()).toBe('gate_failed');
+  });
+});
+
+// ── 5. The hold has to survive the process that is holding it ────────────────
+//
+// Section 4 proves a held build does not publish. This proves it is still held
+// after the restart that interrupts it — which is the case that actually failed.
+//
+// MEASURED ON PRODUCTION, 2026-10-01. A build started with holdForReview: true
+// was interrupted by a container restart at 03:06:47, resumed by the stranded
+// sweep at 03:06:54 under a new correlation id, and logged `sbp_autopublished`
+// at 03:07:37. It published itself to the student. The flag lived only on the
+// in-memory StartBuildInput, and `inputFromIntake` rebuilds the job from the
+// `build_intake` row, which had no column to keep it in.
+//
+// Every deploy kills this process, so "holds unless we deploy" is not a hold.
+describe('a held build that a restart interrupted', () => {
+  const strandedRow = (over: Record<string, unknown> = {}) => ({
+    project_id: PROJECT,
+    enrollment_id: 'enr-1',
+    idea: INPUT.idea,
+    size: 'project',
+    status: 'generating',
+    correlation_id: 'corr-before-the-restart',
+    ...over,
+  });
+
+  it('is STILL HELD when the sweep resumes it, so the deploy cannot publish it', async () => {
+    mockListByStatus.mockResolvedValue([strandedRow({ hold_for_review: true })]);
+
+    await recoverStrandedBuilds();
+    await flush();
+
+    expect(mockSaveDraft).toHaveBeenCalled();      // it generated
+    expect(mockPublishPlan).not.toHaveBeenCalled(); // and stopped there
+    expect(mockMaterialize).not.toHaveBeenCalled();
+  });
+
+  it('still publishes a resumed build that was never held', async () => {
+    // The honesty runs both ways. The sweep exists so an interrupted student build
+    // reaches them; restoring the hold must not quietly strand every resumed build.
+    mockListByStatus.mockResolvedValue([strandedRow({ hold_for_review: false })]);
+
+    await recoverStrandedBuilds();
+    await flush();
+
+    expect(mockPublishPlan).toHaveBeenCalled();
+  });
+
+  it('treats a row from before the column existed as not held', async () => {
+    // Rows written before this fix have no value there; undefined must read as
+    // "publish", because that was the behaviour those builds were started under.
+    mockListByStatus.mockResolvedValue([strandedRow()]);
+
+    await recoverStrandedBuilds();
+    await flush();
+
+    expect(mockPublishPlan).toHaveBeenCalled();
   });
 });

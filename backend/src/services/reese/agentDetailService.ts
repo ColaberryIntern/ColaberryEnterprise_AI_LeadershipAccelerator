@@ -8,7 +8,7 @@ import { Ticket, TicketActivity } from '../../models';
 import { derivePresence } from '../communityService';
 import type { CommunityPresenceStatus } from '../../models/CommunityMember';
 import { buildCreatorIdMatchList } from '../agentBlueprint/legacyCreatorAliases';
-import { countOpenTicketsForAgent, countCompletedTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, countCompletedTicketsForAgent, countVerifiedResolutionsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../workforce/liveAgentsService';
 import { deriveAgentCapabilities } from './agentToolCapabilities';
 import { resolveReportsToChainWithTrail } from '../ticketCreatorReportsToResolver';
 import { getPersonaVersionHistory } from '../agentPersonaVersionHistoryService';
@@ -52,6 +52,27 @@ async function resolveHumanIdentity(orgMemberId: string): Promise<{ id: string; 
     if (enrollment?.full_name) name = enrollment.full_name;
   }
   return { id: member.id, name, email: member.email };
+}
+
+/** Reports-to editor (2026-09-30) — pure extraction of this file's own existing
+ * reports_to-building logic (org-chart hierarchy build, 2026-08-19), so
+ * agentReportsToService.ts's new write path can return the SAME real, recomputed
+ * display shape this file already builds for GET, rather than a second copy of this
+ * logic. Zero behaviour change for this file's own existing call site below. */
+export async function buildReportsToView(agent: AiAgent): Promise<AgentDetailResult['reports_to']> {
+  if (!agent.reports_to_type) return null;
+  const { resolvedHumanId, trail } = await resolveReportsToChainWithTrail(agent);
+  const resolvedHuman = resolvedHumanId ? await resolveHumanIdentity(resolvedHumanId) : null;
+  // Immediate next hop, only when it's an agent (2026-08-23 "link to the
+  // agent they report to" ask) — a single extra lookup, not a second copy
+  // of the recursive chain-walk (that stays the one canonical
+  // implementation in ticketCreatorReportsToResolver.ts).
+  let immediateAgent: { id: string; name: string } | null = null;
+  if (agent.reports_to_type === 'agent' && agent.reports_to_id) {
+    const nextAgent = await AiAgent.findByPk(agent.reports_to_id);
+    if (nextAgent) immediateAgent = { id: nextAgent.id, name: nextAgent.agent_name };
+  }
+  return { trail, resolved_human: resolvedHuman, immediate_agent: immediateAgent };
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetailResult | null> {
@@ -185,6 +206,13 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
   // see countCompletedTicketsForAgent()'s own header comment for why).
   const completedTicketCount30d = adminUser ? await countCompletedTicketsForAgent(adminUser.id, agent) : 0;
 
+  // Agent Detail polish round 5 (2026-09-30) — Results & Reports' real
+  // "Verified resolution" stat (see countVerifiedResolutionsForAgent()'s own
+  // header comment for the honest evidence+success gate this mirrors).
+  const verifiedResolution = adminUser
+    ? await countVerifiedResolutionsForAgent(adminUser.id, agent)
+    : { verified: 0, owned: 0, mostRecentVerifiedTicketId: null };
+
   // Dara v2 Phase 6 ("open-ticket accountability") — same shared query shape,
   // ASC instead of COUNT. Null (not 0) when there's nothing open, so a caller
   // never confuses "no data" with "brand new, zero days old".
@@ -197,21 +225,10 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
 
   // reports_to (org-chart hierarchy build, 2026-08-19) — null when this agent
   // has no reports_to_type configured at all, never a fabricated empty shape.
-  let reportsTo: AgentDetailResult['reports_to'] = null;
-  if (agent.reports_to_type) {
-    const { resolvedHumanId, trail } = await resolveReportsToChainWithTrail(agent);
-    const resolvedHuman = resolvedHumanId ? await resolveHumanIdentity(resolvedHumanId) : null;
-    // Immediate next hop, only when it's an agent (2026-08-23 "link to the
-    // agent they report to" ask) — a single extra lookup, not a second copy
-    // of the recursive chain-walk (that stays the one canonical
-    // implementation in ticketCreatorReportsToResolver.ts).
-    let immediateAgent: { id: string; name: string } | null = null;
-    if (agent.reports_to_type === 'agent' && agent.reports_to_id) {
-      const nextAgent = await AiAgent.findByPk(agent.reports_to_id);
-      if (nextAgent) immediateAgent = { id: nextAgent.id, name: nextAgent.agent_name };
-    }
-    reportsTo = { trail, resolved_human: resolvedHuman, immediate_agent: immediateAgent };
-  }
+  // buildReportsToView() above is the one canonical builder (extracted 2026-09-30
+  // for the reports-to editor's write path to reuse — pure extraction here, zero
+  // behaviour change).
+  const reportsTo: AgentDetailResult['reports_to'] = await buildReportsToView(agent);
 
   // Task visibility (2026-08-26) — this agent's own real recurring tasks:
   // sibling AiAgent rows sharing its `module` (e.g. 'reese'), excluding
@@ -306,6 +323,8 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
       max_proposals_per_run: agent.max_proposals_per_run ?? null,
       autonomy_level_set_at: agent.autonomy_level_set_at ?? null,
       autonomy_level_source: agent.autonomy_level_source ?? null,
+      reports_to_type: agent.reports_to_type ?? null,
+      reports_to_id: agent.reports_to_id ?? null,
       abac_mode_override: abacOverride,
       abac_mode_override_set_at: (agent as any).abac_mode_override_set_at ?? null,
       abac_mode_override_set_by: (agent as any).abac_mode_override_set_by ?? null,
@@ -323,10 +342,24 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
     live_status: liveStatus,
     open_ticket_count: openTicketCount,
     completed_ticket_count_30d: completedTicketCount30d,
+    verified_resolution_count: verifiedResolution.verified,
+    owned_ticket_count_all_time: verifiedResolution.owned,
+    most_recent_verified_ticket_id: verifiedResolution.mostRecentVerifiedTicketId,
     oldest_open_ticket_age_days: oldestOpenTicketAge?.ageDays ?? null,
     tickets: tickets.map((t: any) => {
       const latestActivity = latestActivityByTicketId.get(t.id) ?? null;
       const needsReply = computeNeedsReply(latestActivity?.actor_id ?? null, ownIdentityIds);
+      // Ticket due-date validation gap fix (2026-09-28) surfaced a real,
+      // pre-existing bug here: Ticket.due_date is a Sequelize DATEONLY
+      // column, which comes back from a real DB read as a plain string
+      // (e.g. "2026-10-02"), never a JS Date, regardless of the model's
+      // own `declare due_date: Date | null` claiming otherwise. Before this
+      // session's fix, almost no ticket had a due_date at all, so
+      // computeStatusBucket()'s `dueDate.getTime()` call almost never ran
+      // against a real value — now every open ticket has one, so it ran on
+      // every ticket and crashed this page's tickets mapping outright.
+      // Coerce once, here, rather than trusting the model's own type.
+      const dueDate = t.due_date ? new Date(t.due_date) : null;
       return {
         id: t.id,
         ticket_number: t.ticket_number ?? null,
@@ -341,7 +374,7 @@ export async function getAgentDetail(agentId: string): Promise<AgentDetailResult
         // never surfaced in this response (response-shape change only, no
         // schema change; see models/Ticket.ts's real due_date column).
         due_date: t.due_date ?? null,
-        status_bucket: computeStatusBucket({ status: t.status, dueDate: t.due_date ?? null, needsReply }),
+        status_bucket: computeStatusBucket({ status: t.status, dueDate, needsReply }),
       };
     }),
     ticket_breakdown: ticketBreakdown,

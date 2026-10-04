@@ -3,8 +3,6 @@ import { AgentDetail } from '../../../services/agentDetailApi';
 import { AUTONOMY_LEVELS, AUTONOMY_LEVEL_DESCRIPTIONS, AutonomyLevel } from '../../../services/workforceOrgChartApi';
 import { LEVEL_PILL_CLASS } from './AgentDetailV2Header';
 import { timeAgo } from '../shell/trust';
-import AgentOverviewV2Tickets from './AgentOverviewV2Tickets';
-import AgentOverviewV2WorkExplained from './AgentOverviewV2WorkExplained';
 import AgentOverviewV2AgenticExplainer from './AgentOverviewV2AgenticExplainer';
 import { scheduledWorkColors } from './agentDetailV2Correlation';
 import type { TabKey } from './AgentDetailV2Header';
@@ -40,7 +38,7 @@ interface Props {
 }
 
 export default function AgentOverviewV2MainColumn({ detail, onNavigate }: Props) {
-  const { agent, trust_contract, cost_summary, authorization_summary, related_tasks, owned_behaviors, tickets, ticket_breakdown } = detail;
+  const { agent, trust_contract, cost_summary, authorization_summary, related_tasks, owned_behaviors } = detail;
   const currentIndex = agent.autonomy_level ? AUTONOMY_LEVELS.indexOf(agent.autonomy_level) : -1;
   const workColor = scheduledWorkColors(detail);
 
@@ -131,7 +129,11 @@ export default function AgentOverviewV2MainColumn({ detail, onNavigate }: Props)
           Ali's mockup. Real relocation, not a duplicate — this section no
           longer renders here. */}
 
-      <AgentOverviewV2WorkExplained agentId={detail.agent.id} onNavigate={onNavigate} />
+      {/* Agent Detail polish round 5 (2026-09-30) — Ali, live: "work
+          explained should be in the top right section of 'Needs Ali'
+          section." Relocated to AgentOverviewV2.tsx's own new
+          .adv2-needs-row, paired with Needs Ali — this section no longer
+          renders here. */}
 
       <section className="adv2-card">
         <h2>Scheduled work <span className="adv2-hint">{related_tasks.length} task{related_tasks.length === 1 ? '' : 's'}</span></h2>
@@ -198,7 +200,11 @@ export default function AgentOverviewV2MainColumn({ detail, onNavigate }: Props)
         ))}
       </section>
 
-      <AgentOverviewV2Tickets tickets={tickets} ticketBreakdown={ticket_breakdown} openTicketCount={detail.open_ticket_count} />
+      {/* Agent Detail polish round 3 (2026-09-29) — Ali, live: "let's remove
+          ticket activity since it's redundant and we already have it in the
+          work category." AgentOverviewV2Tickets.tsx's own mount removed;
+          the component itself is left in the tree, currently unused —
+          disclosed in this round's handoff.md, not silently deleted. */}
 
       {/* Agent Detail redesign, Track A1 — the mockup's static "What makes
           this agentic?" explainer, placed last in this column (same column

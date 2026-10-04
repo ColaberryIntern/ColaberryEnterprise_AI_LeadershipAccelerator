@@ -49,6 +49,38 @@ export function centralWallClockToInstant(naive: Date): Date {
 }
 
 /**
+ * The INVERSE of `centralWallClockToInstant`, for an arbitrary zone: given a real
+ * instant, what does the wall clock read in `timeZone`?
+ *
+ * Returns `YYYY-MM-DDTHH:mm:ss` with NO trailing `Z`, because the one caller that
+ * needs it — the Zoom adapter — pairs a naive local string with an explicit
+ * `timezone` field, which is how Zoom's API expects a non-GMT start time.
+ *
+ * WHY THIS EXISTS. `meetingProvider.ts` used to do `instant.toISOString().slice(0,19)`
+ * and send the result alongside `timezone: 'America/Chicago'`. That takes the UTC
+ * wall clock and tells Zoom to read it as Central, so every booking was created
+ * 5-6 hours late. Slicing the `Z` off an ISO string does not convert anything; it
+ * only discards the one piece of information that said which zone the digits were in.
+ *
+ * DST is handled by `Intl` rather than by arithmetic, so a booking on either side of
+ * a transition converts with the offset actually in force on that date.
+ */
+export function instantToWallClock(instant: Date, timeZone: string): string {
+  const parts: Record<string, string> = {};
+  for (const p of new Intl.DateTimeFormat('en-US', {
+    timeZone, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(instant)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  // `hour12: false` yields "24" for midnight in some ICU builds — the same guard
+  // centralWallClockToInstant above already carries, for the same reason.
+  const hour = parts.hour === '24' ? '00' : parts.hour;
+  return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}:${parts.second}`;
+}
+
+/**
  * Normalize a stored class time to 24h "HH:MM".
  *
  * Lives here, not in a service, because more than one module needs it and a

@@ -1,15 +1,12 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { SectionCard, StatusBadge } from './shell';
-import { timeAgo } from './shell/trust';
-import { AgentDetail, setAgentAbacOverride } from '../../services/agentDetailApi';
-import {
-  AgentMemoryProposal,
-  listMemoryProposals,
-  proposeMemory,
-  approveMemoryProposal,
-  rejectMemoryProposal,
-} from '../../services/agentMemoryProposalApi';
-import { ManagerDirective, listDirectives, revokeDirective } from '../../services/managerDirectiveApi';
+import React from 'react';
+import type { TabKey } from './agentDetailV2/AgentDetailV2Header';
+import { AgentDetail } from '../../services/agentDetailApi';
+import AgentTrustControlGoalsScore from './agentDetailV2/AgentTrustControlGoalsScore';
+import AgentTrustControlMemory from './agentDetailV2/AgentTrustControlMemory';
+import AgentTrustControlEnforcement from './agentDetailV2/AgentTrustControlEnforcement';
+import AgentTrustControlDirectives from './agentDetailV2/AgentTrustControlDirectives';
+import AgentTrustControlArchitecture from './agentDetailV2/AgentTrustControlArchitecture';
+import AgentTrustControlAuthority from './agentDetailV2/AgentTrustControlAuthority';
 
 // AI Agent Dashboard redesign, Checkpoint E: Trust & Control, slice 1
 // (2026-09-03) — the fifth and last design section. Consolidated Governed
@@ -33,427 +30,40 @@ import { ManagerDirective, listDirectives, revokeDirective } from '../../service
 // AgentOverviewV2Sidebar.tsx's own inline Role Charter card, reusing
 // agentRoleCharterApi.ts directly. The old standalone AgentCharterTab.tsx
 // component was deleted the same pass — nothing rendered it any more.
+//
+// Track A2 (2026-09-22) — this file hit the repo's 500-line ceiling once 2
+// new real cards (Independence with boundaries, Work controls link) were
+// needed for Ali's real mockup. Split into one adv2-styled sub-component per
+// section (GOALS score, Governed Memory, Authorization Enforcement, Standing
+// Directives, Architecture — each a pure extraction, zero logic change) plus
+// the 2 new cards. This file is now a thin orchestrator.
 
 interface Props {
   agentId: string;
   detail: AgentDetail;
+  onNavigate: (tab: TabKey) => void;
 }
 
-// The real defaults agentPermissionService.ts falls back to when the
-// database column is null (an on-demand agent like CoryStrategicAgent never
-// goes through the registry-seed default-assignment path) — disclosed
-// explicitly here rather than silently substituted, so the drawer never
-// shows a fabricated number or a confusing blank for a real null.
-const DEFAULT_MAX_RUNS_PER_HOUR = 60;
-const DEFAULT_MAX_WRITES_PER_EXECUTION = 100;
-const DEFAULT_MAX_PROPOSALS_PER_RUN = 50;
-
-function executionLimit(value: number | null, fallback: number): string {
-  return value === null ? `Not set — ${fallback} applies` : String(value);
-}
-
-function goalsDimensionSource(source: 'live' | 'fixed') {
-  return source === 'live'
-    ? <StatusBadge label="Live" tone="success" icon="pulse-line" />
-    : <StatusBadge label="Declared" tone="neutral" icon="file-list-3-line" />;
-}
-
-function memoryStatusBadge(status: AgentMemoryProposal['status']) {
-  if (status === 'pending') return <StatusBadge label="Pending review" tone="warning" icon="time-line" />;
-  if (status === 'approved') return <StatusBadge label="Approved" tone="success" />;
-  return <StatusBadge label="Rejected" tone="neutral" />;
-}
-
-// Real-enforcement scoping, Phase 3 (2026-09-20) — the per-agent shadow/enforce switch Ali
-// asked for. 'off' is included only because AgentDetail's abac_effective_mode type allows it
-// (the platform-wide kill switch) — it's not a value this card's own controls can ever select.
-function abacModeBadge(mode: 'off' | 'shadow' | 'enforce') {
-  if (mode === 'enforce') return <StatusBadge label="Enforce" tone="success" icon="shield-check-line" />;
-  if (mode === 'off') return <StatusBadge label="Off (platform-wide)" tone="neutral" icon="shield-line" />;
-  return <StatusBadge label="Shadow" tone="info" icon="eye-line" />;
-}
-
-type AbacSelection = 'default' | 'shadow' | 'enforce';
-
-export default function AgentTrustControlTab({ agentId, detail }: Props) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [proposals, setProposals] = useState<AgentMemoryProposal[]>([]);
-  const [proposalsLoading, setProposalsLoading] = useState(true);
-  const [proposalsError, setProposalsError] = useState<string | null>(null);
-  const [decidingId, setDecidingId] = useState<string | null>(null);
-
-  const [content, setContent] = useState('');
-  const [evidence, setEvidence] = useState('');
-  const [proposing, setProposing] = useState(false);
-  const [proposeError, setProposeError] = useState<string | null>(null);
-
-  const [directives, setDirectives] = useState<ManagerDirective[]>([]);
-  const [directivesLoading, setDirectivesLoading] = useState(true);
-  const [directivesError, setDirectivesError] = useState<string | null>(null);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  // Real-enforcement scoping, Phase 3 — local state seeded from the detail prop once, then
-  // updated from the real save response (never re-derived/guessed client-side), same pattern
-  // as this file's own Governed Memory / Standing Directives sections above.
-  const [abacOverride, setAbacOverride] = useState<'shadow' | 'enforce' | null>(detail.agent.abac_mode_override);
-  const [abacSetAt, setAbacSetAt] = useState<string | null>(detail.agent.abac_mode_override_set_at);
-  const [abacSetBy, setAbacSetBy] = useState<string | null>(detail.agent.abac_mode_override_set_by);
-  const [abacSelection, setAbacSelection] = useState<AbacSelection>(detail.agent.abac_mode_override ?? 'default');
-  const [abacSaving, setAbacSaving] = useState(false);
-  const [abacError, setAbacError] = useState<string | null>(null);
-  const abacGlobalDefault = detail.agent.abac_global_default;
-  // Global 'off' always wins over any per-agent override, matching the real chokepoint's own
-  // behavior (agentAuthorizationService.ts) — reproduced here so a save's local recomputation
-  // never shows an override "winning" over a global 'off' state that it never actually can.
-  const abacEffectiveMode = abacGlobalDefault === 'off' ? 'off' : (abacOverride ?? abacGlobalDefault);
-
-  const handleSaveAbacOverride = useCallback(async () => {
-    setAbacSaving(true);
-    setAbacError(null);
-    try {
-      const value = abacSelection === 'default' ? null : abacSelection;
-      const result = await setAgentAbacOverride(agentId, value);
-      setAbacOverride(result.override);
-      setAbacSetAt(result.setAt);
-      setAbacSetBy(result.setBy);
-    } catch (err: any) {
-      setAbacError(err?.response?.data?.error || 'Failed to update authorization enforcement');
-    } finally {
-      setAbacSaving(false);
-    }
-  }, [agentId, abacSelection]);
-
-  const fetchProposals = useCallback(async () => {
-    setProposalsLoading(true);
-    setProposalsError(null);
-    try {
-      setProposals(await listMemoryProposals(agentId));
-    } catch (err: any) {
-      setProposalsError(err?.response?.data?.error || 'Failed to load memory proposals');
-    } finally {
-      setProposalsLoading(false);
-    }
-  }, [agentId]);
-
-  const fetchDirectives = useCallback(async () => {
-    setDirectivesLoading(true);
-    setDirectivesError(null);
-    try {
-      setDirectives(await listDirectives(agentId));
-    } catch (err: any) {
-      setDirectivesError(err?.response?.data?.error || 'Failed to load directives');
-    } finally {
-      setDirectivesLoading(false);
-    }
-  }, [agentId]);
-
-  useEffect(() => { fetchProposals(); }, [fetchProposals]);
-  useEffect(() => { fetchDirectives(); }, [fetchDirectives]);
-
-  const handlePropose = useCallback(async () => {
-    if (!content.trim()) return;
-    setProposing(true);
-    setProposeError(null);
-    try {
-      await proposeMemory(agentId, content.trim(), evidence.trim() || undefined);
-      setContent('');
-      setEvidence('');
-      await fetchProposals();
-    } catch (err: any) {
-      setProposeError(err?.response?.data?.error || 'Failed to propose memory');
-    } finally {
-      setProposing(false);
-    }
-  }, [agentId, content, evidence, fetchProposals]);
-
-  const handleDecide = useCallback(async (proposalId: string, decision: 'approve' | 'reject') => {
-    setDecidingId(proposalId);
-    try {
-      if (decision === 'approve') {
-        await approveMemoryProposal(agentId, proposalId);
-      } else {
-        await rejectMemoryProposal(agentId, proposalId);
-      }
-      await fetchProposals();
-    } catch (err: any) {
-      setProposalsError(err?.response?.data?.error || `Failed to ${decision} memory proposal`);
-    } finally {
-      setDecidingId(null);
-    }
-  }, [agentId, fetchProposals]);
-
-  const handleRevoke = useCallback(async (directiveId: string) => {
-    setRevokingId(directiveId);
-    try {
-      await revokeDirective(agentId, directiveId);
-      await fetchDirectives();
-    } catch (err: any) {
-      setDirectivesError(err?.response?.data?.error || 'Failed to revoke directive');
-    } finally {
-      setRevokingId(null);
-    }
-  }, [agentId, fetchDirectives]);
-
-  const activeDirectives = directives.filter((d) => d.status === 'active');
-  const revokedDirectives = directives.filter((d) => d.status === 'revoked');
-
+export default function AgentTrustControlTab({ agentId, detail, onNavigate }: Props) {
   return (
     <>
-      <SectionCard
-        title="GOALS™ Score"
-        icon="shield-star-line"
-        subtitle="Colaberry's operational-excellence framework, from Ram Katamaraja's Trust Before Intelligence — how you measure whether an agent stays trustworthy after it's built. Real score, computed from this agent's own real data."
-        padded={false}
-      >
-        <div className="p-3 border-bottom d-flex align-items-baseline gap-3">
-          <span style={{ fontSize: '2.25rem', fontWeight: 700, lineHeight: 1 }}>
-            {detail.goals_overall.toFixed(1)}
-          </span>
-          <span className="text-muted">/ 5 overall</span>
-        </div>
-        <div className="row g-0">
-          {detail.goals.map((g, i) => (
-            <div
-              key={g.key}
-              className={`col-md-6 p-3 ${i % 2 === 0 ? 'border-end' : ''} ${i < detail.goals.length - 2 ? 'border-bottom' : ''}`}
-            >
-              <div className="d-flex align-items-center justify-content-between mb-1">
-                <span className="fw-semibold">{g.label}</span>
-                <span className="d-flex align-items-center gap-2">
-                  <span className="fw-semibold">{g.score}/5</span>
-                  {goalsDimensionSource(g.source)}
-                </span>
-              </div>
-              <p className="text-muted small mb-0">{g.evidence}</p>
-            </div>
-          ))}
-        </div>
-        <p className="text-muted small px-3 py-2 mb-0 border-top">
-          G-O-A-L-S maps back to the book's own INPACT™ needs: Governance→Permitted, Observability→Transparent, Availability→Instant, Lexicon→Natural/Contextual, Solid→Adaptive.
-        </p>
-      </SectionCard>
+      <AgentTrustControlGoalsScore detail={detail} />
+      <AgentTrustControlMemory agentId={agentId} />
+      <AgentTrustControlEnforcement agentId={agentId} detail={detail} />
+      <AgentTrustControlAuthority agentId={agentId} />
 
-      <SectionCard
-        title="Governed Memory"
-        icon="brain-line"
-        subtitle="A proposed fact only reaches this agent's real runtime context after a separate, explicit approval here — never automatically."
-        padded={false}
-      >
-        {proposalsError && <div className="p-3"><div className="alert alert-warning py-2 mb-0 small">{proposalsError}</div></div>}
-        {proposalsLoading && <div className="p-3 text-muted small">Loading…</div>}
-        {!proposalsLoading && proposals.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No memory has been proposed for this agent yet.</p>
-        )}
-        {!proposalsLoading && proposals.map((p, i) => (
-          <div key={p.id} className={`p-3 ${i < proposals.length - 1 ? 'border-bottom' : ''}`}>
-            <div className="d-flex align-items-start justify-content-between gap-2">
-              <div>
-                {memoryStatusBadge(p.status)}
-                <p className="mb-1 mt-2">{p.content}</p>
-                {p.evidence && <p className="text-muted small mb-1"><strong>Evidence:</strong> {p.evidence}</p>}
-                <div className="text-muted small">
-                  Proposed by {p.proposedByEmail}, {timeAgo(p.createdAt)}
-                  {p.status !== 'pending' && p.reviewedByEmail && (
-                    <> · {p.status} by {p.reviewedByEmail}{p.reviewedAt ? `, ${timeAgo(p.reviewedAt)}` : ''}</>
-                  )}
-                </div>
-              </div>
-              {p.status === 'pending' && (
-                <div className="d-flex gap-2 flex-shrink-0">
-                  <button
-                    className="btn btn-success btn-sm"
-                    disabled={decidingId === p.id}
-                    onClick={() => handleDecide(p.id, 'approve')}
-                  >
-                    {decidingId === p.id ? 'Working…' : 'Approve'}
-                  </button>
-                  <button
-                    className="btn btn-outline-danger btn-sm"
-                    disabled={decidingId === p.id}
-                    onClick={() => handleDecide(p.id, 'reject')}
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-
-        <div className="p-3 border-top">
-          {proposeError && <div className="alert alert-danger py-2 small">{proposeError}</div>}
-          <label className="form-label small fw-semibold">Propose a fact</label>
-          <textarea
-            className="form-control form-control-sm mb-2"
-            rows={2}
-            placeholder="What should this agent remember?"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={2000}
-          />
-          <label className="form-label small fw-semibold">Evidence (optional)</label>
-          <textarea
-            className="form-control form-control-sm mb-2"
-            rows={2}
-            placeholder="Why is this true? Link, quote, or context."
-            value={evidence}
-            onChange={(e) => setEvidence(e.target.value)}
-            maxLength={4000}
-          />
-          <button className="btn btn-primary btn-sm" disabled={proposing || !content.trim()} onClick={handlePropose}>
-            {proposing ? 'Proposing…' : 'Propose'}
-          </button>
+      <div className="adv2-card" style={{ marginTop: 22 }}>
+        <h2>Work controls</h2>
+        <div className="adv2-body">
+          <p className="adv2-muted" style={{ marginTop: 0 }}>
+            Behaviour switches live on the Overview tab's Employee Facts card.
+          </p>
+          <button className="adv2-btn" onClick={() => onNavigate('overview')}>Go to Employee Facts</button>
         </div>
-      </SectionCard>
+      </div>
 
-      <SectionCard
-        title="Authorization Enforcement"
-        icon="shield-flash-line"
-        subtitle="Whether this agent's real actions are actually blocked when policy would deny them, or only logged (shadow mode). Set per agent here, or leave it following the platform-wide default."
-        padded={false}
-      >
-        <div className="p-3 border-bottom">
-          <div className="d-flex align-items-center gap-2 mb-2">
-            <span className="fw-semibold">Currently:</span>
-            {abacModeBadge(abacEffectiveMode)}
-          </div>
-          {abacGlobalDefault === 'off' ? (
-            <p className="text-muted small mb-0">
-              The platform-wide authorization gate is fully off right now — that always wins over any per-agent setting below.
-            </p>
-          ) : abacOverride === null ? (
-            <p className="text-muted small mb-0">
-              Following the platform-wide default ({abacGlobalDefault}). No one has set an override for this agent.
-            </p>
-          ) : (
-            <p className="text-muted small mb-0">
-              Overridden to <strong>{abacOverride}</strong> by {abacSetBy || 'an admin'}
-              {abacSetAt ? `, ${timeAgo(abacSetAt)}` : ''} — the platform-wide default is currently {abacGlobalDefault}.
-            </p>
-          )}
-        </div>
-        <div className="p-3">
-          {abacError && <div className="alert alert-danger py-2 small">{abacError}</div>}
-          <div className="alert alert-warning py-2 small mb-3">
-            Setting this to Enforce has a real, immediate effect once the platform-wide default isn't also off: this
-            agent's held actions actually stop, instead of only being logged.
-          </div>
-          <div className="d-flex flex-column gap-2 mb-3">
-            {(['default', 'shadow', 'enforce'] as const).map((choice) => (
-              <label key={choice} className="d-flex align-items-center gap-2">
-                <input
-                  type="radio"
-                  name={`abac-selection-${agentId}`}
-                  checked={abacSelection === choice}
-                  onChange={() => setAbacSelection(choice)}
-                />
-                <span>
-                  {choice === 'default' && `Follow platform-wide default (${abacGlobalDefault})`}
-                  {choice === 'shadow' && 'Shadow — log only, never block'}
-                  {choice === 'enforce' && 'Enforce — actually block when policy denies'}
-                </span>
-              </label>
-            ))}
-          </div>
-          <button
-            className="btn btn-primary btn-sm"
-            disabled={abacSaving || abacSelection === (abacOverride ?? 'default')}
-            onClick={handleSaveAbacOverride}
-          >
-            {abacSaving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Standing Directives"
-        icon="flag-line"
-        subtitle="Review and revoke this agent's active directives here. To create a new one, use Ask/Direct on the Talk tab."
-        padded={false}
-      >
-        {directivesError && <div className="p-3"><div className="alert alert-warning py-2 mb-0 small">{directivesError}</div></div>}
-        {directivesLoading && <div className="p-3 text-muted small">Loading…</div>}
-        {!directivesLoading && directives.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No directives have been given to this agent yet.</p>
-        )}
-        {!directivesLoading && activeDirectives.map((d, i) => (
-          <div key={d.id} className={`d-flex align-items-start justify-content-between gap-2 p-3 ${i < activeDirectives.length - 1 || revokedDirectives.length > 0 ? 'border-bottom' : ''}`}>
-            <div>
-              <StatusBadge label="Active" tone="success" />
-              <p className="mb-1 mt-2">{d.directiveText}</p>
-              <div className="text-muted small">Set by {d.createdByEmail}, {timeAgo(d.createdAt)}</div>
-            </div>
-            <button
-              className="btn btn-outline-secondary btn-sm flex-shrink-0"
-              disabled={revokingId === d.id}
-              onClick={() => handleRevoke(d.id)}
-            >
-              {revokingId === d.id ? 'Working…' : 'Revoke'}
-            </button>
-          </div>
-        ))}
-        {!directivesLoading && revokedDirectives.map((d, i) => (
-          <div key={d.id} className={`p-3 ${i < revokedDirectives.length - 1 ? 'border-bottom' : ''}`}>
-            <StatusBadge label="Revoked" tone="neutral" />
-            <p className="mb-1 mt-2 text-muted">{d.directiveText}</p>
-            <div className="text-muted small">
-              Set by {d.createdByEmail}, {timeAgo(d.createdAt)}
-              {d.revokedByEmail && d.revokedAt && <> · Revoked by {d.revokedByEmail}, {timeAgo(d.revokedAt)}</>}
-            </div>
-          </div>
-        ))}
-      </SectionCard>
-
-      <SectionCard
-        title="Architecture"
-        icon="settings-3-line"
-        subtitle="Platform-level configuration for this agent — not shown anywhere else on this page."
-        padded={false}
-        actions={
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => setDrawerOpen((o) => !o)}>
-            {drawerOpen ? 'Collapse' : 'Expand'}
-          </button>
-        }
-      >
-        {drawerOpen && (
-          <div className="p-3">
-            <div className="row g-3">
-              <div className="col-md-4">
-                <div className="text-muted small text-uppercase">Department</div>
-                <div>{detail.agent.department || 'Unclassified'}</div>
-              </div>
-              <div className="col-md-4">
-                <div className="text-muted small text-uppercase">Registry module</div>
-                <div>{detail.agent.module || '—'}</div>
-              </div>
-              <div className="col-md-4">
-                <div className="text-muted small text-uppercase">Source file</div>
-                <div>{detail.agent.source_file || '—'}</div>
-              </div>
-              <div className="col-md-4">
-                <div className="text-muted small text-uppercase">Max runs / hour</div>
-                <div>{executionLimit(detail.agent.max_runs_per_hour, DEFAULT_MAX_RUNS_PER_HOUR)}</div>
-              </div>
-              <div className="col-md-4">
-                <div className="text-muted small text-uppercase">Max writes / execution</div>
-                <div>{executionLimit(detail.agent.max_writes_per_execution, DEFAULT_MAX_WRITES_PER_EXECUTION)}</div>
-              </div>
-              <div className="col-md-4">
-                <div className="text-muted small text-uppercase">Max proposals / run</div>
-                <div>{executionLimit(detail.agent.max_proposals_per_run, DEFAULT_MAX_PROPOSALS_PER_RUN)}</div>
-              </div>
-              <div className="col-md-4">
-                <div className="text-muted small text-uppercase">Autonomy level set</div>
-                <div>
-                  {detail.agent.autonomy_level_set_at
-                    ? timeAgo(detail.agent.autonomy_level_set_at)
-                    : 'Never — sitting on the untouched default'}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </SectionCard>
+      <AgentTrustControlDirectives agentId={agentId} />
+      <AgentTrustControlArchitecture detail={detail} />
     </>
   );
 }

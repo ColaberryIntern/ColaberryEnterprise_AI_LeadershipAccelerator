@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { SectionCard, StatusBadge } from './shell';
 import { timeAgo } from './shell/trust';
+import { adv2PillClass } from './agentDetailV2/adv2PillTone';
 import {
   ReportSubscription, ReportRunHistory, ReportContentSection, ReportCadence, ReportPreview,
   listReportSubscriptions, createReportSubscription, updateReportSubscription, getReportRuns, getReportPreview,
@@ -13,6 +13,11 @@ import {
 // renders as "Not enough data yet" — never a fabricated 0% or 100% — and a
 // failed run's real error_message is always shown, never hidden behind a
 // bare status badge.
+//
+// Track A2 (2026-09-22) — reflowed from SectionCard/StatusBadge/Bootstrap to
+// this page's adv2-* visual language, matching Ali's real mockup
+// (preview (3).html's "Results & reports" sub-tab). Zero change to any API
+// call, request shape, or the honest null-handling above — restyle only.
 
 interface Props {
   agentId: string;
@@ -131,127 +136,123 @@ export default function AgentReportsTab({ agentId }: Props) {
 
   return (
     <>
-      <SectionCard title="Report Subscriptions" icon="mail-send-line" padded={false}>
-        {subsError && <div className="p-3"><div className="alert alert-warning py-2 mb-0 small">{subsError}</div></div>}
-        {subsLoading && <div className="p-3 text-muted small">Loading…</div>}
-        {!subsLoading && subscriptions.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No one has subscribed to reports about this agent yet.</p>
-        )}
-        {!subsLoading && subscriptions.map((sub, i) => (
-          <div key={sub.id} className={`d-flex align-items-start justify-content-between gap-2 p-3 ${i < subscriptions.length - 1 ? 'border-bottom' : ''}`}>
-            <div>
-              <StatusBadge label={sub.enabled ? 'Enabled' : 'Disabled'} tone={sub.enabled ? 'success' : 'neutral'} />
-              <span className="ms-2 fw-semibold">{sub.cadence === 'daily' ? 'Daily' : 'Weekly'} · {String(sub.deliveryHourLocal).padStart(2, '0')}:00 {sub.timezone}</span>
-              <div className="text-muted small mt-1">
-                Sections: {sub.contentScope.join(', ')} · Created by {sub.createdByEmail}, {timeAgo(sub.createdAt)}
+      <div className="adv2-card">
+        <h2>Report Subscriptions</h2>
+        <div>
+          {subsError && <p className="adv2-body" style={{ color: 'var(--adv2-bad)' }}>{subsError}</p>}
+          {subsLoading && <p className="adv2-body adv2-muted">Loading…</p>}
+          {!subsLoading && subscriptions.length === 0 && (
+            <p className="adv2-body adv2-muted">No one has subscribed to reports about this agent yet.</p>
+          )}
+          {!subsLoading && subscriptions.map((sub) => (
+            <div key={sub.id} className="adv2-task">
+              <div>
+                <span className={adv2PillClass(sub.enabled ? 'success' : 'neutral')}>{sub.enabled ? 'Enabled' : 'Disabled'}</span>
+                <span style={{ marginLeft: 8, fontWeight: 600 }}>{sub.cadence === 'daily' ? 'Daily' : 'Weekly'} · {String(sub.deliveryHourLocal).padStart(2, '0')}:00 {sub.timezone}</span>
+                <p className="adv2-muted" style={{ marginTop: 4 }}>
+                  Sections: {sub.contentScope.join(', ')} · Created by {sub.createdByEmail}, {timeAgo(sub.createdAt)}
+                </p>
               </div>
-            </div>
-            <button className="btn btn-outline-secondary btn-sm flex-shrink-0" disabled={togglingId === sub.id} onClick={() => handleToggle(sub)}>
-              {togglingId === sub.id ? 'Working…' : sub.enabled ? 'Disable' : 'Enable'}
-            </button>
-          </div>
-        ))}
-
-        <div className="p-3 border-top">
-          {createError && <div className="alert alert-danger py-2 small">{createError}</div>}
-          <label className="form-label small fw-semibold">Sections</label>
-          <div className="d-flex gap-3 mb-2 flex-wrap">
-            {CONTENT_SECTIONS.map((s) => (
-              <div className="form-check" key={s}>
-                <input className="form-check-input" type="checkbox" id={`section-${s}`} checked={formSections.includes(s)} onChange={() => toggleSection(s)} />
-                <label className="form-check-label small" htmlFor={`section-${s}`}>{s}</label>
-              </div>
-            ))}
-          </div>
-          <div className="row g-2 align-items-end">
-            <div className="col-auto">
-              <label className="form-label small fw-semibold">Cadence</label>
-              <select className="form-select form-select-sm" value={formCadence} onChange={(e) => setFormCadence(e.target.value as ReportCadence)}>
-                {CADENCES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="col-auto">
-              <label className="form-label small fw-semibold">Hour (local, 0-23)</label>
-              <input type="number" min={0} max={23} className="form-control form-control-sm" style={{ width: '5rem' }} value={formHour} onChange={(e) => setFormHour(Number(e.target.value))} />
-            </div>
-            <div className="col-auto">
-              <button className="btn btn-outline-secondary btn-sm" disabled={previewLoading} onClick={handlePreview}>
-                {previewLoading ? 'Rendering…' : 'Preview'}
+              <button className={`adv2-switch ${sub.enabled ? '' : 'adv2-off'}`} disabled={togglingId === sub.id} onClick={() => handleToggle(sub)}>
+                {togglingId === sub.id ? 'Working…' : sub.enabled ? 'Disable' : 'Enable'}
               </button>
             </div>
-            <div className="col-auto">
-              <button className="btn btn-primary btn-sm" disabled={creating} onClick={handleCreate}>
+          ))}
+
+          <div className="adv2-body" style={{ borderTop: '1px solid var(--adv2-rule)' }}>
+            {createError && <p style={{ color: 'var(--adv2-bad)' }}>{createError}</p>}
+            <label className="adv2-muted" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Sections</label>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+              {CONTENT_SECTIONS.map((s) => (
+                <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14.5 }}>
+                  <input type="checkbox" id={`section-${s}`} checked={formSections.includes(s)} onChange={() => toggleSection(s)} />
+                  {s}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label className="adv2-muted" style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Cadence</label>
+                <select value={formCadence} onChange={(e) => setFormCadence(e.target.value as ReportCadence)}>
+                  {CADENCES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="adv2-muted" style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>Hour (local, 0-23)</label>
+                <input type="number" min={0} max={23} style={{ width: '5rem' }} value={formHour} onChange={(e) => setFormHour(Number(e.target.value))} />
+              </div>
+              <button className="adv2-btn" disabled={previewLoading} onClick={handlePreview}>
+                {previewLoading ? 'Rendering…' : 'Preview'}
+              </button>
+              <button className="adv2-btn adv2-primary" disabled={creating} onClick={handleCreate}>
                 {creating ? 'Creating…' : 'Subscribe'}
               </button>
             </div>
-          </div>
-          {previewError && <div className="alert alert-warning py-2 small mt-2 mb-0">{previewError}</div>}
-          {preview && (
-            <div className="border rounded mt-3">
-              <div className="px-3 py-2 border-bottom bg-light small">
-                <span className="fw-semibold">Preview</span> — this is what the email actually looks like, rendered live from this agent's real data. Subject: <span className="fw-semibold">{preview.subject}</span>
+            {previewError && <p style={{ color: 'var(--adv2-warn)', marginTop: 8 }}>{previewError}</p>}
+            {preview && (
+              <div className="adv2-card" style={{ marginTop: 14 }}>
+                <div className="adv2-body adv2-muted" style={{ borderBottom: '1px solid var(--adv2-rule)' }}>
+                  <strong>Preview</strong> — this is what the email actually looks like, rendered live from this agent's real data. Subject: <strong>{preview.subject}</strong>
+                </div>
+                {/* Real, server-rendered report content — every interpolated
+                    value is HTML-escaped server-side (agentReportRunService.ts's
+                    escapeHtml()) before this string is ever built, and this is
+                    the exact HTML the real email send uses. Not user input. */}
+                <div className="adv2-body" dangerouslySetInnerHTML={{ __html: preview.html }} />
               </div>
-              {/* Real, server-rendered report content — every interpolated
-                  value is HTML-escaped server-side (agentReportRunService.ts's
-                  escapeHtml()) before this string is ever built, and this is
-                  the exact HTML the real email send uses. Not user input. */}
-              <div className="p-3" dangerouslySetInnerHTML={{ __html: preview.html }} />
-            </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="adv2-card" style={{ marginTop: 22 }}>
+        <h2>Delivery History<span className="adv2-hint">Real send attempts, last 30 days.</span></h2>
+        <div className="adv2-body">
+          {historyError && <p style={{ color: 'var(--adv2-bad)' }}>{historyError}</p>}
+          {historyLoading && <p className="adv2-muted">Loading…</p>}
+          {!historyLoading && history && (
+            <>
+              <div className="adv2-metrics">
+                <div className="adv2-metric">
+                  <span className="adv2-k">Sent</span>
+                  <div className="adv2-v">{history.sent}</div>
+                </div>
+                <div className="adv2-metric">
+                  <span className="adv2-k">Failed</span>
+                  <div className="adv2-v">{history.failed}</div>
+                </div>
+                <div className="adv2-metric">
+                  <span className="adv2-k">Pending</span>
+                  <div className="adv2-v">{history.pending}</div>
+                </div>
+                <div className="adv2-metric">
+                  <span className="adv2-k">{history.successRatePct === null ? 'Success rate' : 'Success rate'}</span>
+                  <div className="adv2-v">{history.successRatePct === null ? '—' : `${history.successRatePct}%`}</div>
+                  {history.successRatePct === null ? (
+                    <span className="adv2-hint">Not enough data yet</span>
+                  ) : (
+                    <div className="adv2-progress"><span style={{ width: `${history.successRatePct}%` }} /></div>
+                  )}
+                </div>
+              </div>
+              {history.runs.length === 0 ? (
+                <p className="adv2-muted">No delivery attempts in the last {history.windowDays} days.</p>
+              ) : (
+                <div>
+                  {history.runs.map((run) => (
+                    <div key={run.id} className="adv2-ticket-row">
+                      <span className="adv2-title">{run.periodKey}</span>
+                      <span className={adv2PillClass(run.deliveryStatus === 'sent' ? 'success' : run.deliveryStatus === 'failed' ? 'danger' : 'warning')}>{run.deliveryStatus}</span>
+                      <span className="adv2-when">{timeAgo(run.generatedAt)}</span>
+                      <span className="adv2-muted" style={{ gridColumn: '1 / -1' }}>{run.errorMessage || (run.deliveredAt ? `Delivered ${timeAgo(run.deliveredAt)}` : '—')}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
-      </SectionCard>
-
-      <SectionCard title="Delivery History" icon="history-line" subtitle="Real send attempts, last 30 days.">
-        {historyError && <div className="alert alert-warning py-2 small">{historyError}</div>}
-        {historyLoading && <div className="text-muted small">Loading…</div>}
-        {!historyLoading && history && (
-          <>
-            <div className="row g-3 mb-3">
-              <div className="col-6 col-md-3">
-                <div className="border rounded p-2 text-center">
-                  <div className="fs-4 fw-bold">{history.sent}</div>
-                  <div className="text-muted small">Sent</div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="border rounded p-2 text-center">
-                  <div className="fs-4 fw-bold">{history.failed}</div>
-                  <div className="text-muted small">Failed</div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="border rounded p-2 text-center">
-                  <div className="fs-4 fw-bold">{history.pending}</div>
-                  <div className="text-muted small">Pending</div>
-                </div>
-              </div>
-              <div className="col-6 col-md-3">
-                <div className="border rounded p-2 text-center">
-                  <div className="fs-4 fw-bold">{history.successRatePct === null ? '—' : `${history.successRatePct}%`}</div>
-                  <div className="text-muted small">{history.successRatePct === null ? 'Not enough data yet' : 'Success rate'}</div>
-                </div>
-              </div>
-            </div>
-            {history.runs.length === 0 ? (
-              <p className="text-muted small text-center py-3 mb-0">No delivery attempts in the last {history.windowDays} days.</p>
-            ) : (
-              <table className="table table-sm mb-0">
-                <thead><tr><th>Period</th><th>Status</th><th>Generated</th><th>Detail</th></tr></thead>
-                <tbody>
-                  {history.runs.map((run) => (
-                    <tr key={run.id}>
-                      <td>{run.periodKey}</td>
-                      <td><StatusBadge label={run.deliveryStatus} tone={run.deliveryStatus === 'sent' ? 'success' : run.deliveryStatus === 'failed' ? 'danger' : 'warning'} /></td>
-                      <td>{timeAgo(run.generatedAt)}</td>
-                      <td className="text-muted small">{run.errorMessage || (run.deliveredAt ? `Delivered ${timeAgo(run.deliveredAt)}` : '—')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
-      </SectionCard>
+      </div>
     </>
   );
 }

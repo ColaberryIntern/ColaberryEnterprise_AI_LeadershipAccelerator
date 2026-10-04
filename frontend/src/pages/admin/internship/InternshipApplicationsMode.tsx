@@ -34,7 +34,7 @@ const InternshipApplicationsMode: React.FC = () => {
 
       <div className={`aint-master${r.selected ? ' show' : ''}`}>
         <InternshipQueue />
-        <InternshipDetailPanel onBack={() => r.setSelected(null)} />
+        <InternshipDetailPanel onBack={r.closeApplicant} />
       </div>
     </div>
   );

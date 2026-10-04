@@ -126,6 +126,15 @@ export interface CreateZoomMeetingInput {
   startDateTime: string; // e.g. "2026-08-04T18:30:00"
   durationMinutes: number;
   timezone?: string;
+  /**
+   * Which Zoom user to create the meeting as. Defaults to `ZOOM_HOST_EMAIL`, so
+   * every existing caller keeps today's behaviour exactly.
+   *
+   * The Zoom API has always taken the user in the path; only this codebase hard-wired
+   * it. Passing one is what lets a second host add capacity instead of a second
+   * booking fighting the first for the same one.
+   */
+  hostEmail?: string;
 }
 
 // Creates a meeting under ZOOM_HOST_EMAIL with cloud auto-recording, so
@@ -141,7 +150,9 @@ export interface CreateZoomMeetingInput {
 // (auto_recording chief among them) can't drift between the two call sites.
 export async function createMeeting(input: CreateZoomMeetingInput): Promise<ZoomMeetingResult> {
   assertConfigured();
-  const data = await zoomApiRequest<any>('POST', `/users/${encodeURIComponent(env.zoomHostEmail)}/meetings`, {
+  // Default, never override: an absent host must behave exactly as before.
+  const host = input.hostEmail || env.zoomHostEmail;
+  const data = await zoomApiRequest<any>('POST', `/users/${encodeURIComponent(host)}/meetings`, {
     topic: input.topic,
     agenda: input.agenda || '',
     type: 2, // scheduled
@@ -155,6 +166,42 @@ export async function createMeeting(input: CreateZoomMeetingInput): Promise<Zoom
     },
   });
   return { joinUrl: data.join_url, meetingId: String(data.id) };
+}
+
+export interface ZoomListedMeeting {
+  id: number | string;
+  topic?: string;
+  agenda?: string;
+  join_url?: string;
+  start_time?: string;
+}
+
+/**
+ * The host's scheduled meetings, WITH their agendas.
+ *
+ * Exists for one job: reconciling a Zoom create whose response was lost. The
+ * idempotency ledger embeds `[req:<requestId>]` in the agenda, and after a timeout
+ * this is the only way to find out whether Zoom actually created the meeting before
+ * the connection dropped. Guessing instead is how one booking ends up with two join
+ * links on a single-host account.
+ *
+ * `type=scheduled` and a large page size because the reconcile window is minutes, not
+ * months — the meeting we are looking for was created seconds ago and has not started.
+ * Deliberately NOT memoized (unlike listRecordings): a cached list during reconciliation
+ * would answer "no such meeting" about a meeting created moments earlier, which is
+ * precisely the wrong answer.
+ */
+export async function listUpcomingMeetingsWithAgenda(hostEmail?: string): Promise<ZoomListedMeeting[]> {
+  assertConfigured();
+  // MUST be the host the meeting was created as. Reconciling against the wrong host
+  // answers "no such meeting" about a meeting that exists, and that answer is exactly
+  // what licenses a duplicate — the failure this whole ledger exists to prevent.
+  const host = hostEmail || env.zoomHostEmail;
+  const data = await zoomApiRequest<{ meetings?: ZoomListedMeeting[] }>(
+    'GET',
+    `/users/${encodeURIComponent(host)}/meetings?type=scheduled&page_size=300`,
+  );
+  return data?.meetings || [];
 }
 
 export async function createMeetingForSession(

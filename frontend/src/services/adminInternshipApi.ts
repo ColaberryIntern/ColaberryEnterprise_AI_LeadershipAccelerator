@@ -9,7 +9,10 @@ export type QueueBucket =
   | 'interview_incomplete'
   | 'calls_failed'
   | 'approved_awaiting_documents'
-  | 'all_open';
+  | 'onboarding'
+  | 'active_interns'
+  | 'converted'
+  | 'in_review';
 
 export interface QueueRow {
   application_id: string;
@@ -304,6 +307,144 @@ export async function authorInternshipProject(
     `/api/admin/internship/applications/${applicationId}/author-project`,
     project,
   );
+  return data;
+}
+
+// ── Generated projects (the Student Build Pipeline, driven by a reviewer) ───
+
+export type InternProjectSize = 'workflow' | 'project' | 'autonomous';
+
+export interface IntakeQuestion {
+  id: string;
+  question: string;
+  why: string;
+  placeholder: string;
+  suggestions?: string[];
+  kind?: 'text' | 'single' | 'multi';
+  angle?: string;
+}
+
+export interface IntakeQuestionsResponse {
+  questions: IntakeQuestion[];
+  covered: Array<{ angle: string; evidence: string }>;
+  /** false = the model failed and the GENERIC set was substituted. Say so. */
+  generated: boolean;
+  model: string | null;
+  attempts: number;
+}
+
+export interface GeneratedPlanRelease { key: string; name: string; goal: string; demo: string; week_start: number; week_end: number }
+export interface GeneratedPlanStory {
+  id: string; release: string; title: string; narrative: string;
+  fulfills: string[]; owner_agent: string; acceptance: string[];
+  task_guidance?: string; failure_paths?: string[]; blocked_by?: string[];
+}
+export interface GeneratedPlan {
+  project_name: string;
+  descriptor: string;
+  requirements: Array<{ id: string; statement: string; kind: string; priority: string; cluster?: string }>;
+  releases: GeneratedPlanRelease[];
+  stories: GeneratedPlanStory[];
+  agents?: Array<{ name: string; role?: string }>;
+}
+
+export interface GateViolation { rule: string; message: string; subject?: string }
+
+export interface DimensionCoverage {
+  dimension: string;
+  label: string;
+  /** What the customer actually said here, verbatim. */
+  stated: string[];
+  requirement_ids: string[];
+  /** They said something here and nothing in the plan cites it. */
+  unaccounted: boolean;
+}
+
+export interface RequirementCoverage {
+  stated_items: number;
+  planned_requirements: number;
+  dimensions: DimensionCoverage[];
+  unaccounted_dimensions: string[];
+  requirements_without_provenance: string[];
+  dropped: Array<{ dimension: string; value: string; reason: string }>;
+}
+
+export interface InternProjectBuildView {
+  project_id: string;
+  enrollment_id: string;
+  status: string | null;
+  plan: GeneratedPlan | null;
+  version: number | null;
+  /** Reasons it cannot be assigned. Empty means it can. */
+  blocking: GateViolation[];
+  /** Warnings that do NOT stop an assignment. */
+  advisory: GateViolation[];
+  plan_sha256: string | null;
+  assigned: boolean;
+  /** Null when the project was not built from a recorded conversation. */
+  coverage: RequirementCoverage | null;
+  coverage_summary: string | null;
+}
+
+export async function internProjectQuestions(
+  applicationId: string,
+  body: { idea: string; size?: InternProjectSize; name?: string | null },
+): Promise<IntakeQuestionsResponse> {
+  const { data } = await api.post<IntakeQuestionsResponse>(
+    `/api/admin/internship/applications/${applicationId}/project/questions`, body,
+  );
+  return data;
+}
+
+export async function generateInternProject(
+  applicationId: string,
+  body: {
+    idea: string; size?: InternProjectSize; name?: string | null; industry?: string | null;
+    answers?: Array<{ id: string; question: string; answer: string; angle?: string }>;
+    covered?: Array<{ angle: string; evidence: string }>;
+  },
+): Promise<{ project_id: string; enrollment_id: string; correlation_id: string; status: string }> {
+  const { data } = await api.post(
+    `/api/admin/internship/applications/${applicationId}/project/generate`, body,
+  );
+  return data;
+}
+
+export async function internProjectBuild(
+  applicationId: string, projectId: string,
+): Promise<InternProjectBuildView> {
+  const { data } = await api.get<InternProjectBuildView>(
+    `/api/admin/internship/applications/${applicationId}/project/${projectId}/build`,
+  );
+  return data;
+}
+
+export async function assignInternProject(
+  applicationId: string,
+  body: { project_id: string; expected_sha256?: string | null },
+): Promise<{ status: string; planVersion: number; commitSha: string | null; filesWritten: number; repoUrl: string | null }> {
+  const { data } = await api.post(
+    `/api/admin/internship/applications/${applicationId}/project/assign`, body,
+  );
+  return data;
+}
+
+// ── The same review, addressed by the project ───────────────────────────────
+//
+// The conversation intake builds a project for a student who may have no internship
+// application at all, so the application-scoped pair above cannot serve it. Same server
+// handlers, same payload; only the path stops pretending an application is involved.
+
+export async function internProjectBuildByProject(projectId: string): Promise<InternProjectBuildView> {
+  const { data } = await api.get<InternProjectBuildView>(`/api/admin/internship/projects/${projectId}/build`);
+  return data;
+}
+
+export async function assignProject(
+  projectId: string,
+  body: { expected_sha256?: string | null } = {},
+): Promise<{ status: string; planVersion: number; commitSha: string | null; filesWritten: number; repoUrl: string | null }> {
+  const { data } = await api.post(`/api/admin/internship/projects/${projectId}/assign`, body);
   return data;
 }
 

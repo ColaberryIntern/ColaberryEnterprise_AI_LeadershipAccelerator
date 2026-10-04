@@ -430,6 +430,28 @@ export function ruleRepositories(content: CaseStudySnapshotContent, b: Blockers)
 }
 
 /**
+ * The classes that assert something and therefore owe an evidence pointer.
+ *
+ * `verified` and `anonymized` are both SHOWN as claims — `anonymized` is "the
+ * client confirmed it but will not be named" (`types/caseStudy.ts`), which is a
+ * statement of fact with the name withheld, not a weaker kind of guess. It needs
+ * its proof exactly as much as `verified` does; withholding the name is a
+ * presentation choice, never a reason to skip the evidence row.
+ *
+ * `illustrative` and `pending` are deliberately absent. `illustrative` says on
+ * its face that it is a demo, and `pending` exists precisely to mean "nobody has
+ * verified this yet" — demanding proof from either would be demanding they stop
+ * saying the true thing they were created to say.
+ *
+ * Added 2026-10-02. Until then only `verified` was checked, so an `anonymized`
+ * figure published with no evidence pointer at all. Measured before the change:
+ * every metric on every approved snapshot is `verified`, and no approved record
+ * carries an `anonymized` metric, so this tightens the gate without refusing
+ * anything already published.
+ */
+const NEEDS_EVIDENCE: ReadonlySet<string> = new Set(['verified', 'anonymized']);
+
+/**
  * 7 — required proof metadata, and 7b — the self-attestation position.
  *
  * 7b is stated in full in `caseStudyPublishGate.ts`'s header: a `verified` class
@@ -449,10 +471,12 @@ export function ruleProofMetadata(
         'verify it against the repository, the platform or the client, or record it as "anonymized" or "illustrative" so the surface labels it as self-reported');
       continue;
     }
-    if (v?.class === 'verified' && !has(v?.evidenceId)) {
+    if (NEEDS_EVIDENCE.has(v?.class as string) && !has(v?.evidenceId)) {
       b.add('proof_metadata_missing', `${m.path}.verification.evidenceId`,
-        `${metricName(m.metric)} has no verified evidence`,
-        'link a case_study_evidence row to the metric; a verified class with no evidence pointer is an assertion, not proof');
+        v?.class === 'anonymized'
+          ? `${metricName(m.metric)} is labelled anonymized but has no evidence`
+          : `${metricName(m.metric)} has no verified evidence`,
+        'link a case_study_evidence row to the metric; a shown claim with no evidence pointer is an assertion, not proof');
     }
     const ctx = m.metric.measurement;
     if (m.metric.isHeadline === true

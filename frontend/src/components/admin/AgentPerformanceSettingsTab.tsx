@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import type { TabKey } from './agentDetailV2/AgentDetailV2Header';
 import { AgentDetail } from '../../services/agentDetailApi';
+import { ManagerInboxItem } from '../../services/managerInboxApi';
 import AgentReportsTab from './AgentReportsTab';
+import AgentReportsTabSummary from './AgentReportsTabSummary';
 import AgentPerformanceTab from './AgentPerformanceTab';
 import AgentTrustControlTab from './AgentTrustControlTab';
 import AgentOverviewV2ToolsChannels from './agentDetailV2/AgentOverviewV2ToolsChannels';
@@ -36,9 +39,12 @@ const SUB_TABS: Array<{ key: SettingsSubTab; label: string }> = [
 interface Props {
   agentId: string;
   detail: AgentDetail;
+  inboxItems: ManagerInboxItem[];
+  onDraftTalkText: (text: string) => void;
+  onNavigate: (tab: TabKey) => void;
 }
 
-export default function AgentPerformanceSettingsTab({ agentId, detail }: Props) {
+export default function AgentPerformanceSettingsTab({ agentId, detail, inboxItems, onDraftTalkText, onNavigate }: Props) {
   const [subTab, setSubTab] = useState<SettingsSubTab>('results');
 
   return (
@@ -59,6 +65,7 @@ export default function AgentPerformanceSettingsTab({ agentId, detail }: Props) 
 
       {subTab === 'results' && (
         <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <AgentReportsTabSummary detail={detail} inboxItems={inboxItems} onDraftTalkText={onDraftTalkText} onNavigate={onNavigate} />
           <AgentReportsTab agentId={agentId} />
           <AgentPerformanceTab agentId={agentId} />
         </div>
@@ -70,7 +77,7 @@ export default function AgentPerformanceSettingsTab({ agentId, detail }: Props) 
       )}
       {subTab === 'authority' && (
         <div style={{ marginTop: 18 }}>
-          <AgentTrustControlTab agentId={agentId} detail={detail} />
+          <AgentTrustControlTab agentId={agentId} detail={detail} onNavigate={onNavigate} />
         </div>
       )}
     </div>

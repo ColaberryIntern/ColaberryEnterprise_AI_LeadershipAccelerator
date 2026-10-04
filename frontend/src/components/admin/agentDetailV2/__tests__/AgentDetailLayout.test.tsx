@@ -22,6 +22,7 @@ const DETAIL: AgentDetail = {
     department: null, module: null, source_file: null,
     max_runs_per_hour: 60, max_writes_per_execution: 100, max_proposals_per_run: 50,
     autonomy_level_set_at: null, autonomy_level_source: null,
+    reports_to_type: null, reports_to_id: null,
     abac_mode_override: null, abac_mode_override_set_at: null, abac_mode_override_set_by: null,
     abac_effective_mode: 'shadow', abac_global_default: 'shadow',
   },
@@ -29,6 +30,9 @@ const DETAIL: AgentDetail = {
   live_status: 'online',
   open_ticket_count: 1,
   completed_ticket_count_30d: 0,
+  verified_resolution_count: 0,
+  owned_ticket_count_all_time: 0,
+  most_recent_verified_ticket_id: null,
   tickets: [],
   ticket_breakdown: [],
   related_tasks: [],
@@ -66,10 +70,9 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof AgentDetailLay
   return {
     detail: DETAIL,
     displayName: 'Reese',
-    activeTab: 'glance' as const,
+    activeTab: 'overview' as const,
     onTabChange: jest.fn(),
     onDeactivate: jest.fn(),
-    onTalk: jest.fn(),
     resetting: false,
     resetMessage: null,
     refreshing: false,
@@ -106,22 +109,32 @@ afterEach(() => {
 });
 
 describe('AgentDetailLayout — sidebar nav', () => {
-  it('renders all 7 real tabs and clicking one calls onTabChange with the real tab key', async () => {
+  it('renders exactly the 5 real tabs, in the mockup\'s order, and clicking one calls onTabChange with the real tab key', async () => {
     const props = baseProps();
     await render(props);
 
-    const labels = ['At a Glance', 'Live Status', 'Overview', 'Work', 'Decisions', 'Talk', 'Performance & Settings'];
+    const labels = ['Overview', 'Talk to Reese', 'Work & commitments', 'Decisions & evidence', 'Performance & settings'];
     labels.forEach((label) => expect(findButton(container, label)).toBeTruthy());
 
-    await act(async () => { findButton(container, 'Work').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    // 'At a Glance'/'Live Status' are retired — never reachable via the nav.
+    expect(container.querySelectorAll('.adv2-sidebar-navbtn')).toHaveLength(5);
+
+    await act(async () => { findButton(container, 'Work & commitments').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(props.onTabChange).toHaveBeenCalledWith('work');
+  });
+
+  it('the "Talk to" nav label uses the REAL current agent\'s displayName, not a hardcoded "Reese" (this page is shared by every agent, e.g. Dara)', async () => {
+    await render(baseProps({ displayName: 'Dara' }));
+
+    expect(findButton(container, 'Talk to Dara')).toBeTruthy();
+    expect(() => findButton(container, 'Talk to Reese')).toThrow();
   });
 
   it('the active tab is marked aria-selected', async () => {
     await render(baseProps({ activeTab: 'decisions' }));
-    const activeBtn = findButton(container, 'Decisions');
+    const activeBtn = findButton(container, 'Decisions & evidence');
     expect(activeBtn.getAttribute('aria-selected')).toBe('true');
-    expect(findButton(container, 'Work').getAttribute('aria-selected')).toBe('false');
+    expect(findButton(container, 'Work & commitments').getAttribute('aria-selected')).toBe('false');
   });
 
   it('renders the manager footer with the real resolved human', async () => {
@@ -136,13 +149,6 @@ describe('AgentDetailLayout — sidebar nav', () => {
 });
 
 describe('AgentDetailLayout — relocated real controls (verbatim from AgentDetailV2Header.tsx)', () => {
-  it('Talk button calls onTalk', async () => {
-    const props = baseProps();
-    await render(props);
-    await act(async () => { findButton(container, 'Talk to Reese').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(props.onTalk).toHaveBeenCalledTimes(1);
-  });
-
   it('Deactivate button calls onDeactivate, only rendered when the agent is enabled', async () => {
     const props = baseProps();
     await render(props);

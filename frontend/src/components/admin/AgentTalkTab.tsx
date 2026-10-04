@@ -1,8 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { SectionCard, StatusBadge } from './shell';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import type { TabKey } from './agentDetailV2/AgentDetailV2Header';
 import { timeAgo } from './shell/trust';
+import { adv2PillClass } from './agentDetailV2/adv2PillTone';
 import { Conversation, getConversation, sendMessage } from '../../services/agentManagerConversationApi';
 import { ManagerDirective, listDirectives, createDirective, revokeDirective } from '../../services/managerDirectiveApi';
+import { AgentRoleCharter, getAgentRoleCharter } from '../../services/agentRoleCharterApi';
+import { AgentDetail } from '../../services/agentDetailApi';
+import { remarkPreserveGeneratedLineBreaks } from '../../utils/remarkPreserveGeneratedLineBreaks';
+import TruncatedText from './agentDetailV2/TruncatedText';
 
 // AI Agent Dashboard redesign, Checkpoint C (2026-09-02) — Talk: a real
 // conversation (GPT-4o-mini round trip, both turns persisted) plus Ask vs.
@@ -19,14 +26,46 @@ import { ManagerDirective, listDirectives, createDirective, revokeDirective } fr
 // really does guarantee — a directive can only narrow behavior, never grant
 // a new capability or bypass authorization (no code path reads
 // ManagerDirective to do either) — is stated plainly.
+//
+// Agent Detail redesign, Track F (2026-09-28) — reflowed to this page's
+// adv2-* visual language (the mockup's own .msg/.bubble/.composer shape),
+// composer upgraded from a single-line <input> to a <textarea> (Enter
+// sends, Shift+Enter inserts a newline — the real baseline's !sending
+// idempotent-send guard is explicitly preserved, not dropped, and
+// disabled={sending} stays on the textarea exactly as it was on the input).
+// New "Shared working context" sidebar card, backed entirely by real data
+// already fetched elsewhere on this page (role charter's mission/
+// authorityApprovalRequired, the real active-directive count, trust_
+// contract.schedule) — never a fabricated field. Zero change to any real
+// API call or the Ask/Direct logic below.
 
 interface Props {
   agentId: string;
+  detail: AgentDetail;
+  onNavigate: (tab: TabKey) => void;
+  /** Agent Detail polish round 4 (2026-09-30) — a real, ticket-specific
+   * message from the Work tab's "Discuss with Reese" button, pre-filled
+   * into the composer below (never auto-sent). Kept separate from
+   * `onNavigate` deliberately — see AgentDetailPage.tsx's own comment.
+   * Reese manager-directed growth mission, Phase 2 (2026-09-30) — widened
+   * to carry the real ticket id alongside the draft text (was `string |
+   * null`), so the send that consumes this draft can bind the conversation
+   * to that real case — the actual fix for "I cannot access the
+   * conversation details." `ticketId` is null for a non-ticket draft (e.g.
+   * the Results & Reports "Discuss this report" button). */
+  initialDraft?: { text: string; ticketId: string | null } | null;
+  onDraftConsumed?: () => void;
 }
 
 type ComposerMode = 'ask' | 'direct';
 
-export default function AgentTalkTab({ agentId }: Props) {
+const QUICK_PROMPTS = [
+  'What are you working on right now?',
+  'What needs my decision?',
+  'Summarize your recent activity.',
+];
+
+export default function AgentTalkTab({ agentId, detail, onNavigate, initialDraft, onDraftConsumed }: Props) {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState<string | null>(null);
@@ -35,11 +74,15 @@ export default function AgentTalkTab({ agentId }: Props) {
   const [directivesLoading, setDirectivesLoading] = useState(true);
   const [directivesError, setDirectivesError] = useState<string | null>(null);
 
+  const [charter, setCharter] = useState<AgentRoleCharter | null | undefined>(undefined);
+  const [charterError, setCharterError] = useState<string | null>(null);
+
   const [mode, setMode] = useState<ComposerMode>('ask');
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [draftTicketId, setDraftTicketId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const fetchConversation = useCallback(async () => {
@@ -67,8 +110,18 @@ export default function AgentTalkTab({ agentId }: Props) {
     }
   }, [agentId]);
 
+  const fetchCharter = useCallback(async () => {
+    try {
+      const view = await getAgentRoleCharter(agentId);
+      setCharter(view.charter);
+    } catch (err: any) {
+      setCharterError(err?.response?.data?.error || 'Failed to load role charter.');
+    }
+  }, [agentId]);
+
   useEffect(() => { fetchConversation(); }, [fetchConversation]);
   useEffect(() => { fetchDirectives(); }, [fetchDirectives]);
+  useEffect(() => { fetchCharter(); }, [fetchCharter]);
 
   // Ali, live: "I have to scroll every time I type something new... make it
   // more like ChatGPT." The message list never auto-scrolled to the newest
@@ -77,6 +130,21 @@ export default function AgentTalkTab({ agentId }: Props) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' });
   }, [conversation?.messages.length]);
+
+  // Agent Detail polish round 4 (2026-09-30) — Ali, live: "Discuss with
+  // Reese... should send a message about that case." Copies a real,
+  // ticket-specific draft into the composer, resets the mode to 'ask'
+  // (never let a drafted message about a ticket go out as a standing Direct
+  // instruction if the composer was last left in Direct mode), then clears
+  // the parent's one-shot state so leaving and returning to Talk — or
+  // drafting about a different ticket — never repopulates/duplicates it.
+  useEffect(() => {
+    if (!initialDraft) return;
+    setText(initialDraft.text);
+    setDraftTicketId(initialDraft.ticketId);
+    setMode('ask');
+    onDraftConsumed?.();
+  }, [initialDraft, onDraftConsumed]);
 
   const activeDirectives = directives.filter((d) => d.status === 'active');
 
@@ -97,8 +165,13 @@ export default function AgentTalkTab({ agentId }: Props) {
     setSendError(null);
     try {
       if (mode === 'ask') {
-        const updated = await sendMessage(agentId, trimmed);
+        // Reese manager-directed growth mission, Phase 2 (2026-09-30) — one-shot: the real
+        // ticket id only accompanies the message that consumed a fresh draft, never a later
+        // manually-typed message. The backend persists this onto the conversation's own
+        // focused_ticket_id and reuses it for follow-ups without it being resent every time.
+        const updated = await sendMessage(agentId, trimmed, draftTicketId ?? undefined);
         setConversation(updated);
+        setDraftTicketId(null);
       } else {
         await createDirective(agentId, trimmed);
         await fetchDirectives();
@@ -109,7 +182,7 @@ export default function AgentTalkTab({ agentId }: Props) {
     } finally {
       setSending(false);
     }
-  }, [agentId, mode, text, activeDirectives.length, fetchDirectives]);
+  }, [agentId, mode, text, draftTicketId, activeDirectives.length, fetchDirectives]);
 
   const handleRevoke = useCallback(async (directiveId: string) => {
     setRevokingId(directiveId);
@@ -123,97 +196,160 @@ export default function AgentTalkTab({ agentId }: Props) {
     }
   }, [agentId, fetchDirectives]);
 
+  // The real baseline guard (AgentTalkTab.tsx, pre-Track F) was
+  // `e.key === 'Enter' && !sending`. The textarea upgrade ADDS a
+  // `!e.shiftKey` check (so Shift+Enter can insert a real newline) — it
+  // does not remove `!sending`. preventDefault() is only called on the
+  // plain-Enter-and-not-sending branch, so Shift+Enter's native newline
+  // insert fires untouched, and a second Enter while a send is already in
+  // flight is blocked by this guard AND by disabled={sending} below.
+  const handleComposerKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !sending) {
+      e.preventDefault();
+      handleSend();
+    }
+  }, [sending, handleSend]);
+
   return (
-    <>
-      <SectionCard
-        title="Talk"
-        icon="chat-3-line"
-        subtitle="Ask is a normal conversational turn. Direct creates a durable, versioned standing instruction."
-      >
-        {conversationError && <div className="alert alert-warning py-2 small">Could not load the conversation: {conversationError}</div>}
-        {conversationLoading && (
-          <div className="text-muted small py-3">
-            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-            Loading the conversation…
-          </div>
-        )}
-        {!conversationLoading && conversation && (
-          <div className="mb-3" style={{ maxHeight: '540px', overflowY: 'auto' }}>
-            {conversation.messages.length === 0 ? (
-              <p className="text-muted small text-center py-4 mb-0">No messages yet — say hello.</p>
-            ) : (
-              conversation.messages.map((m) => (
-                <div key={m.id} className={`d-flex mb-2 ${m.role === 'manager' ? 'justify-content-end' : 'justify-content-start'}`}>
-                  <div className={`p-2 px-3 rounded-3 small ${m.role === 'manager' ? 'bg-primary text-white' : 'bg-light'}`} style={{ maxWidth: '70%' }}>
-                    {m.content}
-                    <div className={`mt-1 ${m.role === 'manager' ? 'text-white-50' : 'text-muted'}`} style={{ fontSize: '0.68rem' }}>
-                      {m.role === 'manager' ? 'You' : 'Agent'} · {timeAgo(m.createdAt)}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div className="adv2-grid">
+        <div className="adv2-card">
+          <h2>
+            Talk
+            <span className="adv2-hint">Ask is a normal conversational turn. Direct creates a durable, versioned standing instruction.</span>
+          </h2>
+          <div className="adv2-body">
+            {conversationError && <p style={{ color: 'var(--adv2-warn)' }}>Could not load the conversation: {conversationError}</p>}
+            {conversationLoading && <p className="adv2-muted">Loading the conversation…</p>}
+            {!conversationLoading && conversation && (
+              <div className="adv2-chat">
+                {conversation.messages.length === 0 ? (
+                  <p className="adv2-muted" style={{ textAlign: 'center', padding: '24px 0' }}>No messages yet — say hello.</p>
+                ) : (
+                  conversation.messages.map((m) => (
+                    <div key={m.id} className={`adv2-msg${m.role === 'manager' ? ' adv2-user' : ''}`}>
+                      <div className="adv2-who">{m.role === 'manager' ? 'You' : 'Agent'} · {timeAgo(m.createdAt)}</div>
+                      <div className="adv2-bubble">
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkPreserveGeneratedLineBreaks]}>
+                          {m.content}
+                        </ReactMarkdown>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))
+                  ))
+                )}
+                <div ref={messagesEndRef} />
+              </div>
             )}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
 
-        <div className="alert alert-light border py-2 small mb-3">
-          <i className="ri-information-line" aria-hidden="true" /> Every reply here has real standing directives and any approved memory injected into it — but there is no per-message record of exactly which ones, or the model/cost/duration for a specific reply. Not tracked at that granularity today.
-        </div>
+            <p className="adv2-evidence adv2-muted" style={{ marginTop: 14 }}>
+              Every reply here has real standing directives and any approved memory injected into it — but there is no per-message record of exactly which ones, or the model/cost/duration for a specific reply. Not tracked at that granularity today.
+            </p>
 
-        <div className="btn-group mb-2" role="group" aria-label="Composer mode">
-          <button type="button" className={`btn btn-sm ${mode === 'ask' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setMode('ask')}>
-            <i className="ri-question-line" aria-hidden="true" /> Ask
-          </button>
-          <button type="button" className={`btn btn-sm ${mode === 'direct' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setMode('direct')}>
-            <i className="ri-flag-line" aria-hidden="true" /> Direct
-          </button>
-        </div>
-        {mode === 'ask' ? (
-          <p className="text-muted small mb-2">A normal conversational turn. Creates no lasting instruction.</p>
-        ) : (
-          <p className="text-muted small mb-2">
-            Creates a durable, versioned standing instruction. Can only narrow what the agent does — never grants a new capability or bypasses authorization.
-            {!directivesLoading && ` ${activeDirectives.length} other directive${activeDirectives.length === 1 ? ' is' : 's are'} already active — see below.`}
-          </p>
-        )}
-
-        {sendError && <div className="alert alert-danger py-2 small">{sendError}</div>}
-
-        <div className="d-flex gap-2">
-          <input
-            className="form-control"
-            placeholder={mode === 'ask' ? 'Message this agent…' : 'e.g. "Hold anything under $50 impact until Friday\'s review."'}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !sending) handleSend(); }}
-            disabled={sending}
-          />
-          <button className="btn btn-primary" onClick={handleSend} disabled={sending || !text.trim()}>
-            {sending ? 'Sending…' : mode === 'ask' ? 'Send' : 'Add Directive'}
-          </button>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Standing Directives" icon="file-list-3-line" subtitle="Real, active instructions injected into every reply this agent gives." padded={false}>
-        {directivesLoading && <div className="p-3 text-muted small">Loading…</div>}
-        {directivesError && <div className="p-3"><div className="alert alert-warning py-2 mb-0 small">{directivesError}</div></div>}
-        {!directivesLoading && !directivesError && activeDirectives.length === 0 && (
-          <p className="text-muted small text-center py-4 mb-0">No standing directives active for this agent.</p>
-        )}
-        {!directivesLoading && !directivesError && activeDirectives.map((d, i) => (
-          <div key={d.id} className={`d-flex align-items-start justify-content-between gap-2 p-3 ${i < activeDirectives.length - 1 ? 'border-bottom' : ''}`}>
-            <div>
-              <StatusBadge label="Active" tone="success" />
-              <span className="ms-2">{d.directiveText}</span>
-              <div className="text-muted small mt-1">Set by {d.createdByEmail}, {timeAgo(d.createdAt)}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, marginBottom: 8 }}>
+              <button type="button" className={`adv2-btn${mode === 'ask' ? ' adv2-primary' : ''}`} onClick={() => setMode('ask')}>Ask</button>
+              <button type="button" className={`adv2-btn${mode === 'direct' ? ' adv2-primary' : ''}`} onClick={() => setMode('direct')}>Direct</button>
             </div>
-            <button className="btn btn-outline-danger btn-sm flex-shrink-0" disabled={revokingId === d.id} onClick={() => handleRevoke(d.id)}>
+            {mode === 'ask' ? (
+              <p className="adv2-muted">A normal conversational turn. Creates no lasting instruction.</p>
+            ) : (
+              <p className="adv2-muted">
+                Creates a durable, versioned standing instruction. Can only narrow what the agent does — never grants a new capability or bypasses authorization.
+                {!directivesLoading && ` ${activeDirectives.length} other directive${activeDirectives.length === 1 ? ' is' : 's are'} already active — see below.`}
+              </p>
+            )}
+
+            {mode === 'ask' && (
+              <div className="adv2-chatprompts">
+                {QUICK_PROMPTS.map((p) => (
+                  <button key={p} type="button" className="adv2-btn" style={{ fontSize: 12.5 }} onClick={() => setText(p)}>{p}</button>
+                ))}
+              </div>
+            )}
+
+            {sendError && <p style={{ color: 'var(--adv2-bad)', marginTop: 10 }}>{sendError}</p>}
+
+            <div className="adv2-composer" style={{ marginTop: 14 }}>
+              <textarea
+                placeholder={mode === 'ask' ? 'Message this agent…' : 'e.g. "Hold anything under $50 impact until Friday\'s review."'}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                disabled={sending}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="adv2-btn adv2-primary" onClick={handleSend} disabled={sending || !text.trim()}>
+                  {sending ? 'Sending…' : mode === 'ask' ? 'Send' : 'Add Directive'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <div className="adv2-card">
+            <h2>Shared working context</h2>
+            <dl className="adv2-rows adv2-rows-narrow adv2-body" style={{ margin: 0 }}>
+              <dt>Objective</dt>
+              <dd>
+                {charter === undefined && !charterError && 'Loading…'}
+                {charterError && charterError}
+                {charter === null && 'No role charter has been written yet.'}
+                {charter && <TruncatedText text={charter.mission || 'No mission text recorded.'} />}
+              </dd>
+              <dt>Standing direction</dt>
+              <dd>
+                {directivesLoading ? 'Loading…' : activeDirectives.length === 0
+                  ? 'None active right now.'
+                  : `${activeDirectives.length} active — see below.`}
+              </dd>
+              <dt>Permission boundary</dt>
+              <dd>
+                {charter === undefined && !charterError && 'Loading…'}
+                {charter === null && 'No role charter has been written yet.'}
+                {charter && (!charter.authorityApprovalRequired || charter.authorityApprovalRequired.length === 0
+                  ? 'None recorded.'
+                  : charter.authorityApprovalRequired.join(', '))}
+              </dd>
+              <dt>Next scheduled check</dt>
+              <dd>{detail.trust_contract.schedule || 'None'}</dd>
+            </dl>
+          </div>
+
+          <div className="adv2-card" style={{ background: 'var(--adv2-trust-soft)' }}>
+            <div className="adv2-body">
+              <h3 style={{ margin: '0 0 8px' }}>Words become accountable work</h3>
+              <p className="adv2-muted" style={{ margin: '0 0 8px' }}>
+                An assignment should produce a plan. A promise should produce a commitment. A completed action should have a receipt.
+              </p>
+              <button type="button" className="adv2-btn" onClick={() => onNavigate('work')}>Inspect work records →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="adv2-card">
+        <h2>
+          Standing Directives
+          <span className="adv2-hint">Real, active instructions injected into every reply this agent gives.</span>
+        </h2>
+        {directivesLoading && <p className="adv2-body adv2-muted">Loading…</p>}
+        {directivesError && <p className="adv2-body" style={{ color: 'var(--adv2-warn)' }}>{directivesError}</p>}
+        {!directivesLoading && !directivesError && activeDirectives.length === 0 && (
+          <p className="adv2-body adv2-muted">No standing directives active for this agent.</p>
+        )}
+        {!directivesLoading && !directivesError && activeDirectives.map((d) => (
+          <div key={d.id} className="adv2-task">
+            <div>
+              <span className={adv2PillClass('success')}>Active</span>
+              <p style={{ margin: '8px 0 4px' }}>{d.directiveText}</p>
+              <p className="adv2-muted" style={{ margin: 0, fontSize: 13.5 }}>Set by {d.createdByEmail}, {timeAgo(d.createdAt)}</p>
+            </div>
+            <button className="adv2-btn adv2-danger" disabled={revokingId === d.id} onClick={() => handleRevoke(d.id)}>
               {revokingId === d.id ? 'Revoking…' : 'Revoke'}
             </button>
           </div>
         ))}
-      </SectionCard>
-    </>
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 import { ticketCreationLedgerHook } from '../services/workLedger/ticketCreationLedgerHook';
+import { setDefaultTicketDueDate } from './ticketDueDateDefaultHook';
 
 export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
@@ -326,7 +327,17 @@ Ticket.init(
     // services/workLedger/ticketCreationLedgerHook.ts for the full rationale, the
     // idempotency-key contract with ticketService.createTicket()'s own emit call, and
     // the disclosed raw-SQL-bypass residual gap.
+    //
+    // Ticket due-date validation gap fix (2026-09-28) — same reasoning, same
+    // mechanism, a different real gap: Ali, "Tickets should not be allowed to be
+    // created with no due date. That's how ghost tickets and looking up to 500
+    // open tickets happens." Confirmed only 2 of ~32 real ticket-creation call
+    // sites ever set due_date; a beforeValidate hook (models/ticketDueDateDefaultHook.ts)
+    // is the one choke point every one of them passes through, computing a real
+    // default from the ticket's own priority rather than leaving it null. Never
+    // overwrites an explicitly-set due_date.
     hooks: {
+      beforeValidate: setDefaultTicketDueDate,
       afterCreate: ticketCreationLedgerHook,
     },
     indexes: [

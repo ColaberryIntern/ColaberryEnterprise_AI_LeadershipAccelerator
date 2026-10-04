@@ -9,12 +9,14 @@ import {
 import {
   WorkspaceRepoView, ConnectStateView, getWorkspaceRepo,
 } from '../../../services/workspaceRepoApi';
-import WorkspaceRepoPanel from './WorkspaceRepoPanel';
+import WorkspaceRepoPanel, { repoConnectionState } from './WorkspaceRepoPanel';
 import { refreshProjectsFromBackend } from './projectSync';
 import { useStoryVerification } from './useStoryVerification';
 import AcceptanceChecklist from './AcceptanceChecklist';
 import StoryCompletionPanel, { isSelfDirectedStory } from './StoryCompletionPanel';
 import DemoEvidencePanel, { isPrepStory } from './DemoEvidencePanel';
+import PresentationStudio from './presentation/PresentationStudio';
+import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import { useIsExplorer } from '../useIsExplorer';
 import {
   useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
@@ -247,6 +249,13 @@ const ProjectWorkspacePage: React.FC = () => {
 
   // Hook: above the early return below, as every hook must be.
   const demo = useIsExplorer();   // Explorer = demo mode: nothing is handed in for real
+  // Presentation Studio gate. `flags` is null while usePortalFlags resolves, and
+  // `?? false` means that first render shows the EXISTING evidence panel — which is
+  // the correct answer for everyone today, since the flag is off in production.
+  // Read in render, never in a useState initializer: an initializer sees the null
+  // and would lock onto "flag off" permanently even after the real value arrives.
+  const { flags } = usePortalFlags();
+  const studioOn = flags?.presentation_studio ?? false;
   if (!project || !task) {
     return (
       <div className="rt" data-theme={theme}>
@@ -376,8 +385,18 @@ const ProjectWorkspacePage: React.FC = () => {
               whole workspace: what to hand in, the box to hand it in, what it
               pays. Demo Day says staff mark it. (Ali, 2026-09-14: "Demos
               should provide points as well.") */}
-          {isPrep && (
+          {/* PRESENTATION STUDIO, BEHIND A FLAG. With PRESENTATION_STUDIO_ENABLED off
+              — which is the default, and production today — this renders exactly the
+              line it always did, so flag-off is byte-identical. With it on, the Studio
+              wraps six stages around the SAME DemoEvidencePanel rather than replacing
+              it: the guide, the link-only rule on PREP-2/5, the staff-marked note on
+              PREP-6 and the points all keep working because it is literally the same
+              component, mounted inside the stage the task opens on. */}
+          {isPrep && !studioOn && (
             <DemoEvidencePanel task={task} projectId={projectId} taskId={task.storyId || task.id} points={task.points} demo={demo} />
+          )}
+          {isPrep && studioOn && (
+            <PresentationStudio task={task} projectId={projectId} taskId={task.storyId || task.id} points={task.points} demo={demo} />
           )}
           {!isPrep && (<>
 
@@ -387,7 +406,13 @@ const ProjectWorkspacePage: React.FC = () => {
               `writeAccess` is passed because it changes the INSTRUCTION: a
               pull-only student was never given a `.colaberry/progress.json`,
               so telling them to open theirs points at a file that may not
-              exist. See the prop's own note in AcceptanceChecklist. */}
+              exist. See the prop's own note in AcceptanceChecklist.
+              `repoConnected` is the same argument taken one step further: with
+              NO repo, every noun in that instruction is missing, not just the
+              file. It reads `repoConnectionState`, the SAME derivation the
+              repo panel below renders from, rather than `write_access` — which
+              is null both for "no repo" and for "connected before the
+              permission was recorded" and so cannot tell them apart. */}
           <AcceptanceChecklist
             acceptance={acceptance}
             stepNo={1}
@@ -396,6 +421,7 @@ const ProjectWorkspacePage: React.FC = () => {
             ticked={ticked}
             onToggle={toggleAcc}
             writeAccess={repo?.connect?.write_access ?? null}
+            repoConnected={repoConnectionState(repo) === 'connected'}
           />
 
           {/* HOW TO BUILD IT — the prompt and the repo are the same job (get to

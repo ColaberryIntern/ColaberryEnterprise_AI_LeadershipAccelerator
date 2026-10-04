@@ -33,7 +33,6 @@ interface Props {
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
   onDeactivate: () => void;
-  onTalk: () => void;
   resetting: boolean;
   resetMessage: string | null;
   refreshing: boolean;
@@ -47,7 +46,7 @@ interface Props {
 }
 
 export default function AgentDetailLayout({
-  detail, displayName, activeTab, onTabChange, onDeactivate, onTalk, resetting, resetMessage,
+  detail, displayName, activeTab, onTabChange, onDeactivate, resetting, resetMessage,
   refreshing, onRefresh, reactivating, reactivationMessage, selectedAutonomyLevel, onSelectAutonomyLevel, onReactivate,
   children,
 }: Props) {
@@ -91,7 +90,7 @@ export default function AgentDetailLayout({
               className={`adv2-sidebar-navbtn${activeTab === tab.key ? ' active' : ''}`}
               onClick={() => onTabChange(tab.key)}
             >
-              {tab.label}
+              {tab.key === 'talk' ? `Talk to ${displayName}` : tab.label}
             </button>
           ))}
         </nav>
@@ -122,7 +121,11 @@ export default function AgentDetailLayout({
             <button className="adv2-btn" onClick={() => setDark((v) => !v)} aria-pressed={dark}>
               {dark ? 'Light mode' : 'Dark mode'}
             </button>
-            <button className="adv2-btn" onClick={onTalk}>Talk to {displayName}</button>
+            {/* Agent Detail polish round 2 (2026-09-29) — the topbar's own
+                "Talk to {displayName}" button was removed here: the sidebar
+                nav's new "Talk to Reese" label (matching the mockup) now
+                does the exact same setActiveTab('talk') action, so having
+                both was two identically-labeled controls for one action. */}
             {agent.enabled && (
               <button className="adv2-btn adv2-danger" onClick={onDeactivate} disabled={resetting}>
                 {resetting ? 'Deactivating…' : 'Deactivate'}

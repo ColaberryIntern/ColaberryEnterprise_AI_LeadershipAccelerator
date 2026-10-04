@@ -1,6 +1,9 @@
+import crypto from 'crypto';
 import OpenAI from 'openai';
 import { addTicketComment } from '../ticketService';
 import { createDaraHandoff } from './daraHandoffService';
+import { DARA_AGENT_NAME, DARA_RISK_TIER } from './daraIdentitySeed';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
 
 /**
  * Dara v2 Phase 3/4 — Dara's first real LLM-invoked tool. Mirrors
@@ -71,6 +74,28 @@ async function escalateToHumanTool(
     // both — "never off-ledger" means an honest non-escalation here, never a
     // claimed escalation with nothing real behind it.
     return { escalated: false, reason: 'Could not record this right now — try asking again in a moment.' };
+  }
+
+  // T12 completion (2026-10-02) — this tool's FIRST authorization call ever.
+  // ticketId (the conversation ticket) is passed when real for approval-
+  // queue correlation; resourceType/resourceId give the escalation action a
+  // stable resource identity scoped to the student, independent of whether
+  // a conversation ticket happens to exist yet (it's a normal, already-
+  // supported case here for conversationTicketId to be null).
+  const authResult = await authorizeTicketDispatch({
+    eventId: crypto.randomUUID(),
+    ticketId: conversationTicketId,
+    resourceType: 'dara_escalation',
+    resourceId: studentEnrollmentId,
+    agentName: DARA_AGENT_NAME,
+    action: 'dara_escalate_to_human',
+    riskTier: DARA_RISK_TIER,
+    preparedAction: { studentEnrollmentId, reason: cleanReason, conversationTicketId, triggeringMessageId },
+  });
+  if (!authResult.allowed) {
+    // Same "never off-ledger" honesty as the missing-id case above — a held
+    // verdict is a real, honest non-escalation, never a fabricated one.
+    return { escalated: false, reason: 'Held for review — try asking again in a moment.' };
   }
 
   const handoff = await createDaraHandoff(daraAdminUserId, studentEnrollmentId, cleanReason, conversationTicketId, triggeringMessageId);

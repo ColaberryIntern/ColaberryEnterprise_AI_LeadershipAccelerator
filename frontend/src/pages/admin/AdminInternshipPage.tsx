@@ -5,6 +5,7 @@ import './internship/adminInternship.css';
 import { useInternshipReview, ReviewProvider } from './internship/reviewContext';
 import InternshipApplicationsMode from './internship/InternshipApplicationsMode';
 import { InternshipProjectsMode, InternshipManageMode } from './internship/InternshipTools';
+import InternConsoleMode from './internship/InternConsoleMode';
 
 /**
  * AdminInternshipPage — the AI Internship admin console.
@@ -32,9 +33,10 @@ import { InternshipProjectsMode, InternshipManageMode } from './internship/Inter
  * never exposed.
  */
 
-type Mode = 'apps' | 'projects' | 'manage';
+type Mode = 'apps' | 'console' | 'projects' | 'manage';
 const MODES: Array<{ key: Mode; label: string }> = [
   { key: 'apps', label: 'Applications' },
+  { key: 'console', label: 'Intern Console' },
   { key: 'projects', label: 'Projects' },
   { key: 'manage', label: 'Manage' },
 ];
@@ -46,7 +48,9 @@ const AdminInternshipPage: React.FC = () => {
   // meant losing the whole live call view.
   const [searchParams, setSearchParams] = useSearchParams();
   const raw = searchParams.get('view');
-  const mode: Mode = raw === 'projects' || raw === 'manage' ? raw : 'apps';
+  // 'apps' stays the default on purpose: staff mid phone-intake must not be moved off the live
+  // call view by a new tab being added beside it.
+  const mode: Mode = raw === 'projects' || raw === 'manage' || raw === 'console' ? raw : 'apps';
   const setMode = (m: Mode) => setSearchParams((prev) => {
     const p = new URLSearchParams(prev);
     p.set('view', m);
@@ -74,6 +78,7 @@ const AdminInternshipPage: React.FC = () => {
         </div>
 
         {mode === 'apps' && <InternshipApplicationsMode />}
+        {mode === 'console' && <InternConsoleMode onOpenApplicant={openApplicant} />}
         {mode === 'projects' && <InternshipProjectsMode onOpenApplicant={openApplicant} />}
         {mode === 'manage' && <InternshipManageMode />}
       </div>

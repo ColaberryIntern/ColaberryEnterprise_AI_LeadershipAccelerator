@@ -23,7 +23,7 @@ jest.mock('../../ticketCreatorReportsToResolver', () => ({ resolveReportsToChain
 // Trust Contract fix (2026-08-24) — getAgentDetail() now also calls the REAL
 // getLastTicketActivityForAgent() (same module), mocked alongside its sibling.
 // Dara v2 Phase 6 — same for getOldestOpenTicketAge() (open-ticket accountability).
-jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), countCompletedTicketsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn(), getOldestOpenTicketAge: jest.fn() }));
+jest.mock('../../workforce/liveAgentsService', () => ({ countOpenTicketsForAgent: jest.fn(), countCompletedTicketsForAgent: jest.fn(), countVerifiedResolutionsForAgent: jest.fn(), getLastTicketActivityForAgent: jest.fn(), getOldestOpenTicketAge: jest.fn() }));
 // Trust Contract Phase 1 (2026-08-26) — the 3 new real-evidence fields.
 jest.mock('../../agentPersonaVersionHistoryService', () => ({ getPersonaVersionHistory: jest.fn() }));
 jest.mock('../../trustMetricsService', () => ({ agentCostRows: jest.fn() }));
@@ -54,7 +54,7 @@ import OrgMember from '../../../models/OrgMember';
 import { Ticket, TicketActivity } from '../../../models';
 import { derivePresence } from '../../communityService';
 import { resolveReportsToChainWithTrail } from '../../ticketCreatorReportsToResolver';
-import { countOpenTicketsForAgent, countCompletedTicketsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../../workforce/liveAgentsService';
+import { countOpenTicketsForAgent, countCompletedTicketsForAgent, countVerifiedResolutionsForAgent, getLastTicketActivityForAgent, getOldestOpenTicketAge } from '../../workforce/liveAgentsService';
 import { getPersonaVersionHistory } from '../../agentPersonaVersionHistoryService';
 import { agentCostRows } from '../../trustMetricsService';
 import { getAgentAuthorizationSummary, getAbacMode } from '../../agentAuthorizationService';
@@ -77,6 +77,7 @@ const mockDerivePresence = derivePresence as unknown as jest.Mock;
 const mockResolveChain = resolveReportsToChainWithTrail as unknown as jest.Mock;
 const mockCountOpenTickets = countOpenTicketsForAgent as unknown as jest.Mock;
 const mockCountCompletedTickets = countCompletedTicketsForAgent as unknown as jest.Mock;
+const mockCountVerifiedResolutions = countVerifiedResolutionsForAgent as unknown as jest.Mock;
 const mockLastActivity = getLastTicketActivityForAgent as unknown as jest.Mock;
 const mockOldestOpenTicketAge = getOldestOpenTicketAge as unknown as jest.Mock;
 const mockPersonaHistory = getPersonaVersionHistory as unknown as jest.Mock;
@@ -104,6 +105,7 @@ beforeEach(() => {
   mockTicketActivityFindAll.mockResolvedValue([]);
   mockCountOpenTickets.mockResolvedValue(0);
   mockCountCompletedTickets.mockResolvedValue(0);
+  mockCountVerifiedResolutions.mockResolvedValue({ verified: 0, owned: 0, mostRecentVerifiedTicketId: null });
   mockLastActivity.mockResolvedValue(null);
   mockOldestOpenTicketAge.mockResolvedValue(null);
   mockAgentFindAll.mockResolvedValue([]);
@@ -338,6 +340,30 @@ describe('getAgentDetail', () => {
 
     expect(result!.completed_ticket_count_30d).toBe(0);
     expect(mockCountCompletedTickets).not.toHaveBeenCalled();
+  });
+
+  // Agent Detail polish round 5 (2026-09-30) — Results & Reports' real
+  // "Verified resolution" stat, via countVerifiedResolutionsForAgent().
+  it('verified_resolution_count/owned_ticket_count_all_time/most_recent_verified_ticket_id reflect the real aggregate', async () => {
+    mockCountVerifiedResolutions.mockResolvedValue({ verified: 3, owned: 9, mostRecentVerifiedTicketId: 'ticket-42' });
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.verified_resolution_count).toBe(3);
+    expect(result!.owned_ticket_count_all_time).toBe(9);
+    expect(result!.most_recent_verified_ticket_id).toBe('ticket-42');
+    expect(mockCountVerifiedResolutions).toHaveBeenCalledWith('admin-1', reeseAgent);
+  });
+
+  it('verified resolution fields are honestly zero/null, and countVerifiedResolutionsForAgent is never called, when there is no linked AdminUser identity', async () => {
+    mockAdminFindOne.mockResolvedValue(null);
+
+    const result = await getAgentDetail('agent-1');
+
+    expect(result!.verified_resolution_count).toBe(0);
+    expect(result!.owned_ticket_count_all_time).toBe(0);
+    expect(result!.most_recent_verified_ticket_id).toBeNull();
+    expect(mockCountVerifiedResolutions).not.toHaveBeenCalled();
   });
 
   // Dara v2 Phase 6 ("open-ticket accountability") — real, informational age
@@ -742,6 +768,25 @@ describe('getAgentDetail', () => {
 
       expect(result!.tickets[0].due_date).toEqual(due);
       expect(result!.tickets[1].due_date).toBeNull();
+    });
+
+    // Regression (2026-09-29 production incident): a real Sequelize DATEONLY
+    // column comes back from an actual DB read as a plain string (e.g.
+    // "2026-10-02"), NEVER a JS Date, no matter what the model's own
+    // `declare due_date: Date | null` claims. Every other test in this file
+    // mocks due_date as a real Date object, which never exercised this path
+    // and let a real `dueDate.getTime is not a function` crash reach
+    // production the moment every ticket started carrying a real due_date
+    // (the system-wide ticket due-date fix backfill). This test mocks the
+    // real runtime shape, not the model's aspirational type.
+    it('never throws when due_date comes back as a raw date string (the real Sequelize DATEONLY shape), and still computes a correct status_bucket', async () => {
+      mockTicketFindAll.mockResolvedValue([
+        { id: 't1', ticket_number: 1, title: 'String due_date', status: 'in_progress', priority: 'medium', type: 'student_support', created_at: new Date(), updated_at: new Date(), due_date: '2020-01-01' },
+      ]);
+
+      const result = await getAgentDetail('agent-1');
+
+      expect(result!.tickets[0].status_bucket).toBe('overdue');
     });
 
     it("status_bucket: 'overdue' when due_date is past and status is non-terminal, taking priority over the agent's own latest activity", async () => {

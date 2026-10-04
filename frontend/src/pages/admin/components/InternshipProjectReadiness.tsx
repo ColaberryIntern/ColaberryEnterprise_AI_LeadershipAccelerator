@@ -9,7 +9,19 @@ import { fetchInternshipProjectReadiness, ProjectReadinessRow } from '../../../s
  */
 const badge = (bg: string): React.CSSProperties => ({ background: bg, color: '#fff', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 10 });
 
-const InternshipProjectReadiness: React.FC<{ onSelect: (applicationId: string) => void }> = ({ onSelect }) => {
+const InternshipProjectReadiness: React.FC<{
+  onSelect: (applicationId: string) => void;
+  /**
+   * Start the interview for this intern, right here on this page.
+   *
+   * Ali, 2026-09-29: "I want to be able to create a project by clicking on a
+   * button in the intern category... so it's easy for me to just click one
+   * button and I'm already setting up a project." The roster row already knows
+   * who the intern is, so making him search for a name that is on screen in
+   * front of him is a step that exists for its own sake.
+   */
+  onStartProject?: (row: ProjectReadinessRow) => void;
+}> = ({ onSelect, onStartProject }) => {
   const [rows, setRows] = useState<ProjectReadinessRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,9 +71,23 @@ const InternshipProjectReadiness: React.FC<{ onSelect: (applicationId: string) =
                 <td>{r.sessions_attended}</td>
                 <td>{r.has_project ? (r.project_name || 'assigned') : <span className="text-muted">none</span>}</td>
                 <td className="text-end">
-                  <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => onSelect(r.application_id)}>
-                    {r.ready_for_project ? 'Assign a project' : 'Open'}
-                  </button>
+                  <div className="d-flex gap-2 justify-content-end">
+                    {onStartProject && (
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${r.ready_for_project ? 'btn-primary' : 'btn-outline-primary'}`}
+                        onClick={() => onStartProject(r)}
+                        title={r.has_project
+                          ? 'Start another project for this intern, typed or by phone'
+                          : 'Start the interview for this intern, typed or by phone'}
+                      >
+                        <i className="ri-chat-new-line me-1" />{r.has_project ? 'Start another' : 'Start a project'}
+                      </button>
+                    )}
+                    <button type="button" className="btn btn-sm btn-outline-dark" onClick={() => onSelect(r.application_id)}>
+                      Open
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

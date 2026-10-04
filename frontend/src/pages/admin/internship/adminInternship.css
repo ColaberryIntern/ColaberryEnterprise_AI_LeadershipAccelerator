@@ -28,6 +28,12 @@
 .aint-qhead{padding:12px 14px;border-bottom:1px solid var(--border-subtle,#e2e6ec)}
 .aint-search{margin-top:8px;display:flex;align-items:center;gap:8px;background:var(--surface-sunken,#eef0f4);border:1px solid var(--border-subtle,#e2e6ec);border-radius:9px;padding:6px 10px}
 .aint-search input{border:0;background:transparent;width:100%;font-size:13px;outline:none;color:inherit}
+/* The input's own outline is suppressed because it sits inside a styled pill, and suppressing it
+ * left the search box with NO visible focus at all — a keyboard user tabbing into the applicant
+ * queue could not see where they were. The ring moves to the WRAPPER instead, so the pill is what
+ * lights up. Deleting the `outline:none` above would put a second rectangle inside the pill; this
+ * is the fix, not the removal. */
+.aint-search:focus-within{outline:3px solid var(--color-primary-light);outline-offset:2px}
 .aint-filters{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px 6px}
 .aint-chip{border:1px solid var(--border-subtle,#e2e6ec);background:var(--surface-subtle,#f7f8fb);color:var(--text-body,#3f4a5a);font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;cursor:pointer}
 .aint-chip.on{background:var(--berry,#2563a8);border-color:var(--berry,#2563a8);color:#fff}
@@ -58,5 +64,251 @@
 .aint-dbody{padding:18px 20px}
 .aint-empty{text-align:center;color:var(--text-muted,#6b7280);padding:70px 24px}
 .aint-empty .ic{font-size:32px;margin-bottom:8px}
+/* Two ways out, one per layout. Narrow: the queue is off-screen, so leaving the
+   applicant is a navigation back to it. Wide: the queue is already beside the
+   pane, so the action is closing the open file. Exactly one is visible at a
+   time, which is why neither is a plain `display:inline-flex` default. */
 .aint-back{display:none}
-@media(max-width:960px){ .aint-back{display:inline-flex} }
+.aint-close{display:inline-flex}
+@media(max-width:960px){ .aint-back{display:inline-flex} .aint-close{display:none} }
+
+/* ── Intern Console ───────────────────────────────────────────────────────────
+ * Tokens only, no hardcoded colour. The six activity bands live in tokens.css as
+ * --activity-* because that file is the source of truth for colour and because the
+ * bands are read as a scale. */
+
+.aint-console { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.aint-views { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+.aint-views button {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  background: transparent; border: 1px solid var(--color-border);
+  border-radius: var(--r-pill); padding: 6px 14px;
+  font-size: var(--font-size-md); color: var(--color-text-light); cursor: pointer;
+}
+.aint-views button.on {
+  color: var(--color-primary); border-color: var(--color-primary);
+  background: var(--cherry-bg); font-weight: 600;
+}
+
+.aint-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--space-sm); }
+.aint-kpi {
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-border); border-radius: var(--r-8, 8px);
+  padding: var(--space-sm) var(--space-md);
+}
+.aint-kpi.ok { border-top-color: var(--activity-green); }
+.aint-kpi.warn { border-top-color: var(--activity-orange); }
+.aint-kpi.alert { border-top-color: var(--activity-red); }
+.aint-kpi.note { border-top-color: var(--activity-unknown); }
+.aint-kpi-v { font-size: var(--font-size-xl); font-weight: 700; color: var(--color-text); }
+.aint-kpi-l { font-size: var(--font-size-sm); color: var(--color-text-light); }
+
+.aint-chips { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+.aint-chip {
+  background: transparent; border: 1px solid var(--color-border); border-radius: var(--r-pill);
+  padding: 4px 12px; font-size: var(--font-size-sm); color: var(--color-text-light); cursor: pointer;
+}
+.aint-chip.on { color: var(--color-primary); border-color: var(--color-primary); background: var(--cherry-bg); }
+
+.aint-card { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--r-8, 8px); }
+.aint-card-h { padding: var(--space-sm) var(--space-md); border-bottom: 1px solid var(--color-border); }
+.aint-card-h h2 { font-size: var(--font-size-lg); margin: 0; display: flex; align-items: center; gap: var(--space-xs); }
+
+.aint-tbl { overflow-x: auto; }
+.aint-tbl table { width: 100%; border-collapse: collapse; }
+.aint-tbl th, .aint-tbl td {
+  text-align: left; padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border); font-size: var(--font-size-md); vertical-align: top;
+}
+.aint-tbl th { background: var(--color-bg-alt); font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-light); }
+.aint-name { font-weight: 600; color: var(--color-text); }
+.aint-strong { font-weight: 600; color: var(--color-text); }
+.aint-sub { font-size: var(--font-size-sm); color: var(--color-text-light); }
+.aint-nowrap { white-space: nowrap; }
+.aint-empty { text-align: center; padding: var(--space-lg); color: var(--color-text-light); }
+
+.aint-lastseen { display: flex; align-items: center; gap: var(--space-xs); }
+.aint-dot { width: 9px; height: 9px; border-radius: var(--r-pill); display: inline-block; flex: none; }
+.lv-green { background: var(--activity-green); }
+.lv-yellow { background: var(--activity-yellow); }
+.lv-orange { background: var(--activity-orange); }
+.lv-red { background: var(--activity-red); }
+.lv-black { background: var(--activity-black); }
+.lv-unknown { background: var(--activity-unknown); }
+
+.aint-pill { display: inline-block; border-radius: var(--r-pill); padding: 1px 8px; font-size: var(--font-size-xs); font-weight: 600; }
+.aint-pill.state-active { background: var(--color-success-bg); color: var(--activity-green); }
+.aint-pill.state-paused { background: var(--color-warning-bg); color: var(--activity-orange); }
+.aint-pill.pace-gold, .aint-pill.pace-green { background: var(--color-success-bg); color: var(--activity-green); }
+.aint-pill.pace-yellow { background: var(--color-warning-bg); color: var(--activity-yellow); }
+.aint-pill.pace-red { background: var(--color-danger-bg); color: var(--activity-red); }
+
+.aint-tag { font-size: var(--font-size-xs); border-radius: var(--r-4, 4px); padding: 0 5px; background: var(--color-warning-bg); color: var(--activity-yellow); }
+
+/* The week strip. An unpublished week is drawn hollow, NOT as an empty bar: "the curriculum has
+ * not shipped this week" and "this intern has done none of it" must not look the same. */
+.aint-strip { display: flex; gap: 2px; }
+.aint-wk {
+  width: 12px; height: 14px; border-radius: 2px;
+  background: var(--color-border); display: inline-block;
+}
+.aint-wk.done { background: var(--activity-green); }
+.aint-wk.gate { outline: 1px solid var(--color-primary); outline-offset: 1px; }
+.aint-wk.unpub { background: transparent; border: 1px dashed var(--color-border); }
+
+.aint-btn {
+  background: transparent; border: 1px solid var(--color-border); border-radius: var(--r-6, 6px);
+  padding: 4px 10px; font-size: var(--font-size-sm); color: var(--color-text); cursor: pointer;
+}
+.aint-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+.aint-state { padding: var(--space-lg); text-align: center; color: var(--color-text-light); }
+.aint-state.error { color: var(--color-danger); }
+
+.aint-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ── Intern Console · View B, the Triage Board ──────────────────────────────── */
+
+.aint-viewb { display: flex; flex-direction: column; gap: var(--space-md); }
+.aint-card-b { padding: var(--space-md); }
+
+.aint-seg { display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; background: var(--color-bg-alt); }
+.aint-seg > span { display: block; height: 100%; }
+
+.aint-legend { display: flex; flex-wrap: wrap; gap: var(--space-md); margin-top: var(--space-sm); font-size: var(--font-size-sm); color: var(--color-text-light); }
+.aint-legend span { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.aint-legend b { color: var(--color-text); }
+
+.aint-dists { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-sm); }
+.aint-dist-body { padding: var(--space-sm) var(--space-md); display: flex; flex-direction: column; gap: var(--space-xs); }
+.aint-dist-row { display: grid; grid-template-columns: 1fr 80px 24px; align-items: center; gap: var(--space-sm); font-size: var(--font-size-sm); }
+.aint-dist-l { color: var(--color-text-light); }
+
+.aint-bar { display: block; height: 6px; border-radius: var(--r-pill); background: var(--color-bg-alt); overflow: hidden; }
+.aint-bar > span { display: block; height: 100%; background: var(--color-primary); }
+
+.aint-lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--space-sm); align-items: start; }
+.aint-lane { background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--r-8, 8px); padding: var(--space-sm); display: flex; flex-direction: column; gap: var(--space-sm); }
+.aint-lane-h { display: flex; align-items: center; gap: var(--space-xs); font-size: var(--font-size-sm); margin: 0; color: var(--color-text); }
+.aint-lane-c { margin-left: auto; font-weight: 700; color: var(--color-text-light); }
+
+.aint-icard { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--r-6, 6px); padding: var(--space-sm); }
+.aint-icard-top { margin-bottom: var(--space-xs); }
+.aint-icard-acts { display: flex; gap: var(--space-xs); flex-wrap: wrap; margin-top: var(--space-sm); align-items: center; }
+
+.aint-trk { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: var(--space-xs); font-size: var(--font-size-sm); color: var(--color-text-light); }
+.aint-trk-t { grid-column: 2 / span 2; color: var(--color-text-light); }
+
+.aint-pipe { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-sm); padding: var(--space-md); align-items: start; }
+.aint-pipe-col { background: var(--color-bg-alt); border: 1px solid var(--color-border); border-radius: var(--r-8, 8px); padding: var(--space-sm); display: flex; flex-direction: column; gap: var(--space-sm); }
+.aint-pipe-col h4 { display: flex; align-items: center; margin: 0; font-size: var(--font-size-sm); text-transform: capitalize; }
+.aint-pipe-col h4 span { margin-left: auto; font-weight: 700; color: var(--color-text-light); }
+.aint-pcard { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--r-6, 6px); padding: var(--space-sm); }
+
+.aint-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.aint-btn:disabled:hover { border-color: var(--color-border); color: var(--color-text); }
+
+/* ── Intern Console · View C, the Activity Timeline ─────────────────────────── */
+
+.aint-viewc { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.aint-heat-wrap { overflow-x: auto; }
+.aint-heat { display: grid; gap: 2px; align-items: center; }
+.aint-heat-corner { }
+.aint-dh { font-size: var(--font-size-xs); color: var(--color-text-light); text-align: center; white-space: nowrap; }
+
+/* Every cell and every row name is a real button: a grid of unlabelled divs cannot be reached
+ * without a mouse and says nothing to a screen reader. */
+.aint-hc {
+  width: 14px; height: 14px; border-radius: 2px; border: 0; padding: 0;
+  cursor: pointer; display: inline-block;
+}
+.hs-0 { background: var(--heat-0); }
+.hs-1 { background: var(--heat-1); }
+.hs-2 { background: var(--heat-2); }
+.hs-3 { background: var(--heat-3); }
+.hs-4 { background: var(--heat-4); }
+
+.aint-heat-legend { margin: 0; }
+.aint-heat-legend .aint-hc { cursor: default; }
+
+.aint-rn {
+  display: flex; align-items: center; gap: var(--space-xs);
+  background: transparent; border: 0; padding: 2px 6px; cursor: pointer;
+  font-size: var(--font-size-sm); color: var(--color-text); text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.aint-rn.sel, .aint-ritem.sel { background: var(--cherry-bg); font-weight: 600; }
+
+.aint-cgrid { display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: var(--space-md); align-items: start; }
+@media (max-width: 860px) { .aint-cgrid { grid-template-columns: 1fr; } }
+
+.aint-roster-b { display: flex; flex-direction: column; padding: var(--space-xs); }
+.aint-ritem {
+  display: flex; align-items: center; gap: var(--space-sm);
+  background: transparent; border: 0; border-radius: var(--r-6, 6px);
+  padding: var(--space-xs) var(--space-sm); cursor: pointer; text-align: left; width: 100%;
+}
+.aint-ritem-t { display: flex; flex-direction: column; min-width: 0; }
+
+.aint-focus-name { font-size: var(--font-size-lg); }
+.aint-actbar { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+.aint-focus-b { display: flex; flex-direction: column; gap: var(--space-lg); }
+.aint-focus-b h3 { font-size: var(--font-size-md); margin: 0 0 var(--space-xs); }
+
+.aint-wkrow { display: grid; grid-template-columns: 90px 1fr 44px; align-items: center; gap: var(--space-sm); font-size: var(--font-size-sm); }
+.aint-wklabel { color: var(--color-text-light); }
+.aint-wkpct { text-align: right; }
+.aint-segs { display: flex; gap: 2px; }
+/* Seven segments per week, one per bucket. An unpublished bucket is hollow, not an empty bar:
+ * "the curriculum has not shipped this" and "they have not done this" are different facts. */
+.aint-seg-cell { flex: 1; height: 12px; border-radius: 2px; background: var(--color-bg-alt); overflow: hidden; }
+.aint-seg-cell > span { display: block; height: 100%; background: var(--activity-green); }
+.aint-seg-cell.unpub { background: transparent; border: 1px dashed var(--color-border); }
+.aint-seg-cell.full > span { background: var(--activity-green); }
+
+.aint-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.aint-feed li { display: flex; flex-direction: column; border-left: 2px solid var(--color-border); padding-left: var(--space-sm); }
+.aint-feed-t { font-size: var(--font-size-sm); color: var(--color-text); }
+
+/* Focus must stay visible on every one of these controls. */
+.aint-hc:focus-visible, .aint-rn:focus-visible, .aint-ritem:focus-visible {
+  outline: 3px solid var(--color-primary-light); outline-offset: 2px;
+}
+
+/* ── Intern Console · Manage drawer ─────────────────────────────────────────── */
+
+.aint-drawer {
+  border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary);
+  border-radius: var(--r-8, 8px); background: var(--color-bg);
+  padding: var(--space-md); margin: var(--space-md); display: flex;
+  flex-direction: column; gap: var(--space-sm);
+}
+.aint-drawer-h { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.aint-drawer-h h3 { margin: 0; font-size: var(--font-size-lg); }
+.aint-drawer-actions { display: flex; flex-direction: column; gap: var(--space-md); }
+.aint-action { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+
+.aint-field { display: flex; flex-direction: column; gap: var(--space-xs); font-size: var(--font-size-sm); }
+.aint-field input {
+  border: 1px solid var(--color-border); border-radius: var(--r-6, 6px);
+  padding: 6px 10px; font-size: var(--font-size-md); color: var(--color-text);
+  background: var(--color-bg); width: 100%; max-width: 420px;
+}
+.aint-field input:focus-visible { outline: 3px solid var(--color-primary-light); outline-offset: 2px; }
+
+/* A one-way action is visually separated from the reversible ones, because the cost of a misclick
+ * is not symmetric: pause is one click to undo, remove is a new application. */
+.aint-btn.danger { border-color: var(--color-danger); color: var(--color-danger); }
+.aint-btn.danger:hover:not(:disabled) { background: var(--color-danger-bg); }
+
+.aint-confirm {
+  border: 1px dashed var(--color-danger); border-radius: var(--r-6, 6px);
+  padding: var(--space-sm); margin-top: var(--space-xs); width: 100%;
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.aint-confirm-btns { display: flex; gap: var(--space-xs); }

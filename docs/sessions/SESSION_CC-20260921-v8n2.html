@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, September 21, 2026 at 4:32 PM</div>
-    <div><span class="sid">CC-20260921-v8n2</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Thursday, October 1, 2026 at 7:16 AM</div>
+    <div><span class="sid">CC-20260921-v8n2</span><span class="count">23 changes</span></div>
   </header>
   <main>
     
@@ -72,6 +72,336 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend jest `src/services/internship` 23 suites / 310 tests green, re-run after the</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">No test had ever fed the producer&#39;s rows to the consumer — the E2E only converts an</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Deployed #2779, proved it end to end on prod, and converted the eight existing interns to `active`</h2>
+          <span class="badge">2026-09-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">independent read-only query after the run — 8 applications `active`,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">screenshots of each intern&#39;s portal sections are NOT yet captured — the auto-mode classifier</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Proof the eight interns can access every portal section: 120/120 real View-as screenshots + review doc</h2>
+          <span class="badge">2026-09-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`[capture] 120/120 sections loaded across 8 members` — every page HTTP 200 under the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">product observation for Ali — the platform starts every converted intern at Week 1 with the</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Applicant queue: &quot;open&quot; now ends at the decision, so an active intern stops reading as mid-enrollment</h2>
+          <span class="badge">2026-09-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/internshipReviewQueueBuckets.test.ts`, 8 tests, all green, and the whole</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the partition test is the point. These are hand-maintained state lists, and their failure mode</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Internship applicant detail: a way to close the open file and get back to the empty pane</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `frontend/src/pages/admin/internship/__tests__/InternshipDetailPanelClose.test.tsx`,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the first test run failed 6/8 on my own fixture (`suggested_next_step` where the real</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Intern projects are generated through the Student Build Pipeline, not typed one story at a time</h2>
+          <span class="badge">2026-09-28</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `src/services/internship` + the auto-publish suite — **26 suites / 355 tests</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`SBP_PIPELINE_ENABLED=true` and `PROJECT_API_ENABLED=true` verified in the prod container, so</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Start a project for an intern in one click, from the roster row</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/InternshipProjectReadinessStart.test.tsx`, **5 green** — hands up the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this is the SECOND admin door built for the same job. `StartProjectForStudent` already existed</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Detailed requirements survive the crossing: stop clipping at intake, stop capping at decompose</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/buildIntakeAdapterCompleteness.test.ts`, **8 green** — 40 items at ~12k</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ANSWERS_MAX was NOT the cause and is worth not chasing again — there are only 20 dimensions,</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Requirement coverage: compare what the customer SAID against what the plan contains</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/requirementCoverage.test.ts` **11 green**, plus 4 added to</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the granularity is DIMENSIONS, deliberately. A plan requirement cites `from_dimensions`, not</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>The coverage report on screen: what they said, beside what the plan covers</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/RequirementCoveragePanel.test.tsx` **11 green**; all four internship</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the panel is currently wired only into the generator&#39;s review step, which is the door Ali</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>Intern projects board: every project, who it is assigned to, at class-board depth</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/projectDeliveryInterns.test.ts` **6 green** — matches on membership not</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">one test earned its keep immediately — &quot;is absent unless asked for&quot; failed because I had put</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>Click a story, see the requirements it fulfils</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/projectDeliveryStoryRequirements.test.ts` **9 green** — the columns are</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">a hand-written `jest.mock` factory for `projectReleaseMeta` cost a run by omitting</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>Import a project from its repository, decomposed like any other</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `__tests__/repoProjectImport.test.ts` **14 green** — every paste form parsed, bad</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the service import in the route is DEFERRED (`await import(...)` inside the handler), not</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>Wire the requirement packing into the live path it was written for</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">6 new tests in `buildIntakeAdapterCompleteness.test.ts` that go through</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">found by reading the map of the intake before adding to it, not by a failing test -</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>Attach a document to the intake, read before the next question and used in the requirements</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">NEW `intakeDocuments.test.ts` 18 green; 71 green across the three service</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the first mutation run exposed one of my own tests as unfailable - it compared</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>Move the review hold into the conversation intake, and the plan review with it</h2>
+          <span class="badge">2026-09-29</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">58 suites / 1251 tests green across `src/services/delivery` plus the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`InternshipProjectGenerator` is NOT deleted, deliberately, and this is for Ali to</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>One review for both admin build buttons, and every project back on the board</h2>
+          <span class="badge">2026-09-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">1256 backend tests green across `src/services/delivery` and the flotation</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">THREE self-inflicted faults worth recording. (1) A SQL comment I added contained</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>Clear the test understandings and their projects from production</h2>
+          <span class="badge">2026-09-30</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">a safety rail refused the whole transaction if ANY completed task would be</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this was run as a script rather than through a route, so it does not ship. Recorded</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>The requirements loss and the hold that a restart removed, both measured on production</h2>
+          <span class="badge">2026-10-01</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">67 suites / 1369 tests green across `src/services/delivery`,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the new `requirements` dimension changed a contract 12 modules consume and broke</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>Projects board: default to interns, with class and unenrolled on demand</h2>
+          <span class="badge">2026-10-01</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">36 backend tests green on `projectDelivery*`, 63 frontend board tests green via</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this replaces yesterday&#39;s `internsFirst`, which showed everything always. Ali wanted a</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>Clear the test projects from Ali&#39;s own queue</h2>
+          <span class="badge">2026-10-01</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">dry run first, printed keep and delete sets before anything was touched. A rail</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">ran as a script, so nothing ships; recorded because it changed production data.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">22</span>
+          <h2>A build held for review is reviewable: the admin drill-down reads the drafted plan</h2>
+          <span class="badge">2026-10-01</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">42 green across the three `projectDelivery*` suites, 15 of them in the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">FOUR type errors in this change were caught by `tsc` AFTER jest had passed 42 tests.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>e2e: a build held for review is reviewable, proven through the real request path</h2>
+          <span class="badge">2026-10-01</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">15/15 against production. Unauthenticated read refused; `plan_only` true;</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the first run FAILED honestly and usefully - `student_tasks.task_list_id` is NOT</span></div>
           
         </div>
       </article>
