@@ -115,6 +115,34 @@ export function isAccountSecurityMail(subject: string | null | undefined): boole
 }
 
 /**
+ * True when a message carries an operational-health alert header.
+ *
+ * WHY THIS EXISTS. On 2026-10-01 a delivery-health alert — the control built to
+ * shout when Cora's SMS, email or call channel goes silent — was itself archived
+ * by this engine. The LLM classifier filed it AUTOMATION at a recorded
+ * confidence of 15, reasoning "This is a test email with no action needed."
+ * The alert that exists to catch a silent failure failed silently, and the only
+ * reason anyone noticed is that Ali went looking for it in the audit log.
+ *
+ * MATCHED ON THE HEADER, DELIBERATELY, NOT THE SENDER OR THE SUBJECT.
+ * Kes's recommendation and it is the right one twice over. The From is his
+ * ordinary mailbox, so a sender rule would drag all his personal mail into the
+ * inbox. And the subject is prose — "[CRITICAL] Cora: SMS has gone quiet" —
+ * which breaks the first time anyone rewords it. The header is the shape of the
+ * thing, and matching on shape is what finally stopped the account-security
+ * defect (rule 0g) recurring after four sender-by-sender patches.
+ *
+ * `X-Cora-Alert: health` is on every delivery-health alert; `X-Cora-Alert:
+ * system` is on every other system alert (queue lag, new critical exception).
+ * Presence of the header alone is the test, so a value added later still
+ * matches. Header casing varies by provider, so keys are compared lowercased.
+ */
+export function hasOperationalAlertHeader(headers: any): boolean {
+  if (!headers || typeof headers !== 'object') return false;
+  return Object.keys(headers).some((k) => k.toLowerCase() === 'x-cora-alert');
+}
+
+/**
  * True when a Basecamp notification is a person directly tagging or assigning
  * Ali — an @mention or a to-do assignment — rather than project-management
  * noise. Basecamp encodes both directly in the subject:
@@ -169,6 +197,20 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   const headers = email.headers || {};
   const forwardedFromHotmail = isForwardedFromHotmail(email);
   const fwdSuffix = forwardedFromHotmail ? ' (forwarded from Hotmail)' : '';
+
+  // --- 00. Operational health alerts → INBOX, ahead of every other rule ---
+  // FIRST on purpose. This is the alert that tells us the alerting is broken,
+  // so it outranks everything, including any rule added after it. 0c already
+  // sends self-sent "[Alert]" mail to AUTOMATION; these alerts come from a
+  // person's mailbox with a "[CRITICAL]" subject and would not match 0c today,
+  // but putting this above the whole chain means no future rule can quietly
+  // start swallowing them either. See hasOperationalAlertHeader for the
+  // 2026-10-01 incident this closes.
+  if (hasOperationalAlertHeader(headers)) {
+    const reason = 'Operational health alert (X-Cora-Alert) - never archive';
+    console.log(`${LOG_PREFIX} Health alert: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'operational_alert_00', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
 
   // --- 0a. Cory + Inbox COS system emails → INBOX (keep visible) ---
   // Cory's daily/weekly briefings and the Inbox COS decision digests are sent

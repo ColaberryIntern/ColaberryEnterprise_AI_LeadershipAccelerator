@@ -188,3 +188,36 @@ The vocabulary for a client-confirmed outcome has been present and unused the wh
 Building the measurement-definition model is a new schema plus an approval workflow, which
 is an architecture decision and sits with the DRI. Until it is made, the ladder stays
 capped at `capability_demonstration` and the §6 phrase ban stays absolute.
+
+---
+
+## Inbox COS: a health alert can no longer be archived
+
+Separate workstream, same session. From Kes's delivery-health alert being archived by our own
+classifier on 2026-10-01 (state AUTOMATION, confidence 15, reasoning "This is a test email with no
+action needed"). Ali, 2026-10-02, after I showed him the audit row: the rule is mine to build.
+
+- [x] `hardRuleEngine.ts` rule `operational_alert_00` — X-Cora-Alert keeps a health alert in INBOX
+  - Date: 2026-10-04
+  - Session: CC-20260910-3q7x
+  - What changed: new exported predicate `hasOperationalAlertHeader(headers)` and a rule placed
+    **above 0a**, ahead of every other rule, because this is the alert that says the alerting is
+    broken. Matches on the **presence of the `X-Cora-Alert` header**, case-insensitively, so both
+    `health` and `system` values match and a value added later still does.
+  - Why the header and not the sender or subject: Kes's recommendation, right twice over. The From
+    is his ordinary mailbox, so a sender rule would pull all his personal mail into the inbox; the
+    subject is prose that breaks the first time anyone rewords it. Matching on SHAPE is what finally
+    stopped the account-security defect (rule `0g`) recurring after four sender-by-sender patches —
+    this is the fifth instance of the same class and the second fixed by shape.
+  - Verification, re-run after the last edit: `npx jest hardRuleEngine.test.ts` → **75 passed, 1
+    suite, exit 0**. `npx tsc --noEmit` → exit 0, zero output lines.
+  - Mutation evidence: guarding the rule with `if (false && ...)` failed **exactly the six positive
+    tests, by name** — delivery-health alert, system alert, header casing, List-Unsubscribe, the
+    RESOLVED all-clear, and the drill — while the two negative tests stayed green, which is correct:
+    they assert the rule does NOT fire on ordinary mail from the same sender or on a lead notice.
+    Restored by edit, never by `git checkout`; MUTATION marker count is 0.
+  - Notes: eight tests, not one. The two negatives matter as much as the six positives — they are
+    what proves the rule is pinned to the header rather than to Kes.
+  - Still to do: this needs a **prod deploy** to take effect, and only affects mail classified
+    afterwards. Kes is holding a drill (a real-shaped alert carrying `X-Cora-Alert-Drill: true`)
+    until the rule is live.

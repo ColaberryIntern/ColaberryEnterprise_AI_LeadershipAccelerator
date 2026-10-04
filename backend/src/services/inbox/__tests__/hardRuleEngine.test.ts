@@ -503,3 +503,83 @@ describe('evaluateHardRules - priority keyword separators', () => {
     expect(result.state).not.toBe('INBOX');
   });
 });
+
+/**
+ * Operational health alerts (operational_alert_00).
+ *
+ * The regression this pins: on 2026-10-01 a Cora delivery-health alert was
+ * archived by the LLM classifier at confidence 15, reasoning "This is a test
+ * email with no action needed". The control built to catch a silent failure
+ * failed silently. These alerts now match on the X-Cora-Alert header, ahead of
+ * every other rule.
+ */
+describe('evaluateHardRules — operational health alerts (operational_alert_00)', () => {
+  const alertEmail = (overrides: Record<string, any> = {}) => ({
+    id: 'email-alert',
+    from_address: 'kes@colaberry.com',
+    from_name: 'Kes Delele',
+    to_addresses: ['kesetebirhan@gmail.com'],
+    cc_addresses: ['ali@colaberry.com'],
+    subject: '[CRITICAL] Cora: SMS has gone quiet',
+    body_text: 'SMS delivery health: ACTIVE. Why: no delivery in 2.6 days.',
+    headers: { 'X-Cora-Alert': 'health', 'X-Cora-Alert-Channel': 'sms', 'X-Cora-Alert-State': 'active' },
+    ...overrides,
+  });
+
+  it('keeps a delivery-health alert in the inbox', async () => {
+    const result = await evaluateHardRules(alertEmail());
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00', classified_by: 'hard_rule' });
+  });
+
+  it('keeps a system alert, which carries the same header with a different value', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      subject: '[CRITICAL] Cora Alert: queue lag',
+      headers: { 'X-Cora-Alert': 'system', 'X-Cora-Alert-Type': 'queue_lag', 'X-Cora-Alert-Severity': 'critical' },
+    }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('matches the header whatever its casing, since providers rewrite it', async () => {
+    const result = await evaluateHardRules(alertEmail({ headers: { 'x-cora-alert': 'health' } }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('survives the List-Unsubscribe header that archives everything else', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      headers: { 'X-Cora-Alert': 'health', 'List-Unsubscribe': '<https://example.com/u>' },
+    }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('keeps the RESOLVED alert too, so the all-clear is not the one that goes missing', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      subject: '[RESOLVED] Cora: SMS is delivering again',
+      headers: { 'X-Cora-Alert': 'health', 'X-Cora-Alert-State': 'resolved' },
+    }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('keeps the drill, which is shaped exactly like a real alert', async () => {
+    const result = await evaluateHardRules(alertEmail({ headers: { 'X-Cora-Alert': 'health', 'X-Cora-Alert-Drill': 'true' } }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('does NOT fire on ordinary mail from the same person, which is why the rule is not on the sender', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      subject: 'Re: AI-Inbox-Manager is now deployed and live on Hetzner',
+      body_text: 'Ali, update on student notifications.',
+      headers: {},
+    }));
+    expect(result.rule_id).not.toBe('operational_alert_00');
+  });
+
+  it('does NOT fire on a lead notice, which carries no alert header', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      to_addresses: ['rose@colaberry.com'],
+      cc_addresses: [],
+      subject: 'New lead assigned',
+      headers: { 'List-Unsubscribe': '<https://example.com/u>' },
+    }));
+    expect(result.rule_id).not.toBe('operational_alert_00');
+  });
+});
