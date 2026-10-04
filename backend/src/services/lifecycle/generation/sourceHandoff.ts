@@ -254,6 +254,19 @@ function mintFor(
  * Both are the founding incident in miniature - a requirement nobody stated arriving as though
  * somebody had - so position alone is not good enough.
  *
+ * THE TRUST BOUNDARY, STATED BECAUSE THE SIBLING FIELD REFUSES THE SAME PATTERN.
+ * `history` is supplied by whoever supplied the understanding, so a generator emitting both
+ * can fabricate an entry naming a deleted item's text and buy a revision it should not have -
+ * measured: `ok: true, revised: 1` for a never-before-stated requirement. That is narrower
+ * than the position-based version it replaced (the exact prior wording must now be named, and
+ * the result is flagged `revised` rather than passing silently), but it is not closed.
+ *
+ * `blueprintGeneration.DeclarationOrigin` refuses precisely this shape for the capability
+ * declaration, on the grounds that "a generator emitting both can declare whatever it
+ * invents". Applying one standard there and another here is an inconsistency, not a
+ * judgement: closing it needs the understanding's revision history to arrive from an earlier
+ * stage than the replay, the same shape as the declaration fix. Phase 6 owns it.
+ *
  * The rule:
  *   1. An exact TEXT match is the same statement, wherever it sits. Reuse it unchanged. This is
  *      what makes a reorder safe.
@@ -270,9 +283,23 @@ function resolveIdentities(
   const claimed = new Set<string>();
 
   // 1. exact text matches, in order, each prior claimed at most once
+  //
+  // The identity is reused, but the PROVENANCE is taken from the current item. Reusing the
+  // prior item verbatim dropped a provenance change at unchanged text silently - an item
+  // moving `ai_inferred` -> `client_confirmed` kept reporting `ai_inferred`, which is the
+  // one direction that matters: it understates how well-founded a requirement has become,
+  // and `FACT_BEARING_PROVENANCES` upstream treats those two very differently.
   items.forEach((it, i) => {
     const hit = priors.find((p) => p.text === it.value && !claimed.has(p.id));
-    if (hit) { out[i] = hit; claimed.add(hit.id); }
+    if (!hit) return;
+    claimed.add(hit.id);
+    // Only when the prior HAS a provenance: an absent one stays absent rather than being
+    // synthesised here, and the locator deliberately stays the prior's (see the insert
+    // collision noted above). The report does not NAME a kind change - identity is text, not
+    // provenance - so this corrects the handoff the next stage reads, nothing more.
+    out[i] = hit.provenance && hit.provenance.kind !== it.provenance
+      ? { ...hit, provenance: { ...hit.provenance, kind: it.provenance } }
+      : hit;
   });
 
   // 2. A DECLARED correction, never an inferred one.
@@ -383,10 +410,17 @@ export function reportHandoffIntegrity(
  * silently reassign identity with `ok: true`, so the paragraph asserted the opposite of the
  * behaviour. A reorder is now safe and a delete-plus-add is now loud.
  *
- * What remains genuinely unresolvable without a stable per-item id on `UnderstandingItem`:
- * two items in one dimension changing wording in the SAME replay. That is ambiguous by
- * construction, so both mint and both surface as lost+invented - loud and safe, at the cost
- * of losing the revision history on those two.
+ * Two items in one dimension changing wording in the SAME replay resolve correctly WHEN BOTH
+ * DECLARE their prior text (`revised: 2`); undeclared, both mint and surface as lost+invented.
+ * An earlier version of this paragraph claimed the second unconditionally, which understated
+ * the mechanism this module is built on.
+ *
+ * WHAT IS GENUINELY UNRESOLVED: a non-appending INSERT collides locators. A reused prior keeps
+ * its original locator while a mint takes the current per-dimension position, so inserting
+ * ahead of an existing item produces two items at `#1` - and a LATER unchanged replay then
+ * reads 1-lost/1-invented. Loud rather than silent, and inherited from the plan's prescribed
+ * `(dimension, locator)` key. The real fix is a stable per-item id on `UnderstandingItem`,
+ * which does not exist; recorded in the Phase 7 register.
  */
 export function itemsByLocator(result: HandoffResult): Map<string, SourceItem> {
   const out = new Map<string, SourceItem>();

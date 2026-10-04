@@ -11,7 +11,6 @@ import {
   generateBlueprintOnce,
   unresolvedAllocation,
   MAX_GENERATION_ATTEMPTS,
-  GENERATION_STAGES,
   type BlueprintGenerationInput,
 } from '../blueprintGeneration';
 import { itemsByLocator, buildSourceHandoff, reportHandoffIntegrity } from '../sourceHandoff';
@@ -437,6 +436,61 @@ describe('replay identity is TEXT-first, so a reorder is safe and a swap is loud
     expect(report.invented).toEqual([]);
   });
 
+  it('RECORDS A KNOWN HOLE: a fabricated `history` entry still buys a revision', () => {
+    // This test asserts a WEAKNESS, deliberately, so the boundary is machine-checked instead of
+    // living only in a prose comment. `history` arrives from whoever supplied the understanding,
+    // so a generator emitting both can name a deleted item’s text and have a
+    // never-before-stated requirement land as a revision of it.
+    //
+    // `blueprintGeneration.DeclarationOrigin` refuses exactly this shape for the capability
+    // declaration. Holding the two fields to different standards is an inconsistency, not a
+    // judgement - closing it needs the revision history to arrive from an earlier stage than the
+    // replay, which is Phase 6 work.
+    //
+    // WHEN PHASE 6 CLOSES THIS: delete this test and the matching entry in
+    // `docs/project-lifecycle/carried-forward-obligations.md`. Do NOT relax the assertions to
+    // keep it green - a green test here means the hole is still open.
+    const first = buildSourceHandoff([r('AAA')]);
+    const { report } = replay(first, [r('ZZZ never stated by anyone', 'AAA')]);
+
+    expect(report.revised).toEqual([first.items[0].item.id]);
+    expect(report.ok).toBe(true);
+    expect(report.lost).toEqual([]);
+    expect(report.invented).toEqual([]);
+  });
+  it('a PROVENANCE change at unchanged text is carried, not inherited from the prior', () => {
+    // Reusing the prior item verbatim dropped this silently: an item whose provenance moved
+    // `ai_inferred` -> `client_confirmed` kept reporting `ai_inferred` downstream. That is the
+    // direction that matters, because `ai_inferred` is NOT in FACT_BEARING_PROVENANCES and
+    // `client_confirmed` is, so the next stage would weigh a confirmed fact as an inference.
+    const at = (p: UnderstandingItem['provenance']): UnderstandingItem => ({
+      dimension: 'requirements', classification: 'FACT', provenance: p, value: 'AAA',
+    });
+    const first = buildSourceHandoff([at('ai_inferred')]);
+    expect(first.items[0].item.provenance!.kind).toBe('ai_inferred');
+
+    const { second, report } = replay(first, [at('client_confirmed')]);
+
+    expect(second.items[0].item.provenance!.kind).toBe('client_confirmed');
+    // Same statement, so the same id: provenance is not identity.
+    expect(second.items[0].item.id).toBe(first.items[0].item.id);
+    // And unchanged text is not a revision.
+    expect(report.ok).toBe(true);
+    expect(report.revised).toEqual([]);
+    expect(report.lost).toEqual([]);
+    expect(report.invented).toEqual([]);
+    // The locator deliberately stays the prior’s, which is the insert collision recorded in
+    // the module header rather than something this test should assert away.
+    expect(second.items[0].item.provenance!.locator).toBe(first.items[0].item.provenance!.locator);
+  });
+
+  it('PASSING COUNTERPART: an unchanged provenance is left exactly as it was', () => {
+    // The control. Without it, a test that always rewrites provenance would pass the one above
+    // while quietly discarding whatever the prior held.
+    const first = buildSourceHandoff([r('AAA')]);
+    const { second } = replay(first, [r('AAA')]);
+    expect(second.items[0].item.provenance).toEqual(first.items[0].item.provenance);
+  });
   it('the handoff keeps the understanding\u2019s INPUT order, not a per-dimension grouping', () => {
     // Resolving identity needs a per-dimension view; the OUTPUT must not inherit that grouping.
     // Restructuring for the fix silently reordered it, which a locator test caught.

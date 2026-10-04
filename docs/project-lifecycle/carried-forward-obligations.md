@@ -96,7 +96,7 @@ Phase 3's allocation work is enforced at module level only, never through `unmet
 
 ## T6 (blueprint generation orchestration) obligations
 
-**Status after T6, attempt 2 (2026-10-04).** Four of six discharged, one still open, one
+**Status after T6, attempt 3 (2026-10-04) — VERIFIED PASS at 11/12.** Four of six discharged, one still open, one
 partially met and deferred with its reason. Recorded explicitly because the T6 commit first
 claimed "FOUR OBLIGATIONS … EACH DISCHARGED", silently renumbering a committed set of six — the
 verifier caught it, and the machinery for recording a deviation had been used carefully three
@@ -106,7 +106,7 @@ it here.
 | # | Obligation | Status |
 |---|---|---|
 | 1 | ID stability on replay | **Discharged.** With its positive control: without the prior map the same replay still reads as total loss. |
-| 2 | Revised requirement keeps id, bumps revision | **Discharged on attempt 2.** Attempt 1 made this *worse* — see below. |
+| 2 | Revised requirement keeps id, bumps revision | **Discharged on attempt 3.** Attempt 1 made it *worse* and attempt 2’s positional mechanism was replaced — see below. |
 | 3 | Auto-rationale must not self-certify | **Discharged.** Two behavioural tests plus a (weaker, evadable) source-text check. |
 | 4 | Declaration not from the same model turn | **Discharged.** Refused before any stage runs. |
 | 5 | `role_map` write/read round-trip | **STILL OPEN.** Nothing reads or writes `blueprint_role_map`. Needs a persisted manifest, which is Phase 6. |
@@ -123,11 +123,38 @@ report gained two directions: `revised` (legitimate, reported, does not fail) an
 `rewrittenWithoutRevision` (text changed with no bump — history rewritten in place, and a
 failure).
 
-**A known limit, recorded rather than hidden:** the locator is positional
-(`${dimension}#${ordinal}`), which the plan prescribed, so deleting an item shifts every later
-item in that dimension onto its predecessor's locator. That now surfaces as a revision rather
-than a silent identity reassignment, but the attribution is wrong in that case. A stable
-per-item id on `UnderstandingItem` is the real fix and does not exist.
+**CORRECTED AFTER ATTEMPT 3 — the paragraph that stood here described the positional
+mechanism attempt 3 replaced, and it understated the module.** Deleting an item does **not**
+shift later items onto a predecessor’s locator. Identity is resolved text-first, so
+survivors keep their own ids and the deletion reports `lost: 1, revised: 0, ok: false`.
+Measured at HEAD. A reader of the old text would have gone to fix a non-bug — which is
+exactly what this register exists to prevent, since Phase 6/7 read it as the authority on
+what is open.
+
+**What IS open, measured by the attempt-3 verifier rather than asserted:**
+
+- **A fabricated `history` entry still buys a revision.** `history` arrives from whoever
+  supplied the understanding, so a generator emitting both can name a deleted item’s text
+  and get `ok: true, revised: 1` for a never-before-stated requirement. Narrower than the
+  positional version it replaced — the exact prior wording must now be named, and the result
+  is flagged `revised` rather than passing silently — but not closed.
+  **`blueprintGeneration.DeclarationOrigin` refuses precisely this shape** for the capability
+  declaration, on the grounds that a generator emitting both can declare whatever it invents.
+  Holding the two fields to different standards is an inconsistency, not a judgement. Closing
+  it needs the revision history to arrive from an earlier stage than the replay — the same
+  shape as the declaration fix. **Phase 6 owns it.**
+- **A non-appending insert collides locators.** A reused prior keeps its original locator while
+  a mint takes the current per-dimension position, so inserting *ahead* of an existing item
+  yields two items at `#1`, and a later **unchanged** replay then reads 1-lost/1-invented — a
+  false positive on the very case obligation 1 exists to prevent. Loud rather than silent, and
+  inherited from the plan’s prescribed `(dimension, locator)` key. The real fix is a stable
+  per-item id on `UnderstandingItem`, which does not exist.
+- **Provenance drift at unchanged text** was dropped silently. Attempt 3 now takes the current
+  item’s provenance on a text match: an item moving `ai_inferred` → `client_confirmed` kept
+  reporting `ai_inferred`, which understates how well-founded a requirement has become, and
+  `FACT_BEARING_PROVENANCES` upstream treats those two very differently. The integrity
+  report still does **not** name a provenance change, because identity there is text rather
+  than provenance; the fix corrects the handoff the next stage reads, and nothing more.
 
 **§7 corpus cases:** two of three run through the orchestrator (multiple roles held by one
 person; a low-information interview yielding an empty handoff rather than an invented one). The
@@ -261,6 +288,19 @@ were recorded rather than patched mid-phase.
   3 enforced "exactly one" in the blueprint layer rather than tightening the shared validator,
   because tightening it would newly reject already-stored factory projects — an unplanned data
   migration across the 11 non-test modules that depend on that contract.
+- **A stable per-item id on `UnderstandingItem` does not exist, and two T6 limits both trace to
+  its absence.** Replay identity is resolved by exact TEXT per dimension, with the locator
+  (`${dimension}#${ordinal}`) carried from whichever item claimed it. So a **non-appending
+  insert collides locators** — insert ahead of an existing item and two items sit at `#1`,
+  after which a later *unchanged* replay reads 1-lost/1-invented. Loud rather than silent, and a
+  false positive on the very case T6 obligation 1 exists to prevent. Adding the id is a change
+  to the understanding contract, not to this module, which is why it is here and not in Phase 3.
+- **`history` is trusted where the sibling field is not** — see the T6 section above. A
+  fabricated `history` entry buys a revision (`ok: true, revised: 1`) for a never-before-stated
+  requirement, while `blueprintGeneration.DeclarationOrigin` refuses precisely this shape for
+  the capability declaration. **Phase 6 owns the fix** (the revision history has to arrive from
+  an earlier stage than the replay); it is listed here so a hardening pass does not read the
+  text-first resolution as closed.
 - **The §7 corpus case "source exceeding model input limits" is closed for the blueprint path
   only.** The live student SBP path keeps its truncate-and-label behaviour, because
   `decomposePrompt.delimited()` **is** the SAFE-002 injection defense and that path is unflagged
