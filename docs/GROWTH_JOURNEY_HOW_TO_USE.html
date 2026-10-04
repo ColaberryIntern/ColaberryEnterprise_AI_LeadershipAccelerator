@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth Journey OS — how to use it</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --leaf:#77BB4A; --leaf-bg:#f0fff4; --amber:#B7791F; --amber-bg:#FFFBEB;
+    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --bg:#fff; --alt:#f7fafc;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--alt);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.65}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 1.25rem}
+
+  header{background:linear-gradient(135deg,#1a1f2b 0%,#2d3748 100%);color:#fff;padding:3rem 0 2.25rem}
+  header h1{margin:.6rem 0 .5rem;font-size:2.1rem;font-weight:700;line-height:1.15}
+  header p{margin:0;color:#cbd5e0;max-width:68ch;font-size:1.0625rem}
+  .badge{display:inline-block;background:var(--cherry);color:#fff;font-size:.72rem;font-weight:700;
+    letter-spacing:.07em;text-transform:uppercase;padding:.28rem .65rem;border-radius:3px}
+
+  nav{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--border);
+    box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  nav ul{display:flex;flex-wrap:wrap;gap:.25rem;list-style:none;margin:0;
+    padding:.6rem 1.25rem;max-width:1040px;margin:0 auto}
+  nav a{display:block;padding:.35rem .7rem;border-radius:4px;text-decoration:none;
+    color:var(--text);font-size:.875rem;font-weight:500}
+  nav a:hover{background:var(--cherry-bg);color:var(--cherry-deep)}
+
+  section{margin:2.75rem 0}
+  h2{font-size:1.4rem;color:var(--cherry);margin:0 0 .4rem;scroll-margin-top:4rem}
+  h2 .num{color:var(--muted);font-weight:400;margin-right:.4rem}
+  .lede{color:var(--muted);margin:0 0 1.25rem;max-width:72ch}
+  h3{font-size:1.05rem;margin:1.5rem 0 .5rem}
+
+  .box{border-left:4px solid var(--cherry);background:var(--cherry-bg);
+    padding:1rem 1.25rem;border-radius:0 5px 5px 0;margin:1.25rem 0}
+  .box.good{border-left-color:var(--leaf);background:var(--leaf-bg)}
+  .box.warn{border-left-color:var(--amber);background:var(--amber-bg)}
+  .box p:first-child{margin-top:0}.box p:last-child{margin-bottom:0}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem;margin:1.25rem 0}
+  .card{background:#fff;border:1px solid var(--border);border-radius:6px;padding:1.1rem;
+    box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .card h4{margin:0 0 .35rem;font-size:.9375rem}
+  .card p{margin:0;font-size:.875rem;color:var(--muted)}
+  .card a{color:var(--cherry-deep);font-weight:600;text-decoration:none;font-size:.875rem}
+
+  pre{background:#1a1f2b;color:#e2e8f0;padding:.85rem 1rem;border-radius:5px;overflow-x:auto;
+    font-size:.8125rem;line-height:1.5;margin:.6rem 0;position:relative}
+  pre code{background:none;padding:0;color:inherit;font-size:inherit}
+  code{background:var(--alt);padding:.12rem .35rem;border-radius:3px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.875em}
+  .copy{position:absolute;top:.5rem;right:.5rem;background:#2d3748;color:#cbd5e0;border:1px solid #4a5568;
+    border-radius:3px;font-size:.6875rem;padding:.2rem .5rem;cursor:pointer;font-family:inherit}
+  .copy:hover{background:var(--cherry);color:#fff;border-color:var(--cherry)}
+
+  table{width:100%;border-collapse:collapse;font-size:.9rem;background:#fff;
+    border:1px solid var(--border);border-radius:6px;overflow:hidden;margin:1rem 0}
+  th,td{text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--alt);font-weight:600;font-size:.8125rem;text-transform:uppercase;
+    letter-spacing:.03em;color:var(--muted)}
+  tr:last-child td{border-bottom:0}
+
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:1.25rem 0}
+  ol.steps>li{counter-increment:s;position:relative;padding:0 0 1.1rem 2.6rem;margin:0}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:1.8rem;height:1.8rem;
+    background:var(--cherry);color:#fff;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-size:.8125rem;font-weight:700}
+  ol.steps>li.safe::before{background:var(--leaf);color:#14532d}
+  ol.steps>li.danger::before{background:var(--amber);color:#fff}
+  ol.steps strong{display:block;margin-bottom:.15rem}
+  .cost{font-size:.8125rem;color:var(--muted);margin-top:.2rem}
+
+  .pill{display:inline-block;font-size:.6875rem;font-weight:700;padding:.12rem .45rem;
+    border-radius:3px;text-transform:uppercase;letter-spacing:.03em}
+  .pill.safe{background:#c6f6d5;color:#22543d}
+  .pill.care{background:#FEF3C7;color:var(--amber)}
+  .pill.stop{background:#FED7D7;color:#9B2C2C}
+
+  footer{padding:2.5rem 0 3.5rem;color:var(--muted);font-size:.875rem;border-top:1px solid var(--border);
+    margin-top:3rem;background:#fff}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="badge">Live · and doing nothing, on purpose</span>
+    <h1>Growth Journey OS — how to use it</h1>
+    <p>It decides what should happen next for one person in one brand's journey, records
+       that decision, and — only when you explicitly allow it — acts on it. Right now it
+       is watching nothing and contacting nobody. This page is how you look at it, switch
+       it on a notch at a time, and switch it off again.</p>
+  </div>
+</header>
+
+<nav><ul>
+  <li><a href="#state">Where it stands</a></li>
+  <li><a href="#look">Look at it</a></li>
+  <li><a href="#populated">See it populated</a></li>
+  <li><a href="#on">Switch it on</a></li>
+  <li><a href="#off">Stop it</a></li>
+  <li><a href="#queue">Work the queue</a></li>
+  <li><a href="#traps">Traps</a></li>
+  <li><a href="#yours">Your decisions</a></li>
+</ul></nav>
+
+<div class="wrap">
+
+<section id="state">
+  <h2><span class="num">1</span>Where it stands today</h2>
+  <p class="lede">Read this before anything else, because it explains why the screens look empty.</p>
+
+  <div class="box good">
+    <p><strong>Nothing sends.</strong> Every switch is off, all three background jobs are
+    disabled, and seven separate row counts are zero — executions, decisions, handoffs,
+    classifications, in-app nudges, outcomes, and journey ledger events. That was verified
+    on the box, not assumed.</p>
+  </div>
+
+  <p>The system reports its own readiness as <strong>2 of 16 knowable conditions met
+  (13%)</strong>, next move <code>master_flag</code>. But the number is less useful than
+  what sits behind it:</p>
+
+  <div class="box warn">
+    <p><strong>13% is not a system waiting on a switch. It is waiting on configuration.</strong></p>
+    <p>No learner brand has an approved content rule, and the <code>sales</code> and
+    <code>solution_architect</code> queues have no assignee policy. So even with every flag
+    on, a decision could not resolve — it would refuse with
+    <code>content_not_approved</code> or <code>no_assignee_policy</code>. Flipping the
+    master flag today gives you a workspace showing configuration you can already read
+    from the command line.</p>
+  </div>
+
+  <p>Four brands are registered, each with one programme, all in <code>draft</code>:</p>
+  <table>
+    <tr><th>Brand</th><th>Programme</th><th>Kind</th><th>Channels</th></tr>
+    <tr><td>CPN</td><td><code>cpn/learner</code></td><td>learner</td><td>email · in_app · ali_outreach</td></tr>
+    <tr><td>Colaberry Training</td><td><code>colaberry-training/learner</code></td><td>learner</td><td>email · in_app · ali_outreach</td></tr>
+    <tr><td>Colaberry Business<br><span style="font-size:.8125rem;color:var(--muted)">shows as "Colaberry Enterprise"</span></td><td><code>colaberry-enterprise/business-growth</code></td><td>business</td><td>email · in_app · ali_outreach</td></tr>
+    <tr><td>AI Flotation</td><td><code>ai-flotation/service-growth</code></td><td>consulting</td><td>email · in_app · ali_outreach</td></tr>
+  </table>
+</section>
+
+<section id="look">
+  <h2><span class="num">2</span>Look at what it is doing</h2>
+  <p class="lede">Four read-only ways in. None needs a flag on, none writes anything, all
+     are safe against production at any time.</p>
+
+  <h3>The fastest: just open it</h3>
+  <p><a href="https://www.refactored.ai/admin/growth-journey"><strong>https://www.refactored.ai/admin/growth-journey</strong></a>
+  — you are already an admin, so no token handling. Expect the page to render and say it is
+  <strong>switched off, naming <code>GROWTH_JOURNEY_ENABLED</code></strong>. That is the
+  correct answer, not an error.</p>
+
+  <div class="box warn">
+    <p><strong>Do not pick a brand yet.</strong> With the master flag off, every journey
+    route except <code>/status/*</code> returns 404, so the other tabs will look broken.
+    They are not. Leave the brand selector empty until after step 2 of
+    <a href="#on">switching it on</a>.</p>
+  </div>
+
+  <h3>The whole test suite, in one command</h3>
+  <p>Nine checks, read-only, already saved on the prod host:</p>
+  <pre><button class="copy">copy</button><code>ssh root@95.216.199.47 "bash /tmp/gjtest.sh"</code></pre>
+  <p>It proves the backend is up, that Phase 6 code is genuinely inside both running
+  containers (not just that the git tree is at the right commit), that nothing has been
+  sent, that the switches are off, and that the three ledger indexes are
+  <strong>valid</strong> and not merely present — which the built-in readiness check does
+  not verify.</p>
+
+  <h3>What the next run would actually do</h3>
+  <pre><button class="copy">copy</button><code>ssh root@95.216.199.47 "docker exec accelerator-backend \
+  node dist/scripts/growthJourneyExecutionStatus.js"</code></pre>
+  <p>Twelve lines, one per brand × channel, each with a mode and a reason. This asks the
+  <em>same resolver the planner asks</em>, so it is what the next run will do rather than
+  an estimate. It also lists every active pause or rollout <strong>whether or not the flags
+  are on</strong> — the switchboard stays readable in the dark.</p>
+
+  <h3>What is left before launch</h3>
+  <pre><button class="copy">copy</button><code>ssh root@95.216.199.47 "docker exec accelerator-backend \
+  node dist/scripts/growthJourneyLaunchReadiness.js"</code></pre>
+  <p>Seventeen items, each naming its own next move. Work it <strong>top down</strong> —
+  the order is deliberate, and <code>next_move</code> is always the first blocked item in
+  list order.</p>
+
+  <div class="box">
+    <p><strong>One item is deliberately unanswerable.</strong> <code>tests_green</code>
+    reports neither pass nor fail — "not readable from here, the suite's last result lives
+    in CI". It counts in neither column. A system that guessed there would be lying.</p>
+  </div>
+</section>
+
+<section id="populated">
+  <h2><span class="num">3</span>See it with data in it</h2>
+  <p class="lede">The screens are empty because nothing has run. To see what they look like
+     working, without touching production:</p>
+  <div class="cards">
+    <div class="card">
+      <h4>The full walkthrough</h4>
+      <p>All nine tabs rendered with real components and realistic data, each with a note
+         on what to look at.</p>
+      <p style="margin-top:.5rem"><a href="GROWTH_JOURNEY_PHASE6_REVIEW.html">Open the walkthrough →</a></p>
+    </div>
+    <div class="card">
+      <h4>The staff guide</h4>
+      <p>The workspace tab by tab in operator words, for admissions, sales, solution
+         architects and support. No engineering.</p>
+      <p style="margin-top:.5rem"><code>docs/GROWTH_JOURNEY_TRAINING_GUIDE.md</code></p>
+    </div>
+    <div class="card">
+      <h4>The operations runbook</h4>
+      <p>The procedure: switches, the ladder, every operator move with its bounds,
+         rollback levers in blast-radius order.</p>
+      <p style="margin-top:.5rem"><code>directives/growth-journey-operations.md</code></p>
+    </div>
+    <div class="card">
+      <h4>Reason codes</h4>
+      <p>Every refusal this system can emit, grouped by symptom. Start here when something
+         declines to happen.</p>
+      <p style="margin-top:.5rem"><code>docs/GROWTH_JOURNEY_REASON_CODES.md</code></p>
+    </div>
+  </div>
+</section>
+
+<section id="on">
+  <h2><span class="num">4</span>Switch it on, a notch at a time</h2>
+  <p class="lede">Nine steps. Steps 1–8 contact nobody. Only step 9 can reach a person, and
+     it is a separate decision.</p>
+
+  <ol class="steps">
+    <li class="danger">
+      <strong>Seed tenant memberships <span class="pill care">hard to undo</span></strong>
+      Grants journey access to the admins who need it.
+      <div class="cost"><strong>The cost:</strong> the first membership row closes the
+      tenancy fallback for <em>every</em> admin at once. Any admin without a row loses
+      legacy cross-tenant reads too. This is the only step on this list that is not cleanly
+      reversible, so decide who is on the roster before running it. The script refuses
+      unless you acknowledge the exact lock-out count.</div>
+    </li>
+    <li class="safe">
+      <strong>Turn the master flag on <span class="pill safe">reversible</span></strong>
+      <code>GROWTH_JOURNEY_ENABLED=true</code>, then restart the backend.
+      <div class="cost">Routes start answering and the workspace shows real configuration.
+      Still decides nothing. Unset it and restart to undo.</div>
+    </li>
+    <li class="safe">
+      <strong>Do the configuration that actually matters <span class="pill safe">reversible</span></strong>
+      Approve one content rule per learner brand; write <code>queue_capacity</code> and
+      <code>queue_assignee</code> rows for <code>sales</code> and
+      <code>solution_architect</code>; move the programmes off <code>draft</code>.
+      <div class="cost"><strong>This is the step that makes the screens stop being empty.</strong>
+      Without it a decision cannot resolve no matter which flags are on. Set the rows back
+      to <code>paused</code> to undo.</div>
+    </li>
+    <li class="safe">
+      <strong>Let it watch <span class="pill safe">reversible</span></strong>
+      <code>GROWTH_JOURNEY_SIGNAL_INGEST_ENABLED</code>, then
+      <code>GROWTH_JOURNEY_CLASSIFICATION_ENABLED</code>.
+      <div class="cost">It starts reading people and classifying them by brand and path.
+      Acts on nothing.</div>
+    </li>
+    <li class="safe">
+      <strong>Let it think <span class="pill safe">reversible</span></strong>
+      Enable <code>GrowthJourneyShadowDecisions</code> in Admin → Agents, then
+      <code>GROWTH_JOURNEY_DECISIONS_ENABLED=true</code>.
+      <div class="cost"><strong>This is the real demonstration.</strong> Every night it
+      records what it <em>would</em> do for each person, with its reasoning, and contacts
+      nobody. Turn the agent off to undo — the registry toggle, <em>never</em> a redeploy.</div>
+    </li>
+    <li class="safe">
+      <strong>Let it ask for a human <span class="pill safe">reversible</span></strong>
+      <code>GROWTH_JOURNEY_HANDOFFS_ENABLED=true</code>.
+      <div class="cost">Real handoff rows and tickets appear in the queue, and your staff
+      can work them. Creating a handoff notifies nobody — they come to the queue.</div>
+    </li>
+    <li class="safe">
+      <strong>Register the campaigns <span class="pill safe">reversible</span></strong>
+      <code>growthJourneyExecutionSetup register-campaigns</code> and
+      <code>create-flow-drafts</code>, with <code>--confirm-production --expect-count N</code>.
+      <div class="cost">Dry run by default. Nothing here activates or approves a campaign.</div>
+    </li>
+    <li class="safe">
+      <strong>One scope to review mode <span class="pill safe">reversible</span></strong>
+      A <code>review</code> rollout for one brand × programme × <code>email</code>.
+      <div class="cost">Actions get prepared and wait for a human. Nothing goes out
+      unapproved. Clear the rollout and the scope drops back to shadow on the next run.</div>
+    </li>
+    <li>
+      <strong>Let it act <span class="pill stop">contacts people</span></strong>
+      <code>GROWTH_JOURNEY_EXECUTION_ENABLED=true</code>.
+      <div class="cost"><strong>The only switch that can cause a person to be contacted.</strong>
+      This is a separate decision from everything above it, and nothing about the current
+      state argues for haste. If Ali-outreach is ever in scope it needs
+      <a href="#yours">section 6A</a> written first.</div>
+    </li>
+  </ol>
+
+  <div class="box">
+    <p><strong>A shortcut worth knowing.</strong> Steps 1–3 together are the smallest set
+    that makes this thing demonstrable. Steps 4–6 are what make it interesting. You can
+    stop after any of them.</p>
+  </div>
+</section>
+
+<section id="off">
+  <h2><span class="num">5</span>Stop it</h2>
+  <p class="lede">Eight levers, smallest blast radius first. Reach for the smallest one
+     that covers the problem.</p>
+  <table>
+    <tr><th>#</th><th>Lever</th><th>Scope</th><th>Reaches work already running?</th></tr>
+    <tr><td>1</td><td>A <strong>scoped pause</strong> (Controls tab)</td><td>one brand / programme / channel / person</td><td><strong>Yes</strong></td></tr>
+    <tr><td>2</td><td>Clear a rollout</td><td>one scope, back to watching</td><td>No</td></tr>
+    <tr><td>3</td><td>A holdout policy set <code>paused</code></td><td>that brand's experiment</td><td>n/a</td></tr>
+    <tr><td>4</td><td>A queue policy paused or re-capped</td><td>one queue's assignment</td><td>n/a</td></tr>
+    <tr><td>5</td><td>Agent toggle (Admin → Agents)</td><td>one background job</td><td>No — stops future runs</td></tr>
+    <tr><td>6</td><td><code>GROWTH_JOURNEY_EXECUTION_ENABLED=false</code> + restart</td><td>all acting</td><td>No</td></tr>
+    <tr><td>7</td><td><code>GROWTH_JOURNEY_ENABLED=false</code> + restart</td><td>everything; all routes 404</td><td>No</td></tr>
+    <tr><td>8</td><td>The <strong>global kill switch</strong></td><td>every send, system-wide</td><td>Yes, at the send gate</td></tr>
+  </table>
+
+  <div class="box warn">
+    <p><strong>Three things about the kill switch that have caught people:</strong></p>
+    <p>It does <em>not</em> disable the nightly decisions job — that one is categorised
+    <code>behavioral</code>, not <code>outbound</code>. It keeps recording decisions, which
+    contact nobody. So a quiet kill switch is not a stopped system.</p>
+    <p>Turning it <em>off</em> re-enables nothing. Campaigns stay paused and agents stay
+    disabled until someone turns them back on by hand.</p>
+    <p>It does not scope. There is no per-brand kill switch — that is what pauses are for,
+    and a pause with no scope at all is refused precisely because it would be a second
+    global switch that could disagree with this one.</p>
+  </div>
+
+  <p>Turning a background job on or off is the registry toggle plus the flags —
+  <strong>never a redeploy</strong>.</p>
+</section>
+
+<section id="queue">
+  <h2><span class="num">6</span>When your staff work the queue</h2>
+  <p class="lede">Only relevant after step 6. Three moves, and the choice of disposition
+     matters more than it looks.</p>
+  <table>
+    <tr><th>Disposition</th><th>Means</th><th>What happens next</th></tr>
+    <tr><td><strong>qualified</strong></td><td>interested and a fit</td><td>held with that person 30 days</td></tr>
+    <tr><td><strong>converted</strong></td><td>they bought / enrolled</td><td>closed</td></tr>
+    <tr><td><strong>not ready</strong></td><td>real interest, wrong time</td><td><strong>returned to the system</strong> after 14 days</td></tr>
+    <tr><td><strong>nurture</strong></td><td>keep them warm</td><td><strong>returned to the system</strong> after 14 days</td></tr>
+    <tr><td><strong>no contact</strong></td><td>do not contact again</td><td>closed, no further automated contact</td></tr>
+    <tr><td><strong>disqualified</strong></td><td>not a fit</td><td>closed</td></tr>
+  </table>
+  <div class="box warn">
+    <p><strong>"not ready" and "nurture" hand the person back to the machine.</strong> The
+    other four close them out. Choosing "nurture" for someone who asked not to be contacted
+    puts them back in the queue — pick on that basis, not on which word sounds softest.
+    This is in the staff guide, and it is the one thing worth saying twice.</p>
+  </div>
+</section>
+
+<section id="traps">
+  <h2><span class="num">7</span>Traps — things that will look like bugs and are not</h2>
+  <table>
+    <tr><th>What you see</th><th>What it means</th></tr>
+    <tr><td>Every tab errors the moment you pick a brand</td><td>No membership row for you. Fail-closed by design — step 1 above. Not broken.</td></tr>
+    <tr><td>A <code>—</code> where you expected a number</td><td><strong>An absence, not a zero.</strong> <code>0%</code> means every handoff was refused, which is a crisis. <code>—</code> means none existed, which is a quiet week. The reason beside it says which.</td></tr>
+    <tr><td><code>/api/health</code> returns 401</td><td>That is not a health endpoint — it sits behind the admin guard. The liveness path is <code>/health</code>. A monitor pointed at the wrong one will report an outage that is not happening.</td></tr>
+    <tr><td>A 401 on a journey route</td><td>Proves the guard answers. It does <em>not</em> prove the route is mounted — <code>/api/admin</code> refuses before routing.</td></tr>
+    <tr><td>A 404 under <code>/api/admin/growth-journey</code></td><td>Ambiguous on purpose: switched off, not yours, or absent all read the same, so an id cannot be probed. Check <code>status/registry</code>, which is never gated.</td></tr>
+    <tr><td>"not recorded" in a field</td><td>The source column was empty. Nobody typed the word.</td></tr>
+    <tr><td>"redacted" in a field</td><td>The value held an email address and was masked before it reached the screen. No contact details appear in this workspace at all.</td></tr>
+    <tr><td>A count that seems low, with "truncated" nearby</td><td>You are looking at a floor, not a total — the read hit its row cap. Narrow the window.</td></tr>
+    <tr><td>Readiness says the ledger indexes are fine</td><td>It checks their <em>names</em> only. An interrupted index build leaves an invalid index that reports healthy forever. The nine-test script checks validity properly.</td></tr>
+  </table>
+</section>
+
+<section id="yours">
+  <h2><span class="num">8</span>Decisions only you can make</h2>
+  <p class="lede">None of these blocks anything today. All of them will matter before step 9.</p>
+
+  <h3>Section 6A — the Ali-outreach policy</h3>
+  <p>The policy does not exist: what may be prepared in your name, by whom, on what
+  evidence. Until it is written, <strong>three independent mechanisms keep it inert</strong>
+  — nothing generates it, the channel answers <code>review</code> whatever a rollout says,
+  and it cannot be rolled out at all. It can be <em>paused</em> from the Controls tab and
+  cannot be <em>started</em> from it.</p>
+  <div class="box">
+    <p>When you write it, the shape it has to take: a lead may merit your outreach on an
+    <strong>explicit request inside 72 hours</strong> or a <strong>proposal-stage pipeline
+    position</strong> — and in both cases it stays <strong>review-only forever</strong>,
+    with the daily cap honoured. "Review-only forever" is what the channel <em>is</em>, not
+    a transitional setting.</p>
+  </div>
+
+  <h3>The others</h3>
+  <table>
+    <tr><th>Decision</th><th>Why it needs you</th></tr>
+    <tr><td>Hold, limited rollout, or stop here</td><td>My recommendation: hold for now, then steps 1–3 when you want to see it working. Not step 9.</td></tr>
+    <tr><td>Does a "fix pass" count as an attempt under the 3-attempt cap?</td><td>Decides whether one task (T608) was a second undisclosed cap breach. Changes a governance note, not any code.</td></tr>
+    <tr><td>The nine admin reads echo free-text columns</td><td>They mask an <code>@</code> and truncate, but do not sanitise prose. Rendered as text, never as HTML.</td></tr>
+    <tr><td>Does the CCPP mirror carry Eventbrite <em>attendance</em> or only registration?</td><td>Without attendance, no-show follow-up is off the table. A <code>false</code> that actually means "unknown" would be worse than nothing.</td></tr>
+    <tr><td>Preference blindness</td><td>If live-event content becomes a section inside journey email, a student who switched event reminders off would still receive it. That is a consent boundary.</td></tr>
+  </table>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>Where everything lives.</strong> Runbook:
+    <code>directives/growth-journey-operations.md</code> · Reading state:
+    <code>directives/read-growth-journey-state.md</code> · Reason codes:
+    <code>docs/GROWTH_JOURNEY_REASON_CODES.md</code> · Staff guide:
+    <code>docs/GROWTH_JOURNEY_TRAINING_GUIDE.md</code> · Walkthrough:
+    <code>docs/GROWTH_JOURNEY_PHASE6_REVIEW.html</code> · Handoff and the rollout plan:
+    <code>.loop-architect/runs/20260909-growth-journey-multibrand/handoff.md</code> · Build
+    record: <code>docs/sessions/CC-20260812-k4m9.md</code></p>
+    <p>Phase 6 merged <code>b75b23d4</code>, live on <code>96ba62ab</code> since
+    2026-10-04. Session <code>CC-20260812-k4m9</code>. Nothing sends.</p>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('pre .copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var code = btn.parentElement.querySelector('code');
+      if (!code) return;
+      navigator.clipboard.writeText(code.textContent.trim()).then(function () {
+        var was = btn.textContent;
+        btn.textContent = 'copied';
+        setTimeout(function () { btn.textContent = was; }, 1400);
+      });
+    });
+  });
+</script>
+</body>
+</html>
