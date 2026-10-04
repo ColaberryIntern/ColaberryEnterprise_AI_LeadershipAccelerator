@@ -301,7 +301,11 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
         console.error(`[Webhook] Zoom recording ingest failed for session ${session.id}:`, err.message);
       });
     } else if (booking) {
-      ingestRecordingForBooking(booking, preResolvedMatch).catch((err: any) => {
+      // Pass the occurrence uuid the payload already carries. Without it the
+      // booking path cannot dedupe per occurrence and falls back to a
+      // booking-wide check that hides every later part.
+      const bookingInstanceUuid = String(event.payload?.object?.uuid || '');
+      ingestRecordingForBooking(booking, preResolvedMatch, bookingInstanceUuid).catch((err: any) => {
         console.error(`[Webhook] Zoom recording ingest failed for booking ${booking.id}:`, err.message);
       });
     } else if (room) {

@@ -19,6 +19,7 @@ import { findRecordingForSession as findDriveRecording, streamDriveFile, DriveRe
 import {
   findRecordingForSession as findZoomRecording,
   findRecordingByMeetingId as findZoomRecordingByMeetingId,
+  findRecordingInstancesByMeetingId,
   findClassRecordingInstances,
   extractZoomMeetingId,
   streamZoomFile,
@@ -417,31 +418,117 @@ async function ingestZoomRecordingsForSession(
 // or that's actually a class-session booking (related_live_session_id set —
 // that path is owned by ingestRecordingForSession above and keys off
 // LiveSession.zoom_meeting_id, not RoomBooking.google_event_id).
+/** Date-only arithmetic on a YYYY-MM-DD string, for Zoom's list window. */
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function ingestRecordingForBooking(
   booking: RoomBooking,
   preResolvedMatch?: ZoomRecordingMatch,
+  /**
+   * The occurrence this match belongs to, when the caller knows it.
+   *
+   * The webhook always knows — `event.payload.object.uuid` — and simply did not
+   * pass it on this path. Without it a webhook-supplied match cannot be deduped
+   * per occurrence, and the only remaining guard is the booking-wide one this
+   * change removes.
+   */
+  preResolvedUuid?: string,
 ): Promise<IngestResult> {
   if (booking.meeting_provider !== 'zoom') return { status: 'not_found' };
   if (booking.related_live_session_id) return { status: 'not_found' };
   if (!booking.google_event_id) return { status: 'not_found' };
 
-  const existing = await RoomResource.findOne({
-    where: { booking_id: booking.id, resource_type: 'recording' },
-  });
-  if (existing) return { status: 'already_present', resourceId: existing.id };
-
   const dateHint = (booking.start_at || new Date()).toISOString().slice(0, 10);
-  const match = preResolvedMatch ?? await findZoomRecordingByMeetingId(booking.google_event_id, dateHint, booking.title);
-  if (!match) return { status: 'not_found' };
 
-  return attachRecording(
-    booking.room_id,
-    booking.id,
-    match,
-    (m) => streamZoomFile(m as ZoomRecordingMatch),
-    booking.title || 'Room session recording',
-    { booking_id: booking.id },
-  );
+  // EVERY occurrence, not the first one. `findRecordingByMeetingId` is singular by
+  // construction — `meetings.find(...)` — so a session that paused and resumed, or
+  // ran past a break, could only ever surface its opening part.
+  //
+  // A webhook-supplied match is already one specific occurrence, so it is used as
+  // given rather than re-fetched.
+  const instances = preResolvedMatch
+    ? [{ uuid: preResolvedUuid || '', match: preResolvedMatch }]
+    : await findRecordingInstancesByMeetingId(
+      booking.google_event_id,
+      dateHint,
+      addDays(dateHint, 1),
+      booking.title,
+    );
+
+  if (!instances.length) return { status: 'not_found' };
+
+  const multi = instances.length > 1;
+  let firstResourceId: string | null = null;
+  let ingestedAny = false;
+
+  for (let idx = 0; idx < instances.length; idx++) {
+    const inst = instances[idx];
+
+    // IDEMPOTENCY KEYS ON THE OCCURRENCE, NOT ON THE BOOKING.
+    //
+    // The previous guard asked "does this booking have ANY recording?" and
+    // returned early if so. Once part 1 landed, part 2 — a different occurrence
+    // with a different uuid and a different file — could never be ingested, by
+    // this path or by the 30-minute cron that calls it. The session path has
+    // always keyed on the uuid; this is the same rule.
+    //
+    // An occurrence with no uuid (a webhook payload that omitted it) falls back to
+    // the booking-wide check, because a dedupe key we do not have is worse than a
+    // coarse one: without it the same file would be downloaded on every sweep.
+    const existing = inst.uuid
+      ? await RoomResource.findOne({
+        where: {
+          booking_id: booking.id,
+          resource_type: 'recording',
+          metadata: { [Op.contains]: { zoom_uuid: inst.uuid } } as unknown as Record<string, unknown>,
+        },
+      })
+      : await RoomResource.findOne({
+        where: { booking_id: booking.id, resource_type: 'recording' },
+      });
+
+    if (existing) {
+      if (!firstResourceId) firstResourceId = existing.id;
+      continue;
+    }
+
+    const base = booking.title || 'Room session recording';
+    const title = multi ? `${base} · Part ${idx + 1} of ${instances.length}` : base;
+
+    const result = await attachRecording(
+      booking.room_id,
+      booking.id,
+      inst.match,
+      (m) => streamZoomFile(m as ZoomRecordingMatch),
+      title,
+      { booking_id: booking.id },
+      {
+        zoom_uuid: inst.uuid || null,
+        source: 'room_booking',
+        // Ordered, so a split recording plays back in the order it happened
+        // rather than in whatever order the rows were written.
+        part: idx + 1,
+        parts: instances.length,
+        recording_type: inst.match.recordingType ?? null,
+        provider_file_id: inst.match.providerFileId ?? null,
+      },
+    );
+    if (result.resourceId) {
+      ingestedAny = true;
+      if (!firstResourceId) firstResourceId = result.resourceId;
+    }
+  }
+
+  if (!ingestedAny) {
+    return firstResourceId
+      ? { status: 'already_present', resourceId: firstResourceId }
+      : { status: 'not_found' };
+  }
+  return { status: 'ingested', resourceId: firstResourceId || undefined };
 }
 
 // Always-open persistent video Rooms (is_video + always_open — e.g. a
