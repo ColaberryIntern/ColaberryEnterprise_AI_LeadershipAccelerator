@@ -381,7 +381,7 @@ describe('AdminGovQualificationPage — journey', () => {
     const mk = (n: number) => ({ id: `REQ-${String(n).padStart(3, '0')}`, dueStage: 'submission' as const, applicability: 'always' as const, blocking: true, reason: 'submission_prerequisite_no_evidence' });
     const evals = Array.from({ length: 8 }, (_, i) => mk(i + 1));
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
-      evaluation: { evals, blocking: evals.map((e) => ({ id: e.id, reason: e.reason })), deliveryObligations: [], byDueStage: { submission: evals, award: [], delivery: [], unknown: [] }, canApproveBid: false },
+      evaluation: { evals, blocking: evals, deliveryObligations: [], byDueStage: { submission: evals, award: [], delivery: [], unknown: [] }, canApproveBid: false },
     }));
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
