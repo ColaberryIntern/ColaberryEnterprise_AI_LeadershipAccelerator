@@ -273,9 +273,25 @@ export interface ZoomRecordingMatch {
    * database instead of by downloading the file.
    */
   recordingType?: string | null;
+  /** Zoom's per-file id — the other half of the recording's natural key. */
+  providerFileId?: string | null;
 }
 
 export interface ZoomRecordingFile {
+  /**
+   * Zoom's id for THIS FILE, stable across deliveries of the same recording.
+   *
+   * Undeclared here until now, which mattered more than it looks: one occurrence
+   * can yield several files (speaker view, gallery view, shared screen, audio,
+   * transcript), so the occurrence uuid alone cannot identify which file a row is
+   * about. `presentation_recordings` is keyed on (occurrence_uuid, provider_file_id)
+   * precisely to make a duplicate or out-of-order delivery land on the same row —
+   * and that key had no producer while this field did not exist.
+   *
+   * Optional because older cached payloads and hand-built fixtures lack it; the
+   * correlation path treats an absent id as a reason to review, never as a match.
+   */
+  id?: string;
   file_type: string;
   file_size: number;
   download_url: string;
@@ -407,6 +423,7 @@ function toRecordingMatch(meeting: ZoomRecordingMeeting, fallbackName?: string):
     mimeType: 'video/mp4',
     sizeBytes: best.file_size ?? null,
     recordingType: best.recording_type ?? null,
+    providerFileId: (best as { id?: string }).id ?? null,
   };
 }
 
