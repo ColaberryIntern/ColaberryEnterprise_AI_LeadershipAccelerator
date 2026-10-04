@@ -14,6 +14,9 @@ import request from 'supertest';
 const draftLandingPage = jest.fn();
 jest.mock('../../../services/marketing/landingPageDraftService', () => ({ draftLandingPage }));
 
+const commitPublishedPage = jest.fn();
+jest.mock('../../../services/marketing/landingPageRepoService', () => ({ commitPublishedPage }));
+
 jest.mock('../../../middlewares/authMiddleware', () => ({
   requireAdmin: (req: any, _res: any, next: any) => { req.admin = { sub: 'admin-1', email: 'a@b.c' }; next(); },
   adminAllowedSections: () => [],
@@ -97,6 +100,9 @@ beforeEach(() => {
     site_slug: 'training', content: GOOD_CONTENT, published_at: null, repo_path: null,
     repo_commit: null, updated_at: new Date(),
   }));
+  commitPublishedPage.mockResolvedValue({
+    ok: true, repoPath: 'colaberry-training/six-week-build.json', commit: 'a'.repeat(40), pushed: false, error: null,
+  });
   draftLandingPage.mockResolvedValue({
     content: GOOD_CONTENT, placeholders: ['[price]'], unverifiedClaims: [], model: 'gpt-4o-mini', repaired: false,
   });
@@ -380,5 +386,74 @@ describe('failures are logged, not only returned', () => {
       .send({ brand_id: BRAND, source: BRIEF, name: 'X' });
 
     expect(res.body.droppedSections).toEqual(['stats (section 2): Required']);
+  });
+});
+
+/**
+ * The master copy, in git.
+ *
+ * Ali: "There should be a git repo stored somewhere for each one. That is where the main copy
+ * will always be." These pin the two halves of that: it happens on publish, and it never costs
+ * the operator the publish.
+ */
+describe('publishing writes the master copy to git', () => {
+  let err: jest.SpyInstance;
+  beforeEach(() => { err = jest.spyOn(console, 'error').mockImplementation(() => {}); });
+  afterEach(() => { err.mockRestore(); });
+
+  it('commits the content and stamps the row with where it landed', async () => {
+    const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
+
+    expect(res.status).toBe(200);
+    const call = commitPublishedPage.mock.calls[0][0];
+    expect(call.brandSlug).toBe('colaberry-training');
+    expect(call.pageSlug).toBe('six-week-build');
+    expect(call.content).toEqual(GOOD_CONTENT);
+    expect(call.actorEmail).toBe('a@b.c');
+
+    expect(rows[0].repo_path).toBe('colaberry-training/six-week-build.json');
+    expect(rows[0].repo_commit).toBe('a'.repeat(40));
+    expect(res.body.archive).toEqual({ committed: true, commit: 'a'.repeat(40), pushed: false });
+  });
+
+  it('archives AFTER the status flips, so a slow commit cannot leave a half-published page', async () => {
+    let statusAtArchive: string | null = null;
+    commitPublishedPage.mockImplementation(async () => {
+      statusAtArchive = rows[0].status;
+      return { ok: true, repoPath: 'x.json', commit: 'b'.repeat(40), pushed: false, error: null };
+    });
+    await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
+    expect(statusAtArchive).toBe('published');
+  });
+
+  it('still publishes when the archive fails, and says so loudly', async () => {
+    // The operator's goal is the page being live. Refusing to publish because an archive write
+    // failed would be the tail wagging the dog.
+    commitPublishedPage.mockResolvedValue({ ok: false, repoPath: null, commit: null, pushed: false, error: 'disk full' });
+
+    const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
+
+    expect(res.status).toBe(200);
+    expect(rows[0].status).toBe('published');
+    expect(res.body.archive.committed).toBe(false);
+    expect(rows[0].repo_commit).toBeNull();
+
+    const logged = err.mock.calls.map((c) => String(c[0])).join(' ');
+    expect(logged).toContain('landing_page_archive_failed');
+    expect(logged).toContain('the database row is the only copy');
+  });
+
+  it('does not archive a page it refused to publish', async () => {
+    rows[0].content = { sections: [{ type: 'hero' }] };   // will not render
+    const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
+
+    expect(res.status).toBe(422);
+    expect(commitPublishedPage).not.toHaveBeenCalled();
+  });
+
+  it('reports pushed separately from committed - a local repo is not a backup', async () => {
+    commitPublishedPage.mockResolvedValue({ ok: true, repoPath: 'x.json', commit: 'c'.repeat(40), pushed: true, error: null });
+    const res = await request(app).post(`/api/admin/landing-pages/${PAGE}/publish`).send({});
+    expect(res.body.archive.pushed).toBe(true);
   });
 });
