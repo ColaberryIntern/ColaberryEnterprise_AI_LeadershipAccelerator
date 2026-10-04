@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth Journey OS — one person, start to finish</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --leaf:#77BB4A; --leaf-bg:#f0fff4; --amber:#B7791F; --amber-bg:#FFFBEB;
+    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --alt:#f7fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--alt);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.65}
+  .wrap{max-width:900px;margin:0 auto;padding:0 1.25rem}
+  header{background:linear-gradient(135deg,#1a1f2b 0%,#2d3748 100%);color:#fff;padding:2.75rem 0 2rem}
+  header h1{margin:.5rem 0;font-size:2rem;line-height:1.15}
+  header p{margin:0;color:#cbd5e0;max-width:64ch;font-size:1.05rem}
+  .badge{display:inline-block;background:var(--cherry);color:#fff;font-size:.72rem;font-weight:700;
+    letter-spacing:.07em;text-transform:uppercase;padding:.28rem .65rem;border-radius:3px}
+
+  .headline{background:#fff;border:2px solid var(--cherry);border-radius:8px;
+    padding:1.5rem 1.75rem;margin:2rem 0;box-shadow:0 2px 8px rgba(251,40,50,.08)}
+  .headline h2{margin:0 0 .5rem;color:var(--cherry-deep);font-size:1.3rem}
+  .headline p{margin:.5rem 0 0;font-size:1.05rem}
+
+  .step{background:#fff;border:1px solid var(--border);border-radius:8px;margin:0 0 1.25rem;
+    overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .step .hd{display:flex;align-items:center;gap:.9rem;padding:.9rem 1.25rem;
+    border-bottom:1px solid var(--border);background:var(--alt)}
+  .step .n{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--cherry);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.875rem}
+  .step .hd h3{margin:0;font-size:1.05rem}
+  .step .hd .sub{margin-left:auto;font-size:.75rem;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.05em;font-weight:600}
+  .step .bd{padding:1.1rem 1.25rem}
+  .step .bd p:first-child{margin-top:0}.step .bd p:last-child{margin-bottom:0}
+
+  .rec{background:#1a1f2b;color:#cbd5e0;border-radius:6px;padding:.9rem 1.1rem;margin:.9rem 0;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8125rem;line-height:1.7;
+    overflow-x:auto}
+  .rec .k{color:#90cdf4}
+  .rec .v{color:#fff}
+  .rec .c{color:#718096;font-style:italic}
+
+  table{width:100%;border-collapse:collapse;font-size:.875rem;margin:.9rem 0}
+  th,td{text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border)}
+  th{background:var(--alt);font-weight:600;font-size:.75rem;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--muted)}
+  tr.win td{background:var(--leaf-bg);font-weight:600}
+  tr.win td:first-child{border-left:3px solid var(--leaf)}
+  tr:last-child td{border-bottom:0}
+
+  .box{border-left:4px solid var(--cherry);background:var(--cherry-bg);padding:.95rem 1.2rem;
+    border-radius:0 5px 5px 0;margin:1rem 0}
+  .box.good{border-left-color:var(--leaf);background:var(--leaf-bg)}
+  .box.warn{border-left-color:var(--amber);background:var(--amber-bg)}
+  .box p:first-child{margin-top:0}.box p:last-child{margin-bottom:0}
+
+  code{background:var(--alt);padding:.12rem .35rem;border-radius:3px;
+    font-family:ui-monospace,Menlo,monospace;font-size:.875em}
+  h2.sec{font-size:1.35rem;color:var(--cherry);margin:2.75rem 0 .3rem}
+  .lede{color:var(--muted);margin:0 0 1.25rem}
+  footer{padding:2.5rem 0 3.5rem;color:var(--muted);font-size:.875rem;background:#fff;
+    border-top:1px solid var(--border);margin-top:3rem}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <span class="badge">A worked example · nothing here actually ran</span>
+  <h1>One person, start to finish</h1>
+  <p>Maria fills in a form on the CPN site. Follow her all the way to an email —
+     and watch exactly where the words come from.</p>
+</div></header>
+
+<div class="wrap">
+
+  <div class="headline">
+    <h2>The answer to "how does it choose the content"</h2>
+    <p><strong>It doesn't write anything. It picks which of your existing, already-approved
+    campaigns to put the person into.</strong></p>
+    <p>There are sixteen campaigns registered. A human wrote every word in every one of
+    them, and a human approved them. The system's whole job is choosing <em>which</em>
+    envelope this person belongs in — never what the letter says.</p>
+    <p style="color:var(--muted);font-size:.9375rem">The only AI anywhere in this pipeline
+    decides <em>who Maria is</em>. Nothing in it composes a sentence.</p>
+  </div>
+
+  <h2 class="sec">The example</h2>
+  <p class="lede">Maria started a free CPN lesson three weeks ago and stopped after lesson
+     two. This morning she filled in the "next cohort" form and typed a question about
+     start dates.</p>
+
+  <!-- 1 -->
+  <div class="step">
+    <div class="hd"><span class="n">1</span><h3>Something happens</h3><span class="sub">a signal</span></div>
+    <div class="bd">
+      <p>The form submission is recorded. Nothing is interpreted yet — this step only
+      writes down that it happened.</p>
+      <div class="rec">
+<span class="k">trigger</span>        <span class="v">form_submitted</span><br>
+<span class="k">entry site</span>     <span class="v">cpn.colaberry.com</span><br>
+<span class="k">what she typed</span> <span class="v">"when does the next data analytics cohort start?"</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="step">
+    <div class="hd"><span class="n">2</span><h3>Who is this?</h3><span class="sub">classification · the only AI step</span></div>
+    <div class="bd">
+      <p>The entry site supplies a default brand. What she actually said can override it.
+      Here they agree, so confidence is high.</p>
+      <div class="rec">
+<span class="k">brand</span>           <span class="v">CPN</span>  <span class="c">— from the entry site</span><br>
+<span class="k">programme</span>       <span class="v">cpn/learner</span><br>
+<span class="k">path</span>            <span class="v">learner_paid_training</span><br>
+<span class="k">confidence</span>      <span class="v">0.820</span><br>
+<span class="k">evidence</span>        <span class="v">["asked about a cohort date", "stalled at lesson 2", "returned after 21 days"]</span>
+      </div>
+      <div class="box">
+        <p><strong>If confidence had been low</strong> — say 0.41 — this row would be
+        flagged <code>requires_human_review</code> and somebody would look at it before
+        anything else happened.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="step">
+    <div class="hd"><span class="n">3</span><h3>What should happen next?</h3><span class="sub">three proposals</span></div>
+    <div class="bd">
+      <p>Three of the five generators have something to say about Maria. Each one proposes
+      <strong>an existing campaign</strong>, and attaches a tier and a score.</p>
+      <table>
+        <tr><th>Who proposes</th><th>Which campaign</th><th>Tier</th><th>Score</th><th>Because</th></tr>
+        <tr class="win">
+          <td>high intent</td><td><code>explorer_high_intent_fast_track</code></td><td>3</td><td>55</td>
+          <td>asked about a start date today</td>
+        </tr>
+        <tr>
+          <td>activation rescue</td><td><code>explorer_activation_restart</code></td><td>5</td><td>40</td>
+          <td>stalled at lesson 2</td>
+        </tr>
+        <tr>
+          <td>nurture</td><td><code>explorer_weekly_digest</code></td><td>7</td><td>10</td>
+          <td>she exists and is not unsubscribed</td>
+        </tr>
+      </table>
+      <p>Sorted by tier first — <strong>lower wins</strong>. Tier 3 beats tier 5 beats
+      tier 7, so the score never even gets used here. It would only matter if two
+      proposals shared a tier.</p>
+      <div class="rec">
+<span class="k">selected</span>    <span class="v">SEND_EMAIL · explorer_high_intent_fast_track</span><br>
+<span class="k">suppressed</span>  <span class="v">explorer_activation_restart</span> <span class="c">— lower priority than tier 3</span><br>
+<span class="k">suppressed</span>  <span class="v">explorer_weekly_digest</span> <span class="c">— lower priority than tier 3</span>
+      </div>
+      <div class="box good">
+        <p><strong>The losers are kept.</strong> Three weeks from now, "why didn't Maria
+        get the weekly digest?" is answerable from this one row. Nothing is discarded
+        silently.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="step">
+    <div class="hd"><span class="n">4</span><h3>Is CPN allowed to offer this?</h3><span class="sub">the brand boundary</span></div>
+    <div class="bd">
+      <p>Checked on every proposal before the sort, and again on the winner afterwards.
+      Deliberately twice.</p>
+      <div class="rec">
+<span class="k">CPN × learner_paid_training</span>   <span class="v">allowed</span>
+      </div>
+      <div class="box warn">
+        <p><strong>Had Maria been an AI Flotation lead asking about business training,</strong>
+        this is where it would stop — <code>brand_boundary:explicit_deny</code> — and the
+        system would <em>refer her to Colaberry Business</em> rather than sell her
+        something AI Flotation does not offer.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="step">
+    <div class="hd"><span class="n">5</span><h3>Does that campaign actually exist and work?</h3><span class="sub">validation</span></div>
+    <div class="bd">
+      <p>The campaign is found by its key — never by its name, because names get edited.
+      Five things must all be true:</p>
+      <div class="rec">
+<span class="k">registered</span>       <span class="v">yes</span>  <span class="c">— a campaign carries settings.campaign_key</span><br>
+<span class="k">brand-scoped</span>     <span class="v">yes</span>  <span class="c">— it belongs to CPN, not another brand</span><br>
+<span class="k">approved</span>         <span class="v">yes</span><br>
+<span class="k">active</span>           <span class="v">yes</span><br>
+<span class="k">has a sequence</span>   <span class="v">yes, active</span>
+      </div>
+      <p>Any one of those failing is a refusal with its own name —
+      <code>campaign_not_approved</code>, <code>campaign_no_sequence</code>, and so on.</p>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="step">
+    <div class="hd"><span class="n">6</span><h3>May we say these things to her?</h3><span class="sub">the content gate</span></div>
+    <div class="bd">
+      <p>The campaign's assets are checked against what is approved for this exact
+      combination. <strong>A deny always beats an allow</strong>, however many rules
+      permit it.</p>
+      <div class="rec">
+<span class="k">brand</span>          <span class="v">CPN</span><br>
+<span class="k">offer family</span>   <span class="v">learner_paid_training</span><br>
+<span class="k">programme</span>      <span class="v">cpn/learner</span><br>
+<span class="k">path</span>           <span class="v">learner_paid_training</span><br>
+<span class="k">result</span>         <span class="v">approved content exists</span>
+      </div>
+      <div class="box">
+        <p><strong>This is the step that is blocked in production today.</strong> No
+        learner brand has an approved content rule yet, so right now Maria's journey would
+        stop here with <code>content_not_approved</code> — even with every switch turned
+        on.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="step">
+    <div class="hd"><span class="n">7</span><h3>She is enrolled in the campaign</h3><span class="sub">where the words come from</span></div>
+    <div class="bd">
+      <p>Not "an email is written". Maria is <strong>enrolled into the existing sequence</strong>,
+      and the sequence's first step is scheduled.</p>
+      <div class="rec">
+enrollLeadInSequence(<span class="v">lead 4821</span>, <span class="v">sequence 12</span>, <span class="v">campaign 7</span>)<br>
+<span class="c">→ the sequence's step-0 email is scheduled</span>
+      </div>
+      <div class="box good">
+        <p><strong>Nobody generated that email.</strong> It is the same step-0 email every
+        other person in that campaign receives — written by a human, approved by a human,
+        sitting in the campaign already. The system chose the <em>envelope</em>. The
+        <em>letter</em> was written long before Maria arrived.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="step">
+    <div class="hd"><span class="n">8</span><h3>A receipt is written</h3><span class="sub">the audit trail</span></div>
+    <div class="bd">
+      <div class="rec">
+<span class="k">action</span>       <span class="v">SEND_EMAIL</span><br>
+<span class="k">channel</span>      <span class="v">email</span><br>
+<span class="k">campaign</span>     <span class="v">explorer_high_intent_fast_track</span><br>
+<span class="k">status</span>       <span class="v">enrolled</span><br>
+<span class="k">reason</span>       <span class="v">asked about a start date today</span>
+      </div>
+      <p>If any step above had refused, this receipt would exist anyway — with the refusal
+      reason instead. <strong>Every decision leaves a row, including the ones that decide
+      to do nothing.</strong></p>
+    </div>
+  </div>
+
+  <h2 class="sec">So where does the system actually have a choice?</h2>
+  <p class="lede">Only in two places. Everything else is a gate that can say no.</p>
+  <table>
+    <tr><th>Choice</th><th>Made by</th><th>Out of</th></tr>
+    <tr><td>Who is this person?</td><td>classification — the one AI step</td><td>4 brands × their programmes and paths</td></tr>
+    <tr><td>Which campaign?</td><td>a sort by tier, then score</td><td>the 16 registered campaigns</td></tr>
+    <tr><td style="color:var(--muted)">What the email says</td><td style="color:var(--muted)"><strong>nobody — it is already written</strong></td><td style="color:var(--muted)">—</td></tr>
+  </table>
+
+  <div class="box warn">
+    <p><strong>Three things that could still stop this at the very end,</strong> after
+    everything above has passed:</p>
+    <p>A <strong>holdout experiment</strong> may hold Maria back deliberately, to measure
+    whether this messaging works at all — recorded as
+    <code>chosen_then_blocked</code>, chosen and then intentionally not sent.</p>
+    <p>A <strong>human already talking to her</strong> stands the system down.</p>
+    <p>A <strong>pause</strong> on CPN, on this programme, on email, or on Maria
+    specifically — and a pause reaches work already in flight.</p>
+  </div>
+
+  <h2 class="sec">What would have happened differently</h2>
+  <table>
+    <tr><th>If…</th><th>Then</th></tr>
+    <tr><td>She had not asked about a date</td><td>high intent proposes nothing; <strong>activation rescue wins at tier 5</strong> and she gets <code>explorer_activation_restart</code> instead</td></tr>
+    <tr><td>Nobody proposed anything</td><td>recorded as <code>WAIT</code> — silence is never the output</td></tr>
+    <tr><td>Two proposals shared tier 3</td><td>the higher <code>intra_tier_score</code> wins; if those tie too, two further keys break it so the result is never arbitrary</td></tr>
+    <tr><td>She had replied to an email after the decision was made</td><td><code>stale_decision_reply_newer</code> — the decision is discarded rather than acted on</td></tr>
+    <tr><td>The action had been Ali's personal outreach</td><td>prepared and parked for a human, <strong>always</strong>. That channel can never auto-send</td></tr>
+  </table>
+
+</div>
+
+<footer><div class="wrap">
+  <p><strong>Nothing in this example has happened.</strong> Production is dark: zero
+  classifications, zero decisions, zero enrolments. The names, tiers, campaign keys and
+  refusal reasons are real and read from the code; Maria is not.</p>
+  <p>The diagrams: <code>docs/GROWTH_JOURNEY_HOW_IT_WORKS.html</code> · How to operate it:
+  <code>docs/GROWTH_JOURNEY_HOW_TO_USE.html</code> · The screens:
+  <code>docs/GROWTH_JOURNEY_PHASE6_REVIEW.html</code></p>
+</div></footer>
+
+</body>
+</html>
