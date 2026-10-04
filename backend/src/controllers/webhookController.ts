@@ -9,6 +9,7 @@ import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
 import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken, pickBestMp4 } from '../services/zoomService';
+import { judgeDeliveryFreshness } from '../services/zoom/zoomWebhookReplay';
 import {
   ingestRecordingForSession,
   ingestRecordingForBooking,
@@ -232,6 +233,26 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
   if (!verifyZoomWebhookSignature(rawBody, timestamp, signature)) {
     console.error('[Webhook] Zoom signature verification failed');
     res.status(401).json({ error: 'Webhook signature verification failed' });
+    return;
+  }
+
+  // A VALID SIGNATURE IS NOT A FRESH REQUEST. Zoom signs `v0:{timestamp}:{body}`
+  // and that signature never expires, so a captured delivery — from a proxy log, a
+  // mirrored request, an error report with headers attached — can be replayed
+  // verbatim forever and was accepted every time. The timestamp is inside the HMAC
+  // input, so it cannot be altered without breaking the signature, which is
+  // precisely what makes it worth checking.
+  const freshness = judgeDeliveryFreshness(timestamp);
+  if (!freshness.fresh) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'zoom_webhook_stale_delivery', outcome: 'failure',
+      error_class: 'ReplayWindowExceeded',
+      context: { reason: freshness.reason, age_ms: freshness.ageMs, zoom_event: event?.event ?? null },
+    }));
+    // 401, not 400: this is an authentication-shaped refusal. Zoom treats 4xx as
+    // "do not retry", which is correct — a delivery this old will not get younger.
+    res.status(401).json({ error: 'Webhook timestamp outside the accepted window' });
     return;
   }
 

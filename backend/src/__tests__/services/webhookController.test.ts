@@ -414,6 +414,13 @@ describe('handlePaySimpleWebhook', () => {
   });
 });
 
+/**
+ * Zoom sends the delivery time in SECONDS, and the controller now refuses one
+ * outside a 15-minute window. These fixtures used '1' — the first second of 1970 —
+ * which a replay check is supposed to reject, so they say "now" instead.
+ */
+const freshZoomTimestamp = () => String(Math.floor(Date.now() / 1000));
+
 describe('handleZoomWebhook', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -439,7 +446,7 @@ describe('handleZoomWebhook', () => {
     (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(false);
 
     const event = { event: 'recording.completed', payload: { object: { id: 123 } } };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'bad', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'bad', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -448,11 +455,49 @@ describe('handleZoomWebhook', () => {
     expect(LiveSession.findOne).not.toHaveBeenCalled();
   });
 
+  it('REJECTS a correctly-signed delivery that is too old to be genuine', async () => {
+    // The signature proves the request was real WHEN MADE, and never expires. A
+    // captured delivery could be replayed verbatim forever; this is the only thing
+    // that stops it. 401 rather than 400 because Zoom treats 4xx as "do not
+    // retry", which is right — a delivery this old will not get younger.
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    const event = { event: 'recording.completed', payload: { object: { id: 1, uuid: 'U==' } } };
+    const stale = String(Math.floor(Date.now() / 1000) - 60 * 60); // an hour ago
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), {
+      'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': stale,
+    });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    // And it never reached the database on the way to refusing.
+    expect(LiveSession.findOne).not.toHaveBeenCalled();
+  });
+
+  it('accepts a late retry inside the window, because Zoom retries on its own schedule', async () => {
+    // A window that rejects a legitimate retry loses the recording permanently.
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+    (RoomBooking.findOne as jest.Mock).mockResolvedValue(null);
+    (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue(null);
+    const event = { event: 'recording.completed', payload: { object: { id: 1, uuid: 'U==' } } };
+    const tenMinutesAgo = String(Math.floor(Date.now() / 1000) - 10 * 60);
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), {
+      'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': tenMinutesAgo,
+    });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
   it('benign-acks a non recording.completed event without touching the DB', async () => {
     (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
 
     const event = { event: 'meeting.started', payload: { object: { id: 123 } } };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -469,7 +514,7 @@ describe('handleZoomWebhook', () => {
     (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue(null);
 
     const event = { event: 'recording.completed', payload: { object: { id: 999, topic: 'Unrelated 1:1', recording_files: [] } } };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -500,7 +545,7 @@ describe('handleZoomWebhook', () => {
         },
       },
     };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -523,7 +568,7 @@ describe('handleZoomWebhook', () => {
     (ingestRecordingForBooking as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r2' });
 
     const event = { event: 'recording.completed', payload: { object: { id: 456, recording_files: [{ file_type: 'MP4', file_size: 500, download_url: 'https://zoom.us/rec/x' }] } } };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -542,7 +587,7 @@ describe('handleZoomWebhook', () => {
       event: 'recording.completed',
       payload: { object: { id: 456, topic: 'Study Group', recording_files: [{ file_type: 'MP4', file_size: 500, download_url: 'https://zoom.us/rec/booking' }] } },
     };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -580,7 +625,7 @@ describe('handleZoomWebhook', () => {
         },
       },
     };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -595,7 +640,7 @@ describe('handleZoomWebhook', () => {
     (ingestRecordingForSession as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r1' });
 
     const event = { event: 'recording.completed', payload: { object: { id: 123, recording_files: [{ file_type: 'MP4', file_size: 500, download_url: 'https://zoom.us/rec/x' }] } } };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -624,7 +669,7 @@ describe('handleZoomWebhook', () => {
         },
       },
     };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
@@ -665,7 +710,7 @@ describe('handleZoomWebhook', () => {
         },
       },
     };
-    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
     const res = mockResponse();
 
     await handleZoomWebhook(req as Request, res as Response);
