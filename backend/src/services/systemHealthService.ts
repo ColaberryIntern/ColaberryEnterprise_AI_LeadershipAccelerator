@@ -2,6 +2,9 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import AiSystemEvent from '../models/AiSystemEvent';
 import { logAiEvent } from './aiEventService';
+import { checkSequenceProgression } from './health/sequenceProgressionCheck';
+import { checkCampaignHealth } from './health/campaignHealthCheck';
+import { checkGrowthJourney } from './health/growthJourneyCheck';
 
 // ─── Original content-generation health metrics (used by aiOpsRoutes, systemAutoResponseService) ───
 
@@ -126,81 +129,6 @@ export interface SystemHealthReport {
   duration_ms: number;
 }
 
-// ── 1. Sequence Progression Gaps ────────────────────────────────────────────
-// Detects leads that completed a step but have no next step scheduled.
-// This means scheduleNextStep() silently failed after send.
-async function checkSequenceProgression(checks: HealthCheck[]): Promise<void> {
-  try {
-    const [rows] = await sequelize.query(`
-      SELECT se.id, se.lead_id, se.campaign_id, se.sequence_id, se.step_index, se.sent_at
-      FROM scheduled_emails se
-      WHERE se.status = 'sent'
-        AND se.sent_at < NOW() - INTERVAL '30 minutes'
-        AND se.sent_at > NOW() - INTERVAL '7 days'
-        AND se.sequence_id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM scheduled_emails se2
-          WHERE se2.lead_id = se.lead_id
-            AND se2.sequence_id = se.sequence_id
-            AND se2.step_index = se.step_index + 1
-            AND se2.status IN ('pending', 'processing', 'sent')
-        )
-        AND EXISTS (
-          SELECT 1 FROM follow_up_sequences fs
-          WHERE fs.id = se.sequence_id
-            AND jsonb_array_length(fs.steps) > se.step_index + 1
-        )
-    `);
-
-    const gaps = rows as any[];
-    if (gaps.length > 0) {
-      // Attempt auto-fix: schedule the missing next steps
-      let fixed = 0;
-      try {
-        const { scheduleNextStep } = require('./sequenceService');
-        const ScheduledEmail = require('../models').ScheduledEmail;
-        for (const gap of gaps.slice(0, 100)) { // Cap at 100 per run to avoid overload
-          const completedAction = await ScheduledEmail.findByPk(gap.id);
-          if (completedAction) {
-            const next = await scheduleNextStep(completedAction);
-            if (next) fixed++;
-          }
-        }
-      } catch (fixErr: any) {
-        console.error(`[SystemHealth] Sequence gap auto-fix error: ${fixErr.message}`);
-      }
-
-      if (fixed > 0) {
-        checks.push({
-          name: 'sequence_progression',
-          severity: 'warning',
-          detail: `Found ${gaps.length} leads stuck after a step with no next step scheduled. Auto-recovered ${fixed} of them by re-running scheduleNextStep.`,
-          metric: gaps.length,
-          autoFixed: `Recovered ${fixed}/${gaps.length} stuck sequences`,
-        });
-      } else if (gaps.length >= 5) {
-        checks.push({
-          name: 'sequence_progression',
-          severity: 'critical',
-          detail: `${gaps.length} leads completed a campaign step but have no next step scheduled. The scheduleNextStep function may be failing silently. These leads are stalled and not receiving further campaign messages.`,
-          metric: gaps.length,
-        });
-      } else {
-        // Small number of gaps (under 5) — likely transient, will self-heal next cycle
-        checks.push({
-          name: 'sequence_progression',
-          severity: 'warning',
-          detail: `${gaps.length} lead(s) have a minor sequence gap. Auto-recovery will retry next cycle.`,
-          metric: gaps.length,
-        });
-      }
-    } else {
-      checks.push({ name: 'sequence_progression', severity: 'ok', detail: 'All sequence progressions are healthy — no gaps detected.', metric: 0 });
-    }
-  } catch (err: any) {
-    checks.push({ name: 'sequence_progression', severity: 'warning', detail: `Check failed: ${err.message}` });
-  }
-}
 
 // ── 2. Scheduler Liveness ───────────────────────────────────────────────────
 // Uses a heartbeat timestamp written by processScheduledActions every 5 min.
@@ -506,83 +434,6 @@ async function checkFrontendAvailability(checks: HealthCheck[]): Promise<void> {
   });
 }
 
-// ── 8. Campaign-Specific Checks (moved from inline health monitor) ──────────
-async function checkCampaignHealth(checks: HealthCheck[]): Promise<void> {
-  try {
-    // Stuck-in-processing actions
-    const [stuckRows] = await sequelize.query(
-      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'processing' AND processing_started_at < NOW() - INTERVAL '10 minutes'`
-    );
-    const stuckCount = parseInt((stuckRows as any)[0]?.cnt || '0', 10);
-    if (stuckCount > 0) {
-      checks.push({ name: 'stuck_actions', severity: 'warning', detail: `${stuckCount} actions stuck in processing for over 10 minutes. The stale recovery job should clean these up.`, metric: stuckCount });
-    }
-
-    // Cold Outbound draft check
-    const [coldRows] = await sequelize.query(
-      `SELECT status FROM campaigns WHERE name LIKE '%Cold Outbound%' LIMIT 1`
-    );
-    if ((coldRows as any)[0]?.status === 'draft') {
-      // Auto-fix
-      await sequelize.query(`UPDATE campaigns SET status = 'active' WHERE name LIKE '%Cold Outbound%' AND status = 'draft'`);
-      checks.push({
-        name: 'cold_outbound_status',
-        severity: 'warning',
-        detail: 'Cold Outbound campaign had reverted to draft status.',
-        autoFixed: 'Auto-reactivated Cold Outbound to active.',
-      });
-    }
-
-    // No sends gap
-    const [sendRows] = await sequelize.query(
-      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'sent' AND sent_at >= NOW() - INTERVAL '1 hour'`
-    );
-    const recentSends = parseInt((sendRows as any)[0]?.cnt || '0', 10);
-    const [pendingRows] = await sequelize.query(
-      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'pending' AND scheduled_for <= NOW()`
-    );
-    const pastDuePending = parseInt((pendingRows as any)[0]?.cnt || '0', 10);
-
-    // Only flag send gap during weekday business hours (campaigns don't send on weekends)
-    const nowCT = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }));
-    const dayOfWeek = nowCT.getDay(); // 0=Sun, 6=Sat
-    const hourCT = nowCT.getHours();
-    const isBusinessHours = dayOfWeek >= 1 && dayOfWeek <= 5 && hourCT >= 8 && hourCT < 17;
-
-    if (recentSends === 0 && pastDuePending > 0 && isBusinessHours) {
-      checks.push({
-        name: 'send_throughput',
-        severity: 'critical',
-        detail: `No sends in the last hour, but ${pastDuePending} actions are past due and waiting. The scheduler may be stalled or all actions are failing.`,
-        metric: pastDuePending,
-      });
-    } else if (recentSends === 0 && pastDuePending > 0 && !isBusinessHours) {
-      // Expected — campaigns only send during business hours
-      checks.push({
-        name: 'send_throughput',
-        severity: 'ok',
-        detail: `${pastDuePending} actions past due but outside business hours (weekdays 8AM-5PM CT). Will process when send window opens.`,
-        metric: pastDuePending,
-      });
-    }
-
-    // Failure spike
-    const [failRows] = await sequelize.query(
-      `SELECT COUNT(*) as cnt FROM scheduled_emails WHERE status = 'failed' AND created_at >= NOW() - INTERVAL '1 hour'`
-    );
-    const recentFails = parseInt((failRows as any)[0]?.cnt || '0', 10);
-    if (recentFails > 5) {
-      checks.push({
-        name: 'action_failures',
-        severity: 'warning',
-        detail: `${recentFails} campaign actions failed in the last hour. Check email provider status and content generation logs.`,
-        metric: recentFails,
-      });
-    }
-  } catch (err: any) {
-    checks.push({ name: 'campaign_health', severity: 'warning', detail: `Check failed: ${err.message}` });
-  }
-}
 
 // ─── Aggregated Full System Health Check ────────────────────────────────────
 
@@ -600,6 +451,7 @@ export async function runFullSystemHealthCheck(): Promise<SystemHealthReport> {
     checkExternalAPIs(checks),
     checkFrontendAvailability(checks),
     checkCampaignHealth(checks),
+    checkGrowthJourney(checks),
   ]);
 
   const hasCritical = checks.some(c => c.severity === 'critical');

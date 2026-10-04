@@ -5,6 +5,7 @@ import {
   resolveGrowthJourneyFlags,
   isGrowthJourneyCapabilityEnabled,
   enabledGrowthJourneyCapabilities,
+  growthJourneyFlagSummary,
   type GrowthJourneyFlags,
   type GrowthJourneyCapability,
 } from '../growthJourneyFlags';
@@ -183,6 +184,48 @@ describe('the property names do not collide with Explorer’s sub-flags', () => 
 });
 
 /**
+ * T604 — the switchboard summary an admin surface reads.
+ *
+ * It exists because the dark-launch guard below refuses a sub-flag read in any
+ * other file, and the status registry has to report all six switches. So the
+ * naming stays here, and these cells hold the two properties that matter: the
+ * summary says what is SET (not what may run), and its keys are the response
+ * shape rather than the flag names.
+ */
+describe('growthJourneyFlagSummary', () => {
+  const all = (value: boolean): GrowthJourneyFlags => Object.freeze({
+    growthJourneyEnabled: value,
+    journeySignalIngest: value,
+    journeyClassification: value,
+    journeyDecisions: value,
+    journeyHandoffs: value,
+    journeyExecution: value,
+  });
+
+  it('reports the six switches under the response keys, not the flag names', () => {
+    expect(growthJourneyFlagSummary(all(false))).toEqual({ master: false, signal_ingest: false, classification: false, decisions: false, handoffs: false, execution: false });
+    expect(growthJourneyFlagSummary(all(true))).toEqual({ master: true, signal_ingest: true, classification: true, decisions: true, handoffs: true, execution: true });
+  });
+
+  it('covers every flag exactly once: as many keys as there are flags', () => {
+    expect(Object.keys(growthJourneyFlagSummary(all(false))).length).toBe(FLAG_KEYS.length);
+  });
+
+  it('says what is SET, never what may RUN - the master does not mask a sub-flag here', () => {
+    const masterOffSubOn = { ...all(false), journeyDecisions: true } as GrowthJourneyFlags;
+    // The summary reports the sub-flag as the operator set it...
+    expect(growthJourneyFlagSummary(masterOffSubOn).decisions).toBe(true);
+    // ...while the permission answer is still false, because the master is off.
+    expect(isGrowthJourneyCapabilityEnabled('journeyDecisions', masterOffSubOn)).toBe(false);
+    expect(enabledGrowthJourneyCapabilities(masterOffSubOn)).toEqual([]);
+  });
+
+  it('is frozen, so a caller cannot edit the switchboard it was handed', () => {
+    expect(Object.isFrozen(growthJourneyFlagSummary(all(true)))).toBe(true);
+  });
+});
+
+/**
  * This module's own dark-launch guard — the Explorer guard's shape, for the
  * Growth Journey names. Mutation-checked: a direct sub-flag read in any file
  * outside the allowlist fails it.
@@ -212,25 +255,52 @@ describe('dark-launch guard — no direct Growth Journey sub-flag reads outside 
     expect(files.some((f) => f.endsWith(path.join('config', 'growthJourneyFlags.ts')))).toBe(true);
   });
 
-  it('finds no unsanctioned direct sub-flag read', () => {
+  /**
+   * Dotted AND bracketed. The dotted half was all this guard had until T610, when a
+   * mutation replacing the sanctioned reader with `flags[capability]` survived a whole
+   * mutation gauntlet: a bracket read contains no `.prop`, so the scan could not see it,
+   * and a bypass could have shipped past the guard that catches the dotted form.
+   *
+   * The literal-bracket case - `flags['journeyExecution']` - is closed here. The
+   * COMPUTED-key case (`flags[someVariable]`) is not closeable by a text scan at all,
+   * because the offending name never appears in the source; that one needs a behavioural
+   * test at the call site, which is what `buildReadiness.test.ts`'s
+   * `MASTER_OFF_SUBFLAGS_ON` cells are. Recorded here so the limit is known rather than
+   * assumed away: this guard constrains SPELLING, and behaviour needs its own cell.
+   */
+  const readPattern = (prop: string): RegExp =>
+    new RegExp(`\\.${prop}\\b|\\[\\s*['"\`]${prop}['"\`]\\s*\\]`);
+
+  it('finds no unsanctioned direct sub-flag read, dotted or bracketed', () => {
     const offenders: string[] = [];
     for (const file of walk(SRC)) {
       if (ALLOWED.some((a) => file.endsWith(a))) continue;
       const text = fs.readFileSync(file, 'utf8');
       for (const prop of SUB_FLAGS) {
-        if (new RegExp(`\\.${prop}\\b`).test(text)) {
-          offenders.push(`${path.relative(SRC, file)} reads .${prop}`);
+        if (readPattern(prop).test(text)) {
+          offenders.push(`${path.relative(SRC, file)} reads ${prop}`);
         }
       }
     }
     expect(offenders).toEqual([]);
   });
 
-  it('the guard would catch a read of each sub-flag name', () => {
+  it('the guard would catch a read of each sub-flag name, dotted or bracketed', () => {
     // Non-vacuity for the regex itself, against synthetic text.
     for (const prop of SUB_FLAGS) {
-      expect(new RegExp(`\\.${prop}\\b`).test(`if (flags.${prop}) {}`)).toBe(true);
-      expect(new RegExp(`\\.${prop}\\b`).test(`if (flags.${prop}Something) {}`)).toBe(false);
+      expect(readPattern(prop).test(`if (flags.${prop}) {}`)).toBe(true);
+      expect(readPattern(prop).test(`if (flags['${prop}']) {}`)).toBe(true);
+      expect(readPattern(prop).test(`if (flags["${prop}"]) {}`)).toBe(true);
+      expect(readPattern(prop).test(`if (flags.${prop}Something) {}`)).toBe(false);
+    }
+  });
+
+  it('the guard CANNOT see a computed-key read, which is why the call site has its own cell', () => {
+    // The honest limit, asserted rather than left implicit. `buildReadiness.test.ts`
+    // covers this case behaviourally: master off with every sub-flag on, where the
+    // sanctioned reader answers false and any direct read answers true.
+    for (const prop of SUB_FLAGS) {
+      expect(readPattern(prop).test('if (flags[capability]) {}')).toBe(false);
     }
   });
 });

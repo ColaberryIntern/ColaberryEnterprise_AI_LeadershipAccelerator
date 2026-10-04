@@ -43,6 +43,13 @@ const UNLISTED: ReadonlyArray<readonly [string, string, string]> = [
   // Architecture Skills became the Curriculum page's tab in the same pass and
   // reads the same CAPE surface.
   ['/admin/cape-settings', '/api/admin/cape', 'program'],
+  // Growth Journey OS (Phase 6, T604). Its API prefix is classified the day the
+  // routes gained a section, ahead of the page: the workspace lands in T613-T615,
+  // and until then there is no nav entry to pair with - so the FRONTEND route below
+  // is the one that page will use, and this row is the backend half waiting for it.
+  // The status prefix inherits the same section through the '/'-delimited match,
+  // which the journey suites assert directly.
+  ['/admin/growth-journey', '/api/admin/growth-journey', 'campaigns'],
 ];
 
 describe('mgmtSectionGate — previously unmapped admin surfaces', () => {

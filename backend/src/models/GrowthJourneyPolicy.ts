@@ -34,7 +34,12 @@ import { sequelize } from '../config/database';
  * maintained and the model is outside the append-only guard's pattern.
  */
 
-export type GrowthJourneyPolicyType = 'queue_capacity' | 'queue_assignee' | 'cooldown';
+/**
+ * T608 adds `holdout_experiment`: a brand-wide row (`owner_queue` NULL) whose `settings` carry the
+ * experiment key and control share. No DDL change was needed for it - `policy_type` is a bare
+ * `VARCHAR(32)` with no CHECK constraint, verified before assuming otherwise.
+ */
+export type GrowthJourneyPolicyType = 'queue_capacity' | 'queue_assignee' | 'cooldown' | 'holdout_experiment';
 
 export interface GrowthJourneyPolicyAttributes {
   id?: string;

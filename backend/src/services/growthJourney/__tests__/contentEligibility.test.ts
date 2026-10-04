@@ -418,3 +418,61 @@ describe('Explorer does not go through this gate', () => {
     expect(fs.existsSync(path.join(root, 'content', 'resolveContentAssets.ts'))).toBe(true);
   });
 });
+
+/**
+ * T612: the declaration read is BOUNDED - in rows and in columns.
+ *
+ * `journeyContent` calls this once per asset in the registry, so an unbounded read here
+ * is multiplied by the size of the set it is filtering. Before T612 the query named no
+ * `attributes` (every column, JSON payloads included) and fetched ten rows to use one.
+ * Behaviour tests could not see either, because they only ever asserted the verdict.
+ */
+describe('T612: the content-rule read is bounded in rows AND columns', () => {
+  const ruleQuery = () => m.ruleFindAll.mock.calls[0][0] as {
+    attributes?: string[];
+    limit?: number;
+    where?: Record<string, unknown>;
+    order?: unknown;
+  };
+
+  it('asks for ONE row, because only the newest declaration is ever read', async () => {
+    await assertContentAllowed(input());
+    expect(ruleQuery().limit).toBe(1);
+  });
+
+  it('orders by version DESC, so that one row is the newest and not an arbitrary one', async () => {
+    await assertContentAllowed(input());
+    expect(ruleQuery().order).toEqual([['version', 'DESC']]);
+  });
+
+  it('names its columns, and they are exactly the ones the verdict reads', async () => {
+    await assertContentAllowed(input());
+    const attrs = ruleQuery().attributes;
+    expect(attrs).toBeDefined();
+    // Sorted so the cell is about the SET, not the order someone typed them in.
+    expect([...(attrs as string[])].sort()).toEqual([
+      'access_tier',
+      'approval_status',
+      'effective_from',
+      'eligible_programs',
+      'expires_at',
+      'id',
+      'lifecycle_states',
+      'offer_family',
+    ]);
+  });
+
+  it('still scopes by tenant, brand and asset - boundedness must not have cost the clause', async () => {
+    await assertContentAllowed(input());
+    expect(ruleQuery().where).toMatchObject({ asset_id: expect.anything() });
+    const where = ruleQuery().where as Record<string, unknown>;
+    expect(Object.keys(where).sort()).toEqual(['asset_id', 'brand_id', 'tenant_id']);
+  });
+
+  it('asks NOTHING when there is no asset - the collection-level question issues no query', async () => {
+    // Pinned because an earlier version of this file fetched the brand's rules and
+    // discarded them; its own header records that.
+    await assertContentAllowed(input({ asset: undefined }));
+    expect(m.ruleFindAll).not.toHaveBeenCalled();
+  });
+});

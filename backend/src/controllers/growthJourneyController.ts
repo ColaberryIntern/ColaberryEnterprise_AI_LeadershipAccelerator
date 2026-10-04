@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ZodError } from 'zod';
+import { ZodError, type z } from 'zod';
 import { classifyError } from '../utils/errorClassifier';
 import { GrowthJourneyEnrollment } from '../models';
 import { contextFromAdminRequest } from '../modules/tenancy/adminScopeBridge';
@@ -155,6 +155,51 @@ export function logReadFailure(req: Request, err: unknown, event = 'participatio
     }),
   );
   return errorClass;
+}
+
+/**
+ * ONE shape for every journey admin read: parse, scope, read, answer - and one failure path.
+ *
+ * Moved here verbatim in T607 from the performance controller, which declared it for five routes;
+ * there are twelve now across two controllers, and a second copy of the scope narrowing at line
+ * `brandIds` below is the one piece of this file no task should ever duplicate. `T606`'s 100 cells
+ * and `T605`'s 18 exercise it end to end, so the move is characterised rather than asserted.
+ *
+ * The narrowing is the load-bearing line: `authorizedBrandIds ?? (brandId ? [brandId] : [])` means a
+ * caller with no membership resolves to an EMPTY list, which every read answers as an empty page
+ * rather than an error - and never as "all brands".
+ */
+export const READ_FAILURE = 'Journey read failed';
+
+export async function serveRead<S extends z.ZodTypeAny>(
+  req: Request,
+  res: Response,
+  schema: S,
+  event: string,
+  read: (query: z.infer<S>, scope: { tenantId: string; brandIds: string[]; brandId: string | null; programId: string | null }) => Promise<unknown>,
+): Promise<void> {
+  const parsed = schema.safeParse(req.query);
+  if (!parsed.success) {
+    badRequest(res, parsed.error);
+    return;
+  }
+  const query = parsed.data as z.infer<S> & { tenant_id?: string; brand_id?: string; program_id?: string };
+  try {
+    const ctx = await scopedContext(req, res, query);
+    if (!ctx) return; // scopedContext has already answered 403/404.
+    const brandIds = ctx.authorizedBrandIds ?? (ctx.brandId ? [ctx.brandId] : []);
+    const brandId = query.brand_id ?? ctx.brandId ?? null;
+    const scoped = brandId ? brandIds.filter((b) => b === brandId) : brandIds;
+    res.json(await read(query, {
+      tenantId: ctx.tenantId ?? '',
+      brandIds: scoped,
+      brandId,
+      programId: query.program_id ?? null,
+    }));
+  } catch (err) {
+    const errorClass = logReadFailure(req, err, event);
+    res.status(500).json({ error: READ_FAILURE, error_class: errorClass });
+  }
 }
 
 /** GET /participations/:id — one participation, brand-scoped. */

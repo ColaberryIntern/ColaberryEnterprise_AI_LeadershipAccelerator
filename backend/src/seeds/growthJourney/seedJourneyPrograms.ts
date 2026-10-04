@@ -1,6 +1,7 @@
 import type { Brand } from '../../models';
 import { JourneyProgram, JourneyPath } from '../../models';
 import { resolveBrandBySlug } from '../../modules/tenancy/tenantResolver';
+import { TERMINOLOGY, TERMINOLOGY_METADATA_KEY } from '../../services/growthJourney/journeyTerminology';
 import {
   JOURNEY_PROGRAMS,
   pathsForProgram,
@@ -63,6 +64,10 @@ export interface SeedJourneyProgramsResult {
   defaults_set: number;
   /** A default pointer left alone because a human had already set one. */
   defaults_left_alone: number;
+  /** T604: a programme whose metadata gained the kind's terminology. */
+  terminology_written: number;
+  /** T604: terminology left alone because the programme already carried the key. */
+  terminology_left_alone: number;
   /** Brand named in §5 but absent from this database. */
   skipped_brands: string[];
   failed: { target: string; error: string }[];
@@ -106,6 +111,32 @@ async function seedPaths(
   }
 }
 
+/**
+ * The programme's words (T604), written ONLY when they are absent.
+ *
+ * `metadata` is the operator's column: §13 designated it for exactly this, and
+ * a human who renames "learner" to "member" on their own programme must not
+ * have the next boot rename it back. So: no key, no metadata, or metadata that
+ * is not an object => write the kind's defaults; a key already present => leave
+ * it, whatever it holds. The spread keeps every OTHER key a human put there,
+ * which is the failure mode a whole-column write has (the JSONB-clobber lesson
+ * this repo already paid for once).
+ */
+async function seedTerminology(
+  program: JourneyProgram,
+  def: JourneyProgramDefinition,
+  result: SeedJourneyProgramsResult,
+): Promise<void> {
+  const metadata = program.metadata;
+  const existing = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : null;
+  if (existing && Object.prototype.hasOwnProperty.call(existing, TERMINOLOGY_METADATA_KEY)) {
+    result.terminology_left_alone += 1;
+    return;
+  }
+  await program.update({ metadata: { ...(existing ?? {}), [TERMINOLOGY_METADATA_KEY]: TERMINOLOGY[def.kind] } });
+  result.terminology_written += 1;
+}
+
 async function setBrandDefault(
   brand: Brand,
   programId: string,
@@ -129,6 +160,8 @@ export async function seedJourneyPrograms(): Promise<SeedJourneyProgramsResult> 
     paths_existing: 0,
     defaults_set: 0,
     defaults_left_alone: 0,
+    terminology_written: 0,
+    terminology_left_alone: 0,
     skipped_brands: [],
     failed: [],
   };
@@ -163,10 +196,14 @@ export async function seedJourneyPrograms(): Promise<SeedJourneyProgramsResult> 
           // about `is_active`.
           status: 'draft',
           description: def.description,
+          // `metadata` is deliberately NOT set here: `seedTerminology` below is the one
+          // writer of the terminology key, for a new row and an existing one alike, so
+          // there is one path to read and one counter to believe.
         });
         result.programs_created += 1;
       }
 
+      await seedTerminology(program, def, result);
       await seedPaths(program.id, def, result);
       await setBrandDefault(brand, program.id, result);
     } catch (err: unknown) {

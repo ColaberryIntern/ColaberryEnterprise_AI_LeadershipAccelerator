@@ -23,6 +23,8 @@ const AdminCertPrepPage = lazy(() => import('../pages/admin/certprep/AdminCertPr
 const AdminEventLedgerPage = lazy(() => import('../pages/admin/AdminEventLedgerPage'));
 const AdminCampaignsPage = lazy(() => import('../pages/admin/AdminCampaignsPage'));
 const ExplorerGrowthPage = lazy(() => import('../pages/admin/ExplorerGrowthPage'));
+const GrowthJourneyPage = lazy(() => import('../pages/admin/GrowthJourneyPage'));
+const GrowthJourneyHandoffPage = lazy(() => import('../pages/admin/HandoffDetailPage'));
 const AdminCampaignDetailPage = lazy(() => import('../pages/admin/AdminCampaignDetailPage'));
 const AdminApolloPage = lazy(() => import('../pages/admin/AdminApolloPage'));
 const CampaignBuilderPage = lazy(() => import('../pages/admin/CampaignBuilderPage'));
@@ -186,6 +188,8 @@ const adminRoutes = (
         <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
         <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
         <Route path="/admin/explorer-growth" element={<ExplorerGrowthPage />} />
+        <Route path="/admin/growth-journey/handoffs/:id" element={<GrowthJourneyHandoffPage />} />
+        <Route path="/admin/growth-journey" element={<GrowthJourneyPage />} />
         <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />
         <Route path="/admin/campaigns/:id" element={<AdminCampaignDetailPage />} />
         <Route path="/admin/apollo" element={<AdminApolloPage />} />

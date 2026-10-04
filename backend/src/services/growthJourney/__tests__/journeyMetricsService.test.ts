@@ -1,0 +1,381 @@
+const m = { decisions: jest.fn(), executions: jest.fn(), agents: jest.fn(), rates: jest.fn(), handoffs: jest.fn() };
+
+jest.mock('../../../models', () => ({
+  GrowthJourneyDecision: { findAll: (...a: unknown[]) => m.decisions(...a) },
+  GrowthJourneyExecution: { findAll: (...a: unknown[]) => m.executions(...a) },
+  GrowthJourneyHandoff: { findAll: (...a: unknown[]) => m.handoffs(...a) },
+  AiAgent: { findAll: (...a: unknown[]) => m.agents(...a) },
+}));
+jest.mock('../outcomes/handoffRatesQuery', () => ({
+  loadHandoffRates: (...a: unknown[]) => m.rates(...a),
+  DEFAULT_RATES_WINDOW_DAYS: 30,
+}));
+
+import { Op } from 'sequelize';
+import { brandsInScope, computeJourneyMetrics, DEFAULT_WINDOW_DAYS, MAX_ACCEPT_SAMPLES, MAX_WINDOW_DAYS, pooledMedian, rateOf, type JourneyMetricsResult, type ServedMetric } from '../performance/journeyMetricsService';
+import { JOURNEY_METRICS } from '../../adminOs/metrics/journeyMetrics';
+import { BELOW_MIN_SAMPLES, MIN_MEDIAN_SAMPLES, NO_DENOMINATOR } from '../outcomes/handoffRates';
+
+/**
+ * T605 — the journey metrics computed for one scope.
+ *
+ * The properties, in the order they would hurt if wrong:
+ *
+ *   1. NULL IS NEVER ZERO. Every rate with an empty denominator is
+ *      `{ value: null, reason: 'no_denominator' }`, which is Phase 4's
+ *      vocabulary reused rather than a second one invented here.
+ *   2. EVERY VALUE CARRIES FRESHNESS, and on a dark system - no agent run, no
+ *      rows - every verdict is `never`, not a zero-aged `fresh`.
+ *   3. IT READS DECLARED COLUMNS AND AGGREGATES, never a JSONB payload: the
+ *      shape of the `findAll` calls is asserted, because that is where a
+ *      person's words would leak in.
+ *   4. THE SCOPE IS THE CALLER'S. An explicit brand outside the caller's
+ *      memberships narrows to nothing rather than widening.
+ */
+
+const NOW = new Date('2026-09-28T12:00:00Z');
+const TENANT = 'tenant-1';
+const BRAND_A = 'brand-a';
+const BRAND_B = 'brand-b';
+
+const ratesFor = (over: Record<string, unknown> = {}) => ({
+  all: {
+    handoffs: 0, accepted: 0, verdicts: 0,
+    acceptance_rate: rateOf(0, 0), expiry_rate: rateOf(0, 0), connection_rate: rateOf(0, 0), meeting_rate: rateOf(0, 0),
+    qualification_rate: rateOf(0, 0), proposal_rate: rateOf(0, 0), conversion_rate: rateOf(0, 0), false_positive_handoff_rate: rateOf(0, 0),
+    time_to_accept_hours: { value: null, samples: 0 }, time_to_disposition_hours: { value: null, samples: 0 }, time_to_first_connection_hours: { value: null, samples: 0 },
+    ...over,
+  },
+  by_queue: {},
+});
+
+/** A handoff row as the pooled accept-time read projects it: two timestamps, nothing else. */
+const handoffRow = (createdAgoHours: number, waitedSeconds: number | null) => ({
+  created_at: new Date(NOW.getTime() - createdAgoHours * 3_600_000),
+  accepted_at: waitedSeconds === null ? null : new Date(NOW.getTime() - createdAgoHours * 3_600_000 + waitedSeconds * 1_000),
+});
+
+const metric = (result: JourneyMetricsResult, key: string): ServedMetric => result.metrics.find((x) => x.key === key)!;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  m.decisions.mockResolvedValue([]);
+  m.executions.mockResolvedValue([]);
+  m.agents.mockResolvedValue([]);
+  m.handoffs.mockResolvedValue([]);
+  m.rates.mockResolvedValue(ratesFor());
+});
+
+describe('a dark system: nothing has run, and it says so', () => {
+  it('returns every registered journey metric, with null rates and never freshness', async () => {
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(result.metrics.map((x) => x.key).sort()).toEqual(Object.keys(JOURNEY_METRICS).sort());
+    // The two this service cannot compute carry their OWN reason instead of `no_denominator` -
+    // "we have no way to compute this yet" and "there was nothing to divide by" are different
+    // facts, and a screen that blurred them would be back to the registry's original defect.
+    const CANNOT_COMPUTE: Record<string, string> = {
+      'journey.plan_refusal_rate': 'needs_executor_run_row',
+      'journey.enrolment_conversion_rate': 'needs_identity_key',
+    };
+    for (const served of result.metrics) {
+      expect(served.freshness.verdict).toBe('never');
+      if (served.unit !== 'percent') continue;
+      expect(served.value).toBeNull();
+      expect(served.reason).toBe(CANNOT_COMPUTE[served.key] ?? NO_DENOMINATOR);
+    }
+    expect(Object.keys(CANNOT_COMPUTE).every((k) => result.metrics.some((x) => x.key === k))).toBe(true);
+  });
+
+  it('a count with no rows is 0 - a count CAN be zero, a rate cannot', async () => {
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.decisions_recorded').value).toBe(0);
+    expect(metric(result, 'journey.receipts_completed').value).toBe(0);
+    expect(metric(result, 'journey.live_decision_share').value).toBeNull();
+    expect(metric(result, 'journey.send_block_rate').value).toBeNull();
+  });
+
+  it('carries the registry definition with each value, so a screen needs no second lookup', async () => {
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    const served = metric(result, 'journey.enrolment_conversion_rate');
+    expect(served.name).toBe(JOURNEY_METRICS['journey.enrolment_conversion_rate'].name);
+    expect(served.status).toBe('partial');
+    expect(served.statusReason).toMatch(/e-mail equality/i);
+    expect(served.reason).toBe('needs_identity_key');
+  });
+});
+
+describe('the numerators and denominators, by name', () => {
+  it('the live decision share is live decisions over all decisions', async () => {
+    m.decisions.mockResolvedValue([
+      { mode: 'live', n: '3', newest: '2026-09-28T11:00:00Z' },
+      { mode: 'shadow', n: '9', newest: '2026-09-28T10:00:00Z' },
+    ]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.decisions_recorded').value).toBe(12);
+    expect(metric(result, 'journey.live_decision_share')).toMatchObject({ value: 25, numerator: 3, denominator: 12 });
+    // The newest row's timestamp decides a live metric's freshness.
+    expect(metric(result, 'journey.live_decision_share').freshness).toMatchObject({ verdict: 'fresh', age_hours: 1 });
+  });
+
+  it('the blocked send rate is blocked over the receipts that REACHED a send', async () => {
+    m.executions.mockResolvedValue([
+      { status: 'completed', n: '6', newest: '2026-09-28T11:30:00Z' },
+      { status: 'blocked', n: '2', newest: '2026-09-28T11:45:00Z' },
+      { status: 'failed', n: '2', newest: '2026-09-28T09:00:00Z' },
+      // Not in the denominator: these never reached the send step.
+      { status: 'pending_review', n: '50', newest: '2026-09-28T11:59:00Z' },
+      { status: 'approved', n: '7', newest: '2026-09-28T11:58:00Z' },
+    ]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.receipts_completed').value).toBe(6);
+    expect(metric(result, 'journey.send_block_rate')).toMatchObject({ value: 20, numerator: 2, denominator: 10 });
+  });
+
+  it('the handoff rates come from Phase 4\'s computation, summed on numerators - never averaged across brands', async () => {
+    // Averaging two brands' rates would weight three handoffs the same as three hundred.
+    m.rates.mockImplementation(async ({ brandId }: { brandId: string }) =>
+      brandId === BRAND_A
+        ? ratesFor({ handoffs: 100, accepted: 40, verdicts: 20, false_positive_handoff_rate: rateOf(2, 20), qualification_rate: rateOf(10, 20), time_to_accept_hours: { value: 4, samples: 40 } })
+        : ratesFor({ handoffs: 4, accepted: 4, verdicts: 4, false_positive_handoff_rate: rateOf(3, 4), qualification_rate: rateOf(1, 4), time_to_accept_hours: { value: 1, samples: 4 } }));
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B], asOf: NOW });
+    expect(metric(result, 'journey.handoff_acceptance_rate')).toMatchObject({ numerator: 44, denominator: 104 });
+    expect(metric(result, 'journey.false_positive_handoff_rate')).toMatchObject({ numerator: 5, denominator: 24 });
+    expect(metric(result, 'journey.qualified_opportunity_rate')).toMatchObject({ numerator: 11, denominator: 24 });
+    // A naive average of the two rates would be 10% and 75% -> 42.5%; the pooled figure is 5/24.
+    expect(metric(result, 'journey.false_positive_handoff_rate').value).toBe(20.83);
+    expect(m.rates).toHaveBeenCalledTimes(2);
+  });
+
+  it('Phase 4\'s per-brand median is NOT what the served median reads - the pooled sample is', async () => {
+    // Phase 4 computes a median per brand; this service reads the accepted handoffs itself and pools
+    // them (see the pooled-median block below). So a per-brand median of 4h with a one-row sample
+    // does not become the served figure, and with no accept sample the answer is the floor's.
+    m.rates.mockResolvedValue(ratesFor({ handoffs: 2, accepted: 1, verdicts: 1, time_to_accept_hours: { value: 4, samples: 1, reason: 'below_min_samples' } }));
+    m.handoffs.mockResolvedValue([]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.time_to_first_human_touch_seconds')).toMatchObject({ value: null, denominator: 0, reason: BELOW_MIN_SAMPLES });
+  });
+});
+
+describe('the median wait is POOLED over the scope, and its denominator is the sample count', () => {
+  it('two brands, unequal volumes: the median is over every accepted handoff, not a mean of the brands\' medians', async () => {
+    // The defect this cell exists for: the first version of this service averaged Phase 4's per-brand
+    // MEDIANS, so a brand with 4 accepted handoffs weighed the same as one with 40, and the served
+    // `denominator` was the BRAND COUNT (2). The registry formula says median over accepted handoffs.
+    const busy = Array.from({ length: 40 }, () => handoffRow(10, 4 * 3_600));
+    const quiet = Array.from({ length: 4 }, () => handoffRow(5, 1 * 3_600));
+    m.handoffs.mockResolvedValue([...busy, ...quiet]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B], asOf: NOW });
+    const served = metric(result, 'journey.time_to_first_human_touch_seconds');
+    // The pooled median of forty 14400s waits and four 3600s waits is 14400s - not the mean of the
+    // two medians (9000s), which is what the averaged version served.
+    expect(served.value).toBe(14_400);
+    expect(served.denominator).toBe(44);
+    expect(served.unit).toBe('duration_seconds');
+  });
+
+  it('counts only the handoffs a human accepted, and the rest are not zeros', async () => {
+    m.handoffs.mockResolvedValue([handoffRow(9, 600), handoffRow(8, 1_200), handoffRow(7, 1_800), handoffRow(6, null), handoffRow(5, null)]);
+    const served = metric(await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW }), 'journey.time_to_first_human_touch_seconds');
+    expect(served).toMatchObject({ value: 1_200, denominator: 3 });
+  });
+
+  it('under Phase 4\'s sample floor it is null with below_min_samples - a sample, not a distribution', async () => {
+    m.handoffs.mockResolvedValue([handoffRow(9, 600), handoffRow(8, 6_000)]);
+    const served = metric(await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B], asOf: NOW }), 'journey.time_to_first_human_touch_seconds');
+    expect(MIN_MEDIAN_SAMPLES).toBe(3);
+    expect(served).toMatchObject({ value: null, denominator: 2, reason: BELOW_MIN_SAMPLES });
+  });
+
+  it('pooledMedian itself: the floor, the sample count, and two decimals', () => {
+    expect(pooledMedian([])).toEqual({ value: null, denominator: 0, reason: BELOW_MIN_SAMPLES });
+    expect(pooledMedian([10, 20])).toEqual({ value: null, denominator: 2, reason: BELOW_MIN_SAMPLES });
+    expect(pooledMedian([10, 20, 30])).toEqual({ value: 20, denominator: 3 });
+    expect(pooledMedian([10, 20, 30, 41])).toEqual({ value: 25, denominator: 4 });
+  });
+
+  it('reads the accept sample bounded, newest first, over two timestamp columns only', async () => {
+    await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    const [query] = m.handoffs.mock.calls[0] as [Record<string, unknown>];
+    expect(query.attributes).toEqual(['created_at', 'accepted_at']);
+    expect(query.order).toEqual([['created_at', 'DESC']]);
+    expect(query.limit).toBe(MAX_ACCEPT_SAMPLES);
+    expect(query.raw).toBe(true);
+    expect(JSON.stringify(query.attributes)).not.toContain('subject_ref');
+  });
+});
+
+describe('the nightly count is the nightly pass\'s own, not the total', () => {
+  it('isolates trigger = nightly, so two registered metrics do not render the same figure', async () => {
+    m.decisions.mockResolvedValue([
+      { mode: 'shadow', trigger: 'nightly', n: '7', newest: '2026-09-28T04:20:00Z' },
+      { mode: 'live', trigger: 'reply', n: '2', newest: '2026-09-28T11:00:00Z' },
+      { mode: 'shadow', trigger: 'form', n: '5', newest: '2026-09-28T10:00:00Z' },
+    ]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.decisions_recorded').value).toBe(14);
+    expect(metric(result, 'journey.nightly_recorded_decisions').value).toBe(7);
+    expect(metric(result, 'journey.live_decision_share')).toMatchObject({ numerator: 2, denominator: 14 });
+  });
+
+  it('groups by mode AND trigger, which is what makes the two counts separable', async () => {
+    await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    const [query] = m.decisions.mock.calls[0] as [Record<string, unknown>];
+    expect(query.group).toEqual(['mode', 'trigger']);
+    expect(JSON.stringify(query.attributes)).toContain('trigger');
+  });
+
+  it('a window with no nightly run at all reports 0 for it while the total stands', async () => {
+    m.decisions.mockResolvedValue([{ mode: 'live', trigger: 'manual', n: '3', newest: '2026-09-28T11:00:00Z' }]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.decisions_recorded').value).toBe(3);
+    expect(metric(result, 'journey.nightly_recorded_decisions').value).toBe(0);
+  });
+});
+
+describe('freshness comes from the input each metric declares', () => {
+  it('a scheduled metric reads its AGENT\'s last run, not the rows', async () => {
+    m.decisions.mockResolvedValue([{ mode: 'live', n: '1', newest: '2026-09-28T11:59:00Z' }]);
+    m.agents.mockResolvedValue([
+      { get: (k: string) => ({ agent_name: 'GrowthJourneyShadowDecisions', last_run_at: new Date('2026-09-27T04:20:00Z') }[k]) },
+      { get: (k: string) => ({ agent_name: 'GrowthJourneyExecutor', last_run_at: new Date('2026-09-28T11:00:00Z') }[k]) },
+    ]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    // The nightly ran 31.7h ago, past its 26h rule, even though a decision row is a minute old.
+    expect(metric(result, 'journey.nightly_recorded_decisions').freshness).toMatchObject({ verdict: 'stale' });
+    expect(metric(result, 'journey.nightly_recorded_decisions').freshness.reason).toContain('GrowthJourneyShadowDecisions last run');
+    // The executor ran an hour ago, inside its 4h rule.
+    expect(metric(result, 'journey.receipts_completed').freshness).toMatchObject({ verdict: 'fresh', age_hours: 1 });
+    // And the live metric reads the row.
+    expect(metric(result, 'journey.decisions_recorded').freshness).toMatchObject({ verdict: 'fresh' });
+  });
+
+  it('a handoff metric\'s freshness is MEASURED from the newest handoff, so it can go stale', async () => {
+    // The defect this cell exists for: the first version passed `now` whenever any handoff existed,
+    // so a brand whose last handoff was 300 days ago still read "newest row is 0h old" and no handoff
+    // metric could ever be stale - in the one task whose deliverable is telling fresh from stale.
+    m.handoffs.mockResolvedValue([handoffRow(300 * 24, 3_600), handoffRow(301 * 24, 3_600), handoffRow(302 * 24, 3_600)]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], windowDays: 365, asOf: NOW });
+    for (const key of ['journey.handoff_acceptance_rate', 'journey.false_positive_handoff_rate', 'journey.qualified_opportunity_rate', 'journey.time_to_first_human_touch_seconds']) {
+      expect(metric(result, key).freshness).toMatchObject({ verdict: 'stale' });
+      expect(metric(result, key).freshness.age_hours).toBeGreaterThan(7_000);
+    }
+  });
+
+  it('and fresh when a handoff arrived inside the rule\'s window', async () => {
+    m.handoffs.mockResolvedValue([handoffRow(2, 3_600)]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.handoff_acceptance_rate').freshness).toMatchObject({ verdict: 'fresh', age_hours: 2 });
+  });
+
+  it('never when the scope holds no handoff at all - not a zero-aged fresh', async () => {
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.handoff_acceptance_rate').freshness).toMatchObject({ verdict: 'never', age_hours: null });
+  });
+
+  it('an agent row that exists but never ran is never, not stale', async () => {
+    m.agents.mockResolvedValue([{ get: (k: string) => ({ agent_name: 'GrowthJourneyExecutor', last_run_at: null }[k]) }]);
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], asOf: NOW });
+    expect(metric(result, 'journey.receipts_completed').freshness).toMatchObject({ verdict: 'never', age_hours: null });
+  });
+});
+
+describe('what it reads, and what it refuses to read', () => {
+  it('aggregates in the database and names only declared columns - no JSONB payload', async () => {
+    await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], programId: 'program-1', asOf: NOW });
+    const [decisionQuery] = m.decisions.mock.calls[0] as [Record<string, unknown>];
+    const [executionQuery] = m.executions.mock.calls[0] as [Record<string, unknown>];
+    const [handoffQuery] = m.handoffs.mock.calls[0] as [Record<string, unknown>];
+    for (const query of [decisionQuery, executionQuery]) {
+      const attributes = JSON.stringify(query.attributes);
+      expect(attributes).toContain('COUNT');
+      expect(attributes).toContain('MAX');
+      expect(query.raw).toBe(true);
+    }
+    // The handoff read is the one row-level read this service makes (the pooled accept sample), so
+    // the banned-column rule is asserted across all three rather than only the two aggregates.
+    for (const query of [decisionQuery, executionQuery, handoffQuery]) {
+      const attributes = JSON.stringify(query.attributes);
+      for (const banned of ['candidates', 'evidence', 'selected_content', 'metadata', 'payload', 'subject_ref', 'lead_id']) {
+        expect(attributes).not.toContain(banned);
+      }
+    }
+    expect(decisionQuery.group).toEqual(['mode', 'trigger']);
+    expect(executionQuery.group).toEqual(['status']);
+    expect(handoffQuery.limit).toBe(MAX_ACCEPT_SAMPLES);
+  });
+
+  it('bounds every read by the scope, the window and the programme', async () => {
+    await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B], programId: 'program-1', windowDays: 7, asOf: NOW });
+    const [decisionQuery] = m.decisions.mock.calls[0] as [{ where: Record<string, unknown> }];
+    expect(decisionQuery.where.brand_id).toEqual({ [Op.in]: [BRAND_A, BRAND_B] });
+    expect(decisionQuery.where.program_id).toBe('program-1');
+    const window = decisionQuery.where.created_at as Record<symbol, Date>;
+    expect(window[Op.gte]).toEqual(new Date('2026-09-21T12:00:00Z'));
+    expect(window[Op.lt]).toEqual(NOW);
+  });
+
+  it('clamps the window: a year at most, a day at least, whole days', async () => {
+    for (const [asked, applied] of [[undefined, DEFAULT_WINDOW_DAYS], [0, DEFAULT_WINDOW_DAYS], [7, 7], [9.9, 9], [4000, MAX_WINDOW_DAYS], [-5, 1]] as const) {
+      m.rates.mockClear();
+      const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], windowDays: asked as number | undefined, asOf: NOW });
+      expect(result.scope.window_days).toBe(applied);
+      expect(m.rates).toHaveBeenCalledWith(expect.objectContaining({ windowDays: applied }));
+    }
+  });
+
+  it('never queries at all when the caller\'s scope is empty', async () => {
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [], asOf: NOW });
+    expect(m.decisions).not.toHaveBeenCalled();
+    expect(m.executions).not.toHaveBeenCalled();
+    expect(m.rates).not.toHaveBeenCalled();
+    expect(m.handoffs).not.toHaveBeenCalled();
+    expect(metric(result, 'journey.decisions_recorded').value).toBe(0);
+    expect(metric(result, 'journey.handoff_acceptance_rate').value).toBeNull();
+  });
+});
+
+describe('the scope narrows, never widens', () => {
+  it('an explicit brand inside the caller\'s memberships narrows to it', () => {
+    expect(brandsInScope({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B], brandId: BRAND_B })).toEqual([BRAND_B]);
+  });
+
+  it('an explicit brand OUTSIDE them narrows to nothing - it does not fall back to all', () => {
+    expect(brandsInScope({ tenantId: TENANT, brandIds: [BRAND_A], brandId: 'brand-theirs' })).toEqual([]);
+  });
+
+  it('no explicit brand reads every brand the caller may see', () => {
+    expect(brandsInScope({ tenantId: TENANT, brandIds: [BRAND_A, BRAND_B] })).toEqual([BRAND_A, BRAND_B]);
+  });
+
+  it('reports the scope it used back with the answer', async () => {
+    const result = await computeJourneyMetrics({ tenantId: TENANT, brandIds: [BRAND_A], brandId: BRAND_A, programId: 'program-1', windowDays: 14, asOf: NOW });
+    expect(result.scope).toEqual({
+      tenant_id: TENANT, brand_id: BRAND_A, program_id: 'program-1', window_days: 14,
+      from: '2026-09-14T12:00:00.000Z', to: NOW.toISOString(),
+    });
+    expect(result.computed_at).toBe(NOW.toISOString());
+  });
+});
+
+describe('the bounds other suites restate', () => {
+  it('the window bounds are 30 and 365 - the numbers the route suite and the Zod schema carry', () => {
+    // `growthJourneyReadRoutes.access.test.ts` mocks this module wholly (the real one loads a model
+    // directly), so it restates these two numbers. This cell is what stops that copy drifting.
+    expect(DEFAULT_WINDOW_DAYS).toBe(30);
+    expect(MAX_WINDOW_DAYS).toBe(365);
+  });
+});
+
+describe('rateOf', () => {
+  it('is null with a reason on an empty denominator, never 0', () => {
+    expect(rateOf(0, 0)).toEqual({ value: null, numerator: 0, denominator: 0, reason: NO_DENOMINATOR });
+    expect(rateOf(3, 0)).toEqual({ value: null, numerator: 3, denominator: 0, reason: NO_DENOMINATOR });
+  });
+
+  it('is a percentage to two decimals, and carries both sides', () => {
+    expect(rateOf(1, 3)).toEqual({ value: 33.33, numerator: 1, denominator: 3 });
+    expect(rateOf(0, 5)).toEqual({ value: 0, numerator: 0, denominator: 5 });
+    expect(rateOf(5, 5)).toEqual({ value: 100, numerator: 5, denominator: 5 });
+  });
+});

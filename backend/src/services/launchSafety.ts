@@ -11,6 +11,8 @@
  */
 
 import AiAgent from '../models/AiAgent';
+import SystemSetting from '../models/SystemSetting';
+import { classifyError } from '../utils/errorClassifier';
 import { logAiEvent } from './aiEventService';
 import { getSetting, setSetting } from './settingsService';
 
@@ -197,6 +199,34 @@ export async function deactivateKillSwitch(deactivatedBy: string): Promise<void>
   }).catch(() => {});
 
   console.log(`[KILL SWITCH] Deactivated by ${deactivatedBy}. Campaigns and agents must be manually re-enabled.`);
+}
+
+export type KillSwitchRowResult = { created: boolean } | { created: false; error_class: string };
+
+/**
+ * The switch as a ROW (Growth Journey Phase 6, T602).
+ *
+ * Until this ran, production had no `system_kill_switch` row at all: both
+ * readers above answered "off" from an ABSENT row - the right answer, but an
+ * inferred one. A readiness check, a `production-activate` dry run or a person
+ * reading the table could not tell "off" from "never set". Seeded once at boot
+ * (from `ensureGrowthJourneySchema`), `false`, through the model - `findOrCreate`
+ * on the unique key, so the model supplies the id the raw table has no default
+ * for (`models/SystemSetting.ts`), and two containers booting at once resolve
+ * to the one row. A PRESENT row, on or off, is never touched: a switch somebody
+ * turned on is not something boot may turn off. Best effort, like every other
+ * boot ensure: a failure is one warning line and `{ created: false }`, never
+ * a boot failure - the readers keep answering as they always have.
+ */
+export async function ensureKillSwitchRow(): Promise<KillSwitchRowResult> {
+  try {
+    const [, created] = await SystemSetting.findOrCreate({ where: { key: KILL_SWITCH_KEY }, defaults: { value: false } as never });
+    return { created };
+  } catch (err: unknown) {
+    const error_class = classifyError(err);
+    console.warn(JSON.stringify({ service: 'launch-safety', level: 'warn', outcome: 'failure', event: 'kill_switch.row_seed_failed', key: KILL_SWITCH_KEY, error_class }));
+    return { created: false, error_class };
+  }
 }
 
 // ─── 3. War Room Mode ───────────────────────────────────────────────────────

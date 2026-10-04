@@ -21,6 +21,8 @@ import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
 import caseStudyStudioRoutes from './admin/caseStudyStudioRoutes';
 import caseStudyMetricRoutes from './admin/caseStudyMetricRoutes';
 import explorerGrowthRoutes from './admin/explorerGrowthRoutes';
+import growthJourneyStatusRoutes from './admin/growthJourneyStatusRoutes';
+import growthJourneyReadRoutes from './admin/growthJourneyReadRoutes';
 import growthJourneyRoutes from './admin/growthJourneyRoutes';
 import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
@@ -203,6 +205,19 @@ router.use(caseStudyMetricRoutes);
 // deny-by-default for every scoped management role while legacy admin passed,
 // which is a surface that half-works and looks fine.
 router.use(explorerGrowthRoutes);
+// MUST STAY ABOVE `growthJourneyRoutes` (Phase 6, T604). That router applies
+// `requireGrowthJourneyEnabled` over the whole /api/admin/growth-journey prefix, so the status
+// registry - the one surface an operator needs BEFORE the master flag is on - escapes the 404
+// only from in front of it. Express matches in mount order; `adminRoutes.order.test.ts` pins
+// these two lines' relative position, and the status access suite proves the consequence.
+router.use(growthJourneyStatusRoutes);
+// The performance reads (T605) carry the master flag themselves, so their position relative to
+// `growthJourneyRoutes` DOES matter as of T607: the read router owns `/handoffs/policies` and
+// `/handoffs/ownership`, which `growthJourneyRoutes` would otherwise swallow with its
+// `/handoffs/:id`. It must stay above. (Before T607 either order answered the same, which is what
+// the previous note said.) They
+// sit here so the three journey routers read in one place: status (always), performance, queues.
+router.use(growthJourneyReadRoutes);
 router.use(growthJourneyRoutes);
 router.use(campaignRoutes);
 router.use(insightRoutes);
