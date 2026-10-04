@@ -54,6 +54,7 @@ import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureZoomRequestLedgerSchema } from './db/ensureZoomRequestLedgerSchema';
 import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema';
 import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
+import { ensurePresenterSlotSchema } from './db/ensurePresenterSlotSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
@@ -2492,6 +2493,10 @@ async function start(): Promise<void> {
   // the tables must exist before the flag can be turned on, and empty unread tables
   // change no behaviour while it is off.
   await ensurePresentationStudioSchema();
+  // Demo-day running order. Its own module rather than columns on the Studio
+  // schema: a slot belongs to the SESSION, and the uniqueness that matters (one
+  // presenter per position) cannot be expressed on the attempt.
+  await ensurePresenterSlotSchema();
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
   // /inbox-zero commitment ledger (what Ali owes). Depends on inbox_cases above.
