@@ -346,7 +346,44 @@ router.post('/api/admin/landing-pages/:id/publish', requireAdmin, async (req: Re
       slug, status: 'published', published_at: new Date(), path: `/lp/${brand.slug}/${slug}`,
     } as never);
 
-    res.json({ page: summarise(page), url: `/lp/${brand.slug}/${slug}` });
+    /**
+     * The master copy, in git. Ali: "There should be a git repo stored somewhere for each one.
+     * That is where the main copy will always be."
+     *
+     * AFTER the status flip and deliberately fail-soft: the operator's goal is the page being
+     * live, and refusing to publish because an archive write failed would be the tail wagging the
+     * dog. A failure is logged at error and `repo_commit` stays null, so "this page has no master
+     * copy" is a readable state rather than a silent one.
+     */
+    const { commitPublishedPage } = await import('../../services/marketing/landingPageRepoService');
+    const archived = await commitPublishedPage({
+      brandSlug: brand.slug,
+      pageSlug: slug,
+      pageName: page.name,
+      content: content.content,
+      actorEmail: req.admin?.email ?? null,
+    });
+    if (archived.ok) {
+      await page.update({ repo_path: archived.repoPath, repo_commit: archived.commit } as never);
+    } else {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error', service: 'landing-pages', event: 'landing_page_archive_failed',
+        outcome: 'failure', error_class: 'RepoCommitFailed',
+        context: {
+          brand_slug: brand.slug, slug, reason: archived.error,
+          impact: 'the page is live but has no master copy in git; the database row is the only copy',
+        },
+      }));
+    }
+
+    res.json({
+      page: summarise(page),
+      url: `/lp/${brand.slug}/${slug}`,
+      // Stated, not implied: the UI says plainly whether a master copy exists and whether it
+      // left this host.
+      archive: { committed: archived.ok, commit: archived.commit, pushed: archived.pushed },
+    });
   } catch (err) { fail(res, err, 'landing_page_publish_failed'); }
 });
 

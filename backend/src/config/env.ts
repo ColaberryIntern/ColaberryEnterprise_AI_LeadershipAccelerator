@@ -433,6 +433,15 @@ export const env = {
   // Used to build absolute one-click unsubscribe links embedded in outbound campaign
   // email. Must be the public https host, not the internal container port.
   publicAppUrl: process.env.PUBLIC_APP_URL || 'https://enterprise.colaberry.ai',
+  // Where the master copy of every landing page is kept (Ali, 2026-10-01: "There should be a git
+  // repo stored somewhere for each one"). A DEDICATED repo, deliberately not this application's
+  // own checkout at /opt/colaberry-accelerator - that tree is `git pull`ed by every deploy, and a
+  // dirty tree makes a deploy silently ship stale code.
+  landingPageRepoPath: process.env.LANDING_PAGE_REPO_PATH || '/opt/colaberry-landing-pages',
+  // Optional. Unset, the archive is version history on one host: it survives a bad edit and a bad
+  // deploy, not a lost disk. Setting this is the one change that makes it durable, and it is the
+  // only thing standing between the current local repo and a GitHub one.
+  landingPageRepoRemote: process.env.LANDING_PAGE_REPO_REMOTE || '',
   // Where Synthflow posts a call's completion. Sent on EVERY call we place, because the
   // per-agent dashboard setting it used to depend on was found unset for two agents in a
   // row (the internship interviewer, then AI Flotation) - and a call whose completion never
