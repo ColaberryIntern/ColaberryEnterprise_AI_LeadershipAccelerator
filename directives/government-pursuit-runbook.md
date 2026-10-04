@@ -15,7 +15,7 @@ This is the end-to-end process for taking a government opportunity from discover
 | 3 | **Capture requirements** | **Open qualification** → upload the Bonfire ZIP → **Extract** → confirm the real ones → **Establish**. | ✅ live |
 | 4 | **Assess fit & risk** | Read **What they want vs what we offer** (matcher) and **Gaps / potential disqualifiers** (eligibility/blocking). Decide: *Needs evidence* / *No bid*. | ✅ live |
 | 5 | **Attest evidence & approve the pursuit** | Record the ZIP as evidence of record; when requirements are established, evidenced and cleared, **approve the bid pursuit** (approver ≠ reviewer). | ✅ live |
-| 6 | **Spin up the two projects** | On approval, create the linked **Proposal** + **Build** projects (requirements flow into both tracks). | ⏸️ held (ingestion) |
+| 6 | **Spin up the two projects** | On approval, create the gov delivery project with its **Proposal** + **Build** tracks (established requirements flow into both). | ⏸️ built, ships dark — activates on `ENABLE_GOV_INGESTION` |
 | 7 | **Authorize + run the build** | Authorize a bounded build, then run it to produce a working pilot/PoC **+ screenshots**. | ⏸️ held (builder activation) |
 | 8 | **Submit** | Submit the proposal with the build screenshots as proof. | 🔜 not built |
 | 9 | **Bank the capability** | Win or lose, add the built capability to **Our Services** → more matchable next time. | 🔜 not built |
@@ -34,8 +34,8 @@ This is the end-to-end process for taking a government opportunity from discover
 - Record the uploaded ZIP as the **evidence of record** (a server-side hash; the bytes are never stored).
 - Approval is **gated**: at least one applicable requirement established, the ZIP attested, no blocking requirement, and the **approver must not be the reviewer**. Unknown applicability or an empty requirement set never passes.
 
-### 6 — Two projects (held)
-- On approval, the system creates one **government delivery project** with a **Proposal** track (the customer's requirements) and a **Build** track (our solution). *Held pending coordinator sign-off — uses the parked ingestion step.*
+### 6 — Two projects (built; ships dark)
+- On approval, the system creates (idempotently) one **government delivery project** with a **Proposal** track (the customer's established requirements) and a **Build** track (our solution); the established requirements are written into the compliance matrix on both tracks (`evidence_state: unassessed` — nothing fabricated). *Coordinator-approved and built; ships behind `ENABLE_GOV_INGESTION` (default off) and activates when that flag is flipped on. Creating the project does NOT authorize a build — that stays the separate step-7 gate.*
 
 ### 7 — Authorize + run the build (held)
 - Record a **bounded build authorization** (scope + resource limit), then run the build to produce the demo + screenshots. *The autonomous builder stays parked; it runs only on an explicit, separate go.*
