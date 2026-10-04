@@ -320,10 +320,17 @@ export function heatColumnLabels(days: readonly ActivityDay[]): string[] {
  * The backend always sends 28, and this does not trust that: a short array would otherwise draw a
  * ragged grid where each row's columns mean different dates, which is worse than a visible blank.
  */
+/** A padding cell: a real `ActivityDay` with every track at zero, so no reader meets `undefined`. */
+const EMPTY_DAY = (): ActivityDay => ({
+  date: '',
+  events: 0,
+  by_category: { training: 0, project: 0, certification: 0, community: 0, other: 0 },
+});
+
 export function heatRow(row: InternRow): ActivityDay[] {
   const days = row.activity.days ?? [];
   if (days.length >= WINDOW_DAYS) return days.slice(0, WINDOW_DAYS);
-  return [...days, ...Array.from({ length: WINDOW_DAYS - days.length }, () => ({ date: '', events: 0 }))];
+  return [...days, ...Array.from({ length: WINDOW_DAYS - days.length }, EMPTY_DAY)];
 }
 
 /**
