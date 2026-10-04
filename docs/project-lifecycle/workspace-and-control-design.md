@@ -19,13 +19,29 @@ TaskSurfaceBinding =
   | { taskId, kind: 'headless', reason: HeadlessReason }
 ```
 
-**Two states, no third, and no default.** A default would be the whole problem: whichever way it
-fell, a task nobody had considered would acquire a position nobody chose. An unbound task is
-refused (`SURFACE_UNMAPPED`), and so is a task bound twice (`SURFACE_DUPLICATE_BINDING`).
+**Two states, no third, and no default** — and that is now true at runtime, not only in
+the type. A default would be the whole problem: whichever way it fell, a task nobody had
+considered would acquire a position nobody chose. An unbound task is refused
+(`SURFACE_UNMAPPED`), a task bound twice is refused (`SURFACE_DUPLICATE_BINDING`), and a
+**third `kind` arriving as JSON is refused** (`SURFACE_BINDING_MALFORMED`) rather than
+throwing.
 
-`START` and `END` need no binding. They mark where a process begins and ends rather than work
-anyone performs, and requiring surfaces for them would make every blueprint carry two meaningless
-bindings — noise that trains a reviewer to skim the list.
+**Corrected after verification.** The first version of this sentence was false in the one
+way that mattered: a third `kind` was an unhandled `TypeError`, not a refusal, as were a
+missing `ref` and every non-string or non-array field. The module header claimed model
+JSON bypasses the union and then defended a single field against it. All fourteen fields,
+the audience union, the boolean and the third `kind` are now refusals, and
+`consolidationAssessment` and `unboundProposedSurfaces` skip malformed entries instead of
+crashing.
+
+`START` and `END` need no binding. They mark where a process begins and ends rather than
+work anyone performs, and requiring surfaces for them would make every blueprint carry
+two meaningless bindings — noise that trains a reviewer to skim the list. A binding
+placed on one anyway is **refused** (`SURFACE_BINDING_ON_FLOW_MARKER`).
+
+**Corrected after verification.** Attempt 1 silently *skipped* flow-marker bindings, so a
+ref on `START` bypassed every rule in this document while still being counted by
+`consolidationAssessment` — a surface that existed for the count and for nothing else.
 
 ## 2. `headless` is a closed enum, never a sentence
 
@@ -52,13 +68,35 @@ Adding a member is a deliberate act visible in a diff. That is the point.
 serve this*. An empty `whyNotExisting` is refused (`NEW_SCREEN_UNJUSTIFIED`), because a screen that
 cannot answer that question is the renamed dashboard the phase exit condition rules out.
 
-It also carries `deepLink` and `preservesNavigationState`, since §4.5 requires deep links and
-preserved navigation state. A workspace with no addressable link is refused
-(`SURFACE_DEEP_LINK_MISSING`).
+It also carries `deepLink` and `preservesNavigationState`, since §4.5 requires deep
+links and preserved navigation state. A workspace with no addressable link is refused
+(`SURFACE_DEEP_LINK_MISSING`), and one declaring `preservesNavigationState: false` is
+refused too (`SURFACE_NAVIGATION_STATE_NOT_PRESERVED`) — declaring the field false
+declares non-compliance rather than satisfying it.
 
-Roles are checked against `project.roles`, both for `intendedRoles` and for each `permissionViews`
-entry (`SURFACE_ROLE_UNKNOWN`), and cited requirement ids against `project.requirements`. A surface
-may not name a role or a requirement the project never declared.
+**Corrected after verification.** `preservesNavigationState` was declared and then read
+by nothing: `false` passed clean, and no later task was scheduled to check it. A declared
+field with no enforcement is the dummy switch this phase exists to refuse, and it meant
+the "preserve navigation state" requirement was half-closed while looking closed.
+
+§4.5 also requires a primary human job, intended roles and relevant records of every
+proposed screen. Those are enforced non-empty (`SURFACE_FIELD_EMPTY`), as are
+`workspaceId` and `workspaceTitle`. **`decisions` is deliberately exempt**: a read-only
+view supports none, and a test pins that exemption so the rule cannot quietly grow to
+forbid read-only surfaces. A ref whose own `taskIds` omit the task it is bound to is
+refused (`SURFACE_TASKIDS_INCONSISTENT`).
+
+Roles are checked against `project.roles`, both for `intendedRoles` and for each
+`permissionViews` entry (`SURFACE_ROLE_UNKNOWN`). Cited requirement ids are checked
+against `project.requirements` under **their own code**,
+`SURFACE_REQUIREMENT_UNKNOWN`.
+
+**Corrected after verification, and this one was load-bearing.** Attempt 1 folded the
+requirement check into `SURFACE_TASK_UNKNOWN`. Because two unrelated branches shared one
+code, the code-reachability test could not see that the requirement branch had **zero**
+coverage — deleting the check left the suite green. Splitting the code is what makes
+the branch visible, and it is a worked example of why overloading a refusal code weakens
+the test that is supposed to protect it.
 
 ## 4. Customer and internal surfaces stay distinct
 
@@ -81,9 +119,28 @@ product: twelve services unreachable, nothing chaining them. Each of those tasks
 legitimately headless. Every per-task check would have passed. The blueprint still described a
 system nobody could operate.
 
-So this is the one rule an all-headless project cannot satisfy by declaring each reason correctly.
-A test asserts that an all-headless project **fails**, and a paired control asserts that a single
-human surface clears it — otherwise a rule that refused everything would pass the first test too.
+**It is a DISCLOSURE requirement, not a prohibition — corrected after verification.**
+Refusing an all-headless blueprint outright was wrong, for the reason this phase argues
+everywhere else: a legitimately headless pipeline could then proceed only by declaring a
+workspace nobody would use, which is the "invent a screen to clear the gate" incentive.
+
+So an all-headless project **passes when it declares a rationale and a named acceptor**
+(`HeadlessAcceptance`), and is refused otherwise. That is the same shape as
+`checkTargetDisclosure` in `effortMeasures`, which lets a below-target AI share proceed on
+a visible rationale plus owner acceptance. An undisclosed absence of any human surface is
+how a design decision quietly becomes a defect nobody admits.
+
+Tests pin all four directions: undisclosed all-headless **fails**; declared all-headless
+**passes**; acceptance with a blank rationale or no named acceptor **still fails**, so the
+declaration is load-bearing; and a single human surface clears the rule with no
+acceptance at all. A further test proves a workspace on `START` does **not** buy a human
+path, so the flow-marker exclusion is not itself the evasion route.
+
+**Grounding, stated precisely because the first version overclaimed it.** LC-08 and
+§4.5’s first clause both *permit* an all-headless blueprint. The requirement comes
+from §4.5’s journey clause — "Required prototype journeys: normal success,
+approval, rejection/revision, uncertain/failed AI result, and human takeover" — which a
+project with no human surface cannot satisfy.
 
 ### What a workspace binding does NOT prove
 
@@ -125,15 +182,20 @@ reviewer.
 
 | Code | Refuses |
 |---|---|
+| `SURFACE_BINDING_MALFORMED` | A binding a model could emit but no rule could read: a third `kind`, an absent `ref`, a non-string or non-array field, an out-of-union `audience`, a non-boolean flag |
 | `SURFACE_UNMAPPED` | A business task with neither binding |
-| `SURFACE_TASK_UNKNOWN` | A binding, or a cited requirement, the project does not declare |
+| `SURFACE_TASK_UNKNOWN` | A binding naming a task the project does not declare |
+| `SURFACE_REQUIREMENT_UNKNOWN` | A cited requirement the project does not declare |
 | `SURFACE_DUPLICATE_BINDING` | One task bound twice |
+| `SURFACE_BINDING_ON_FLOW_MARKER` | A surface or reason on `START`/`END` |
 | `NEW_SCREEN_UNJUSTIFIED` | A workspace with no `whyNotExisting` |
+| `SURFACE_FIELD_EMPTY` | An empty `workspaceId`, `workspaceTitle`, `action`, `primaryJob`, `intendedRoles` or `records` |
 | `HEADLESS_REASON_UNDECLARED` | A headless reason outside the closed set |
 | `SURFACE_ROLE_UNKNOWN` | A role not in `project.roles` |
 | `SURFACE_AUDIENCE_CONFLATED` | One workspace serving both audiences |
 | `SURFACE_DEEP_LINK_MISSING` | A workspace with no addressable link |
-| `SURFACE_NO_HUMAN_PATH` | **Project level:** no task reaches any human surface |
-
+| `SURFACE_NAVIGATION_STATE_NOT_PRESERVED` | `preservesNavigationState: false` |
+| `SURFACE_TASKIDS_INCONSISTENT` | A ref whose `taskIds` omit the task it is bound to |
+| `SURFACE_NO_HUMAN_PATH` | **Project level:** no task reaches a human surface, with no rationale and no named acceptor |
 A test asserts the set of codes the module can actually emit equals this declared list in both
 directions, so the table cannot drift and no code can be decorative.

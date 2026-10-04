@@ -267,6 +267,23 @@ What each answer would imply for Phase 6:
 Whatever is chosen, it must be stated in `architecture.md` §5.1 rather than only implemented,
 because the current wording reads as though it already covers every case.
 
+## Phase 4 open items (P4-T1)
+
+- **`unboundProposedSurfaces` is a producer with no consumer.** It reports which free-text
+  `proposed_surfaces` from the understanding no declared workspace covers. Nothing in the repo
+  calls it and the Phase 4 plan schedules no caller. It ships because the gap it reports is real
+  and because auto-binding on a string match would manufacture traceability rather than establish
+  it — but a producer nobody reads is a named failure mode here, so it is recorded rather than
+  left to look wired. **Owner: P4-T3**, which carries `task_surfaces` into the design brief and is
+  the natural reader.
+- **A workspace binding proves interaction, not a chained workflow.** `SURFACE_NO_HUMAN_PATH` and
+  the per-task rules together prove a human interacts somewhere; an ingestion task bound to an
+  "Imports" admin screen satisfies all of them. Stronger than the measured-unworkable
+  `r0_no_trust_spine` regex, weaker than "proves a workflow". **Owner: Phase 6**, whose
+  release-level view can test whether r0 reaches user-visible output.
+
+---
+
 ## Phase 7 (hardening) gaps
 
 Each is a place a gate is thinner than it reads. None collapses a blocking set, which is why they
