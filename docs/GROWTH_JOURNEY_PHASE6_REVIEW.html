@@ -75,11 +75,11 @@
     <div><div class="n">170</div><div class="l">files</div></div>
     <div><div class="n">0</div><div class="l">sends</div></div>
     <div><div class="n">9</div><div class="l">tabs</div></div>
-    <div><div class="n">5</div><div class="l">images</div></div>
+    <div><div class="n">11</div><div class="l">images</div></div>
   </div>
 
   <div class="note">
-    <strong>Read the labels on the images.</strong> Five are <em>component</em> captures:
+    <strong>Read the labels on the images.</strong> Eleven are <em>component</em> captures:
     real components, really rendered, with fixture payloads and no admin session. They prove
     layout and wording in states a dark system cannot reach — a null rate beside a real zero,
     a handoff blocked at capacity, an active pause. They prove nothing about production
@@ -95,17 +95,13 @@
       <h3>The dark state <span class="tag component">component</span></h3>
       <p>What an operator sees today, before anything is switched on.</p>
     </div>
-    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-switched-off.png"
-         alt="The switched-off banner, naming the GROWTH_JOURNEY_ENABLED flag">
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-switched-off.png" alt="The switched-off banner, naming the GROWTH_JOURNEY_ENABLED flag">
     <div class="look">
       <strong>Look at:</strong>
       <ul>
-        <li>The banner names the <em>flag</em>, not a symptom. A dark system and a broken
-            one look identical on every other screen, so this is the only thing that tells
-            them apart.</li>
+        <li>The banner names the <em>flag</em>, not a symptom. A dark system and a broken one look identical on every other screen, so this is the only thing that tells them apart.</li>
         <li>It says the page is showing configuration rather than activity.</li>
-        <li>It does <em>not</em> also claim memberships are missing — two different problems,
-            and showing both would send someone to run the wrong fix.</li>
+        <li>It does <em>not</em> also claim memberships are missing — two different problems, and showing both would send someone to run the wrong fix.</li>
       </ul>
     </div>
   </div>
@@ -115,40 +111,127 @@
       <h3>The unseeded state <span class="tag component">component</span></h3>
       <p>The other state that looks exactly like a working system.</p>
     </div>
-    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-unseeded.png"
-         alt="The unseeded banner, naming the membership seed script">
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-unseeded.png" alt="The unseeded banner, naming the membership seed script">
     <div class="look">
       <strong>Look at:</strong>
       <ul>
-        <li>It names the seed script. In production <code>tenant_memberships</code> is empty,
-            so this is the state you will actually meet first.</li>
-        <li>The runbook's §8 explains why: the journey reads do not use the tenancy
-            migration ramp, so naming a brand before seeding is a hard 403 — fail-closed,
-            not broken.</li>
+        <li>It names the seed script. In production <code>tenant_memberships</code> is empty, so this is the state you will actually meet first.</li>
+        <li>The runbook's §8 explains why: the journey reads do not use the tenancy migration ramp, so naming a brand before seeding is a hard 403 — fail-closed, not broken.</li>
       </ul>
     </div>
   </div>
 
   <div class="screenshot">
     <div class="head">
-      <h3>The handoff queue <span class="tag component">component</span></h3>
-      <p>The tab admissions, sales and solution architects will live in.</p>
+      <h3>Overview — readiness with three states <span class="tag component">component</span></h3>
+      <p>Where you start: is this on, and does it have anything in it?</p>
     </div>
-    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-handoffs.png"
-         alt="The handoff queue with a blocked assignment and a redacted reason">
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-overview.png" alt="The readiness list with ready, not-ready and cannot-be-known items">
     <div class="look">
       <strong>Look at:</strong>
       <ul>
-        <li>The first row has <strong>no ticket</strong> and says why: <code>capacity_full</code>.
-            A blocked assignment is stated, never silently dropped.</li>
-        <li>The second row's reason reads <strong>redacted</strong> — the column held an
-            address and the API masked it before it reached the screen, with a separate flag
-            saying which happened.</li>
-        <li>The caption says the ordering is <em>not</em> strictly highest-value-first and
-            that paging is unstable. Both are true of the SQL, and a column labelled
-            "highest value first" would be false exactly where it matters.</li>
-        <li><code>priority</code> has its own column and is <em>not</em> what the list sorts
-            by, so nobody infers otherwise.</li>
+        <li><code>ready</code> is <strong>three-state</strong>. <code>tests_green</code> is <em>neither</em> true nor false — "not readable from here, the suite's last result lives in CI" — and it counts neither as ready nor in the denominator.</li>
+        <li>Every blocked item names the <em>next move</em>, not just the problem.</li>
+        <li>Order is the product: <code>next_move</code> is the first blocked item in list order, so the list is worked top-down rather than by whatever looks easiest.</li>
+        <li>The three crons are shown <code>disabled</code> with <code>last_run_at</code> never — "never ran" and "ran and found nothing" are different facts.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Classification — how a person was read <span class="tag component">component</span></h3>
+      <p>The evidence behind every brand and path assignment.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-classification.png" alt="Two classifications: one confirmed, one needing review and locked by an operator">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>The second row <strong>requires human review</strong> at confidence 0.410 and is <strong>locked</strong> — an operator overrode it, and the lock stops the system re-classifying them later.</li>
+        <li>It carries a <code>referral_target_brand_id</code>: an AI Flotation subject asking for business training is referred to Colaberry Business rather than served content AI Flotation does not sell.</li>
+        <li><code>decided_by</code> on the first row reads <strong>redacted</strong> — that column can hold an email, so the API masked it and set a separate flag saying which happened.</li>
+        <li>Confidence arrives as the <em>string</em> <code>"0.820"</code> — a DECIMAL over JSON — and is rendered without being coerced into a float.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Decisions — what it would do, and what stopped it <span class="tag component">component</span></h3>
+      <p>Every decision here is shadow: recorded, never acted on.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-decisions.png" alt="Two shadow decisions, one of them held out of an experiment">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>The second row selected <strong>no action</strong>, and the reason is <code>holdout:capability_education_q4</code> — this person was deliberately left alone so the team can measure whether the messaging works at all. That is not a failure, and the tab does not present it as one.</li>
+        <li>The first row would <code>SEND_EMAIL</code> and has <code>executed: false</code>. Nothing on this screen has contacted anyone.</li>
+        <li>The transitions panel beside it shows a state change with a <strong>redacted</strong> reason — the column held an address.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Shadow — did the nightly job actually run? <span class="tag component">component</span></h3>
+      <p>The first place to look when decisions seem stale.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-shadow.png" alt="Two nightly runs, one successful and one failed with only a trace id">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>A <strong>failure</strong> whose only handle is a <code>trace_id</code>. The reason and the stack trace are deliberately never projected to this surface, so the trace id is what you take to the logs.</li>
+        <li>Both runs are listed with their duration, so a job that ran and found nothing is distinguishable from one that never ran.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Content — what may be said, and what may not <span class="tag component">component</span></h3>
+      <p>The tab that enforces the brand boundary.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-content.png" alt="An approved content rule beside a pending one, and a deny policy">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>An <code>approved</code> rule sits beside a <code>pending</code> one. Only <strong>approved</strong> content is usable — pending counts for nothing, and seeing both makes that concrete.</li>
+        <li>The AI Flotation policy for <code>business_training</code> is <strong>deny</strong>. A deny always outranks an allow, however many other rules permit it.</li>
+        <li>The approved-landing-pages list shows <strong>2 of 27</strong>: the server caps the array at 25 and returns the true total separately, so the screen says the list was cut rather than implying there are only two.</li>
+        <li>Claim and CTA <em>counts</em> are shown — the approved copy itself never leaves the server.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Experiments — did withholding content change anything? <span class="tag component">component</span></h3>
+      <p>The number to read is the lift, and the interval is the finding.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-experiments.png" alt="An unknown lift stated as unknown, and a malformed policy needing a human">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li><strong>"No lift is reported. control arm has 12 subjects, below the floor of 30"</strong> — and "18 short". The <code>Measured</code> union makes printing a number here structurally impossible when the arms are too small. There is no figure to misread.</li>
+        <li>The second brand is <code>settings_invalid</code>: "A holdout policy exists and is malformed. <strong>This one needs a human</strong>." That is one of four possible absences, and the only one requiring a person — kept distinct from the three that do not.</li>
+        <li>The select reads "30 days" while the caption says the server applied <strong>90</strong>. The screen reports what the server did, not what was asked for.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="screenshot">
+    <div class="head">
+      <h3>Handoffs — the queue your staff will live in <span class="tag component">component</span></h3>
+      <p>A handoff is the system saying a human should take this one.</p>
+    </div>
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-handoffs.png" alt="The handoff queue with a blocked assignment and a redacted reason">
+    <div class="look">
+      <strong>Look at:</strong>
+      <ul>
+        <li>The first row has <strong>no ticket</strong> and says why: <code>capacity_full</code>. A blocked assignment is stated, never silently dropped.</li>
+        <li>The second row's reason reads <strong>redacted</strong> — the column held an address and the API masked it, with a separate flag saying which happened.</li>
+        <li>The caption says the ordering is <em>not</em> strictly highest-value-first and that paging is unstable. Both are true of the SQL, and a column labelled "highest value first" would be false exactly where it matters.</li>
+        <li><code>priority</code> has its own column and is <em>not</em> what the list sorts by.</li>
       </ul>
     </div>
   </div>
@@ -158,28 +241,15 @@
       <h3>Performance — a null is never a zero <span class="tag component">component</span></h3>
       <p>The single most important distinction on the whole surface.</p>
     </div>
-    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-performance.png"
-         alt="Acceptance rate 0.0% of 12 directly above expiry rate as an em dash with its reason">
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-performance.png" alt="Acceptance rate 0.0% of 12 directly above expiry rate as an em dash with its reason">
     <div class="look">
       <strong>Look at:</strong>
       <ul>
-        <li><strong>Acceptance rate <code>0.0%</code> "0 of 12"</strong> sits directly above
-            <strong>expiry rate <code>—</code></strong> "no handoff was created in this
-            window". A real zero means every handoff was refused, which is a crisis. An
-            absence means none existed, which is a quiet week. A screen printing 0% for both
-            would say the opposite of the truth.</li>
-        <li>Every absence carries its <em>own</em> reason — "nothing was accepted, so no
-            meeting could follow", "nothing reached qualified or converted", "no human has
-            ruled on anything yet". The API's bare <code>no_denominator</code> is not
-            actionable; these are.</li>
-        <li>Medians distinguish "no samples yet" from "only 2 samples — a median needs 3".
-            The API's single reason cannot tell those apart; the sample count can.</li>
-        <li>The freshness badge is <code>stale</code> with the API's own sentence. This is the
-            only journey read that carries a freshness verdict, so it is the only place a
-            badge is a fact rather than a guess.</li>
-        <li>The bottom table shows a running programme with real percentages and
-            <strong>AI Flotation Consulting as "Not running yet"</strong> — every figure
-            absent rather than zero, "because nobody has arrived to count".</li>
+        <li><strong>Acceptance rate <code>0.0%</code> "0 of 12"</strong> sits directly above <strong>expiry rate <code>—</code></strong> "no handoff was created in this window". A real zero means every handoff was refused, which is a crisis. An absence means none existed, which is a quiet week. A screen printing 0% for both would say the opposite of the truth.</li>
+        <li>Every absence carries its <em>own</em> reason — "nothing was accepted, so no meeting could follow", "nothing reached qualified or converted". The API's bare <code>no_denominator</code> is not actionable; these are.</li>
+        <li>Medians distinguish "no samples yet" from "only 2 samples — a median needs 3".</li>
+        <li>The freshness badge is <code>stale</code> with the API's own sentence. This is the only journey read carrying a freshness verdict, so it is the only place a badge is a fact rather than a guess.</li>
+        <li>The bottom table shows <strong>AI Flotation Consulting as "Not running yet"</strong> — every figure absent rather than zero, "because nobody has arrived to count".</li>
       </ul>
     </div>
   </div>
@@ -189,20 +259,13 @@
       <h3>Controls — the only write surface <span class="tag component">component</span></h3>
       <p>Everything else on this workspace reads.</p>
     </div>
-    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-controls.png"
-         alt="The controls tab listing one active pause">
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-controls.png" alt="The controls tab listing one active pause">
     <div class="look">
       <strong>Look at:</strong>
       <ul>
-        <li>An active pause is listed with its scope, its reason and who set it. Rows are
-            cleared, never deleted, so the history of who stopped what survives.</li>
-        <li>A pause must name a brand, a programme, a channel or a subject. An all-wildcard
-            pause is refused twice — by the schema and again in the service layer — because
-            it would be a second global kill switch, and this system deliberately has
-            exactly one.</li>
-        <li><code>ali_outreach</code> can be <em>paused</em> here and cannot be
-            <em>started</em> here. It is review-only by construction and has no rollout
-            route.</li>
+        <li>An active pause is listed with its scope, its reason and who set it. Rows are cleared, never deleted, so the history of who stopped what survives.</li>
+        <li>A pause must name a brand, a programme, a channel or a subject. An all-wildcard pause is refused twice — by the schema and again in the service layer — because it would be a second global kill switch, and this system deliberately has exactly one.</li>
+        <li><code>ali_outreach</code> can be <em>paused</em> here and cannot be <em>started</em> here. It is review-only by construction and has no rollout route.</li>
       </ul>
     </div>
   </div>

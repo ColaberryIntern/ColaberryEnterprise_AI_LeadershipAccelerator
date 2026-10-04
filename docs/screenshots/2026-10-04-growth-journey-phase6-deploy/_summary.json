@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-04T18:34:31.988Z",
+  "generated_at": "2026-10-04T19:48:55.487Z",
   "max_safe_width": 1800,
   "safe_viewport": {
     "width": 1440,
@@ -22,6 +22,54 @@
       "downscaled": false,
       "kind": "component capture (fixture data, no admin session)",
       "what": "The unseeded state: it names the seed script"
+    },
+    {
+      "name": "harness-overview",
+      "file": "harness-overview.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "Readiness with a three-state verdict - true, false, and \"cannot be known from here\""
+    },
+    {
+      "name": "harness-classification",
+      "file": "harness-classification.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "How a person was read, with a locked override and a redacted decider"
+    },
+    {
+      "name": "harness-decisions",
+      "file": "harness-decisions.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "What the system WOULD do, including a held-out subject that is not a failure"
+    },
+    {
+      "name": "harness-shadow",
+      "file": "harness-shadow.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "Did the nightly job run - a success beside a failure whose only handle is a trace id"
+    },
+    {
+      "name": "harness-content",
+      "file": "harness-content.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "What may be said: an approved rule beside a pending one, and a deny that outranks"
+    },
+    {
+      "name": "harness-experiments",
+      "file": "harness-experiments.png",
+      "width": 1440,
+      "downscaled": false,
+      "kind": "component capture (fixture data, no admin session)",
+      "what": "An UNKNOWN lift rendered as unknown, and the one absence that needs a human"
     },
     {
       "name": "harness-handoffs",
@@ -50,7 +98,7 @@
     {
       "name": "production",
       "status": "skipped",
-      "why": "admin token expired 43h ago; a fresh one is needed"
+      "why": "CAPTURE_HOST unset"
     }
   ]
 }
