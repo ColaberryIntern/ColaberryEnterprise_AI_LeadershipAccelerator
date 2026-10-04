@@ -22,6 +22,7 @@ jest.mock('../../services/zoomService', () => ({
   extractZoomMeetingId: jest.fn(),
   streamZoomFile: jest.fn(),
 }));
+jest.mock('../../services/presentation/presentationRecordingCorrelation', () => ({ correlateRecording: jest.fn() }));
 jest.mock('../../config/upload', () => ({ ROOM_RECORDING_DIR: '/fake/room-recordings', MAX_ROOM_RECORDING_SIZE: 4 * 1024 * 1024 * 1024 }));
 jest.mock('../../config/database', () => ({ sequelize: { transaction: jest.fn() } }));
 
@@ -34,6 +35,7 @@ import { ensureRoomForSession } from '../../services/communityRooms/roomService'
 import { emitRoomEvent } from '../../services/communityRooms/roomOutboxService';
 import { findRecordingForSession as findDriveMatch, streamDriveFile } from '../../services/driveService';
 import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, findRecordingInstancesByMeetingId, findClassRecordingInstances, extractZoomMeetingId, streamZoomFile } from '../../services/zoomService';
+import { correlateRecording } from '../../services/presentation/presentationRecordingCorrelation';
 import { sequelize } from '../../config/database';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom, findAlwaysOpenRoomForZoomMeeting } from '../../services/sessionRecordingService';
 
@@ -53,6 +55,7 @@ const findInstancesByMeetingIdMock = findRecordingInstancesByMeetingId as jest.M
 const extractZoomMeetingIdMock = extractZoomMeetingId as jest.Mock;
 const streamZoomMock = streamZoomFile as jest.Mock;
 const transactionMock = sequelize.transaction as jest.Mock;
+const correlateMock = correlateRecording as jest.Mock;
 
 const room = { id: 'room-1' };
 const booking = { id: 'booking-1', room_id: 'room-1' };
@@ -399,6 +402,65 @@ describe('ingestRecordingForBooking — general Room bookings (the "+ Book a ses
     expect(result).toEqual({ status: 'ingested', resourceId: 'booking-resource-2' });
     expect(findInstancesByMeetingIdMock).not.toHaveBeenCalled();
     expect(streamZoomMock).toHaveBeenCalledWith(preResolvedMatch);
+  });
+
+  it('tells the Presentation Studio whose attempt the recording belongs to', async () => {
+    // Storing the file answers "a recording happened". It does not say WHOSE demo
+    // it is, and one booking can carry the whole cohort.
+    findInstancesByMeetingIdMock.mockResolvedValue([
+      { uuid: 'occ-1', startedAt: new Date('2026-11-20T19:10:00Z'), endedAt: new Date('2026-11-20T19:15:00Z'),
+        match: { downloadUrl: 'u', name: 'a.mp4', mimeType: 'video/mp4', sizeBytes: 1, providerFileId: 'file-1', recordingType: 'shared_screen_with_speaker_view' } },
+    ]);
+    findOneResource.mockResolvedValue(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'res-1' });
+    correlateMock.mockResolvedValue({ kind: 'matched', attemptId: 'at1', recorded: true });
+
+    await ingestRecordingForBooking(zoomBooking);
+
+    expect(correlateMock).toHaveBeenCalledTimes(1);
+    expect(correlateMock.mock.calls[0][0]).toMatchObject({
+      meetingId: '987654321',
+      occurrenceUuid: 'occ-1',
+      providerFileId: 'file-1',
+      provenance: 'cron_sweep',
+    });
+  });
+
+  it('marks a webhook-sourced recording as such, so provenance is not guessed later', async () => {
+    findOneResource.mockResolvedValue(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'res-2' });
+    correlateMock.mockResolvedValue({ kind: 'unrelated' });
+
+    await ingestRecordingForBooking(
+      zoomBooking,
+      { downloadUrl: 'u', name: 'a.mp4', mimeType: 'video/mp4', sizeBytes: 1 } as any,
+      'OCC-FROM-WEBHOOK',
+    );
+
+    expect(correlateMock.mock.calls[0][0]).toMatchObject({
+      occurrenceUuid: 'OCC-FROM-WEBHOOK',
+      provenance: 'webhook',
+    });
+  });
+
+  it('a correlation failure NEVER loses a recording that is already on disk', async () => {
+    // The file is downloaded and stored before correlation runs. Letting a
+    // correlation error propagate would turn a stored recording into a failed
+    // ingest that the cron then retries, downloading it all over again.
+    findInstancesByMeetingIdMock.mockResolvedValue([
+      { uuid: 'occ-1', match: { downloadUrl: 'u', name: 'a.mp4', mimeType: 'video/mp4', sizeBytes: 1 } },
+    ]);
+    findOneResource.mockResolvedValue(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'res-3' });
+    correlateMock.mockRejectedValue(new Error('correlation exploded'));
+
+    const result = await ingestRecordingForBooking(zoomBooking);
+
+    expect(result).toEqual({ status: 'ingested', resourceId: 'res-3' });
+    expect(createResource).toHaveBeenCalledTimes(1);
   });
 
   it('returns not_found cleanly when no recording matches (recording is still a manual toggle a host may not have used)', async () => {

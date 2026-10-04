@@ -450,8 +450,8 @@ export async function ingestRecordingForBooking(
   //
   // A webhook-supplied match is already one specific occurrence, so it is used as
   // given rather than re-fetched.
-  const instances = preResolvedMatch
-    ? [{ uuid: preResolvedUuid || '', match: preResolvedMatch }]
+  const instances: Array<{ uuid: string; match: ZoomRecordingMatch; startedAt?: Date | null; endedAt?: Date | null }> = preResolvedMatch
+    ? [{ uuid: preResolvedUuid || '', match: preResolvedMatch, startedAt: null, endedAt: null }]
     : await findRecordingInstancesByMeetingId(
       booking.google_event_id,
       dateHint,
@@ -520,6 +520,34 @@ export async function ingestRecordingForBooking(
     if (result.resourceId) {
       ingestedAny = true;
       if (!firstResourceId) firstResourceId = result.resourceId;
+    }
+
+    // WHOSE DEMO IS THIS? Storing the file answers "a recording happened"; it does
+    // not say which student's attempt it belongs to, and a booking can carry the
+    // whole cohort. Correlation decides that, or sends it to review.
+    //
+    // Best-effort and lazily imported, like the composition check above: a
+    // correlation failure must never lose a recording that is already safely on
+    // disk. The worst case is a stored file with no attempt, which the review
+    // queue exists to catch.
+    try {
+      const { correlateRecording } = await import('./presentation/presentationRecordingCorrelation');
+      await correlateRecording({
+        meetingId: String(booking.google_event_id),
+        occurrenceUuid: inst.uuid || '',
+        providerFileId: inst.match.providerFileId ?? null,
+        startedAt: inst.startedAt ?? null,
+        endedAt: inst.endedAt ?? null,
+        recordingType: inst.match.recordingType ?? null,
+        // A webhook supplied the match directly; anything else came from the sweep.
+        provenance: preResolvedMatch ? 'webhook' : 'cron_sweep',
+      });
+    } catch (err: any) {
+      log('warn', 'recording_correlation_failed', {
+        booking_id: booking.id,
+        zoom_uuid: inst.uuid || null,
+        message: String(err?.message || err),
+      });
     }
   }
 
