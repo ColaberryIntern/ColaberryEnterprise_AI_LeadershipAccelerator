@@ -71,6 +71,13 @@ services:
       SYNTHFLOW_INTEREST_AGENT_ID: ${SYNTHFLOW_INTEREST_AGENT_ID:-}
       SYNTHFLOW_CALLBACK_AGENT_ID: ${SYNTHFLOW_CALLBACK_AGENT_ID:-}
       ENABLE_VOICE_CALLS: ${ENABLE_VOICE_CALLS:-false}
+      # Gov pursuit step 6 — on a bid-pursuit approval, auto-create the two-track gov delivery
+      # project (govDeliveryProject.ensureGovTwoTrackProject). Coordinator-approved activation.
+      # A LITERAL "true" (not ${...:-false}) on purpose: it is unconditionally on in prod, and the
+      # config change guarantees the backend recreates so the flag is actually read (a bare host-.env
+      # edit may not recreate). Flip to "false" to deactivate; the code is fully inert when unset.
+      # Creating the project NEVER authorizes a build — that stays the separate buildAuthorization gate.
+      ENABLE_GOV_INGESTION: "true"
       # Service-to-service token training.colaberry.com uses for /api/v1/* calls.
       ENTERPRISE_CRM_TOKEN: ${ENTERPRISE_CRM_TOKEN:-}
       # AI News Flash intelligence pipeline — the daily generator behind the
