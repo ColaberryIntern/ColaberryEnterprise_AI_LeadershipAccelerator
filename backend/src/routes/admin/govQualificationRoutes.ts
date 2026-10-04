@@ -20,6 +20,9 @@ import { authorizeBuild, BuildNotAuthorizedError } from '../../services/factory/
 import { linkGovOpportunity, AliasProjectNotFoundError, AliasProjectNotGovernmentError, AliasConflictError } from '../../services/factory/opportunities/govOpportunityAlias';
 import { resolveGovOpportunityDetail, isLiveOpDetailConfigured, describeSourceState } from '../../services/factory/opportunities/opDetailClient';
 import { fetchGovOpportunityCandidatesV2 } from '../../services/factory/opportunities/opListClient';
+// Gov step 6 — the two-track delivery project, created on approval behind FLAGS.govIngestion (ships dark).
+import { FLAGS } from '../../config/featureFlags';
+import { ensureGovTwoTrackProject } from '../../services/factory/govDeliveryProject';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -278,6 +281,29 @@ const approveBody = z.object({
   reassessmentConditions: z.string().max(2000).optional(),
 });
 
+/**
+ * STEP 6 (behind FLAGS.govIngestion — ships DARK): after a pursuit is approved, create-or-reuse the two-track gov
+ * delivery project. BEST-EFFORT by design — the pursuit is already approved and forked, so a project-creation
+ * failure must NOT fail the request; it is logged and returned as a non-fatal warning so it can be retried
+ * (ensureGovTwoTrackProject is idempotent). Never runs when the flag is off. Never confers build authorization.
+ */
+async function createTwoTrackProjectAfterApproval(q: any, canonicalOpportunityId: string, approverIdentityId: string): Promise<string | undefined> {
+  if (!FLAGS.govIngestion) return undefined;
+  try {
+    await ensureGovTwoTrackProject({
+      qualificationId: q.id,
+      canonicalOpportunityId,
+      established: (q.requirements_json && q.requirements_json.established) || [],
+      provenance: (q.requirements_json && q.requirements_json.provenance) || null,
+      approverIdentityId,
+    });
+    return undefined;
+  } catch (projErr: any) {
+    logFail('gov_two_track_project_create_failed', projErr, { canonicalOpportunityId });
+    return 'The pursuit was approved, but creating its delivery project failed; it will be retried.';
+  }
+}
+
 /** POST /api/admin/factory/qualification/:canonicalOpportunityId/approve — the server-side, source-bound approval.
  *  The approver is the request identity (enforced != reviewer in the service). */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/approve', requireSection('program'), async (req: Request, res: Response) => {
@@ -295,7 +321,8 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/approve', 
         gwsKey: canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
         decision: b.data.decision, approverIdentityId: actorIdentity(req), rationale: b.data.rationale ?? null,
       });
-      res.json({ qualification: q });
+      const projectWarning = await createTwoTrackProjectAfterApproval(q, canonicalOpportunityId, actorIdentity(req));
+      res.json({ qualification: q, ...(projectWarning ? { projectWarning } : {}) });
     } catch (err: any) {
       if (mapQualificationError(res, err)) return;
       logFail('gov_qualification_decoupled_approve_failed', err, { canonicalOpportunityId });
@@ -314,7 +341,8 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/approve', 
       decision: b.data.decision, approverIdentityId: actorIdentity(req),
       rationale: b.data.rationale ?? null, effortCap: b.data.effortCap ?? null, reassessmentConditions: b.data.reassessmentConditions ?? null,
     });
-    res.json({ qualification: q });
+    const projectWarning = await createTwoTrackProjectAfterApproval(q, canonicalOpportunityId, actorIdentity(req));
+    res.json({ qualification: q, ...(projectWarning ? { projectWarning } : {}) });
   } catch (err: any) {
     if (mapQualificationError(res, err)) return;
     logFail('gov_qualification_approve_failed', err, { canonicalOpportunityId });

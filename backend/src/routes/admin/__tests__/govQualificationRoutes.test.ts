@@ -41,6 +41,9 @@ jest.mock('../../../services/factory/opportunities/govOpportunityAlias', () => {
 });
 const extractProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalExtractor', () => ({ extractProposal: (...a: any[]) => extractProposal(...a) }));
+// Step 6 — the two-track project creator, mocked so the flag-on tests don't touch the DB.
+const ensureGovTwoTrackProject = jest.fn();
+jest.mock('../../../services/factory/govDeliveryProject', () => ({ ensureGovTwoTrackProject: (...a: any[]) => ensureGovTwoTrackProject(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -53,6 +56,7 @@ import { DocumentNotListedError } from '../../../services/factory/govQualificati
 import { BuildNotAuthorizedError } from '../../../services/factory/buildAuthorization';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
 import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL } from '../../../services/factory/opportunities/govOpportunityFixtures';
+import { FLAGS } from '../../../config/featureFlags';
 
 const app = express();
 app.use(express.json());
@@ -479,5 +483,44 @@ describe('POST link + authorize-build', () => {
       .send({ deliveryProjectId: PID, scope: 's', resourceLimit: 'x' });
     expect(res.status).toBe(400);
     expect(res.body.reason).toBe('missing_resource_limit');
+  });
+});
+
+describe('step 6 — two-track project creation on approval (behind FLAGS.govIngestion, ships dark)', () => {
+  const GWS = 'gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec';
+  const approvedQ = { id: 'q-approved', requirements_json: { established: [{ id: 'REQ-1', text: 't' }], provenance: { title: 'RFP IVR' } } };
+  const approve = () => request(app)
+    .post(`/api/admin/factory/qualification/${encodeURIComponent(GWS)}/approve`)
+    .send({ biddingEntity: 'colaberry', expectedVersion: 2, decision: 'approved_bid_pursuit' });
+  afterEach(() => { (FLAGS as any).govIngestion = false; });
+
+  it('flag OFF (default): approval does NOT create a project', async () => {
+    approveDecoupledQualification.mockResolvedValue(approvedQ);
+    const r = await approve();
+    expect(r.status).toBe(200);
+    expect(ensureGovTwoTrackProject).not.toHaveBeenCalled();
+    expect(r.body.projectWarning).toBeUndefined();
+  });
+
+  it('flag ON: approval creates the two-track project from the established requirements', async () => {
+    (FLAGS as any).govIngestion = true;
+    approveDecoupledQualification.mockResolvedValue(approvedQ);
+    ensureGovTwoTrackProject.mockResolvedValue({ deliveryProjectId: 'dp-1', created: true, tracks: 2, requirements: 1 });
+    const r = await approve();
+    expect(r.status).toBe(200);
+    expect(ensureGovTwoTrackProject).toHaveBeenCalledTimes(1);
+    expect(ensureGovTwoTrackProject.mock.calls[0][0]).toMatchObject({ qualificationId: 'q-approved', canonicalOpportunityId: GWS, established: [{ id: 'REQ-1', text: 't' }] });
+    expect(r.body.qualification).toMatchObject({ id: 'q-approved' });
+    expect(r.body.projectWarning).toBeUndefined();
+  });
+
+  it('flag ON but project creation fails: the approval STILL succeeds (best-effort) with a non-fatal warning', async () => {
+    (FLAGS as any).govIngestion = true;
+    approveDecoupledQualification.mockResolvedValue(approvedQ);
+    ensureGovTwoTrackProject.mockRejectedValue(new Error('boom'));
+    const r = await approve();
+    expect(r.status).toBe(200);
+    expect(r.body.qualification).toMatchObject({ id: 'q-approved' });
+    expect(r.body.projectWarning).toContain('will be retried');
   });
 });
