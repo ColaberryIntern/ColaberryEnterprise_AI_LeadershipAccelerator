@@ -115,6 +115,18 @@ beforeEach(() => {
   setRecordingResolver((o, a) => stub(o, a));
 });
 
+describe('the windows these tests depend on are pinned, not inferred', () => {
+  it('pins the documented TTL and segment grace', () => {
+    // A test that calibrates its own offsets from the constant it is checking cannot fail.
+    // The first version of the expiry tests below did exactly that: widening the grace from
+    // 10s to 10 minutes failed nothing at all, because every offset moved with it. These two
+    // literals are the fixed point. Changing either constant now fails here, deliberately —
+    // the grace is the window in which an expired paid link still serves bytes.
+    expect(GRANT_TTL_MS).toBe(120_000);
+    expect(GRANT_SEGMENT_GRACE_MS).toBe(10_000);
+  });
+});
+
 describe('mount order', () => {
   it('serves the bytes to a session-less <video> fetch when mounted ABOVE adminRoutes', async () => {
     const res = await getBinary(appWithOrder(true), signedPath());
@@ -161,7 +173,9 @@ describe('a rejected link is refused before the filesystem is touched', () => {
   });
 
   it('410s a link whose window has closed, past the segment grace', async () => {
-    const stale = signedPath(undefined, Date.now() - GRANT_TTL_MS - GRANT_SEGMENT_GRACE_MS - 5_000);
+    // Minted five minutes ago, so it expired ~3 minutes ago: a literal, not an offset
+    // derived from the grace this test exists to hold in place.
+    const stale = signedPath(undefined, Date.now() - 300_000);
     const res = await request(app()).get(stale);
     expect(res.status).toBe(410);
     expect(resolverCalls).toHaveLength(0);
@@ -285,6 +299,95 @@ describe('a verified link', () => {
   it('416s a malformed Range header', async () => {
     const res = await request(app()).get(signedPath()).set('Range', 'bytes=abc');
     expect(res.status).toBe(416);
+  });
+});
+
+describe('the preview deadline is enforced HERE, not only when the grant is minted', () => {
+  const app = () => appWithOrder(true);
+  const PREVIEW_SECONDS = 900;
+
+  /** A preview-bounded token, minted 5s before its deadline so its expiry IS the deadline. */
+  function previewToken(deadlineOffsetMs: number): string {
+    const contentStartedAtMs = Date.now() + deadlineOffsetMs - PREVIEW_SECONDS * 1000;
+    const deadline = contentStartedAtMs + PREVIEW_SECONDS * 1000;
+    const signed = signPlayback(
+      `broadcast/${OCC}/${ASSET}`,
+      { grant: 'preview' },
+      { contentStartedAtMs, previewSeconds: PREVIEW_SECONDS },
+      '',
+      process.env,
+      deadline - 5_000,
+    );
+    if (!signed) throw new Error('fixture: the signer refused a preview still inside its window');
+    // The point of the bound: the token dies at the deadline, not 120s after it was minted.
+    expect(signed.expiresAt).toBe(deadline);
+    return signed.url;
+  }
+
+  it('mints nothing at all once the window is already spent', () => {
+    const spent = signPlayback(
+      `broadcast/${OCC}/${ASSET}`,
+      { grant: 'preview' },
+      { contentStartedAtMs: Date.now() - (PREVIEW_SECONDS + 1) * 1000, previewSeconds: PREVIEW_SECONDS },
+      '',
+    );
+    expect(spent).toBeNull();
+  });
+
+  it('serves a RANGE request while the preview window is still open', async () => {
+    const res = await getBinary(app(), previewToken(60_000), 'bytes=0-99');
+    expect(res.status).toBe(206);
+    expect(res.headers['content-range']).toBe(`bytes 0-99/${SIZE}`);
+  });
+
+  it('410s a RANGE request once the deadline has passed — seeking does not buy more preview', async () => {
+    // This is the criterion in full: a paid-content range request after the deadline is
+    // refused by the server. A hidden button is not enforcement, and neither is a player
+    // that stops asking.
+    //
+    // 20s past the deadline is a literal, deliberately more than the 10s grace pinned above
+    // and deliberately NOT computed from it.
+    const res = await request(app()).get(previewToken(-20_000)).set('Range', 'bytes=0-99');
+    expect(res.status).toBe(410);
+    expect(resolverCalls).toHaveLength(0);
+  });
+
+  it('410s an unranged request on the same spent token', async () => {
+    const res = await request(app()).get(previewToken(-20_000));
+    expect(res.status).toBe(410);
+  });
+});
+
+describe('every asset goes through the same gate, not just the video', () => {
+  const app = () => appWithOrder(true);
+  const vttPath = path.join(tmpRoot, 'captions.vtt');
+
+  beforeAll(() => {
+    // A real cue, assembled from lines rather than escapes. The bytes do not matter to the
+    // route; what matters is that a .vtt is gated identically to an .mp4.
+    fs.writeFileSync(vttPath, ['WEBVTT', '', '00:00.000 --> 00:02.000', 'hello', ''].join('\n'));
+  });
+
+  it('serves a captions track inline, signed, with its own content type', async () => {
+    stub = async () => ({ absolutePath: vttPath, contentType: 'text/vtt' });
+    const res = await request(app()).get(signedPath(`broadcast/${OCC}/captions.vtt`));
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('text/vtt');
+    expect(res.headers['content-disposition']).toBe('inline');
+    expect(res.headers['cache-control']).toBe('private, max-age=60');
+  });
+
+  it('refuses an UNSIGNED captions request exactly as it refuses an unsigned video', async () => {
+    stub = async () => ({ absolutePath: vttPath, contentType: 'text/vtt' });
+    const res = await request(app()).get(`/bm/broadcast/${OCC}/captions.vtt`);
+    expect(res.status).toBe(403);
+    expect(resolverCalls).toHaveLength(0);
+  });
+
+  it('refuses a video token reused for the captions track', async () => {
+    const minted = new URL(`http://x${signedPath()}`);
+    const res = await request(app()).get(`/bm/broadcast/${OCC}/captions.vtt${minted.search}`);
+    expect(res.status).toBe(403);
   });
 });
 
