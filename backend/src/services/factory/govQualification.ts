@@ -39,10 +39,18 @@ function contentHash(salt: string, obj: unknown): string {
 export interface RequirementEval { id: string; dueStage: string; applicability: string; blocking: boolean; reason: string | null; }
 export interface RequirementsEvaluation {
   evals: RequirementEval[];
+  /** The FULL submission bar: every blocking reason (judgment gaps AND un-evidenced submission prerequisites). */
   blocking: RequirementEval[];
+  /** Disqualifiers that block a PURSUIT decision: unknown applicability + un-evidenced "not applicable". */
+  pursuitBlocking: RequirementEval[];
+  /** Applicable submission requirements still needing evidence — block SUBMISSION, not the pursuit decision. */
+  openSubmissionRequirements: RequirementEval[];
   deliveryObligations: RequirementEval[];
   byDueStage: Record<string, RequirementEval[]>;
+  /** Submission-ready: nothing blocking at all (the bar the later bid-submission gate uses). */
   canApproveBid: boolean;
+  /** Pursuit/research-ready: no disqualifier (un-evidenced submission prerequisites are expected at this stage). */
+  canApprovePursuit: boolean;
 }
 
 /**
@@ -73,7 +81,16 @@ export function evaluateRequirements(reqs: any[] | null | undefined): Requiremen
   for (const e of evals) (byDueStage[e.dueStage] ?? byDueStage.unknown).push(e);
   const deliveryObligations = evals.filter((e) => (e.dueStage === 'delivery' || e.dueStage === 'award') && !e.blocking);
   const blocking = evals.filter((e) => e.blocking);
-  return { evals, blocking, deliveryObligations, byDueStage, canApproveBid: blocking.length === 0 };
+  // A PURSUIT (research) decision is blocked only by true disqualifiers — a requirement of unknown applicability or
+  // an un-evidenced "not applicable". An applicable submission requirement that merely lacks evidence yet is NOT a
+  // disqualifier: evidence is gathered during the pursuit/build, and the FULL bar (canApproveBid) gates submission.
+  const pursuitBlocking = blocking.filter((e) => e.reason !== 'submission_prerequisite_no_evidence');
+  const openSubmissionRequirements = blocking.filter((e) => e.reason === 'submission_prerequisite_no_evidence');
+  return {
+    evals, blocking, pursuitBlocking, openSubmissionRequirements, deliveryObligations, byDueStage,
+    canApproveBid: blocking.length === 0,
+    canApprovePursuit: pursuitBlocking.length === 0,
+  };
 }
 
 // ── Evidence-coverage evaluation (PURE) ──────────────────────────────────────
@@ -248,7 +265,7 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     provenance,
     zipAttestation,
     changedSource: false,
-    canApprove: evaluation.canApproveBid && coverage.sufficient,
+    canApprove: evaluation.canApprovePursuit && coverage.sufficient,
   };
 }
 
@@ -447,7 +464,9 @@ export async function approveGovQualification(input: ApproveQualificationInput):
   const coverage = evaluateEvidenceCoverage(detail, established, reviewedDocIdsFrom(current));
   if (!coverage.sufficient) throw new EvidenceInsufficientError(coverage.reasons);
   const evaluation = evaluateRequirements(established);
-  if (!evaluation.canApproveBid) throw new QualificationBlockedError(evaluation.blocking.map((b) => `${b.id}:${b.reason}`));
+  // PURSUIT (research) bar: block only on true disqualifiers (unknown applicability / un-evidenced dismissal).
+  // Un-evidenced submission prerequisites are carried as open items, not blockers — the full bar gates submission.
+  if (!evaluation.canApprovePursuit) throw new QualificationBlockedError(evaluation.pursuitBlocking.map((b) => `${b.id}:${b.reason}`));
 
   return forkNewVersion(current, {
     decision: input.decision, reviewer_identity_id: current.reviewer_identity_id,
@@ -499,7 +518,8 @@ export async function approveDecoupledQualification(input: ApproveDecoupledQuali
   const coverage = evaluateZipCoverage(established, reviewedDocuments);
   if (!coverage.sufficient) throw new EvidenceInsufficientError(coverage.reasons);
   const evaluation = evaluateRequirements(established);
-  if (!evaluation.canApproveBid) throw new QualificationBlockedError(evaluation.blocking.map((b) => `${b.id}:${b.reason}`));
+  // PURSUIT (research) bar: disqualifiers only. Un-evidenced submission prerequisites are open items, not blockers.
+  if (!evaluation.canApprovePursuit) throw new QualificationBlockedError(evaluation.pursuitBlocking.map((b) => `${b.id}:${b.reason}`));
   return forkNewVersion(current, {
     decision: input.decision, reviewer_identity_id: current.reviewer_identity_id,
     source_snapshot: null, source_snapshot_version: null, source_available: false, // decoupled: no OP snapshot invented

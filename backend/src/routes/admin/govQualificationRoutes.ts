@@ -134,7 +134,7 @@ router.get('/api/admin/factory/qualification/:canonicalOpportunityId', requireSe
     const sourcePresent = resolved.state === 'available' || resolved.state === 'degraded' || resolved.state === 'snapshot_unrecorded';
     const sourceApprovable = resolved.state === 'available';
     const changedSource = !!(recordJson && resolved.snapshotRecorded && recordJson.source_snapshot_version !== resolved.sourceSnapshotVersion);
-    const canApprove = sourceApprovable && !changedSource && !!evaluation && evaluation.canApproveBid && !!coverage && coverage.sufficient;
+    const canApprove = sourceApprovable && !changedSource && !!evaluation && evaluation.canApprovePursuit && !!coverage && coverage.sufficient;
 
     res.json({
       canonicalOpportunityId,

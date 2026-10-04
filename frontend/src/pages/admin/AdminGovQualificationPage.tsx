@@ -591,6 +591,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               {ws.coverage && !ws.coverage.sufficient && (
                 <div className="small text-warning-emphasis mt-2"><i className="ri-information-line me-1" aria-hidden="true" />Coverage not yet sufficient for approval: {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
               )}
+              {(ws.evaluation.openSubmissionRequirements?.length ?? 0) > 0 && (
+                <div className="small text-secondary mt-2"><i className="ri-information-line me-1" aria-hidden="true" />{ws.evaluation.openSubmissionRequirements!.length} submission requirement{ws.evaluation.openSubmissionRequirements!.length === 1 ? '' : 's'} still need evidence. These do <strong>not</strong> block approving the <strong>pursuit</strong> (research) — they must be evidenced before a bid is <strong>submitted</strong>.</div>
+              )}
             </SectionCard>
           )}
 
