@@ -134,3 +134,46 @@ _Phase 8 fills in: exact navigation path, screenshot of the impact list._
 - How projects that existed before this feature behave.
 - Known limitations.
 - Who to call and how to roll back, in the operator runbook.
+
+---
+
+## Test 7 — A deliberately manual project
+
+*Added with Phase 3. Use a project where the work is meant to stay human — a legal review, an
+admissions decision, anything you would not hand to software.*
+
+1. Open the allocation view.
+2. Read every row.
+
+**What you should see:** every task marked as done by a person, and **a reason on each one**. Not
+"assigned to a human" — a reason, in words, for why this particular work stays with a person.
+
+**What should worry you:** rows that say something like *"derived from the human performer
+assignment"*. That is the system restating its own structure back at you, not a decision anybody
+made. If you see it, the project has an allocation but nobody has said why.
+
+3. Find the automation percentage.
+
+**What you should see:** 0%, stated plainly, **with a note recording that you accepted it and
+why**. A deliberately manual project is 0% automated and that is the right answer, not a failure.
+
+**What should worry you:** a percentage above 0 on a project you believe is entirely manual, or
+a 0% with no accepted reason attached. The first means something was classified as automated that
+you did not agree to; the second means the shortfall was never put to anyone.
+
+---
+
+## Test 8 — Ask for the same blueprint twice
+
+*Added with Phase 3. This checks that re-running generation does not look like losing your work.*
+
+1. Note the project's requirement list.
+2. Ask for the blueprint to be regenerated, without changing anything.
+3. Compare the requirement list.
+
+**What you should see:** the same requirements, unchanged, with no warning about anything being
+lost or added.
+
+**What should worry you:** a report that requirements were lost and an equal number invented.
+Nothing was lost — it means the system stopped recognising its own earlier work, and a real loss
+would be invisible among the false ones.

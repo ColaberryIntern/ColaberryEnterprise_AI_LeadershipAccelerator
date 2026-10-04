@@ -146,6 +146,7 @@ function toSourceProvenance(
  */
 export function buildSourceHandoff(
   understanding: ReadonlyArray<UnderstandingItem>,
+  priorIds: ReadonlyMap<string, string> = new Map(),
 ): HandoffResult {
   const perDimensionCount = new Map<UnderstandingDimension, number>();
   const staged: HandoffItem[] = [];
@@ -154,6 +155,15 @@ export function buildSourceHandoff(
   for (const it of understanding) {
     const ordinal = (perDimensionCount.get(it.dimension) ?? 0) + 1;
     perDimensionCount.set(it.dimension, ordinal);
+
+    // REPLAY: reuse the id this locator already had, where the caller supplies one.
+    //
+    // The P3-T1 verifier found that minting a fresh uuid per call meant a REPLAYED handoff over
+    // an unchanged understanding would read to reportHandoffIntegrity as 30 lost and 30 invented
+    // - the integrity check firing on a correct replay. T6 passes the prior map so a second run
+    // is identity-stable; an absent entry still mints, so first runs are unchanged.
+    const locator = `${it.dimension}#${ordinal}`;
+    const priorId = priorIds.get(locator);
 
     const item = mintSourceItem({
       text: it.value,
@@ -165,9 +175,13 @@ export function buildSourceHandoff(
       interpretation: null,
     });
 
+    // mintSourceItem owns id generation, so the prior id is applied after minting rather than by
+    // passing it in: that keeps the "capture cannot claim confirmed" guard in one place.
+    const stable = priorId ? { ...item, id: priorId } : item;
+
     totalChars += it.value.length;
     staged.push({
-      item,
+      item: stable,
       dimension: it.dimension,
       classification: it.classification,
       sourceQuote: it.source_quote ?? null,
@@ -251,6 +265,21 @@ export function reportHandoffIntegrity(
  * Exists so a caller can assert "all thirty requirements arrived" against the dimension rather
  * than against a total, which is the assertion the incident actually needed.
  */
+/**
+ * The (locator -> id) map a later replay needs, read off a result.
+ *
+ * Exists so a caller never has to know how a locator is built: pass this back into
+ * buildSourceHandoff and the second run keeps the first run's identities.
+ */
+export function idsByLocator(result: HandoffResult): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const h of result.items) {
+    const loc = h.item.provenance?.locator;
+    if (loc) out.set(loc, h.item.id);
+  }
+  return out;
+}
+
 export function itemsForDimension(
   result: HandoffResult,
   dimension: UnderstandingDimension,
