@@ -52,6 +52,12 @@ const REMIX = 'https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css'
 const SURFACES = [
   ['switched-off', 'The dark state: the banner names the flag, not a symptom'],
   ['unseeded', 'The unseeded state: it names the seed script'],
+  ['overview', 'Readiness with a three-state verdict - true, false, and "cannot be known from here"'],
+  ['classification', 'How a person was read, with a locked override and a redacted decider'],
+  ['decisions', 'What the system WOULD do, including a held-out subject that is not a failure'],
+  ['shadow', 'Did the nightly job run - a success beside a failure whose only handle is a trace id'],
+  ['content', 'What may be said: an approved rule beside a pending one, and a deny that outranks'],
+  ['experiments', 'An UNKNOWN lift rendered as unknown, and the one absence that needs a human'],
   ['handoffs', 'The queue - a blocked assignment, a redacted reason, unstable paging stated'],
   ['performance', 'A null rate beside a REAL zero, each absence with its own reason'],
   ['controls', 'The only write surface, with an active pause listed'],
