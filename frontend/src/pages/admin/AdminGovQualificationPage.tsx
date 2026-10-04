@@ -10,6 +10,7 @@ import {
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
+import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -96,6 +97,61 @@ function RequirementStageList({ stage, rows }: { stage: string; rows: QualRequir
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * DeadlineCard — a prominent live countdown to the submission deadline, plus the key date.
+ * Honest about precision: the discovery feed carries a date-only close date (so the countdown is
+ * day-granular, and the exact cutoff time is flagged as pending the daily Bonfire sync); the canonical
+ * source may carry a real UTC datetime (so it can show hours and its parse confidence). Updates each minute.
+ */
+function DeadlineCard({ value, confidence, originalText, loading, decoupled }: {
+  value: string | null; confidence?: string | null; originalText?: string | null; loading?: boolean; decoupled?: boolean;
+}): React.ReactElement {
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const parsed = parseDeadline(value);
+  const c = parsed ? countdownTo(parsed.ms, nowMs) : null;
+  const tone = c ? deadlineTone(c) : 'secondary';
+  const absolute = parsed
+    ? (parsed.hasTime
+        ? new Date(parsed.ms).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+        : new Date(parsed.ms).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }))
+    : null;
+  return (
+    <SectionCard title="Submission deadline" icon="timer-flash-line">
+      {loading ? (
+        <div className="text-secondary small">Loading deadline…</div>
+      ) : !parsed || !c ? (
+        <div className="text-secondary small">
+          {originalText
+            ? <>Stated deadline: <span className="fw-semibold">“{originalText}”</span> — not parsed to an exact date/time, so no countdown yet.</>
+            : <>No submission deadline captured yet — it appears here once the solicitation details are available{decoupled ? ', and the exact cutoff time arrives with the daily Bonfire sync (not yet enabled)' : ''}.</>}
+        </div>
+      ) : (
+        <div className="d-flex flex-wrap align-items-center gap-3">
+          <div className={`h2 mb-0 fw-bold text-${tone}-emphasis`}>
+            <i className={`ri-${c.past ? 'alarm-warning-line' : 'timer-flash-line'} me-2`} aria-hidden="true" />{formatCountdown(c, parsed.hasTime)}
+          </div>
+          <div className="small">
+            <div>
+              <span className="text-secondary">Closes:</span> <span className="fw-semibold">{absolute}</span>
+              {confidence && <> <StatusBadge label={`confidence: ${confidence}`} tone={confidence === 'high' ? 'success' : 'warning'} /></>}
+            </div>
+            {originalText && <div className="text-secondary">As stated: “{originalText}”</div>}
+            <div className="text-secondary">
+              {parsed.hasTime
+                ? 'Verify the exact time zone on the portal before relying on the hour.'
+                : 'Date only (unverified) — the exact cutoff time arrives with the daily Bonfire sync.'}
+            </div>
+          </div>
+        </div>
+      )}
+    </SectionCard>
   );
 }
 
@@ -361,6 +417,14 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             <div className="col-6 col-lg-3"><StatCard label="Current decision" value={record ? record.decision.replace(/_/g, ' ') : 'not opened'} icon="file-list-3-line" tone="neutral" hint={record ? `v${record.version}` : undefined} /></div>
             <div className="col-6 col-lg-3"><StatCard label="Approval allowed" value={ws.canApprove ? 'yes' : 'no'} icon={ws.canApprove ? 'shield-check-line' : 'shield-cross-line'} tone={ws.canApprove ? 'success' : 'warning'} /></div>
           </div>
+
+          <DeadlineCard
+            value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? null) : (ws.source?.deadline.utc ?? null)}
+            confidence={isDecoupled ? null : (ws.source?.deadline.utcConfidence ?? null)}
+            originalText={isDecoupled ? null : (ws.source?.deadline.originalText ?? null)}
+            loading={isDecoupled && oppDetail === null}
+            decoupled={isDecoupled}
+          />
 
           {ws.changedSource && (
             <div className="alert alert-danger d-flex align-items-center justify-content-between gap-2" role="alert">

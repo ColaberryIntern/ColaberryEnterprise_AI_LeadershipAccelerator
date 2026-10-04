@@ -14,7 +14,7 @@ This is the end-to-end process for taking a government opportunity from discover
 | 2 | **Qualify** | Click **Qualify** on a row → the ZIP workspace opens for that opportunity. | ✅ live |
 | 3 | **Capture requirements** | **Open qualification** → upload the Bonfire ZIP → **Extract** → confirm the real ones → **Establish**. | ✅ live |
 | 4 | **Assess fit & risk** | Read **What they want vs what we offer** (matcher) and **Gaps / potential disqualifiers** (eligibility/blocking). Decide: *Needs evidence* / *No bid*. | ✅ live |
-| 5 | **Attest evidence & approve the pursuit** | Record the ZIP as evidence of record; when requirements are established, evidenced and cleared, **approve the bid pursuit** (approver ≠ reviewer). | ⏸️ building now (step 4 slice) |
+| 5 | **Attest evidence & approve the pursuit** | Record the ZIP as evidence of record; when requirements are established, evidenced and cleared, **approve the bid pursuit** (approver ≠ reviewer). | ✅ live |
 | 6 | **Spin up the two projects** | On approval, create the linked **Proposal** + **Build** projects (requirements flow into both tracks). | ⏸️ held (ingestion) |
 | 7 | **Authorize + run the build** | Authorize a bounded build, then run it to produce a working pilot/PoC **+ screenshots**. | ⏸️ held (builder activation) |
 | 8 | **Submit** | Submit the proposal with the build screenshots as proof. | 🔜 not built |
@@ -30,7 +30,7 @@ This is the end-to-end process for taking a government opportunity from discover
 3. Download the solicitation ZIP from Bonfire, then **Open qualification** → upload it in **Extract requirements** → **Extract** → tick the real requirements, set applicability/due stage → **Establish selected**. They appear under **Requirements by due stage**.
 4. Review **What they want vs what we offer** and **Gaps / potential disqualifiers**. The gaps panel is advisory — it surfaces eligibility gates (SAM registration, set-asides, clearances, certs, bonding…) and blocking items to **verify or resolve before bidding**; it is never a verified pass/fail. Record **Needs evidence** (keep working) or **No bid** (pass).
 
-### 5 — Attest evidence & approve the pursuit (building now)
+### 5 — Attest evidence & approve the pursuit (live)
 - Record the uploaded ZIP as the **evidence of record** (a server-side hash; the bytes are never stored).
 - Approval is **gated**: at least one applicable requirement established, the ZIP attested, no blocking requirement, and the **approver must not be the reviewer**. Unknown applicability or an empty requirement set never passes.
 
@@ -51,7 +51,7 @@ Once a ZIP has been uploaded and we've **decided to bid**, the opportunity moves
 - **Daily Bonfire sync** — a scheduled run keeps the opportunity in sync with Bonfire (amendments, Q&A, addenda, status). *This is the held "ingestion" capability — needs coordinator sign-off.*
 - **Change alerts** — if the solicitation, deadline, or documents change, the workspace flags it and prompts a re-review (the existing "source changed → renewed review" gate).
 - **Meetings** — surface pre-bid / Q&A meeting dates and deadlines from the solicitation.
-- **Countdown** — a live countdown to the submission deadline on the workspace, with all key dates. *The on-page countdown is buildable from captured data now; the live Bonfire-driven updates are part of the held sync.*
+- **Countdown** — ✅ a live **Submission deadline** countdown is on the workspace now (days to close, with the close date). It is honest about precision: the discovery feed is date-only, so the exact cutoff *time* and any live Bonfire-driven date changes arrive with the held sync.
 
 ---
 
