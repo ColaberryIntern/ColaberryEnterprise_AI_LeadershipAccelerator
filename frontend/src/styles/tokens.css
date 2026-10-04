@@ -142,4 +142,13 @@
   --heat-2: #9ccfab;
   --heat-3: #5fb37c;
   --heat-4: #2f8f54;
+
+  /* The four tracks, as Ali named them: orange training, red project, brown certification,
+   * purple community. `other` is deliberately grey — an unrecognised source must look like a
+   * question, not like one of the four. */
+  --track-training: #f97316;
+  --track-project: #dc2626;
+  --track-certification: #92400e;
+  --track-community: #7c3aed;
+  --track-other: #9ca3af;
 }

@@ -1,4 +1,26 @@
-import { InternRow, ActivityLevel, ActivityDay, PaceBand } from '../../../services/adminInternConsoleApi';
+import {
+  InternRow, ActivityLevel, ActivityDay, PaceBand, ActivityCategory,
+} from '../../../services/adminInternConsoleApi';
+
+/**
+ * The four tracks in render order, plus `other`.
+ *
+ * Defined here rather than beside the API types on purpose: a component importing a runtime constant
+ * from the API client gets `undefined` in every test that mocks the client, and throws on first
+ * render. `consoleFormat` is not mocked by any component test, so these survive.
+ *
+ * The order is fixed rather than alphabetical because it breaks ties in `dominantTrack`, and a tie
+ * that resolved differently between renders would change a day's colour for no reason.
+ */
+export const TRACK_ORDER: readonly ActivityCategory[] = ['training', 'project', 'certification', 'community', 'other'];
+
+export const TRACK_LABEL: Record<ActivityCategory, string> = {
+  training: 'Training',
+  project: 'Project work',
+  certification: 'Certification',
+  community: 'Community',
+  other: 'Other',
+};
 
 /**
  * The Intern Console's presentation rules, kept pure so they can be tested as facts rather than
@@ -298,10 +320,17 @@ export function heatColumnLabels(days: readonly ActivityDay[]): string[] {
  * The backend always sends 28, and this does not trust that: a short array would otherwise draw a
  * ragged grid where each row's columns mean different dates, which is worse than a visible blank.
  */
+/** A padding cell: a real `ActivityDay` with every track at zero, so no reader meets `undefined`. */
+const EMPTY_DAY = (): ActivityDay => ({
+  date: '',
+  events: 0,
+  by_category: { training: 0, project: 0, certification: 0, community: 0, other: 0 },
+});
+
 export function heatRow(row: InternRow): ActivityDay[] {
   const days = row.activity.days ?? [];
   if (days.length >= WINDOW_DAYS) return days.slice(0, WINDOW_DAYS);
-  return [...days, ...Array.from({ length: WINDOW_DAYS - days.length }, () => ({ date: '', events: 0 }))];
+  return [...days, ...Array.from({ length: WINDOW_DAYS - days.length }, EMPTY_DAY)];
 }
 
 /**
@@ -322,4 +351,36 @@ export function BUCKET_LABEL(bucket: string): string {
     unsorted: 'Unsorted',
   };
   return named[bucket] ?? bucket;
+}
+
+/* ── The four tracks ──────────────────────────────────────────────────────────── */
+
+/**
+ * Which track dominated a day, for a single-colour cell.
+ *
+ * Ties break by `TRACK_ORDER`, which is stable rather than alphabetical, so the same day never
+ * changes colour between renders. A day with nothing returns null and draws as an empty cell, not as
+ * the first track with a count of zero.
+ */
+export function dominantTrack(day: ActivityDay): ActivityCategory | null {
+  let best: ActivityCategory | null = null;
+  for (const track of TRACK_ORDER) {
+    const n = day.by_category?.[track] ?? 0;
+    if (n > 0 && (best === null || n > (day.by_category[best] ?? 0))) best = track;
+  }
+  return best;
+}
+
+/** The last seven days of a track, oldest first — the strip the Command Center draws. */
+export function trackStrip(row: InternRow, track: ActivityCategory, days = 7): Array<{ date: string; events: number }> {
+  const all = row.activity.days ?? [];
+  return all.slice(Math.max(0, all.length - days)).map((d) => ({
+    date: d.date,
+    events: d.by_category?.[track] ?? 0,
+  }));
+}
+
+/** Did this intern do anything in this track inside the window? */
+export function hasTrackActivity(row: InternRow, track: ActivityCategory): boolean {
+  return (row.activity.days ?? []).some((d) => (d.by_category?.[track] ?? 0) > 0);
 }

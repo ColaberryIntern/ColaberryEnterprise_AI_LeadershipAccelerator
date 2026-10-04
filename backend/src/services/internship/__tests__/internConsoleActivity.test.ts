@@ -24,7 +24,7 @@ jest.mock('../../adminOs/personTimelineService', () => ({
 }));
 
 import {
-  internActivitySignal, internActivitySignals, daysFromEvents,
+  internActivitySignal, internActivitySignals, daysFromEvents, signalFrom, categoryOf,
   bandFor, withGrace, WINDOW_DAYS, NEW_INTERN_GRACE_DAYS,
 } from '../internConsoleActivity';
 
@@ -381,5 +381,63 @@ describe('folding a feed into day rows', () => {
     const out = daysFromEvents([event('2026-09-28T09:00:00.000Z'), event('2026-09-29T09:00:00.000Z')]);
 
     expect(out.map((d) => d.date)).toEqual(['2026-09-28', '2026-09-29']);
+  });
+});
+
+describe('what they were doing, not just that they did something', () => {
+  const dayRow = (date: string, events: number, source: string) =>
+    ({ date, events, lastAt: `${date}T10:00:00.000Z`, lastSource: source });
+
+  it('maps each source to its track', () => {
+    expect(categoryOf('timeline_card_progress')).toBe('training');
+    expect(categoryOf('cert_sessions')).toBe('certification');
+    expect(categoryOf('student_tasks')).toBe('project');
+    expect(categoryOf('community_likes')).toBe('community');
+  });
+
+  it('calls an UNKNOWN source "other", never training', () => {
+    // A new source silently inflating training is a number nobody checks; a neutral band is a
+    // question somebody asks.
+    expect(categoryOf('some_new_table')).toBe('other');
+    expect(categoryOf(null)).toBe('other');
+    expect(categoryOf(undefined)).toBe('other');
+  });
+
+  it('splits a day across the tracks the intern touched', () => {
+    const out = signalFrom({
+      days: [
+        dayRow('2026-10-01', 4, 'timeline_card_progress'),
+        dayRow('2026-10-01', 2, 'cert_sessions'),
+        dayRow('2026-10-01', 1, 'student_tasks'),
+        dayRow('2026-10-01', 3, 'community_likes'),
+      ],
+      heartbeat: null, joinedAt: null, now: NOW,
+    });
+
+    const today = out.days.find((d) => d.date === '2026-10-01')!;
+    expect(today.events).toBe(10);
+    expect(today.by_category).toEqual({ training: 4, project: 1, certification: 2, community: 3, other: 0 });
+  });
+
+  it('gives every day all five keys, so a reader never meets undefined', () => {
+    const out = signalFrom({ days: [], heartbeat: null, joinedAt: null, now: NOW });
+
+    for (const day of out.days) {
+      expect(Object.keys(day.by_category).sort())
+        .toEqual(['certification', 'community', 'other', 'project', 'training']);
+      expect(day.events).toBe(0);
+    }
+  });
+
+  it('keeps the category total equal to the day total', () => {
+    // If these drift, a stacked bar stops meaning the number beside it.
+    const out = signalFrom({
+      days: [dayRow('2026-09-30', 5, 'xp_events'), dayRow('2026-09-30', 2, 'mystery_table')],
+      heartbeat: null, joinedAt: null, now: NOW,
+    });
+
+    const day = out.days.find((d) => d.date === '2026-09-30')!;
+    expect(Object.values(day.by_category).reduce((a, b) => a + b, 0)).toBe(day.events);
+    expect(day.by_category.other).toBe(2);
   });
 });

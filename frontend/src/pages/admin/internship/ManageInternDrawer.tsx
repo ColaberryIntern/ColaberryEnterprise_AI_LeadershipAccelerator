@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   InternRow, InternAction, ONE_WAY_ACTIONS, transitionIntern,
+  NudgeTemplate, nudgeIntern, NudgeResult,
 } from '../../../services/adminInternConsoleApi';
 
 /**
@@ -51,6 +52,29 @@ export const ManageInternDrawer: React.FC<{
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nudgeTemplate, setNudgeTemplate] = useState<NudgeTemplate>('quiet_check_in');
+  const [nudgeNote, setNudgeNote] = useState('');
+  // The preview the server returned. Sending is only possible AFTER one exists, so a manager has
+  // seen the subject and the recipient before anything leaves.
+  const [preview, setPreview] = useState<NudgeResult | null>(null);
+
+  const doNudge = async (send: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await nudgeIntern(row.application_id!, nudgeTemplate, {
+        note: nudgeNote.trim() || undefined,
+        send,
+      });
+      setPreview(send ? null : result);
+      if (send) { setNudgeNote(''); onChanged(); }
+      if (result.outcome === 'skipped') setError(`Not sent: ${result.reason}`);
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? 'Could not send this nudge.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // Only the reversible one of the pair is offered: an active intern sees Pause, a paused one sees
   // Resume. Offering both invites a transition the state machine will refuse anyway.
@@ -175,9 +199,44 @@ export const ManageInternDrawer: React.FC<{
           </div>
         ))}
 
-        <div className="aint-action">
-          <button type="button" className="aint-btn" disabled title="Nudge is not built yet">Nudge</button>
-          <span className="aint-sub">Not built yet.</span>
+        <div className="aint-action aint-nudge">
+          <label className="aint-field">
+            <span>Nudge</span>
+            <select
+              value={nudgeTemplate}
+              onChange={(e) => { setNudgeTemplate(e.target.value as NudgeTemplate); setPreview(null); }}
+              aria-label="Nudge template"
+            >
+              <option value="quiet_check_in">Checking in on your internship</option>
+              <option value="weeks_1_3_reminder">Weeks 1 to 3 unlock your project</option>
+              <option value="project_start">Ready to start your build project</option>
+            </select>
+          </label>
+          <label className="aint-field">
+            <span>One line from you <span className="aint-sub">(optional)</span></span>
+            <input
+              type="text"
+              value={nudgeNote}
+              maxLength={400}
+              onChange={(e) => { setNudgeNote(e.target.value); setPreview(null); }}
+              placeholder="Your week 2 lab looked close, want a hand?"
+            />
+          </label>
+          <div className="aint-confirm-btns">
+            <button type="button" className="aint-btn" disabled={busy} onClick={() => doNudge(false)}>
+              Preview
+            </button>
+            {/* Sending needs a preview first: the manager sees the subject and the address before
+                anything reaches a student. */}
+            <button type="button" className="aint-btn" disabled={busy || !preview} onClick={() => doNudge(true)}>
+              Send nudge
+            </button>
+          </div>
+          {preview?.outcome === 'dry_run' && (
+            <div className="aint-sub" role="status">
+              Will send “{preview.subject}” to {preview.to}
+            </div>
+          )}
         </div>
         <div className="aint-action">
           <button type="button" className="aint-btn" disabled title="Private notes need a table that does not exist">Note</button>
