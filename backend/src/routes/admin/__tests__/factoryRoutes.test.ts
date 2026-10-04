@@ -265,6 +265,45 @@ describe('GET /api/admin/factory/opportunities', () => {
   });
 });
 
+describe('GET /api/admin/factory/opportunities/:uuid — one row detail for the ZIP workspace (fail-closed)', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  const UUID = '11111111-1111-4111-a111-111111111111';
+  const feed = {
+    opportunities: [{ uuid: UUID, title: 'IVR', agency: 'Fort Worth', closeDate: '2026-10-22', fitScore: 75, estimatedValue: 500000, sourceUrl: 'https://bonfire.example/op', preliminarySummary: 'AI IVR solution.' }],
+    source: 'live', snapshotDate: null, snapshotReason: null,
+  };
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('200 returns the mapped discovery row for a known uuid (+ source passthrough)', async () => {
+    fetchBestFitOpportunities.mockResolvedValue(feed);
+    const res = await request(app).get(`/api/admin/factory/opportunities/${UUID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.opportunity.uuid).toBe(UUID);
+    expect(res.body.opportunity.sourceUrl).toBe('https://bonfire.example/op'); // the Source link the workspace shows
+    expect(res.body.source).toBe('live');
+  });
+
+  it('503 fail-closed when the gov container is not configured (never reaches the feed for scope)', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).get(`/api/admin/factory/opportunities/${UUID}`);
+    expect(res.status).toBe(503);
+    expect(fetchBestFitOpportunities).not.toHaveBeenCalled();
+  });
+
+  it('404 honest-null when the uuid is not in the live feed (aged out / degraded dark)', async () => {
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [], source: 'live', snapshotDate: null });
+    const res = await request(app).get(`/api/admin/factory/opportunities/${UUID}`);
+    expect(res.status).toBe(404);
+    expect(res.body.found).toBe(false);
+  });
+
+  it('400 on a non-uuid id (before any scope lookup)', async () => {
+    const res = await request(app).get('/api/admin/factory/opportunities/not-a-uuid');
+    expect(res.status).toBe(400);
+    expect(lookupGovContractsContainer).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/admin/factory/opportunities/:key/dismiss — team-scoped, idempotent, fail-closed', () => {
   const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
   beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
@@ -555,7 +594,7 @@ describe('route-auth — every route is section-gated (required CI lint)', () =>
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(16); // + opportunities/match (prev 15: 11 + services GET/POST/PATCH/retire)
+    expect(guards.length).toBeGreaterThanOrEqual(16); // + opportunities/match + opportunities/:uuid detail (prev 15: 11 + services GET/POST/PATCH/retire)
   });
 });
 

@@ -5,6 +5,7 @@ import {
   listGovOpportunities, dismissGovOpportunity, restoreGovOpportunity, matchServicesToOpportunity,
   type GovOpportunity, type GovOpportunityFeed, type ServiceMatch,
 } from '../../services/factoryApi';
+import { band, subtle, fmtValue, shortValue, daysLeft, closeLabel } from './govOppFormat';
 
 /**
  * AdminGovOpportunitiesPage — the government-contract discovery dashboard.
@@ -23,47 +24,9 @@ import {
  * Design: Bootstrap 5 + admin-shell + RemixIcon; colors via design tokens / Bootstrap utilities, no hardcoded hex.
  */
 
-type Band = { label: 'High' | 'Med' | 'Low'; tone: 'success' | 'warning' | 'danger' };
-const band = (score: number | null | undefined): Band => {
-  const s = typeof score === 'number' ? score : -1;
-  if (s >= 75) return { label: 'High', tone: 'success' };
-  if (s >= 60) return { label: 'Med', tone: 'warning' };
-  return { label: 'Low', tone: 'danger' };
-};
-const subtle = (tone: 'success' | 'warning' | 'danger' | 'secondary'): string => `bg-${tone}-subtle text-${tone}-emphasis`;
-
 /** "Decent options" threshold — Med band or better (matches band()'s 60 boundary). */
 const DECENT_FIT = 60;
 const GOOD_FIT = 75;
-
-const fmtValue = (v: number | null | undefined): string => {
-  if (v === null || v === undefined || Number.isNaN(v)) return '—';
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
-  return `$${v}`;
-};
-const shortValue = (v: number | null | undefined): string => {
-  if (v === null || v === undefined || Number.isNaN(v)) return '—';
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `$${Math.round(v / 1_000)}K`;
-  return `$${v}`;
-};
-
-/** Whole days from today (UTC date math) to a YYYY-MM-DD close date; null when unknown. */
-const daysLeft = (dateStr: string | null | undefined): number | null => {
-  if (!dateStr) return null;
-  const d = Date.parse(`${dateStr}T00:00:00Z`);
-  if (Number.isNaN(d)) return null;
-  const today = new Date();
-  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  return Math.round((d - todayUtc) / 86_400_000);
-};
-const closeLabel = (dateStr: string | null | undefined): string => {
-  if (!dateStr) return 'TBD';
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-};
 
 const isIT = (o: GovOpportunity): boolean => /it|software|cyber|technolog|system|digital|data/i.test(`${o.category ?? ''} ${o.title}`);
 const isConsulting = (o: GovOpportunity): boolean => /consult/i.test(`${o.category ?? ''} ${o.title}`);

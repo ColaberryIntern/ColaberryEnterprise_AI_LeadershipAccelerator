@@ -56,7 +56,11 @@ const clickButton = async (label: string) => {
 };
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); jest.clearAllMocks(); });
 // The workspace renders the advisory "what we offer" panel, which calls the matcher; default it to empty.
-beforeEach(() => { (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 0 }); });
+beforeEach(() => {
+  (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [], catalogSize: 0 });
+  // The decoupled workspace fetches the discovery detail by uuid; default to "not in the feed" so unrelated tests don't throw.
+  (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: null, source: 'snapshot', snapshotDate: null });
+});
 const flush = async () => { await act(async () => { await Promise.resolve(); }); await act(async () => { await Promise.resolve(); }); };
 
 describe('AdminGovQualificationPage — journey', () => {
@@ -333,7 +337,8 @@ describe('AdminGovQualificationPage — journey', () => {
     snapshotRecorded: false,
     source: null,
     evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
-    coverage: { sufficient: false, reasons: ['pursuit_approval_not_enabled_on_this_path'] },
+    coverage: { sufficient: false, reasons: ['no_requirements_established'] },
+    zipAttestation: null,
     qualification: null,
     changedSource: false,
     canApprove: false,
@@ -360,6 +365,7 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established } },
       evaluation: { evals: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+      coverage: { sufficient: false, reasons: ['no_zip_attested'] }, // established, but the ZIP isn't attested yet
     }));
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
@@ -368,6 +374,121 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Requirements by due stage');           // renders from evaluation on the decoupled path
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(text).toContain('Pursuit approval and evidence attestation come in a later step'); // honest deferred note, not an OP-source block
+    expect(text).toContain('solicitation ZIP has not been attested yet'); // honest coverage reason, not an OP-source block
+  });
+
+  it('Requirements by due stage caps a long list to a few and expands on "Show all"', async () => {
+    const mk = (n: number) => ({ id: `REQ-${String(n).padStart(3, '0')}`, dueStage: 'submission' as const, applicability: 'always' as const, blocking: true, reason: 'submission_prerequisite_no_evidence' });
+    const evals = Array.from({ length: 8 }, (_, i) => mk(i + 1));
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      evaluation: { evals, blocking: evals, deliveryObligations: [], byDueStage: { submission: evals, award: [], delivery: [], unknown: [] }, canApproveBid: false },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    let text = container.textContent ?? '';
+    expect(text).toContain('REQ-006');                 // first 6 shown
+    expect(text).not.toContain('REQ-008');             // 7th/8th hidden behind the toggle
+    expect(text).toContain('Show all 8 (2 more)');
+    const moreBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Show all 8')) as HTMLButtonElement;
+    expect(moreBtn).toBeTruthy();
+    await act(async () => { moreBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    text = container.textContent ?? '';
+    expect(text).toContain('REQ-008');                 // now visible after expand
+    expect(text).toContain('Show fewer');
+  });
+
+  // ── Discovery details card + Source link + Gaps panel (decoupled only) ──
+  it('decoupled workspace shows the Discovery details card (why-surfaced + overview + Source link)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: { uuid: '11111111-1111-4111-a111-111111111111', title: 'IVR', agency: 'Fort Worth', closeDate: '2026-10-22', fitScore: 75, priorityScore: 81, estimatedValue: 500000, valueBasis: null, sourceUrl: 'https://bonfire.example/op', preliminarySummary: 'AI IVR solution for Fort Worth.' }, source: 'live', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Discovery details');
+    expect(text).toContain('$500K');                                // est value (fmtValue)
+    expect(text).toContain('AI IVR solution for Fort Worth.');      // project overview
+    const srcLink = Array.from(container.querySelectorAll('a')).find((a) => a.getAttribute('href') === 'https://bonfire.example/op');
+    expect(srcLink).toBeTruthy();                                   // the Source link to Bonfire
+  });
+
+  it('decoupled workspace: a not-found detail shows the honest "no longer in the live discovery feed" note', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: null, source: 'snapshot', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('no longer in the live discovery feed');
+  });
+
+  it('Gaps panel: advisory banner + a flagged eligibility gap (SAM registration, no evidence, no matching capability)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'E1', text: 'Offeror must be registered in SAM.gov.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
+      evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Gaps / potential disqualifiers');
+    expect(text).toContain('Advisory only');                       // the unmissable advisory banner
+    expect(text).toContain('registered in SAM.gov');               // the flagged eligibility requirement
+    expect(text).toContain('no evidence attached');                // the honest basis
+  });
+
+  it('Gaps panel: honest no_requirements empty state when nothing is established', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs()); // qualification null -> established []
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No requirements established yet — establish the cited requirements above to surface potential disqualifiers');
+  });
+
+  it('canonical workspace renders NEITHER new card (Discovery details / Gaps panel are decoupled-only)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('Discovery details');
+    expect(text).not.toContain('Gaps / potential disqualifiers');
+    expect(factoryApi.getGovOpportunityDetail).not.toHaveBeenCalled(); // canonical path never fetches the discovery detail
+  });
+
+  // ── Step 4: attest the ZIP + enable pursuit approval on the decoupled path ──
+  it('decoupled: the "Attest the solicitation ZIP" card renders (with a record) and uploading calls attestSolicitationZip', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
+      zipAttestation: null,
+    }));
+    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('Attest the solicitation ZIP');
+    const fileInputs = Array.from(container.querySelectorAll('input[type=file]')) as HTMLInputElement[]; // extract card first, attest card last
+    const attestInput = fileInputs[fileInputs.length - 1];
+    const file = new File(['zip'], 'sol.zip', { type: 'application/zip' });
+    Object.defineProperty(attestInput, 'files', { value: [file], configurable: true });
+    await act(async () => { attestInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Attest ZIP');
+    const call = (factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0];
+    expect(call[0]).toBe(GWS);
+    expect(call[1].mode).toBe('add');
+    expect(call[1].file).toBeTruthy();
+  });
+
+  it('decoupled: when the server says canApprove (requirements + attested ZIP), Approve is ENABLED and calls approveGovQualification', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'RQ1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }] } },
+      evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+      coverage: { sufficient: true, reasons: [] },
+      zipAttestation: { sha256: 'f'.repeat(64), filename: 'sol.zip', reviewedBy: 'rev', reviewedAt: 't' },
+      canApprove: true,
+    }));
+    (factoryApi.approveGovQualification as jest.Mock).mockResolvedValue({ qualification: { id: 'q2' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('Attested'); // the attested badge replaces the upload
+    const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
+    expect(approve.disabled).toBe(false);
+    await clickButton('Approve bid pursuit');
+    const call = (factoryApi.approveGovQualification as jest.Mock).mock.calls[0];
+    expect(call[0]).toBe(GWS);
+    expect(call[1].decision).toBe('approved_bid_pursuit');
   });
 });

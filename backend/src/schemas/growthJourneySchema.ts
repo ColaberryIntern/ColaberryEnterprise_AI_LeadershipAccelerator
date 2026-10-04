@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import type { GrowthJourneyHandoffDisposition, GrowthJourneyHandoffStatus, GrowthJourneyOwnerQueue } from '../models/GrowthJourneyHandoff';
+import type { AgentActivityResult } from '../models/AiAgentActivityLog';
+import type { PolicyDecision, PolicyStatus } from '../models/BrandOfferPolicy';
+import type { GrowthJourneyPolicyType } from '../models/GrowthJourneyPolicy';
+import type { OfferFamilySlug } from '../models/OfferFamily';
 
 /**
  * Zod contracts for the Growth Journey admin read routes (T207).
@@ -219,3 +223,225 @@ export type ControlsQuery = z.infer<typeof controlsQuerySchema>;
 export type PauseBody = z.infer<typeof pauseBodySchema>;
 export type RolloutBody = z.infer<typeof rolloutBodySchema>;
 export type ClearControlBody = z.infer<typeof clearControlBodySchema>;
+
+/* ── Phase 6 (T605, T606): the performance reads ─────────────────────────────────────────────── */
+
+/**
+ * Every list read is BOUNDED at the boundary: `limit` at most 100, `offset` a whole number,
+ * `window_days` at most a year. The clamp exists in the service too (a caller is not the only way
+ * in), and these schemas make a bad request a 400 before any query runs rather than a silently
+ * truncated page.
+ *
+ * `tenant_id` / `brand_id` are a SCOPE REQUEST, not a filter - the same rule as the read schemas
+ * above: `scopedContext` grants them only against a real membership and refuses anything else with
+ * a 403, so a caller cannot widen their own scope through a query string.
+ */
+
+export const PERFORMANCE_MAX_LIMIT = 100;
+export const PERFORMANCE_MAX_WINDOW_DAYS = 365;
+
+const performanceScope = {
+  tenant_id: z.string().uuid().optional(),
+  brand_id: z.string().uuid().optional(),
+  program_id: z.string().uuid().optional(),
+};
+
+const performancePaging = {
+  limit: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_LIMIT).default(25),
+  offset: z.coerce.number().int().min(0).default(0),
+};
+
+export const metricsQuerySchema = z.object({
+  ...performanceScope,
+  window_days: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_WINDOW_DAYS).optional(),
+});
+
+export const ratesQuerySchema = z.object({
+  ...performanceScope,
+  window_days: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_WINDOW_DAYS).default(30),
+});
+
+/** The statuses and channels a receipt can carry - the model's own vocabulary, not a free string. */
+export const RECEIPT_STATUSES = [
+  'pending_review', 'approved', 'enrolling', 'enrolled', 'in_progress',
+  'completed', 'blocked', 'failed', 'cancelled', 'expired', 'rejected',
+] as const;
+export const RECEIPT_CHANNELS = ['email', 'in_app', 'ali_outreach'] as const;
+
+export const receiptsQuerySchema = z.object({
+  ...performanceScope,
+  ...performancePaging,
+  status: z.enum(RECEIPT_STATUSES).optional(),
+  channel: z.enum(RECEIPT_CHANNELS).optional(),
+});
+
+/** The outcome vocabulary, likewise the model's: an unknown type is a 400, never an empty list. */
+export const OUTCOME_TYPES = [
+  'reply', 'meeting_booked', 'meeting_completed', 'meeting_no_show', 'declined',
+  'opportunity_stage', 'enrolled_paid', 'subscription_active', 'project_started',
+  'handoff_accepted', 'handoff_dispositioned',
+  'contact_sent', 'contact_blocked', 'contact_failed', 'contact_replied',
+] as const;
+export const OUTCOME_SOURCES = [
+  'interaction_outcomes', 'appointments', 'strategy_calls', 'leads.pipeline_stage',
+  'enrollments', 'subscriptions', 'delivery_engagements', 'growth_journey_handoffs',
+  'growth_journey_executions',
+] as const;
+
+/**
+ * No `program_id`: `growth_journey_outcomes` has no such column, so the parameter cannot be honoured
+ * and is not accepted. The handler echoes `program_id: null` to say so in the answer.
+ */
+export const outcomesQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  ...performancePaging,
+  outcome_type: z.enum(OUTCOME_TYPES).optional(),
+  source: z.enum(OUTCOME_SOURCES).optional(),
+});
+
+/** The by-journey roll-up takes a date range, like the Marketing Ops route it re-exposes. */
+export const byJourneyQuerySchema = z.object({
+  ...performanceScope,
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+/* ── T607: the inspect reads - decisions, shadow runs, content, handoff policy ── */
+
+/**
+ * The vocabularies below are the models' own, pinned with `satisfies` exactly as
+ * `HANDOFF_STATUSES` above is. They are re-declared here rather than imported at runtime on
+ * purpose: this file's model imports are all `import type`, so it pulls in no model file and
+ * therefore no Sequelize instance - which is what lets every route suite load it. `satisfies`
+ * catches a wrong member and the `Covers` guard at the bottom catches a missing one, so the
+ * duplication cannot drift silently in either direction.
+ */
+export const OFFER_FAMILY_SLUGS = [
+  'learner_free_training', 'learner_paid_training', 'learner_community_subscription',
+  'learner_certification', 'learner_internship', 'business_training', 'ai_consulting',
+  'workflow_automation', 'application_build', 'ai_project', 'paid_discovery',
+] as const satisfies readonly OfferFamilySlug[];
+export const POLICY_DECISIONS = ['allow', 'deny'] as const satisfies readonly PolicyDecision[];
+export const POLICY_STATUSES = ['active', 'paused', 'retired'] as const satisfies readonly PolicyStatus[];
+export const JOURNEY_POLICY_TYPES = ['queue_capacity', 'queue_assignee', 'cooldown', 'holdout_experiment'] as const satisfies readonly GrowthJourneyPolicyType[];
+export const RUN_RESULTS = ['success', 'failed', 'skipped', 'pending'] as const satisfies readonly AgentActivityResult[];
+
+/**
+ * The three journey cron identities. There is no union to `satisfy` - they are DATA, declared by
+ * `agentRegistry/growthJourneyAgents.ts` - so a cell asserts this list equals the one the read
+ * service derives from that registry, which is the only thing that would catch a fourth agent
+ * being registered without this filter learning about it.
+ */
+export const SHADOW_AGENTS = ['GrowthJourneyShadowDecisions', 'GrowthJourneyExecutor', 'GrowthJourneyHandoffDigest'] as const;
+
+/**
+ * A subject is a POINTER, and this is the one place that can say so before a query runs:
+ * `lead:123`, `enrollment:<uuid>`, `org_member:<uuid>`, `visitor:<id>`. The charset excludes `@`,
+ * so a filter carrying an address is a 400 rather than a lookup that quietly finds nothing.
+ */
+const subjectRefField = z.string().min(3).max(128).regex(/^(lead|enrollment|org_member|visitor):[A-Za-z0-9_-]+$/);
+
+/** Snapshots carry no `program_id` column, so the schema does not accept one (see T606's `/outcomes`). */
+export const snapshotsQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  ...performancePaging,
+  subject_ref: subjectRefField.optional(),
+});
+
+export const transitionsQuerySchema = z.object({
+  ...performanceScope,
+  ...performancePaging,
+  subject_ref: subjectRefField.optional(),
+});
+
+/**
+ * No `brand_id`: `ai_agent_activity_logs` has no brand column, a cron run is one process across
+ * every brand, and accepting a scope parameter this read cannot apply would label the answer with
+ * a filter that never ran.
+ */
+export const shadowRunsQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  ...performancePaging,
+  window_days: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_WINDOW_DAYS).default(7),
+  agent: z.enum(SHADOW_AGENTS).optional(),
+  result: z.enum(RUN_RESULTS).optional(),
+});
+
+export const offerPoliciesQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  ...performancePaging,
+  offer_family: z.enum(OFFER_FAMILY_SLUGS).optional(),
+  decision: z.enum(POLICY_DECISIONS).optional(),
+  status: z.enum(POLICY_STATUSES).optional(),
+});
+
+/**
+ * `approval_status` is a bounded string, not an enum, and deliberately so: the column is a bare
+ * `STRING(16)` with no CHECK and no exported union, so a closed list here would be a contract this
+ * repo does not have - and would answer 400 for a value the table can legitimately hold. The one
+ * documented value is the default, `'draft'`. The answer echoes the filter it applied.
+ */
+export const contentRulesQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  ...performancePaging,
+  offer_family: z.enum(OFFER_FAMILY_SLUGS).optional(),
+  approval_status: z.string().min(1).max(16).optional(),
+});
+
+export const queuePoliciesQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  ...performancePaging,
+  policy_type: z.enum(JOURNEY_POLICY_TYPES).optional(),
+  owner_queue: z.enum(HANDOFF_OWNER_QUEUES).optional(),
+});
+
+/**
+ * T608's holdout lift. `window_days` defaults to 90 rather than the reads' 30: an experiment needs
+ * 100 decisions per arm before `computeLift` will answer at all, and a month of a dark journey has
+ * none. The cap is the same 365 as every other window on this surface.
+ */
+export const experimentsQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  window_days: z.coerce.number().int().min(1).max(PERFORMANCE_MAX_WINDOW_DAYS).default(90),
+});
+
+export const ownershipQuerySchema = z.object({
+  tenant_id: performanceScope.tenant_id,
+  brand_id: performanceScope.brand_id,
+  ...performancePaging,
+});
+
+/**
+ * A compile error the day a model union gains a member one of the lists above does not carry:
+ * `Covers` resolves to `never`, and `never` cannot be assigned `true`. The scoped `tsc` is what
+ * enforces it - `ts-jest` transpiles without typechecking, so no suite would ever notice.
+ */
+type Covers<U, L extends readonly unknown[]> = [Exclude<U, L[number]>] extends [never] ? true : never;
+const _vocabulariesAreExhaustive: [
+  Covers<OfferFamilySlug, typeof OFFER_FAMILY_SLUGS>,
+  Covers<PolicyDecision, typeof POLICY_DECISIONS>,
+  Covers<PolicyStatus, typeof POLICY_STATUSES>,
+  Covers<GrowthJourneyPolicyType, typeof JOURNEY_POLICY_TYPES>,
+  Covers<AgentActivityResult, typeof RUN_RESULTS>,
+] = [true, true, true, true, true];
+void _vocabulariesAreExhaustive;
+
+export type MetricsQuery = z.infer<typeof metricsQuerySchema>;
+export type RatesQuery = z.infer<typeof ratesQuerySchema>;
+export type ReceiptsQuery = z.infer<typeof receiptsQuerySchema>;
+export type OutcomesQuery = z.infer<typeof outcomesQuerySchema>;
+export type ByJourneyQuery = z.infer<typeof byJourneyQuerySchema>;
+export type SnapshotsQuery = z.infer<typeof snapshotsQuerySchema>;
+export type TransitionsQuery = z.infer<typeof transitionsQuerySchema>;
+export type ShadowRunsQuery = z.infer<typeof shadowRunsQuerySchema>;
+export type OfferPoliciesQuery = z.infer<typeof offerPoliciesQuerySchema>;
+export type ContentRulesQuery = z.infer<typeof contentRulesQuerySchema>;
+export type QueuePoliciesQuery = z.infer<typeof queuePoliciesQuerySchema>;
+export type OwnershipQuery = z.infer<typeof ownershipQuerySchema>;
+export type ExperimentsQuery = z.infer<typeof experimentsQuerySchema>;

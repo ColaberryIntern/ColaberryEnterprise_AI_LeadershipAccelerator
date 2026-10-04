@@ -1,7 +1,7 @@
 import type { ExplorerGrowthFlags } from '../../../../config/explorerGrowthFlags';
 import type { GrowthJourneyFlags } from '../../../../config/growthJourneyFlags';
 import { m as m3 } from './phase3Harness';
-import { brandRow, programRow, type GjBrandSlug } from './phase3Fixtures';
+import { brandRow, policyRowFor, programRow, type GjBrandSlug } from './phase3Fixtures';
 import type { HandoffFixture } from './phase4Fixtures';
 import { arrangeWorld, flags4, m4, modelsMock as models4, T, world, type WorldOptions } from './phase4Harness';
 import { AS_OF_4, clock, Table, uniqueViolation, type Query, type Row } from './phase4Tables';
@@ -129,10 +129,12 @@ export const modelsMock = {
   JourneyProgram: {
     ...models4.JourneyProgram,
     // The executor plans for ACTIVE programmes: the world's programmes, activated.
-    findAll: async (q?: { where?: { status?: string } }) => {
+    findAll: async (q?: { where?: { status?: string | string[] } }) => {
       const rows = [...new Set(world.fixtures.map((f) => f.brand))].map((slug) => ({ ...programRow(slug), status: 'active' })).sort((a, b) => a.slug.localeCompare(b.slug));
+      // A string (the executor's `active`) or a list (the nightly's draft/active/paused - T601): both are the model's contract.
       const wanted = q?.where?.status;
-      return rows.filter((r) => !wanted || r.status === wanted).map((r) => ({ ...r, get: (k: string) => (r as unknown as Record<string, unknown>)[k] }));
+      const ok = (s: string) => !wanted || (Array.isArray(wanted) ? wanted.includes(s) : s === wanted);
+      return rows.filter((r) => ok(r.status)).map((r) => ({ ...r, get: (k: string) => (r as unknown as Record<string, unknown>)[k] }));
     },
   },
   ScheduledEmail: T5x.scheduled,
@@ -151,6 +153,8 @@ export const modelsMock = {
   Lead: { findByPk: (...a: unknown[]) => m3.leadFindByPk(...a) },
   CampaignLead: { count: (...a: unknown[]) => m5.aliSends(...a) },
   ExplorerJourneyProfile: { ...models4.ExplorerJourneyProfile, findOne: (...a: unknown[]) => m5.explorerProfileFindOne(...a) },
+  // The 360 read (T601 H) lists transitions; this world writes none, because `upsertProfile` - the transition recorder's caller - is mocked.
+  GrowthJourneyTransition: { findAll: async () => [] },
   __tables: T5x,
 };
 
@@ -173,11 +177,20 @@ export const ENV_ON: Record<string, string> = {
 export interface World5Options extends WorldOptions {
   /** A lead whose status blocks the send (`unsubscribed`, `dnd`, `bounced`), by id. */
   leadStatus?: Record<number, string>;
+  /**
+   * Brands whose offer policies carry operator-approved content (T601): the world's stand-in for the Phase 4 content-rules
+   * run, without which every learner candidate is suppressed `content_gap:content_not_approved` - the shipped state.
+   */
+  contentReady?: ReadonlySet<GjBrandSlug>;
 }
 
 /** The Phase 4 world, then everything Phase 5 adds; every boundary answers as production would with nothing switched on. */
 export function arrangeWorld5(fixtures: HandoffFixture[], opts: World5Options = {}): void {
   arrangeWorld(fixtures, opts);
+  if (opts.contentReady) {
+    const ready = opts.contentReady;
+    m3.policyFindOne.mockImplementation(async (q: { where: { brand_id: string; offer_family: string } }) => policyRowFor(q.where.brand_id, q.where.offer_family, ready));
+  }
   resetPhase5Tables();
   for (const t of Object.values(T5x)) t.reset();
   campaigns.clear();
@@ -271,6 +284,11 @@ export function applyStop(kind: StopKind, brand: GjBrandSlug, channel: string, s
 
 /** The reason the ladder names for a stop - on a receipt, in the ledger, on a cancelled send. */
 export const stopReason = (kind: StopKind): string => kind;
+/**
+ * The reason the send chokepoint names for a stop applied AFTER enrolment. Since T602 the global kill switch is asked
+ * first, by every send, ahead of the journey's hold - so it answers by its own name; the four pauses are the hold's.
+ */
+export const sendStopReason = (kind: StopKind): string => (kind === 'kill_switch' ? 'kill_switch' : `journey_hold:${kind}`);
 
 /* ── reading the world back ─────────────────────────────────────────────────── */
 

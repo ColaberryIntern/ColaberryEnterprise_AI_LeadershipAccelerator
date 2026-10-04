@@ -94,8 +94,14 @@ async function sendTicketFollowUp(
 
   const reeseAdminUserId = await getReeseAdminUserId();
   await addTicketComment(ticket.id, `[Reese] Checked in after ${quietDays} quiet day(s): "${message}"`, 'ai_staff', reeseAdminUserId || 'Reese');
+  // Approval-correlation fix (2026-10-02) — thread the same eventId/decisionId
+  // the authorization check above already generated, instead of a fresh,
+  // disconnected traceId (a bug introduced when this file was first written
+  // earlier today, copying the then-unrecognized broken precedent).
   await emitReeseLedgerEvent({
     ticketId: ticket.id,
+    eventId,
+    authorizationDecisionId: authResult.decisionId,
     traceId: crypto.randomUUID(),
     actorType: 'ai_staff',
     actorId: reeseAdminUserId || 'Reese',
@@ -148,8 +154,13 @@ async function escalateTicketFollowUp(
     actorId,
   );
   await row.update({ status: 'escalated' } as any);
+  // Approval-correlation fix (2026-10-02) — thread the same eventId/decisionId
+  // the authorization check above already generated, instead of a fresh,
+  // disconnected traceId.
   await emitReeseLedgerEvent({
     ticketId: ticket.id,
+    eventId,
+    authorizationDecisionId: authResult.decisionId,
     traceId: crypto.randomUUID(),
     actorType: 'ai_staff',
     actorId,

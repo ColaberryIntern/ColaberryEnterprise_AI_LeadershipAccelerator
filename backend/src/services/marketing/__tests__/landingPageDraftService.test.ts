@@ -247,6 +247,41 @@ describe('the prompt states the rules it is relied on for', () => {
     expect(system).toMatch(/Do not write "\[source\]" to satisfy the field/);
   });
 
+  it('demands a concrete detail in the headline, with a worked weak/strong pair', async () => {
+    // Measured on the live model 2026-10-03: without this, 1 of 3 runs put any fact from the
+    // brief in the hero ("Build Your First AI Project"); with it, 3 of 3 did.
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    const system = create.mock.calls[0][0].messages[0].content;
+    expect(system).toMatch(/THE HEADLINE CARRIES A CONCRETE DETAIL FROM THE BRIEF/);
+    expect(system).toMatch(/would fit any\s+course on any subject is a failed headline/);
+    // The pair is the part that works; an abstract instruction alone did not.
+    expect(system).toMatch(/Weak, because it fits anything/);
+    expect(system).toMatch(/Strong, because only this brief could produce it/);
+  });
+
+  it('forbids the brand name in the title, because the page already shows it', async () => {
+    // Measured: 3 of 3 v1 runs began the title "Colaberry Training: ...", spending the only
+    // line a search result and a link preview show.
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(create.mock.calls[0][0].messages[0].content).toMatch(/DO NOT PUT THE BRAND NAME IN THE TITLE/);
+  });
+
+  it('is recorded as a new prompt version, so the telemetry can tell the two apart', async () => {
+    // Changing a prompt without changing its version makes every before/after comparison in the
+    // instrumentation a blend of the two.
+    const { getInstrumentedOpenAI } = require('../../openaiInstrumented');
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(getInstrumentedOpenAI).toBeDefined();
+    const svc = require('fs').readFileSync(
+      require('path').resolve(__dirname, '..', 'landingPageDraftService.ts'), 'utf8',
+    );
+    expect(svc).toContain("prompt_version: 'landing-page-draft-v2'");
+    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v1'");
+  });
+
   it('lists every section type the schema allows, and no others', async () => {
     create.mockResolvedValueOnce(reply(GOOD_PAGE));
     await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
@@ -255,5 +290,82 @@ describe('the prompt states the rules it is relied on for', () => {
     for (const type of ['hero', 'text', 'bullets', 'stats', 'quote', 'details', 'faq', 'cta']) {
       expect(system).toContain(`"type":"${type}"`);
     }
+  });
+});
+
+/**
+ * Salvage: a page that mostly validates is not thrown away.
+ *
+ * The first real brief in production came back as a 502 with nothing to show for it. Usually only
+ * one section is wrong - a `stats` item with no `source`, a `quote` with no attribution - and
+ * discarding the other seven helps nobody.
+ */
+describe('when both attempts fail, the valid sections survive', () => {
+  const MIXED = {
+    title: 'Six-week AI build',
+    sections: [
+      { type: 'hero', headline: 'Ship an AI project in six weeks' },
+      { type: 'stats', items: [{ value: '92%', label: 'placed' }] },      // no source
+      { type: 'cta', headline: 'Apply', cta: { label: 'Apply', href: '/apply' } },
+    ],
+  };
+
+  it('keeps what validates and NAMES what it dropped', async () => {
+    create.mockResolvedValue(reply(MIXED));
+    const r = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+
+    expect(r.content.sections.map((s) => s.type)).toEqual(['hero', 'cta']);
+    expect(r.droppedSections).toHaveLength(1);
+    expect(r.droppedSections[0]).toMatch(/^stats \(section 2\)/);
+  });
+
+  it('still returns content the public route would serve', async () => {
+    create.mockResolvedValue(reply(MIXED));
+    const r = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(parseLandingPageContent(r.content).ok).toBe(true);
+  });
+
+  it('keeps the title when it survives', async () => {
+    create.mockResolvedValue(reply(MIXED));
+    const r = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(r.content.title).toBe('Six-week AI build');
+  });
+
+  it('drops a bad title rather than refusing the whole page', async () => {
+    create.mockResolvedValue(reply({
+      title: '',
+      sections: [{ type: 'hero', headline: 'Fine' }, { type: 'stats', items: [{ value: '1', label: 'x' }] }],
+    }));
+    const r = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(r.content.title).toBeUndefined();
+    expect(r.content.sections.map((s) => s.type)).toEqual(['hero']);
+  });
+
+  it('reports nothing dropped on the normal path', async () => {
+    create.mockResolvedValueOnce(reply(GOOD_PAGE));
+    const r = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+    expect(r.droppedSections).toEqual([]);
+  });
+
+  it('still fails when NOTHING survives - an empty page cannot be stored', async () => {
+    create.mockResolvedValue(reply({ sections: [{ type: 'carousel' }, { type: 'gallery' }] }));
+    await expect(draftLandingPage({ source: BRIEF, brandId: 'b-1' }))
+      .rejects.toThrow(/no part of it could be used/);
+  });
+
+  it('still fails when the response is not an object at all', async () => {
+    create.mockResolvedValue(reply([1, 2, 3]));
+    await expect(draftLandingPage({ source: BRIEF, brandId: 'b-1' })).rejects.toThrow();
+  });
+
+  it('salvage runs only AFTER the repair attempt, never instead of it', async () => {
+    create
+      .mockResolvedValueOnce(reply({ sections: [{ type: 'hero' }] }))
+      .mockResolvedValueOnce(reply(GOOD_PAGE));
+    const r = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(r.repaired).toBe(true);
+    expect(r.droppedSections).toEqual([]);
   });
 });

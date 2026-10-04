@@ -248,6 +248,8 @@ describe('every §7.3 field is on the row, or explicitly null / unknown', () => 
     'ruleset/model versions': ['ruleset_version', 'model_version'],
     'whether AI participated': ['ai_involved'],
     'execution and outcome receipt': ['executed', 'execution_receipt'],
+    // T608: null on every row until an operator writes a holdout policy.
+    'holdout arm': ['experiment_key', 'holdout_group'],
   };
   const IDENTITY = ['tenant_id', 'brand_id', 'program_id', 'subject_ref', 'lead_id', 'enrollment_id', 'classification_id', 'trigger', 'decision_date', 'mode', 'reason', 'requires_human_review', 'decided_by', 'idempotency_key'];
   const EXTRA = ['deferred_actions'];

@@ -146,7 +146,13 @@ describe('maybeTriggerReeseReply', () => {
     // 6th arg is the real work unit id (Workspace mission, Phase 2 slice 1) —
     // createWorkUnit() resolves to { id: 'wu-1', ... } under the default mocks.
     expect(mockLogExchange).toHaveBeenNthCalledWith(1, 'ticket-1', 'human', STUDENT_ID, 'student-msg-1', 'Hi Reese, I am stuck on my project.', 'wu-1');
-    expect(mockLogExchange).toHaveBeenNthCalledWith(2, 'ticket-1', 'ai_staff', REESE_ADMIN_ID, 'reply-msg-1', 'Here is your next move.', 'wu-1');
+    // Approval-correlation fix (2026-10-02) — ONLY Reese's own reply call gets
+    // the authorization eventId/decisionId threaded through (7th/8th args);
+    // the student's own message above is never gated, so it stays 6-arg.
+    expect(mockLogExchange).toHaveBeenNthCalledWith(
+      2, 'ticket-1', 'ai_staff', REESE_ADMIN_ID, 'reply-msg-1', 'Here is your next move.', 'wu-1',
+      expect.any(String), 'auth-1',
+    );
   });
 
   it('ProofDesk linkage boundary: if ticket-ensure fails, the reply is still generated and sent (ticket layer never blocks messaging)', async () => {

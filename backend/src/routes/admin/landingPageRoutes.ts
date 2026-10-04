@@ -17,7 +17,7 @@ import type LandingPage from '../../models/LandingPage';
  *   POST   /api/admin/landing-pages/:id/revise   feedback becomes a new revision of that content
  *   PATCH  /api/admin/landing-pages/:id          hand-edit the content, slug, name or site
  *   GET    /api/admin/landing-pages/:id/preview  the REAL page, rendered, before it is public
- *   POST   /api/admin/landing-pages/:id/publish  make it live at /p/:brand/:slug
+ *   POST   /api/admin/landing-pages/:id/publish  make it live at /lp/:brand/:slug
  *   POST   /api/admin/landing-pages/:id/unpublish  take it back off the internet
  *   GET    /api/admin/landing-pages?brand_id=    the picker's list, scoped to one brand
  *
@@ -76,8 +76,23 @@ function bad(res: Response, details: unknown): void {
   res.status(400).json({ error: 'Validation failed', error_class: 'ValidationError', details });
 }
 
+/**
+ * Report a failure to the caller AND to the log.
+ *
+ * A `WorkflowError` used to return silently - it is an expected, well-described failure, so it
+ * went to the browser and nowhere else. That is exactly how the first real "Build the page" in
+ * production became undiagnosable: `POST /api/admin/landing-pages` answered 502, the operator saw
+ * a toast, and there was no server-side record of WHY. An expected failure is still a failure
+ * somebody has to explain; "the user can see it" is not a substitute for being able to read it
+ * back an hour later. Both kinds are logged now, with the level separating them.
+ */
 function fail(res: Response, err: unknown, event: string): void {
   if (err instanceof WorkflowError) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'landing-pages', event,
+      outcome: 'failure', error_class: err.errorClass,
+      context: { status: err.status, message: String(err.message).slice(0, 400) },
+    }));
     res.status(err.status).json({ error: err.message, error_class: err.errorClass });
     return;
   }
@@ -138,7 +153,7 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
     const draft = await draftLandingPage({ source: parsed.data.source, brandId: parsed.data.brand_id });
 
     // `path` is NOT NULL and UNIQUE on this table from its path-registry days. A hosted page's
-    // real address is /p/:brand/:slug, so the legacy column is filled with that same path to
+    // real address is /lp/:brand/:slug, so the legacy column is filled with that same path to
     // keep the old uniqueness meaningful instead of inventing a placeholder.
     const slug = parsed.data.slug ?? null;
     const page = await Model.create({
@@ -148,7 +163,7 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
       kind: 'hosted',
       status: 'draft',
       name: parsed.data.name,
-      path: slug ? `/p/${brand.slug}/${slug}` : `/p/${brand.slug}/draft-${Date.now()}`,
+      path: slug ? `/lp/${brand.slug}/${slug}` : `/lp/${brand.slug}/draft-${Date.now()}`,
       slug,
       content: draft.content,
       created_by: req.admin?.sub ?? null,
@@ -164,6 +179,7 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
       unverifiedClaims: draft.unverifiedClaims,
       model: draft.model,
       repaired: draft.repaired,
+      droppedSections: draft.droppedSections,
     });
   } catch (err) { fail(res, err, 'landing_page_create_failed'); }
 });
@@ -201,6 +217,7 @@ router.post('/api/admin/landing-pages/:id/revise', requireAdmin, async (req: Req
       unverifiedClaims: draft.unverifiedClaims,
       model: draft.model,
       repaired: draft.repaired,
+      droppedSections: draft.droppedSections,
     });
   } catch (err) { fail(res, err, 'landing_page_revise_failed'); }
 });
@@ -222,7 +239,7 @@ router.patch('/api/admin/landing-pages/:id', requireAdmin, async (req: Request, 
     if (parsed.data.slug && page.brand_id) {
       const { Brand } = await import('../../models');
       const brand = await Brand.findByPk(page.brand_id);
-      if (brand) patch.path = `/p/${brand.slug}/${parsed.data.slug}`;
+      if (brand) patch.path = `/lp/${brand.slug}/${parsed.data.slug}`;
     }
 
     await page.update(patch as never);
@@ -264,7 +281,7 @@ router.get('/api/admin/landing-pages/:id/preview', requireAdmin, async (req: Req
       // The tracker is deliberately omitted from a preview: an operator checking their own draft
       // twenty times must not land in the analytics as twenty visits to a page nobody can reach.
       siteSlug: null,
-      pageUrl: `${String(req.headers['x-forwarded-proto'] ?? 'https')}://${String(req.headers.host ?? '')}/p/${brand.slug}/${page.slug ?? 'preview'}`,
+      pageUrl: `${String(req.headers['x-forwarded-proto'] ?? 'https')}://${String(req.headers.host ?? '')}/lp/${brand.slug}/${page.slug ?? 'preview'}`,
     });
 
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; base-uri 'none'; form-action 'none'");
@@ -321,15 +338,15 @@ router.post('/api/admin/landing-pages/:id/publish', requireAdmin, async (req: Re
     });
     if (clash) {
       return void res.status(409).json({
-        error: `This brand already has a page at /p/${brand.slug}/${slug}.`, error_class: 'SlugTaken',
+        error: `This brand already has a page at /lp/${brand.slug}/${slug}.`, error_class: 'SlugTaken',
       });
     }
 
     await page.update({
-      slug, status: 'published', published_at: new Date(), path: `/p/${brand.slug}/${slug}`,
+      slug, status: 'published', published_at: new Date(), path: `/lp/${brand.slug}/${slug}`,
     } as never);
 
-    res.json({ page: summarise(page), url: `/p/${brand.slug}/${slug}` });
+    res.json({ page: summarise(page), url: `/lp/${brand.slug}/${slug}` });
   } catch (err) { fail(res, err, 'landing_page_publish_failed'); }
 });
 

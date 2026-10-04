@@ -13,7 +13,13 @@ const m = {
   killSwitch: jest.fn(),
   ledger: jest.fn(),
   transaction: jest.fn(),
+  query: jest.fn(),
 };
+// T609: runExecutor now emits one ai_events row per run. `aiEventService` imports the AiEvent
+// MODEL directly rather than through the barrel this suite mocks, so without this the model's
+// `Model.init` runs against an undefined sequelize and the whole suite fails to load. The event
+// itself is asserted in runExecutor.aiEvents.test.ts; here it is only stubbed out of the way.
+jest.mock('../../../aiEventService', () => ({ emitAiEvent: jest.fn(), logAiEvent: jest.fn() }));
 jest.mock('../../../../models', () => {
   const { phase5ModelsMock } = require('../../__tests__/fixtures/phase5Tables');
   const { Table } = require('../../__tests__/fixtures/phase4Tables');
@@ -52,7 +58,7 @@ jest.mock('../../../../config/env', () => ({
     explorerGrowth: { growthOsEnabled: true, aliOutreachEnabled: true, inAppNudgeEnabled: true, smsEnabled: false, autoDialEnabled: false },
   },
 }));
-jest.mock('../../../../config/database', () => ({ sequelize: { transaction: (...a: unknown[]) => m.transaction(...a) } }));
+jest.mock('../../../../config/database', () => ({ sequelize: { transaction: (...a: unknown[]) => m.transaction(...a), query: (...a: unknown[]) => m.query(...a) } }));
 // The reconciler imports OPEN_EXECUTION_STATUSES as a value from the model file, whose Model.init needs the real
 // sequelize; with the database mocked above, the one value it needs is handed over directly.
 jest.mock('../../../../models/GrowthJourneyExecution', () => ({ OPEN_EXECUTION_STATUSES: ['pending_review', 'approved', 'enrolling', 'enrolled', 'in_progress'] }));
@@ -143,6 +149,8 @@ beforeEach(() => {
   for (const t of Object.values(tables)) t.reset();
   for (const fn of Object.values(m)) fn.mockReset();
   m.transaction.mockImplementation(async (fn: (t: unknown) => Promise<unknown>) => fn({ LOCK: { UPDATE: 'UPDATE' } }));
+  // T602: the refusal memory's bounded read issues SET LOCAL statement_timeout on its own transaction before the ledger read.
+  m.query.mockResolvedValue([]);
   m.killSwitch.mockResolvedValue(false);
   m.programsFindAll.mockResolvedValue([programRow()]);
   m.leadFindByPk.mockResolvedValue({ get: (k: string) => (k === 'email' ? 'person@example.com' : null) });
@@ -261,11 +269,16 @@ describe('acceptance 2: a limited cohort decision reaches enrolled in one run, a
     expect(first.plan).toMatchObject({ candidates: 1, planned: 0, refused: { returned_to_ai_cooldown: 1 }, remembered: 0 });
     const refusals = () => tables.ledger.rows.filter((r) => r.event_type === 'growth_journey.execution.refused');
     expect(refusals()).toHaveLength(1);
-    expect(m.transaction).toHaveBeenCalledTimes(1);
+    // Two transactions per run with a candidate since T602: the memory's bounded ledger read, then the planner's. The second
+    // run opens the read alone - the planner is never reached - so the count grows by exactly one, and the SET LOCAL is
+    // issued inside each read's transaction.
+    expect(m.transaction).toHaveBeenCalledTimes(2);
+    expect(m.query.mock.calls.map(([sql]) => sql)).toEqual(['SET LOCAL statement_timeout = 5000']);
     const second = await run();
     expect(second.plan).toMatchObject({ candidates: 0, remembered: 1, refused: {} });
     expect(refusals()).toHaveLength(1);
-    expect(m.transaction).toHaveBeenCalledTimes(1);
+    expect(m.transaction).toHaveBeenCalledTimes(3);
+    expect(m.query.mock.calls.map(([sql]) => sql)).toEqual(['SET LOCAL statement_timeout = 5000', 'SET LOCAL statement_timeout = 5000']);
     expect(T5.executions.rows).toEqual([]);
   });
 
@@ -395,9 +408,11 @@ describe('acceptance 3: a stage that fails is one line, and the next stage still
     limitedRollout([LEAD, 514]);
     liveDecision();
     liveDecision({ lead_id: 514, subject_ref: 'lead:514', created_at: ago(HOUR) });
+    // The first transaction of the run is the refusal memory's bounded read (T602); the planner's is the second.
+    m.transaction.mockImplementationOnce(async (fn: (t: unknown) => Promise<unknown>) => fn({ LOCK: { UPDATE: 'UPDATE' } }));
     m.transaction.mockRejectedValueOnce(Object.assign(new Error('deadlock'), { name: 'SequelizeDatabaseError' }));
     const s = await run();
-    expect(s.plan).toMatchObject({ candidates: 2, planned: 1, errors: 1 });
+    expect(s.plan).toMatchObject({ candidates: 2, planned: 1, errors: 1, remembered: 0 });
     expect(s.stage_errors).toEqual([]);
     expect(T5.executions.rows.map((r) => r.lead_id)).toEqual([514]);
   });

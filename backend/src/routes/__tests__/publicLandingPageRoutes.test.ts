@@ -74,7 +74,7 @@ function appWithOrder(publicFirst: boolean): express.Express {
 }
 
 const app = appWithOrder(true);
-const URL = '/p/colaberry-training/six-week-build';
+const URL = '/lp/colaberry-training/six-week-build';
 
 let logSpy: jest.SpyInstance;
 let errSpy: jest.SpyInstance;
@@ -117,7 +117,7 @@ describe('a published hosted page', () => {
     const res = await request(app).get(URL)
       .set('x-forwarded-proto', 'https')
       .set('x-forwarded-host', 'enterprise.colaberry.ai');
-    expect(res.text).toContain('href="https://enterprise.colaberry.ai/p/colaberry-training/six-week-build"');
+    expect(res.text).toContain('href="https://enterprise.colaberry.ai/lp/colaberry-training/six-week-build"');
   });
 
   it('sets a CSP that permits the external tracker but no inline script', async () => {
@@ -153,27 +153,27 @@ describe('what must never be served', () => {
   });
 
   it('404s a page belonging to a different brand', async () => {
-    const res = await request(app).get('/p/ai-flotation/six-week-build');
+    const res = await request(app).get('/lp/ai-flotation/six-week-build');
     expect(res.status).toBe(404);
   });
 
   it('404s an unknown brand', async () => {
-    expect((await request(app).get('/p/no-such-brand/six-week-build')).status).toBe(404);
+    expect((await request(app).get('/lp/no-such-brand/six-week-build')).status).toBe(404);
   });
 
   it('404s an unknown slug', async () => {
-    expect((await request(app).get('/p/colaberry-training/no-such-page')).status).toBe(404);
+    expect((await request(app).get('/lp/colaberry-training/no-such-page')).status).toBe(404);
   });
 
   it('404s a malformed slug, with the same status as an unknown one', async () => {
     // A 400 for "wrong shape" would let someone map the slug alphabet without guessing a page.
-    for (const bad of ['/p/colaberry-training/Has Spaces', '/p/UPPER/six-week-build', '/p/colaberry-training/-leading-dash']) {
+    for (const bad of ['/lp/colaberry-training/Has Spaces', '/lp/UPPER/six-week-build', '/lp/colaberry-training/-leading-dash']) {
       expect((await request(app).get(bad)).status).toBe(404);
     }
   });
 
   it('never reaches the database for a malformed param', async () => {
-    await request(app).get('/p/colaberry-training/Bad Slug');
+    await request(app).get('/lp/colaberry-training/Bad Slug');
     expect(fakeLandingPage.findOne).not.toHaveBeenCalled();
   });
 });

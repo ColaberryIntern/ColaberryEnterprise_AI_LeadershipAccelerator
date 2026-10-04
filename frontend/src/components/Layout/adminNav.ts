@@ -93,6 +93,14 @@ export const NAV_GROUPS: NavGroup[] = [
     // luck. A link sitting in a group whose section the API does not recognise
     // is a link that renders for someone the API will then 403.
     { path: '/admin/explorer-growth', label: 'Explorer Growth', icon: 'radar-line' },
+    // Growth Journey OS workspace (Phase 6, T613). Same group, same section, and for
+    // the same reason the row above gives: `campaigns` is what the BACKEND gate
+    // classifies `/api/admin/growth-journey` under (`mgmtSectionGate.ts`), so nav
+    // visibility and API access agree by construction. The detail page at
+    // `/admin/growth-journey/handoffs/:id` needs NO UNLISTED_PATH_SECTIONS row:
+    // `sectionForPath` matches by longest prefix, so this entry already resolves it.
+    // `adminNavGrowthJourney.test.ts` asserts that rather than leaving it to be assumed.
+    { path: '/admin/growth-journey', label: 'Growth Journey', icon: 'route-line' },
   ]},
   { label: 'Lead Ingestion', section: 'lead_ingestion', links: [
     { path: '/admin/sources', label: 'Sources', icon: 'upload-cloud-2-line' },

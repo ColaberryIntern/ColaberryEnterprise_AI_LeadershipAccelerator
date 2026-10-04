@@ -31,6 +31,9 @@ async function db() {
 
 export interface IdempotentCreateInput {
   requestId: string;
+  /** Defaults to `ZOOM_HOST_EMAIL`. Recorded on the ledger so a retry reconciles
+   *  against the host the first attempt actually used. */
+  hostEmail?: string;
   topic: string;
   agenda?: string;
   startDateTime: string;
@@ -62,11 +65,12 @@ type LedgerRow = {
   meeting_id: string | null;
   join_url: string | null;
   attempts: number;
+  host_email: string | null;
 };
 
 async function readLedger(requestId: string): Promise<LedgerRow | null> {
   const [rows] = await (await db()).query(
-    `SELECT request_id, state, meeting_id, join_url, attempts
+    `SELECT request_id, state, meeting_id, join_url, attempts, host_email
        FROM zoom_meeting_requests WHERE request_id = :rid LIMIT 1`,
     { replacements: { rid: requestId } },
   ) as [LedgerRow[], unknown];
@@ -80,13 +84,16 @@ async function readLedger(requestId: string): Promise<LedgerRow | null> {
  * both attempt the insert, exactly one affects a row, and the loser falls through to
  * read the winner's state. A SELECT-then-INSERT would let both see "absent".
  */
-async function claim(requestId: string, topic: string): Promise<boolean> {
+async function claim(requestId: string, topic: string, hostEmail: string): Promise<boolean> {
   const [rows] = await (await db()).query(
-    `INSERT INTO zoom_meeting_requests (request_id, state, topic)
-       VALUES (:rid, 'pending', :topic)
+    `INSERT INTO zoom_meeting_requests (request_id, state, topic, host_email)
+       VALUES (:rid, 'pending', :topic, :host)
        ON CONFLICT (request_id) DO NOTHING
        RETURNING request_id`,
-    { replacements: { rid: requestId, topic } },
+    // The host is written with the CLAIM, before Zoom is called — the same reason the
+    // row itself is. A host recorded after a successful response only ever describes
+    // the calls that already worked, which are the ones that never needed recording.
+    { replacements: { rid: requestId, topic, host: hostEmail } },
   ) as [Array<{ request_id: string }>, unknown];
   return (rows?.length || 0) > 0;
 }
@@ -120,10 +127,16 @@ async function noteFailure(requestId: string, message: string): Promise<void> {
  * Returns null when nothing matches, which is the honest answer for "the earlier call
  * never landed" — and the only case where creating a second meeting is correct.
  */
-export async function findMeetingByRequestMarker(requestId: string): Promise<{ meetingId: string; joinUrl: string | null } | null> {
+export async function findMeetingByRequestMarker(
+  requestId: string,
+  hostEmail?: string,
+): Promise<{ meetingId: string; joinUrl: string | null } | null> {
   const marker = requestMarker(requestId);
   try {
-    const meetings = await zoomService.listUpcomingMeetingsWithAgenda();
+    // The host the ORIGINAL attempt used, not today's default. Those differ as soon
+    // as a second host exists, and asking the wrong one returns a confident, wrong
+    // "not there".
+    const meetings = await zoomService.listUpcomingMeetingsWithAgenda(hostEmail);
     const hit = meetings.find((m) => (m.agenda || '').includes(marker));
     return hit ? { meetingId: String(hit.id), joinUrl: hit.join_url ?? null } : null;
   } catch (err: any) {
@@ -142,7 +155,8 @@ export async function createMeetingIdempotent(input: IdempotentCreateInput): Pro
     throw Object.assign(new Error('requestId is required for idempotent meeting creation'), { error_class: 'ValidationError' });
   }
 
-  const iOwnIt = await claim(requestId, input.topic);
+  const host = input.hostEmail || '';
+  const iOwnIt = await claim(requestId, input.topic, host);
 
   if (!iOwnIt) {
     const prior = await readLedger(requestId);
@@ -150,7 +164,9 @@ export async function createMeetingIdempotent(input: IdempotentCreateInput): Pro
       return { meetingId: prior.meeting_id, joinUrl: prior.join_url, outcome: 'replayed' };
     }
     // 'pending': a previous attempt reached Zoom with an unknown outcome.
-    const found = await findMeetingByRequestMarker(requestId);
+    // Reconcile against the host the FIRST attempt recorded. An empty value means a
+    // row written before multi-host existed, which is the default host.
+    const found = await findMeetingByRequestMarker(requestId, prior?.host_email || undefined);
     if (found) {
       await markCreated(requestId, found.meetingId, found.joinUrl, true);
       return { ...found, outcome: 'reconciled' };
@@ -165,6 +181,7 @@ export async function createMeetingIdempotent(input: IdempotentCreateInput): Pro
       startDateTime: input.startDateTime,
       durationMinutes: input.durationMinutes,
       timezone: input.timezone,
+      hostEmail: input.hostEmail,
     });
     await markCreated(requestId, result.meetingId, result.joinUrl);
     return { meetingId: result.meetingId, joinUrl: result.joinUrl, outcome: 'created' };

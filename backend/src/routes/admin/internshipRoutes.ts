@@ -27,6 +27,8 @@ import { PROJECT_STAGES } from '../../services/projectDeliveryService';
 import { getInternConsoleDetail } from '../../services/internship/internConsoleDetail';
 import { transition } from '../../services/internship/internshipApplicationService';
 import { isTerminal, InternshipState } from '../../services/internship/internshipStateMachine';
+import { sendNudge, isNudgeTemplate, NUDGE_TEMPLATES } from '../../services/internship/internshipNudge';
+import Enrollment from '../../models/Enrollment';
 
 /**
  * Admin — AI Internship applications.
@@ -239,6 +241,69 @@ router.post('/api/admin/internship/applications/:id/transition', requireSection(
       context: { message: err?.message, action },
     }));
     res.status(500).json({ error: "Could not change this intern's status." });
+  }
+});
+
+const nudgeSchema = z.object({
+  template: z.string().refine(isNudgeTemplate, {
+    message: `template must be one of: ${Object.keys(NUDGE_TEMPLATES).join(', ')}`,
+  }),
+  /** One optional human line. Escaped and capped by the renderer. */
+  note: z.string().trim().max(400).optional(),
+  /**
+   * Defaults to a DRY RUN. Sending requires `send: true` explicitly, so a mistaken call previews
+   * rather than mails a student.
+   */
+  send: z.boolean().optional(),
+}).strict();
+
+/**
+ * POST /api/admin/internship/applications/:id/nudge
+ *
+ * **The caller picks a template; it can never supply the words.** There is no subject, body or HTML
+ * parameter, so no request can put unreviewed text in front of a student. The one free-text field is
+ * a short note, escaped and length-capped by the renderer.
+ *
+ * **The recipient comes from the enrollment, never the body.** A body-supplied address would turn an
+ * admin console into an open relay that sends from Colaberry's domain.
+ *
+ * Dry run by default: `send: true` is required to actually mail, and the idempotency ledger allows
+ * one nudge of a given template per intern per day.
+ */
+router.post('/api/admin/internship/applications/:id/nudge', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = nudgeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid nudge request.', issues: parsed.error.issues });
+    return;
+  }
+
+  try {
+    const app = await InternshipApplication.findByPk(String(req.params.id));
+    if (!app) { res.status(404).json({ error: 'Application not found.' }); return; }
+
+    const enrollment: any = await Enrollment.findByPk(String((app as any).enrollment_id));
+    const to = enrollment?.email ?? null;
+    if (!to) { res.status(409).json({ error: 'This intern has no email address on file.' }); return; }
+
+    const result = await sendNudge({
+      applicationId: String(app.id),
+      to,
+      firstName: String(enrollment?.full_name ?? '').trim().split(/\s+/)[0] || null,
+      template: parsed.data.template,
+      note: parsed.data.note ?? null,
+      dryRun: parsed.data.send !== true,
+      correlationId: (app as any).correlation_id ?? null,
+    });
+
+    res.json(result);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error', service: 'backend', event: 'internship_console_nudge_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message },
+    }));
+    res.status(500).json({ error: 'Could not send this nudge.' });
   }
 });
 

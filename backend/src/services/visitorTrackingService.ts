@@ -84,11 +84,18 @@ export function categorizePagePath(path: string, brandSlug?: string | null): str
   // strength-20 `deep_scroll_case_study` lead signal. The index route itself is
   // matched by the exact `/stories` key in the map above.
   if (cleaned.startsWith('/stories/')) return 'case_studies';
-  // Hosted landing pages: `/p/:brand/:slug`. Without this every campaign destination lands in
+  // Hosted landing pages: `/lp/:brand/:slug`. Without this every campaign destination lands in
   // 'other', which is the one bucket that answers no question - and a landing page view is the
-  // single most interesting event in a campaign funnel. Trailing slash is load-bearing for the
-  // same reason as `/stories/` above.
-  if (cleaned.startsWith('/p/')) return 'landing_page';
+  // most interesting event in a campaign funnel.
+  //
+  // `/lp/`, NOT `/p/`. This rule shipped as `/p/` on 2026-10-01 and was wrong: `/p/` is the
+  // public CAREER PORTFOLIO route (see the `location ^~ /p/` block in nginx/nginx.conf, which
+  // noindexes it because a portfolio is something a student hands to one hiring manager). So the
+  // rule claimed every portfolio view as a landing page view. It produced no bad rows - a
+  // database check on 2026-10-02 found zero `landing_page` events - because no portfolio view
+  // had been tracked in the window, but it was one visit away from quietly corrupting the
+  // campaign funnel with somebody's CV page.
+  if (cleaned.startsWith('/lp/')) return 'landing_page';
 
   return categoryMap[cleaned] || 'other';
 }

@@ -14,7 +14,7 @@ import {
  * gave me... produced me the attached landing page. The user should be able to address things
  * that need to be updated... Once the image is approved, we will build the actual landing page
  * and save the link." So: brief in, generated page, preview the real thing, say what to change,
- * publish to /p/:brand/:slug with tracking already wired.
+ * publish to /lp/:brand/:slug with tracking already wired.
  *
  * THE PREVIEW IS THE PAGE. It is the same renderer and the same row the public route serves, so
  * what gets approved is what gets served. It is fetched rather than framed by `src`, because
@@ -188,7 +188,7 @@ export default function AdminLandingPagesPage() {
                   onChange={(e) => setName(e.target.value)} data-testid="lp-name" />
                 <div className="form-text small">
                   Internal. The URL comes from the slug, which you can change before publishing.
-                  {suggestSlug(name) && <> Suggested: <code>/p/{brand?.slug ?? 'brand'}/{suggestSlug(name)}</code></>}
+                  {suggestSlug(name) && <> Suggested: <code>/lp/{brand?.slug ?? 'brand'}/{suggestSlug(name)}</code></>}
                 </div>
               </div>
               <div className="col-12">
@@ -303,7 +303,7 @@ export default function AdminLandingPagesPage() {
                     <div className="border-top pt-3">
                       <label className="form-label small mb-1" htmlFor="lp-slug">URL slug</label>
                       <div className="input-group input-group-sm">
-                        <span className="input-group-text">/p/{brand?.slug ?? 'brand'}/</span>
+                        <span className="input-group-text">/lp/{brand?.slug ?? 'brand'}/</span>
                         <input id="lp-slug" className="form-control" value={slugDraft} disabled={busy || selected.status === 'published'}
                           onChange={(e) => setSlugDraft(e.target.value)} data-testid="lp-slug" />
                       </div>

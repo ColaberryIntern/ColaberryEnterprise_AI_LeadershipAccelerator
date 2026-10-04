@@ -20,9 +20,19 @@ import api from '../utils/api';
 export type ActivityLevel = 'green' | 'yellow' | 'orange' | 'red' | 'black' | 'unknown';
 export type PaceBand = 'gold' | 'green' | 'yellow' | 'red';
 
+/** The four tracks, plus `other` for a source the server does not recognise. */
+export type ActivityCategory = 'training' | 'project' | 'certification' | 'community' | 'other';
+
+// TRACK_ORDER and TRACK_LABEL deliberately live in `consoleFormat`, not here. A component that
+// imports a runtime CONSTANT from this module gets `undefined` in any test that mocks the client —
+// which is every component test — and throws on first render. Types are safe because they erase;
+// values are not. This cost two debugging rounds before it was moved.
+
 export interface ActivityDay {
   date: string;
   events: number;
+  /** The same total split by track. Always all five keys, computed server-side. */
+  by_category: Record<ActivityCategory, number>;
 }
 
 export interface ActivitySignal {
@@ -190,6 +200,30 @@ export async function transitionIntern(
   const { data } = await api.post<TransitionResult>(
     `/api/admin/internship/applications/${encodeURIComponent(applicationId)}/transition`,
     { action, ...(opts.reason ? { reason: opts.reason } : {}), ...(opts.confirm ? { confirm: opts.confirm } : {}) },
+  );
+  return data;
+}
+
+/** The fixed server-side template list. The client never supplies the words. */
+export type NudgeTemplate = 'quiet_check_in' | 'weeks_1_3_reminder' | 'project_start';
+
+export interface NudgeResult { outcome: string; subject?: string; to?: string; reason?: string; }
+
+/**
+ * Send, or preview, one nudge.
+ *
+ * `send` defaults to false on the server too — a request without it previews. The console asks for
+ * the preview first and only sends on a second, explicit click, so the manager sees the subject and
+ * recipient before anything leaves.
+ */
+export async function nudgeIntern(
+  applicationId: string,
+  template: NudgeTemplate,
+  opts: { note?: string; send?: boolean } = {},
+): Promise<NudgeResult> {
+  const { data } = await api.post<NudgeResult>(
+    `/api/admin/internship/applications/${encodeURIComponent(applicationId)}/nudge`,
+    { template, ...(opts.note ? { note: opts.note } : {}), ...(opts.send ? { send: true } : {}) },
   );
   return data;
 }

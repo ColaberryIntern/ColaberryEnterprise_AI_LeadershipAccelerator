@@ -37,10 +37,52 @@ import {
 /** The bands the design specifies, in the order they degrade. */
 export type ActivityLevel = 'green' | 'yellow' | 'orange' | 'red' | 'black' | 'unknown';
 
+/**
+ * What an intern was doing on a day, by the table the event came from.
+ *
+ * Derived from the SOURCE rather than the timeline's `domain`, because domain cannot tell these
+ * apart: a cert sitting, a verified build task and a completed card are all `learning`. The
+ * categories are the four tracks the console is about.
+ *
+ * An unrecognised source is `other` and renders grey. It is NOT folded into training: a new source
+ * appearing as a neutral band is a question somebody asks, while one silently inflating training is
+ * a number nobody checks.
+ */
+export type ActivityCategory = 'training' | 'project' | 'certification' | 'community' | 'other';
+
+export const SOURCE_CATEGORY: Readonly<Record<string, ActivityCategory>> = {
+  timeline_card_progress: 'training',
+  student_skill_evidence: 'training',
+  runtime_assessment_attempts: 'training',
+  runtime_mentor_turns: 'training',
+  runtime_portfolio_artifacts: 'training',
+  reflection_entries: 'training',
+  attendance_records: 'training',
+  xp_events: 'training',
+  student_points_events: 'training',
+  cert_sessions: 'certification',
+  student_tasks: 'project',
+  community_posts: 'community',
+  community_comments: 'community',
+  community_likes: 'community',
+};
+
+export function categoryOf(source: string | null | undefined): ActivityCategory {
+  return (source && SOURCE_CATEGORY[source]) || 'other';
+}
+
+export type CategoryCounts = Readonly<Record<ActivityCategory, number>>;
+
+const ZERO_COUNTS: CategoryCounts = {
+  training: 0, project: 0, certification: 0, community: 0, other: 0,
+};
+
 export interface ActivityDay {
   /** `YYYY-MM-DD`, oldest first. */
   readonly date: string;
   readonly events: number;
+  /** The same total, split by what they were doing. Always all five keys. */
+  readonly by_category: CategoryCounts;
 }
 
 export interface ActivitySignal {
@@ -129,6 +171,7 @@ export interface ActivityDayInput {
   events: number;
   /** The latest event that day, ISO. */
   lastAt: string;
+  /** The table these events came from. Rows arrive one per source per day. */
   lastSource: string;
 }
 
@@ -179,13 +222,21 @@ export function signalFrom(input: {
   // Always 28 entries. A sparse grid with gaps would be read as missing data rather than as quiet
   // days, and quiet days are the thing being looked for.
   const counts = new Map<string, number>();
+  const byCat = new Map<string, Record<ActivityCategory, number>>();
   for (const d of input.days) {
     if (d.date < iso(windowStart) || d.date > iso(now)) continue;
     counts.set(d.date, (counts.get(d.date) ?? 0) + d.events);
+    const cats = byCat.get(d.date) ?? { ...ZERO_COUNTS };
+    cats[categoryOf(d.lastSource)] += d.events;
+    byCat.set(d.date, cats);
   }
   const days: ActivityDay[] = Array.from({ length: WINDOW_DAYS }, (_, i) => {
     const date = iso(new Date(windowStart.getTime() + i * DAY_MS));
-    return { date, events: counts.get(date) ?? 0 };
+    return {
+      date,
+      events: counts.get(date) ?? 0,
+      by_category: byCat.get(date) ?? ZERO_COUNTS,
+    };
   });
 
   return {

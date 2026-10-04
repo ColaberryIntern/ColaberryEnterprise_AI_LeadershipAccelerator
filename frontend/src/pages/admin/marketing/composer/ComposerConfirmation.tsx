@@ -27,6 +27,16 @@ export interface ComposerConfirmationProps {
   summary: ConfirmationSummary;
   busy: boolean;
   onAction: (action: ComposerAction) => void;
+  /**
+   * Go to the step that clears the current blocker.
+   *
+   * The ladder says "Press Validate under Channels" - which was fine when all five sections were
+   * one scrolling page, and became a dead end the moment the step rail made Channels a separate
+   * screen. Reported 2026-10-02: "I can't publish or schedule or send for approval." The buttons
+   * were correctly disabled and the reason was correctly displayed; there was simply no way to
+   * act on it from where the operator was standing.
+   */
+  onGoToStep?: (step: 'setup' | 'channels' | 'preview') => void;
 }
 
 /**
@@ -36,7 +46,12 @@ export interface ComposerConfirmationProps {
  * question an operator actually arrives with is "why can I not click anything?", and that used
  * to be answered last and in grey.
  */
-function Ladder({ steps }: { steps: ConfirmStep[] }) {
+/** Which step a blocked rung is cleared on. The ladder names the action; this is where it lives. */
+const CLEARED_ON: Partial<Record<ConfirmStep['key'], { step: 'setup' | 'channels' | 'preview'; label: string }>> = {
+  validate: { step: 'channels', label: 'Go to Channels and validate' },
+};
+
+function Ladder({ steps, onGoToStep }: { steps: ConfirmStep[]; onGoToStep?: ComposerConfirmationProps['onGoToStep'] }) {
   const mark = (state: ConfirmStep['state']) =>
     state === 'done' ? '✓' : state === 'current' ? '→' : '·';
   const tone = (state: ConfirmStep['state']) =>
@@ -49,6 +64,18 @@ function Ladder({ steps }: { steps: ConfirmStep[] }) {
           <span>
             <span className={tone(st.state)}>{st.label}</span>
             {st.detail && <span className="small text-muted ms-2">{st.detail}</span>}
+            {/* The way out, beside the reason. A blocker an operator cannot act on from where
+                they are reading it is just an explanation of being stuck. */}
+            {st.state === 'current' && onGoToStep && CLEARED_ON[st.key] && (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-primary ms-2 py-0"
+                data-testid={`confirm-goto-${st.key}`}
+                onClick={() => onGoToStep(CLEARED_ON[st.key]!.step)}
+              >
+                {CLEARED_ON[st.key]!.label}
+              </button>
+            )}
           </span>
         </li>
       ))}
@@ -72,7 +99,7 @@ function approvalTone(label: ConfirmationSummary['approval']['label']): 'success
   return 'neutral';
 }
 
-export default function ComposerConfirmation({ summary, busy, onAction }: ComposerConfirmationProps) {
+export default function ComposerConfirmation({ summary, busy, onAction, onGoToStep }: ComposerConfirmationProps) {
   const { brand, campaign, accounts, schedule, copy, assets, links, linkGaps, approval, validation, readiness } = summary;
   const poll = summary.item.poll;
   const ladder = confirmLadder(summary);
@@ -83,7 +110,7 @@ export default function ComposerConfirmation({ summary, busy, onAction }: Compos
           reference material for a decision this tells you whether you can yet make. */}
       <div className="border rounded p-3 mb-3 bg-light" data-testid="confirm-status">
         <div className="fw-semibold mb-2" data-testid="confirm-headline">{ladder.headline}</div>
-        <Ladder steps={ladder.steps} />
+        <Ladder steps={ladder.steps} onGoToStep={onGoToStep} />
         {ladder.nextAction && (
           <button
             type="button"

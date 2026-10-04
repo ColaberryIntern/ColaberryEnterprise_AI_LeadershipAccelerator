@@ -97,9 +97,18 @@ export function publicUrl(page: LandingPage): string | null {
  * asserted that the brief does not support. Collapsing them into one "issues" count would hide
  * which kind you have.
  */
-export function draftWarnings(draft: { placeholders: string[]; unverifiedClaims: string[] } | null): string[] {
+export function draftWarnings(
+  draft: { placeholders: string[]; unverifiedClaims: string[]; droppedSections?: string[] } | null,
+): string[] {
   if (!draft) return [];
   const out: string[] = [];
+  // First, because it means the page is missing something the brief asked for - a louder problem
+  // than a hole to fill or a claim to check.
+  if (draft.droppedSections && draft.droppedSections.length > 0) {
+    out.push(
+      `Some of the brief could not be turned into a section and was left out: ${draft.droppedSections.join('; ')}. Re-run with a clearer brief, or add those parts by hand.`,
+    );
+  }
   if (draft.placeholders.length > 0) {
     out.push(`Fill these in before publishing: ${draft.placeholders.join(', ')}.`);
   }

@@ -4,7 +4,7 @@ import { sequelize } from '../config/database';
 /**
  * `external_path` is what every row here was until 2026-10-01: a marketing-enabled path on a site
  * that exists somewhere else, so a campaign could point at it. `hosted` is a page this platform
- * builds, stores and serves at /p/:brand/:slug, which is the only kind that can be tracked end to
+ * builds, stores and serves at /lp/:brand/:slug, which is the only kind that can be tracked end to
  * end. Both live in one table because the campaign destination dropdown reads both.
  */
 export type LandingPageKind = 'external_path' | 'hosted';

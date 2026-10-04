@@ -13,8 +13,10 @@ import ManageInternDrawer from '../ManageInternDrawer';
  * tests below try to fire them by accident in every way available.
  */
 const mockTransition = jest.fn();
+const mockNudge = jest.fn();
 jest.mock('../../../../services/adminInternConsoleApi', () => ({
   transitionIntern: (...a: unknown[]) => mockTransition(...a),
+  nudgeIntern: (...a: unknown[]) => mockNudge(...a),
   ONE_WAY_ACTIONS: ['complete', 'withdraw', 'remove'],
 }));
 
@@ -196,11 +198,69 @@ describe('when the server refuses', () => {
   });
 });
 
-describe('controls that are not available', () => {
-  it('renders Nudge and Note disabled, each saying why', async () => {
+describe('the nudge', () => {
+  beforeEach(() => mockNudge.mockResolvedValue({
+    outcome: 'dry_run', subject: 'Checking in on your internship', to: 'intern@example.com',
+  }));
+
+  it('cannot send before a preview exists', async () => {
+    // The manager sees the subject and the address before anything reaches a student.
     await render();
 
-    expect(button('Nudge').disabled).toBe(true);
+    expect(button('Send nudge').disabled).toBe(true);
+  });
+
+  it('previews without sending', async () => {
+    await render();
+
+    await act(async () => { button('Preview').click(); });
+
+    expect(mockNudge).toHaveBeenCalledWith('app-1', 'quiet_check_in', expect.objectContaining({ send: false }));
+    expect(text()).toContain('Will send');
+    expect(text()).toContain('intern@example.com');
+  });
+
+  it('enables sending only after the preview, and sends explicitly', async () => {
+    await render();
+    await act(async () => { button('Preview').click(); });
+
+    expect(button('Send nudge').disabled).toBe(false);
+    mockNudge.mockResolvedValue({ outcome: 'sent' });
+    await act(async () => { button('Send nudge').click(); });
+
+    expect(mockNudge).toHaveBeenLastCalledWith('app-1', 'quiet_check_in', expect.objectContaining({ send: true }));
+  });
+
+  it('withdraws the send button again when the message is changed', async () => {
+    // A preview of one message must not authorise sending a different one.
+    await render();
+    await act(async () => { button('Preview').click(); });
+    expect(button('Send nudge').disabled).toBe(false);
+
+    const note = container.querySelectorAll('.aint-nudge input')[0] as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setter.call(note, 'a different line');
+      note.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    expect(button('Send nudge').disabled).toBe(true);
+  });
+
+  it('surfaces a server refusal rather than claiming it sent', async () => {
+    mockNudge.mockResolvedValue({ outcome: 'skipped', reason: 'kill_switch_active' });
+    await render();
+
+    await act(async () => { button('Preview').click(); });
+
+    expect(text()).toContain('Not sent: kill_switch_active');
+  });
+});
+
+describe('controls that are not available', () => {
+  it('renders Note disabled, saying why', async () => {
+    await render();
+
     expect(button('Note').disabled).toBe(true);
     expect(button('Note').title).toContain('table that does not exist');
   });

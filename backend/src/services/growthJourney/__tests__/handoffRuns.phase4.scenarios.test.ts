@@ -108,7 +108,7 @@ describe('A/B: learners hand off through the learner deferral, and only with Exp
     });
   }
 
-  it('A: a NEEDS_ALI reply reaches the ali queue through the reply-route hook - keyed on the message, so the same message twice is one row - and a NOT_INTERESTED reply hands nothing to anyone', async () => {
+  it('B: a NEEDS_ALI reply reaches the ali queue through the reply-route hook - keyed on the message, so the same message twice is one row - and a NOT_INTERESTED reply hands nothing to anyone', async () => {
     const [, activating] = learnerScenarios();
     arrangeWorld([activating]);
     const leadId = activating.subject.lead_id as number;

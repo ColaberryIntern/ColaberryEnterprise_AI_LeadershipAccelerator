@@ -9,7 +9,7 @@ import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContai
 // The qualification services lazy-load their models inside their functions, so these imports never init the ORM.
 import {
   createQualification, recordDecision, approveGovQualification, recordDocumentReview,
-  createDecoupledQualification, getDecoupledWorkspace,
+  createDecoupledQualification, getDecoupledWorkspace, recordZipAttestation, approveDecoupledQualification,
   evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom,
   QUALIFICATION_DECISIONS, APPROVAL_DECISIONS,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
@@ -283,8 +283,26 @@ const approveBody = z.object({
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/approve', requireSection('program'), async (req: Request, res: Response) => {
   const p = qualKeyParam.safeParse(req.params);
   if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
-  // Pursuit approval on the DECOUPLED (ZIP) path is a later, coordinator-gated slice — never runs OP approval logic here.
-  if (isGwsKey(p.data.canonicalOpportunityId)) { res.status(409).json({ decoupledApprovalUnavailable: true, error: 'Pursuit approval is not enabled on the ZIP workspace path yet.' }); return; }
+  // DECOUPLED (ZIP) pursuit approval: the uploaded+attested ZIP is the evidence (no OP re-fetch). Same ordered gate.
+  if (isGwsKey(p.data.canonicalOpportunityId)) {
+    const b = approveBody.safeParse(req.body ?? {});
+    if (!b.success) { res.status(400).json({ error: 'Invalid approval body.', issues: b.error.issues }); return; }
+    const { canonicalOpportunityId } = p.data;
+    const scope = await scopeOrFail(res, 'gov_qualification_decoupled_approve_scope', { canonicalOpportunityId });
+    if (!scope) return;
+    try {
+      const q = await approveDecoupledQualification({
+        gwsKey: canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
+        decision: b.data.decision, approverIdentityId: actorIdentity(req), rationale: b.data.rationale ?? null,
+      });
+      res.json({ qualification: q });
+    } catch (err: any) {
+      if (mapQualificationError(res, err)) return;
+      logFail('gov_qualification_decoupled_approve_failed', err, { canonicalOpportunityId });
+      res.status(500).json({ error: 'Could not approve the qualification.' });
+    }
+    return;
+  }
   const b = approveBody.safeParse(req.body ?? {});
   if (!b.success) { res.status(400).json({ error: 'Invalid approval body.', issues: b.error.issues }); return; }
   const { canonicalOpportunityId } = p.data;
@@ -414,6 +432,44 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/review-doc
     if (mapQualificationError(res, err)) return;
     logFail('gov_qualification_review_documents_failed', err, { canonicalOpportunityId });
     res.status(500).json({ error: 'Could not record the document review.' });
+  }
+});
+
+const attestZipBody = z.object({
+  biddingEntity: biddingEntityField,
+  expectedVersion: z.coerce.number().int().min(1),
+  mode: z.enum(['add', 'revoke']),
+});
+
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/attest-zip — DECOUPLED (gws) evidence attestation.
+ * The uploaded solicitation ZIP is the evidence of record for a ZIP workspace (there is NO OP snapshot to validate
+ * docIds against), so the server computes the sha256 and records a single synthetic 'solicitation_zip' attestation
+ * (bytes are NEVER stored); 'revoke' removes it. GWS-ONLY — a canonical opportunity uses /review-documents (400 here).
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/attest-zip', requireSection('program'), uploadDocumentZip, async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  if (!isGwsKey(p.data.canonicalOpportunityId)) { res.status(400).json({ error: 'ZIP attestation is only for the decoupled ZIP workspace; a canonical opportunity uses review-documents.' }); return; }
+  const b = attestZipBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid attest-zip body.', issues: b.error.issues }); return; }
+  const file: any = (req as any).file;
+  if (b.data.mode === 'add' && (!file || !file.buffer)) { res.status(400).json({ error: 'No document file uploaded (field "document").' }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_qualification_attest_zip_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const sha256 = file && file.buffer ? crypto.createHash('sha256').update(file.buffer).digest('hex') : null;
+    const q = await recordZipAttestation({
+      gwsKey: canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
+      reviewerIdentityId: actorIdentity(req), mode: b.data.mode,
+      filename: file ? (file.originalname || 'solicitation.zip') : null, sha256, sizeBytes: file ? file.size : null,
+    });
+    res.status(b.data.mode === 'add' ? 201 : 200).json({ qualification: q });
+  } catch (err: any) {
+    if (mapQualificationError(res, err)) return;
+    logFail('gov_qualification_attest_zip_failed', err, { canonicalOpportunityId });
+    res.status(500).json({ error: 'Could not record the ZIP attestation.' });
   }
 });
 

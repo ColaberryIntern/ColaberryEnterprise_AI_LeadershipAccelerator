@@ -5,8 +5,9 @@ import {
 import ManageInternDrawer from './ManageInternDrawer';
 import {
   ago, byNeediest, certLabel, heatStep, heatColumnLabels, heatRow, WINDOW_DAYS,
-  LEVEL_LABEL, BUCKET_LABEL,
+  LEVEL_LABEL, BUCKET_LABEL, dominantTrack, TRACK_ORDER, TRACK_LABEL,
 } from './consoleFormat';
+
 
 /**
  * View C — the Activity Timeline.
@@ -48,10 +49,15 @@ export const ConsoleViewC: React.FC<{
       <div className="aint-card">
         <div className="aint-card-h">
           <h2><i className="ri-calendar-2-line" aria-hidden="true" /> Last 28 days of activity</h2>
+          {/* The legend keys the COLOURS, so it lists the tracks rather than intensities. Depth
+              within a colour still reads as volume. */}
           <div className="aint-legend aint-heat-legend">
-            <span><i className="aint-hc hs-0" aria-hidden="true" />None</span>
-            <span><i className="aint-hc hs-2" aria-hidden="true" />Some</span>
-            <span><i className="aint-hc hs-4" aria-hidden="true" />Busy</span>
+            {TRACK_ORDER.map((track) => (
+              <span key={track}>
+                <i className={`aint-hc tr-${track} s3`} aria-hidden="true" />
+                {TRACK_LABEL[track]}
+              </span>
+            ))}
           </div>
         </div>
         <div className="aint-card-b aint-heat-wrap">
@@ -119,18 +125,27 @@ const HeatRow: React.FC<{ row: InternRow; selected: boolean; onSelect: () => voi
       <span className={`aint-dot lv-${row.activity.level}`} aria-hidden="true" />
       {row.name}
     </button>
-    {heatRow(row).map((day, i) => (
+    {heatRow(row).map((day, i) => {
+      // Colour by WHAT they did, shade by how much. A day with nothing has no track and keeps the
+      // empty-cell grey rather than taking the first track's colour at zero intensity.
+      const track = dominantTrack(day);
+      const parts = TRACK_ORDER
+        .filter((t) => (day.by_category?.[t] ?? 0) > 0)
+        .map((t) => `${TRACK_LABEL[t]} ${day.by_category[t]}`);
+      const breakdown = parts.length ? ` — ${parts.join(', ')}` : '';
+      return (
       <button
         type="button"
         key={`${row.enrollment_id}-${day.date || i}`}
-        className={`aint-hc hs-${heatStep(day.events)}`}
+        className={track ? `aint-hc tr-${track} s${heatStep(day.events)}` : 'aint-hc hs-0'}
         onClick={onSelect}
         // Every cell is a real button with a name, because a grid of unlabelled divs is unusable
         // without a mouse and tells a screen reader nothing at all.
-        aria-label={`${row.name}, ${day.date || 'unknown date'}: ${day.events} ${day.events === 1 ? 'event' : 'events'}`}
-        title={`${day.date || 'unknown date'}: ${day.events} ${day.events === 1 ? 'event' : 'events'}`}
+        aria-label={`${row.name}, ${day.date || 'unknown date'}: ${day.events} ${day.events === 1 ? 'event' : 'events'}${breakdown}`}
+        title={`${day.date || 'unknown date'}: ${day.events} ${day.events === 1 ? 'event' : 'events'}${breakdown}`}
       />
-    ))}
+      );
+    })}
   </>
 );
 

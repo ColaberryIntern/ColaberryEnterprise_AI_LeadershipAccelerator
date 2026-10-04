@@ -1,12 +1,18 @@
 jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }));
+// The allocator asks the registry which hosts exist. Mocked here so that lookup
+// never consumes the sequelize.query queue these tests carefully sequence — an
+// empty list is the single-host world they were written to describe.
+jest.mock('../../zoom/zoomHostRegistry', () => ({ allocatableHostEmails: jest.fn() }));
 jest.mock('../../../models/LiveSession', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 
 import { sequelize } from '../../../config/database';
 import LiveSession from '../../../models/LiveSession';
+import { allocatableHostEmails } from '../../zoom/zoomHostRegistry';
 import { reserveSlot, releaseSlot, nextAvailableFrom, collidingClassWindows } from '../presentationCapacityService';
 
 const q = sequelize.query as unknown as jest.Mock;
 const sessions = (LiveSession as unknown as { findAll: jest.Mock }).findAll;
+const hostPool = allocatableHostEmails as unknown as jest.Mock;
 
 /** Well in the future so the in-the-past guard never interferes. */
 const START = new Date('2026-11-04T19:00:00Z');
@@ -17,6 +23,23 @@ const req = (over: Record<string, unknown> = {}) => ({
 } as any);
 
 /** Postgres raises 23P01 when the exclusion constraint rejects an overlap. */
+/**
+ * Find a query by what it IS, not by when it happened.
+ *
+ * These assertions used to index into call 0. Then the allocator started looking up
+ * registered hosts before inserting, every index shifted by one, and nine tests
+ * failed without a single guarantee having changed. Matching on the statement keeps
+ * them pinned to the behaviour they actually describe.
+ */
+const callMatching = (needle: string | RegExp) => {
+  const hit = q.mock.calls.find((c: any[]) => (needle instanceof RegExp
+    ? needle.test(String(c[0]))
+    : String(c[0]).includes(needle)));
+  if (!hit) throw new Error('no query matched ' + String(needle));
+  return hit;
+};
+const insertCall = () => callMatching('INSERT INTO presentation_slot_reservations');
+
 const exclusionViolation = () =>
   Object.assign(new Error('conflicting key value violates exclusion constraint "presentation_slot_no_overlap"'),
     { parent: { code: '23P01' } });
@@ -24,6 +47,8 @@ const exclusionViolation = () =>
 beforeEach(() => {
   jest.clearAllMocks();
   q.mockReset();
+  // No registered Zoom hosts: the single-host world these tests describe.
+  hostPool.mockResolvedValue([]);
   sessions.mockResolvedValue([]);          // no classes unless a test adds one
 });
 
@@ -33,13 +58,13 @@ describe('capacity — the happy path', () => {
     const r = await reserveSlot(req());
     expect(r).toMatchObject({ ok: true, reservationId: 'res-1' });
     // '[)' matters: a slot ending at 19:30 must not block one starting at 19:30.
-    expect(String(q.mock.calls[0][0])).toContain("tstzrange(:s, :e, '[)')");
+    expect(String(insertCall()[0])).toContain("tstzrange(:s, :e, '[)')");
   });
 
   it('records who holds it and in what mode', async () => {
     q.mockResolvedValueOnce([[{ id: 'res-2' }], {}]);
     await reserveSlot(req({ mode: 'practice_peer', attemptId: 'att-9' }));
-    const vals = q.mock.calls[0][1].replacements;
+    const vals = insertCall()[1].replacements;
     expect(vals).toMatchObject({ eid: 'e1', mode: 'practice_peer', aid: 'att-9' });
   });
 });
@@ -64,7 +89,7 @@ describe('capacity — two students, one host', () => {
     // The service must insert first and interpret the constraint's refusal.
     q.mockResolvedValueOnce([[{ id: 'res-3' }], {}]);
     await reserveSlot(req());
-    const firstSql = String(q.mock.calls[0][0]);
+    const firstSql = String(insertCall()[0]);
     expect(firstSql).toMatch(/INSERT INTO presentation_slot_reservations/);
     expect(firstSql).not.toMatch(/SELECT .* FROM presentation_slot_reservations/i);
   });
@@ -148,7 +173,8 @@ describe('capacity — releasing', () => {
   it('frees the slot by flipping state, keeping the row for history', async () => {
     q.mockResolvedValueOnce([[{ id: 'res-1' }], {}]);
     await expect(releaseSlot('res-1', 'student cancelled')).resolves.toBe(true);
-    const sql = String(q.mock.calls[0][0]);
+    // The UPDATE, not the insert — releasing never inserts anything.
+    const sql = String(callMatching('UPDATE presentation_slot_reservations')[0]);
     expect(sql).toMatch(/SET state = 'released'/);
     expect(sql).not.toMatch(/DELETE/i);
     // Only a held reservation can be released — releasing twice must not resurrect it.

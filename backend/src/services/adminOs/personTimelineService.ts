@@ -314,6 +314,53 @@ const BRANCHES: Branch[] = [
             SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
           )`,
   },
+  // ── Added 2026-10-02 for the Intern Console's per-category activity colours ────────────
+  //
+  // Four sources the feed was missing. Each is a real thing a person did that had no line in their
+  // own timeline: they sat a certification, they got a build task verified from a commit, they
+  // commented, they reacted. Added here rather than in a console-only loader so the feed and the
+  // console's heatmap are drawn from ONE definition of what counts as activity — the thing this
+  // module's header already argues for.
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT cs.completed_at AS occurred_at, 'learning' AS domain, 'cert_sessions' AS source,
+                 'cert_' || COALESCE(cs.mode, 'sitting') AS type,
+                 COALESCE(cs.scaled_score::text, 'no score') ||
+                   CASE WHEN cs.total_count IS NOT NULL
+                        THEN ' on ' || cs.total_count::text || ' items' ELSE '' END AS summary
+          FROM cert_sessions cs
+          WHERE cs.enrollment_id IN (:enrollmentIds)
+            AND cs.completed_at IS NOT NULL AND cs.status = 'completed'`,
+  },
+  {
+    // Keyed through the project, because that is where the enrollment lives. The alias carrying
+    // `enrollment_id` is what the per-enrollment projection rewrites, so it must be `p`.
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT st.verified_at AS occurred_at, 'learning' AS domain, 'student_tasks' AS source,
+                 'task_verified' AS type,
+                 COALESCE(st.story_id || ' · ', '') || COALESCE(left(st.title, 110), '') AS summary
+          FROM student_tasks st
+          JOIN projects p ON p.id = st.project_id
+          WHERE p.enrollment_id IN (:enrollmentIds) AND st.verified_at IS NOT NULL`,
+  },
+  {
+    domain: 'community', key: 'enrollment',
+    sql: `SELECT cc.created_at AS occurred_at, 'community' AS domain, 'community_comments' AS source,
+                 'comment' AS type, left(cc.body, 140) AS summary
+          FROM community_comments cc
+          WHERE cc.member_id IN (
+            SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
+          )`,
+  },
+  {
+    domain: 'community', key: 'enrollment',
+    sql: `SELECT cl2.created_at AS occurred_at, 'community' AS domain, 'community_likes' AS source,
+                 'reaction' AS type, NULL AS summary
+          FROM community_likes cl2
+          WHERE cl2.member_id IN (
+            SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
+          )`,
+  },
 ];
 
 const MAX_LIMIT = 500;
@@ -439,11 +486,18 @@ export interface EnrollmentActivityDay {
   enrollmentId: string;
   /** `YYYY-MM-DD`. */
   date: string;
-  /** Events that day, with identical-event collapsing already applied. */
+  /** Events that day FROM THIS SOURCE. */
   events: number;
-  /** The latest event that day, ISO — so the caller can derive "last active" exactly. */
+  /** The latest event that day from this source, ISO. */
   lastAt: string;
-  /** Which table that latest event came from. */
+  /**
+   * Which table these events came from.
+   *
+   * Rows are per source rather than per day since 2026-10-02: the console colours a day by what the
+   * person was doing — training, project, certification, community — and that is a property of the
+   * source table. Collapsing to one row per day threw the category away before anyone could use it.
+   * A caller that wants the old shape sums the sources for a date.
+   */
   lastSource: string;
 }
 
@@ -471,13 +525,13 @@ export async function activityDaysByEnrollment(input: {
             to_char(date_trunc('day', t.occurred_at), 'YYYY-MM-DD') AS day,
             COUNT(*)::int AS events,
             max(t.occurred_at) AS last_at,
-            (array_agg(t.source ORDER BY t.occurred_at DESC))[1] AS last_source
+            t.source AS last_source
      FROM (SELECT unnest(ARRAY[:enrollmentIds]::uuid[]) AS id) enr
      CROSS JOIN LATERAL (
        ${usable.map((b) => scopeBranchToLateral(b.sql)).join('\n       UNION ALL\n       ')}
      ) t
      WHERE t.occurred_at IS NOT NULL
-     GROUP BY enr.id, date_trunc('day', t.occurred_at)
+     GROUP BY enr.id, date_trunc('day', t.occurred_at), t.source
      ORDER BY enr.id, 2`,
     { type: QueryTypes.SELECT, replacements: { enrollmentIds: input.enrollmentIds } },
   );

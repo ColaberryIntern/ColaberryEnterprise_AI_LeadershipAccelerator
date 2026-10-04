@@ -53,3 +53,98 @@ describe('no controller has a code path that reads a host header', () => {
     });
   }
 });
+
+/**
+ * T612: every Growth Journey router carries the rate limit, and carries it PATH-SCOPED.
+ *
+ * The acceptance line for this task asked for a test that lists the four router files
+ * and asserts each imports `express-rate-limit`. That is weaker than it sounds in two
+ * directions, so this asserts something stronger instead. A direct import of the
+ * library would be satisfied by four copies of the same nine-line config - the
+ * duplication the shared module exists to remove - and the files now import that module
+ * rather than the library. And an import proves nothing about the line that matters:
+ * `router.use(limiter)` bare would pass an import check while gating every unrelated
+ * router mounted after it, which is the failure this repo has had in production twice.
+ * So each file must MOUNT the limiter, and the mount must carry a path argument.
+ */
+describe('T612: the rate limiter is mounted on every Growth Journey router, path-scoped', () => {
+  const ADMIN_ROUTERS = ['growthJourneyRoutes.ts', 'growthJourneyStatusRoutes.ts', 'growthJourneyReadRoutes.ts'];
+
+  describe.each(ADMIN_ROUTERS)('%s', (file) => {
+    const code = () => stripComments(read('..', file));
+
+    it('imports the shared limiter', () => {
+      expect(code()).toMatch(/import \{[^}]*growthJourneyAdminLimiter[^}]*\} from '\.\.\/growthJourneyRateLimit'/);
+    });
+
+    it('mounts it WITH a path prefix', () => {
+      expect(code()).toMatch(/router\.use\(\s*[A-Za-z_$][\w$]*\s*,\s*growthJourneyAdminLimiter\s*\)/);
+    });
+
+    it('never mounts it bare - a bare use() bills unrelated routers', () => {
+      expect(code()).not.toMatch(/router\.use\(\s*growthJourneyAdminLimiter\s*\)/);
+    });
+
+    it('mounts it BELOW requireAdmin, so the key is an admin and not the CDN edge', () => {
+      // Inverted after T612's verifier proved the original ordering keyed on a
+      // Cloudflare edge node in production: no guard runs before this router, so
+      // `req.admin` was never set and `req.ip` - the edge - was the only key. Every
+      // caller behind one PoP shared a 120/min bucket, and an unauthenticated flood
+      // would have spent it and locked out every admin. `authFailureLog.ts` has
+      // recorded since August 2026 that `req.ip` here names the CDN and must never
+      // become a rate-limiting input.
+      const c = code();
+      const limiter = c.indexOf('growthJourneyAdminLimiter)');
+      const guard = c.search(/router\.use\([A-Za-z_$][\w$]*, requireAdmin\)/);
+      expect(limiter).toBeGreaterThan(-1);
+      expect(guard).toBeGreaterThan(-1);
+      expect(guard).toBeLessThan(limiter);
+    });
+  });
+
+  describe('journeyNudgeRoutes.ts', () => {
+    const code = () => stripComments(read('..', '..', 'journeyNudgeRoutes.ts'));
+
+    it('builds its OWN bucket rather than sharing the admin one', () => {
+      const c = code();
+      expect(c).toMatch(/import \{[^}]*makeGrowthJourneyLimiter[^}]*\} from '\.\/growthJourneyRateLimit'/);
+      expect(c).toMatch(/makeGrowthJourneyLimiter\('journey-nudges'\)/);
+      // An admin id means nothing on a learner surface, and one shared IP bucket would
+      // let a learner and an admin exhaust each other's budget.
+      expect(c).not.toContain('growthJourneyAdminLimiter');
+    });
+
+    it('sits AFTER requireParticipant in every route chain, and is never a bare use()', () => {
+      // These guards are per-route, so there is no `router.use` to sit below. Ahead of
+      // them the limiter would key on `req.ip` - the Cloudflare edge, not a learner.
+      const c = code();
+      const chains = c.match(/router\.(get|post)\([^)]*\)/g) ?? [];
+      const guarded = chains.filter((line) => line.includes('requireParticipant'));
+      expect(guarded.length).toBeGreaterThanOrEqual(2);
+      for (const line of guarded) {
+        expect(line).toContain('nudgeLimiter');
+        expect(line.indexOf('requireParticipant')).toBeLessThan(line.indexOf('nudgeLimiter'));
+      }
+      expect(c).not.toMatch(/router\.use\(\s*nudgeLimiter\s*\)/);
+    });
+  });
+
+  it('the shared module is the ONLY place the library is imported for these routers', () => {
+    // One answer in the repo to "how fast may a client hit this surface", rather than
+    // four that can drift apart.
+    for (const file of ADMIN_ROUTERS) {
+      expect(stripComments(read('..', file))).not.toContain('express-rate-limit');
+    }
+    expect(stripComments(read('..', '..', 'journeyNudgeRoutes.ts'))).not.toContain('express-rate-limit');
+    expect(stripComments(read('..', '..', 'growthJourneyRateLimit.ts'))).toContain("from 'express-rate-limit'");
+  });
+
+  it('the scan is anchored on CODE, not prose - a header that discusses the mount does not satisfy it', () => {
+    // The positive control. Without it this whole describe could be passing on comment
+    // text, which is exactly how a grep in this task reported a deleted guard as present.
+    const commentOnly = stripComments(
+      '// router.use(BASE, growthJourneyAdminLimiter);\n/* router.use(X, growthJourneyAdminLimiter) */\n',
+    );
+    expect(commentOnly).not.toMatch(/router\.use\(\s*[A-Za-z_$][\w$]*\s*,\s*growthJourneyAdminLimiter\s*\)/);
+  });
+});
