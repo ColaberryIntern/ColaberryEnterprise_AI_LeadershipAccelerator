@@ -13,8 +13,23 @@ export interface CommunityRoomsHealth {
   active_rooms: number;
   bookings_by_state: Record<string, number>;
   rsvp_going: number;
-  attended: number;
-  rsvp_to_attendance_pct: number;
+  /**
+   * People who pressed "join". That is an INTENT, not evidence anyone was in the
+   * room: the click is recorded the moment the link is handed over, before the
+   * meeting is even opened, and nothing later retracts it if they never arrive.
+   */
+  join_intent: number;
+  /**
+   * Attendance from a provider report rather than a click.
+   *
+   * This is 0 today, and that is honest rather than broken: no reconciliation
+   * against Zoom's participant report exists yet (it lands with recording
+   * ingestion). Reporting it as a separate, visibly-zero number is the point —
+   * folding intent into it would manufacture an attendance figure out of clicks.
+   */
+  attended_confirmed: number;
+  /** Of those who said they were coming, how many pressed join. Not attendance. */
+  rsvp_to_intent_pct: number;
   unanswered_questions: number;
   open_reports: number;
   outbox_backlog: number;
@@ -27,7 +42,8 @@ export async function getCommunityRoomsHealth(): Promise<CommunityRoomsHealth> {
     activeRooms,
     bookingRows,
     rsvpGoing,
-    attended,
+    joinIntent,
+    attendedConfirmed,
     unansweredQuestions,
     openReports,
     outboxBacklog,
@@ -36,7 +52,12 @@ export async function getCommunityRoomsHealth(): Promise<CommunityRoomsHealth> {
     CommunityRoom.count({ where: { status: 'active' } }),
     RoomBooking.findAll({ attributes: ['state'] }),
     RoomBookingAttendee.count({ where: { rsvp_state: 'going' } }),
-    RoomBookingAttendee.count({ where: { attended: true } }),
+    RoomBookingAttendee.count({ where: { attendance_source: 'intent' } }),
+    // Anything NOT sourced from a click. `attended` alone would count every
+    // join-intent row, which is how a click becomes an attendance statistic.
+    RoomBookingAttendee.count({
+      where: { attended: true, attendance_source: { [Op.ne]: 'intent' } },
+    }),
     RoomMessage.count({
       where: { kind: 'question', [Op.or]: [{ question_status: null }, { question_status: 'open' }] },
     }),
@@ -54,8 +75,9 @@ export async function getCommunityRoomsHealth(): Promise<CommunityRoomsHealth> {
     active_rooms: activeRooms,
     bookings_by_state: bookingsByState,
     rsvp_going: rsvpGoing,
-    attended,
-    rsvp_to_attendance_pct: rsvpGoing > 0 ? Math.round((attended / rsvpGoing) * 100) : 0,
+    join_intent: joinIntent,
+    attended_confirmed: attendedConfirmed,
+    rsvp_to_intent_pct: rsvpGoing > 0 ? Math.round((joinIntent / rsvpGoing) * 100) : 0,
     unanswered_questions: unansweredQuestions,
     open_reports: openReports,
     outbox_backlog: outboxBacklog,
