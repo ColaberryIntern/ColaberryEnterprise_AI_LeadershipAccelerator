@@ -76,6 +76,29 @@ function RequirementRow({ r }: { r: QualRequirementEval }): React.ReactElement {
   );
 }
 
+/** One due-stage group of requirement rows, capped to a few with a "Show all" toggle so a long
+ *  solicitation (dozens of binding requirements) doesn't force a long scroll. Nothing is dropped —
+ *  the hidden rows are one click away, and the count is always shown next to the stage. */
+function RequirementStageList({ stage, rows }: { stage: string; rows: QualRequirementEval[] }): React.ReactElement {
+  const LIMIT = 6;
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? rows : rows.slice(0, LIMIT);
+  const hiddenCount = rows.length - visible.length;
+  return (
+    <div className="mb-3">
+      <h3 className="h6 text-secondary text-uppercase small mb-2">
+        {STAGE_LABEL[stage]} <span className="fw-normal">({rows.length})</span>
+      </h3>
+      <ul className="list-unstyled mb-0">{visible.map((r) => <RequirementRow key={r.id + r.dueStage} r={r} />)}</ul>
+      {rows.length > LIMIT && (
+        <button type="button" className="btn btn-link btn-sm px-0 mt-1" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
+          {showAll ? 'Show fewer' : `Show all ${rows.length} (${hiddenCount} more)`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** The no-canonical landing: a trusted candidate picker, or the gap when v2 is unavailable. */
 function CandidatePicker(): React.ReactElement {
   const navigate = useNavigate();
@@ -499,10 +522,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
               {ws.evaluation.evals.length === 0 && <div className="text-secondary small">No requirements established yet. Opportunity Pulse supplies none — establish the applicable, cited requirements below before a pursuit can be approved.</div>}
               {STAGE_ORDER.filter((s) => (ws.evaluation!.byDueStage[s]?.length ?? 0) > 0).map((stage) => (
-                <div key={stage} className="mb-3">
-                  <h3 className="h6 text-secondary text-uppercase small mb-2">{STAGE_LABEL[stage]}</h3>
-                  <ul className="list-unstyled mb-0">{ws.evaluation!.byDueStage[stage].map((r) => <RequirementRow key={r.id + r.dueStage} r={r} />)}</ul>
-                </div>
+                <RequirementStageList key={stage} stage={stage} rows={ws.evaluation!.byDueStage[stage]} />
               ))}
               {ws.coverage && !ws.coverage.sufficient && (
                 <div className="small text-warning-emphasis mt-2"><i className="ri-information-line me-1" aria-hidden="true" />Coverage not yet sufficient for approval: {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
