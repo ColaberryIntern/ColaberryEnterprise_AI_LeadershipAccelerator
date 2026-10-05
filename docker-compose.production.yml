@@ -78,6 +78,11 @@ services:
       # edit may not recreate). Flip to "false" to deactivate; the code is fully inert when unset.
       # Creating the project NEVER authorizes a build — that stays the separate buildAuthorization gate.
       ENABLE_GOV_INGESTION: "true"
+      # Gov pursuit DAILY SYNC — a 7am Central job re-checks the live v1 discovery feed for pursued
+      # opportunities and flags a changed close date / drop from the feed (govOpportunitySync). Literal "true"
+      # (same reasoning as ENABLE_GOV_INGESTION). Surfaces changes only; NEVER advances a decision. Flip to
+      # "false" to deactivate; the scheduler entry no-ops when unset.
+      ENABLE_GOV_DAILY_SYNC: "true"
       # Service-to-service token training.colaberry.com uses for /api/v1/* calls.
       ENTERPRISE_CRM_TOKEN: ${ENTERPRISE_CRM_TOKEN:-}
       # AI News Flash intelligence pipeline — the daily generator behind the
