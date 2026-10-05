@@ -10,8 +10,13 @@ appended to this file.
 
 ## 1. Every business task resolves to exactly one of two states
 
-LC-08 requires that *every task maps to a justified human surface/action or explicit background
-operation*. The implementation is `backend/src/services/lifecycle/generation/workspaceMapping.ts`.
+LC-08 requires that *every task maps to a justified human surface/action or explicit
+background operation*. The implementation is two modules under
+`backend/src/services/lifecycle/generation/`: **`workspaceMapping.ts`** holds the
+orchestration and the consolidation report, and **`workspaceBindingChecks.ts`** holds the
+types, the refusal codes and the shape, content, audience and acceptance checks. The split
+happened because the single module reached 602 lines against CLAUDE.md’s 500-line hard
+ceiling; `workspaceMapping` re-exports the public surface, so it remains the import point.
 
 ```
 TaskSurfaceBinding =
@@ -232,5 +237,7 @@ reviewer.
 | `SURFACE_TASKIDS_INCONSISTENT` | A ref whose `taskIds` omit the task it is bound to |
 | `SURFACE_NO_HUMAN_PATH` | **Project level:** no task reaches a human surface, with no rationale and no named acceptor |
 | `SURFACE_ACCEPTANCE_SELF_SUPPLIED` | **Project level:** the no-human-path acceptance came from the same model turn as the blueprint |
+| `SURFACE_ARGUMENT_NOT_ARRAY` | The `bindings` argument is not an array — refused rather than reported as an empty, compliant mapping |
+| `SURFACE_PROJECT_UNUSABLE` | The project carries no usable tasks, roles or requirements array |
 A test asserts the set of codes the module can actually emit equals this declared list in both
 directions, so the table cannot drift and no code can be decorative.

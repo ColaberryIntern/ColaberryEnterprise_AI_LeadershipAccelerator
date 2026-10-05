@@ -218,37 +218,198 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     expect(run).not.toThrow();
   });
 
-  // THE FULL PROBE, as permanent tests rather than a throwaway script: every malformed shape
-  // against every one of the three exported functions. A verifier found ten live throws here;
-  // expressing the probe as tests means a regression fails the suite instead of waiting for
-  // another verification round.
-  const SHAPES: ReadonlyArray<readonly [string, unknown]> = [
-    ['null', null],
-    ['undefined', undefined],
-    ['a number', 7],
-    ['a string', 'nope'],
-    ['an array', []],
-    ['a bare object', {}],
-    ['kind-only', { kind: 'workspace' }],
-    ['whitespace taskId', { taskId: '   ', kind: 'headless', reason: 'x' }],
-    ['ref is an array', { taskId: 't-a', kind: 'workspace', ref: [] }],
-    ['ref is null', { taskId: 't-a', kind: 'workspace', ref: null }],
-    ['permissionViews [null]', { taskId: 't-a', kind: 'workspace', ref: { permissionViews: [null] } }],
-    ['taskIds [number]', { taskId: 't-a', kind: 'workspace', ref: { taskIds: [1] } }],
-  ];
+  // ─────────────────────────────────────────────────────────────────────────────
+  // A GENERATOR, NOT AN ENUMERATION.
+  //
+  // Four consecutive attempts published a claim quantified over all JSON input and backed it
+  // with a hand-written list of the shapes the author thought of. Each list missed a different
+  // layer: one field, then the container, then the array elements, then the stringification
+  // inside the refusal message. A finite list cannot establish a claim over an infinite space.
+  //
+  // So the corpus is GENERATED from a seeded deterministic PRNG, combined with the literals
+  // already known to be hostile, and spliced into every reachable position. Same seed, same
+  // corpus, every run — reproducible evidence rather than an anecdote. The standing rule is
+  // recorded in plan-phase4.md.
+  // ─────────────────────────────────────────────────────────────────────────────
 
-  const EXPORTS: ReadonlyArray<readonly [string, (b: TaskSurfaceBinding) => unknown]> = [
-    ['validateTaskSurfaces', (b) => validateTaskSurfaces(project, [b])],
-    ['consolidationAssessment', (b) => consolidationAssessment([b])],
-    ['unboundProposedSurfaces', (b) => unboundProposedSurfaces(['X'], [b])],
-  ];
-
-  for (const [fnName, run] of EXPORTS) {
-    it.each(SHAPES)(`${fnName} does not throw on %s`, (_label, shape) => {
-      expect(() => run(smuggle(shape))).not.toThrow();
-    });
+  /** Deterministic LCG. A seeded generator is reproducible; Math.random would not be. */
+  function lcg(seed: number): () => number {
+    let x = seed >>> 0;
+    return () => {
+      x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+      return x / 0x100000000;
+    };
   }
 
+  /** Emit JSON TEXT, so every value is genuinely what JSON.parse produces. */
+  function jsonText(rnd: () => number, depth: number): string {
+    const r = rnd();
+    if (depth <= 0 || r < 0.34) {
+      const leaf = rnd();
+      if (leaf < 0.2) return 'null';
+      if (leaf < 0.35) return 'true';
+      if (leaf < 0.5) return String(Math.floor(rnd() * 1000) - 500);
+      if (leaf < 0.62) return '0';
+      if (leaf < 0.75) return JSON.stringify(Math.floor(rnd() * 1e6) / 7);
+      if (leaf < 0.88) return '""';
+      return JSON.stringify(`s${Math.floor(rnd() * 9999)}`);
+    }
+    const n = Math.floor(rnd() * 4);
+    if (r < 0.67) {
+      const items: string[] = [];
+      for (let i = 0; i < n; i += 1) items.push(jsonText(rnd, depth - 1));
+      return `[${items.join(',')}]`;
+    }
+    // Object keys drawn from the names this module actually dereferences, so the generator
+    // reaches the dangerous paths rather than wandering in an unrelated keyspace.
+    const keys = ['toString', 'valueOf', 'taskId', 'kind', 'ref', 'audience', 'roleId',
+      '__proto__', 'length', '0', 'constructor'];
+    const parts: string[] = [];
+    for (let i = 0; i < n + 1; i += 1) {
+      const k = keys[Math.floor(rnd() * keys.length)];
+      parts.push(`${JSON.stringify(k)}:${jsonText(rnd, depth - 1)}`);
+    }
+    return `{${parts.join(',')}}`;
+  }
+
+  /** Literals already proven dangerous, kept so a known regression cannot slip past the PRNG. */
+  const KNOWN_HOSTILE_JSON: ReadonlyArray<string> = [
+    '{"toString":null}',   // falsified attempt 3: String() throws on this
+    '{"valueOf":null}',
+    '{"toString":null,"valueOf":null}',
+    '{"toString":{}}',
+    '{"__proto__":{"polluted":true}}',
+    '{"length":2}',
+    '[]', '{}', 'null', 'true', '0', '""', '-1', '1e308',
+  ];
+
+  /** Every position this module dereferences, as a setter on a would-be binding. */
+  const PATHS: ReadonlyArray<readonly [string, (v: unknown) => unknown]> = [
+    ['<binding itself>', (v) => v],
+    ['taskId', (v) => ({ ...base(), taskId: v })],
+    ['kind', (v) => ({ ...base(), kind: v })],
+    ['reason', (v) => ({ taskId: 't-intake', kind: 'headless', reason: v })],
+    ['ref', (v) => ({ ...base(), ref: v })],
+    ['ref.workspaceId', (v) => refAt('workspaceId', v)],
+    ['ref.workspaceTitle', (v) => refAt('workspaceTitle', v)],
+    ['ref.action', (v) => refAt('action', v)],
+    ['ref.primaryJob', (v) => refAt('primaryJob', v)],
+    ['ref.whyNotExisting', (v) => refAt('whyNotExisting', v)],
+    ['ref.deepLink', (v) => refAt('deepLink', v)],
+    ['ref.audience', (v) => refAt('audience', v)],
+    ['ref.preservesNavigationState', (v) => refAt('preservesNavigationState', v)],
+    ['ref.intendedRoles', (v) => refAt('intendedRoles', v)],
+    ['ref.intendedRoles[0]', (v) => refAt('intendedRoles', [v])],
+    ['ref.records', (v) => refAt('records', v)],
+    ['ref.records[0]', (v) => refAt('records', [v])],
+    ['ref.decisions[0]', (v) => refAt('decisions', [v])],
+    ['ref.requirementIds', (v) => refAt('requirementIds', v)],
+    ['ref.requirementIds[0]', (v) => refAt('requirementIds', [v])],
+    ['ref.taskIds', (v) => refAt('taskIds', v)],
+    ['ref.taskIds[0]', (v) => refAt('taskIds', [v])],
+    ['ref.permissionViews', (v) => refAt('permissionViews', v)],
+    ['ref.permissionViews[0]', (v) => refAt('permissionViews', [v])],
+    ['ref.permissionViews[0].roleId', (v) => refAt('permissionViews', [{ roleId: v, visibleActions: [] }])],
+    ['ref.permissionViews[0].visibleActions', (v) => refAt('permissionViews', [{ roleId: 'r', visibleActions: v }])],
+    ['ref.permissionViews[0].visibleActions[0]', (v) => refAt('permissionViews', [{ roleId: 'r', visibleActions: [v] }])],
+  ];
+
+  const base = () => ({ taskId: 't-intake', kind: 'workspace', ref: ref({ taskIds: ['t-intake'] }) });
+  const refAt = (k: string, v: unknown) => ({
+    taskId: 't-intake', kind: 'workspace',
+    ref: { ...ref({ taskIds: ['t-intake'] }), [k]: v },
+  });
+
+  function corpus(): unknown[] {
+    const rnd = lcg(20261005);
+    const out: unknown[] = KNOWN_HOSTILE_JSON.map((t) => JSON.parse(t));
+    for (let i = 0; i < 400; i += 1) out.push(JSON.parse(jsonText(rnd, 3)));
+    return out;
+  }
+
+  it('GENERATED CORPUS: no JSON.parse-producible value throws, in any position, in any export',
+    () => {
+      const values = corpus();
+      const throws: string[] = [];
+      let calls = 0;
+
+      for (const v of values) {
+        for (const [pathName, put] of PATHS) {
+          const binding = smuggle(put(v));
+          const attempts: ReadonlyArray<readonly [string, () => unknown]> = [
+            ['validateTaskSurfaces', () => validateTaskSurfaces(project, [binding])],
+            ['consolidationAssessment', () => consolidationAssessment([binding])],
+            ['unboundProposedSurfaces', () => unboundProposedSurfaces(['X'], [binding])],
+          ];
+          for (const [fn, run] of attempts) {
+            calls += 1;
+            try {
+              run();
+            } catch (e) {
+              throws.push(`${fn} @ ${pathName} :: ${(e as Error).message}`);
+            }
+          }
+        }
+      }
+
+      // The corpus is big enough to be meaningful and the assertion names what failed, so a
+      // regression reports the path rather than just a count.
+      expect(calls).toBeGreaterThan(30000);
+      expect(throws.slice(0, 5)).toEqual([]);
+      expect(throws).toHaveLength(0);
+    });
+
+  it('THE ARGUMENTS THEMSELVES are generated over too, not just their contents', () => {
+    // Attempt 3 typed every field and element and never checked that `bindings` was an array.
+    const throws: string[] = [];
+    for (const v of corpus()) {
+      for (const [fn, run] of [
+        ['validateTaskSurfaces/bindings', () => validateTaskSurfaces(project, v as never)],
+        ['consolidationAssessment/bindings', () => consolidationAssessment(v as never)],
+        ['unboundProposedSurfaces/bindings', () => unboundProposedSurfaces(['X'], v as never)],
+        ['unboundProposedSurfaces/proposed', () => unboundProposedSurfaces(v as never, [])],
+        ['validateTaskSurfaces/project', () => validateTaskSurfaces(v as never, [])],
+        ['validateTaskSurfaces/acceptance', () => validateTaskSurfaces(project, [], v as never)],
+        ['businessTasks/project', () => businessTasks(v as never)],
+      ] as ReadonlyArray<readonly [string, () => unknown]>) {
+        try { run(); } catch (e) { throws.push(`${fn} :: ${(e as Error).message}`); }
+      }
+    }
+    expect(throws.slice(0, 5)).toEqual([]);
+    expect(throws).toHaveLength(0);
+  });
+
+  it('A NON-ARRAY bindings argument is REFUSED, not silently treated as empty', () => {
+    // Not throwing is necessary but not sufficient: returning [] would report a broken input as
+    // a compliant mapping. This fails closed.
+    for (const v of [null, undefined, 0, {}, true, 'x']) {
+      expect(codes(validateTaskSurfaces(project, v as never)))
+        .toEqual(['SURFACE_ARGUMENT_NOT_ARRAY']);
+    }
+  });
+
+  it('AN UNUSABLE PROJECT is REFUSED, not reported as having nothing to check', () => {
+    for (const v of [null, {}, { tasks: [] }, { tasks: [], roles: [] }]) {
+      expect(codes(validateTaskSurfaces(v as never, []))).toEqual(['SURFACE_PROJECT_UNUSABLE']);
+    }
+  });
+
+  it('PASSING COUNTERPART: a real project and a real array are not refused as malformed', () => {
+    const out = codes(validateTaskSurfaces(project, [ws('t-intake'), ws('t-review')]));
+    expect(out).not.toContain('SURFACE_ARGUMENT_NOT_ARRAY');
+    expect(out).not.toContain('SURFACE_PROJECT_UNUSABLE');
+    expect(out).toEqual([]);
+  });
+
+  it('the label helper cannot throw on the value that broke attempt 3', () => {
+    // String(JSON.parse('{"toString":null}')) throws; label() must not.
+    const hostile = JSON.parse('{"toString":null}');
+    const issues = validateTaskSurfaces(project,
+      [smuggle({ taskId: 't-intake', kind: hostile }), ws('t-review')]);
+    expect(codes(issues)).toEqual(['SURFACE_BINDING_MALFORMED', 'SURFACE_UNMAPPED']);
+    // And the message describes it safely rather than interpolating it.
+    expect(issues[0].message).toContain('declares kind "object"');
+  });
   it('PASSING COUNTERPART: a well-formed binding is not reported malformed', () => {
     expect(codes(validateTaskSurfaces(project, [ws('t-intake'), ws('t-review')])))
       .not.toContain('SURFACE_BINDING_MALFORMED');
@@ -535,10 +696,15 @@ describe('the code list is the contract', () => {
     ];
     const emitted = new Set<string>();
     for (const c of cases) for (const i of validateTaskSurfaces(project, c)) emitted.add(i.code);
-    // The self-supplied acceptance needs an acceptance argument, so it is driven separately.
+    // Three codes need a call shape the loop above cannot express, so they are driven
+    // separately rather than left undriven. This assertion catching their absence is exactly
+    // what it is for: the two argument-guard codes were added in the follow-up commit and the
+    // test failed until these lines existed.
     for (const i of validateTaskSurfaces(project,
       [headless('t-intake'), headless('t-review')],
       { ...ACCEPTED, origin: 'model_turn' })) emitted.add(i.code);
+    for (const i of validateTaskSurfaces(project, null as never)) emitted.add(i.code);
+    for (const i of validateTaskSurfaces(null as never, [])) emitted.add(i.code);
 
     // Both directions. Attempt 1 passed this while one guard site had zero coverage, because two
     // unrelated branches shared one code; splitting SURFACE_REQUIREMENT_UNKNOWN out is what makes

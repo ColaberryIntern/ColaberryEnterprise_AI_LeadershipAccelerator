@@ -269,6 +269,25 @@ because the current wording reads as though it already covers every case.
 
 ## Phase 4 open items (P4-T1)
 
+- **STANDING RULE for the rest of this build (adopted 2026-10-05):** a claim quantified over an
+  input space ships with **a seeded generator over that space and the command that enumerated
+  it**, or it is rewritten as a scoped list. P4-T1 published such a claim four times and was
+  falsified four times — one field, then the container, then the elements, then the
+  stringification inside the refusal message. Each fix was right; each sentence was broader than
+  its fix. Full reasoning in `plan-phase4.md`.
+- **The combined public export surface of `workspaceMapping` + `workspaceBindingChecks` exceeds
+  CLAUDE.md’s per-module ceiling of 12** (15 and 19). The split that brought both files under
+  the 500-line ceiling forced nine internal helpers to become exported. None is accidental and
+  all nine are consumed, but the ceiling is breached. Collapsing it needs a third module holding
+  the shared predicates. **Owner: P4-T5**, which already must touch these files.
+- **`SURFACE_ACCEPTANCE_SELF_SUPPLIED` is a marker, not an enforcement.** It mirrors
+  `DeclarationOrigin` and fails closed on an absent or unrecognised origin, which is the right
+  direction — but `origin` is itself generator-supplied, and where
+  `DeclarationOrigin`'s `approved_blueprint` names a real upstream artifact a value can be
+  passed through from, `'owner_recorded'` names nothing in this repo for a reviewer to check it
+  against. The waiver costs three string literals instead of two. **Owner: Phase 6**, which
+  persists the manifest an acceptance could be attested against.
+
 - **`unboundProposedSurfaces` is a producer with no consumer.** It reports which free-text
   `proposed_surfaces` from the understanding no declared workspace covers. Nothing in the repo
   calls it and the Phase 4 plan schedules no caller. It ships because the gap it reports is real

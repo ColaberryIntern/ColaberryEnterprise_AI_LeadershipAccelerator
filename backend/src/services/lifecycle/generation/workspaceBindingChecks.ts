@@ -21,9 +21,26 @@
  * `JSON.parse` yields.
  *
  * The same mistake three times, each a level up: one field, then every field but not the
- * container, then the array but not its members. `SURFACE_BINDING_MALFORMED` now refuses
- * **every value `JSON.parse` can produce**. A hostile object with a throwing accessor is
- * explicitly out of scope — see `shapeIssue`.
+ * container, then the array but not its members, then — attempt 3 — every member but not the
+ * STRINGIFICATION of the non-union value in the refusal it emits.
+ *
+ * ## The bound, and how it is now established
+ *
+ * Four attempts published a universally-quantified claim ("refuses all of it", "no later rule
+ * can throw", "every value `JSON.parse` can produce") backed by a hand-written list of the cases
+ * the author thought of. A twelve-item enumeration cannot support a claim over an infinite space,
+ * and it failed every time.
+ *
+ * **So the claim is now backed by a GENERATOR, not a list.** `__tests__/workspaceMapping.test.ts`
+ * builds its corpus from a seeded deterministic JSON generator plus the known-hostile literals,
+ * splices every value into every reachable path, and asserts zero throws across all three
+ * exported functions. Same seed, same corpus, every run — so the evidence is reproducible rather
+ * than anecdotal. The standing rule this follows is recorded in `plan-phase4.md`.
+ *
+ * **Out of scope, stated rather than discovered:** an object with a throwing accessor (`get ref()
+ * { throw }`) or one built by `Object.create(null)`. Neither is `JSON.parse`-producible, so
+ * neither is on the model-output path, and a blanket try/catch would hide real defects rather
+ * than classify them.
  */
 
 import type { ValidationIssue } from '../../factory/factoryValidate';
@@ -150,6 +167,8 @@ export const SURFACE_CODES = [
   'SURFACE_TASKIDS_INCONSISTENT',
   'SURFACE_NO_HUMAN_PATH',
   'SURFACE_ACCEPTANCE_SELF_SUPPLIED',
+  'SURFACE_ARGUMENT_NOT_ARRAY',
+  'SURFACE_PROJECT_UNUSABLE',
 ] as const;
 export type SurfaceCode = (typeof SURFACE_CODES)[number];
 
@@ -157,6 +176,27 @@ export const err = (code: SurfaceCode, message: string, stepId?: string): Valida
   ({ code, message, stepId, severity: 'error' });
 
 export const isStr = (v: unknown): v is string => typeof v === 'string';
+
+/**
+ * Describe a value in a refusal message WITHOUT invoking any user code.
+ *
+ * This is where attempt 3 still threw, and the location is the instructive part: the unsafe
+ * call was inside the REFUSAL ITSELF. The code proved a value was not in its union and then
+ * interpolated that same value into the message explaining why — so a hostile value was
+ * guaranteed to reach `String()`.
+ *
+ * `String(JSON.parse('{"toString":null}'))` throws `TypeError: Cannot convert object to
+ * primitive value`: with `toString` null, it falls through to `Object.prototype.valueOf`, which
+ * returns the object, and V8 gives up. Ordinary JSON, no Proxy, no accessor.
+ *
+ * `typeof` and `Array.isArray` cannot call into user code, so this helper cannot throw.
+ */
+export function label(v: unknown): string {
+  if (isStr(v)) return v;
+  if (v === null) return 'null';
+  if (Array.isArray(v)) return 'array';
+  return typeof v;
+}
 export const blank = (v: string): boolean => v.trim() === '';
 
 const REF_STRINGS = ['workspaceId', 'workspaceTitle', 'action', 'primaryJob', 'whyNotExisting',
@@ -179,7 +219,7 @@ function isPermissionView(v: unknown): boolean {
  *
  * Returns a refusal, or `null` when the shape is sound enough for the content rules to run.
  *
- * ## TOTAL over anything `JSON.parse` can produce — stated as a bound, not as "nothing can throw"
+ * ## The bound: every `JSON.parse`-producible ARGUMENT, proven by a generator
  *
  * Attempt 2 said "every field a later check dereferences is proven present and correctly typed
  * here, so no later rule can throw". That was false, and in the ordinary case rather than an exotic
@@ -191,9 +231,11 @@ function isPermissionView(v: unknown): boolean {
  * field but not the CONTAINER or the array ELEMENTS. Proving `permissionViews` is an array while
  * never typing its members is the array-level version of the same mistake.
  *
- * So the guarantee is now scoped to what it can actually carry: **every value `JSON.parse` can
- * produce is refused rather than thrown on** — `null`, `undefined`, a primitive, an array in place
- * of an object, a null element in any array, a wrong-typed element in any array.
+ * Every `JSON.parse`-producible value, in any argument or any nested position, is refused rather
+ * than thrown on — including the two cases attempt 3 missed: a value whose `toString` is null
+ * (which broke the refusal message itself) and a non-array in the `bindings` or
+ * `proposedSurfaces` argument. Established by the generator described in the file header, not by
+ * an enumeration.
  *
  * **Explicitly NOT covered:** a hostile object with a throwing accessor (`get ref() { throw }`).
  * `JSON.parse` cannot produce one, so it is not on the model-output path this module defends, and a
@@ -215,7 +257,7 @@ export function shapeIssue(b: TaskSurfaceBinding): ValidationIssue | null {
 
   if (!isStr(raw.taskId) || blank(raw.taskId)) return bad('A binding carries no usable taskId.');
   if (raw.kind !== 'workspace' && raw.kind !== 'headless') {
-    return bad(`Binding for ${raw.taskId} declares kind "${String(raw.kind)}"; the only states are `
+    return bad(`Binding for ${raw.taskId} declares kind "${label(raw.kind)}"; the only states are `
       + '"workspace" and "headless". There is no third.');
   }
   if (raw.kind === 'headless') {
@@ -246,7 +288,7 @@ export function shapeIssue(b: TaskSurfaceBinding): ValidationIssue | null {
       + 'object with a string roleId and a string-array visibleActions.');
   }
   if (r.audience !== 'internal' && r.audience !== 'customer') {
-    return bad(`Workspace binding for ${raw.taskId} declares audience "${String(r.audience)}"; the `
+    return bad(`Workspace binding for ${raw.taskId} declares audience "${label(r.audience)}"; the `
       + 'only audiences are "internal" and "customer".');
   }
   if (typeof r.preservesNavigationState !== 'boolean') {
