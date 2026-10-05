@@ -46,27 +46,45 @@ const { checkTree, GAP_MARKERS, REPO_ROOT, DOCS_REL } = require('./lib/growthOsC
  * shallower indentation is a substring of line 6's. That is the real
  * ambiguity found in enrollmentService.ts, reproduced here so both the
  * not-unique failure and the whole-line-equality fallback are exercised.
+ *
+ * The tiebreak control must cite line 4, the SHALLOWER one. A verifier's
+ * mutation testing found that citing line 6 left the control passing with the
+ * tiebreak DELETED, because the deeper line's indented literal is already
+ * unique as a plain substring, so the fallback never executed. Only the
+ * shallower literal is ambiguous, so only citing it exercises the thing.
+ *
+ * Line 1 carries a double quote on purpose: it is what makes the
+ * literal-truncation attack expressible against this fixture.
  */
 const TARGET = [
-  "export function writeIt() {",                     // 1
-  "  return {",                                      // 2
+  'const greeting = "hello";',                       // 1  carries a double quote
+  "const carrier = 'unique-carrier';",               // 2  the carrier: long + unique
   "    where: {",                                    // 3
-  "    kind: 'explorer',",                           // 4
+  "    kind: 'explorer',",                           // 4  shallow — ambiguous
   "    },",                                          // 5
-  "      kind: 'explorer',",                         // 6
+  "      kind: 'explorer',",                         // 6  deep
   "  };",                                            // 7
   "}",                                               // 8
 ].join('\n') + '\n';
 
-const OK_CITE = "`target.ts:1` → \"export function writeIt() {\"";
+// The carrier used by fixtures that are testing some OTHER rule. It must clear
+// the 8-non-whitespace-character floor and be unique, which rules out every
+// short structural line in the fixture above.
+const OK_CITE = "`target.ts:2` → \"const carrier = 'unique-carrier';\"";
 
 const CASES = [
   { name: 'bare citation (no literal)', body: 'See `target.ts:1` for the shape.\n', want: 'bare citation' },
   { name: 'literal absent from the cited file', body: 'A `target.ts:1` → "no such text exists in this file".\n', want: 'literal not found' },
   { name: 'literal too short to be evidence', body: 'A `target.ts:8` → "}".\n', want: 'too short' },
   { name: 'literal not unique even at 8+ chars', body: 'A `target.ts:4` → "kind: \'explorer\',".\n', want: 'not unique' },
-  { name: 'range citation rejected (one form only)', body: 'A `target.ts:1-8` → "export function writeIt() {".\n', want: 'range citation' },
-  { name: 'cited path missing', body: 'A `does/not/exist.ts:1` → "export function writeIt() {".\n', want: 'does not exist' },
+  // THE FABRICATION VECTOR. A double quote inside the literal closed the
+  // delimiter early, so only the prefix was verified while the invented tail
+  // rode along inside what a reader sees as the quotation. Found by a task
+  // verifier; reproduced by probe against the library before being fixed.
+  { name: 'fabricated tail hidden behind an inner double quote', body: 'A `target.ts:1` → "const greeting = "THIS ENTIRE TAIL IS INVENTED AND IS IN NO FILE";"\n', want: 'truncated at an inner' },
+  { name: 'a backticked time is named as such, not as a bare citation', body: 'Standup is at `09:30` every weekday.\n', want: 'looks like a time or a ratio' },
+  { name: 'range citation rejected (one form only)', body: 'A `target.ts:1-8` → "    where: {".\n', want: 'range citation' },
+  { name: 'cited path missing', body: 'A `does/not/exist.ts:1` → "const carrier = \'unique-carrier\';".\n', want: 'does not exist' },
   { name: 'zero citations scanned', body: 'A document making claims with no citations at all.\n', want: 'zero citations scanned' },
   { name: 'email address in a doc', body: `A ${OK_CITE} and contact someone@example.com now.\n`, want: 'forbidden email address' },
   { name: 'JWT in a doc', body: `A ${OK_CITE} token eyJhbGciOiJIUzI1NiXX.\n`, want: 'forbidden JWT' },
@@ -187,7 +205,7 @@ function runAcceptanceControls(tmp) {
   // apposite line stays citable instead of forcing a detour to a neighbour.
   {
     const { root, docs } = caseRoot(tmp, 'exact-');
-    fs.writeFileSync(path.join(docs, 'doc.md'), '`target.ts:6` → "      kind: \'explorer\',"\n', 'utf8');
+    fs.writeFileSync(path.join(docs, 'doc.md'), '`target.ts:4` → "    kind: \'explorer\',"\n', 'utf8');
     const e = checkTree(docs, 'self-test', root);
     const ok = e.failures.length === 0 && e.drift.length === 0;
     console.log(`  ${ok ? 'passed  ' : 'FAILED  '} indentation disambiguates an otherwise non-unique literal`);
@@ -202,7 +220,7 @@ function runAcceptanceControls(tmp) {
   // unrelated commit inserts a line above a cited one.
   {
     const { root, docs } = caseRoot(tmp, 'drift-');
-    fs.writeFileSync(path.join(docs, 'doc.md'), '`target.ts:9999` → "export function writeIt() {"\n', 'utf8');
+    fs.writeFileSync(path.join(docs, 'doc.md'), '`target.ts:9999` → "const carrier = \'unique-carrier\';"\n', 'utf8');
     const d = checkTree(docs, 'self-test', root);
     const ok = d.failures.length === 0 && d.drift.length === 1;
     console.log(`  ${ok ? 'passed  ' : 'FAILED  '} a moved line is drift, not failure`);

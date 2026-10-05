@@ -116,12 +116,40 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** Pull the literal that follows a citation token, or null. */
+/**
+ * Pull the literal that follows a citation token.
+ *
+ * Returns `{ literal, truncated }`. `literal` is null when there is no literal
+ * at all; `truncated` flags the one way this gate could be made to approve a
+ * FABRICATED quotation, which a task verifier found and which is the whole
+ * reason this function returns an object instead of a string:
+ *
+ *     `target.ts:1` → "const greeting = "THIS TAIL IS INVENTED";"
+ *
+ * The delimiter closes at the inner quote, so only `const greeting = ` was
+ * verified -- ten non-whitespace characters, clearing the floor, unique in the
+ * file -- while everything after it rode along inside what a reader sees as
+ * the quotation. Confirmed by probe before fixing: that line was ACCEPTED
+ * clean, while the identical fabricated tail WITHOUT an inner quote was
+ * correctly rejected. The inner quote was the entire bypass.
+ *
+ * So a delimited literal must be followed by end-of-line, whitespace, or
+ * closing punctuation. Anything else means the quotation continues past what
+ * was checked, and the citation is refused with a pointer to the other
+ * delimiter -- which is how a literal containing a double quote is meant to be
+ * written, and what the honest form of the example above uses.
+ */
 function literalAfter(line, endIndex) {
   const rest = line.slice(endIndex);
   const m = /^\s*(?:→|->)\s*("([^"]+)"|'([^']+)')/.exec(rest);
-  if (!m) return null;
-  return m[2] !== undefined ? m[2] : m[3];
+  if (!m) return { literal: null, truncated: false };
+
+  const after = rest.slice(m[0].length);
+  return {
+    literal: m[2] !== undefined ? m[2] : m[3],
+    truncated: after.length > 0 && !/^[\s|,.;:)\]}]/.test(after),
+    delimiter: m[2] !== undefined ? '"' : "'",
+  };
 }
 
 /**
@@ -201,14 +229,27 @@ function checkAttribution(line, rel, lineNo) {
  * Extracted from `checkTree` when that function passed CLAUDE.md's 100-line
  * hard ceiling for a function.
  */
-function verifyCitation({ rel, lineNo, root, citedPath, start, endStr, literal }) {
+function verifyCitation({ rel, lineNo, root, citedPath, start, endStr, literal, truncated, delimiter }) {
   const at = `${rel}:${lineNo}`;
 
   if (endStr !== undefined) {
     return { failure: `${at}  range citation \`${citedPath}:${start}-${endStr}\` — ranges are not a citation form; cite the one line whose literal you are quoting` };
   }
   if (literal === null) {
+    // A digits-only "path" is almost always a time or a ratio in backticks,
+    // and the bare-citation message named neither the value nor the cause.
+    if (/^\d+$/.test(citedPath)) {
+      return { failure: `${at}  \`${citedPath}:${start}\` looks like a time or a ratio, not a citation — drop the backticks` };
+    }
     return { failure: `${at}  bare citation \`${citedPath}:${start}\` — every citation needs → "a literal that occurs exactly once in that file"` };
+  }
+  if (truncated) {
+    const other = delimiter === '"' ? "single quotes ('…')" : 'double quotes ("…")';
+    return {
+      failure: `${at}  literal is truncated at an inner ${delimiter} — only ${JSON.stringify(literal)} would have been verified,\n`
+        + `      and anything after it rides along unchecked inside what a reader sees as the quotation.\n`
+        + `      Delimit with ${other} instead.`,
+    };
   }
 
   // Distinctiveness floor. Uniqueness alone stops being enough once whole-line
@@ -334,7 +375,7 @@ function checkTree(docsAbs, label, rootOverride) {
           citedPath,
           start: Number(startStr),
           endStr,
-          literal: literalAfter(line, t.index + whole.length),
+          ...literalAfter(line, t.index + whole.length),
         });
         if (result.failure) failures.push(result.failure);
         if (result.drift) drift.push(result.drift);
