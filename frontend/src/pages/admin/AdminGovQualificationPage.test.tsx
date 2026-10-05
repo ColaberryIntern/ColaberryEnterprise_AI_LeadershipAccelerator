@@ -478,25 +478,16 @@ describe('AdminGovQualificationPage — journey', () => {
   });
 
   // ── Step 4: attest the ZIP + enable pursuit approval on the decoupled path ──
-  it('decoupled: the "Attest the solicitation ZIP" card renders (with a record) and uploading calls attestSolicitationZip', async () => {
+  it('decoupled: the "Evidence of record" card shows guidance (no second upload) when not attested — only ONE file input on the page', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
       zipAttestation: null,
     }));
-    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
     expect(container.textContent ?? '').toContain('Evidence of record (attested ZIP)');
-    const fileInputs = Array.from(container.querySelectorAll('input[type=file]')) as HTMLInputElement[]; // extract card first, attest card last
-    const attestInput = fileInputs[fileInputs.length - 1];
-    const file = new File(['zip'], 'sol.zip', { type: 'application/zip' });
-    Object.defineProperty(attestInput, 'files', { value: [file], configurable: true });
-    await act(async () => { attestInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
-    await clickButton('Attest ZIP');
-    const call = (factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0];
-    expect(call[0]).toBe(GWS);
-    expect(call[1].mode).toBe('add');
-    expect(call[1].file).toBeTruthy();
+    expect(container.textContent ?? '').toContain('recorded automatically when you'); // points to Extract & attest above
+    expect(container.querySelectorAll('input[type=file]').length).toBe(1);             // ONE upload now, not two
   });
 
   it('decoupled: one "Extract & attest" upload runs BOTH extraction and attestation', async () => {
