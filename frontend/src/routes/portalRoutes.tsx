@@ -9,6 +9,8 @@ const PortalVerifyPage = lazy(() => import('../pages/portal/PortalVerifyPage'));
 const PortalViewAsPage = lazy(() => import('../pages/portal/PortalViewAsPage'));
 const PortalMgmtEnterPage = lazy(() => import('../pages/portal/PortalMgmtEnterPage'));
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
+import { BroadcastPlayerProvider } from '../contexts/BroadcastPlayerContext';
+import LiveMiniPlayer from '../components/portal/LiveMiniPlayer';
 const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage'));
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
@@ -45,7 +47,32 @@ const ClassroomWeekPage = lazy(() => import('../pages/portal/ClassroomWeekPage')
 // (Today); every other retired builder URL simply 404s.
 
 const portalRoutes = (
-  <Route element={<ParticipantAuthProvider><ReadOnlyBanner /><Outlet /></ParticipantAuthProvider>}>
+  <Route
+    element={(
+      <ParticipantAuthProvider>
+        <BroadcastPlayerProvider>
+          <ReadOnlyBanner />
+          <Outlet />
+          {/*
+            THE MINI-PLAYER IS A SIBLING OF <Outlet/>, AND THAT IS THE WHOLE DESIGN.
+            React Router keeps a layout route's element mounted while the outlet's contents
+            change, so the <video> inside this component is the same DOM node across every
+            portal navigation and playback does not stop.
+
+            It must NOT move into PortalShell, which looks like the natural home for portal
+            chrome: PortalShell is rendered independently by 29 different page components, so
+            anything inside it unmounts and remounts on every route change. A player there
+            would restart on every click.
+
+            components/portal/__tests__/liveMiniPlayer.persistence.test.tsx builds both
+            arrangements and asserts the node survives this one and is destroyed by the other,
+            so a future re-parenting fails a test rather than a release.
+          */}
+          <LiveMiniPlayer />
+        </BroadcastPlayerProvider>
+      </ParticipantAuthProvider>
+    )}
+  >
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
