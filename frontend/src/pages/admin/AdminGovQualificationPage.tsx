@@ -264,7 +264,6 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [extractError, setExtractError] = useState<string | null>(null);
   // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
   const [oppDetail, setOppDetail] = useState<OppDetail | null>(null);
-  const [attestFile, setAttestFile] = useState<File | null>(null); // the solicitation ZIP to attest as evidence (decoupled path)
 
   const load = useCallback(async () => {
     if (!canonical) return;
@@ -613,13 +612,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     onClick={() => run(() => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'revoke' }), 'ZIP attestation revoked.')}>Revoke</button>
                 </div>
               ) : (
-                <div className="d-flex flex-wrap align-items-center gap-2">
-                  <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
-                    onChange={(e) => setAttestFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
-                  <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !attestFile}
-                    onClick={() => run(() => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'add', file: attestFile }), 'Solicitation ZIP attested as evidence.')}>
-                    <i className="ri-upload-2-line me-1" aria-hidden="true" />Attest ZIP
-                  </button>
+                <div className="small text-secondary">
+                  <i className="ri-information-line me-1" aria-hidden="true" />Not attested yet — it's recorded automatically when you <strong>Extract &amp; attest</strong> above (one upload does both). To attest a corrected ZIP, just run Extract &amp; attest again with the new file.
                 </div>
               )}
             </SectionCard>
