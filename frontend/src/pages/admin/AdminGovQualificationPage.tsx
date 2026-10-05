@@ -12,6 +12,7 @@ import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
 import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
+import { deriveBidDecision } from './govBidDecision';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -450,6 +451,41 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             <div className="col-6 col-lg-3"><StatCard label="Current decision" value={record ? record.decision.replace(/_/g, ' ') : 'not opened'} icon="file-list-3-line" tone="neutral" hint={record ? `v${record.version}` : undefined} /></div>
             <div className="col-6 col-lg-3"><StatCard label="Approval allowed" value={ws.canApprove ? 'yes' : 'no'} icon={ws.canApprove ? 'shield-check-line' : 'shield-cross-line'} tone={ws.canApprove ? 'success' : 'warning'} /></div>
           </div>
+
+          {isDecoupled && ws.evaluation && ws.evaluation.evals.length > 0 && (() => {
+            const matches = svcMatches ?? [];
+            const capability: 'strong' | 'moderate' | 'none' = matches.some((m) => m.strength === 'strong') ? 'strong' : matches.some((m) => m.strength === 'moderate') ? 'moderate' : 'none';
+            const gaps = derivePotentialDisqualifiers(established, ws.evaluation, matches);
+            const decision = deriveBidDecision({
+              establishedCount: ws.evaluation.evals.length,
+              pursuitBlockingCount: (ws.evaluation.pursuitBlocking ?? []).length,
+              openSubmissionCount: (ws.evaluation.openSubmissionRequirements ?? []).length,
+              eligibilityGapCount: gaps.items.filter((g) => g.kind === 'eligibility_gap').length,
+              capability,
+              daysLeft: daysLeft(oppDetail?.opportunity?.closeDate ?? null),
+              estimatedValue: oppDetail?.opportunity?.estimatedValue ?? null,
+            });
+            const tone = decision.band === 'caution' ? 'warning' : decision.band === 'pass' ? 'danger' : 'success';
+            const bandLabel = decision.band === 'strong' ? 'Strong fit' : decision.band === 'pursue' ? 'Worth pursuing' : decision.band === 'caution' ? 'Caution' : 'Lean no-bid';
+            return (
+              <SectionCard title="Bid decision — should we pursue this?" icon="scales-3-line"
+                subtitle="A deterministic, advisory read synthesised from the evidence, capability fit, gaps, and deadline. You decide — this feeds no gate and fabricates nothing; every factor below shows its own effect.">
+                <div className="d-flex flex-wrap align-items-center gap-3 mb-3">
+                  <span className={`badge bg-${tone}-subtle text-${tone}-emphasis fs-6 px-3 py-2`}>{bandLabel}</span>
+                  <span className="h4 mb-0">{decision.score}<span className="text-secondary fs-6">/100</span></span>
+                  <span className="fw-semibold">{decision.headline}</span>
+                </div>
+                <ul className="list-unstyled mb-0">
+                  {decision.factors.map((f) => (
+                    <li key={f.key} className="py-1 d-flex align-items-start gap-2">
+                      <i className={`ri-${f.signal === 'good' ? 'checkbox-circle-line text-success' : f.signal === 'concern' ? 'error-warning-line text-danger' : 'information-line text-secondary'} mt-1`} aria-hidden="true" />
+                      <div><span className="fw-semibold small">{f.label}:</span> <span className="small">{f.detail}</span></div>
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+            );
+          })()}
 
           <DeadlineCard
             value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? null) : (ws.source?.deadline.utc ?? null)}

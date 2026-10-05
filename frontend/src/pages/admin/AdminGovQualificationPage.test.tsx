@@ -404,6 +404,21 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Show fewer');
   });
 
+  it('Bid decision panel: renders a scored recommendation + band once requirements are established (decoupled)', async () => {
+    const evalRow = { id: 'E1', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' };
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'E1', text: 'Offeror must be registered in SAM.gov.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
+      evaluation: { evals: [evalRow], blocking: [evalRow], pursuitBlocking: [], openSubmissionRequirements: [evalRow], deliveryObligations: [], byDueStage: { submission: [evalRow], award: [], delivery: [], unknown: [] }, canApproveBid: false, canApprovePursuit: true },
+    }));
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: { uuid: '11111111-1111-4111-a111-111111111111', title: 'IVR', agency: 'FW', closeDate: '2099-12-31', fitScore: null, priorityScore: null, estimatedValue: 500000, valueBasis: null, sourceUrl: null, preliminarySummary: null }, source: 'live', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Bid decision — should we pursue this?');
+    expect(text).toMatch(/Strong fit|Worth pursuing|Caution|Lean no-bid/);  // a band rendered
+    expect(text).toContain('/100');                                          // the score
+  });
+
   // ── Discovery details card + Source link + Gaps panel (decoupled only) ──
   it('decoupled workspace shows the Discovery details card (why-surfaced + overview + Source link)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
