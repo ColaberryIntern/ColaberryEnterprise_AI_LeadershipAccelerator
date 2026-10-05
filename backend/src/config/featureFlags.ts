@@ -23,6 +23,11 @@ export const FLAGS = {
   // the approval route calls it only when ENABLE_GOV_INGESTION=true, so deploying it changes nothing.
   // Creating the project NEVER authorizes a build — buildAuthorization stays the separate (held) gate.
   govIngestion: process.env.ENABLE_GOV_INGESTION === 'true',
+  // Gov pursuit daily tracking — a daily job that re-checks the live v1 discovery feed for opportunities we're
+  // pursuing and flags a changed close date or a drop from the feed (refreshing the countdown). Ships DARK
+  // (default off) behind its OWN flag — distinct from govIngestion (already on) so deploying does not auto-run it.
+  // Narrow by design: v1 feed carries the close DATE only, never amendments/meetings (no programmatic Bonfire).
+  govDailySync: process.env.ENABLE_GOV_DAILY_SYNC === 'true',
 };
 
 export const isDev = process.env.APP_ENV === 'dev';

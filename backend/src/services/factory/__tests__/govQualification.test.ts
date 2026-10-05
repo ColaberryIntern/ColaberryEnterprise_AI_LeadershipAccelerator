@@ -11,6 +11,8 @@ jest.mock('../../../models/GovQualification', () => ({
   __esModule: true,
   default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
 }));
+// getDecoupledWorkspace reads the daily-sync state; keep that DB-free in these unit tests.
+jest.mock('../govOpportunitySync', () => ({ getGovSyncEntry: jest.fn().mockResolvedValue(null) }));
 
 import {
   evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,

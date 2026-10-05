@@ -47,13 +47,13 @@ This is the end-to-end process for taking a government opportunity from discover
 
 ---
 
-## Daily tracking & Bonfire sync (planned — 🔜 / ⏸️ held: ingestion)
+## Daily tracking & Bonfire sync
 
 Once a ZIP has been uploaded and we've **decided to bid**, the opportunity moves into **active tracking**:
-- **Daily Bonfire sync** — a scheduled run keeps the opportunity in sync with Bonfire (amendments, Q&A, addenda, status). *This is the held "ingestion" capability — needs coordinator sign-off.*
-- **Change alerts** — if the solicitation, deadline, or documents change, the workspace flags it and prompts a re-review (the existing "source changed → renewed review" gate).
-- **Meetings** — surface pre-bid / Q&A meeting dates and deadlines from the solicitation.
-- **Countdown** — ✅ a live **Submission deadline** countdown is on the workspace now (days to close, with the close date). It is honest about precision: the discovery feed is date-only, so the exact cutoff *time* and any live Bonfire-driven date changes arrive with the held sync.
+- **Daily discovery-feed sync** — ✅ built (narrow v1), ships dark behind `ENABLE_GOV_DAILY_SYNC`. A daily job re-checks the **live v1 discovery feed** for pursued opportunities and flags a **changed close date** or a **drop from the feed**, refreshing the countdown baseline; the workspace surfaces "last checked" + any flagged change. It **never auto-advances a decision** — it prompts a human re-review.
+- **Change alerts** — ✅ the workspace surfaces the sync's flag (deadline moved / dropped from feed), alongside the existing canonical "source changed → renewed review" gate.
+- **Honest limits (NOT built — blocked on integrations):** **amendments, Q&A, addenda** need the **undeployed OP v2 feed** (there is no programmatic Bonfire access — the ZIP is downloaded by hand); **pre-bid / Q&A meeting dates** are not modeled in any feed (they live only in the manually downloaded ZIP). These arrive only when OP v2 is deployed and/or a Bonfire capability exists.
+- **Countdown** — ✅ a live **Submission deadline** countdown is on the workspace (days to close, with the close date). Honest about precision: the discovery feed is date-only, so the exact cutoff *time* is still pending a richer feed.
 
 ---
 
