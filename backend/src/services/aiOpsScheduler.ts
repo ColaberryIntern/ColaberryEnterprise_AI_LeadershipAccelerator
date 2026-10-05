@@ -406,6 +406,18 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
     },
     label: 'Executive weekly briefing',
   },
+  {
+    // Gov pursuit daily tracking — re-check the v1 discovery feed for pursued opportunities and flag deadline
+    // changes / drops from the feed. Ships DARK: the runner no-ops unless ENABLE_GOV_DAILY_SYNC=true (a distinct
+    // flag from govIngestion, which is already on), so registering this changes nothing until it is switched on.
+    agentName: 'GovOpportunityDailySync',
+    hardcodedSchedule: '0 7 * * *',
+    dynamicImport: async () => {
+      const { syncPursuedGovOpportunities } = await import('./factory/govOpportunitySync');
+      await syncPursuedGovOpportunities();
+    },
+    label: 'Gov opportunity daily sync',
+  },
   // REMOVED 2026-06-05 (CC-20260603-v7da, Ali approved): this morning
   // digest fires at 45 6 * * * — the same minute as DailyExecutiveBriefing
   // above. Ali was getting two copies of the morning brief. Keeping the

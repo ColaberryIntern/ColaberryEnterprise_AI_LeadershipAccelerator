@@ -250,6 +250,9 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   const zipAttestation = (Array.isArray(reviewedDocuments) ? reviewedDocuments : []).find((d: any) => d && d.method === 'solicitation_zip') || null;
   const evaluation = evaluateRequirements(established);
   const coverage = evaluateZipCoverage(established, reviewedDocuments);
+  // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
+  let sync: any = null;
+  try { const { getGovSyncEntry } = await import('./govOpportunitySync'); sync = await getGovSyncEntry(gwsKey); } catch { sync = null; }
   return {
     canonicalOpportunityId: gwsKey,
     sourceLive: false,
@@ -265,6 +268,8 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     provenance,
     zipAttestation,
     changedSource: false,
+    lastSyncedAt: sync ? sync.syncedAt : null,
+    syncChange: sync && sync.change && sync.change.kind !== 'none' ? sync.change : null,
     canApprove: evaluation.canApprovePursuit && coverage.sufficient,
   };
 }

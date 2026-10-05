@@ -399,6 +399,10 @@ export interface GovQualificationWorkspace {
   coverage: QualEvidenceCoverage | null;
   qualification: QualificationRecord | null;
   changedSource: boolean;
+  /** Daily-tracking (decoupled): ISO timestamp of the last sync run that saw this opportunity, or null. */
+  lastSyncedAt?: string | null;
+  /** Daily-tracking (decoupled): the last flagged change (deadline moved / dropped from feed), or null. */
+  syncChange?: { kind: string; detail: string } | null;
   /** Server's verdict on whether an approval is currently permitted (source approvable + current + covered + unblocked). */
   canApprove: boolean;
   /** Decoupled (discovery-ZIP) workspace only: the clicked discovery row's title/agency (display). Null on the canonical path. */

@@ -432,6 +432,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => { void load(); }}>Review changes</button>
             </div>
           )}
+          {ws.syncChange && (
+            <div className="alert alert-warning d-flex align-items-start gap-2" role="status">
+              <i className="ri-refresh-line mt-1" aria-hidden="true" />
+              <span>Daily tracking flagged a change: <strong>{ws.syncChange.detail}</strong>. Review it — if the solicitation changed, re-download the ZIP from Bonfire and re-attest.</span>
+            </div>
+          )}
+          {ws.lastSyncedAt && !ws.syncChange && (
+            <div className="small text-secondary mb-2"><i className="ri-refresh-line me-1" aria-hidden="true" />Daily tracking: last checked {new Date(ws.lastSyncedAt).toLocaleString()} — no change detected.</div>
+          )}
           {(ws.sourceState === 'degraded' || ws.sourceState === 'snapshot_unrecorded') && (
             <div className="alert alert-warning" role="status"><i className="ri-alert-line me-1" aria-hidden="true" />{ws.sourceStateLabel} — approval is blocked until the source is current. Research and draft decisions are still allowed.</div>
           )}
