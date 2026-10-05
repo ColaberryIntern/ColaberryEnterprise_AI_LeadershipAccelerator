@@ -65,6 +65,7 @@ const TARGET = [
   "      kind: 'explorer',",                         // 6  deep
   "  };",                                            // 7
   "}",                                               // 8
+  "const base = 'https://example.com/v1';",          // 9  a URL in source code
 ].join('\n') + '\n';
 
 // The carrier used by fixtures that are testing some OTHER rule. It must clear
@@ -99,6 +100,22 @@ const CASES = [
   { name: 'backslash path (was silently skipped)', body: 'A `backend\\src\\nope.ts:1` → "a literal that exists nowhere".\n', want: 'backslash' },
   { name: 'path escaping the repo', body: 'A `../outside.ts:1` → "a literal that exists nowhere".\n', want: 'escapes the repo' },
   { name: 'citation to a directory (was an unhandled crash)', body: 'A `sub/:1` → "a literal that exists nowhere".\n', want: 'not a readable file' },
+];
+
+/**
+ * Cases that must be ACCEPTED, kept beside the rejection list because each one
+ * is a false ALARM that a real document actually tripped. An over-strict gate
+ * is abandoned just as fast as a vacuous one.
+ */
+const ACCEPT_CASES = [
+  {
+    name: 'a URL inside a cited literal is quoted source, not an external claim',
+    body: '`target.ts:9` → "const base = \'https://example.com/v1\';"\n',
+  },
+  {
+    name: 'a literal containing double quotes, single-delimited',
+    body: "`target.ts:1` → 'const greeting = \"hello\";'\n",
+  },
 ];
 
 /** A self-contained case root: a docs dir plus the fixture target beside it. */
@@ -178,6 +195,18 @@ function runRejectionCases(tmp) {
 function runAcceptanceControls(tmp) {
   let bad = 0;
   console.log('\nand these MUST be accepted — a checker that refuses everything would\n"catch" every case above without being a check at all\n');
+
+  for (const c of ACCEPT_CASES) {
+    const { root, docs } = caseRoot(tmp, 'ok-');
+    fs.writeFileSync(path.join(docs, 'doc.md'), c.body, 'utf8');
+    const r = checkTree(docs, 'self-test', root);
+    const ok = r.failures.length === 0;
+    console.log(`  ${ok ? 'passed  ' : 'FAILED  '} ${c.name}`);
+    if (!ok) {
+      bad += 1;
+      console.log(`           ${JSON.stringify(r.failures)}`);
+    }
+  }
 
   // CSS/SVG/attribute numerals must NOT count as figures. Without this the
   // HTML rule fails on contact with any real styled page, and the cheapest

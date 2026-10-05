@@ -216,7 +216,15 @@ function checkAttribution(line, rel, lineNo) {
   if (/\[source:\s*https?:/i.test(line)) {
     return `${rel}:${lineNo}  external [source: …] without [fetched YYYY-MM-DD] and not marked UNVERIFIED`;
   }
-  const url = /https?:\/\/[^\s)\]>"']+/i.exec(line);
+
+  // A URL inside a citation's own literal is QUOTED SOURCE CODE, not an
+  // external attribution. The first run over a real document flagged
+  // `const GHL_BASE = 'https://rest.gohighlevel.com/v1';` -- a correctly
+  // cited line of this repo -- as an unattributed third-party claim. So the
+  // literals come out before the URL scan.
+  const outsideLiterals = line.replace(/(?:→|->)\s*(?:"[^"]*"|'[^']*')/g, ' ');
+
+  const url = /https?:\/\/[^\s)\]>"']+/i.exec(outsideLiterals);
   if (url && !/github\.com\/ColaberryIntern/i.test(url[0])) {
     return `${rel}:${lineNo}  external URL (${url[0].slice(0, 48)}) without [fetched YYYY-MM-DD] and not marked UNVERIFIED — wrap it as [source: …] [fetched …] or mark the claim UNVERIFIED`;
   }
