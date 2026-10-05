@@ -50,10 +50,16 @@ export interface BrandTheme {
  * Keyed by `brands.default_theme_key`. Seeded keys today: `enterprise`, `training`,
  * `cpn`, `ai-flotation`, `refactored`.
  *
- * Only `ai-flotation` is populated. The other four are absent on purpose rather than
- * filled with guesses: no token set has been agreed for them, and inventing one would put
- * a colour in front of a real client that nobody chose. They render neutral until their
- * own design systems land here the way this one did.
+ * `enterprise`, `cpn` and `refactored` are absent on purpose rather than filled with
+ * guesses: no token set has been agreed for them, and inventing one would put a colour in
+ * front of a real client that nobody chose. They render neutral until their own design
+ * systems land here the way these two did.
+ *
+ * `training` is NOT a guess. Every value below is lifted from this repo's own
+ * `frontend/src/colaberry/tokens/colors.css`, whose header reads "Built from the Colaberry
+ * School Style Guide": Cherry Red #FB2832, brand black #1A1A1A, brand gray #4A4A4A, light
+ * gray ramp #E4E4E3. Sourcing an existing, documented palette is the opposite of inventing
+ * one - the rule above exists to stop colours nobody chose, not to stop the brand's own.
  */
 const THEMES: Readonly<Record<string, BrandTheme>> = {
   'ai-flotation': {
@@ -65,6 +71,16 @@ const THEMES: Readonly<Record<string, BrandTheme>> = {
     '--accent-contrast': '#FFFFFF',
     '--accent-soft': '#FBE4D5',
     '--line': '#DEDAD3',
+  },
+  'training': {
+    '--bg': '#FFFFFF',
+    '--bg-elevated': '#F8F8F7',
+    '--fg': '#1A1A1A',
+    '--fg-muted': '#4A4A4A',
+    '--accent': '#FB2832',
+    '--accent-contrast': '#FFFFFF',
+    '--accent-soft': '#FFF0F1',
+    '--line': '#E4E4E3',
   },
 };
 

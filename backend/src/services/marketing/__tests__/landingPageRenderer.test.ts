@@ -13,6 +13,8 @@ import { LANDING_PAGE_THEMES, NEUTRAL_THEME, themeForLandingPage } from '../land
 
 const BRAND = { name: 'Colaberry Training', default_theme_key: 'training' };
 const FLOTATION = { name: 'AI Flotation', default_theme_key: 'ai-flotation' };
+/** A brand whose palette and lockup genuinely have not been agreed. */
+const UNBRANDED = { name: 'Colaberry Enterprise', default_theme_key: 'enterprise' };
 
 function render(content: LandingPageContentShape, over: Partial<Parameters<typeof renderLandingPage>[0]> = {}) {
   return renderLandingPage({
@@ -91,8 +93,16 @@ describe('nothing an operator types can become markup', () => {
         { type: 'cta', headline: nasty, body: nasty, cta: { label: nasty, href: '/apply' } },
       ],
     }));
-    // No `<img` tag was opened, and no `</style>` escaped the stylesheet.
-    expect(html).not.toMatch(/<img(?![^>]*\bloading=)/);
+    // No `<img` tag was opened by the payload, and no `</style>` escaped the stylesheet.
+    //
+    // Asserted against the SRC rather than against `loading=`. The header now carries the brand
+    // lockup, which is an `<img>` the renderer emitted and deliberately does NOT lazy-load - it
+    // is the first thing above the fold. So the property worth pinning is that every `<img>` in
+    // the document has a src the renderer validated, and that the payload's bare `src=x` never
+    // becomes one.
+    const imgTags = html.match(/<img[^>]*>/g) ?? [];
+    expect(imgTags.every((tag) => /\ssrc="(\/|https?:\/\/)[^"]*"/.test(tag))).toBe(true);
+    expect(html).not.toMatch(/<img[^>]*\ssrc=x/);
     expect(html).not.toContain('</style><img');
     // The payload IS present, escaped - proving the text was rendered and merely defanged,
     // rather than silently dropped, which would make this test pass for the wrong reason.
@@ -194,6 +204,175 @@ describe('tracking', () => {
   });
 });
 
+/**
+ * The page is a designed document, not a stack of blocks. Ali, 2026-10-05, holding it next to a
+ * page he had designed himself: "Yours is the Hello World version."
+ */
+describe('the page has a structure a reader can navigate', () => {
+  it('opens with a sticky header carrying the lockup and the page CTA', () => {
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'Start here', cta: { label: 'Sign up', href: '/portal/signup' } }],
+    }));
+    expect(html).toContain('<header class="site-head">');
+    expect(html).toContain('colaberry-horizontal.png');
+    // The header reuses the page's own first CTA rather than inventing a second destination.
+    expect(html.match(/href="\/portal\/signup"/g)).toHaveLength(2);
+  });
+
+  it('a page with no CTA anywhere gets a header with no button, not an invented one', () => {
+    const { html } = render(MINIMAL);
+    expect(html).toContain('<header class="site-head">');
+    expect(html).not.toContain('data-track-cta');
+  });
+
+  it('closes with a footer', () => {
+    expect(render(MINIMAL).html).toContain('<footer class="site-foot">');
+  });
+
+  it('alternates bands so a long page reads as chapters rather than one column', () => {
+    const { html } = render(content({
+      sections: [
+        { type: 'hero', headline: 'H' },
+        { type: 'text', paragraphs: ['One.'] },
+        { type: 'text', paragraphs: ['Two.'] },
+        { type: 'cta', headline: 'Go', cta: { label: 'Apply', href: '/apply' } },
+      ],
+    }));
+    const bands = [...html.matchAll(/<section class="band band--([a-z]+)/g)].map((m) => m[1]);
+    // Hero opens tinted, the closer takes the brand colour, the middle alternates.
+    expect(bands).toEqual(['subtle', 'default', 'subtle', 'accent']);
+  });
+
+  it('never paints two auto-assigned bands the same colour in a row', () => {
+    // The bug this pins: resolving per-index, `index % 2` did not know the hero had been forced
+    // to `subtle`, so the section after it computed `subtle` too and the two merged into one
+    // grey slab with a dead gap in it. Alternation is a property of the run, not of the index.
+    const { html } = render(content({
+      sections: [
+        { type: 'hero', headline: 'H' },
+        ...Array.from({ length: 6 }, (_, i) => ({ type: 'text', paragraphs: [`P${i}`] })),
+      ],
+    }));
+    const bands = [...html.matchAll(/<section class="band band--([a-z]+)/g)].map((m) => m[1]);
+    expect(bands).toHaveLength(7);
+    const adjacentRepeats = bands.filter((b, i) => i > 0 && bands[i - 1] === b);
+    expect(adjacentRepeats).toEqual([]);
+  });
+
+  it('drops the seam between two bands the author deliberately gave the same tone', () => {
+    // A dark block holding copy AND cards is two sections but one visual object; full padding on
+    // both sides of the seam reads as a gulf.
+    const { html } = render(content({
+      sections: [
+        { type: 'text', tone: 'inverse', paragraphs: ['Lead-in.'] },
+        { type: 'bullets', tone: 'inverse', variant: 'steps', items: [{ label: 'One' }] },
+      ],
+    }));
+    // Counted on the section tags only. A bare /band--joined/g also matches the CSS rule that
+    // defines the class, so it reports one more than the number of joined sections.
+    const joinedSections = html.match(/<section class="band [^"]*band--joined/g) ?? [];
+    // Only the second one is joined - the first still opens the block normally.
+    expect(joinedSections).toHaveLength(1);
+    expect(html).toContain('.band--joined{padding-top:0}');
+  });
+
+  it('lets the content override the band, which is how a dark section happens', () => {
+    const { html } = render(content({
+      sections: [{ type: 'text', tone: 'inverse', paragraphs: ['On black.'] }],
+    }));
+    expect(html).toContain('band--inverse');
+  });
+
+  it('is deterministic - the same content renders byte-identically twice', () => {
+    // A tone chosen at random, or from the clock, would make two publishes of one draft disagree.
+    const c = content({
+      sections: [
+        { type: 'hero', headline: 'H' }, { type: 'text', paragraphs: ['A.'] },
+        { type: 'bullets', items: [{ label: 'B' }] },
+      ],
+    });
+    expect(render(c).html).toBe(render(c).html);
+  });
+});
+
+describe('sections carry the shape the brief gave them', () => {
+  it('renders the eyebrow, which the schema used to throw away', () => {
+    const { html } = render(content({
+      sections: [{ type: 'text', eyebrow: 'Why start now?', heading: 'H', paragraphs: ['P.'] }],
+    }));
+    expect(html).toContain('<p class="eyebrow">Why start now?</p>');
+  });
+
+  it.each([
+    ['checks', 'class="checks"'],
+    ['steps', 'class="steps"'],
+    ['cards', 'class="cards"'],
+  ])('draws %s bullets as their own thing', (variant, marker) => {
+    const { html } = render(content({
+      sections: [{ type: 'bullets', variant, items: [{ label: 'An item' }] }],
+    }));
+    expect(html).toContain(marker);
+    expect(html).toContain('An item');
+  });
+
+  it('numbers steps from 01, so the sequence is readable as a sequence', () => {
+    const { html } = render(content({
+      sections: [{ type: 'bullets', variant: 'steps', items: [{ label: 'First' }, { label: 'Second' }] }],
+    }));
+    expect(html).toContain('<span class="step-n">01</span>');
+    expect(html).toContain('<span class="step-n">02</span>');
+  });
+
+  it('bullets with no variant still render, because variant is optional', () => {
+    const { html } = render(content({ sections: [{ type: 'bullets', items: [{ label: 'Plain' }] }] }));
+    expect(html).toContain('class="cards"');
+    expect(html).toContain('Plain');
+  });
+
+  it('splits the audience into pills on commas', () => {
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'H', audience: 'beginners, working professionals, and builders' }],
+    }));
+    expect(html).toContain('<li>beginners</li>');
+    expect(html).toContain('<li>working professionals</li>');
+    // The leading "and" is stripped rather than rendered as part of the last pill.
+    expect(html).toContain('<li>builders</li>');
+    expect(html).not.toContain('and builders');
+  });
+
+  it('an audience with no commas stays one pill instead of being guessed apart', () => {
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'H', audience: 'working data analysts' }],
+    }));
+    expect(html).toContain('<li>working data analysts</li>');
+  });
+
+  it('paints the accent phrase inside the headline', () => {
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'Start learning AI today', headlineAccent: 'learning AI' }],
+    }));
+    expect(html).toContain('Start <span class="hl">learning AI</span> today');
+  });
+
+  it('leaves the headline untouched when the accent phrase is not in it', () => {
+    // The dangerous failure would be appending it, or highlighting a near-match: either silently
+    // rewrites a headline somebody approved.
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'Start learning AI today', headlineAccent: 'nowhere near it' }],
+    }));
+    expect(html).toContain('<h1>Start learning AI today</h1>');
+    expect(html).not.toContain('nowhere near it');
+  });
+
+  it('escapes an accent phrase rather than letting it open a tag', () => {
+    const { html } = render(content({
+      sections: [{ type: 'hero', headline: 'Before <img src=x> after', headlineAccent: '<img src=x>' }],
+    }));
+    expect(html).toContain('&lt;img src=x&gt;');
+    expect(html).not.toMatch(/<img[^>]*\ssrc=x/);
+  });
+});
+
 describe('theming is honest about what has been decided', () => {
   it('uses the agreed palette for the one brand that has one', () => {
     const { html, branded } = render(MINIMAL, { brand: FLOTATION });
@@ -202,9 +381,18 @@ describe('theming is honest about what has been decided', () => {
   });
 
   it('renders neutral for a brand with no agreed palette, and says so in the result', () => {
-    const { html, branded } = render(MINIMAL);
+    // `enterprise`, not the default BRAND: `training` HAS an agreed palette now (the Colaberry
+    // School Style Guide), so using it here would assert the opposite of what it says.
+    const { html, branded } = render(MINIMAL, { brand: UNBRANDED });
     expect(branded).toBe(false);
     expect(html).toContain(NEUTRAL_THEME['--accent']);
+  });
+
+  it('paints Colaberry cherry red, not the neutral navy, for the training brand', () => {
+    const { html, branded } = render(MINIMAL);
+    expect(branded).toBe(true);
+    expect(html).toContain('#FB2832');
+    expect(html).not.toContain(NEUTRAL_THEME['--accent']);
   });
 
   it('a brand with no theme key at all still paints', () => {
@@ -213,8 +401,16 @@ describe('theming is honest about what has been decided', () => {
     expect(html).toContain('--bg:');
   });
 
-  it('shows the brand name as the wordmark, because there is no logo column to read', () => {
-    expect(render(MINIMAL).html).toContain('>Colaberry Training</div>');
+  it('shows the agreed lockup for a brand that has one', () => {
+    expect(render(MINIMAL).html).toContain('<img src="/colaberry-horizontal.png" alt="Colaberry">');
+  });
+
+  it('falls back to the brand name for a brand with no agreed lockup, rather than borrowing one', () => {
+    // The failure this guards against is worse than showing no logo: putting Colaberry's mark
+    // above a different client's page.
+    const { html } = render(MINIMAL, { brand: UNBRANDED });
+    expect(html).not.toContain('colaberry-horizontal.png');
+    expect(html).toContain('>Colaberry Enterprise</span>');
   });
 });
 
@@ -235,9 +431,29 @@ describe('every section type renders something', () => {
     expect(Object.keys(EXAMPLES).sort()).toEqual([...UNION_TYPES].sort());
   });
 
+  /** The visible copy each example above puts on the page, so "and its text" is really checked. */
+  const EXAMPLE_TEXT: Record<string, string> = {
+    hero: 'Hero headline',
+    text: 'A paragraph.',
+    bullets: 'A bullet label',
+    stats: 'Programme calendar',
+    quote: 'It worked.',
+    details: 'Nov 3',
+    faq: 'Every session.',
+    cta: 'Apply today',
+  };
+
+  it('the text map covers the union too, so no type is checked for its class alone', () => {
+    expect(Object.keys(EXAMPLE_TEXT).sort()).toEqual([...UNION_TYPES].sort());
+  });
+
   it.each(Object.keys(EXAMPLES))('%s renders its own section element and its text', (type) => {
     const { html } = render(content({ sections: [EXAMPLES[type]] }));
-    expect(html).toContain(`class="s s-${type}"`);
+    // Its own band, carrying the type as a class...
+    expect(html).toMatch(new RegExp(`<section class="band band--[a-z]+ s-${type}[^"]*">`));
+    // ...and the copy actually on the page. The previous version of this test asserted only the
+    // class, so a section that rendered an empty shell would have passed it.
+    expect(html).toContain(EXAMPLE_TEXT[type]);
   });
 
   it('renders a stat source on the page, not just in the database', () => {
