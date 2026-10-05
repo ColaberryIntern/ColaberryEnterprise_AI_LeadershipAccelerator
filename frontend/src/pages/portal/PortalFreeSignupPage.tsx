@@ -3,10 +3,17 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { freeSignup } from '../../services/onboardingApi';
 
-// Public "Sign up free" front door. Creates a free guest account (0 points),
-// logs the visitor straight in, and drops them on the Today shell — the top of
-// the onboarding funnel. Styled onto the Colaberry Design System to match
+// Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
+// the visitor straight in, and drops them on the Today shell — the top of the
+// onboarding funnel. Styled onto the Colaberry Design System to match
 // PortalLoginPage (self-contained scoped `cbfs-*` classes).
+//
+// COPY RULE: the word "free" never appears on this page. Ali, 2026-10-05, on the
+// landing page that fed it: "don't use free". TWC §807.172(d) governs how a career
+// school may advertise, so the approved wording is "$0 to start" / "No card needed".
+// The identifiers (`freeSignup`, the component name, the `cbfs-` class prefix) are
+// internal and deliberately left alone - renaming them would churn every consumer
+// without changing a word anybody reads.
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 function PortalFreeSignupPage() {
@@ -43,11 +50,11 @@ function PortalFreeSignupPage() {
         </div>
 
         <div className="cbfs-head">
-          <span className="cbfs-badge">Free preview</span>
-          <h1 className="cbfs-title">Start free</h1>
+          <span className="cbfs-badge">Preview access</span>
+          <h1 className="cbfs-title">Start for $0</h1>
           <p className="cbfs-text">
-            Create a free account to explore the AI Systems Architect Accelerator, RSVP to the next open house,
-            and see your project take shape. No payment required.
+            Create an account to explore the AI Systems Architect Accelerator, RSVP to the next open house,
+            and see your project take shape. No card needed.
           </p>
         </div>
 
@@ -66,7 +73,7 @@ function PortalFreeSignupPage() {
           />
           {error && <div className="cbfs-error" role="alert">{error}</div>}
           <button className="cbfs-btn" type="submit" disabled={loading}>
-            {loading ? 'Creating your account…' : 'Create my free account'}
+            {loading ? 'Creating your account…' : 'Create my account'}
           </button>
         </form>
 

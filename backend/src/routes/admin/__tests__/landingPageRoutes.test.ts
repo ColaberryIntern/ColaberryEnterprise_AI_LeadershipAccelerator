@@ -217,6 +217,16 @@ describe('the preview is the real page', () => {
 
   it('reports whether the brand had a real palette in a header, not on the page', async () => {
     // The preview has to look exactly like the live page, so this cannot be written into the HTML.
+    // `training` now HAS an agreed palette (the Colaberry School Style Guide), so the honest
+    // assertion here is `true` plus the absence of any of it in the body.
+    const res = await request(app).get(`/api/admin/landing-pages/${PAGE}/preview`);
+    expect(res.headers['x-landing-page-branded']).toBe('true');
+    expect(res.text).not.toContain('x-landing-page-branded');
+  });
+
+  it('reports false for a brand whose palette has not been agreed', async () => {
+    // The flag has to be able to say "no", or it is not reporting anything.
+    brandsById[BRAND].default_theme_key = 'enterprise';
     const res = await request(app).get(`/api/admin/landing-pages/${PAGE}/preview`);
     expect(res.headers['x-landing-page-branded']).toBe('false');
   });
