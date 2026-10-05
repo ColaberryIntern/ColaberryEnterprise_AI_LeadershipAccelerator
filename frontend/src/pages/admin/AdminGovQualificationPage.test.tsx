@@ -360,6 +360,13 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(openBtn.disabled).toBe(false);                                      // enabled even though sourceAvailable:false
   });
 
+  it('Next-step banner: 0 established requirements -> tells the reviewer to capture the requirements', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('Next: capture the requirements');
+  });
+
   it('decoupled (gws) workspace with established requirements: "what they want" lists them, requirements-by-due-stage renders, Approve is deferred (not an OP-source block)', async () => {
     const established = [{ id: 'RQ1', text: 'Offeror shall be registered in SAM.', applicability: 'always' as const, dueStage: 'submission' as const, bindingStatus: 'binding_solicitation_requirement' }];
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({

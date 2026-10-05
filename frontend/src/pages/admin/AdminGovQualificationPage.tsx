@@ -11,6 +11,7 @@ import {
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
 import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
+import { deriveNextStep } from './govNextStep';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -411,6 +412,24 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </div>
           )}
 
+          {(() => {
+            const ns = deriveNextStep({
+              decision: record ? record.decision : null,
+              establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
+              zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
+              canApprove: ws.canApprove,
+              canApprovePursuit: ws.evaluation ? (ws.evaluation.canApprovePursuit ?? true) : true,
+              changed: ws.changedSource || !!ws.syncChange,
+            });
+            const cls = ns.tone === 'success' ? 'alert-success' : ns.tone === 'warning' ? 'alert-warning' : 'alert-primary';
+            return (
+              <div className={`alert ${cls} d-flex align-items-start gap-2`} role="status">
+                <i className="ri-guide-line mt-1 fs-5" aria-hidden="true" />
+                <div><div className="fw-semibold">{ns.title}</div><div className="small mb-0">{ns.detail}</div></div>
+              </div>
+            );
+          })()}
+
           <div className="row g-3 mb-3">
             <div className="col-6 col-lg-3"><StatCard label="Source state" value={ws.sourceState} icon="git-commit-line" tone={ws.sourceState === 'available' ? 'success' : ws.sourceState === 'unavailable' || ws.sourceState === 'auth_failed' || ws.sourceState === 'malformed' ? 'danger' : 'warning'} hint={ws.snapshotRecorded ? `snapshot v${ws.sourceSnapshotVersion}` : 'snapshot unrecorded'} /></div>
             <div className="col-6 col-lg-3"><StatCard label="Blocking requirements" value={ws.evaluation ? ws.evaluation.blocking.length : '—'} icon="error-warning-line" tone={ws.evaluation && ws.evaluation.blocking.length > 0 ? 'danger' : 'success'} /></div>
@@ -634,7 +653,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                       </li>
                     ))}</ul>
                   ) : (
-                    <p className="text-secondary small mb-0">No suggested services — add or refine keywords in <strong>Our Services</strong>.</p>
+                    <p className="text-secondary small mb-0">{needs.length === 0
+                      ? <>No suggestions yet — <strong>establish the requirements above first</strong>; the match works from them.</>
+                      : <>No suggested services for these signals. This is <strong>advisory</strong> — a suggestion, <em>not</em> a verdict that we can't do this. The opportunity carries no NAICS to match on, so refine keywords in <strong>Our Services</strong> or use your own judgment.</>}</p>
                   )}
                 </div>
               </div>
