@@ -51,6 +51,11 @@ export interface IncomingRecording {
 export type CorrelationOutcome =
   /** Exactly one attempt owns this recording. */
   | { kind: 'matched'; attemptId: string; recorded: boolean }
+  /**
+   * One recording of the whole cohort. Nobody owns it — each presenter's part is a
+   * time range inside it, resolved by `presentationSegmentService`.
+   */
+  | { kind: 'session'; presenterCount: number; attemptIds: string[]; recorded: boolean }
   /** A human has to choose. The row is persisted with a reason. */
   | { kind: 'review'; reason: string; candidateAttemptIds: string[]; recorded: boolean }
   /** Not a presentation at all — a class, a 1:1, somebody's personal meeting. */
@@ -158,6 +163,29 @@ async function recordPart(
 }
 
 /**
+ * Does this recording run the length of the session?
+ *
+ * Compared against the extent of the scheduled slots — first start to last end —
+ * with a margin for a session that began recording a little late or stopped a
+ * little early. A recording that only covers part of that extent is not the
+ * session recording however many slots it happens to brush against.
+ */
+function spansWholeSession(rec: IncomingRecording, slotted: CandidateAttempt[]): boolean {
+  if (!rec.startedAt || !rec.endedAt) return false;
+
+  const starts = slotted.map((c) => new Date(c.slot_starts_at as Date).getTime());
+  const ends = slotted.map((c, i) => starts[i] + (c.slot_duration_seconds ?? 600) * 1000);
+  const sessionFrom = Math.min(...starts);
+  const sessionTo = Math.max(...ends);
+
+  // Generous, because nobody presses record exactly on the hour — but not so
+  // generous that a single presenter's slot could qualify.
+  const EDGE_MS = 5 * 60 * 1000;
+  return rec.startedAt.getTime() <= sessionFrom + EDGE_MS
+    && rec.endedAt.getTime() >= sessionTo - EDGE_MS;
+}
+
+/**
  * The decision.
  *
  * Deliberately does not download anything, and does not touch `room_resources`.
@@ -201,11 +229,39 @@ export async function correlateRecording(rec: IncomingRecording): Promise<Correl
     return { kind: 'matched', attemptId: only.id, recorded };
   }
 
+  // A RECORDING THAT COVERS EVERY SLOT IS NOT AMBIGUOUS — IT IS THE SESSION.
+  //
+  // Demo day is one unbroken recording of the whole cohort. Treating that as "could
+  // be any of these eleven students" sends every demo day to review, and worse, any
+  // attempt to resolve it would end up labelling a cohort-wide video as one
+  // student's demo. It belongs to nobody: it is the session's recording, and each
+  // presenter's place in it is a time range, not a file.
+  //
+  // THE DISCRIMINATOR IS SPAN, NOT COUNT. "Overlaps every slot" looks like the
+  // right test and is not: where two presenters' slots overlap each other, a short
+  // five-minute recording also touches both, and that is real ambiguity. A session
+  // recording is one that runs from the first slot to the last. Counting slots
+  // would quietly relabel an ambiguous recording as the whole session and attach a
+  // range to someone who may not be in it.
+  const slotted = candidates.filter((c) => c.slot_starts_at);
+  const isWholeSession = slotted.length > 1 && spansWholeSession(rec, slotted);
+
+  if (isWholeSession) {
+    const recorded = await recordPart(rec, null, 'ingested',
+      `Session recording covering ${slotted.length} presenters. Each presenter's part is a time range within it, not a separate file.`);
+    return {
+      kind: 'session',
+      presenterCount: slotted.length,
+      attemptIds: slotted.map((c) => c.id),
+      recorded,
+    };
+  }
+
   const reason = inWindow.length === 0
     ? (rec.startedAt
       ? 'The recording does not fall inside any presenter slot for this session.'
       : 'Zoom sent no recording start time, so it cannot be placed against a presenter slot.')
-    : `The recording overlaps ${inWindow.length} presenter slots, so it cannot be attributed to one student.`;
+    : `The recording overlaps ${inWindow.length} of ${slotted.length} presenter slots, so it cannot be attributed to one student.`;
 
   const recorded = await recordPart(rec, null, 'review', reason);
   return {
