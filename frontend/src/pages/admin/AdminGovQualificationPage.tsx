@@ -326,8 +326,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
   // READ-ONLY: extract candidate requirements from the uploaded solicitation ZIP. Persists nothing — the reviewer
   // confirms which candidates become established (gate-bearing) requirements below.
-  const extract = useCallback(async () => {
-    if (!extractFile || !canonical) return;
+  const extract = useCallback(async (): Promise<boolean> => {
+    if (!extractFile || !canonical) return false;
     setExtractBusy(true); setExtractError(null);
     try {
       const r = await extractGovQualificationRequirements(canonical, extractFile);
@@ -335,9 +335,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       const rows: Record<string, CandidateRow> = {};
       for (const c of r.candidates) rows[c.id] = { checked: true, applicability: 'always', dueStage: 'submission' };
       setCandRows(rows);
+      return true;
     } catch (err: any) {
       setExtractError(err?.response?.data?.error ?? 'Could not extract requirements from the document.');
       setCandidates(null);
+      return false;
     } finally {
       setExtractBusy(false);
     }
@@ -389,6 +391,19 @@ export default function AdminGovQualificationPage(): React.ReactElement {
       setCandidates(null); setCandRows({});
     }, `Established ${mapped.length} requirement(s) from the solicitation.`);
   };
+
+  // ONE upload does both: extract the requirement candidates (read-only) AND attest the SAME ZIP as the evidence of
+  // record (a server hash). Attestation runs only on the decoupled path once the qualification is open and it is not
+  // already attested; it is skipped silently otherwise (e.g. before Open qualification), and extraction still stands.
+  const uploadSolicitationZip = useCallback(async () => {
+    const extracted = await extract();
+    if (extracted && isDecoupled && record && version && extractFile && !(ws && ws.zipAttestation && ws.zipAttestation.sha256)) {
+      await run(
+        () => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'add', file: extractFile }),
+        'Solicitation ZIP extracted and attested as the evidence of record.',
+      );
+    }
+  }, [extract, isDecoupled, record, version, extractFile, ws, run, canonical, biddingEntity]);
 
   return (
     <div className="admin-page">
@@ -525,14 +540,14 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {(ws.source || isDecoupled) && (
-            <SectionCard title="Extract requirements from the solicitation ZIP" icon="file-search-line"
-              subtitle="Upload the solicitation package (the Bonfire ZIP). The extractor lists the requirements it detects as CANDIDATES — confirm the real ones to establish them. It reads the file in memory and stores nothing; a candidate is not a requirement until you confirm it.">
+            <SectionCard title="Upload the solicitation ZIP" icon="file-search-line"
+              subtitle="Upload the Bonfire ZIP once. It does two things in one step: lists the requirements it detects as CANDIDATES (confirm the real ones to establish them), and — once the qualification is open — attests the same ZIP as the evidence of record (the server stores only a hash of it, never the bytes). A candidate is not a requirement until you confirm it.">
               <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
                 <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
                   onChange={(e) => setExtractFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
-                <button type="button" className="btn btn-outline-primary btn-sm" disabled={extractBusy || !extractFile}
-                  onClick={() => { void extract(); }}>
-                  <i className="ri-search-eye-line me-1" aria-hidden="true" />{extractBusy ? 'Extracting…' : 'Extract requirements'}
+                <button type="button" className="btn btn-outline-primary btn-sm" disabled={extractBusy || busy || !extractFile}
+                  onClick={() => { void uploadSolicitationZip(); }}>
+                  <i className="ri-search-eye-line me-1" aria-hidden="true" />{extractBusy ? 'Processing…' : 'Extract & attest'}
                 </button>
               </div>
               {extractError && <div className="alert alert-danger py-2" role="alert">{extractError}</div>}
@@ -588,8 +603,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {isDecoupled && record && (
-            <SectionCard title="Attest the solicitation ZIP (evidence of record)" icon="file-shield-2-line"
-              subtitle="Record the uploaded solicitation ZIP as the evidence of record (the server stores only a hash, never the bytes). Required, with established requirements, before a bid pursuit can be approved.">
+            <SectionCard title="Evidence of record (attested ZIP)" icon="file-shield-2-line"
+              subtitle="Normally attested automatically when you upload above. Use this to check the status, re-attest a corrected ZIP, or revoke. The server stores only a hash, never the bytes; required (with established requirements) before a bid pursuit can be approved.">
               {ws.zipAttestation && ws.zipAttestation.sha256 ? (
                 <div className="d-flex flex-wrap align-items-center gap-2">
                   <span className="badge bg-success-subtle text-success-emphasis"><i className="ri-checkbox-circle-line me-1" aria-hidden="true" />Attested</span>
