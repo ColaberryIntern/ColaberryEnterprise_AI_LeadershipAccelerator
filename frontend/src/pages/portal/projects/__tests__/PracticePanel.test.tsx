@@ -109,6 +109,54 @@ describe('reserving a practice room', () => {
   });
 });
 
+describe('the recording state is reported honestly', () => {
+  const booked = (over: Record<string, unknown> = {}) => ({ ...SESSION, ...over });
+
+  it('never calls a still-processing recording ready', async () => {
+    // A webhook receipt proves an event arrived; it does not prove a playable file
+    // exists. Telling someone their rehearsal is ready and sending them to an empty
+    // page makes them distrust the next honest message.
+    portalApi.get.mockResolvedValue({ data: { session: booked({ recordingState: 'processing' }) } });
+    mount();
+    await flush();
+
+    expect(q('ps-practice-recording-state')?.textContent).toBe('Processing');
+    expect(q('ps-practice-recording-detail')?.textContent).toMatch(/not watchable yet/i);
+    expect(container.textContent).not.toMatch(/recording complete/i);
+  });
+
+  it('says ready only when it is', async () => {
+    portalApi.get.mockResolvedValue({ data: { session: booked({ recordingState: 'ready' }) } });
+    mount();
+    await flush();
+    expect(q('ps-practice-recording-state')?.textContent).toBe('Ready');
+  });
+
+  it('presents a review as a check in progress, not as a failure', async () => {
+    // It usually means a cohort session had overlapping slots. Nothing is lost,
+    // and alarming the student would be both wrong and unkind.
+    portalApi.get.mockResolvedValue({ data: { session: booked({ recordingState: 'review' }) } });
+    mount();
+    await flush();
+    expect(q('ps-practice-recording-detail')?.textContent).toMatch(/nothing is lost/i);
+  });
+
+  it('does not claim a recording exists when none arrived', async () => {
+    portalApi.get.mockResolvedValue({ data: { session: booked({ recordingState: 'missing' }) } });
+    mount();
+    await flush();
+    expect(q('ps-practice-recording-state')?.textContent).toBe('Not found');
+    expect(q('ps-practice-recording-detail')?.textContent).toMatch(/no recording arrived/i);
+  });
+
+  it('defaults to "expected" rather than inventing a state it does not know', async () => {
+    portalApi.get.mockResolvedValue({ data: { session: booked({ recordingState: 'something-new' }) } });
+    mount();
+    await flush();
+    expect(q('ps-practice-recording-state')?.textContent).toBe('Expected');
+  });
+});
+
 describe('when the single host is already busy', () => {
   const conflict = {
     response: { status: 409, data: { error: 'A class owns the host then.', why: 'class_window', next_available: '2026-11-04T21:00:00.000Z' } },

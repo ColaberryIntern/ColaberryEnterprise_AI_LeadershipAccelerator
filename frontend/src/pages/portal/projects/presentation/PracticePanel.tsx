@@ -62,6 +62,38 @@ export interface PracticePanelProps {
 
 type Load = 'loading' | 'ready' | 'error';
 
+/**
+ * What the attempt's recording state actually means, in words a student can act on.
+ *
+ * "processing" is NEVER rendered as a finished recording. A webhook receipt proves
+ * an event arrived; it does not prove a playable file exists, and telling someone
+ * their rehearsal is ready when it is still being assembled sends them to an empty
+ * page and makes them distrust the next honest message.
+ *
+ * 'review' is deliberately not dressed up as an error. It means a human has to
+ * decide which attempt the recording belongs to — usually because a cohort session
+ * had overlapping slots — and nothing is lost while that happens.
+ */
+function recordingLine(state: string): { label: string; tone: 'ok' | 'wait' | 'idle'; detail: string } {
+  switch (state) {
+    case 'ready':
+      return { label: 'Ready', tone: 'ok', detail: 'Your recording is available to watch back.' };
+    case 'processing':
+      return { label: 'Processing', tone: 'wait', detail: 'Zoom is still assembling the file. It is not watchable yet.' };
+    case 'review':
+      return { label: 'Being checked', tone: 'wait', detail: 'Someone is confirming which take this recording belongs to. Nothing is lost.' };
+    case 'missing':
+      return { label: 'Not found', tone: 'idle', detail: 'No recording arrived for this take. You can rehearse again, or ask staff to look.' };
+    case 'failed':
+      return { label: 'Failed', tone: 'idle', detail: 'The recording could not be collected. Staff can retry it for you.' };
+    case 'superseded':
+      return { label: 'Replaced', tone: 'idle', detail: 'A later take replaced this one.' };
+    case 'expected':
+    default:
+      return { label: 'Expected', tone: 'idle', detail: 'Nothing has arrived yet. Recordings appear after the room closes.' };
+  }
+}
+
 /** The reserved slot, once there is one. */
 function BookedSlot(
   { session, projectId, storyId, demo }:
@@ -85,6 +117,18 @@ function BookedSlot(
               Still being created
             </span>
           )}
+        </dd>
+        <dt>Recording</dt>
+        <dd>
+          <span
+            className={`ps-chip ps-chip--${recordingLine(session.recordingState).tone}`}
+            data-testid="ps-practice-recording-state"
+          >
+            {recordingLine(session.recordingState).label}
+          </span>
+          <div className="ps-note ps-note--soft" data-testid="ps-practice-recording-detail">
+            {recordingLine(session.recordingState).detail}
+          </div>
         </dd>
       </dl>
       {!session.meetingReady && (
