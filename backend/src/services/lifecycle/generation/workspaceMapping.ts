@@ -94,12 +94,13 @@
  * adding that sentence made it 487.
  *
  * **Disclosed, because a verifier found it undisclosed:** the split raised the combined public export
- * surface above CLAUDE.md’s per-module ceiling of 12 — nine internal helpers had to become exported
- * for the importer to reach them. None is accidental and all nine are consumed, but the ceiling is
+ * surface above CLAUDE.md’s per-module ceiling of 12 — **ten** internal helpers had to become
+ * exported for the importer to reach them (15 exports here, 20 there). None is accidental and all
+ * ten are consumed, but the ceiling is
  * breached and saying so is better than a reader discovering it. Collapsing it needs the two modules
  * to become one again, which the line ceiling forbids; the honest resolution is a third module for
  * the shared predicates, and that is recorded as an open item rather than done here.
- * * NO DATABASE. `ValidationIssue` is reused verbatim rather than redeclared, so a consumer can
+ * NO DATABASE. `ValidationIssue` is reused verbatim rather than redeclared, so a consumer can
  * concatenate these with `factoryValidate`'s and render one list.
  */
 
@@ -155,8 +156,10 @@ export type {
 export function businessTasks(project: FactoryProject): FactoryTask[] {
   // A malformed project is refused by validateTaskSurfaces, not thrown on here.
   if (!isObj(project) || !Array.isArray(project.tasks)) return [];
+  // `isStr(t.id)` as well as `isObj(t)`: a task with no usable id cannot be reported
+  // against, and every caller here keys on it.
   return project.tasks.filter(
-    (t) => isObj(t) && (t.kind === 'TASK' || t.kind === 'DECISION'),
+    (t) => isObj(t) && isStr(t.id) && (t.kind === 'TASK' || t.kind === 'DECISION'),
   ) as FactoryTask[];
 }
 
@@ -186,11 +189,22 @@ export function validateTaskSurfaces(
       + 'mapping cannot be checked against it. Refused rather than reported as compliant.')];
   }
 
+  // The ELEMENTS, not just the arrays. `SURFACE_PROJECT_UNUSABLE` above proves these are
+  // arrays; it said nothing about their members, and `.map((t) => t.id)` on a `[null]`
+  // threw. That is the `permissionViews` defect from attempt 2, one argument over — the
+  // fourth time this exact shape has been missed, and the reason the generator now derives
+  // its keyspace from the source instead of from a list.
+  const ids = (xs: ReadonlyArray<unknown>): Set<string> => {
+    const out = new Set<string>();
+    for (const x of xs) if (isObj(x) && isStr(x.id)) out.add(x.id);
+    return out;
+  };
+
   const work = businessTasks(project);
-  const workIds = new Set(work.map((t) => t.id));
-  const allTaskIds = new Set(project.tasks.map((t) => t.id));
-  const roleIds = new Set(project.roles.map((r) => r.id));
-  const requirementIds = new Set(project.requirements.map((r) => r.id));
+  const workIds = ids(work);
+  const allTaskIds = ids(project.tasks);
+  const roleIds = ids(project.roles);
+  const requirementIds = ids(project.requirements);
 
   const sound: TaskSurfaceBinding[] = [];
   const seen = new Set<string>();
@@ -229,8 +243,13 @@ export function validateTaskSurfaces(
 
   for (const t of work) {
     if (!seen.has(t.id)) {
+      // label(), not raw interpolation. A task whose `id` or `title` has a null
+      // `toString` threw here — three lines after `label()` was introduced for exactly
+      // this, and applied only to `kind` and `audience`. The unsafe call is again inside
+      // the refusal message: the code describes a value it is rejecting.
       issues.push(err('SURFACE_UNMAPPED',
-        `Task ${t.id} ("${t.title}") maps to no workspace action and is not marked headless.`, t.id));
+        `Task ${label(t.id)} ("${label(t.title)}") maps to no workspace action and is not `
+        + 'marked headless.', isStr(t.id) ? t.id : undefined));
     }
   }
 

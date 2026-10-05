@@ -272,13 +272,21 @@ because the current wording reads as though it already covers every case.
 - **STANDING RULE for the rest of this build (adopted 2026-10-05):** a claim quantified over an
   input space ships with **a seeded generator over that space and the command that enumerated
   it**, or it is rewritten as a scoped list. P4-T1 published such a claim four times and was
-  falsified four times — one field, then the container, then the elements, then the
-  stringification inside the refusal message. Each fix was right; each sentence was broader than
-  its fix. Full reasoning in `plan-phase4.md`.
+  falsified **five** times — one field, then the container, then the elements, then the
+  stringification inside the refusal message, then the same stringification and element
+  defects one argument over, in `project`. Each fix was right; each sentence was broader
+  than its fix.
+  **Amended 2026-10-05 after the rule itself proved insufficient:** the keyspace and position
+  set must also be **derived from the code under test**, not listed, and every guarded body
+  needs a positive control proving the corpus reaches it. The first version banned enumerated
+  *values* while leaving enumerated *keys*, so 0 of 414 corpus values could reach the defect.
+  Full reasoning and the measured figures in `plan-phase4.md`.
 - **The combined public export surface of `workspaceMapping` + `workspaceBindingChecks` exceeds
-  CLAUDE.md’s per-module ceiling of 12** (15 and 19). The split that brought both files under
-  the 500-line ceiling forced nine internal helpers to become exported. None is accidental and
-  all nine are consumed, but the ceiling is breached. Collapsing it needs a third module holding
+  CLAUDE.md’s per-module ceiling of 12** (15 and 20). The split that brought both files under
+  the 500-line ceiling forced **ten** internal helpers to become exported — the count was
+  stated as nine in three places until a verifier caught that this commit had added `label` as
+  the twentieth export. None is accidental and all ten are consumed, but the ceiling is
+  breached. Collapsing it needs a third module holding
   the shared predicates. **Owner: P4-T5**, which already must touch these files.
 - **`SURFACE_ACCEPTANCE_SELF_SUPPLIED` is a marker, not an enforcement.** It mirrors
   `DeclarationOrigin` and fails closed on an absent or unrecognised origin, which is the right

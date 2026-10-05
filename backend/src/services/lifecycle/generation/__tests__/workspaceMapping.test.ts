@@ -21,6 +21,8 @@ import {
   type TaskSurfaceBinding,
   type WorkspaceRef,
 } from '../workspaceMapping';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { manualOnlyProject } from './fixtures/manualOnly';
 import { fixtureA, fixtureB, fixtureC } from './fixtures/referenceFixtures';
 import type { FactoryProject } from '../../../factory/contracts/factoryContract';
@@ -260,10 +262,7 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
       for (let i = 0; i < n; i += 1) items.push(jsonText(rnd, depth - 1));
       return `[${items.join(',')}]`;
     }
-    // Object keys drawn from the names this module actually dereferences, so the generator
-    // reaches the dangerous paths rather than wandering in an unrelated keyspace.
-    const keys = ['toString', 'valueOf', 'taskId', 'kind', 'ref', 'audience', 'roleId',
-      '__proto__', 'length', '0', 'constructor'];
+    const keys = KEYSPACE;
     const parts: string[] = [];
     for (let i = 0; i < n + 1; i += 1) {
       const k = keys[Math.floor(rnd() * keys.length)];
@@ -320,6 +319,67 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     ref: { ...ref({ taskIds: ['t-intake'] }), [k]: v },
   });
 
+  // ─── THE KEYSPACE IS DERIVED FROM THE SOURCE, NOT LISTED.
+  //
+  // The fifth falsification of the totality claim was not a missing guard. It was that the
+  // generator could not REACH the defect: 0 of 414 corpus values cleared the project guard,
+  // because the keyspace was a list I wrote and it contained no `tasks`, `roles`,
+  // `requirements`, `id` or `title`. A generator over a hand-listed keyspace is a
+  // hand-written enumeration wearing a better costume — the same failure one level up.
+  //
+  // So the property names come out of the two module source files. If a future edit
+  // dereferences a new name, it enters the keyspace automatically, and the assertion below
+  // fails if it somehow does not.
+  const SRC_DIR = join(__dirname, '..');
+  const SOURCES = ['workspaceMapping.ts', 'workspaceBindingChecks.ts']
+    .map((f) => readFileSync(join(SRC_DIR, f), 'utf8'));
+
+  /** Names that are JS/stdlib machinery rather than input fields. Deliberately small. */
+  const NOT_INPUT_FIELDS = new Set([
+    'map', 'filter', 'every', 'some', 'forEach', 'find', 'includes', 'push', 'join', 'trim',
+    'has', 'add', 'get', 'set', 'size', 'values', 'keys', 'length', 'isArray', 'slice',
+    'toBe', 'toEqual', 'sort', 'concat', 'split', 'replace', 'startsWith', 'endsWith',
+    'charAt', 'indexOf', 'substring', 'toLowerCase', 'toUpperCase', 'from', 'of', 'parse',
+    'stringify', 'freeze', 'create', 'assign', 'entries', 'prototype', 'call', 'apply',
+  ]);
+
+  /**
+   * Every property name these modules read, minus the machinery. Over-inclusion is SAFE
+   * (the generator simply emits more); under-inclusion is the failure mode that produced
+   * five false claims, so the bias is deliberately toward including too much.
+   */
+  function derivedKeyspace(): string[] {
+    const found = new Set<string>();
+    for (const src of SOURCES) {
+      for (const m of src.matchAll(/\.([A-Za-z_]\w*)\b/g)) found.add(m[1]);
+      for (const m of src.matchAll(/'([a-z][A-Za-z0-9_]*)'/g)) found.add(m[1]);
+    }
+    for (const k of NOT_INPUT_FIELDS) found.delete(k);
+    // Plus the two JS names that make a value hostile to stringification, which are not
+    // dereferenced by this code and are exactly what broke attempts 3 and 4.
+    for (const k of ['toString', 'valueOf', '__proto__', 'constructor', '0']) found.add(k);
+    return [...found].sort();
+  }
+
+  const KEYSPACE = derivedKeyspace();
+
+  it('THE KEYSPACE IS DERIVED: every field the modules dereference can be generated', () => {
+    // The guard clause of the standing rule. If this fails, the generator has a blind spot
+    // and any bound it appears to prove is unsound.
+    for (const field of [
+      'taskId', 'kind', 'ref', 'reason', 'workspaceId', 'workspaceTitle', 'action',
+      'primaryJob', 'intendedRoles', 'records', 'decisions', 'whyNotExisting',
+      'requirementIds', 'taskIds', 'audience', 'permissionViews', 'deepLink',
+      'preservesNavigationState', 'roleId', 'visibleActions', 'rationale', 'acceptedBy',
+      'origin', 'tasks', 'roles', 'requirements', 'id', 'title',
+    ]) {
+      expect(KEYSPACE).toContain(field);
+    }
+    // And the stringification traps that are not fields at all.
+    expect(KEYSPACE).toContain('toString');
+    expect(KEYSPACE).toContain('valueOf');
+  });
+
   function corpus(): unknown[] {
     const rnd = lcg(20261005);
     const out: unknown[] = KNOWN_HOSTILE_JSON.map((t) => JSON.parse(t));
@@ -332,6 +392,7 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
       const values = corpus();
       const throws: string[] = [];
       let calls = 0;
+      let reachedBody = 0;
 
       for (const v of values) {
         for (const [pathName, put] of PATHS) {
@@ -344,7 +405,11 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
           for (const [fn, run] of attempts) {
             calls += 1;
             try {
-              run();
+              const r = run();
+              if (fn === 'validateTaskSurfaces' && Array.isArray(r)
+                && !r.some((i) => (i as { code: string }).code === 'SURFACE_BINDING_MALFORMED')) {
+                reachedBody += 1;
+              }
             } catch (e) {
               throws.push(`${fn} @ ${pathName} :: ${(e as Error).message}`);
             }
@@ -355,9 +420,54 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
       // The corpus is big enough to be meaningful and the assertion names what failed, so a
       // regression reports the path rather than just a count.
       expect(calls).toBeGreaterThan(30000);
+      // POSITIVE CONTROL: the corpus must actually reach past the shape guard, or this whole
+      // test is an elaborate way of asserting that malformed input is malformed.
+      expect(reachedBody).toBeGreaterThan(0);
       expect(throws.slice(0, 5)).toEqual([]);
       expect(throws).toHaveLength(0);
     });
+
+  /** Positions under a well-formed `project`, so the corpus clears the project guard. */
+  const PROJECT_PATHS: ReadonlyArray<readonly [string, (v: unknown) => unknown]> = [
+    ['project.tasks', (v) => ({ ...manualOnlyProject(), tasks: v })],
+    ['project.tasks[0]', (v) => ({ ...manualOnlyProject(), tasks: [v] })],
+    ['project.roles[0]', (v) => ({ ...manualOnlyProject(), roles: [v] })],
+    ['project.requirements[0]', (v) => ({ ...manualOnlyProject(), requirements: [v] })],
+    ['project.tasks[0].id', (v) => ({ ...manualOnlyProject(),
+      tasks: [{ kind: 'TASK', id: v, title: 't' }] })],
+    ['project.tasks[0].title', (v) => ({ ...manualOnlyProject(),
+      tasks: [{ kind: 'TASK', id: 't-x', title: v }] })],
+    ['project.tasks[0].kind', (v) => ({ ...manualOnlyProject(),
+      tasks: [{ kind: v, id: 't-x', title: 't' }] })],
+  ];
+
+  it('PROJECT-NESTED positions do not throw \u2014 the fifth falsification lived here', () => {
+    // Five reproducible TypeErrors came from exactly these positions: the project guard
+    // proved `tasks`/`roles`/`requirements` were ARRAYS and never typed their elements, then
+    // `.map((t) => t.id)` ran on a `[null]`. The generator could not reach any of it.
+    const throws: string[] = [];
+    let reachedBody = 0;
+    for (const v of corpus()) {
+      for (const [pathName, put] of PROJECT_PATHS) {
+        const proj = put(v) as never;
+        try {
+          const issues = validateTaskSurfaces(proj, [ws('t-intake')]);
+          // Did we clear the project guard and reach the real work?
+          if (!issues.some((i) => i.code === 'SURFACE_PROJECT_UNUSABLE')) reachedBody += 1;
+        } catch (e) { throws.push(`${pathName} :: ${(e as Error).message}`); }
+        try { consolidationAssessment([ws('t-intake')]); } catch (e) {
+          throws.push(`cA/${pathName} :: ${(e as Error).message}`);
+        }
+      }
+    }
+    expect(throws.slice(0, 5)).toEqual([]);
+    expect(throws).toHaveLength(0);
+
+    // POSITIVE CONTROL ON THE GENERATOR ITSELF. Previously this number was 0 of 414 and the
+    // test still passed — a check that could not fail, in the position where the defect
+    // lived. Asserting it is non-zero is what stops that recurring silently.
+    expect(reachedBody).toBeGreaterThan(0);
+  });
 
   it('THE ARGUMENTS THEMSELVES are generated over too, not just their contents', () => {
     // Attempt 3 typed every field and element and never checked that `bindings` was an array.

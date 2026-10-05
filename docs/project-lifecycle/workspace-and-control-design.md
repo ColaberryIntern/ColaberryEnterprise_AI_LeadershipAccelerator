@@ -42,10 +42,23 @@ over-broad.** Attempt 2 refused every malformed *field* and still threw on a mal
 `permissionViews`. Ten live throws. Proving an array is an array while never typing its
 members is the same mistake one level up.
 
-The guarantee is now scoped to what it can carry: **every value `JSON.parse` can produce is
-refused rather than thrown on**, across all three exported functions. A hostile object with a
-throwing accessor is explicitly out of scope and named as such in the code, because `JSON.parse`
-cannot produce one and a blanket try/catch would hide real defects rather than classify them.
+**And corrected a third time, because the second correction was also over-broad.** This
+sentence previously claimed every `JSON.parse`-producible value was refused across all three
+exports. A verifier falsified it again: the project guard proved
+`tasks`/`roles`/`requirements` were arrays and never typed their **elements**, so
+`.map((t) => t.id)` on a `[null]` threw — and `${t.id}` was interpolated raw into a
+refusal message three lines after `label()` was introduced for exactly that.
+
+**The claim is now a SCOPED LIST, and the list is the claim.** Every `JSON.parse`-producible
+value is refused rather than thrown on in: the `bindings` argument and every position nested
+under it; `proposedSurfaces`; the `project` argument, its three arrays, and their elements’
+`id`, `title` and `kind`; and `headlessAcceptance`. Each position carries a positive control
+proving the corpus reaches it. Anything outside the list is unproven, and an unproven
+position is how this sentence became false five times.
+
+Out of scope by construction: a throwing accessor and `Object.create(null)`, neither of
+which `JSON.parse` can produce. A blanket try/catch would hide real defects rather than
+classify them.
 
 `START` and `END` need no binding. They mark where a process begins and ends rather than
 work anyone performs, and requiring surfaces for them would make every blueprint carry

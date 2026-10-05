@@ -31,11 +31,24 @@
  * the author thought of. A twelve-item enumeration cannot support a claim over an infinite space,
  * and it failed every time.
  *
- * **So the claim is now backed by a GENERATOR, not a list.** `__tests__/workspaceMapping.test.ts`
- * builds its corpus from a seeded deterministic JSON generator plus the known-hostile literals,
- * splices every value into every reachable path, and asserts zero throws across all three
- * exported functions. Same seed, same corpus, every run — so the evidence is reproducible rather
- * than anecdotal. The standing rule this follows is recorded in `plan-phase4.md`.
+ * **The claim is backed by a GENERATOR, and SCOPED to what that generator demonstrably
+ * reaches.** `__tests__/workspaceMapping.test.ts` builds a corpus from a seeded deterministic
+ * JSON generator plus the known-falsifying literals, splices every value into every position
+ * in a derived table, and asserts zero throws. Same seed, same corpus, every run.
+ *
+ * **Why "scoped" is load-bearing and not hedging.** The fifth falsification of this sentence
+ * was not a missing guard — it was that the generator *structurally could not reach* the
+ * defect: 0 of 414 corpus values could clear the project guard, because the keyspace was a list
+ * I wrote and it contained no `tasks`, `roles`, `requirements`, `id` or `title`. A generator
+ * over a hand-listed keyspace is a hand-written enumeration wearing a better costume.
+ *
+ * So two things changed. The keyspace is now **DERIVED from the dereference sites in these
+ * two source files** rather than listed, and a test fails if the generator cannot reach a
+ * property name the module actually reads. And a **positive control on the generator itself**
+ * asserts that a non-zero number of corpus values reach each guarded body — so a blind spot
+ * of this kind cannot recur silently.
+ *
+ * The standing rule, with the keyspace-derivation clause, is in `plan-phase4.md`.
  *
  * **Out of scope, stated rather than discovered:** an object with a throwing accessor (`get ref()
  * { throw }`) or one built by `Object.create(null)`. Neither is `JSON.parse`-producible, so
@@ -219,7 +232,7 @@ function isPermissionView(v: unknown): boolean {
  *
  * Returns a refusal, or `null` when the shape is sound enough for the content rules to run.
  *
- * ## The bound: every `JSON.parse`-producible ARGUMENT, proven by a generator
+ * ## The bound, scoped to what the generator provably reaches
  *
  * Attempt 2 said "every field a later check dereferences is proven present and correctly typed
  * here, so no later rule can throw". That was false, and in the ordinary case rather than an exotic
@@ -231,11 +244,18 @@ function isPermissionView(v: unknown): boolean {
  * field but not the CONTAINER or the array ELEMENTS. Proving `permissionViews` is an array while
  * never typing its members is the array-level version of the same mistake.
  *
- * Every `JSON.parse`-producible value, in any argument or any nested position, is refused rather
- * than thrown on — including the two cases attempt 3 missed: a value whose `toString` is null
- * (which broke the refusal message itself) and a non-array in the `bindings` or
- * `proposedSurfaces` argument. Established by the generator described in the file header, not by
- * an enumeration.
+ * Every `JSON.parse`-producible value is refused rather than thrown on, in these positions:
+ * the `bindings` argument and every position nested under it; the `proposedSurfaces`
+ * argument; the `project` argument, its `tasks`/`roles`/`requirements` arrays and their
+ * elements’ `id` and `title`; and the `headlessAcceptance` argument.
+ *
+ * **That list is the claim.** It is not a summary of a broader guarantee — it is exactly what
+ * the generator reaches, each position carrying a positive control proving the corpus gets
+ * there. Anything outside it is unproven, and an unproven position is how this sentence became
+ * false five times.
+ *
+ * Out of scope, by construction rather than oversight: a throwing accessor and
+ * `Object.create(null)`, neither of which `JSON.parse` can produce.
  *
  * **Explicitly NOT covered:** a hostile object with a throwing accessor (`get ref() { throw }`).
  * `JSON.parse` cannot produce one, so it is not on the model-output path this module defends, and a
