@@ -29,10 +29,18 @@ throwing.
 **Corrected after verification.** The first version of this sentence was false in the one
 way that mattered: a third `kind` was an unhandled `TypeError`, not a refusal, as were a
 missing `ref` and every non-string or non-array field. The module header claimed model
-JSON bypasses the union and then defended a single field against it. All fourteen fields,
-the audience union, the boolean and the third `kind` are now refusals, and
-`consolidationAssessment` and `unboundProposedSurfaces` skip malformed entries instead of
-crashing.
+JSON bypasses the union and then defended a single field against it.
+
+**And corrected again after the second verification, because the first correction was itself
+over-broad.** Attempt 2 refused every malformed *field* and still threw on a malformed
+*container* or *element*: a `null` entry in the bindings array, and a `null` inside
+`permissionViews`. Ten live throws. Proving an array is an array while never typing its
+members is the same mistake one level up.
+
+The guarantee is now scoped to what it can carry: **every value `JSON.parse` can produce is
+refused rather than thrown on**, across all three exported functions. A hostile object with a
+throwing accessor is explicitly out of scope and named as such in the code, because `JSON.parse`
+cannot produce one and a blanket try/catch would hide real defects rather than classify them.
 
 `START` and `END` need no binding. They mark where a process begins and ends rather than
 work anyone performs, and requiring surfaces for them would make every blueprint carry
@@ -124,11 +132,37 @@ Refusing an all-headless blueprint outright was wrong, for the reason this phase
 everywhere else: a legitimately headless pipeline could then proceed only by declaring a
 workspace nobody would use, which is the "invent a screen to clear the gate" incentive.
 
-So an all-headless project **passes when it declares a rationale and a named acceptor**
-(`HeadlessAcceptance`), and is refused otherwise. That is the same shape as
+So an all-headless project **passes when it declares a rationale and a named acceptor
+recorded by the owner**, and is refused otherwise. That is the shape of
 `checkTargetDisclosure` in `effortMeasures`, which lets a below-target AI share proceed on
 a visible rationale plus owner acceptance. An undisclosed absence of any human surface is
 how a design decision quietly becomes a defect nobody admits.
+
+### And the acceptance may not be self-issued
+
+**Added after the second verification, which found the disclosure cost one string
+literal.** `HeadlessAcceptance` carries an `origin`, and `model_turn` is refused as
+`SURFACE_ACCEPTANCE_SELF_SUPPLIED`.
+
+The asymmetry that makes this necessary, because the two cases look identical:
+`checkTargetDisclosure` waives a **target** that sits on top of an independent
+**measurement** — the AI share is computed from effort rows, and no acceptance string
+moves it, so the waiver buys a pass on the threshold rather than on the number.
+`SURFACE_NO_HUMAN_PATH` has **no measurement underneath**: the acceptance *is* the whole
+gate, and what it waives is the only rule here that catches the walking-skeleton failure.
+
+So this follows `blueprintGeneration.DeclarationOrigin` instead, whose
+`DECLARATION_SELF_SUPPLIED` refuses a capability declaration from the same model turn as
+the roster, on the stated grounds that "a generator emitting both can declare whatever it
+invents". A disclosure a generator can self-issue is not a disclosure.
+
+**A noted inconsistency, recorded rather than resolved by assertion.** A blueprint with no
+human surface at all is now waivable (by an owner-recorded acceptance), while a blueprint
+with an honest human surface that cannot preserve navigation state is **unwaivable**. The
+weaker violation has a disclosure path and the stronger one does not. That is arguably
+backwards; it is left as-is because adding a second waiver hatch is a design decision for
+P4-T5, which owns the UX-quality rules, rather than something to settle inside a refusal
+table.
 
 Tests pin all four directions: undisclosed all-headless **fails**; declared all-headless
 **passes**; acceptance with a blank rationale or no named acceptor **still fails**, so the
@@ -197,5 +231,6 @@ reviewer.
 | `SURFACE_NAVIGATION_STATE_NOT_PRESERVED` | `preservesNavigationState: false` |
 | `SURFACE_TASKIDS_INCONSISTENT` | A ref whose `taskIds` omit the task it is bound to |
 | `SURFACE_NO_HUMAN_PATH` | **Project level:** no task reaches a human surface, with no rationale and no named acceptor |
+| `SURFACE_ACCEPTANCE_SELF_SUPPLIED` | **Project level:** the no-human-path acceptance came from the same model turn as the blueprint |
 A test asserts the set of codes the module can actually emit equals this declared list in both
 directions, so the table cannot drift and no code can be decorative.

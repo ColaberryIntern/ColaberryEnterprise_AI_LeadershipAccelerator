@@ -61,6 +61,7 @@ const ACCEPTED: HeadlessAcceptance = {
   rationale: 'This is an ingestion pipeline with no operator surface by design; the client runs it '
     + 'from their own scheduler.',
   acceptedBy: 'owner@example.test',
+  origin: 'owner_recorded',
 };
 
 describe('businessTasks excludes flow markers', () => {
@@ -166,6 +167,88 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     expect(out).toEqual(['Contract review']);
   });
 
+  // ─── THE CONTAINER AND THE ELEMENTS, not just the fields. Attempt 2 refused every
+  // malformed FIELD and still threw ten times: a null entry in the bindings array, and a
+  // null inside permissionViews. A dropped object in a JSON list arrives exactly this way.
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a number', 7],
+    ['a string', 'nope'],
+    ['an array', []],
+  ])('a binding element that is %s is refused, not thrown', (_n, v) => {
+    const issues = validateTaskSurfaces(project, [smuggle(v), ws('t-intake'), ws('t-review')]);
+    expect(codes(issues)).toEqual(['SURFACE_BINDING_MALFORMED']);
+  });
+
+  it('a NULL element inside permissionViews is refused, not thrown', () => {
+    // refIssues mapped p.roleId over an array proven to BE an array whose members were never
+    // typed — the array-level form of attempt 1’s one-field mistake.
+    const issues = validateTaskSurfaces(project, [
+      ws('t-intake'), smuggle({ taskId: 't-review', kind: 'workspace',
+        ref: { ...ref({ taskIds: ['t-review'] }), permissionViews: [null] } }),
+    ]);
+    expect(codes(issues)).toEqual(['SURFACE_BINDING_MALFORMED', 'SURFACE_UNMAPPED']);
+  });
+
+  it('a permissionViews entry missing roleId is refused', () => {
+    const issues = validateTaskSurfaces(project, [
+      ws('t-intake'), smuggle({ taskId: 't-review', kind: 'workspace',
+        ref: { ...ref({ taskIds: ['t-review'] }), permissionViews: [{ visibleActions: [] }] } }),
+    ]);
+    expect(codes(issues)).toEqual(['SURFACE_BINDING_MALFORMED', 'SURFACE_UNMAPPED']);
+  });
+
+  it.each([
+    'intendedRoles', 'records', 'decisions', 'requirementIds', 'taskIds',
+  ] as const)('a non-string entry inside %s is refused', (field) => {
+    const issues = validateTaskSurfaces(project, [
+      ws('t-intake'), smuggle({ taskId: 't-review', kind: 'workspace',
+        ref: { ...ref({ taskIds: ['t-review'] }), [field]: [42] } }),
+    ]);
+    expect(codes(issues)).toEqual(['SURFACE_BINDING_MALFORMED', 'SURFACE_UNMAPPED']);
+  });
+
+  it.each([
+    ['consolidationAssessment', () => consolidationAssessment([smuggle(null), ws('t-a')])],
+    ['unboundProposedSurfaces', () => unboundProposedSurfaces(['X'], [smuggle(null)])],
+  ])('%s does not throw on a null element either', (_n, run) => {
+    // Both were documented as skipping malformed entries, and both crashed on exactly this.
+    expect(run).not.toThrow();
+  });
+
+  // THE FULL PROBE, as permanent tests rather than a throwaway script: every malformed shape
+  // against every one of the three exported functions. A verifier found ten live throws here;
+  // expressing the probe as tests means a regression fails the suite instead of waiting for
+  // another verification round.
+  const SHAPES: ReadonlyArray<readonly [string, unknown]> = [
+    ['null', null],
+    ['undefined', undefined],
+    ['a number', 7],
+    ['a string', 'nope'],
+    ['an array', []],
+    ['a bare object', {}],
+    ['kind-only', { kind: 'workspace' }],
+    ['whitespace taskId', { taskId: '   ', kind: 'headless', reason: 'x' }],
+    ['ref is an array', { taskId: 't-a', kind: 'workspace', ref: [] }],
+    ['ref is null', { taskId: 't-a', kind: 'workspace', ref: null }],
+    ['permissionViews [null]', { taskId: 't-a', kind: 'workspace', ref: { permissionViews: [null] } }],
+    ['taskIds [number]', { taskId: 't-a', kind: 'workspace', ref: { taskIds: [1] } }],
+  ];
+
+  const EXPORTS: ReadonlyArray<readonly [string, (b: TaskSurfaceBinding) => unknown]> = [
+    ['validateTaskSurfaces', (b) => validateTaskSurfaces(project, [b])],
+    ['consolidationAssessment', (b) => consolidationAssessment([b])],
+    ['unboundProposedSurfaces', (b) => unboundProposedSurfaces(['X'], [b])],
+  ];
+
+  for (const [fnName, run] of EXPORTS) {
+    it.each(SHAPES)(`${fnName} does not throw on %s`, (_label, shape) => {
+      expect(() => run(smuggle(shape))).not.toThrow();
+    });
+  }
+
   it('PASSING COUNTERPART: a well-formed binding is not reported malformed', () => {
     expect(codes(validateTaskSurfaces(project, [ws('t-intake'), ws('t-review')])))
       .not.toContain('SURFACE_BINDING_MALFORMED');
@@ -229,6 +312,17 @@ describe('THE NO-HUMAN-PATH RULE is a disclosure requirement, not a threshold', 
   ])('acceptance with %s does NOT clear it, so the declaration is load-bearing', (_n, acc) => {
     expect(codes(validateTaskSurfaces(manualOnlyProject(), allHeadless, acc as HeadlessAcceptance)))
       .toEqual(['SURFACE_NO_HUMAN_PATH']);
+  });
+
+  it('AN ACCEPTANCE FROM THE SAME MODEL TURN DOES NOT WAIVE IT', () => {
+    // A disclosure a generator can self-issue is not a disclosure. Attempt 2 copied
+    // checkTargetDisclosure, which needs no origin because it waives a TARGET sitting on an
+    // independent measurement. Here the acceptance IS the whole gate, so it mirrors
+    // blueprintGeneration.DECLARATION_SELF_SUPPLIED instead.
+    const selfIssued: HeadlessAcceptance = { ...ACCEPTED, origin: 'model_turn' };
+    const issues = validateTaskSurfaces(manualOnlyProject(), allHeadless, selfIssued);
+    expect(codes(issues)).toEqual(['SURFACE_ACCEPTANCE_SELF_SUPPLIED']);
+    expect(issues[0].message).toContain('declare whatever it invents');
   });
 
   it('PASSING COUNTERPART: one human surface clears it with no acceptance at all', () => {
@@ -329,6 +423,27 @@ describe('roles and requirements must exist', () => {
       .toEqual(['SURFACE_REQUIREMENT_UNKNOWN']);
   });
 
+  it('THE POSITIVE CONTROL THIS CODE WAS MISSING: a REAL cited requirement passes', () => {
+    // Uniquely among the 15 codes, SURFACE_REQUIREMENT_UNKNOWN had no passing counterpart:
+    // manualOnlyProject() declares no requirements and ref() cites none, so no test ever
+    // cited one that EXISTS. An always-fire mutation of the check therefore survived at
+    // 69/69, and the suite header’s promise that every refusal has a passing counterpart
+    // was false for exactly this rule. The irony: this is the code attempt 2 split out
+    // BECAUSE overloading had hidden a gap in it.
+    const project: FactoryProject = {
+      ...manualOnlyProject(),
+      requirements: [{
+        id: 'req-50k', statement: 'contracts over 50k need a solicitor', kind: 'functional',
+        priority: 'must', tracks: [], source_document: 'doc', source_locator: '1.1',
+        acceptance_criteria: [], evidence_state: 'stated',
+      } as never],
+    };
+    const issues = validateTaskSurfaces(project, [
+      ws('t-intake'), ws('t-review', { requirementIds: ['req-50k'] }),
+    ]);
+    expect(issues).toEqual([]);
+  });
+
   it('PASSING COUNTERPART: real roles and no cited requirements pass', () => {
     expect(validateTaskSurfaces(manualOnlyProject(), [ws('t-intake'), ws('t-review', {
       intendedRoles: ['role-counsel'],
@@ -416,9 +531,14 @@ describe('the code list is the contract', () => {
       [ws('t-intake'), ws('t-review', { preservesNavigationState: false })],
       [ws('t-intake'), { taskId: 't-review', kind: 'workspace', ref: ref({ taskIds: ['x'] }) }],
       [headless('t-intake'), headless('t-review')],
+      [smuggle(null), ws('t-intake'), ws('t-review')],
     ];
     const emitted = new Set<string>();
     for (const c of cases) for (const i of validateTaskSurfaces(project, c)) emitted.add(i.code);
+    // The self-supplied acceptance needs an acceptance argument, so it is driven separately.
+    for (const i of validateTaskSurfaces(project,
+      [headless('t-intake'), headless('t-review')],
+      { ...ACCEPTED, origin: 'model_turn' })) emitted.add(i.code);
 
     // Both directions. Attempt 1 passed this while one guard site had zero coverage, because two
     // unrelated branches shared one code; splitting SURFACE_REQUIREMENT_UNKNOWN out is what makes

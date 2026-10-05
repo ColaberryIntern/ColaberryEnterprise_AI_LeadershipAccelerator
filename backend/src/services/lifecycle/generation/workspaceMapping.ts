@@ -13,9 +13,12 @@
  * So the shape follows `processValidation.validateProcess(project, bounds)`: the caller declares
  * the bindings, this module refuses the ones that are wrong. Declared, not inferred.
  *
- * The plan named a `mapTaskSurfaces()` export. It does not exist, deliberately: there is nothing to
- * map FROM. What shipped instead is `businessTasks()` plus `unboundProposedSurfaces()`, and that
- * deviation is recorded in the session log rather than left as a silent substitution.
+ * The plan named a `mapTaskSurfaces()` export. It does not exist, deliberately: there is nothing
+ * to map FROM. What shipped instead is `businessTasks()` plus `unboundProposedSurfaces()`.
+ *
+ * (Attempt 2 added "and that deviation is recorded in the session log" — it was not. The
+ * sentence asserted a record in a named file that did not contain it, which is the self-referential
+ * class attempt 2 claimed to have swept. The deviation is now actually written there.)
  *
  * ## Why `headless` is a closed enum and not a sentence
  *
@@ -33,8 +36,17 @@
  * `deepLink`, a non-array `intendedRoles`, and a third `kind` value, which the documentation
  * claimed was impossible. A generic error escaping a validator is worse than a refusal, because
  * the caller learns nothing, and CLAUDE.md forbids `Error` as a production error class.
- * `SURFACE_BINDING_MALFORMED` now refuses all of it, and `consolidationAssessment` and
- * `unboundProposedSurfaces` skip malformed entries rather than crashing on them.
+ * `SURFACE_BINDING_MALFORMED` refuses **every value `JSON.parse` can produce** — a null or
+ * undefined entry, a primitive, an array where an object belongs, a null or wrong-typed element
+ * inside any array — and `consolidationAssessment` and `unboundProposedSurfaces` skip those
+ * rather than crashing.
+ *
+ * **That sentence is scoped on purpose.** Attempt 2 said it "refuses all of it" and that no later
+ * rule "can throw", and a verifier then executed ten throws: a `null` binding element, a `null`
+ * inside `permissionViews`, and a throwing accessor. Proving an array IS an array while never
+ * typing its members is the array-level form of attempt 1’s mistake — defending the cases I
+ * happened to think of. A hostile object with a throwing getter remains out of scope, and is named
+ * as such in `shapeIssue` rather than quietly included in a totality claim.
  *
  * ## The project-level rule is a DISCLOSURE requirement, not a threshold
  *
@@ -47,8 +59,13 @@
  * workspace nobody would use — the "invent a screen to clear the gate" incentive. §4.4 gives a
  * below-target project a visible rationale plus owner acceptance, and `checkTargetDisclosure`
  * implements that shape already. So an all-headless project passes WHEN it declares a rationale
- * and a named acceptor, and is refused otherwise. An undisclosed absence of any human surface is
- * how a design decision quietly becomes a defect nobody admits.
+ * and a named acceptor **recorded by the owner**, and is refused otherwise.
+ *
+ * **And the acceptance itself must not be self-supplied.** Attempt 2 copied `checkTargetDisclosure`
+ * and stopped, which left the gate costing one string literal. The asymmetry: that function waives
+ * a target sitting on an independent measurement, while here the acceptance IS the whole gate. So
+ * `origin: 'model_turn'` is refused as `SURFACE_ACCEPTANCE_SELF_SUPPLIED`, mirroring
+ * `DECLARATION_SELF_SUPPLIED`. See `HeadlessAcceptance` for the full reasoning.
  *
  * Grounding, stated precisely because attempt 1 overclaimed it: LC-08 and §4.5's first clause both
  * PERMIT an all-headless blueprint. The requirement comes from §4.5's journey clause — "Required
@@ -63,7 +80,11 @@
  * weaker than "proves a workflow"; the stronger guarantee needs Phase 6's release-level view and is
  * recorded in the register.
  *
- * ## SIZE: this file is 478 lines against CLAUDE.md`s 500-line hard ceiling
+ * ## SIZE: this file is close to CLAUDE.md`s 500-line hard ceiling (check with `wc -l`)
+ *
+ * The header deliberately states no exact count: attempt 2 wrote "478 lines", and the act of
+ * adding that very note made it 487. A self-describing count in the file it describes is wrong
+ * the moment anyone edits the file, so `wc -l` is the source of truth.
  *
  * P4-T5 is planned to add per-workspace empty/loading/error state checks HERE. It must **split
  * this file first** rather than grow it past the ceiling. The obvious seam is already cut: the
@@ -79,108 +100,39 @@
 import type { ValidationIssue } from '../../factory/factoryValidate';
 import type { FactoryProject, FactoryTask } from '../../factory/contracts/factoryContract';
 
-/**
- * Why a task has no human surface. A CLOSED set: there is no `other`, and no free-text field.
- *
- * Adding a member is a deliberate act that a reviewer sees in a diff. That is the point — the
- * alternative is a sentence, which is how `r0_no_trust_spine` became evadable.
- */
-export const HEADLESS_REASONS = [
-  'scheduled_ingestion',
-  'system_to_system',
-  'derived_computation',
-  'notification_delivery',
-  'retention_or_cleanup',
-] as const;
-export type HeadlessReason = (typeof HEADLESS_REASONS)[number];
 
-/** Who a surface is for. Conflating the two is refused: their trust boundaries differ. */
-export type SurfaceAudience = 'internal' | 'customer';
+// Shape, content, audience and acceptance checks, plus the types and refusal codes, live in
+// the sibling module. They are re-exported so every existing import of `./workspaceMapping`
+// keeps resolving: the split is an internal reorganisation, not a contract change.
+import {
+  SURFACE_CODES,
+  audienceIssues,
+  blank,
+  err,
+  headlessAccepted,
+  headlessSelfSupplied,
+  isObj,
+  isStr,
+  refIssues,
+  shapeIssue,
+} from './workspaceBindingChecks';
+import { HEADLESS_REASONS } from './workspaceBindingChecks';
+import type {
+  AcceptanceOrigin,
+  HeadlessAcceptance,
+  HeadlessReason,
+  PermissionView,
+  SurfaceAudience,
+  SurfaceCode,
+  TaskSurfaceBinding,
+  WorkspaceRef,
+} from './workspaceBindingChecks';
 
-/** What one role may see and do on a workspace. §4.5's permission-specific views, as data. */
-export interface PermissionView {
-  roleId: string;
-  visibleActions: string[];
-}
-
-/**
- * One human surface, with the fields §4.5 requires of a proposed screen.
- *
- * §4.5 requires "a primary human job, intended roles, relevant records, supported decisions, why
- * an existing workspace cannot serve it, and links to requirements/tasks". All are enforced
- * non-empty except `decisions`, which is legitimately empty for a read-only view — an exception
- * stated here rather than left as an unexplained gap.
- */
-export interface WorkspaceRef {
-  workspaceId: string;
-  workspaceTitle: string;
-  /** the action a human takes here, e.g. "approve the contract". Not a page name. */
-  action: string;
-  primaryJob: string;
-  intendedRoles: string[];
-  /** record kinds surfaced here, e.g. "contract", "solicitor note". */
-  records: string[];
-  /** decisions this surface supports; empty is legal for a read-only view, by design. */
-  decisions: string[];
-  whyNotExisting: string;
-  requirementIds: string[];
-  /** must contain this binding's own `taskId`; a disagreement is refused. */
-  taskIds: string[];
-  audience: SurfaceAudience;
-  permissionViews: PermissionView[];
-  /** §4.5: "use deep links and preserve navigation state". A stable addressable path. */
-  deepLink: string;
-  /** §4.5 requires preserved navigation state, so declaring `false` declares non-compliance. */
-  preservesNavigationState: boolean;
-}
-
-/**
- * A task resolves to EXACTLY ONE of two states. There is no third and no default.
- *
- * A default would be the whole problem: whichever way it fell, an unconsidered task would acquire
- * a position nobody chose. A third `kind` arriving as JSON is refused, not thrown.
- */
-export type TaskSurfaceBinding =
-  | { taskId: string; kind: 'workspace'; ref: WorkspaceRef }
-  | { taskId: string; kind: 'headless'; reason: HeadlessReason };
-
-/**
- * Owner acceptance of a blueprint with no human surface.
- *
- * The same shape as `TargetAcceptance` in `effortMeasures`, deliberately: both answer "this looks
- * wrong but is actually the requirement", and both require a named human so the acceptance has
- * somebody behind it.
- */
-export interface HeadlessAcceptance {
-  rationale: string;
-  acceptedBy: string;
-}
-
-/** The codes this module adds. Distinct from `factoryValidate`'s fourteen. */
-export const SURFACE_CODES = [
-  'SURFACE_BINDING_MALFORMED',
-  'SURFACE_UNMAPPED',
-  'SURFACE_TASK_UNKNOWN',
-  'SURFACE_REQUIREMENT_UNKNOWN',
-  'SURFACE_DUPLICATE_BINDING',
-  'SURFACE_BINDING_ON_FLOW_MARKER',
-  'NEW_SCREEN_UNJUSTIFIED',
-  'SURFACE_FIELD_EMPTY',
-  'HEADLESS_REASON_UNDECLARED',
-  'SURFACE_ROLE_UNKNOWN',
-  'SURFACE_AUDIENCE_CONFLATED',
-  'SURFACE_DEEP_LINK_MISSING',
-  'SURFACE_NAVIGATION_STATE_NOT_PRESERVED',
-  'SURFACE_TASKIDS_INCONSISTENT',
-  'SURFACE_NO_HUMAN_PATH',
-] as const;
-export type SurfaceCode = (typeof SURFACE_CODES)[number];
-
-const err = (code: SurfaceCode, message: string, stepId?: string): ValidationIssue =>
-  ({ code, message, stepId, severity: 'error' });
-
-const isStr = (v: unknown): v is string => typeof v === 'string';
-const blank = (v: string): boolean => v.trim() === '';
+export { HEADLESS_REASONS, SURFACE_CODES };
+export type {
+  AcceptanceOrigin, HeadlessAcceptance, HeadlessReason, PermissionView, SurfaceAudience,
+  SurfaceCode, TaskSurfaceBinding, WorkspaceRef,
+};
 
 /**
  * Tasks that are business work, and so need a surface decision.
@@ -195,139 +147,6 @@ const blank = (v: string): boolean => v.trim() === '';
  */
 export function businessTasks(project: FactoryProject): FactoryTask[] {
   return project.tasks.filter((t) => t.kind === 'TASK' || t.kind === 'DECISION');
-}
-
-const REF_STRINGS = ['workspaceId', 'workspaceTitle', 'action', 'primaryJob', 'whyNotExisting',
-  'deepLink'] as const;
-const REF_ARRAYS = ['intendedRoles', 'records', 'decisions', 'requirementIds', 'taskIds',
-  'permissionViews'] as const;
-
-/**
- * Is this binding structurally usable at all?
- *
- * Returns a refusal, or `null` when the shape is sound enough for the content rules to run. Every
- * field a later check dereferences is proven present and correctly typed here, so no later rule
- * can throw on model-shaped JSON.
- */
-function shapeIssue(b: TaskSurfaceBinding): ValidationIssue | null {
-  const raw = b as unknown as Record<string, unknown>;
-  const at = isStr(raw.taskId) ? raw.taskId : undefined;
-  const bad = (m: string) => err('SURFACE_BINDING_MALFORMED', m, at);
-
-  if (!isStr(raw.taskId) || blank(raw.taskId)) return bad('A binding carries no usable taskId.');
-  if (raw.kind !== 'workspace' && raw.kind !== 'headless') {
-    return bad(`Binding for ${raw.taskId} declares kind "${String(raw.kind)}"; the only states are `
-      + '"workspace" and "headless". There is no third.');
-  }
-  if (raw.kind === 'headless') {
-    return isStr(raw.reason) ? null
-      : bad(`Headless binding for ${raw.taskId} carries no reason string.`);
-  }
-
-  const ref = raw.ref;
-  if (ref === null || typeof ref !== 'object') {
-    return bad(`Workspace binding for ${raw.taskId} carries no ref.`);
-  }
-  const r = ref as Record<string, unknown>;
-  for (const f of REF_STRINGS) {
-    if (!isStr(r[f])) return bad(`Workspace binding for ${raw.taskId} has a non-string ${f}.`);
-  }
-  for (const f of REF_ARRAYS) {
-    if (!Array.isArray(r[f])) return bad(`Workspace binding for ${raw.taskId} has a non-array ${f}.`);
-  }
-  if (r.audience !== 'internal' && r.audience !== 'customer') {
-    return bad(`Workspace binding for ${raw.taskId} declares audience "${String(r.audience)}"; the `
-      + 'only audiences are "internal" and "customer".');
-  }
-  if (typeof r.preservesNavigationState !== 'boolean') {
-    return bad(`Workspace binding for ${raw.taskId} has a non-boolean preservesNavigationState.`);
-  }
-  return null;
-}
-
-/** Content rules for one well-shaped workspace ref. */
-function refIssues(
-  b: Extract<TaskSurfaceBinding, { kind: 'workspace' }>,
-  roleIds: ReadonlySet<string>,
-  requirementIds: ReadonlySet<string>,
-): ValidationIssue[] {
-  const out: ValidationIssue[] = [];
-  const r = b.ref;
-  const push = (c: SurfaceCode, m: string) => out.push(err(c, m, b.taskId));
-
-  if (blank(r.whyNotExisting)) {
-    push('NEW_SCREEN_UNJUSTIFIED',
-      `Workspace ${r.workspaceId} carries no rationale for why an existing workspace cannot serve it.`);
-  }
-  if (blank(r.deepLink)) {
-    push('SURFACE_DEEP_LINK_MISSING',
-      `Workspace ${r.workspaceId} declares no deep link, so its state cannot be addressed.`);
-  }
-  if (!r.preservesNavigationState) {
-    push('SURFACE_NAVIGATION_STATE_NOT_PRESERVED',
-      `Workspace ${r.workspaceId} declares preservesNavigationState false. §4.5 requires preserved `
-      + 'navigation state, so this declares non-compliance rather than satisfying the field.');
-  }
-
-  // §4.5's required per-screen content. `decisions` is deliberately absent from this list: empty
-  // is legal for a read-only view, and that exception is documented on the interface.
-  for (const [field, value] of [
-    ['workspaceId', r.workspaceId], ['workspaceTitle', r.workspaceTitle],
-    ['action', r.action], ['primaryJob', r.primaryJob],
-  ] as const) {
-    if (blank(value)) push('SURFACE_FIELD_EMPTY', `Workspace ${r.workspaceId} has an empty ${field}.`);
-  }
-  if (r.intendedRoles.length === 0) {
-    push('SURFACE_FIELD_EMPTY', `Workspace ${r.workspaceId} names no intended roles.`);
-  }
-  if (r.records.length === 0) {
-    push('SURFACE_FIELD_EMPTY', `Workspace ${r.workspaceId} surfaces no records.`);
-  }
-
-  if (!r.taskIds.includes(b.taskId)) {
-    push('SURFACE_TASKIDS_INCONSISTENT',
-      `Workspace ${r.workspaceId} is bound to task ${b.taskId} but its own taskIds do not list it.`);
-  }
-  for (const roleId of [...r.intendedRoles, ...r.permissionViews.map((p) => p.roleId)]) {
-    if (!roleIds.has(roleId)) {
-      push('SURFACE_ROLE_UNKNOWN',
-        `Workspace ${r.workspaceId} names role ${roleId}, which is not in project.roles.`);
-    }
-  }
-  // Its OWN code rather than an overload. Attempt 1 folded this into `SURFACE_TASK_UNKNOWN`, and
-  // the overload is precisely what hid the branch from the code-reachability test: deleting the
-  // check left the suite green at 28/28.
-  for (const reqId of r.requirementIds) {
-    if (!requirementIds.has(reqId)) {
-      push('SURFACE_REQUIREMENT_UNKNOWN',
-        `Workspace ${r.workspaceId} cites requirement ${reqId}, which the project does not declare.`);
-    }
-  }
-  return out;
-}
-
-/** Audience conflation across every sound workspace binding. */
-function audienceIssues(sound: ReadonlyArray<TaskSurfaceBinding>): ValidationIssue[] {
-  const out: ValidationIssue[] = [];
-  const byId = new Map<string, SurfaceAudience>();
-  for (const b of sound) {
-    if (b.kind !== 'workspace') continue;
-    const prior = byId.get(b.ref.workspaceId);
-    if (prior === undefined) byId.set(b.ref.workspaceId, b.ref.audience);
-    else if (prior !== b.ref.audience) {
-      out.push(err('SURFACE_AUDIENCE_CONFLATED',
-        `Workspace ${b.ref.workspaceId} is declared both ${prior} and ${b.ref.audience}; a single `
-        + 'surface cannot hold both trust boundaries.', b.taskId));
-    }
-  }
-  return out;
-}
-
-/** Is owner acceptance of a no-human-path blueprint present and complete? */
-function headlessAccepted(a: HeadlessAcceptance | null): boolean {
-  return a !== null
-    && isStr(a.rationale) && !blank(a.rationale)
-    && isStr(a.acceptedBy) && !blank(a.acceptedBy);
 }
 
 /** Validate a declared set of bindings against the project they claim to describe. */
@@ -403,11 +222,20 @@ export function validateTaskSurfaces(
   // outright would force a legitimately headless pipeline to invent a screen to clear the gate.
   const reachesHuman = sound.some((b) => b.kind === 'workspace');
   if (work.length > 0 && !reachesHuman && !headlessAccepted(headlessAcceptance)) {
-    issues.push(err('SURFACE_NO_HUMAN_PATH',
-      `No business task reaches a human surface: all ${work.length} are headless, with no rationale `
-      + 'and no named acceptor. A blueprint with no human path cannot demonstrate the approval or '
-      + 'human-takeover journeys §4.5 requires. That is a disclosure requirement rather than a '
-      + 'prohibition — but an undisclosed one is how a design decision quietly becomes a defect.'));
+    if (headlessSelfSupplied(headlessAcceptance)) {
+      issues.push(err('SURFACE_ACCEPTANCE_SELF_SUPPLIED',
+        `All ${work.length} business tasks are headless and the acceptance came from the same `
+        + 'model turn as the blueprint, so it cannot waive the gate: a generator emitting both can '
+        + 'declare whatever it invents. Pass an acceptance recorded by the owner. (Same judgement '
+        + 'as DECLARATION_SELF_SUPPLIED for the capability declaration.)'));
+    } else {
+      issues.push(err('SURFACE_NO_HUMAN_PATH',
+        `No business task reaches a human surface: all ${work.length} are headless, with no `
+        + 'rationale and no named acceptor. A blueprint with no human path cannot demonstrate the '
+        + 'approval or human-takeover journeys §4.5 requires. That is a disclosure requirement '
+        + 'rather than a prohibition — but an undisclosed one is how a design decision quietly '
+        + 'becomes a defect nobody admits.'));
+    }
   }
 
   return issues;
