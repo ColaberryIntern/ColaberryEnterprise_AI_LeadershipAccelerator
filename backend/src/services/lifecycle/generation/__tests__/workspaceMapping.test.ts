@@ -56,6 +56,28 @@ const headless = (taskId: string, reason = 'scheduled_ingestion' as const): Task
 
 const codes = (issues: ReadonlyArray<{ code: string }>) => issues.map((i) => i.code);
 
+/**
+ * Did the function BODY run, or did we get one of the two early-return refusals?
+ *
+ * The previous definition of reach was "no SURFACE_BINDING_MALFORMED in the result", and a
+ * verifier proved that vacuous: with `if (true || !Array.isArray(bindings))` the body never
+ * executed at ANY position, and both per-position controls still reported every position as
+ * reached — because the blanket refusal carries a DIFFERENT code. A control that cannot
+ * tell "reached" from "never entered" is not a control, and that was the one thing the
+ * per-position rule existed to guarantee.
+ *
+ * The early returns are structurally distinctive: exactly one issue, no `stepId`, and one of
+ * two codes. Anything else means the body ran.
+ */
+const EARLY_RETURN_CODES: ReadonlyArray<string> = [
+  'SURFACE_ARGUMENT_NOT_ARRAY', 'SURFACE_PROJECT_UNUSABLE',
+];
+const bodyRan = (issues: ReadonlyArray<{ code: string; stepId?: string }>): boolean => !(
+  issues.length === 1
+  && issues[0].stepId === undefined
+  && EARLY_RETURN_CODES.includes(issues[0].code)
+);
+
 /** Anything a model could emit. Cast exactly as a real decomposition would arrive. */
 const smuggle = (v: unknown): TaskSurfaceBinding => v as TaskSurfaceBinding;
 
@@ -512,7 +534,7 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
             try {
               const r = run();
               if (fn === 'validateTaskSurfaces' && Array.isArray(r)
-                && !r.some((i) => (i as { code: string }).code === 'SURFACE_BINDING_MALFORMED')) {
+                && bodyRan(r as ReadonlyArray<{ code: string; stepId?: string }>)) {
                 perPosition[pathName] = (perPosition[pathName] ?? 0) + 1;
               }
             } catch (e) {
@@ -562,8 +584,9 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
         const proj = put(v) as never;
         try {
           const issues = validateTaskSurfaces(proj, [ws('t-intake')]);
-          // Did we clear the project guard and reach the real work?
-          if (!issues.some((i) => i.code === 'SURFACE_PROJECT_UNUSABLE')) {
+          // Did the BODY run? Asking for the absence of one code was satisfied by a blanket
+          // refusal carrying another, so every position read as reached while none was.
+          if (bodyRan(issues)) {
             perPosition[pathName] = (perPosition[pathName] ?? 0) + 1;
           }
         } catch (e) { throws.push(`${pathName} :: ${(e as Error).message}`); }
@@ -620,9 +643,16 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
         manualOnlyProject(), allHeadlessPair, v as never);
       expect(Array.isArray(withHostile)).toBe(true);
 
-      // proposedSurfaces: reach = the filter ran over a real element and returned it.
+      // proposedSurfaces: asserted PER VALUE, not counted in aggregate.
+      //
+      // The aggregate version was satisfied by the corpus’s string leaves while a real
+      // regression survived: adding `if (!proposedSurfaces.every(isStr)) return [];` makes ONE
+      // hostile element silently discard the WHOLE unbound report, and all 98 tests passed.
+      // That is the aggregate shape Amendment 2 banned, reintroduced inside the control added
+      // to satisfy the per-position claim.
       const out = unboundProposedSurfaces([v as never, 'Definitely Unbound'], [ws('t-x')]);
-      if (out.includes('Definitely Unbound')) proposedReached += 1;
+      expect(out).toContain('Definitely Unbound');
+      proposedReached += 1;
     }
     // The exemplar for the acceptance position, same discipline as VALID_AT.
     if (validateTaskSurfaces(manualOnlyProject(), allHeadlessPair, ACCEPTED).length === 0) {

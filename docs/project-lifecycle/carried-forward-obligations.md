@@ -269,6 +269,29 @@ because the current wording reads as though it already covers every case.
 
 ## Phase 4 open items (P4-T1)
 
+**P4-T1 is CLOSED at Ali’s decision after eight gradings.** The behaviour is unfalsified across
+three independent generators and 310,736 calls; the residuals below are recorded rather than
+chased further, because the module is imported by nothing until P4-T3 and every item has zero
+blast radius.
+
+- **Amendment 3’s count check is under-broad.** It matches roughly the one historical phrasing;
+  "we have 40 positions", "the table has 39 positions in it today" and similar all pass.
+  Broadening the pattern is cheap and was deliberately not done in the closing commit, which
+  added no prose.
+- **The position table is hand-written.** Keyspace and leaf value space are derived from source;
+  the positions are not. A position nobody listed is a gap no control can see.
+- **Two further levels of the same class are unsolved:** *which mechanism* delivers a property,
+  and the control’s author-chosen *definition of reach* — now "the body ran", much stronger
+  than the code-absence version it replaced but still a definition I chose.
+- **Minor wording residue:** the covered-element sentence distributes `id`/`title`/`kind` across
+  all three project arrays while the code reads `.title`/`.kind` on tasks only and `.id` on all
+  three; and one word-spelled apparatus count ("three positions") remains, accurate today.
+- **`unboundProposedSurfaces` has no consumer.** Owner **P4-T3**, the natural reader.
+- **Combined public export surface is 15 and 20 against the per-module ceiling of 12.** Owner
+  **P4-T5**, which must touch these files anyway.
+- **`SURFACE_ACCEPTANCE_SELF_SUPPLIED` is a marker, not an enforcement** — `origin` is
+  generator-supplied and names no artifact a reviewer can check it against. Owner **Phase 6**.
+
 - **STANDING RULE for the rest of this build (adopted 2026-10-05):** a claim quantified over an
   input space ships with **a seeded generator over that space and the command that enumerated
   it**, or it is rewritten as a scoped list. P4-T1 published such a claim four times and was

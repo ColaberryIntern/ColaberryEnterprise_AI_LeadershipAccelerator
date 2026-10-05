@@ -281,7 +281,7 @@ function isPermissionView(v: unknown): boolean {
  * Reach is delivered by a **valid exemplar seeded per position**, not by the derived leaf
  * literals: three positions (`<binding itself>`, `ref`, `ref.permissionViews[0]`) require
  * the value to BE a valid structure, which random substitution essentially never produces.
- * Mutation-proven — removing the derived literals leaves the suite at 95/95, while
+ * Mutation-proven — removing the derived literals leaves the suite fully green, while
  * removing one exemplar makes the per-position control fail by name. The derivation broadens
  * the hostile corpus (union-shaped values get tried everywhere); it is **not** what fixed
  * the zero-reach problem, and an earlier draft of this note said it was.
