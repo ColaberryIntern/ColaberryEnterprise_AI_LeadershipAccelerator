@@ -3,12 +3,11 @@
  *
  * Split out of scripts/verifyGrowthOsResetCitations.js when that file crossed
  * the repo's 500-line ceiling. This module owns WHAT a valid citation is; the
- * CLI owns running it and PROVING the rules still bite. Extraction was
- * verbatim and the CLI's self-test is the characterization proof.
+ * CLI owns running it and PROVING the rules still bite.
  *
  * Phase 1 of the Growth OS reset produces documents, and documents are where
- * fabrication hides. This checker exists so that a claim about current repo
- * behaviour cannot be asserted without evidence a machine can re-derive.
+ * fabrication hides. This exists so a claim about current repo behaviour
+ * cannot be asserted without evidence a machine can re-derive.
  *
  * THE CITATION FORM IS MANDATORY:
  *
@@ -17,7 +16,7 @@
  * A bare `path:123` with no literal FAILS.
  *
  * THE LITERAL IS AUTHORITATIVE; THE LINE NUMBER IS ADVISORY. The literal must
- * occur exactly once in the cited file. If it does, the citation passes — and
+ * occur exactly once in the cited file. If it does, the citation passes -- and
  * if it has moved, that is reported as DRIFT with its new line number, not as
  * a failure.
  *
@@ -36,23 +35,25 @@
  *
  * Uniqueness also does three jobs the first design needed extra rules for: it
  * is the distinctiveness floor, so a lone brace or a comment terminator can no
- * longer satisfy a citation; it removes any need for a `LINE-LINE` range form; and it gives
- * multi-line constructs an expressible citation, since any unique line of the
- * construct works. Range tokens are therefore rejected outright, so there is
+ * longer satisfy a citation; it removes any need for a `LINE-LINE` range form;
+ * and it gives multi-line constructs an expressible citation, since any unique
+ * line of the construct works. Range tokens are rejected outright, so there is
  * exactly one citation form.
  *
- * What this proves is that a quote is REAL and FINDABLE — not that it is
- * apposite. `…:133` → "export async function processOptOut(" still passes
- * while being the wrong line to cite for an enforcement claim. Judging
- * aptness is a human job and stays one.
+ * WHAT THIS PROVES is that a quote is REAL, FINDABLE and UNIQUE -- not that it
+ * is apposite. Citing a function's signature, or a comment that merely mentions
+ * a behaviour, still passes while being the wrong evidence for a claim about
+ * enforcement. Judging aptness is a human job and stays one.
  *
- * Literals are delimited by double quotes, or by single quotes when the cited
- * line itself contains a double quote. This repo's TypeScript is single-quoted
- * (prettier), so double-quote delimiters cover nearly every real citation.
+ * KNOWN LIMIT, deliberately not closed: a backticked path with no `:LINE` is
+ * not a citation token, so dropping the line number is a way to make an
+ * uncited claim look sourced. Failing every backticked path would fight
+ * ordinary prose -- this very comment names several files -- so the per-file
+ * non-vacuity rule plus human review covers it instead.
  *
- * NO BYPASS IS PROVIDED, deliberately. If a cited line contains something this
- * checker refuses to see in a doc (an email address, say), cite a different
- * unique literal from that same line — the failure message says so. An escape
+ * NO BYPASS IS PROVIDED, deliberately. If a cited line holds something this
+ * checker refuses to print in a doc (an email address, say), cite a different
+ * unique literal from that same line -- the failure message says so. An escape
  * token would be used.
  *
  * WHY THE PII RULE LIVES HERE: scripts/secret-scan.js excludes `\.md$` and
@@ -76,17 +77,16 @@ const GAP_MARKERS = ['ABSENT', 'UNKNOWN', 'UNVERIFIED'];
 /**
  * A citation token: anything shaped `<path>:<digits>` in backticks.
  *
- * Deliberately LOOSE, then validated below. A strict pattern silently skips
- * what it cannot parse, which is the worst possible failure mode for an
- * evidence gate: a verifier showed that `` `Makefile:99999` `` and a
- * backslash path both exited 0 while carrying an invented literal, because
- * the strict form required a dotted extension and forward slashes. Anything
- * that LOOKS like a citation must now be either valid or a failure — never
- * ignored.
+ * Deliberately LOOSE, then validated. A strict pattern silently skips what it
+ * cannot parse, which is the worst failure mode for an evidence gate: a
+ * verifier showed that `` `Makefile:99999` `` and a backslash path both exited
+ * 0 while carrying an invented literal, because the strict form required a
+ * dotted extension and forward slashes. Anything that LOOKS like a citation
+ * must now be either valid or a failure -- never ignored.
  *
- * The cost is that a backticked `12:30` reads as a citation to a path "12"
- * and fails. That is the right trade: failing loudly on an ambiguous token
- * beats silently skipping a real one. Write times without backticks.
+ * The cost is that a backticked `12:30` reads as a citation to a path "12" and
+ * fails. That is the right trade: failing loudly on an ambiguous token beats
+ * silently skipping a real one. Write times without backticks.
  */
 const TOKEN = /`([^`\s:]+):(\d+)(?:-(\d+))?`/g;
 
@@ -96,8 +96,14 @@ const FORBIDDEN = [
   { name: 'API key prefix', re: /\b(?:sk-[A-Za-z0-9]{8,}|ghp_[A-Za-z0-9]{8,}|xoxb-[A-Za-z0-9-]{8,}|AKIA[A-Z0-9]{12,})/ },
 ];
 
+const NUMBER_TOKEN = /\b\d[\d,]*(?:\.\d+)?%?\b/g;
+
 function readLines(abs) {
   return fs.readFileSync(abs, 'utf8').split('\n').map((l) => l.replace(/\r$/, ''));
+}
+
+function normaliseNumber(raw) {
+  return raw.replace(/,/g, '').replace(/%$/, '');
 }
 
 function walk(dir, out = []) {
@@ -122,24 +128,166 @@ function literalAfter(line, endIndex) {
  * Figures in HTML *text content*, defined precisely so this rule cannot
  * quietly narrow itself until it checks nothing.
  *
- * A "figure" is a numeric token in text that a reader actually sees. So:
- * `<style>`, `<script>` and `<svg>` elements are removed WHOLE (they are full
- * of numerals — `padding: 12px`, `rgba(0,0,0,.08)`, `viewBox="0 0 24 24"`,
- * path coordinates — that belong to no document), then every remaining tag is
- * removed, which also discards attributes. From what is left, a figure is
- * `\d[\d,]*(\.\d+)?%?` with at least two significant digits; commas and a
- * trailing % are normalised away. Single digits are too noisy to be evidence.
+ * A "figure" is a numeric token a reader actually sees. `<style>`, `<script>`
+ * and `<svg>` elements are removed WHOLE (they are full of numerals --
+ * `padding: 12px`, `rgba(0,0,0,.08)`, `viewBox="0 0 24 24"`, path coordinates
+ * -- that belong to no document), then every remaining tag is removed, which
+ * also discards attributes. From what is left, a figure is a number with at
+ * least two significant digits; commas and a trailing % are normalised away.
  */
 function htmlTextNumbers(src) {
   const text = src
     .replace(/<(script|style|svg)\b[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]*>/g, ' ');
   const found = new Set();
-  for (const m of text.matchAll(/\b\d[\d,]*(?:\.\d+)?%?\b/g)) {
-    const raw = m[0].replace(/,/g, '').replace(/%$/, '');
+  for (const m of text.matchAll(NUMBER_TOKEN)) {
+    const raw = normaliseNumber(m[0]);
     if (raw.replace(/\./g, '').length >= 2) found.add(raw);
   }
   return found;
+}
+
+/** Every number appearing in the markdown, as exact tokens. */
+function collectMdNumbers(files) {
+  const out = new Set();
+  for (const abs of files) {
+    if (!/\.md$/i.test(abs)) continue;
+    for (const m of fs.readFileSync(abs, 'utf8').matchAll(NUMBER_TOKEN)) {
+      out.add(normaliseNumber(m[0]));
+    }
+  }
+  return out;
+}
+
+/** Documentation must not carry addresses, tokens or key shapes. */
+function scanForbidden(lines, rel) {
+  const failures = [];
+  lines.forEach((line, i) => {
+    for (const rule of FORBIDDEN) {
+      const hit = rule.re.exec(line);
+      if (hit) failures.push(`${rel}:${i + 1}  forbidden ${rule.name} in documentation: ${hit[0].slice(0, 24)}…`);
+    }
+  });
+  return failures;
+}
+
+/**
+ * Evidence from outside the repo must say where it came from and when.
+ *
+ * Two forms are checked. A `[source: <url>]` wrapper needs a `[fetched
+ * YYYY-MM-DD]` beside it. And a BARE external URL needs the same, because a
+ * verifier pointed out that dropping the wrapper bypassed the rule entirely --
+ * which would have gutted the GHL task, the one place Phase 1 rests on
+ * documentation it does not own. Links to this repo are exempt: a PR URL is a
+ * pointer, not a factual claim about a third-party API.
+ */
+function checkAttribution(line, rel, lineNo) {
+  if (line.includes('UNVERIFIED')) return null;
+  if (/\[fetched\s+\d{4}-\d{2}-\d{2}\]/.test(line)) return null;
+
+  if (/\[source:\s*https?:/i.test(line)) {
+    return `${rel}:${lineNo}  external [source: …] without [fetched YYYY-MM-DD] and not marked UNVERIFIED`;
+  }
+  const url = /https?:\/\/[^\s)\]>"']+/i.exec(line);
+  if (url && !/github\.com\/ColaberryIntern/i.test(url[0])) {
+    return `${rel}:${lineNo}  external URL (${url[0].slice(0, 48)}) without [fetched YYYY-MM-DD] and not marked UNVERIFIED — wrap it as [source: …] [fetched …] or mark the claim UNVERIFIED`;
+  }
+  return null;
+}
+
+/**
+ * Verify one citation. Returns `{ failure }`, `{ drift }`, or `{}`.
+ *
+ * Extracted from `checkTree` when that function passed CLAUDE.md's 100-line
+ * hard ceiling for a function.
+ */
+function verifyCitation({ rel, lineNo, root, citedPath, start, endStr, literal }) {
+  const at = `${rel}:${lineNo}`;
+
+  if (endStr !== undefined) {
+    return { failure: `${at}  range citation \`${citedPath}:${start}-${endStr}\` — ranges are not a citation form; cite the one line whose literal you are quoting` };
+  }
+  if (literal === null) {
+    return { failure: `${at}  bare citation \`${citedPath}:${start}\` — every citation needs → "a literal that occurs exactly once in that file"` };
+  }
+
+  // Distinctiveness floor. Uniqueness alone stops being enough once whole-line
+  // equality is a fallback: package.json's last line is exactly `}`, so a
+  // one-character literal would resolve "uniquely" and prove nothing.
+  if (literal.replace(/\s/g, '').length < 8) {
+    return { failure: `${at}  literal too short to be evidence (${JSON.stringify(literal)}) — quote at least 8 non-whitespace characters` };
+  }
+
+  if (citedPath.includes('\\')) {
+    return { failure: `${at}  citation path uses backslashes (${citedPath}) — use forward slashes, repo-relative` };
+  }
+  if (citedPath.split('/').includes('..')) {
+    return { failure: `${at}  citation path escapes the repo (${citedPath}) — cite a repo-relative path` };
+  }
+  if (!citedPath.includes('/') && !citedPath.includes('.')) {
+    return { failure: `${at}  citation path is not repo-relative (${citedPath}) — expected something like backend/src/x.ts` };
+  }
+
+  const targetAbs = path.join(root, citedPath);
+  if (!fs.existsSync(targetAbs)) {
+    return { failure: `${at}  cited path does not exist: ${citedPath}` };
+  }
+
+  // Reading can still fail -- a citation to a directory raised an unhandled
+  // EISDIR trace -- and a gate's own crash is not an acceptable report.
+  let targetLines;
+  try {
+    targetLines = readLines(targetAbs);
+  } catch (err) {
+    return { failure: `${at}  cited path is not a readable file (${citedPath}): ${err.code || err.message}` };
+  }
+
+  let hits = [];
+  targetLines.forEach((tl, idx) => { if (tl.includes(literal)) hits.push(idx + 1); });
+
+  // Substring matching can be legitimately ambiguous: in enrollmentService.ts,
+  // `enrollment_type: 'explorer',` is both a WHERE clause and the write, and
+  // the shallower indentation is a substring of the deeper one. Whole-line
+  // equality lets an author disambiguate by quoting the indentation, with no
+  // new syntax, and keeps the apposite line citable.
+  if (hits.length > 1) {
+    const exact = [];
+    targetLines.forEach((tl, idx) => { if (tl.replace(/\s+$/, '') === literal.replace(/\s+$/, '')) exact.push(idx + 1); });
+    if (exact.length === 1) hits = exact;
+  }
+
+  if (hits.length === 0) {
+    return {
+      failure: `${at}  literal not found anywhere in ${citedPath}\n`
+        + `      wanted ${JSON.stringify(literal)}\n`
+        + `      (if the cited line holds something this checker refuses to print — an address, a token —\n`
+        + `       quote a different unique literal from that same line)`,
+    };
+  }
+  if (hits.length > 1) {
+    return {
+      failure: `${at}  literal is not unique in ${citedPath} — ${hits.length} occurrences (lines ${hits.slice(0, 6).join(', ')}${hits.length > 6 ? ', …' : ''})\n`
+        + `      wanted ${JSON.stringify(literal)}\n`
+        + `      quote something distinctive enough to identify one line`,
+    };
+  }
+  if (hits[0] !== start) {
+    return { drift: `${at}  ${citedPath}:${start} → now at line ${hits[0]} (literal verified; update the number when convenient)` };
+  }
+  return {};
+}
+
+/** Every figure in an HTML doc must be traceable to a sibling markdown doc. */
+function checkHtmlFigures(abs, rel, mdNumbers) {
+  const failures = [];
+  let figures = 0;
+  for (const n of htmlTextNumbers(fs.readFileSync(abs, 'utf8'))) {
+    figures += 1;
+    if (!mdNumbers.has(n)) {
+      failures.push(`${rel}  number ${n} appears in the HTML but in no sibling .md — every figure must be traceable to its source doc`);
+    }
+  }
+  return { failures, figures };
 }
 
 /**
@@ -152,162 +300,60 @@ function checkTree(docsAbs, label, rootOverride) {
   const failures = [];
   const drift = [];
   const files = walk(docsAbs);
+  const mdNumbers = collectMdNumbers(files);
+  const gapCounts = Object.fromEntries(GAP_MARKERS.map((m) => [m, 0]));
   let citations = 0;
   let filesWithCitations = 0;
   let figures = 0;
-  const gapCounts = Object.fromEntries(GAP_MARKERS.map((m) => [m, 0]));
-
-  // Numbers present in the markdown, as a set of exact TOKENS rather than a
-  // blob to substring-search. A blob search is near-vacuous for the two- and
-  // three-digit figures that actually matter: a verifier demonstrated that an
-  // HTML reading "Readiness score: 73" passed against docs whose only "73"
-  // was inside "1738".
-  const mdNumbers = new Set();
-  for (const abs of files) {
-    if (!/\.md$/i.test(abs)) continue;
-    const body = fs.readFileSync(abs, 'utf8');
-    for (const m of body.matchAll(/\b\d[\d,]*(?:\.\d+)?%?\b/g)) {
-      mdNumbers.add(m[0].replace(/,/g, '').replace(/%$/, ''));
-    }
-  }
 
   for (const abs of files) {
     const rel = path.relative(root, abs).replace(/\\/g, '/');
     const lines = readLines(abs);
     let fileHadCitation = false;
 
-    for (const rule of FORBIDDEN) {
-      lines.forEach((line, i) => {
-        const hit = rule.re.exec(line);
-        if (hit) failures.push(`${rel}:${i + 1}  forbidden ${rule.name} in documentation: ${hit[0].slice(0, 24)}…`);
-      });
-    }
+    failures.push(...scanForbidden(lines, rel));
 
     lines.forEach((line, i) => {
       for (const m of GAP_MARKERS) {
         if (line.includes(m)) gapCounts[m] += 1;
       }
 
-      if (/\[source:\s*https?:/i.test(line) && !/\[fetched\s+\d{4}-\d{2}-\d{2}\]/.test(line) && !line.includes('UNVERIFIED')) {
-        failures.push(`${rel}:${i + 1}  external [source: …] without [fetched YYYY-MM-DD] and not marked UNVERIFIED`);
-      }
+      const attribution = checkAttribution(line, rel, i + 1);
+      if (attribution) failures.push(attribution);
 
       TOKEN.lastIndex = 0;
       let t;
       while ((t = TOKEN.exec(line)) !== null) {
         const [whole, citedPath, startStr, endStr] = t;
-        const start = Number(startStr);
         citations += 1;
         fileHadCitation = true;
-
-        if (endStr !== undefined) {
-          failures.push(`${rel}:${i + 1}  range citation \`${citedPath}:${start}-${endStr}\` — ranges are not a citation form; cite the one line whose literal you are quoting`);
-          continue;
-        }
-
-        const literal = literalAfter(line, t.index + whole.length);
-        if (literal === null) {
-          failures.push(`${rel}:${i + 1}  bare citation \`${citedPath}:${start}\` — every citation needs → "a literal that occurs exactly once in that file"`);
-          continue;
-        }
-
-        // Distinctiveness floor. Uniqueness alone stops being enough once
-        // whole-line equality is a fallback: package.json's last line is
-        // exactly `}`, so a one-character literal would resolve "uniquely"
-        // and prove nothing. Eight non-whitespace characters is the bar.
-        if (literal.replace(/\s/g, '').length < 8) {
-          failures.push(`${rel}:${i + 1}  literal too short to be evidence (${JSON.stringify(literal)}) — quote at least 8 non-whitespace characters`);
-          continue;
-        }
-
-        // Validate the loose path before touching the filesystem.
-        if (citedPath.includes('\\')) {
-          failures.push(`${rel}:${i + 1}  citation path uses backslashes (${citedPath}) — use forward slashes, repo-relative`);
-          continue;
-        }
-        if (citedPath.split('/').includes('..')) {
-          failures.push(`${rel}:${i + 1}  citation path escapes the repo (${citedPath}) — cite a repo-relative path`);
-          continue;
-        }
-        if (!citedPath.includes('/') && !citedPath.includes('.')) {
-          failures.push(`${rel}:${i + 1}  citation path is not repo-relative (${citedPath}) — expected something like backend/src/x.ts`);
-          continue;
-        }
-
-        const targetAbs = path.join(root, citedPath);
-        if (!fs.existsSync(targetAbs)) {
-          failures.push(`${rel}:${i + 1}  cited path does not exist: ${citedPath}`);
-          continue;
-        }
-
-        // The literal is the evidence. Find every line carrying it. Reading
-        // can still fail — a citation to a directory raised an unhandled
-        // EISDIR trace — and a gate's own crash is not an acceptable report.
-        let targetLines;
-        try {
-          targetLines = readLines(targetAbs);
-        } catch (err) {
-          failures.push(`${rel}:${i + 1}  cited path is not a readable file (${citedPath}): ${err.code || err.message}`);
-          continue;
-        }
-        let hits = [];
-        targetLines.forEach((tl, idx) => { if (tl.includes(literal)) hits.push(idx + 1); });
-
-        // Substring matching can be legitimately ambiguous: in
-        // enrollmentService.ts, `enrollment_type: 'explorer',` is both a WHERE
-        // clause and the write, and the shallower indentation is a substring
-        // of the deeper one. So when a literal is not unique as a substring,
-        // fall back to whole-line equality, which lets an author disambiguate
-        // by quoting the line's own indentation. No new syntax, and it keeps
-        // the apposite line citable instead of forcing a detour to a
-        // neighbouring one.
-        if (hits.length > 1) {
-          const exact = [];
-          targetLines.forEach((tl, idx) => { if (tl.replace(/\s+$/, '') === literal.replace(/\s+$/, '')) exact.push(idx + 1); });
-          if (exact.length === 1) hits = exact;
-        }
-
-        if (hits.length === 0) {
-          failures.push(
-            `${rel}:${i + 1}  literal not found anywhere in ${citedPath}\n` +
-            `      wanted ${JSON.stringify(literal)}\n` +
-            `      (if the cited line holds something this checker refuses to print — an address, a token —\n` +
-            `       quote a different unique literal from that same line)`,
-          );
-          continue;
-        }
-        if (hits.length > 1) {
-          failures.push(
-            `${rel}:${i + 1}  literal is not unique in ${citedPath} — ${hits.length} occurrences (lines ${hits.slice(0, 6).join(', ')}${hits.length > 6 ? ', …' : ''})\n` +
-            `      wanted ${JSON.stringify(literal)}\n` +
-            `      quote something distinctive enough to identify one line`,
-          );
-          continue;
-        }
-        if (hits[0] !== start) {
-          drift.push(`${rel}:${i + 1}  ${citedPath}:${start} → now at line ${hits[0]} (literal verified; update the number when convenient)`);
-        }
+        const result = verifyCitation({
+          rel,
+          lineNo: i + 1,
+          root,
+          citedPath,
+          start: Number(startStr),
+          endStr,
+          literal: literalAfter(line, t.index + whole.length),
+        });
+        if (result.failure) failures.push(result.failure);
+        if (result.drift) drift.push(result.drift);
       }
     });
 
     if (/\.html$/i.test(abs)) {
-      const src = fs.readFileSync(abs, 'utf8');
-      for (const n of htmlTextNumbers(src)) {
-        figures += 1;
-        if (!mdNumbers.has(n)) {
-          failures.push(`${rel}  number ${n} appears in the HTML but in no sibling .md — every figure must be traceable to its source doc`);
-        }
-      }
+      const html = checkHtmlFigures(abs, rel, mdNumbers);
+      failures.push(...html.failures);
+      figures += html.figures;
     }
 
     if (fileHadCitation) filesWithCitations += 1;
 
     // Non-vacuity has to be PER FILE, not per tree. A verifier showed that a
-    // document consisting entirely of uncited assertion ("The Governor
-    // exists. Suppression is enforced everywhere.") passed so long as one
-    // other document in the tree carried a single valid citation — which is
-    // exactly the artifact this gate exists to refuse. Every markdown doc in
-    // this tree makes claims about the code, so every one must cite.
+    // document consisting entirely of uncited assertion ("The Governor exists.
+    // Suppression is enforced everywhere.") passed so long as one other
+    // document in the tree carried a single valid citation -- which is exactly
+    // the artifact this gate exists to refuse.
     if (/\.md$/i.test(abs) && !fileHadCitation) {
       failures.push(`${rel}  no citations in this document — every doc here makes claims about the code, so each must carry at least one`);
     }

@@ -70,7 +70,11 @@ const CASES = [
   { name: 'zero citations scanned', body: 'A document making claims with no citations at all.\n', want: 'zero citations scanned' },
   { name: 'email address in a doc', body: `A ${OK_CITE} and contact someone@example.com now.\n`, want: 'forbidden email address' },
   { name: 'JWT in a doc', body: `A ${OK_CITE} token eyJhbGciOiJIUzI1NiXX.\n`, want: 'forbidden JWT' },
-  { name: 'unattributed external source', body: `A ${OK_CITE} and [source: https://example.com/api].\n`, want: 'without [fetched' },
+  { name: 'unattributed external source', body: `A ${OK_CITE} and [source: https://example.com/api].\n`, want: 'external [source:' },
+  // Dropping the [source: …] wrapper used to bypass the fetched-date rule
+  // entirely, which would have gutted the one task resting on documentation
+  // this repo does not own.
+  { name: 'bare external URL dodging the fetched-date rule', body: `A ${OK_CITE} per https://highlevel.stoplight.io/docs/integrations.\n`, want: 'external URL' },
   // The four below were all false-passes found by an independent verifier
   // against the previous commit. Each is now a named case.
   { name: 'extensionless citation (was silently skipped)', body: 'A `Makefile:99999` → "a literal that exists nowhere".\n', want: 'not repo-relative' },
@@ -89,8 +93,11 @@ function caseRoot(tmp, prefix) {
   return { root, docs };
 }
 
-function selfTest() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gorc-'));
+/**
+ * Cases that must be REJECTED. Each proves one rule is load-bearing: remove
+ * the rule and its case reports MISSED.
+ */
+function runRejectionCases(tmp) {
   let bad = 0;
   console.log('self-test: each fixture below MUST be rejected\n');
 
@@ -141,6 +148,17 @@ function selfTest() {
     if (!caught) bad += 1;
   }
 
+  return bad;
+}
+
+/**
+ * Cases that must be ACCEPTED. These are the load-bearing half: a checker that
+ * refuses everything "catches" every rejection case above while being no check
+ * at all, and a verifier's refuse-everything mutation was caught by exactly
+ * this control on an earlier design.
+ */
+function runAcceptanceControls(tmp) {
+  let bad = 0;
   console.log('\nand these MUST be accepted — a checker that refuses everything would\n"catch" every case above without being a check at all\n');
 
   // CSS/SVG/attribute numerals must NOT count as figures. Without this the
@@ -206,7 +224,14 @@ function selfTest() {
     }
   }
 
-  // Clean up after ourselves; the previous version left a gorc-* directory in
+  return bad;
+}
+
+function selfTest() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gorc-'));
+  const bad = runRejectionCases(tmp) + runAcceptanceControls(tmp);
+
+  // Clean up after ourselves; an earlier version left a gorc-* directory in
   // the OS temp dir on every run.
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* best effort */ }
 
