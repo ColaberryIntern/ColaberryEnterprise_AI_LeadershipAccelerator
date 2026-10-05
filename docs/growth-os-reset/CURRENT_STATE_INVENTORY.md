@@ -52,12 +52,15 @@ A file named in prose without a line number is **not** evidence. Only the cited 
 The evidence, one citation per line:
 
 - Claim 1 — `backend/src/models/Lead.ts:102` → "declare ghl_contact_id: string | null;"
-- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:25` → "export const DEFAULT_ACCOUNT = 'default';"
+- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:85` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
 - Claim 3 — `backend/src/services/ghlService.ts:54` → "const GHL_BASE = 'https://rest.gohighlevel.com/v1';"
 - Claim 4 — `backend/src/routes/calendarRoutes.ts:6` → "router.get('/api/calendar/availability', handleGetAvailability);"
 - Claim 4 — `backend/src/services/calendarService.ts:225` → "export async function createBooking(data: BookingInput): Promise<BookingResult> {"
 - Claim 5 — `backend/src/models/GrowthJourneyHandoff.ts:67` → "export const OWNER_QUEUES"
-- Claim 6 — `backend/src/services/growthJourney/capacityService.ts:48` → "learner: 'admissions',"
+- Claim 6 — `backend/src/services/growthJourney/capacityService.ts:83` → "      where: { brand_id: args.brandId, policy_type: 'queue_capacity', owner_queue: args.ownerQueue },"
+- Claim 7 — `frontend/src/components/growthJourney/HandoffsTab.tsx:115` → '            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={state.reload}>'
+- Claim 7 — `frontend/src/pages/admin/HandoffDetailPage.tsx:231` → "onClick={() => move('Disposition', () => dispositionHandoff(id, { disposition: 'qualified', reason }))}>"
+- Claim 8 — `backend/src/controllers/growthJourneyHandoffController.ts:57` → "export const HANDOFF_QUEUE_ORDER"
 - Claim 9 — `frontend/src/hooks/useRealtimeAwareness.ts:54` → "const src = new EventSource(url, { withCredentials: true });"
 - Claim 9 — `backend/src/intelligence/systemStateEngine/realtime/sseTransport.ts:27` → "export function openSSEStream(req: Request, res: Response, opts: SSEStreamOptions): () => void {"
 - Claim 10 — `backend/src/types/explorerGrowth.ts:229` → "export type ExplorerAssetType ="
@@ -156,8 +159,11 @@ read time in two places under two different labels.
 ### 2.3 Current Growth Journey implementation
 
 Four journey programmes are seeded across four brands, keyed by brand slug and programme
-kind. The programme kind decides which human queue a handoff goes to — see the claim-6
-citation above. Eight brands are seeded in total; four carry journey programmes.
+kind. The programme kind decides which human queue a handoff goes to:
+
+`backend/src/services/growthJourney/capacityService.ts:48` → "learner: 'admissions',"
+
+Eight brands are seeded in total; four carry journey programmes.
 
 ### 2.4 Campaign definitions
 
@@ -259,7 +265,7 @@ has no account link, no brand and no capacity.
 
 The routing table exists and **ships empty by design**:
 
-`backend/src/seeds/growthJourney/policyDefinitions.ts:14` → " * never writes it again. No assignee is seeded: a queue with no"
+`backend/src/seeds/growthJourney/policyDefinitions.ts:32` → "  assigned_to_id: null as string | null,"
 
 So every handoff today lands queued and unassigned, which the seed's own comment calls the
 honest state until Ali names someone.
@@ -279,7 +285,8 @@ exists only as knowledge-base seed data and in project-management scripts, with 
 "Admissions & Sales" in a roster that records her as not yet provisioned. There is **no
 admin-user row, no brand assignment, no queue assignee, no capacity, no CRM id and no
 calendar id** for her anywhere. Four other people *are* provisioned with the sales role in
-scripts; she is in none of them. **Still a question for Ali** — but the answer is a brand
+scripts — other people are provisioned with the sales role in three provisioning scripts
+and she is in none of them. **Still a question for Ali**, but the answer is a brand
 assignment, not a discovery.
 
 **Which GHL sub-account/location is Rose using?** `ABSENT`. One non-default account key
@@ -301,7 +308,11 @@ and the learner brand's policy allows exactly that learner set:
 Four of the five are paid. So the question for Ali is not open — it is a choice among
 **four named, already-legal options**: paid training, community subscription,
 certification, internship. A deny in brand-offer policy is unconditional and outranks an
-allow, so whichever he picks is already enforceable.
+allow — and that is enforced, not merely documented:
+
+`backend/src/services/growthJourney/offerEligibility.ts:137` → "return DENIED(brandId, offerFamily, 'explicit_deny', row.id);"
+
+So whichever he picks is already enforceable.
 
 ---
 
@@ -317,7 +328,11 @@ allow, so whichever he picks is already enforceable.
 `backend/src/services/adminOs/personProfileService.ts:229` → "WHEN e.email IS NOT NULL THEN 'enrolled_student'"
 
    and that stage is treated as post-conversion, which nulls temperature and lead score
-   server-side with this explanation:
+   **on the server**, not merely hiding them in the UI:
+
+`backend/src/services/adminOs/personProfileService.ts:297` → "row.temperatureUpdatedAt = null;"
+
+   with this explanation attached to the suppression:
 
 `backend/src/services/adminOs/panels/acquisitionPanels.ts:92` → "+ 'someone is to convert, and this person already has.';"
 
@@ -327,9 +342,12 @@ allow, so whichever he picks is already enforceable.
    existing value column — it needs a score that recomputes.
 4. **The Governor can only choose a lesson**, because one of 21 asset types resolves.
    Richer journeys are a content-resolution problem before they are a decision problem.
-5. **The human-ownership pause is enforced at three points including immediately before
-   send**, which is stronger than expected; the weakness is single-claimant safety, not the
-   pause.
+5. **The human-ownership pause is enforced at three points, including immediately before
+   send** — stronger than expected. The send-time check is the decisive one:
+
+`backend/src/services/growthJourney/execution/planChecks.ts:90` → "if (evidence.human_conversation === 'yes') return { open: false, reason: 'human_in_conversation' };"
+
+   The weakness is single-claimant safety, not the pause.
 
 ---
 

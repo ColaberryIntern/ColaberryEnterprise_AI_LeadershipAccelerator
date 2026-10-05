@@ -94,6 +94,10 @@ const CASES = [
   // entirely, which would have gutted the one task resting on documentation
   // this repo does not own.
   { name: 'bare external URL dodging the fetched-date rule', body: `A ${OK_CITE} per https://highlevel.stoplight.io/docs/integrations.\n`, want: 'external URL' },
+  // Wearing a literal's clothes. The strip that exempts quoted source code was
+  // matching a bare arrow, so an unattributed external URL escaped the rule
+  // entirely. Two verifiers found it independently.
+  { name: 'external URL hidden behind an arrow with no citation token', body: 'HighLevel docs say → "https://highlevel.stoplight.io/docs/calendars"\n', want: 'external URL' },
   // The four below were all false-passes found by an independent verifier
   // against the previous commit. Each is now a named case.
   { name: 'extensionless citation (was silently skipped)', body: 'A `Makefile:99999` → "a literal that exists nowhere".\n', want: 'not repo-relative' },

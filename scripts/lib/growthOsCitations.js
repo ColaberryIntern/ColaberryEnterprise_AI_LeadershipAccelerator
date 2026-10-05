@@ -220,9 +220,23 @@ function checkAttribution(line, rel, lineNo) {
   // A URL inside a citation's own literal is QUOTED SOURCE CODE, not an
   // external attribution. The first run over a real document flagged
   // `const GHL_BASE = 'https://rest.gohighlevel.com/v1';` -- a correctly
-  // cited line of this repo -- as an unattributed third-party claim. So the
-  // literals come out before the URL scan.
-  const outsideLiterals = line.replace(/(?:→|->)\s*(?:"[^"]*"|'[^']*')/g, ' ');
+  // cited line of this repo -- as an unattributed third-party claim. So a
+  // citation and its literal come out before the URL scan.
+  //
+  // THE STRIP MUST BE ANCHORED TO A CITATION TOKEN. The first version matched
+  // a bare arrow, which let an unattributed external URL escape the rule
+  // entirely just by wearing a literal's clothes:
+  //
+  //     HighLevel's docs say → "https://highlevel.stoplight.io/docs/..."
+  //
+  // Two verifiers found that independently, and it gutted the rule that the
+  // GHL task -- the one place Phase 1 rests on documentation this repo does
+  // not own -- depends on. Only a span that FOLLOWS a real citation token is
+  // quoted source.
+  const outsideLiterals = line.replace(
+    /`[^`\s:]+:\d+(?:-\d+)?`\s*(?:→|->)\s*(?:"[^"]*"|'[^']*')/g,
+    ' ',
+  );
 
   const url = /https?:\/\/[^\s)\]>"']+/i.exec(outsideLiterals);
   if (url && !/github\.com\/ColaberryIntern/i.test(url[0])) {
