@@ -174,6 +174,17 @@ jobs:
         run: node scripts/lint-explorer-copy.js --self-test
       - name: Explorer copy lint
         run: node scripts/lint-explorer-copy.js
+      # Growth OS reset citation check. Same two-step shape and same reason as
+      # the Explorer copy lint above: the thing being trusted is the matcher,
+      # so it proves it can still reject before it is allowed to approve. It
+      # also refuses a run that scanned zero citations, because the docs it
+      # guards are the kind of artifact where a silent no-op reads as a pass.
+      # On a branch without docs/growth-os-reset/ it reports nothing to check
+      # and exits 0, so unrelated PRs are unaffected.
+      - name: Growth OS reset citation check self-test
+        run: node scripts/verifyGrowthOsResetCitations.js --self-test
+      - name: Growth OS reset citation check
+        run: node scripts/verifyGrowthOsResetCitations.js
 
   security-scan:
     name: Static security scan
