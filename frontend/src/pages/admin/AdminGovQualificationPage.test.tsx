@@ -252,7 +252,7 @@ describe('AdminGovQualificationPage — journey', () => {
     const file = new File(['zip'], name, { type: 'application/zip' });
     Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
     await act(async () => { fileInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
-    await clickButton('Extract requirements');
+    await clickButton('Extract & attest');
     await flush();
   };
 
@@ -352,7 +352,7 @@ describe('AdminGovQualificationPage — journey', () => {
     await flush();
     const text = container.textContent ?? '';
     expect(factoryApi.getGovQualificationWorkspace).toHaveBeenCalledWith(GWS, 'colaberry'); // keyed off the gws id
-    expect(text).toContain('Extract requirements from the solicitation ZIP'); // capture UI renders despite source:null
+    expect(text).toContain('Upload the solicitation ZIP'); // capture UI renders despite source:null
     expect(text).not.toContain('labeled sample');                             // OP-only banner is absent
     expect(text).not.toContain('Server-fetched by canonical id');             // Source-facts card hidden on decoupled
     const openBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open qualification')) as HTMLButtonElement;
@@ -486,7 +486,7 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
-    expect(container.textContent ?? '').toContain('Attest the solicitation ZIP');
+    expect(container.textContent ?? '').toContain('Evidence of record (attested ZIP)');
     const fileInputs = Array.from(container.querySelectorAll('input[type=file]')) as HTMLInputElement[]; // extract card first, attest card last
     const attestInput = fileInputs[fileInputs.length - 1];
     const file = new File(['zip'], 'sol.zip', { type: 'application/zip' });
@@ -497,6 +497,27 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(call[0]).toBe(GWS);
     expect(call[1].mode).toBe('add');
     expect(call[1].file).toBeTruthy();
+  });
+
+  it('decoupled: one "Extract & attest" upload runs BOTH extraction and attestation', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
+      zipAttestation: null,
+    }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
+    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const extractInput = container.querySelector('input[type=file]') as HTMLInputElement; // the extract card's input is first
+    const file = new File(['zip'], 'sol.zip', { type: 'application/zip' });
+    Object.defineProperty(extractInput, 'files', { value: [file], configurable: true });
+    await act(async () => { extractInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Extract & attest');
+    await flush();
+    expect(factoryApi.extractGovQualificationRequirements).toHaveBeenCalled();  // extracted the candidates
+    expect(factoryApi.attestSolicitationZip).toHaveBeenCalled();                // AND attested the same ZIP
+    expect((factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0][1].mode).toBe('add');
+    expect(container.textContent ?? '').toContain('SAM registration required.'); // candidates shown
   });
 
   it('decoupled: when the server says canApprove (requirements + attested ZIP), Approve is ENABLED and calls approveGovQualification', async () => {
