@@ -21,6 +21,13 @@ export interface BroadcastSession {
   asset: string;
   /** Display only. A private occurrence's title must never reach an ineligible viewer. */
   title: string | null;
+  /**
+   * The captions asset, when one exists. Absent means no captions control is offered at all,
+   * which is the honest state until P6-02b reports a captions status: a toggle that always
+   * fails is worse than no toggle. Captions need their own signed grant, because a grant
+   * covers one asset.
+   */
+  captionsAsset?: string | null;
 }
 
 interface BroadcastPlayerContextValue {

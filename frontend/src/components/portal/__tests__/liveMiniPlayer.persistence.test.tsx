@@ -259,10 +259,7 @@ describe('mounted as a sibling of <Outlet/> — the real arrangement', () => {
     await click('open');
     expect(container.textContent).toContain('Week 9 class');
 
-    const closeButton = container.querySelector('.lmp-close') as HTMLElement;
-    await act(async () => {
-      closeButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-    });
+    await click('lmp-close');
 
     expect(find('live-mini-player')).toBeNull();
   });
