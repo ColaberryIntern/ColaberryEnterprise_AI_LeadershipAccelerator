@@ -79,11 +79,13 @@
 
   <div class="headline">
     <h2>The answer to "how does it choose the content"</h2>
+    <p style="font-size:.875rem;color:var(--muted);border-left:3px solid var(--amber);padding-left:.75rem;margin:0 0 .75rem">Corrected 2026-10-05: this page first said sixteen campaigns and named <code>explorer_high_intent_fast_track</code> at tier 3 as the winner. There are eleven, that key is a test fixture, and the real winner is <code>explorer_enrollment_ready</code> at tier 5.</p>
     <p><strong>It doesn't write anything. It picks which of your existing, already-approved
     campaigns to put the person into.</strong></p>
-    <p>There are sixteen campaigns registered. A human wrote every word in every one of
-    them, and a human approved them. The system's whole job is choosing <em>which</em>
-    envelope this person belongs in — never what the letter says.</p>
+    <p>There are <strong>eleven</strong> campaigns registered. A human wrote every word
+    in every one of them, and a human approved them. The system's whole job is choosing
+    <em>which</em> envelope this person belongs in — never what the letter says.
+    <a href="GROWTH_JOURNEY_CAMPAIGNS.html">All eleven, and when each is used →</a></p>
     <p style="color:var(--muted);font-size:.9375rem">The only AI anywhere in this pipeline
     decides <em>who Maria is</em>. Nothing in it composes a sentence.</p>
   </div>
@@ -137,30 +139,36 @@
       <table>
         <tr><th>Who proposes</th><th>Which campaign</th><th>Tier</th><th>Score</th><th>Because</th></tr>
         <tr class="win">
-          <td>high intent</td><td><code>explorer_high_intent_fast_track</code></td><td>3</td><td>55</td>
-          <td>asked about a start date today</td>
+          <td>high intent</td><td><code>explorer_enrollment_ready</code></td><td>5</td><td>82</td>
+          <td>asked about a start date, and nothing is blocking her</td>
         </tr>
         <tr>
-          <td>activation rescue</td><td><code>explorer_activation_restart</code></td><td>5</td><td>40</td>
-          <td>stalled at lesson 2</td>
+          <td>activation rescue</td><td><code>explorer_activation_restart</code></td><td>6</td><td>40</td>
+          <td>stalled at lesson 2, but has engaged before</td>
         </tr>
         <tr>
-          <td>nurture</td><td><code>explorer_weekly_digest</code></td><td>7</td><td>10</td>
+          <td>nurture</td><td><code>explorer_weekly_digest</code></td><td>9</td><td>10</td>
           <td>she exists and is not unsubscribed</td>
         </tr>
       </table>
-      <p>Sorted by tier first — <strong>lower wins</strong>. Tier 3 beats tier 5 beats
-      tier 7, so the score never even gets used here. It would only matter if two
-      proposals shared a tier.</p>
+      <p>Sorted by tier first — <strong>lower wins</strong>. Tier 5 beats tier 6 beats
+      tier 9, so the score never even gets used here. It would only matter if two
+      proposals shared a tier — which happens for real between
+      <code>explorer_activation_never_started</code> and
+      <code>explorer_activation_restart</code>, both at tier 6.</p>
       <div class="rec">
-<span class="k">selected</span>    <span class="v">SEND_EMAIL · explorer_high_intent_fast_track</span><br>
-<span class="k">suppressed</span>  <span class="v">explorer_activation_restart</span> <span class="c">— lower priority than tier 3</span><br>
-<span class="k">suppressed</span>  <span class="v">explorer_weekly_digest</span> <span class="c">— lower priority than tier 3</span>
+<span class="k">selected</span>    <span class="v">SEND_EMAIL · explorer_enrollment_ready</span><br>
+<span class="k">suppressed</span>  <span class="v">explorer_activation_restart</span> <span class="c">— lower priority than tier 5</span><br>
+<span class="k">suppressed</span>  <span class="v">explorer_weekly_digest</span> <span class="c">— lower priority than tier 5</span>
       </div>
       <div class="box good">
         <p><strong>The losers are kept.</strong> Three weeks from now, "why didn't Maria
         get the weekly digest?" is answerable from this one row. Nothing is discarded
         silently.</p>
+        <p style="margin-top:.6rem;font-size:.9rem;color:var(--muted)">Note the friction
+        test inside high intent: had Maria also had a blocked payment, friction recovery
+        would have proposed at <strong>tier 2</strong> and won — a person fighting a
+        broken thing does not get a cohort email.</p>
       </div>
     </div>
   </div>
@@ -250,7 +258,7 @@ enrollLeadInSequence(<span class="v">lead 4821</span>, <span class="v">sequence 
       <div class="rec">
 <span class="k">action</span>       <span class="v">SEND_EMAIL</span><br>
 <span class="k">channel</span>      <span class="v">email</span><br>
-<span class="k">campaign</span>     <span class="v">explorer_high_intent_fast_track</span><br>
+<span class="k">campaign</span>     <span class="v">explorer_enrollment_ready</span><br>
 <span class="k">status</span>       <span class="v">enrolled</span><br>
 <span class="k">reason</span>       <span class="v">asked about a start date today</span>
       </div>
@@ -265,7 +273,7 @@ enrollLeadInSequence(<span class="v">lead 4821</span>, <span class="v">sequence 
   <table>
     <tr><th>Choice</th><th>Made by</th><th>Out of</th></tr>
     <tr><td>Who is this person?</td><td>classification — the one AI step</td><td>4 brands × their programmes and paths</td></tr>
-    <tr><td>Which campaign?</td><td>a sort by tier, then score</td><td>the 16 registered campaigns</td></tr>
+    <tr><td>Which campaign?</td><td>a sort by tier, then score</td><td>the 11 registered campaigns</td></tr>
     <tr><td style="color:var(--muted)">What the email says</td><td style="color:var(--muted)"><strong>nobody — it is already written</strong></td><td style="color:var(--muted)">—</td></tr>
   </table>
 
@@ -283,9 +291,9 @@ enrollLeadInSequence(<span class="v">lead 4821</span>, <span class="v">sequence 
   <h2 class="sec">What would have happened differently</h2>
   <table>
     <tr><th>If…</th><th>Then</th></tr>
-    <tr><td>She had not asked about a date</td><td>high intent proposes nothing; <strong>activation rescue wins at tier 5</strong> and she gets <code>explorer_activation_restart</code> instead</td></tr>
+    <tr><td>She had not asked about a date</td><td>high intent proposes nothing; <strong>activation rescue wins at tier 6</strong> and she gets <code>explorer_activation_restart</code> instead</td></tr>
     <tr><td>Nobody proposed anything</td><td>recorded as <code>WAIT</code> — silence is never the output</td></tr>
-    <tr><td>Two proposals shared tier 3</td><td>the higher <code>intra_tier_score</code> wins; if those tie too, two further keys break it so the result is never arbitrary</td></tr>
+    <tr><td>Two proposals shared a tier</td><td>the higher <code>intra_tier_score</code> wins — this is real at tier 6, where never-started and restart compete; if those tie too, two further keys break it so the result is never arbitrary</td></tr>
     <tr><td>She had replied to an email after the decision was made</td><td><code>stale_decision_reply_newer</code> — the decision is discarded rather than acted on</td></tr>
     <tr><td>The action had been Ali's personal outreach</td><td>prepared and parked for a human, <strong>always</strong>. That channel can never auto-send</td></tr>
   </table>
