@@ -72,6 +72,18 @@ describe('businessTasks excludes flow markers', () => {
   });
 });
 
+describe('businessTasks requires a usable id', () => {
+  it('a task with no string id is not returned as business work', () => {
+    // A verifier mutation deleted `isStr(t.id)` and the suite stayed green: an uncovered
+    // guard. Not a false claim, since nothing claimed it was covered — but an unmutated
+    // guard is one nobody has shown does anything.
+    const project = { ...manualOnlyProject(),
+      tasks: [{ kind: 'TASK', id: 42, title: 't' }, { kind: 'TASK', id: 't-ok', title: 'u' }],
+    } as never;
+    expect(businessTasks(project).map((t) => t.id)).toEqual(['t-ok']);
+  });
+});
+
 describe('a complete mapping passes', () => {
   it('Fixture D maps totally with no issues', () => {
     expect(validateTaskSurfaces(manualOnlyProject(), [ws('t-intake'), ws('t-review')])).toEqual([]);
@@ -253,7 +265,9 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
       if (leaf < 0.5) return String(Math.floor(rnd() * 1000) - 500);
       if (leaf < 0.62) return '0';
       if (leaf < 0.75) return JSON.stringify(Math.floor(rnd() * 1e6) / 7);
-      if (leaf < 0.88) return '""';
+      if (leaf < 0.78) return '""';
+      // A DERIVED union literal, so guards requiring one are reachable.
+      if (leaf < 0.92) return JSON.stringify(LITERALS[Math.floor(rnd() * LITERALS.length)]);
       return JSON.stringify(`s${Math.floor(rnd() * 9999)}`);
     }
     const n = Math.floor(rnd() * 4);
@@ -311,6 +325,8 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     ['ref.permissionViews[0].roleId', (v) => refAt('permissionViews', [{ roleId: v, visibleActions: [] }])],
     ['ref.permissionViews[0].visibleActions', (v) => refAt('permissionViews', [{ roleId: 'r', visibleActions: v }])],
     ['ref.permissionViews[0].visibleActions[0]', (v) => refAt('permissionViews', [{ roleId: 'r', visibleActions: [v] }])],
+    ['ref.decisions', (v) => refAt('decisions', v)],
+    ['ref.records[0]', (v) => refAt('records', [v])],
   ];
 
   const base = () => ({ taskId: 't-intake', kind: 'workspace', ref: ref({ taskIds: ['t-intake'] }) });
@@ -363,6 +379,44 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
 
   const KEYSPACE = derivedKeyspace();
 
+  /**
+   * The LEAF VALUE space, derived the same way.
+   *
+   * The sixth verification found 5 of 27 positions had ZERO reach past their guard, because
+   * the leaf values were only `null/true/number/""/"s####"` — so a guard requiring a union
+   * literal (`kind`, `audience`, `ref`) could never be cleared. The keyspace was derived and
+   * the leaf space was still a list I wrote: the enumerated-list problem one level up for the
+   * third time.
+   *
+   * So the union literals come out of the source too. `[A-Za-z_]` rather than the keyspace’s
+   * lowercase-first pattern, because `'TASK'` and `'DECISION'` are literals the code compares
+   * against and the narrower pattern missed them.
+   */
+  function derivedLiterals(): string[] {
+    const found = new Set<string>();
+    for (const src of SOURCES) {
+      for (const m of src.matchAll(/'([A-Za-z_][A-Za-z0-9_]*)'/g)) {
+        found.add(m[1]);
+      }
+    }
+    for (const k of NOT_INPUT_FIELDS) found.delete(k);
+    return [...found].sort();
+  }
+
+  const LITERALS = derivedLiterals();
+
+  it('THE LEAF VALUE SPACE IS DERIVED: union literals the code compares against', () => {
+    // Without these the generator cannot clear a union guard, so the positions behind those
+    // guards are unreachable and any bound over them is unproven.
+    for (const v of [
+      'workspace', 'headless', 'internal', 'customer', 'TASK', 'DECISION',
+      'owner_recorded', 'model_turn', 'scheduled_ingestion', 'system_to_system',
+      'derived_computation', 'notification_delivery', 'retention_or_cleanup',
+    ]) {
+      expect(LITERALS).toContain(v);
+    }
+  });
+
   it('THE KEYSPACE IS DERIVED: every field the modules dereference can be generated', () => {
     // The guard clause of the standing rule. If this fails, the generator has a blind spot
     // and any bound it appears to prove is unsound.
@@ -380,6 +434,28 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     expect(KEYSPACE).toContain('valueOf');
   });
 
+  /**
+   * A VALID exemplar per position, appended to that position’s corpus.
+   *
+   * Five positions had zero reach even with derived literals, and for three of them that is
+   * STRUCTURAL rather than a generator weakness: reaching the body at `<binding itself>`, `ref`
+   * or `ref.permissionViews[0]` requires the value to BE a valid binding, ref or permission view,
+   * which random substitution will essentially never produce. `kind` and `ref.audience` need an
+   * exact union member, reachable but vanishingly rare.
+   *
+   * Seeding each position with a known-good value is what makes the per-position control mean
+   * something: it proves the position is WIRED (the setter really does put a value where the code
+   * reads it), while the hostile corpus proves nothing throws there. Without the exemplar, "reach"
+   * is a property of random luck rather than of the test.
+   */
+  const VALID_AT: Record<string, unknown> = {
+    '<binding itself>': { taskId: 't-intake', kind: 'workspace', ref: ref({ taskIds: ['t-intake'] }) },
+    kind: 'workspace',
+    ref: ref({ taskIds: ['t-intake'] }),
+    'ref.audience': 'internal',
+    'ref.permissionViews[0]': { roleId: 'role-counsel', visibleActions: ['approve'] },
+  };
+
   function corpus(): unknown[] {
     const rnd = lcg(20261005);
     const out: unknown[] = KNOWN_HOSTILE_JSON.map((t) => JSON.parse(t));
@@ -392,10 +468,13 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
       const values = corpus();
       const throws: string[] = [];
       let calls = 0;
-      let reachedBody = 0;
+      const perPosition: Record<string, number> = {};
 
-      for (const v of values) {
-        for (const [pathName, put] of PATHS) {
+      for (const [pathName, put] of PATHS) {
+        // The hostile corpus PLUS a valid exemplar for this position, so reach is proven rather
+        // than hoped for. See VALID_AT.
+        const atThisPath = pathName in VALID_AT ? [...values, VALID_AT[pathName]] : values;
+        for (const v of atThisPath) {
           const binding = smuggle(put(v));
           const attempts: ReadonlyArray<readonly [string, () => unknown]> = [
             ['validateTaskSurfaces', () => validateTaskSurfaces(project, [binding])],
@@ -408,7 +487,7 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
               const r = run();
               if (fn === 'validateTaskSurfaces' && Array.isArray(r)
                 && !r.some((i) => (i as { code: string }).code === 'SURFACE_BINDING_MALFORMED')) {
-                reachedBody += 1;
+                perPosition[pathName] = (perPosition[pathName] ?? 0) + 1;
               }
             } catch (e) {
               throws.push(`${fn} @ ${pathName} :: ${(e as Error).message}`);
@@ -417,14 +496,15 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
         }
       }
 
-      // The corpus is big enough to be meaningful and the assertion names what failed, so a
-      // regression reports the path rather than just a count.
       expect(calls).toBeGreaterThan(30000);
-      // POSITIVE CONTROL: the corpus must actually reach past the shape guard, or this whole
-      // test is an elaborate way of asserting that malformed input is malformed.
-      expect(reachedBody).toBeGreaterThan(0);
       expect(throws.slice(0, 5)).toEqual([]);
       expect(throws).toHaveLength(0);
+
+      // PER-POSITION, not aggregate. The sixth verification found the aggregate control was
+      // satisfied while 5 of 27 positions had ZERO reach past their guard — an average
+      // hiding five dead rows. Naming the dead positions is the whole point.
+      const dead = PATHS.map(([n]) => n).filter((n) => !(perPosition[n] > 0));
+      expect(dead).toEqual([]);
     });
 
   /** Positions under a well-formed `project`, so the corpus clears the project guard. */
@@ -437,6 +517,10 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
       tasks: [{ kind: 'TASK', id: v, title: 't' }] })],
     ['project.tasks[0].title', (v) => ({ ...manualOnlyProject(),
       tasks: [{ kind: 'TASK', id: 't-x', title: v }] })],
+    ['project.roles', (v) => ({ ...manualOnlyProject(), roles: v })],
+    ['project.requirements', (v) => ({ ...manualOnlyProject(), requirements: v })],
+    ['project.roles[0].id', (v) => ({ ...manualOnlyProject(),
+      roles: [{ id: v, name: 'n', definition: 'd' }] })],
     ['project.tasks[0].kind', (v) => ({ ...manualOnlyProject(),
       tasks: [{ kind: v, id: 't-x', title: 't' }] })],
   ];
@@ -446,14 +530,16 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     // proved `tasks`/`roles`/`requirements` were ARRAYS and never typed their elements, then
     // `.map((t) => t.id)` ran on a `[null]`. The generator could not reach any of it.
     const throws: string[] = [];
-    let reachedBody = 0;
+    const perPosition: Record<string, number> = {};
     for (const v of corpus()) {
       for (const [pathName, put] of PROJECT_PATHS) {
         const proj = put(v) as never;
         try {
           const issues = validateTaskSurfaces(proj, [ws('t-intake')]);
           // Did we clear the project guard and reach the real work?
-          if (!issues.some((i) => i.code === 'SURFACE_PROJECT_UNUSABLE')) reachedBody += 1;
+          if (!issues.some((i) => i.code === 'SURFACE_PROJECT_UNUSABLE')) {
+            perPosition[pathName] = (perPosition[pathName] ?? 0) + 1;
+          }
         } catch (e) { throws.push(`${pathName} :: ${(e as Error).message}`); }
         try { consolidationAssessment([ws('t-intake')]); } catch (e) {
           throws.push(`cA/${pathName} :: ${(e as Error).message}`);
@@ -463,10 +549,11 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     expect(throws.slice(0, 5)).toEqual([]);
     expect(throws).toHaveLength(0);
 
-    // POSITIVE CONTROL ON THE GENERATOR ITSELF. Previously this number was 0 of 414 and the
-    // test still passed — a check that could not fail, in the position where the defect
-    // lived. Asserting it is non-zero is what stops that recurring silently.
-    expect(reachedBody).toBeGreaterThan(0);
+    // PER-POSITION CONTROL ON THE GENERATOR ITSELF. Previously this was one aggregate number,
+    // and before that it was 0 of 414 with the test still passing — a check that could not
+    // fail, in the position where the defect lived. Naming the dead positions is the point.
+    const dead = PROJECT_PATHS.map(([n]) => n).filter((n) => !(perPosition[n] > 0));
+    expect(dead).toEqual([]);
   });
 
   it('THE ARGUMENTS THEMSELVES are generated over too, not just their contents', () => {

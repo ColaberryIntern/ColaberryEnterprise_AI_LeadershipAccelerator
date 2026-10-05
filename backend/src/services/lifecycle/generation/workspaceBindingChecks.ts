@@ -34,7 +34,19 @@
  * **The claim is backed by a GENERATOR, and SCOPED to what that generator demonstrably
  * reaches.** `__tests__/workspaceMapping.test.ts` builds a corpus from a seeded deterministic
  * JSON generator plus the known-falsifying literals, splices every value into every position
- * in a derived table, and asserts zero throws. Same seed, same corpus, every run.
+ * in a **hand-written** position table, and asserts zero throws. Same seed, same corpus,
+ * every run.
+ *
+ * **"Hand-written" is stated, not glossed.** An earlier version of this sentence said "a derived
+ * table", which was false: the **keyspace** and the **leaf value space** are derived from these
+ * two source files, but the 34 positions are a literal array someone wrote. A verifier caught
+ * the overstatement in the very commit that existed to fix overstatement.
+ *
+ * What makes the hand-written list safe is not derivation but a **per-position positive
+ * control**: the suite fails and NAMES any position that cannot be reached past its guard.
+ * The aggregate version of that control passed while 5 of 27 positions were dead — an average
+ * hiding five zero rows. A position missing from the table is still a gap, and that residual
+ * limit is recorded rather than claimed away.
  *
  * **Why "scoped" is load-bearing and not hedging.** The fifth falsification of this sentence
  * was not a missing guard — it was that the generator *structurally could not reach* the
@@ -251,8 +263,17 @@ function isPermissionView(v: unknown): boolean {
  *
  * **That list is the claim.** It is not a summary of a broader guarantee — it is exactly what
  * the generator reaches, each position carrying a positive control proving the corpus gets
- * there. Anything outside it is unproven, and an unproven position is how this sentence became
- * false five times.
+ * there. Anything outside it is unproven, and an unproven position is how this sentence
+ * became false five times.
+ *
+ * **Which mechanism does which job, because crediting the wrong one is its own error.**
+ * Reach is delivered by a **valid exemplar seeded per position**, not by the derived leaf
+ * literals: three positions (`<binding itself>`, `ref`, `ref.permissionViews[0]`) require
+ * the value to BE a valid structure, which random substitution essentially never produces.
+ * Mutation-proven — removing the derived literals leaves the suite at 95/95, while
+ * removing one exemplar makes the per-position control fail by name. The derivation broadens
+ * the hostile corpus (union-shaped values get tried everywhere); it is **not** what fixed
+ * the zero-reach problem, and an earlier draft of this note said it was.
  *
  * Out of scope, by construction rather than oversight: a throwing accessor and
  * `Object.create(null)`, neither of which `JSON.parse` can produce.

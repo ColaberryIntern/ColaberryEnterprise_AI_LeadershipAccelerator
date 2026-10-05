@@ -28,27 +28,15 @@
  * `Generation`, `Deliver` and `Upload` while flagging correct plans. A free-text justification
  * would make the downstream rule evadable for the cost of a sentence.
  *
- * ## EVERY field is defended against runtime JSON, not just `reason`
+ * ## Malformed runtime JSON is refused rather than thrown on — see the sibling for the bound
  *
- * Attempt 1 of this module said exactly what is written above — that a decomposition arrives as
- * JSON where `as` casts and model output bypass the union — and then defended **one** field
- * against it. Every other malformed shape threw a raw `TypeError`: a missing `ref`, a missing
- * `deepLink`, a non-array `intendedRoles`, and a third `kind` value, which the documentation
- * claimed was impossible. A generic error escaping a validator is worse than a refusal, because
- * the caller learns nothing, and CLAUDE.md forbids `Error` as a production error class.
- * `SURFACE_BINDING_MALFORMED` refuses **every value `JSON.parse` can produce** — a null or
- * undefined entry, a primitive, an array where an object belongs, a null or wrong-typed element
- * inside any array — and `consolidationAssessment` and `unboundProposedSurfaces` skip those
- * rather than crashing.
- *
- * **That sentence is scoped on purpose.** Attempt 2 said it "refuses all of it" and that no later
- * rule "can throw", and a verifier then executed ten throws: a `null` binding element, a `null`
- * inside `permissionViews`, and a throwing accessor. Proving an array IS an array while never
- * typing its members is the array-level form of attempt 1’s mistake — defending the cases I
- * happened to think of. A hostile object with a throwing getter remains out of scope, and is named
- * as such in `shapeIssue` rather than quietly included in a totality claim.
- *
- * ## The project-level rule is a DISCLOSURE requirement, not a threshold
+ * This header carried the unscoped version of that claim ("refuses **every value `JSON.parse`
+ * can produce**") for two commits after the sibling module’s copy had been scoped, because
+ * the scoping edit only touched one of the two files. Nobody caught it; I found it while
+ * splitting this function. The authoritative, scoped statement lives in
+ * `./workspaceBindingChecks` beside the code that implements it, and this header does not
+ * restate it — two copies of a bound is how one of them goes stale.
+ * * ## The project-level rule is a DISCLOSURE requirement, not a threshold
  *
  * A student finished 20 of 20 stories, platform-verified, and could not run her own product:
  * twelve services unreachable, nothing chaining them. Per-task LC-08 cannot catch that, because
@@ -100,6 +88,14 @@
  * breached and saying so is better than a reader discovering it. Collapsing it needs the two modules
  * to become one again, which the line ceiling forbids; the honest resolution is a third module for
  * the shared predicates, and that is recorded as an open item rather than done here.
+ *
+ * **The FUNCTION ceiling was breached too, and undisclosed.** `validateTaskSurfaces` reached
+ * 125 `wc -l` lines against the 100-line hard ceiling — and the commit that grew it from
+ * 109 to 125 was the one whose session entry claimed it had been "split to clear the
+ * 100-line ceiling". `resolveBindings` is now extracted; the function is 93 lines and the
+ * helper 43. Measured by `wc -l` on the span, which is the operative measure here: the
+ * "602 against 500" figure that forced the module split also counted comments.
+ *
  * NO DATABASE. `ValidationIssue` is reused verbatim rather than redeclared, so a consumer can
  * concatenate these with `factoryValidate`'s and render one list.
  */
@@ -163,6 +159,63 @@ export function businessTasks(project: FactoryProject): FactoryTask[] {
   ) as FactoryTask[];
 }
 
+/**
+ * Resolve which bindings are sound enough for the content rules, and report identity problems.
+ *
+ * Extracted because `validateTaskSurfaces` reached **125 lines against CLAUDE.md’s 100-line
+ * function hard ceiling** — and the commit that grew it from 109 to 125 was the one whose
+ * session entry claimed the function had been "split to clear the 100-line ceiling". A verifier
+ * caught it. The rule is that the next change to an oversize unit splits it before adding code,
+ * so this is that split rather than a note telling a later task to do it.
+ *
+ * Measured by `wc -l` on the function span, which is the operative measure in this repo: the
+ * "602 lines against the 500-line ceiling" figure that forced the module split also counted
+ * comments.
+ */
+function resolveBindings(
+  bindings: ReadonlyArray<TaskSurfaceBinding>,
+  allTaskIds: ReadonlySet<string>,
+  workIds: ReadonlySet<string>,
+): { sound: TaskSurfaceBinding[]; seen: Set<string>; issues: ValidationIssue[] } {
+  const issues: ValidationIssue[] = [];
+  const sound: TaskSurfaceBinding[] = [];
+  const seen = new Set<string>();
+
+  for (const b of bindings) {
+    const shape = shapeIssue(b);
+    if (shape) { issues.push(shape); continue; }
+
+    // The MIRROR of the unmapped-task check. T6 in Phase 3 proved the unchecked direction is the
+    // one that inflates the headline: one effort row for a nonexistent task took a manual-only
+    // blueprint to 97.9% automated. A binding for a ghost task would make coverage look complete.
+    if (!allTaskIds.has(b.taskId)) {
+      issues.push(err('SURFACE_TASK_UNKNOWN',
+        `Binding names task ${b.taskId}, which the process graph does not declare.`, b.taskId));
+      continue;
+    }
+    if (seen.has(b.taskId)) {
+      issues.push(err('SURFACE_DUPLICATE_BINDING',
+        `Task ${b.taskId} has more than one binding; a task resolves to exactly one surface state.`,
+        b.taskId));
+      continue;
+    }
+    seen.add(b.taskId);
+
+    // A flow marker performs no work, so it cannot carry a surface. Attempt 1 silently SKIPPED
+    // these, so a ref on START bypassed every §4.5 rule while still being counted by
+    // `consolidationAssessment` — a surface that existed for the count and nothing else.
+    if (!workIds.has(b.taskId)) {
+      issues.push(err('SURFACE_BINDING_ON_FLOW_MARKER',
+        `Task ${b.taskId} is a flow marker (START/END) and performs no work, so it cannot carry a `
+        + 'surface or a headless reason.', b.taskId));
+      continue;
+    }
+    sound.push(b);
+  }
+
+  return { sound, seen, issues };
+}
+
 /** Validate a declared set of bindings against the project they claim to describe. */
 export function validateTaskSurfaces(
   project: FactoryProject,
@@ -206,40 +259,8 @@ export function validateTaskSurfaces(
   const roleIds = ids(project.roles);
   const requirementIds = ids(project.requirements);
 
-  const sound: TaskSurfaceBinding[] = [];
-  const seen = new Set<string>();
-
-  for (const b of bindings) {
-    const shape = shapeIssue(b);
-    if (shape) { issues.push(shape); continue; }
-
-    // The MIRROR of the unmapped-task check. T6 in Phase 3 proved the unchecked direction is the
-    // one that inflates the headline: one effort row for a nonexistent task took a manual-only
-    // blueprint to 97.9% automated. A binding for a ghost task would make coverage look complete.
-    if (!allTaskIds.has(b.taskId)) {
-      issues.push(err('SURFACE_TASK_UNKNOWN',
-        `Binding names task ${b.taskId}, which the process graph does not declare.`, b.taskId));
-      continue;
-    }
-    if (seen.has(b.taskId)) {
-      issues.push(err('SURFACE_DUPLICATE_BINDING',
-        `Task ${b.taskId} has more than one binding; a task resolves to exactly one surface state.`,
-        b.taskId));
-      continue;
-    }
-    seen.add(b.taskId);
-
-    // A flow marker performs no work, so it cannot carry a surface. Attempt 1 silently SKIPPED
-    // these, so a ref on START bypassed every §4.5 rule while still being counted by
-    // `consolidationAssessment` — a surface that existed for the count and nothing else.
-    if (!workIds.has(b.taskId)) {
-      issues.push(err('SURFACE_BINDING_ON_FLOW_MARKER',
-        `Task ${b.taskId} is a flow marker (START/END) and performs no work, so it cannot carry a `
-        + 'surface or a headless reason.', b.taskId));
-      continue;
-    }
-    sound.push(b);
-  }
+  const { sound, seen, issues: identityIssues } = resolveBindings(bindings, allTaskIds, workIds);
+  issues.push(...identityIssues);
 
   for (const t of work) {
     if (!seen.has(t.id)) {

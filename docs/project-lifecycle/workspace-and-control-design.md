@@ -52,9 +52,21 @@ refusal message three lines after `label()` was introduced for exactly that.
 **The claim is now a SCOPED LIST, and the list is the claim.** Every `JSON.parse`-producible
 value is refused rather than thrown on in: the `bindings` argument and every position nested
 under it; `proposedSurfaces`; the `project` argument, its three arrays, and their elements’
-`id`, `title` and `kind`; and `headlessAcceptance`. Each position carries a positive control
-proving the corpus reaches it. Anything outside the list is unproven, and an unproven
-position is how this sentence became false five times.
+`id`, `title` and `kind`; and `headlessAcceptance`.
+
+**Each position carries a PER-POSITION positive control** — the suite fails and names any
+position it cannot reach past its guard. The aggregate version of that control passed while
+**5 of 27 positions were dead**, an average hiding five zero rows, which is why it is now
+per position. Reach itself comes from a valid exemplar seeded at each position, not from the
+derived leaf literals: three positions need the value to *be* a valid structure. Both facts
+are mutation-proven.
+
+The position table is **hand-written**, and that is a stated residual limit rather than a
+claim of derivation. The keyspace and leaf value space are derived from the module sources;
+the positions are not. A position missing from the table is a gap the control cannot see.
+
+Anything outside the list is unproven, and an unproven position is how this sentence became
+false five times.
 
 Out of scope by construction: a throwing accessor and `Object.create(null)`, neither of
 which `JSON.parse` can produce. A blanket try/catch would hide real defects rather than
