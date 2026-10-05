@@ -276,11 +276,25 @@ because the current wording reads as though it already covers every case.
   stringification inside the refusal message, then the same stringification and element
   defects one argument over, in `project`. Each fix was right; each sentence was broader
   than its fix.
-  **Amended 2026-10-05 after the rule itself proved insufficient:** the keyspace and position
-  set must also be **derived from the code under test**, not listed, and every guarded body
-  needs a positive control proving the corpus reaches it. The first version banned enumerated
-  *values* while leaving enumerated *keys*, so 0 of 414 corpus values could reach the defect.
-  Full reasoning and the measured figures in `plan-phase4.md`.
+  **Amended twice on 2026-10-05, because the rule itself recurred at two further levels.**
+  This is the durable copy and the one later phases read cold, so it states what is
+  actually true rather than what an earlier draft intended:
+
+  - The **keyspace** and the **leaf value space** must be derived from the code under test.
+  - The **position table remains hand-written** — a recorded residual limit, not
+    something derived away. A position nobody listed is a gap no control can see.
+  - The positive control must be **per claimed position**, never aggregate or per guarded
+    body. An average is satisfied by one reachable position out of thirty.
+  - Where reaching a position needs the value to BE a valid structure, seed a **valid
+    exemplar** per position; the exemplars deliver reach, and the derived leaf literals
+    only broaden the hostile corpus. Mutation-measured: removing the literals leaves the
+    reach table byte-identical.
+  - **Amendment 3:** no number describing the test apparatus may appear in prose unless a
+    test asserts it. Two tests enforce it.
+
+  An earlier version of this entry said the position set must be derived and that every
+  *guarded body* needs a control. Both were overstatements of what was built; the
+  correction is above. Full history and measured figures in `plan-phase4.md`.
 - **The combined public export surface of `workspaceMapping` + `workspaceBindingChecks` exceeds
   CLAUDE.md’s per-module ceiling of 12** (15 and 20). The split that brought both files under
   the 500-line ceiling forced **ten** internal helpers to become exported — the count was

@@ -36,7 +36,7 @@
  * splitting this function. The authoritative, scoped statement lives in
  * `./workspaceBindingChecks` beside the code that implements it, and this header does not
  * restate it — two copies of a bound is how one of them goes stale.
- * * ## The project-level rule is a DISCLOSURE requirement, not a threshold
+ * ## The project-level rule is a DISCLOSURE requirement, not a threshold
  *
  * A student finished 20 of 20 stories, platform-verified, and could not run her own product:
  * twelve services unreachable, nothing chaining them. Per-task LC-08 cannot catch that, because

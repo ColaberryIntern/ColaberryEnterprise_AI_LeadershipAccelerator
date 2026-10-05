@@ -37,10 +37,16 @@
  * in a **hand-written** position table, and asserts zero throws. Same seed, same corpus,
  * every run.
  *
- * **"Hand-written" is stated, not glossed.** An earlier version of this sentence said "a derived
- * table", which was false: the **keyspace** and the **leaf value space** are derived from these
- * two source files, but the 34 positions are a literal array someone wrote. A verifier caught
- * the overstatement in the very commit that existed to fix overstatement.
+ * **"Hand-written" is stated, not glossed.** An earlier version said "a derived table",
+ * which was false: the **keyspace** and the **leaf value space** are derived from these two
+ * source files, but the position table is a literal array someone wrote. A verifier caught the
+ * overstatement in the very commit that existed to fix overstatement.
+ *
+ * **No count appears here, under Amendment 3.** The previous version stated a count of the
+ * position table and the tables had already grown past it — a stale number inside the
+ * sentence written to correct a stale number. Two tests enforce the rule instead of
+ * carefulness: one fails if a module header states a present-tense count of the apparatus,
+ * and one fails on a duplicate position entry (the table had carried `ref.records[0]` twice).
  *
  * What makes the hand-written list safe is not derivation but a **per-position positive
  * control**: the suite fails and NAMES any position that cannot be reached past its guard.
@@ -259,11 +265,16 @@ function isPermissionView(v: unknown): boolean {
  * Every `JSON.parse`-producible value is refused rather than thrown on, in these positions:
  * the `bindings` argument and every position nested under it; the `proposedSurfaces`
  * argument; the `project` argument, its `tasks`/`roles`/`requirements` arrays and their
- * elements’ `id` and `title`; and the `headlessAcceptance` argument.
+ * elements’ `id`, `title` and `kind`; and the `headlessAcceptance` argument.
  *
  * **That list is the claim.** It is not a summary of a broader guarantee — it is exactly what
- * the generator reaches, each position carrying a positive control proving the corpus gets
- * there. Anything outside it is unproven, and an unproven position is how this sentence
+ * the generator reaches. **Every position in the tables carries a per-position reach
+ * control**, and the two whole-argument positions the claim also names (`proposedSurfaces`,
+ * `headlessAcceptance`) have their own reach controls as of this commit — a verifier found
+ * them named in the claim with none, so "each position carries a control" had been false for
+ * two of them.
+ *
+ * Anything outside the list is unproven, and an unproven position is how this sentence
  * became false five times.
  *
  * **Which mechanism does which job, because crediting the wrong one is its own error.**

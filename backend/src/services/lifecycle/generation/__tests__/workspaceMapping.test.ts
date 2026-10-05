@@ -266,7 +266,9 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
       if (leaf < 0.62) return '0';
       if (leaf < 0.75) return JSON.stringify(Math.floor(rnd() * 1e6) / 7);
       if (leaf < 0.78) return '""';
-      // A DERIVED union literal, so guards requiring one are reachable.
+      // A DERIVED union literal. It broadens the hostile corpus; it does NOT deliver reach
+      // — mutation-measured, removing this branch leaves the reach table byte-identical.
+      // The exemplars in VALID_AT are what make the union-guarded positions reachable.
       if (leaf < 0.92) return JSON.stringify(LITERALS[Math.floor(rnd() * LITERALS.length)]);
       return JSON.stringify(`s${Math.floor(rnd() * 9999)}`);
     }
@@ -326,7 +328,6 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     ['ref.permissionViews[0].visibleActions', (v) => refAt('permissionViews', [{ roleId: 'r', visibleActions: v }])],
     ['ref.permissionViews[0].visibleActions[0]', (v) => refAt('permissionViews', [{ roleId: 'r', visibleActions: [v] }])],
     ['ref.decisions', (v) => refAt('decisions', v)],
-    ['ref.records[0]', (v) => refAt('records', [v])],
   ];
 
   const base = () => ({ taskId: 't-intake', kind: 'workspace', ref: ref({ taskIds: ['t-intake'] }) });
@@ -406,8 +407,10 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
   const LITERALS = derivedLiterals();
 
   it('THE LEAF VALUE SPACE IS DERIVED: union literals the code compares against', () => {
-    // Without these the generator cannot clear a union guard, so the positions behind those
-    // guards are unreachable and any bound over them is unproven.
+    // These broaden the hostile corpus so union-shaped values are tried at every position.
+    // They do NOT deliver reach: measured, this branch contributes zero reach at every
+    // position, and the VALID_AT exemplars are what make union-guarded positions reachable.
+    // An earlier version of this comment claimed the opposite.
     for (const v of [
       'workspace', 'headless', 'internal', 'customer', 'TASK', 'DECISION',
       'owner_recorded', 'model_turn', 'scheduled_ingestion', 'system_to_system',
@@ -455,6 +458,29 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     'ref.audience': 'internal',
     'ref.permissionViews[0]': { roleId: 'role-counsel', visibleActions: ['approve'] },
   };
+
+  // ─── AMENDMENT 3, AS A CHECK RATHER THAN A PARAGRAPH.
+  //
+  // Ali adopted: no number describing the test may appear in prose unless a test asserts it.
+  // The failure it closes: "the 34 positions" was written into a module header, the tables
+  // then grew to 39, and the stale count sat inside the very sentence written to correct a
+  // stale sentence. Six passes of carefulness did not prevent that; a check does.
+
+  it('AMENDMENT 3: no module header states a count of this test apparatus', () => {
+    // Historical measurements ("5 of 27 positions were dead") are fine and deliberately not
+    // matched — they describe a past state, not a current one. What is banned is a
+    // present-tense count of the live table, because that is what goes stale.
+    for (const src of SOURCES) {
+      expect(src).not.toMatch(/the \d+ positions/);
+      expect(src).not.toMatch(/\d+ positions are/);
+    }
+  });
+
+  it('AMENDMENT 3: the position tables carry no duplicate entries', () => {
+    // `ref.records[0]` was listed twice, so the table had a dead row no reader would spot.
+    const names = [...PATHS, ...PROJECT_PATHS].map(([n]) => n);
+    expect(names).toEqual([...new Set(names)]);
+  });
 
   function corpus(): unknown[] {
     const rnd = lcg(20261005);
@@ -574,6 +600,37 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
     }
     expect(throws.slice(0, 5)).toEqual([]);
     expect(throws).toHaveLength(0);
+  });
+
+  it('THE TWO REMAINING CLAIMED POSITIONS have reach controls too', () => {
+    // A verifier found `proposedSurfaces` and `headlessAcceptance` named in the scoped claim
+    // with NO reach control — so "each position carries a positive control" was false for
+    // two of them. Adding the controls is cheaper than narrowing the claim, and these two
+    // can genuinely be reached: a well-formed value gets past the guard and is used.
+    let acceptanceReached = 0;
+    let proposedReached = 0;
+    const allHeadlessPair: TaskSurfaceBinding[] = [
+      headless('t-intake'), headless('t-review'),
+    ];
+
+    for (const v of corpus()) {
+      // headlessAcceptance: reach = the acceptance path ran and did NOT refuse, which only
+      // a well-formed owner-recorded acceptance achieves.
+      const withHostile = validateTaskSurfaces(
+        manualOnlyProject(), allHeadlessPair, v as never);
+      expect(Array.isArray(withHostile)).toBe(true);
+
+      // proposedSurfaces: reach = the filter ran over a real element and returned it.
+      const out = unboundProposedSurfaces([v as never, 'Definitely Unbound'], [ws('t-x')]);
+      if (out.includes('Definitely Unbound')) proposedReached += 1;
+    }
+    // The exemplar for the acceptance position, same discipline as VALID_AT.
+    if (validateTaskSurfaces(manualOnlyProject(), allHeadlessPair, ACCEPTED).length === 0) {
+      acceptanceReached += 1;
+    }
+
+    expect(acceptanceReached).toBeGreaterThan(0);
+    expect(proposedReached).toBeGreaterThan(0);
   });
 
   it('A NON-ARRAY bindings argument is REFUSED, not silently treated as empty', () => {

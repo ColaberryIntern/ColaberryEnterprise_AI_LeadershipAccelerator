@@ -54,7 +54,9 @@ value is refused rather than thrown on in: the `bindings` argument and every pos
 under it; `proposedSurfaces`; the `project` argument, its three arrays, and their elements’
 `id`, `title` and `kind`; and `headlessAcceptance`.
 
-**Each position carries a PER-POSITION positive control** — the suite fails and names any
+**Each position in the tables carries a PER-POSITION positive control**, and so do the two
+whole-argument positions this list names (`proposedSurfaces`, `headlessAcceptance`), which had
+none until a verifier found them claimed without one — the suite fails and names any
 position it cannot reach past its guard. The aggregate version of that control passed while
 **5 of 27 positions were dead**, an average hiding five zero rows, which is why it is now
 per position. Reach itself comes from a valid exemplar seeded at each position, not from the
