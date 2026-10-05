@@ -66,7 +66,7 @@ describe('syncPursuedGovOpportunities (runner, mocked DB/feed)', () => {
     (FLAGS as any).govDailySync = true;
     setupQuery({ claimed: true, state: { [GWS]: { closeDate: '2026-10-22', present: true, syncedAt: 'x', change: null } } });
     findAll.mockResolvedValue([{ canonical_opportunity_id: GWS, bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2 }]);
-    fetchBestFitOpportunities.mockResolvedValue([{ uuid: UUID, closeDate: '2026-11-05' }]);
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [{ uuid: UUID, closeDate: '2026-11-05' }] });
     const r = await syncPursuedGovOpportunities();
     expect(r).toMatchObject({ checked: 1, changed: 1 });
     expect(r.changes[0].change.kind).toBe('deadline_changed');
@@ -79,7 +79,7 @@ describe('syncPursuedGovOpportunities (runner, mocked DB/feed)', () => {
     (FLAGS as any).govDailySync = true;
     setupQuery({ claimed: true, state: { [GWS]: { closeDate: '2026-10-22', present: true, syncedAt: 'x', change: null } } });
     findAll.mockResolvedValue([{ canonical_opportunity_id: GWS, bidding_entity: 'colaberry', decision: 'approved_bid_pursuit', version: 3 }]);
-    fetchBestFitOpportunities.mockResolvedValue([]); // no longer in the feed
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [] }); // no longer in the feed
     const r = await syncPursuedGovOpportunities();
     expect(r.changes[0].change.kind).toBe('dropped_from_feed');
     expect(writtenState()[GWS].present).toBe(false);
@@ -89,7 +89,7 @@ describe('syncPursuedGovOpportunities (runner, mocked DB/feed)', () => {
     (FLAGS as any).govDailySync = true;
     setupQuery({ claimed: true, state: {} });
     findAll.mockResolvedValue([{ canonical_opportunity_id: 'op:gov:0000000000000000000000000000aaaa', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 1 }]);
-    fetchBestFitOpportunities.mockResolvedValue([]);
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [] });
     const r = await syncPursuedGovOpportunities();
     expect(r.checked).toBe(0);
   });

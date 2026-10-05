@@ -100,11 +100,13 @@ export async function syncPursuedGovOpportunities(): Promise<GovSyncResult> {
   const cohort = Array.from(latestByThread.values()).filter(
     (r) => PURSUED_DECISIONS.includes(String(r.decision)) && GWS_RE.test(String(r.canonical_opportunity_id)));
 
-  // One feed read for all; fail-closed: on a feed error record nothing and report.
+  // One feed read for all; fail-closed: on a feed error record nothing and report. fetchBestFitOpportunities
+  // returns a GovOpportunityFeed ({ opportunities, source, ... }), so read the rows off `.opportunities`.
   let feed: any[] = [];
-  try { feed = await fetchBestFitOpportunities(); } catch { return { skipped: 'feed_unavailable', checked: 0, changed: 0, changes: [] }; }
+  try { const res: any = await fetchBestFitOpportunities(); feed = Array.isArray(res?.opportunities) ? res.opportunities : []; }
+  catch { return { skipped: 'feed_unavailable', checked: 0, changed: 0, changes: [] }; }
   const byUuid = new Map<string, any>();
-  for (const o of Array.isArray(feed) ? feed : []) if (o && o.uuid) byUuid.set(String(o.uuid).toLowerCase(), o);
+  for (const o of feed) if (o && o.uuid) byUuid.set(String(o.uuid).toLowerCase(), o);
 
   const state = await readSyncState();
   const now = new Date().toISOString();
