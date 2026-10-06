@@ -95,4 +95,68 @@ router.get('/api/admin/presentation/cohorts/:cohortId/readiness', requireAdmin, 
   } catch (e) { fail(res, e, next); }
 });
 
+/**
+ * POINTING A WHOLE COHORT AT ONE LIVE SESSION — two routes, never one.
+ *
+ * `plan` is a pure read: the service it calls contains no write statement of any
+ * kind, so it cannot write however it is called. `commit` is the only writer, and it
+ * takes the plan back as INPUT — which makes the plan untrusted on the return trip.
+ * The service therefore re-verifies every row's cohort and story against the database
+ * and skips anything that no longer matches. The plan decides what to consider, never
+ * whether it is allowed.
+ *
+ * A single `dryRun` flag on one endpoint would be one forgotten `if` away from
+ * rebinding forty students' demo slots, which is why this is shaped as two.
+ *
+ * Neither route completes a task or awards anything. Mapping a student to a room says
+ * where they will present, not that they presented.
+ */
+const planBody = z.object({
+  cohort_id: z.string().uuid(),
+  story_id: z.string().trim().min(1).max(60),
+  booking_id: z.string().uuid(),
+}).strict();
+
+router.post('/api/admin/presentation/session-map/plan', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const b = planBody.parse(req.body || {});
+    const { planSessionMap } = await import('../../services/presentation/presentationSessionMap');
+    res.json(await planSessionMap({ cohortId: b.cohort_id, storyId: b.story_id, bookingId: b.booking_id }));
+  } catch (e) { fail(res, e, next); }
+});
+
+// The plan is echoed back whole. Shape-checked only — its CONTENTS are re-proved
+// against the database by the service, because anything the client returns to us is
+// something the client could have invented.
+const commitBody = z.object({
+  plan: z.object({
+    dry_run: z.literal(true),
+    bookingId: z.string().uuid(),
+    cohortId: z.string().uuid(),
+    storyId: z.string().trim().min(1).max(60),
+    rows: z.array(z.object({
+      assignmentId: z.string().uuid(),
+      projectId: z.string().uuid(),
+      storyId: z.string().trim().min(1).max(60),
+      cohortId: z.string().uuid().nullable(),
+      attemptId: z.string().uuid().nullable(),
+      currentBookingId: z.string().uuid().nullable(),
+      outcome: z.enum(['will_map', 'already_mapped', 'will_remap', 'blocked_no_booking']),
+      actions: z.array(z.string()),
+      blocked_reason: z.string().nullable(),
+    })).max(500),
+  }).passthrough(),
+}).strict();
+
+router.post('/api/admin/presentation/session-map/commit', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const b = commitBody.parse(req.body || {});
+    const actorId = String((req as any).admin?.email || (req as any).admin?.sub || 'admin');
+    const { commitSessionMap } = await import('../../services/presentation/presentationSessionMap');
+    res.json(await commitSessionMap({ plan: b.plan as any, actorId }));
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;
