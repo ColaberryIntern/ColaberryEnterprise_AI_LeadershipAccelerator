@@ -255,6 +255,12 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
   let sync: any = null;
   try { const { getGovSyncEntry } = await import('./govOpportunitySync'); sync = await getGovSyncEntry(gwsKey); } catch { sync = null; }
+  // Phase 3: advisory "have we pursued this agency before?" — read-only, best-effort, gates nothing.
+  let relationship: any = null;
+  try {
+    const { getAgencyRelationship } = await import('./govRelationship');
+    relationship = await getAgencyRelationship(tenantId, gwsKey, provenance ? provenance.agency : null);
+  } catch { relationship = null; }
   return {
     canonicalOpportunityId: gwsKey,
     sourceLive: false,
@@ -270,6 +276,7 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     provenance,
     zipAttestation,
     dossier,
+    relationship,
     changedSource: false,
     lastSyncedAt: sync ? sync.syncedAt : null,
     syncChange: sync && sync.change && sync.change.kind !== 'none' ? sync.change : null,

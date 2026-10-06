@@ -11,8 +11,9 @@ jest.mock('../../../models/GovQualification', () => ({
   __esModule: true,
   default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
 }));
-// getDecoupledWorkspace reads the daily-sync state; keep that DB-free in these unit tests.
+// getDecoupledWorkspace reads the daily-sync state + the agency relationship; keep both DB-free in these unit tests.
 jest.mock('../govOpportunitySync', () => ({ getGovSyncEntry: jest.fn().mockResolvedValue(null) }));
+jest.mock('../govRelationship', () => ({ getAgencyRelationship: jest.fn().mockResolvedValue({ agency: null, priorCount: 0, pursuits: [] }) }));
 
 import {
   evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,
@@ -522,6 +523,15 @@ describe('getDecoupledWorkspace — canApprove from ZIP coverage + requirement b
     expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toEqual(dossier);
     findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
     expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toBeNull();
+  });
+
+  it('Phase 3: surfaces the agency relationship, and is null when the lookup throws (best-effort)', async () => {
+    const { getAgencyRelationship } = require('../govRelationship');
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    getAgencyRelationship.mockResolvedValueOnce({ agency: 'Harris County', priorCount: 1, pursuits: [{ canonicalOpportunityId: 'gws:other', title: 'Prior RFP', agency: 'Harris County', decision: 'no_bid', date: null }] });
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toMatchObject({ agency: 'Harris County', priorCount: 1 });
+    getAgencyRelationship.mockRejectedValueOnce(new Error('db down'));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toBeNull();
   });
 });
 
