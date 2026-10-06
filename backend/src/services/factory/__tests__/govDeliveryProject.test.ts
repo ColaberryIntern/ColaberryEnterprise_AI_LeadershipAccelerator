@@ -14,7 +14,8 @@ const dpFindOne = jest.fn();
 const dpCreate = jest.fn();
 jest.mock('../../../models/DeliveryProject', () => ({ __esModule: true, default: { findOne: (...a: any[]) => dpFindOne(...a), create: (...a: any[]) => dpCreate(...a) } }));
 const ctFindOrCreate = jest.fn();
-jest.mock('../../../models/ContractTrack', () => ({ __esModule: true, default: { findOrCreate: (...a: any[]) => ctFindOrCreate(...a) } }));
+const ctUpdate = jest.fn();
+jest.mock('../../../models/ContractTrack', () => ({ __esModule: true, default: { findOrCreate: (...a: any[]) => ctFindOrCreate(...a), update: (...a: any[]) => ctUpdate(...a) } }));
 const crFindOne = jest.fn();
 const crCreate = jest.fn();
 const crUpdate = jest.fn();
@@ -23,8 +24,13 @@ jest.mock('../../../models/ContractRequirement', () => ({ __esModule: true, defa
 } }));
 const gqUpdate = jest.fn();
 jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default: { update: (...a: any[]) => gqUpdate(...a) } }));
+// linkGovBuildToStudentProject dynamically imports these; stub the models (no sequelize.define in CI) and the bridge.
+jest.mock('../../../models/Project', () => ({ __esModule: true, default: {} }));
+jest.mock('../../../models/DeliveryProjectSourceLink', () => ({ __esModule: true, default: {} }));
+const linkStudentProject = jest.fn();
+jest.mock('../../delivery/projectSourceLink', () => ({ linkStudentProject: (...a: any[]) => linkStudentProject(...a) }));
 
-import { ensureGovTwoTrackProject, govProjectSlug, toContractRequirementRow, GovContainerUnavailableError } from '../govDeliveryProject';
+import { ensureGovTwoTrackProject, govProjectSlug, toContractRequirementRow, classifyRequirementTracks, linkGovBuildToStudentProject, GovContainerUnavailableError } from '../govDeliveryProject';
 
 const GWS = 'gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec';
 
@@ -38,10 +44,10 @@ describe('govProjectSlug (pure, deterministic)', () => {
 });
 
 describe('toContractRequirementRow (pure) — honest mapping, never fabricates evidence', () => {
-  it('maps the fields and keeps evidence_state unassessed, both tracks, deterministic id', () => {
-    const r1 = toContractRequirementRow('dp-1', { id: 'REQ-001', text: 'Register in SAM.gov', bindingStatus: 'binding_solicitation_requirement', section: 'L.3', sourceDocument: 'rfp.pdf' });
+  it('maps the fields and keeps evidence_state unassessed, both tracks for a technical req, deterministic id', () => {
+    const r1 = toContractRequirementRow('dp-1', { id: 'REQ-001', text: 'The system shall provide a claims search database', bindingStatus: 'binding_solicitation_requirement', section: 'L.3', sourceDocument: 'rfp.pdf' });
     expect(r1).toMatchObject({
-      delivery_project_id: 'dp-1', canonical_req_id: 'REQ-001', statement: 'Register in SAM.gov',
+      delivery_project_id: 'dp-1', canonical_req_id: 'REQ-001', statement: 'The system shall provide a claims search database',
       priority: 'must', tracks: ['proposal', 'solution_build'], evidence_state: 'unassessed',
       human_confirmed: true, section: 'L.3', source_document: 'rfp.pdf',
     });
@@ -51,6 +57,26 @@ describe('toContractRequirementRow (pure) — honest mapping, never fabricates e
   it('non-binding -> priority should; a requirement with no id -> null (skipped)', () => {
     expect(toContractRequirementRow('dp', { id: 'R', text: 't' })!.priority).toBe('should');
     expect(toContractRequirementRow('dp', { text: 'no id' })).toBeNull();
+  });
+});
+
+describe('classifyRequirementTracks (pure) — admin forms never reach the build track', () => {
+  it('every requirement maps to proposal', () => {
+    for (const t of ['The system shall provide a search database', 'Submit the pricing schedule', 'anything at all'])
+      expect(classifyRequirementTracks({ text: t })).toContain('proposal');
+  });
+  it('a technical/solution requirement ALSO maps to solution_build', () => {
+    expect(classifyRequirementTracks({ text: 'The system shall provide a claims search database' })).toEqual(['proposal', 'solution_build']);
+    expect(classifyRequirementTracks({ text: 'Provide a data migration and reporting dashboard' })).toContain('solution_build');
+    expect(classifyRequirementTracks({ text: 'generic', section: 'Technical Requirements' })).toContain('solution_build');
+  });
+  it('an ADMINISTRATIVE requirement is proposal-ONLY (no build story generated)', () => {
+    for (const t of ['Complete the Execution of Offer form and sign it', 'Submit the Pricing Schedule', 'Offeror shall be registered in SAM.gov', 'Provide a certification of insurance', 'Complete the Exceptions Schedule', 'Texas Family Code schedule', 'Submit three references'])
+      expect(classifyRequirementTracks({ text: t })).toEqual(['proposal']);
+  });
+  it('is total on empty/garbage input (still proposal)', () => {
+    expect(classifyRequirementTracks({})).toEqual(['proposal']);
+    expect(classifyRequirementTracks(null)).toEqual(['proposal']);
   });
 });
 
@@ -147,5 +173,35 @@ describe('ensureGovTwoTrackProject (orchestration, mocked models)', () => {
     expect(res).toMatchObject({ created: false, tracks: 2, requirements: 1 });
     expect(dpCreate).not.toHaveBeenCalled();
     expect(crCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('linkGovBuildToStudentProject — sets the build link ONLY on a real, existence-checked link', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('happy path: creates the bridge, then wires ONLY the solution_build track', async () => {
+    linkStudentProject.mockResolvedValue({ ok: true, linkId: 'L1', created: true });
+    ctUpdate.mockResolvedValue([1]);
+    const res = await linkGovBuildToStudentProject({ deliveryProjectId: 'dp', studentProjectId: 'sp', reason: 'intern build' });
+    expect(res).toEqual({ ok: true, linkId: 'L1', created: true });
+    expect(linkStudentProject).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp', studentProjectId: 'sp', reason: 'intern build' }));
+    expect(ctUpdate).toHaveBeenCalledTimes(1);
+    expect(ctUpdate.mock.calls[0][0]).toEqual({ solution_student_project_id: 'sp' });     // the column it sets
+    expect(ctUpdate.mock.calls[0][1].where).toEqual({ delivery_project_id: 'dp', track_type: 'solution_build' }); // proposal track untouched
+  });
+
+  it('refusal (no such student project) -> wires NOTHING (never fabricates a link)', async () => {
+    linkStudentProject.mockResolvedValue({ ok: false, reason: 'no_such_student_project', message: 'x' });
+    const res = await linkGovBuildToStudentProject({ deliveryProjectId: 'dp', studentProjectId: 'nope', reason: 'r' });
+    expect(res).toMatchObject({ ok: false, reason: 'no_such_student_project' });
+    expect(ctUpdate).not.toHaveBeenCalled();
+  });
+
+  it('idempotent: re-linking returns created:false and still wires the track', async () => {
+    linkStudentProject.mockResolvedValue({ ok: true, linkId: 'L1', created: false });
+    ctUpdate.mockResolvedValue([1]);
+    const res = await linkGovBuildToStudentProject({ deliveryProjectId: 'dp', studentProjectId: 'sp', reason: 'r' });
+    expect(res).toMatchObject({ ok: true, created: false });
+    expect(ctUpdate).toHaveBeenCalledTimes(1);
   });
 });
