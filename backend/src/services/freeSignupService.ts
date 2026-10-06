@@ -29,6 +29,32 @@ export interface FreeSignupInput {
    * this argument exists to make impossible.
    */
   programme: FreeAccountProgramme;
+
+  /**
+   * Acquisition evidence, Phase 2 T204. Optional throughout, and absent means
+   * **not known** — recorded as null rather than defaulted, because a default
+   * here would invent attribution that nobody can later distinguish from a real
+   * measurement.
+   *
+   * Deliberately kept apart from `programme`: these say where the person came
+   * from, `programme` says what they joined. **Origin brand is not journey
+   * ownership** — someone arriving from a non-learner brand's page can still be a
+   * free AI learner, and the two facts live in different columns in different
+   * tables so neither can overwrite the other. Origin brand is DERIVED, via
+   * `Lead.source_id → LeadSource.brand_id`, so there is no second brand column to
+   * disagree with the first.
+   */
+  acquisition?: {
+    source?: string;
+    form_type?: string;
+    source_id?: number;
+    entry_point_id?: number;
+    utm_source?: string;
+    utm_campaign?: string;
+    page_url?: string;
+    referrer?: string;
+    visitor_id?: string;
+  };
 }
 
 export interface FreeSignupResult {
@@ -87,16 +113,33 @@ export function guestEnrollmentDefaults(clean: FreeAccountIdentity) {
  * nurture like an inbound enquiry, and they should not silently join those
  * lists.
  */
-async function captureGuestAsLead(clean: FreeAccountIdentity): Promise<void> {
+async function captureGuestAsLead(
+  clean: FreeAccountIdentity,
+  acquisition: FreeSignupInput['acquisition'],
+): Promise<void> {
   try {
     await Lead.findOrCreate({
       where: { email: clean.email },
       defaults: {
         name: clean.full_name,
         email: clean.email,
-        source: 'free_signup',
-        form_type: 'free_signup',
+        // The caller's own source wins when supplied, so a signup that arrived
+        // through a named entry point keeps that provenance. `free_signup` stays
+        // the fallback, and is still what makes these rows identifiable and
+        // excludable in campaign segments.
+        source: acquisition?.source || 'free_signup',
+        form_type: acquisition?.form_type || 'free_signup',
         status: 'engaged',
+        // Acquisition evidence. `?? null` rather than `|| null` so that a
+        // deliberate 0 or empty string is preserved instead of being swallowed,
+        // and so "absent" lands as NULL rather than as an invented default.
+        source_id: acquisition?.source_id ?? null,
+        entry_point_id: acquisition?.entry_point_id ?? null,
+        utm_source: acquisition?.utm_source ?? null,
+        utm_campaign: acquisition?.utm_campaign ?? null,
+        page_url: acquisition?.page_url ?? null,
+        referrer: acquisition?.referrer ?? null,
+        visitor_id: acquisition?.visitor_id ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
       } as any,
     });
@@ -146,7 +189,7 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     } catch { /* never allowed to affect signup */ }
   })();
 
-  await captureGuestAsLead(clean);
+  await captureGuestAsLead(clean, input.acquisition);
 
   return {
     jwt: signParticipantJwt(enrollment),

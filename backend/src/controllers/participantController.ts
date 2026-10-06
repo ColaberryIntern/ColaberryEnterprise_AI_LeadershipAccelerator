@@ -7,6 +7,7 @@ import {
 } from '../services/participantService';
 import { joinLiveSession, leaveMeetingSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
+import { portalFreeSignupSchema } from '../schemas/enrollmentSchema';
 import { getPointsSummary } from '../services/pointsService';
 import { getBandForEnrollment } from '../services/progression/progressionService';
 import { resolveBuildEntitlement } from '../middlewares/requireBuildEntitlement';
@@ -229,19 +230,25 @@ export async function handleRsvpOpenHouse(req: Request, res: Response, next: Nex
 
 export async function handleFreeSignup(req: Request, res: Response, next: NextFunction) {
   try {
-    const { full_name, email } = req.body || {};
-    if (!full_name || !email || typeof email !== 'string') {
-      return res.status(400).json({ error: 'full_name and email are required' });
+    // Phase 2 T204: a Zod schema replaces two hand-rolled `if` checks. This route
+    // is UNAUTHENTICATED and now accepts caller-supplied URLs, UTM values and a
+    // visitor id, which is exactly when CLAUDE.md's Contract Enforcement Layer
+    // applies rather than being a formality. The schema's messages reproduce the
+    // two original strings, so existing clients see no change on the paths they
+    // already exercise.
+    const parsed = portalFreeSignupSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      // Zod v4: `.issues`, not `.errors`.
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid signup' });
     }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
-      return res.status(400).json({ error: 'A valid email is required' });
-    }
+    const { full_name, email, ...acquisition } = parsed.data;
+
     // 'learner': this is the public free-AI signup, so the account joins the
     // Explorer programme and is visible to Explorer Growth from the moment it
     // exists. Before this argument existed, accounts created here carried
     // `tier: 'guest'` and no `enrollment_type`, which made them free AI learners
     // the growth engine could not see.
-    const result = await createFreeAccount({ full_name: String(full_name), email, programme: 'learner' });
+    const result = await createFreeAccount({ full_name, email, programme: 'learner', acquisition });
     res.status(result.created ? 201 : 200).json(result);
   } catch (err) { next(err); }
 }
