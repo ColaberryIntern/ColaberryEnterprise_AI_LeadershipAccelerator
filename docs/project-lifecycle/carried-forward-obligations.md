@@ -401,3 +401,54 @@ were recorded rather than patched mid-phase.
 - **`factoryContract.test.ts` pins the decomposition schema as an exact set** — `required`, the
   exact `Object.keys(properties)`, and `additionalProperties: false`. Update it to the new exact set
   when you add a key; do not relax it to a subset check, because the exactness is the whole value.
+
+---
+
+## Phase 4 open items (P4-T4), and three corrections from the P4-T2 verification
+
+### Obligations
+
+- **`ProcessRecord.exceptions` has no documented meaning and no reader.** `string[]` on
+  `factoryContract.ts`, no doc comment, and the only `.exceptions` reference under
+  `services/lifecycle/` is `designAlternatives.ts` deciding NOT to read it. Every sibling
+  field on that record holds prose. **Whoever gives the field a meaning owns joining it to**
+  `exceptionTaskIds()`; until then `is_rework` is the only exception source, by design.
+- **The reference corpus has zero rework edges, and Fixture B is supposed to have one.**
+  All eight transitions in `referenceFixtures.ts` + `manualOnly.ts` are `is_rework: false`,
+  and every `ProcessRecord` has `exceptions: []`. `reference-fixtures.md` asserts for
+  Fixture B that "the appeals path is a real exception/rework edge in the transition graph,
+  not an orphan task" — **that coverage claim is not met by the code fixture.** Not fixed
+  here: the fixture is shared with Phase 3’s suites, so changing it is a Phase 7 corpus
+  change, not a side effect of a Phase 4 task. P4-T4 supplies its own rework input instead.
+- **`deliveryDesignLoop.ts` exported 20 public symbols when measured on 2026-10-06, against
+  a hard ceiling of 12.** P4-T4
+  avoided widening it by adding nothing to it, which is not the same as fixing it. The split
+  is the obligation of the next task that needs to ADD a symbol there.
+- **`controlSurfaceExists()` still has no production call site.** Found by the P4-T2
+  verifier, and it is a precise point: `designBrief.DesignFacts.controlSurfaceExists` is a
+  **passed boolean of the same name**, and the claim is genuinely gated on it in both
+  directions — but nothing calls the function, and nothing supplies the field, because no
+  design-stage orchestrator exists yet. **The phase that builds that orchestrator closes the
+  wire.** A composition test now pins that the function’s output fits the field, so the two
+  halves cannot drift apart while the wire is open.
+
+### Corrections made to earlier Phase 4 records
+
+- The P4-T3 session entry claimed "this is where `controlSurfaceExists()` stops being a
+  producer with no consumer". **True of the boolean field, not of the function**, and the
+  entry has been corrected rather than left to read as if the wire were closed.
+- `workspace-and-control-design.md` §8 said the only tree reference to the three agent
+  execution limits outside their definitions is a doc comment. **That is exact for the three
+  CHECK FUNCTIONS and false for the three COLUMNS**, which are read in the resource monitor,
+  the Reese agent detail service and the frontend. Scoped.
+- §12 said "a test asserts this table equals the emittable set in both directions". The test
+  asserted `CONTROL_CODES` against the emittable set; **nothing asserted the markdown table
+  against `CONTROL_CODES`.** A test now parses the table out of the doc and asserts
+  set-equality, following the `readFileSync` precedent in `workspaceMapping.test.ts`.
+
+### A trap worth knowing: jest here cannot see a type error
+
+`ts-jest` runs with `isolatedModules`, which strips types without checking them. P4-T4’s two
+modules passed their suites **green with three real `tsc` errors in them** — a widened
+`includes` that narrowed nothing, and an `Array.isArray` on a `ReadonlyArray` silently
+producing `any[]`. A green jest run is not a typecheck, and only `tsc --noEmit` is.

@@ -284,7 +284,11 @@ they work."*
 **The dummy switch §4.5 forbids is already shipped in this repository.** `AiAgent` persists
 `max_runs_per_hour`, `max_writes_per_execution` and `max_proposals_per_run`;
 `agentPermissionService` has a check function for each; **all three have zero call sites**.
-Outside their own definitions the only reference in the tree is a doc comment. Meanwhile
+Outside their own definitions the only reference to **those three check functions** is a
+doc comment. The three **columns** are read in several places — the agent resource monitor,
+the Reese agent-detail service and the frontend — which is the asymmetry that matters: the
+numbers are displayed, and the functions that would enforce them are called by nobody.
+Meanwhile
 `AgentTrustControlArchitecture.tsx:24` renders them to a human as
 `` `Not set — ${fallback} applies` `` — a sentence asserting an enforcement that does not exist.
 Two independent verifiers confirmed the zero.
@@ -357,9 +361,10 @@ ladders exist to refuse. An approver role the project does not declare is refuse
 
 True only when at least one control is genuinely enforced with a named site. Tested in **both**
 directions, plus the case that matters: an `enforced` claim with no call site returns **false**,
-because the claim alone is not a surface. P4-T3 consumes it — the design brief populates
-`controls` only when it is true, so an all-unavailable specification produces an **open fact**
-rather than an empty array that reads like "no controls needed".
+because the claim alone is not a surface. P4-T3 is **shaped to consume it** — the design brief populates
+`controls` only when a `controlSurfaceExists` boolean is true, so an all-unavailable
+specification produces an **open fact** rather than an empty array that reads like "no
+controls needed". **Nothing calls this function in production.** See §15.
 
 ## Refusal codes
 
@@ -378,7 +383,11 @@ rather than an empty array that reads like "no controls needed".
 | `CONTROL_EFFECTIVE_AT_INVALID` | An unparseable effective time |
 | `CONTROL_PREVIEW_ABSENT` | `previewDiff: false` — declaring it false declares non-compliance |
 
-A test asserts this table equals the emittable set in both directions.
+Two tests, because one sentence used to claim both and only one was true: one asserts
+`CONTROL_CODES` equals the **emittable** set in both directions, and one parses the
+`CONTROL_`-prefixed rows **out of this file** and asserts they equal `CONTROL_CODES`. The
+second was missing until the P4-T2 verifier pointed out that nothing checked this table
+against the code at all.
 
 ## What P4-T2 does not do
 
@@ -418,11 +427,26 @@ would put lifecycle noise into a sales artifact. A caller that supplies *some* f
 a claim, and whatever is missing from it is opened. A test pins both halves — this was caught by
 that test rather than by reading.
 
-## 15. This is where `controlSurfaceExists()` becomes load-bearing
+## 15. The brief is SHAPED to consume `controlSurfaceExists()`, and nothing calls it yet
 
-P4-T2 shipped the predicate; until now nothing consumed it, which in this repo is a named
-failure mode. The brief populates `controls` **only** when the predicate is true AND there is
-at least one showable control. Otherwise it opens a fact.
+**This section overstated its case and an independent verifier caught it.** It read "this is
+where `controlSurfaceExists()` becomes load-bearing… until now nothing consumed it". What is
+true: the brief populates `controls` **only** when a `controlSurfaceExists` **boolean** is
+true AND there is at least one showable control, and otherwise opens a fact — a claim that is
+genuinely gated and tested in both directions. What is false: that the predicate now has a
+consumer. `grep -rn controlSurfaceExists backend/src frontend/src` returns its own definition
+and its own test, and nothing supplies the field either, because **no design-stage
+orchestrator exists yet**. The phase that builds one closes the wire; the register holds it
+with an owner.
+
+Why the decoupling is deliberate rather than an oversight: `delivery/` importing from
+`lifecycle/generation/` would invert the only direction this repo uses (measured 2026-10-06:
+four import sites run that way and zero run this way), so `showableControls` mirrors the shape instead, with
+`enforcedBy` widened to `string`. A hand-mirrored type is exactly how two definitions drift
+apart, so the mirror is pinned on the lifecycle side: a composition test passes
+`renderControlAvailability().showable` and `controlSurfaceExists()` straight into
+`buildDesignBrief` and asserts both branches, which makes `tsc` check the assignability at
+the one place the data actually crosses.
 
 The predicate is **passed, never inferred from the array length**, and that distinction is the
 point:
@@ -435,3 +459,122 @@ point:
 
 An empty array would assert "no controls are needed". The middle row is the whole argument of
 Part 2, and flattening it into `controls: []` would undo it.
+
+---
+
+# Part 4 — interactive alternatives and the selected design (P4-T4)
+
+Implementation: `backend/src/services/lifecycle/generation/designAlternatives.ts` and
+`designSelection.ts`.
+
+## 16. Why these are two NEW modules rather than an edit to `deliveryDesignLoop.ts`
+
+The phase-4 plan named `delivery/deliveryDesignLoop.ts` as the file to edit. It is not,
+for two reasons that were measured rather than argued:
+
+1. **That file exported 20 public symbols when measured on 2026-10-06**, above CLAUDE.md’s hard ceiling of 12.
+   The rule for an over-ceiling file is that the next change MUST split it before adding
+   new code, so piling this task’s vocabulary on top would have widened a breach.
+2. **The dependency direction runs `lifecycle/generation` → `delivery`** and never the
+   reverse: measured 2026-10-06, four import sites that way and zero the other way. This code consumes `TaskSurfaceBinding` from P4-T1, so
+   putting it under `delivery/` would have inverted an established direction to satisfy a
+   path in a plan.
+
+`MIN_VARIANTS` and `MAX_VARIANTS` are **imported** from `deliveryDesignLoop`, so there is
+still exactly one definition of the variant bounds. The `too_few_variants` /
+`too_many_variants` warnings stay where they are and keep their severity: duplicating them
+here would create a second source for one rule, and the two layers compose correctly as it
+is — the existing warning notes a thin option set, and §18 below makes it blocking unless a
+human accepted it.
+
+## 17. The alternatives are a derivation, which is what lets the comparator be structural
+
+`generateDesignAlternatives()` makes **no model call**. It projects the process graph and
+P4-T1’s bindings onto the three patterns §4.5 names — queue/detail, case workspace, and
+exception-first — and nothing else. A fourth pattern would be this module’s opinion about UX
+presented to a human as a thing the system supports.
+
+Two consequences, and they are the reason for the choice:
+
+- **"Do these two options actually differ?" becomes a structural question.** The fingerprint
+  is built from TASK ids and navigation depth, and deliberately not from workspace ids, slot
+  ids, titles or actions. Task ids arrive from the process graph; everything else is minted
+  by the design step and can be renamed at will. A fingerprint that read a workspace id would
+  call "rename the dashboard" a different design, which is the exact failure §4.5’s
+  "genuinely different" wording exists to prevent.
+- **The phase has no unbounded loop.** There is nothing to retry until the options look
+  varied enough.
+
+The comparator is exported and tested directly against hand-written structures. A comparator
+only ever checked against structures the same module generated proves the two agree, not that
+either is right.
+
+## 18. One structure is an answer; ZERO is the refusal
+
+A short linear process can honestly admit one shape. Refusing there would strand the
+manual-only case, and padding to two would ship the "one proposal presented as a choice"
+that `deliveryDesignLoop` already warns about, with the warning suppressed.
+
+So a sole structure is **recorded**, with a rationale and a named human who accepted it —
+the shape this repo already uses for a below-target AI share. `ALTERNATIVES_NO_STRUCTURE` is
+reserved for zero structures, which is not a thin design but a process graph that produced
+nothing a human can stand in front of.
+
+**The plan predicted Fixture D was itself the degenerate case. Measured, it is not.** With
+both of its business tasks on surfaces, D yields two structurally distinct options: a queue
+of contracts routing into a review detail, and one case workspace holding both actions. D
+becomes the one-structure case when its intake is read as an **ingestion step** rather than a
+screen job — so degeneracy is a property of the **bindings**, not of the fixture. Both
+readings are tested, and the one-structure reading reaches `design_ready` once the acceptance
+is recorded, which was the fixture’s stated purpose all along.
+
+## 19. The five journeys are declared, and one may be waived by a named human
+
+§4.5 requires normal success, approval, rejection/revision, uncertain/failed AI result, and
+human takeover. Each is either **declared** as steps over the selected structure, or declared
+**not applicable** with a reason, a named acceptor, and an `origin`.
+
+The second branch is not a loophole, it is the manual-only case: a project with no software
+actor has no uncertain AI result to show and nothing for a human to take over from, and a
+rule demanding those journeys anyway would punish the honest answer — the same mistake as
+demanding an agent roster from Fixture D. What it must not be is **silent**, which is why the
+waiver carries the same rationale/acceptor/origin triple as every other waiver in this phase,
+and why `origin: 'model_turn'` is refused.
+
+A step must name a task **and** the workspace that actually serves it in the chosen
+structure. Checking only the task id would accept a journey walking through a screen the
+design does not have, which is how a demo script drifts from the design it claims to show.
+
+## 20. The selection record, and why the ref carries two things
+
+`selectedDesignRef` is `<alternativeId>@vc<revision>`. §4.5 requires the approval record to
+reference the selected variant **and** the visual contract revision; a ref carrying only the
+variant would let the contract move underneath an approval without the ref changing. A
+missing revision is refused rather than defaulted to 1.
+
+`selectDesign()` returns `selected: null` whenever any issue is raised, so a caller cannot
+read a ref out of a refused selection. That matters downstream: this ref is what clears
+`design_variant_not_selected` in `lifecyclePrerequisites`, a blocking gap, and a ref produced
+alongside a refusal would clear it on the strength of a record that was rejected.
+
+## 21. The honest limit, and two findings about the corpus
+
+**A journey here is a declared path, not a rendered interaction.** Nothing in this module
+clicks anything, and there is no surface to click until Phase 5. §4.5 itself says a
+screenshot or matching vocabulary does not establish usability; a declared journey does not
+either. What it does is make the claim checkable and name the gap, rather than leaving "can
+be demonstrated" as an untested sentence in a brief.
+
+Two things found while building this, both recorded in the carried-forward register:
+
+- **`ProcessRecord.exceptions` is read by nothing in this repo and carries no doc comment.**
+  An earlier draft of `exceptionTaskIds()` treated it as a list of task ids. It should not:
+  every sibling field on that record holds prose, so the invention would fail silently —
+  free-text exception descriptions never equal a task id, `exception_first` would simply
+  never fire, and the cause would be invisible. `is_rework` on a typed edge is the only
+  source this module reads.
+- **No fixture in the reference corpus has a rework edge.** All eight transitions across
+  `referenceFixtures.ts` and `manualOnly.ts` carry `is_rework: false`, so `exception_first`
+  is unreachable by the corpus as it stands and this suite supplies the input itself. Fixture
+  B’s own documented coverage says its appeals path should be "a real exception/rework edge
+  in the transition graph", and the code fixture does not have one.

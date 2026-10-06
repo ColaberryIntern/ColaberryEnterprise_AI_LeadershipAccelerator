@@ -15,6 +15,9 @@
  */
 
 import { readFileSync } from 'fs';
+import { buildDesignBrief } from '../../../delivery/designBrief';
+import type { BuildBlueprint } from '../../../delivery/buildBlueprint';
+import type { ProjectUnderstanding } from '../../../delivery/projectUnderstanding';
 import { join } from 'path';
 import {
   CONTROL_CODES,
@@ -525,5 +528,59 @@ describe('the code list is the contract', () => {
     const emitted = new Set<string>();
     for (const c of cases) for (const i of validateControlSpec(c, ROLES)) emitted.add(i.code);
     expect([...emitted].sort()).toEqual([...CONTROL_CODES].sort());
+  });
+});
+
+describe('the refusal-code table in the design doc matches the code', () => {
+  it('every CONTROL_ row in workspace-and-control-design.md is a real code, and none is missing', () => {
+    // Added after the P4-T2 verifier found that the doc sentence claimed this check existed
+    // when only the emittable-set half did. Reads the doc the way `workspaceMapping.test.ts`
+    // already reads source files.
+    const doc = readFileSync(
+      join(__dirname, '../../../../../../docs/project-lifecycle/workspace-and-control-design.md'),
+      'utf8',
+    );
+    const rows = [...doc.matchAll(/^\|\s*`(CONTROL_[A-Z_]+)`\s*\|/gm)].map((m) => m[1]);
+
+    // POSITIVE CONTROL for the extraction itself: a regex that matched nothing would make
+    // the comparison below vacuous in one direction and trivially false in the other, so
+    // assert the parse found rows before comparing them.
+    expect(rows.length).toBeGreaterThan(0);
+    expect([...new Set(rows)].sort()).toEqual([...CONTROL_CODES].sort());
+  });
+});
+
+describe('COMPOSITION: controlSurfaceExists() output fits the design brief field', () => {
+  // The P4-T2 verifier was right that the function has NO production call site: P4-T3
+  // consumes a passed boolean of the same name, and no design-stage orchestrator exists yet
+  // to call one and supply the other. That wire is in the carried-forward register with an
+  // owner. What this test can do is pin that the two halves FIT, so they cannot drift while
+  // the wire is open — and it is a real call site for the function, in the correct
+  // dependency direction (lifecycle → delivery).
+  const facts = (spec: ControlPolicy[]) => ({
+    controlSurfaceExists: controlSurfaceExists(spec),
+    showableControls: renderControlAvailability(spec).showable,
+  });
+  const u = { title: 'Agent limits', items: [], proposed_surfaces: [] } as unknown as ProjectUnderstanding;
+  const bp = { readiness: { not_discussed: [] } } as unknown as BuildBlueprint;
+
+  it('an enforced control reaches the brief as a populated controls field', () => {
+    const brief = buildDesignBrief(u, bp, facts([policy()]));
+    expect(brief.controls).toEqual([{
+      policyKey: 'agent.max_runs_per_hour',
+      enforcedBy: 'persisted_column_checked',
+      callSite: 'workforceAgentRuntime.ts:69',
+    }]);
+    // The other three facts are genuinely absent here and are correctly opened, so this asserts
+    // the precise thing: nothing about CONTROLS is open when a control is enforced.
+    expect(brief.open_facts?.join(' ')).not.toContain('control');
+  });
+
+  it('an all-unavailable spec reaches it as an OPEN FACT, not an empty array', () => {
+    const brief = buildDesignBrief(u, bp, facts([policy({
+      enforcement: { status: 'unavailable', why: 'no_enforcement_site' },
+    })]));
+    expect(brief.controls).toBeUndefined();
+    expect(brief.open_facts?.join(' ')).toContain('nothing a human can actually operate');
   });
 });

@@ -63,6 +63,15 @@ describe('a missing fact is OPENED, never substituted', () => {
     expect(b.open_facts?.join(' ')).toContain(frag);
   });
 
+  it('an empty task-surface mapping is treated as ABSENT too', () => {
+    // The doc said "same for an empty task-surface mapping" and no test covered it: a mutation
+    // replacing `taskSurfaces.length > 0` with `taskSurfaces !== undefined` survived the whole
+    // suite. Only the ABSENT case was tested, never the EMPTY one.
+    const b = buildDesignBrief(understanding(), blueprint(), { ...FULL, taskSurfaces: [] });
+    expect(b.task_surfaces).toBeUndefined();
+    expect(b.open_facts?.join(' ')).toContain('traceable to the work it serves');
+  });
+
   it('an empty allocation is treated as ABSENT, not as "nobody does this work"', () => {
     // The distinction that matters: an empty allocation would read as a decision, and it is not one.
     const b = buildDesignBrief(understanding(), blueprint(), { ...FULL, allocation: [] });
@@ -98,6 +107,16 @@ describe('THE P4-T2 CONSUMER: controlSurfaceExists is passed, never inferred', (
 
   it('a TRUE predicate with showable controls populates the field', () => {
     expect(buildDesignBrief(understanding(), blueprint(), FULL).controls).toHaveLength(1);
+  });
+
+  it('a FALSE predicate with a NON-EMPTY showable list still opens rather than claiming controls', () => {
+    // THE CASE THAT MAKES THE FIRST CONJUNCT LOAD-BEARING, and I did not write it. An
+    // independent verifier deleted `f.controlSurfaceExists === true &&` from the populate guard
+    // and the suite stayed green: every other test here had BOTH conjuncts failing together, so
+    // neither was individually proven. A guard tested only alongside its partner is not tested.
+    const b = buildDesignBrief(understanding(), blueprint(), { ...FULL, controlSurfaceExists: false });
+    expect(b.controls).toBeUndefined();
+    expect(b.open_facts?.join(' ')).toContain('nothing a human can actually operate');
   });
 
   it('a TRUE predicate with an EMPTY showable list still opens rather than claiming controls', () => {
