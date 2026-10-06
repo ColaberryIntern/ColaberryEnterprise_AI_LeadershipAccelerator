@@ -81,6 +81,67 @@ describe('T203 — the scanner can tell a write from a read', () => {
     expect(sites).toEqual([]);
   });
 
+  /**
+   * THE SHAPE THAT DEFEATED THE FIRST VERSION, and the reason this suite exists at
+   * all. A verifier dropped a brand-new third writer into a new file as
+   * `findOne({ where: { email } })` followed by a `create({ … })` — the most
+   * ordinary shape in this repo, look the person up then make them — and the
+   * scanner reported `6 write sites across 3 files`, unchanged. The tripwire passed
+   * 17 of 17 while a third writer walked straight past it.
+   *
+   * Cause: the old rule walked BACK up to 12 lines for an unclosed `where: {`, and
+   * a balanced one-liner leaves the brace depth at zero, so a single `findOne`
+   * suppressed every write in the next twelve lines. The docblock claimed the error
+   * mode was over-counting. It was the opposite — the one direction that makes a
+   * guard worthless.
+   */
+  it('FINDS a write that follows a one-line findOne on the next lines', () => {
+    const sites = findWriteSites(
+      [
+        `const existing = await Enrollment.findOne({ where: { email } });`,
+        `if (!existing) {`,
+        `  await Enrollment.create({`,
+        `    enrollment_type: 'explorer',`,
+        `    tier: 'guest',`,
+        `  });`,
+        `}`,
+      ].join('\n'),
+    );
+    expect(sites).toHaveLength(2);
+    expect(sites.map((s) => s.line)).toEqual([4, 5]);
+  });
+
+  it('FINDS a two-argument update, where the payload and the filter share a line', () => {
+    const sites = findWriteSites(
+      `await Enrollment.update({ enrollment_type: 'explorer' }, { where: { id } });`,
+    );
+    expect(sites).toHaveLength(1);
+  });
+
+  it('FINDS a double-quoted literal', () => {
+    expect(findWriteSites(`  enrollment_type: "explorer",`)).toHaveLength(1);
+    expect(findWriteSites(`  tier: "guest",`)).toHaveLength(1);
+  });
+
+  it('FINDS a raw-SQL SET write, which no object-literal rule can see', () => {
+    const sites = findWriteSites(`await sql.query("UPDATE enrollments SET enrollment_type = 'explorer' WHERE id = :id");`);
+    expect(sites).toHaveLength(1);
+    expect(sites[0].call).toBe('sql');
+  });
+
+  it('does NOT count a raw-SQL WHERE as a write — the keyword is the only difference', () => {
+    expect(findWriteSites(`WHERE e.enrollment_type = 'explorer' AND e.status = 'active'`)).toEqual([]);
+  });
+
+  it('KNOWN LIMIT, asserted so the boundary is visible: a multi-line SET is missed', () => {
+    // Stated as a test rather than only in a comment, because an undocumented
+    // blind spot in a guard is indistinguishable from a guard that works. No
+    // raw-SQL writer of either column exists in the tree today; this records what
+    // the guard would and would not catch if one arrived.
+    const sites = findWriteSites(`UPDATE enrollments\n  SET\n    enrollment_type = 'explorer'`);
+    expect(sites).toEqual([]);
+  });
+
   it('does NOT count a type union as a write', () => {
     expect(findWriteSites(`declare tier: 'guest' | 'member';`)).toEqual([]);
     expect(findWriteSites(`  tier: 'guest' | 'member';`)).toEqual([]);

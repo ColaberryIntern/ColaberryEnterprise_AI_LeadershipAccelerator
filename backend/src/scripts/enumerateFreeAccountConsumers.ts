@@ -188,14 +188,16 @@ export function enumerateConsumers(): ConsumerRow[] {
  * A separate question from `enumerateConsumers`, and the distinction is the whole
  * point: `enrollmentService.ts:163` and `explorerIdentityBridge.ts:122` both
  * contain `enrollment_type: 'explorer'` and neither is a writer — the first is the
- * retirement sweep's `where` clause, the second is the population loader's. A
- * tripwire that counted those as writers would report five writers where there are
- * three, and a reviewer who checked it once and found it wrong would stop trusting
- * it.
+ * retirement sweep's `where` clause, the second is the population loader's.
+ * Counting those two reads would report **8 sites across 4 files** where there are
+ * 6 across 3, and a reviewer who checked the guard once and found it wrong would
+ * stop trusting it.
  *
- * So this looks only inside `.create({ … })` and `.update({ … })` argument blocks,
- * which is what "writes" means here. Brace-counted from the opening call so a
- * nested object cannot end the block early.
+ * The rule itself is documented on `findWriteSites`, which is the only account of
+ * it. An earlier draft of this comment described a different rule — scanning only
+ * `.create({ … })`/`.update({ … })` blocks — that was replaced twice over; leaving
+ * it here gave the file two contradictory explanations of its own behaviour, which
+ * a verifier flagged as failing "a junior developer can understand the change".
  */
 /**
  * The negative lookahead excludes a TYPE UNION. `declare tier: 'guest' | 'member'`
@@ -204,9 +206,26 @@ export function enumerateConsumers(): ConsumerRow[] {
  * an allow-list that is supposed to be read by a human and trusted.
  */
 export const LEARNER_WRITE_LITERALS = [
-  /enrollment_type:\s*'explorer'(?!\s*\|)/,
-  /tier:\s*'guest'(?!\s*\|)/,
+  /enrollment_type:\s*['"]explorer['"](?!\s*\|)/,
+  /tier:\s*['"]guest['"](?!\s*\|)/,
 ];
+
+/**
+ * Raw-SQL writes, which the object-literal rules above cannot see at all.
+ *
+ * `UPDATE enrollments SET enrollment_type = 'explorer'` is a write;
+ * `WHERE enrollment_type = 'explorer'` is a read, and the two differ only by the
+ * keyword in front. So the rule requires a `SET` on the same line — which is how
+ * every single-statement update in this repo is written — and accepts that a
+ * multi-line `SET` with the assignment on a later line would be missed. **That
+ * limitation is real and tested**, rather than left for someone to discover: see
+ * `learnerWriterTripwire.test.ts`, which asserts both the detected and the
+ * undetected form so the boundary is visible in the suite instead of only here.
+ *
+ * No raw-SQL writer of either column exists in the tree today; this rule is here
+ * so the first one is not silent.
+ */
+export const LEARNER_SQL_WRITE = /\bSET\b[^;]*\b(enrollment_type|tier)\s*=\s*['"](explorer|guest)['"]/i;
 
 export interface WriterSite {
   file: string;
@@ -236,28 +255,77 @@ export function findWriteSites(content: string): Omit<WriterSite, 'file'>[] {
   const raw = content.split('\n');
   const out: Omit<WriterSite, 'file'>[] = [];
 
-  const insideWhere = (idx: number): boolean => {
-    // Walk back up to 12 lines, counting braces, looking for an unclosed `where: {`.
-    let depth = 0;
-    for (let k = idx; k >= 0 && idx - k < 12; k--) {
-      const line = lines[k];
-      if (k < idx) {
-        for (let c = line.length - 1; c >= 0; c--) {
-          if (line[c] === '}') depth++;
-          else if (line[c] === '{') depth--;
+  // Every `where: { … }` block's own line span, by matching braces FORWARD from
+  // the opener. Only lines inside a span are reads.
+  //
+  // The previous version walked BACKWARD up to 12 lines looking for an unclosed
+  // `where: {`, and a balanced one-liner leaves the depth at zero — so a single
+  // `findOne({ where: { email } })` suppressed every write in the next twelve
+  // lines. That is the most ordinary shape in this repo: look the person up, then
+  // create them. A verifier dropped a brand-new third writer into a new file in
+  // exactly that shape and the tripwire reported clean. The docblock above
+  // claimed the error mode was over-counting; as shipped it was the opposite,
+  // which is the one direction that makes a guard worthless.
+  const readSpans: Array<[number, number]> = [];
+  for (let i = 0; i < lines.length; i++) {
+    let from = 0;
+    for (;;) {
+      const at = lines[i].indexOf('where:', from);
+      if (at === -1) break;
+      from = at + 6;
+      const open = lines[i].indexOf('{', at);
+      if (open === -1) break;
+      // Match forward from this brace.
+      let depth = 0;
+      let endLine = i;
+      let done = false;
+      for (let j = i; j < lines.length && !done; j++) {
+        const startCol = j === i ? open : 0;
+        for (let c = startCol; c < lines[j].length; c++) {
+          if (lines[j][c] === '{') depth++;
+          else if (lines[j][c] === '}') {
+            depth--;
+            if (depth === 0) { endLine = j; done = true; break; }
+          }
         }
+        if (!done) endLine = j;
       }
-      if (/where:\s*\{/.test(line) && depth <= 0) return true;
+      readSpans.push([i, endLine]);
     }
-    return false;
-  };
+  }
+  const insideRead = (idx: number) => readSpans.some(([a, b]) => idx >= a && idx <= b);
 
   for (let i = 0; i < lines.length; i++) {
-    if (!LEARNER_WRITE_LITERALS.some((re) => re.test(lines[i]))) continue;
-    if (/where:\s*\{/.test(lines[i]) || insideWhere(i)) continue;
-    out.push({ line: i + 1, call: 'write', evidence: raw[i].trim().slice(0, 160) });
+    const sqlWrite = LEARNER_SQL_WRITE.test(lines[i]);
+    if (!sqlWrite && !LEARNER_WRITE_LITERALS.some((re) => re.test(lines[i]))) continue;
+    // A two-argument update puts the payload and the filter on one line:
+    // `update({ enrollment_type: 'explorer' }, { where: { id } })`. The literal
+    // sits OUTSIDE the where span, so span logic counts it correctly where the
+    // old same-line test discarded the whole line.
+    // The two-argument escape applies ONLY to a line that carries `where:` itself.
+    // Without that guard the helper returned true for every line inside a
+    // MULTI-line where block (they contain no `where:` of their own), which
+    // re-counted the retirement sweep's filter at `enrollmentService.ts:163` as a
+    // write — the exact read this scanner exists to exclude.
+    const sameLineWhere = lines[i].includes('where:');
+    if (!sqlWrite && insideRead(i) && !(sameLineWhere && writeLiteralOutsideReadSpans(lines[i]))) continue;
+    out.push({ line: i + 1, call: sqlWrite ? 'sql' : 'write', evidence: raw[i].trim().slice(0, 160) });
   }
   return out;
+}
+
+/**
+ * True when a line carries one of the literals at a position that is not inside
+ * that same line's `where: { … }`. Keeps the two-argument update form visible.
+ */
+function writeLiteralOutsideReadSpans(line: string): boolean {
+  const whereAt = line.indexOf('where:');
+  if (whereAt === -1) return true;
+  for (const re of LEARNER_WRITE_LITERALS) {
+    const m = re.exec(line);
+    if (m && m.index < whereAt) return true;
+  }
+  return false;
 }
 
 /** Scan the tree for every file that writes learner-programme semantics. */
