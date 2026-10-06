@@ -696,3 +696,56 @@ describe('evaluateHardRules — recurring event reminders (event_reminder_34)', 
     expect(result.rule_id).not.toBe('event_reminder_34');
   });
 });
+
+/**
+ * Anthropic sender (anthropic_0i).
+ *
+ * Colaberry applied to the Claude Partner Network on 2026-10-06. The previous
+ * attempt, submitted 2026-06-24, returned an automated acknowledgement and then
+ * nothing, and the silence went unnoticed for three and a half months. A reply
+ * to this one must not be archived.
+ */
+describe('evaluateHardRules — Anthropic sender (anthropic_0i)', () => {
+  const anthropicEmail = (overrides: Record<string, any> = {}) => ({
+    id: 'email-anth',
+    from_address: 'partners@anthropic.com',
+    from_name: 'Claude Partner Network',
+    to_addresses: ['ali@colaberry.com'],
+    cc_addresses: [],
+    subject: 'Your Claude Partner Network application',
+    body_text: 'Thanks for applying. Next steps are below.',
+    headers: {},
+    ...overrides,
+  });
+
+  it.each([
+    'partners@anthropic.com',
+    'no-reply@claude.com',
+    'partner-network@mail.anthropic.com',
+    'invoice+statements@mail.anthropic.com',
+    'someone@support.claude.com',
+  ])('keeps mail from %s in the inbox', async (from) => {
+    const result = await evaluateHardRules(anthropicEmail({ from_address: from }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'anthropic_0i', classified_by: 'hard_rule' });
+  });
+
+  it('survives a List-Unsubscribe header, which is what archives most of this mail', async () => {
+    const result = await evaluateHardRules(anthropicEmail({ headers: { 'List-Unsubscribe': '<https://anthropic.com/u>' } }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'anthropic_0i' });
+  });
+
+  it('survives a no-reply sender, which archives the rest of it', async () => {
+    const result = await evaluateHardRules(anthropicEmail({ from_address: 'noreply@anthropic.com' }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'anthropic_0i' });
+  });
+
+  it.each([
+    'press@anthropic.com.evil.io',
+    'news@notanthropic.com',
+    'hello@claude.com.phishing.net',
+    'digest@anthropic-news.com',
+  ])('does NOT match the look-alike %s', async (from) => {
+    const result = await evaluateHardRules(anthropicEmail({ from_address: from }));
+    expect(result.rule_id).not.toBe('anthropic_0i');
+  });
+});

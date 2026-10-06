@@ -89,6 +89,35 @@ export function isSchoolNotificationSender(fromAddress: string | null | undefine
 }
 
 /**
+ * True when the sender is Anthropic. Their mail reaches the inbox, always.
+ *
+ * WHY THIS IS HERE. Colaberry applied to the Claude Partner Network on
+ * 2026-10-06. The previous attempt, a learning-path completion submitted
+ * 2026-06-24 for eleven team members, returned an automated acknowledgement and
+ * then nothing — and nobody noticed for three and a half months. The cost of a
+ * reply to this one being archived is not an irritation, it is another quarter.
+ *
+ * A DOMAIN RULE IS RIGHT HERE, where a shape rule was right for account-security
+ * mail (0g). The distinction is which half varies. Reset codes come from every
+ * sender under the sun with a predictable shape, so shape is the stable thing.
+ * Anthropic is one organisation whose mail could be a partner reply, an invoice,
+ * a product notice or a person — the SENDER is the stable thing and the content
+ * is not. Same reasoning as isBasecampSender and isSlackSender above.
+ *
+ * Both domains on purpose: anthropic.com for the company, claude.com for the
+ * product (the partner portal and the application form both live there, and
+ * anthropic.com/partners now 301s to claude.com). Same look-alike guard as the
+ * other sender predicates, so `anthropic.com.evil.io` never matches.
+ *
+ * Billing receipts from `invoice+statements@mail.anthropic.com` also match, and
+ * that is accepted deliberately: a handful of receipts in the inbox is a trivial
+ * price for never missing the reply this was built for.
+ */
+export function isAnthropicSender(fromAddress: string | null | undefined): boolean {
+  return /@(?:[\w-]+\.)*(?:anthropic\.com|claude\.com)(?![\w.-])/i.test((fromAddress || '').trim());
+}
+
+/**
  * True when the subject marks this as account-security mail the recipient
  * asked for seconds ago: a password reset, a verification / one-time code, or
  * a magic sign-in link. These are always user-initiated, always time-limited,
@@ -441,6 +470,17 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     const reason = 'K-12 school platform notification (ParentSquare / Wylie ISD)';
     console.log(`${LOG_PREFIX} School: ${reason}`);
     return { matched: true, state: 'INBOX', rule_id: 'school_0h', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0i. Anthropic → INBOX ---
+  // Sits in the 0-series rather than relying on the VIP table below, because
+  // the VIP check matches one exact address and we do not know which address a
+  // partner reply arrives from. See isAnthropicSender for the application this
+  // protects and the quarter the last one cost.
+  if (isAnthropicSender(email.from_address)) {
+    const reason = 'Anthropic / Claude sender - never archive';
+    console.log(`${LOG_PREFIX} Anthropic: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'anthropic_0i', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 1. VIP Check ---
