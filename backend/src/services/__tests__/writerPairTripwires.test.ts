@@ -176,7 +176,11 @@ describe('the scanners themselves can fail', () => {
     expect(OFF_EXPLORER.test("enrollment_type: 'standard',")).toBe(true);
     expect(OFF_EXPLORER.test("SET enrollment_type = 'standard'")).toBe(true);
     expect(OFF_EXPLORER.test("enrollment_type = CASE WHEN :status = 'paid'")).toBe(true);
-    // And neither matches an explorer write, which is not a transition off the programme.
+    // The OBJECT-LITERAL form of an explorer write is excluded, which is the form asserted
+    // below. The SQL alternative (`enrollment_type\s*=\s*[:'C]`) does still match
+    // `enrollment_type = 'explorer'`; the earlier wording here claimed neither form matched,
+    // which was wider than the test. Harmless for a population guard - over-matching only ever
+    // means "write a determination" - but the sentence should not say more than the pattern.
     expect(OFF_EXPLORER.test("enrollment_type: 'explorer',")).toBe(false);
   });
 

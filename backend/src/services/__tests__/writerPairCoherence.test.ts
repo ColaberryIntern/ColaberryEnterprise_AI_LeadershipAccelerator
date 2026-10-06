@@ -47,7 +47,6 @@ import { sequelize } from '../../config/database';
 
 // The raw-SQL writer calls `sequelize.query` on the module-level instance, so spying on
 // that instance's method is what intercepts it.
-const sequelizeQuerySpy = jest.spyOn(sequelize, 'query');
 
 /**
  * Phase 2 T206 — WRITER-PAIR COHERENCE.
@@ -71,17 +70,42 @@ const sequelizeQuerySpy = jest.spyOn(sequelize, 'query');
  * changed its mind about what enrolled means, these tests would change with it.
  */
 
-/** A free Explorer: the row every coherence failure starts from. */
-const freeExplorer = (over: Record<string, unknown> = {}) => ({
+/**
+ * A free Explorer: the row every coherence failure starts from.
+ *
+ * EXPLICITLY TYPED, because the inferred version shipped two `TS2339 Property 'save' does
+ * not exist` errors in attempt 2. `...over` typed as `Record<string, unknown>` widens nothing
+ * onto the result, so `row.save` did not exist on the type even where a test passed one in.
+ * Nothing in this repo catches that: `tsconfig.json` excludes `__tests__`, and ts-jest runs
+ * with `isolatedModules`, so the canonical `tsc` is honestly green while the test code is not
+ * type-correct. Typing the fixture is the fix; citing the canonical typecheck would not have
+ * been evidence for it.
+ */
+type FixtureRow = {
+  id: string;
+  email: string;
+  status: 'active';
+  tier: string;
+  enrollment_type: string;
+  payment_status: string;
+  cohort_id: string | null;
+  enrolled_at: Date | null;
+  paysimple_external_id?: string;
+  update: jest.Mock;
+  save: jest.Mock;
+};
+
+const freeExplorer = (over: Partial<FixtureRow> = {}): FixtureRow => ({
   id: 'enr-1',
   email: 'maya@example.com',
-  status: 'active' as const,
-  tier: 'guest' as string,
-  enrollment_type: 'explorer' as string,
-  payment_status: 'pending' as string,
+  status: 'active',
+  tier: 'guest',
+  enrollment_type: 'explorer',
+  payment_status: 'pending',
   cohort_id: 'coh-1',
-  enrolled_at: null as Date | null,
+  enrolled_at: null,
   update: jest.fn(),
+  save: jest.fn(),
   ...over,
 });
 
@@ -163,7 +187,7 @@ describe('T206 writer 5 — markEnrollmentPaid (LIVE; the one attempt 1 MISSED)'
   });
 
   it('assigns the pair onto the row before saving it', async () => {
-    const row = freeExplorer({ paysimple_external_id: 'CB-1-2', save: jest.fn() });
+    const row = freeExplorer({ paysimple_external_id: 'CB-1-2' });
     enrollmentFindOne.mockResolvedValue(row);
 
     await markEnrollmentPaid('CB-1-2', { paymentId: 9, amount: 1500 });
@@ -176,7 +200,7 @@ describe('T206 writer 5 — markEnrollmentPaid (LIVE; the one attempt 1 MISSED)'
   });
 
   it('and the saved row reads as ENROLLED to the real partner-app predicate', async () => {
-    const row = freeExplorer({ paysimple_external_id: 'CB-1-2', save: jest.fn() });
+    const row = freeExplorer({ paysimple_external_id: 'CB-1-2' });
     enrollmentFindOne.mockResolvedValue(row);
 
     await markEnrollmentPaid('CB-1-2', { paymentId: 9, amount: 1500 });
@@ -185,7 +209,7 @@ describe('T206 writer 5 — markEnrollmentPaid (LIVE; the one attempt 1 MISSED)'
   });
 
   it('stays idempotent: an already-paid row is returned without a second save', async () => {
-    const row = freeExplorer({ payment_status: 'paid', paysimple_external_id: 'CB-1-2', save: jest.fn() });
+    const row = freeExplorer({ payment_status: 'paid', paysimple_external_id: 'CB-1-2' });
     enrollmentFindOne.mockResolvedValue(row);
 
     await markEnrollmentPaid('CB-1-2');
@@ -257,8 +281,6 @@ describe('T206 writer 3 — paymentSyncService, RAW SQL (LIVE, and the weaker se
    */
   beforeEach(() => {
     jest.clearAllMocks();
-    sequelizeQuerySpy.mockReset();
-    sequelizeQuerySpy.mockResolvedValue([] as never);
   });
 
   /**

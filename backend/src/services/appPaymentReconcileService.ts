@@ -451,17 +451,11 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
         // on the ERROR path: if activation threw or was skipped, this statement would
         // otherwise mark a row paid while leaving `tier: 'guest'` - paid-but-guest, the exact
         // state T206 exists to make unreachable. Unconditional because `payment_status` here
-        // is unconditional too.
-        //
-        // WHY A $50 DEPOSIT HOLDER CANNOT BE PROMOTED HERE - corrected after verification,
-        // because the first version of this comment named a guard that does not control it.
-        // It cited `paysimple_customer_id IS NOT NULL` from `loadCandidates`, but that WHERE
-        // is a DISJUNCTION: `s.status = 'pending' OR (e.paysimple_customer_id IS NOT NULL
-        // AND ...)`, and the first branch needs no customer id at all. The guard that really
-        // controls this is `MEMBERSHIP_MIN_CENTS` (line 98), applied when payments are
-        // gathered - its own comment reads "skip the $50 deposit". Right conclusion, wrong
-        // reason, and a justification that cites the wrong mechanism is worth no more than
-        // no justification.
+        // is unconditional too. A $50 deposit holder cannot be promoted here because of
+        // `MEMBERSHIP_MIN_CENTS` (line 98, "skip the $50 deposit"), enforced on both
+        // membership-selection paths. NOT because of `paysimple_customer_id IS NOT NULL`,
+        // which an earlier version of this comment cited: `loadCandidates` is a DISJUNCTION
+        // and its other branch needs no customer id. Right conclusion, wrong mechanism.
         `UPDATE enrollments
             SET payment_status = 'paid',
                 amount_paid = :amt,
