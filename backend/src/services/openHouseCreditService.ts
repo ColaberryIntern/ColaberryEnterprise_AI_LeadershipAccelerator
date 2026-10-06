@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { Enrollment, Cohort } from '../models';
 import { grantCredit } from './accountCreditService';
 import { isNonPayingCohortName } from './subscriptionService';
+import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
 
 /**
  * openHouseCreditService — reconcile the Open House "$50 hold your spot"
@@ -123,6 +124,13 @@ export async function reconcileOpenHousePayer(
         cohort_id: opts.cohort ? opts.cohort.id : null,
         enrollment_type: 'explorer',   // deposit ≠ subscription; stays Explorer until they pay
         tier: 'guest',
+        // T205: entry into the Explorer journey, set once at registration. A deposit
+        // holder IS an Explorer — `loadActiveExplorers` filters on
+        // `enrollment_type: 'explorer', status: 'active'` with no deposit exclusion, so
+        // this person is already part of the growth population and belongs in it. The
+        // deposit/subscription split that `explorerRosterService` draws is a REVENUE
+        // reporting partition and is left exactly as it is.
+        explorer_entered_at: new Date(opts.nowMs ?? Date.now()),
         payment_status: 'pending',
         status: 'active',
         portal_enabled: true,
@@ -143,6 +151,13 @@ export async function reconcileOpenHousePayer(
   }
 
   out.enrollmentId = enrollment ? enrollment.id : null;
+
+  // T205: the Explorer journey profile at registration, for the deposit path too.
+  // Guarded on `opts.apply` because a dry run must write NOTHING — this service's whole
+  // contract is that a preview is side-effect free, and a profile row is a side effect.
+  if (opts.apply && enrollment) {
+    await bridgeExplorerProfileAtRegistration(enrollment.id, 'open_house_deposit');
+  }
 
   // Grant the credit (idempotent on sourceEventId). On a dry run, report whether
   // a credit for this deposit already exists so the preview is accurate.

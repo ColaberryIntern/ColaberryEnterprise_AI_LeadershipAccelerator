@@ -1,5 +1,6 @@
 import { Lead } from '../models';
 import { signParticipantJwt } from './participantService';
+import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
 import {
   resolveFreeAccount,
   normalizeIdentity,
@@ -199,6 +200,21 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
   })();
 
   await captureGuestAsLead(clean, input.acquisition);
+
+  // T205: the Explorer journey profile, AT REGISTRATION rather than overnight.
+  //
+  // AFTER lead capture, deliberately: the bridge resolves `lead_id` by normalized
+  // email, so running it first would store `lead_id: null` and leave the link to be
+  // acquired by the nightly repair — the behaviour T205 exists to remove.
+  //
+  // ONLY for a learner. A `programme: 'standard'` account (an org teammate, a
+  // prospect) has not entered the Explorer journey, and giving it a journey profile
+  // would make it visible to Explorer Growth — the exact conscription that the
+  // required `programme` argument exists to prevent. Keyed on the RESOLVED row, not
+  // on the input, so a reused non-learner row is also correctly skipped.
+  if (enrollment.enrollment_type === 'explorer') {
+    await bridgeExplorerProfileAtRegistration(enrollment.id, 'portal_free_signup');
+  }
 
   return {
     jwt: signParticipantJwt(enrollment),

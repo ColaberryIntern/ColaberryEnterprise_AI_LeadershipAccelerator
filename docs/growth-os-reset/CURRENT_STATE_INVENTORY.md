@@ -138,7 +138,7 @@ disjoint code paths that never read each other.
 
 The `/enroll` free-account path sets one flag and leaves the other at its default:
 
-`backend/src/services/enrollmentService.ts:322` → "    enrollment_type: 'explorer',"
+`backend/src/services/enrollmentService.ts:323` → "    enrollment_type: 'explorer',"
 
 The portal free-signup path sets the *other* flag and leaves the first at its default:
 

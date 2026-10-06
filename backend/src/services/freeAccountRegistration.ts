@@ -79,6 +79,10 @@ export function freeEnrollmentDefaults(
     cohort_id: null,                       // free accounts are not in a cohort
     tier: 'guest' as const,
     enrollment_type: programme === 'learner' ? ('explorer' as const) : ('standard' as const),
+    // T205: the moment the Explorer journey was entered, for a learner only. A
+    // non-learner has not entered one, so NULL is the honest value rather than a
+    // timestamp that would make an org teammate look like a journey participant.
+    explorer_entered_at: programme === 'learner' ? new Date() : null,
     status: 'active' as const,
     payment_status: 'pending' as const,
     payment_method: 'credit_card' as const,
@@ -178,7 +182,12 @@ export async function resolveFreeAccount(
   }
 
   if (needsProgrammeUpgrade(existing, args.programme)) {
-    await (existing as any).update({ enrollment_type: 'explorer' });
+    // T205: an upgrade IS an entry — this is the moment the org teammate joined the
+    // learner programme, which is months after `created_at`. Written only when it is
+    // still null, so the column is set once and a repeat visit cannot move it.
+    const patch: Record<string, unknown> = { enrollment_type: 'explorer' };
+    if (!(existing as any).explorer_entered_at) patch.explorer_entered_at = new Date();
+    await (existing as any).update(patch);
     return { enrollment: existing, disposition: 'upgraded' };
   }
 

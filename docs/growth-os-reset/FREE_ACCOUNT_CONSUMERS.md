@@ -57,7 +57,7 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 28 files
+## BRANCHING — 29 files
 
 **Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
 used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
@@ -99,6 +99,7 @@ any row does not.
 | 27 | `services/reese/reeseIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | Seeds Reese's agent enrollment as `'standard'`. Also the row `reeseWelcomeService` refuses to greet, so it must not become an Explorer. |
 | 28 | `scripts/internshipJourneyE2E.ts` | `enrollment_type: 'standard', tier: 'standard'` | unchanged | unchanged | **An E2E script writes `tier: 'standard'`, which is not in the column's declared union** (`'guest' \| 'member'`). Pre-existing, out of this phase's scope, recorded because it is why the column has no CHECK constraint to rely on. |
 | 29 | `services/cohortService.ts` | `{ enrollment_type: { [Op.ne]: 'explorer' } }` | **CHANGES** | — | **Added on the fix pass; the first scan misfiled this as reporting-only.** `getDashboardStats()` builds one `notExplorer` filter and reuses it for three counts — `totalEnrollments`, `paidEnrollments` and `pendingInvoice`. Once population A gains `enrollment_type: 'explorer'`, **`totalEnrollments` and `pendingInvoice` on the admin dashboard drop** by the number of portal free accounts. `paidEnrollments` does not move, because those rows are not paid. Appended rather than inserted in theme order so the existing row numbers, and the determinations that reference them, stay stable. |
+| 30 | `services/freeSignupService.ts` | `enrollment.enrollment_type === 'explorer'` | **CHANGES** | unchanged | **Added by T205, and it is row 17 returning under a new number.** T202b retired row 17 because delegating to the canonical service removed both column literals from this file, and the scan moved it to REPORTING on its own. T205 reintroduces a branch here deliberately: the Explorer profile is created only when the RESOLVED row is an Explorer, so a `programme: 'standard'` account — an org teammate, a prospect — gets no journey profile and stays invisible to Explorer Growth. Population A gains a profile at registration; population B is unaffected because it never takes this branch. Renumbered rather than reusing 17, so citations that reference other rows by number stay valid. |
 
 **Tallies, counted from the table's own cells rather than by hand** — the first draft said "12 for
 A" and "9 unchanged", both off by one in **compensating** directions, so the two wrong numbers
@@ -107,13 +108,13 @@ asserts them from the parsed cells so they cannot drift again:
 
 | Tally | Rows | Command |
 |---|---|---|
-| Changes for population A | **12** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
+| Changes for population A | **13** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
 | Changes for population B | **2** (rows 1 and 13) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
 | Writers | **3** | `grep -c "\| writer \| writer \|"` |
 | Unchanged, with a stated reason | **11** | `grep -c "\| unchanged \| unchanged \|"` |
 | **Total** | **28** | matches the generator's `BRANCHING` count |
 
-## REPORTING — 18 files
+## REPORTING — 17 files
 
 Disclosure, not behaviour tests. **Pasted from the generator's output, after it caught me
 hand-transcribing this list and dropping a file** — see the note below.
@@ -124,7 +125,7 @@ hand-transcribing this list and dropping a file** — see the note below.
 `services/adminOs/metricRegistry.ts` · `services/adminOs/personProfileService.ts` ·
 `services/enrollmentsWithoutProjects.ts` ·
 `services/explorerGrowth/explorerSignalDefinitions.ts` ·
-`services/explorerGrowth/explorerStateMachine.ts` · **`services/freeSignupService.ts`** ·
+`services/explorerGrowth/explorerStateMachine.ts` ·
 `services/growthJourney/outcomes/outcomeNormalizer.ts` · `services/icpProfileService.ts` ·
 `services/internship/internshipReviewQueue.ts` · `services/portalEnrollmentService.ts` ·
 `services/portalSettingsService.ts`
@@ -222,7 +223,7 @@ makes sense with all three:**
 
 - `backend/src/services/leads/prospectAccount.ts:95` → "if (enrollment.tier !== 'guest') return false;"
 - `backend/src/services/leads/prospectAccount.ts:94` → "if (enrollment.cohort_id) return false;"
-- `backend/src/services/enrollmentService.ts:321` → "cohort_id: cohort.id,"
+- `backend/src/services/enrollmentService.ts:322` → "cohort_id: cohort.id,"
 
 **The customer fact needs both terms, which is why it does not move here and why T206 exists —
 row 15:**
@@ -241,7 +242,7 @@ neither column:**
 
 **The send on the `/enroll` path, which is why T216 creates nothing in production — row 16:**
 
-- `backend/src/services/enrollmentService.ts:397` → "const result = await sendTrainingWelcome({"
+- `backend/src/services/enrollmentService.ts:407` → "const result = await sendTrainingWelcome({"
 
 ## What this enumeration does NOT claim
 

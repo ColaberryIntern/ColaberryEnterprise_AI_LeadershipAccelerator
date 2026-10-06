@@ -53,7 +53,7 @@ agree. **Not BUILD**: adding a sixth regime is exactly what §5 forbids.
 **Intent:** the model comment says `tier` is authoritative for access level.
 **Current:** the paywall reads payment status, comp, staff and cohort type, never `tier`.
 
-`backend/src/models/Enrollment.ts:211` → "// self-serve preview account (0 points, no cohort). Source of truth for"
+`backend/src/models/Enrollment.ts:224` → "// self-serve preview account (0 points, no cohort). Source of truth for"
 
 **Disposition: FIX — Phase 2**, by correcting the comment or the code. Today a guest row is
 gated because it is unpaid, not because it is a guest; had anything ever marked a guest paid,

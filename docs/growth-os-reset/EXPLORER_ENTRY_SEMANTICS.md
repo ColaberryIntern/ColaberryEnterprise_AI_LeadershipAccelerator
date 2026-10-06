@@ -27,7 +27,7 @@ yet to cite. Nothing in this document is both.
 
 Declared as a two-value union on the model:
 
-`backend/src/models/Enrollment.ts:106` → "declare enrollment_type: 'standard' | 'explorer';"
+`backend/src/models/Enrollment.ts:118` → "declare enrollment_type: 'standard' | 'explorer';"
 
 The database does not enforce it. The column is `VARCHAR(20)` with a default, created not by
 a migration but by a startup drift-guard:
@@ -42,7 +42,7 @@ doc comment describes `'explorer'` as an Open House visitor who can log in but h
 
 Declared as a different two-value union, on the same model:
 
-`backend/src/models/Enrollment.ts:93` → "declare tier: 'guest' | 'member';"
+`backend/src/models/Enrollment.ts:105` → "declare tier: 'guest' | 'member';"
 
 Same storage story, same kind of drift-guard:
 
@@ -51,7 +51,7 @@ Same storage story, same kind of drift-guard:
 Its doc comment claims it is the source of truth for access level. **It is not** — the
 paywall never reads it, which is gap A5 in `GAP_MATRIX.md`:
 
-`backend/src/models/Enrollment.ts:211` → "// self-serve preview account (0 points, no cohort). Source of truth for"
+`backend/src/models/Enrollment.ts:224` → "// self-serve preview account (0 points, no cohort). Source of truth for"
 
 ### Free-account entry
 
@@ -66,7 +66,7 @@ paywall never reads it, which is gap A5 in `GAP_MATRIX.md`:
 
 Path A sets the programme label and leaves access at the paying default:
 
-`backend/src/services/enrollmentService.ts:322` → "    enrollment_type: 'explorer',"
+`backend/src/services/enrollmentService.ts:323` → "    enrollment_type: 'explorer',"
 
 Path B sets the access level and leaves the programme at the paying default:
 
@@ -74,7 +74,7 @@ Path B sets the access level and leaves the programme at the paying default:
 
 Path D is the only one that sets both:
 
-`backend/src/services/openHouseCreditService.ts:125` → "tier: 'guest',"
+`backend/src/services/openHouseCreditService.ts:126` → "tier: 'guest',"
 
 **No code reads both columns to make a decision.** Every `enrollment_type` decision ignores
 `tier`; every `tier` decision ignores `enrollment_type`. The only place both are selected
@@ -194,8 +194,8 @@ second name for the same thing, which is what "reuse before build" means here.
 replay finds it already set. Both public paths already dedupe on email, so a second signup
 attempt does not produce a second entry event:
 
-`backend/src/services/enrollmentService.ts:307` → "  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });"
-`backend/src/services/freeAccountRegistration.ts:167` → "    where: { email: clean.email, status: 'active' },"
+`backend/src/services/enrollmentService.ts:308` → "  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });"
+`backend/src/services/freeAccountRegistration.ts:171` → "    where: { email: clean.email, status: 'active' },"
 
 **UPDATED by Phase 2 T202b, and the original finding is the reason.** When Phase 1 recorded this,
 the two paths deduped *differently*: the paid path picked a best candidate among **active** rows,

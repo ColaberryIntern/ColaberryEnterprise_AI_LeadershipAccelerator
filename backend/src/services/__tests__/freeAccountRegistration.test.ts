@@ -217,7 +217,12 @@ describe('freeAccountRegistration', () => {
       const res = await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
 
       expect(res.disposition).toBe('upgraded');
-      expect(teammate.update).toHaveBeenCalledWith({ enrollment_type: 'explorer' });
+      // T205 added `explorer_entered_at` to this patch: an upgrade IS the moment the
+      // teammate entered the journey, months after their row's `created_at`.
+      expect(teammate.update).toHaveBeenCalledWith({
+        enrollment_type: 'explorer',
+        explorer_entered_at: expect.any(Date),
+      });
       expect(create).not.toHaveBeenCalled();
     });
 
@@ -229,7 +234,11 @@ describe('freeAccountRegistration', () => {
 
       expect(teammate.update).toHaveBeenCalledTimes(1);
       const written = teammate.update.mock.calls[0][0];
-      expect(Object.keys(written)).toEqual(['enrollment_type']);
+      // Still an EXACT key list, which is the point of this test — `tier`,
+      // `payment_status`, `cohort_id` and `status` must not appear. T205 widened it by
+      // exactly one field and the list stays exhaustive, so a third field arriving later
+      // is still a failure rather than a silent widening of what an upgrade may write.
+      expect(Object.keys(written).sort()).toEqual(['enrollment_type', 'explorer_entered_at']);
     });
 
     it('org provisioning still cannot make a teammate a learner: standard leaves the row alone', async () => {

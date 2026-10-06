@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError';
 import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 import { pickBestEnrollment } from './participantService';
+import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
 import { redactForLogs } from '../utils/piiRedaction';
 
 // Lazy import (the convention ghlService itself uses for aiEventService): a
@@ -329,6 +330,9 @@ export async function createExplorerEnrollment(input: {
     // and `reeseWelcomeService` greets them with the student intro rather than
     // the account intro. See docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md.
     tier: 'guest',
+    // T205: the moment this person entered the Explorer journey. Set once here, at
+    // registration; nothing rewrites it later.
+    explorer_entered_at: new Date(),
     payment_status: 'pending',
     payment_method: 'credit_card',
     status: 'active',
@@ -372,6 +376,12 @@ export async function createExplorerEnrollment(input: {
   } catch (err: any) {
     console.error('[OpenHouse] Lead capture failed (non-fatal):', err.message);
   }
+
+  // T205: the Explorer journey profile, at registration rather than overnight. After
+  // lead capture, because the bridge resolves `lead_id` by normalized email. Never
+  // throws — a bridge failure must not fail an enrollment, and the nightly repair
+  // remains the recovery path for whatever this misses.
+  await bridgeExplorerProfileAtRegistration(enrollment.id, 'enroll_explorer');
 
   // Send the branded welcome with a one-click portal magic link, targeting THIS
   // specific new enrollment. We generate the token on `enrollment` directly rather
