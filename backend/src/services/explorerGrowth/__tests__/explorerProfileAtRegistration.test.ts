@@ -161,7 +161,7 @@ describe('T205 — a bridge failure never fails a registration', () => {
   });
 });
 
-describe('T205 — the bridge cannot send, and the column has a deployment mechanism', () => {
+describe('T205 — the bridge does not send on the executed path, and the column deploys', () => {
   /**
    * SOURCE-TEXT ASSERTIONS, declared as such per this phase's standing decision: allowed
    * only where no seam exists, they must say so, and they must carry a positive control.
@@ -194,15 +194,46 @@ describe('T205 — the bridge cannot send, and the column has a deployment mecha
    * The property that actually matters - that the executed bridge path performs no send - is
    * asserted behaviourally in the test below, on the real call path, where it can fail.
    */
-  it('neither bridge FILE contains a sender token (a file-scope check, not an import-graph one)', () => {
-    const src = read('services/explorerGrowth/explorerIdentityBridge.ts')
-      + read('services/explorerGrowth/explorerProfileAtRegistration.ts');
+  /**
+   * COMMENTS ARE STRIPPED BEFORE SCANNING, and that is not a convenience - it is the
+   * difference between testing the code and testing what I wrote ABOUT the code.
+   *
+   * This test broke the moment the helper's docblock started explaining, truthfully, that
+   * `participantService` reaches `nodemailer`: the scan found the word in my own prose and
+   * failed. T203 hit the mirror image of this - a structural assertion that PASSED because
+   * an explanatory comment happened to contain the literal it was looking for. Either way
+   * the lesson is the same: a source scan that reads comments is measuring the wrong text.
+   */
+  const stripComments = (src: string): string =>
+    src
+      // Block comments first, non-greedy so one comment cannot swallow the file.
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      // Then line comments. `[^\r\n]*` rather than `.*` because JS `.` does not match
+      // a carriage return, and these files are checked out CRLF on this machine - a `.*`
+      // here silently strips nothing and the whole guard reads green while checking prose.
+      .replace(/\/\/[^\r\n]*/g, ' ');
+
+  it('the comment stripper actually strips, and keeps the code', () => {
+    // The stripper is now load-bearing for the test below, so it gets its own check rather
+    // than being trusted. Both directions: prose goes, code stays.
+    const sample = "const a = 1; // nodemailer in a line comment\n/* nodemailer in a block */\nconst b = 2;";
+    const out = stripComments(sample);
+    expect(out).not.toContain('nodemailer');
+    expect(out).toContain('const a = 1;');
+    expect(out).toContain('const b = 2;');
+  });
+
+  it('neither bridge FILE contains a sender token in its CODE', () => {
+    const src = stripComments(
+      read('services/explorerGrowth/explorerIdentityBridge.ts')
+      + read('services/explorerGrowth/explorerProfileAtRegistration.ts'),
+    );
 
     for (const forbidden of ['mandrill', 'axios', 'nodemailer', 'twilio', 'sendMail', 'sendEmail', 'fetch(']) {
       expect(src.toLowerCase()).not.toContain(forbidden.toLowerCase());
     }
-    // POSITIVE CONTROL: the same read finds something it must find, so a path typo
-    // cannot make this pass by reading an empty string.
+    // POSITIVE CONTROL: the stripped source still contains a token it must contain, so
+    // neither a path typo nor an over-eager stripper can make this pass on empty text.
     expect(src).toContain('ExplorerJourneyProfile');
   });
 

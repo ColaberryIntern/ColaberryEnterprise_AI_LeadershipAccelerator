@@ -35,10 +35,19 @@ import { resolveExplorerLead } from './explorerIdentityBridge';
  * must run AFTER lead capture. Called before, it would store `lead_id: null` and leave
  * the link to be acquired overnight — which is the behaviour this task exists to remove.
  *
- * SENDS NOTHING. `explorerIdentityBridge` imports only `sequelize`, the models,
- * `pickBestEnrollment` and `redactForLogs`; it has no mailer, queue, dialler or HTTP
- * surface anywhere in the file. That is asserted in this module's suite rather than
- * asserted here in prose.
+ * SENDS NOTHING ON THE EXECUTED PATH, which is a narrower claim than it may look and is
+ * stated narrowly on purpose.
+ *
+ * `explorerIdentityBridge` contains no mailer, queue, dialler or HTTP call ANYWHERE IN
+ * THE FILE. That is a statement about two files, not about the import graph: the bridge
+ * imports `pickBestEnrollment` from `../participantService`, and `participantService`
+ * imports `./emailService`, which imports `nodemailer`. So a mailer IS reachable in three
+ * hops, and an earlier version of this comment invited the opposite reading by saying the
+ * bridge "imports only" four things without naming where they come from.
+ *
+ * The guarantee that matters is therefore behavioural and lives in this module's suite:
+ * the real bridge runs with only the models mocked, the senders are spied, and no spy may
+ * be called. Planting a send in this function fails that test by name.
  */
 export type ExplorerProfileEntryPoint =
   | 'portal_free_signup'
