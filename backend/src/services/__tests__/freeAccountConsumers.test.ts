@@ -131,7 +131,9 @@ describe('free-account consumer enumeration (T202a)', () => {
       // Cycle 2 found these two.
       expect(files).toContain('services/personHistoryService.ts');
       expect(files).toContain('services/subscriptionRosterService.ts');
-      // Found during execution, in no audit cycle.
+      // Reads an enrollment's tier in a guard. Listed as a consumer; its
+      // determination is that nothing moves, because the guard above it fires
+      // first. The first draft of that row claimed the opposite.
       expect(files).toContain('services/leads/prospectAccount.ts');
       // The gate the whole phase is about.
       expect(files).toContain('services/explorerGrowth/explorerIdentityBridge.ts');
