@@ -24,9 +24,15 @@ import path from 'path';
  * exists: "no file outside this list touches the column" is a claim about files that do not
  * exist yet, which no behavioural test can make. Both tripwires therefore carry a positive
  * control, state the count they matched, and are proved to fail by a planted violation in
- * **BOTH write syntaxes** — a model call and a raw SQL string. A violation planted only in a
- * model call would leave the SQL half unproven, and the SQL half is exactly where
- * `paymentSyncService` and `appPaymentReconcileService` live.
+ * **ALL THREE write syntaxes**: an object literal, a raw SQL string, and a PROPERTY
+ * ASSIGNMENT followed by `.save()`.
+ *
+ * It said TWO syntaxes until verification, and that undercount cost this task its first
+ * attempt. `markEnrollmentPaid` writes `enrollment.payment_status = 'paid'` and then saves -
+ * the plan named it as one of three paid-marking paths, and it was neither fixed nor named
+ * because the write did not look like the two shapes being thought about. The patterns did
+ * match the file; the DETERMINATION written for it described only the create beside it. A
+ * population guard is only as good as the determinations attached to it.
  *
  * COMMENTS ARE STRIPPED before scanning. A guard that reads prose measures the wrong text:
  * in T205 a truthful docblock broke a token scan, and in T203 an explanatory comment made a
@@ -85,7 +91,7 @@ const PAID_FILES: Record<string, string> = {
   'controllers/sponsorController.ts':
     'WRITER (create). Coherent only by COLUMN DEFAULT - tier defaults member, enrollment_type standard. Nothing at the call site states the pair.',
   'services/enrollmentService.ts':
-    'WRITER (create, legacy invoice path) plus reads. Coherent by column default, same caveat as sponsorController.',
+    'TWO WRITERS. (a) markEnrollmentPaid - a LIVE UPDATE on the plan\'s "legacy webhook" path, called from webhookController; writes by PROPERTY ASSIGNMENT then .save(), which is why the first pass of T206 missed it. Coherent as of T206 attempt 2. (b) the legacy invoice CREATE, coherent by column default only.',
 
   // ---- READS: filters, counts and reports. No write. ----
   'services/cohortService.ts': 'READ. Dashboard filter on paid enrolments.',
@@ -113,12 +119,20 @@ const PAID_FILES: Record<string, string> = {
  * TRIPWIRE 2's population: files whose code moves `enrollment_type` to a non-explorer value,
  * or filters on one.
  *
- * SCOPED TO TRANSITIONS, NOT TO THE RESTING STATE, and that scoping is the whole safety of
- * this guard. `standard` + `guest` is a perfectly legitimate place to be: an org teammate
- * invited by their employer has a non-learner programme, free access, and has paid nothing.
- * A tripwire that condemned that state would fire on the population this phase exists to
- * protect. So what is pinned here is the set of files that WRITE the transition, each with a
- * determination; the resting state is asserted legitimate in `writerPairCoherence.test.ts`.
+ * ABOUT TRANSITIONS, NOT THE RESTING STATE — with one honest qualification about how far the
+ * pattern itself can enforce that.
+ *
+ * `standard` + `guest` is a perfectly legitimate place to be: an org teammate invited by
+ * their employer has a non-learner programme, free access, and has paid nothing. A guard
+ * that condemned that state would fire on the population this phase exists to protect.
+ *
+ * **The regex cannot distinguish a transition off `'explorer'` from a create that simply
+ * starts a row at `'standard'`.** A future org-teammate writer using the literal would match
+ * and be pinned. What saves the protected population is not the pattern but the SHAPE of the
+ * guard: matching only ever means "write a determination for this file", never "this is a
+ * bug". Nothing here can condemn a legitimate resting state, because nothing here judges —
+ * which is the difference between a population guard and the invariant guard T203 failed to
+ * build. The legitimacy of that state is asserted as behaviour in `writerPairCoherence.test.ts`.
  */
 const OFF_EXPLORER_FILES: Record<string, string> = {
   // ---- WRITERS of the transition ----
@@ -156,6 +170,9 @@ describe('the scanners themselves can fail', () => {
     expect(PAID_LITERAL.test("payment_status: 'paid',")).toBe(true);
     expect(PAID_LITERAL.test("SET payment_status = 'paid',")).toBe(true);
     expect(PAID_LITERAL.test('SET payment_status = :status,')).toBe(true);
+    // THE THIRD SYNTAX, the one missed on the first attempt: property assignment.
+    expect(PAID_LITERAL.test("enrollment.payment_status = 'paid';")).toBe(true);
+    expect(OFF_EXPLORER.test("enrollment.enrollment_type = 'standard';")).toBe(true);
     expect(OFF_EXPLORER.test("enrollment_type: 'standard',")).toBe(true);
     expect(OFF_EXPLORER.test("SET enrollment_type = 'standard'")).toBe(true);
     expect(OFF_EXPLORER.test("enrollment_type = CASE WHEN :status = 'paid'")).toBe(true);

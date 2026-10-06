@@ -120,6 +120,19 @@ export async function markEnrollmentPaid(
   if (enrollment.payment_status === 'paid') return enrollment;
 
   enrollment.payment_status = 'paid';
+  // T206: THE PAIR, written with the paid flag. This is the plan's "legacy webhook" path -
+  // `webhookController` calls it on a PaySimple payment_created - and it is the one writer
+  // the first pass of T206 MISSED, because it writes by PROPERTY ASSIGNMENT followed by
+  // `.save()` rather than through an object literal or raw SQL. Two syntaxes were considered
+  // and there are three.
+  //
+  // Latent rather than live today: this matches on `paysimple_external_id`, which only
+  // `createPendingEnrollment` writes, and those rows inherit the column default
+  // `tier: 'member'`. So no paid-but-guest row can exist through here right now. It is fixed
+  // for the same reason `convertExplorerToStandard` was - a latent trap is still a trap, and
+  // the coherence must not depend on a column default nobody states at the call site.
+  enrollment.tier = 'member';
+  enrollment.enrollment_type = 'standard';
   // Confirmed payment is the self-serve grant condition — without this, requestMagicLink
   // (participantService) keeps rejecting the paid student with "pending admin approval"
   // forever, since it gates strictly on portal_enabled, not payment_status.

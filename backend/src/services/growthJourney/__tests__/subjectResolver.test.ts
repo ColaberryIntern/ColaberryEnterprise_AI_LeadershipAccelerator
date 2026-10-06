@@ -519,6 +519,21 @@ describe('T407: the lead -> enrolment walk, and what a customer is', () => {
   });
 
   describe('customer is a PAID relationship, never "an enrolment exists"', () => {
+    /**
+     * T206 NOTE. Three `it.each` cases were added here and then DELETED after verification.
+     * They were assertion-for-assertion identical to this test - same fixture, same
+     * expectations - differing only in their names, one per paid-marking writer, and in an
+     * `enrollment_type` field this resolver never reads. They added no mutation-detection
+     * power while their names claimed per-writer coverage, which is worse than having no test:
+     * a reader counts three and gets one. They are deleted rather than rewritten, because this
+     * test already proves the only thing that was true of them.
+     *
+     * What T206 changes is upstream of here. The customer fact was never computed wrongly -
+     * paid-marking writers produced `tier: 'guest'` rows that this fact CORRECTLY rejected (see
+     * the test below). That those writers now produce paid + member is proved in
+     * `services/__tests__/writerPairCoherence.test.ts` by capturing each real write. The link
+     * between the two suites is DOCUMENTATION, not an assertion: no end-to-end test joins them.
+     */
     it('a paid, member-tier enrolment: paid, basis payment_status', async () => {
       enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'paid', tier: 'member' });
       const r = await resolveSubject({ enrollmentId: 'enr-1' });

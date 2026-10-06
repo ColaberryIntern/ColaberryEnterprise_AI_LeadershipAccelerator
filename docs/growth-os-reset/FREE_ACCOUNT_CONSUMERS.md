@@ -234,7 +234,7 @@ makes sense with all three:**
 
 - `backend/src/services/leads/prospectAccount.ts:95` → "if (enrollment.tier !== 'guest') return false;"
 - `backend/src/services/leads/prospectAccount.ts:94` → "if (enrollment.cohort_id) return false;"
-- `backend/src/services/enrollmentService.ts:326` → "cohort_id: cohort.id,"
+- `backend/src/services/enrollmentService.ts:339` → "cohort_id: cohort.id,"
 
 **The customer fact needs both terms, which is why it does not move here and why T206 exists —
 row 15:**
@@ -253,7 +253,7 @@ neither column:**
 
 **The send on the `/enroll` path, which is why T216 creates nothing in production — row 16:**
 
-- `backend/src/services/enrollmentService.ts:411` → "const result = await sendTrainingWelcome({"
+- `backend/src/services/enrollmentService.ts:424` → "const result = await sendTrainingWelcome({"
 
 ## What this enumeration does NOT claim
 

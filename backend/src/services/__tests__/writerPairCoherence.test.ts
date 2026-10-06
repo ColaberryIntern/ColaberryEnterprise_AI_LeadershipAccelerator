@@ -37,7 +37,7 @@ jest.mock('../../models', () => ({
 // opens no connection, so `query` is spied per-test instead.
 jest.mock('../../config/env', () => ({ env: { jwtSecret: 't', databaseUrl: 'postgres://u:p@localhost:5432/t' } }));
 
-import { convertExplorerToStandard } from '../enrollmentService';
+import { convertExplorerToStandard, markEnrollmentPaid } from '../enrollmentService';
 import { reconcilePayment } from '../paymentReconciliationService';
 // THE REAL CONSUMER, imported rather than re-implemented. Re-declaring a predicate inside a
 // test is the tautology that cost T203 five of its tests: inverting the real function left
@@ -136,6 +136,62 @@ describe('T206 writer 1 — convertExplorerToStandard (the LATENT one)', () => {
     await convertExplorerToStandard('enr-1');
 
     expect(row.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('T206 writer 5 — markEnrollmentPaid (LIVE; the one attempt 1 MISSED)', () => {
+  /**
+   * THE PLAN NAMED THIS WRITER and attempt 1 neither fixed nor named it, while the session
+   * log claimed an exhaustive derivation. Worth being exact about the cause, because it is a
+   * better lesson than the omission: this path writes by PROPERTY ASSIGNMENT followed by
+   * `.save()`, not through an object literal or raw SQL. Two write syntaxes were being
+   * thought about and there are three.
+   *
+   * The tripwire patterns DID match this file. What was wrong was the determination written
+   * for it, which described only the create sitting beside this function. A population guard
+   * is worth exactly what its determinations are worth.
+   *
+   * Latent, not live: the lookup is by `paysimple_external_id`, written only by
+   * `createPendingEnrollment`, whose rows inherit the column default `tier: 'member'`. So no
+   * paid-but-guest row can exist through here today. Fixed for the same reason
+   * `convertExplorerToStandard` was - the coherence must not rest on a column default that
+   * nothing at the call site states.
+   */
+  beforeEach(() => {
+    jest.clearAllMocks();
+    cohortIncrement.mockResolvedValue(undefined);
+  });
+
+  it('assigns the pair onto the row before saving it', async () => {
+    const row = freeExplorer({ paysimple_external_id: 'CB-1-2', save: jest.fn() });
+    enrollmentFindOne.mockResolvedValue(row);
+
+    await markEnrollmentPaid('CB-1-2', { paymentId: 9, amount: 1500 });
+
+    // Assignment syntax, so the evidence is the ROW ITSELF after the call, not a patch object.
+    expect(row.save).toHaveBeenCalledTimes(1);
+    expect(row.payment_status).toBe('paid');
+    expect(row.tier).toBe('member');
+    expect(row.enrollment_type).toBe('standard');
+  });
+
+  it('and the saved row reads as ENROLLED to the real partner-app predicate', async () => {
+    const row = freeExplorer({ paysimple_external_id: 'CB-1-2', save: jest.fn() });
+    enrollmentFindOne.mockResolvedValue(row);
+
+    await markEnrollmentPaid('CB-1-2', { paymentId: 9, amount: 1500 });
+
+    expect(isEnrolledMember([row as never])).toBe(true);
+  });
+
+  it('stays idempotent: an already-paid row is returned without a second save', async () => {
+    const row = freeExplorer({ payment_status: 'paid', paysimple_external_id: 'CB-1-2', save: jest.fn() });
+    enrollmentFindOne.mockResolvedValue(row);
+
+    await markEnrollmentPaid('CB-1-2');
+
+    expect(row.save).not.toHaveBeenCalled();
+    expect(cohortIncrement).not.toHaveBeenCalled();
   });
 });
 
@@ -311,8 +367,11 @@ describe('T206 AC6 — an org teammate rests at standard + guest LEGITIMATELY', 
 
     // The real partner-app predicate: correctly not enrolled, because they bought nothing.
     expect(isEnrolledMember([teammate as never])).toBe(false);
-    // And the pair is coherent for what they are - this is not one of the two broken states.
-    expect(teammate.payment_status).not.toBe('paid');   // so not paid-but-guest
-    expect(teammate.enrollment_type).toBe('standard');  // and never was an explorer
+    //
+    // Two further assertions stood here and were REMOVED after verification: they re-read
+    // `payment_status` and `enrollment_type` off the object literal declared a few lines above,
+    // so they restated the fixture rather than testing anything, while their comments presented
+    // the result as a finding. A fixture asserting itself is the class this phase keeps being
+    // caught on, and a small instance is no more acceptable than a large one.
   });
 });
