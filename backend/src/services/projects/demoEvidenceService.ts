@@ -8,11 +8,16 @@
  * there was simply no path. Two paths now exist, both evidence-first:
  *
  *   PREP-1…5  The STUDENT submits the evidence the task asks for and the
- *             submission verifies it: a run-through or final video needs a
- *             link; a narrative, slides, or rehearsal notes take a link or
- *             the text itself. The submission is stored on the row
- *             (verified_ref / verification_json), so "why is this complete"
- *             has an answer a reviewer can open.
+ *             submission verifies it. Three forms: a RECORDING this platform
+ *             already holds (see recordingEvidenceService), a link, or — for
+ *             a narrative, slides or rehearsal notes — the text itself. A
+ *             run-through or final video still refuses prose, but no longer
+ *             refuses the recording we made: until 2026-10-05 it took a link
+ *             and nothing else, so a student who had just rehearsed HERE had
+ *             to download the video, publish it somewhere public and paste
+ *             that back. The submission is stored on the row (verified_ref /
+ *             verification_json), so "why is this complete" has an answer a
+ *             reviewer can open.
  *   PREP-6    "Present at Demo Day" is marked by STAFF, because only a person
  *             in the room can verify it. Never by the student.
  *
@@ -34,8 +39,9 @@ import { award } from '../pointsService';
 import { getTypeXp } from '../progression/pointsConfigService';
 import { DEMO_DAY_STORY_ID, isPrepStory, prepXpKey, type PrepStoryId } from '../sbp/verification/prepPoints';
 import { markTaskVerifiedComplete } from './projectWriteService';
+import { isUuid, resolveRecordingEvidence } from './recordingEvidenceService';
 
-export type DemoEvidenceKind = 'link' | 'text';
+export type DemoEvidenceKind = 'link' | 'text' | 'recording';
 
 export interface DemoEvidenceInput {
   kind: DemoEvidenceKind;
@@ -117,13 +123,22 @@ export function validateDemoEvidence(storyId: PrepStoryId, input: DemoEvidenceIn
     if (!isHttpUrl(value)) return { ok: false, reason: 'A link must be a full http(s) URL.' };
     return isPrivateLink(value) ? { ok: false, reason: PRIVATE_LINK_REASON } : { ok: true };
   }
+  // A recording this platform already holds. Shape only here — that it is the
+  // student's, and that it actually arrived, needs the database and is proved in
+  // submitDemoEvidence. Allowed for every prep task the student hands in: a
+  // rehearsal is as well evidenced by the rehearsal as by notes about it.
+  if (input.kind === 'recording') {
+    return isUuid(value)
+      ? { ok: true }
+      : { ok: false, reason: 'Pick one of your recordings from the Studio.' };
+  }
   if (input.kind === 'text') {
-    if (LINK_ONLY.has(storyId)) return { ok: false, reason: 'This task needs a link to your recording.' };
+    if (LINK_ONLY.has(storyId)) return { ok: false, reason: 'This task needs a recording — pick one from the Studio, or paste a link to it.' };
     return value.length >= MIN_TEXT_CHARS
       ? { ok: true }
       : { ok: false, reason: `Write at least ${MIN_TEXT_CHARS} characters, or paste a link instead.` };
   }
-  return { ok: false, reason: 'Evidence must be a link or text.' };
+  return { ok: false, reason: 'Evidence must be a recording, a link, or text.' };
 }
 
 function log(event: string, ctx: Record<string, unknown>, outcome: 'success' | 'failure' | 'partial' = 'success'): void {
@@ -201,15 +216,37 @@ export async function submitDemoEvidence(enrollmentId: string, projectId: string
   if (!verdict.ok) throw httpError(422, verdict.reason, 'InvalidEvidence');
 
   const value = input.value.trim();
-  const done = await markTaskVerifiedComplete(String(task.project_id), storyId, {
-    source: 'demo_evidence',
-    ref: input.kind === 'link' ? value : null,
-    detail: { kind: input.kind, value, submitted_at: new Date().toISOString() },
-  });
+
+  // A recording the platform already holds is first-class evidence, not a lesser
+  // substitute for a public link. It still has to be PROVED here: the pure check
+  // above only saw a uuid, and an unproved id would let one student cite
+  // another's take. The two misses stay distinct — `not_found` says nothing about
+  // whether that attempt exists elsewhere; `not_ready` is a real wait.
+  let source = 'demo_evidence';
+  let ref: string | null = input.kind === 'link' ? value : null;
+  let detail: Record<string, unknown> = { kind: input.kind, value, submitted_at: new Date().toISOString() };
+
+  if (input.kind === 'recording') {
+    const resolved = await resolveRecordingEvidence(String(task.project_id), storyId, value);
+    if (!resolved.ok) {
+      throw resolved.reason === 'not_ready'
+        ? httpError(409, 'That recording has not arrived from Zoom yet. It usually lands within an hour of the session ending — try again then.', 'RecordingNotReady')
+        : httpError(422, 'We could not find that recording on this task. Pick one from the list.', 'InvalidEvidence');
+    }
+    source = 'demo_recording';
+    ref = resolved.ref;
+    detail = resolved.detail;
+  }
+
+  const done = await markTaskVerifiedComplete(String(task.project_id), storyId, { source, ref, detail });
   if (!done) return null;
 
-  const points = await payPrepTask(enrollmentId, String(task.project_id), String(task.id), storyId, 'demo_evidence');
-  log('demo_evidence_verified', { projectId: String(task.project_id), taskId: String(task.id), storyId, kind: input.kind, points });
+  // Keyed on the TASK, never on the evidence, so a student who hands in a link
+  // and later points at a recording — or hands the same recording in twice — is
+  // paid once. The early `verified_at` return above already stops the second
+  // submission; this key is the backstop if it ever does not.
+  const points = await payPrepTask(enrollmentId, String(task.project_id), String(task.id), storyId, source);
+  log('demo_evidence_verified', { projectId: String(task.project_id), taskId: String(task.id), storyId, kind: input.kind, source, points });
   return { ...done, points_awarded: points, already_verified: false };
 }
 
