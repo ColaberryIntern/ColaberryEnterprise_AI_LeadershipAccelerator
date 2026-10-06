@@ -163,13 +163,19 @@ describe('T205 — a bridge failure never fails a registration', () => {
 
 describe('T205 — the bridge cannot send, and the column has a deployment mechanism', () => {
   /**
-   * A SOURCE-TEXT ASSERTION, declared as such per this phase's standing decision: it is
-   * allowed only where no seam exists, must say so, and must carry a positive control.
+   * SOURCE-TEXT ASSERTIONS, declared as such per this phase's standing decision: allowed
+   * only where no seam exists, they must say so, and they must carry a positive control.
    *
-   * No seam exists for either claim. "This module reaches no mailer" is a property of the
-   * import graph, not of a return value. And `ensureEnrollmentColumns` is an unexported
-   * function that issues raw `ALTER TABLE` statements at server start — there is nothing
-   * to call and nothing to observe without a live database.
+   * **That rationale applies to the drift-guard assertion ONLY.** `ensureEnrollmentColumns`
+   * is an unexported function issuing raw `ALTER TABLE` at server start, so there is
+   * nothing to call and nothing to observe without a live database - no seam to test.
+   *
+   * It does NOT apply to the no-send question, and an earlier version of this block claimed
+   * it did, treating the absence of a mailer as a static fact about this module's imports
+   * rather than something observable at run time. A seam does exist and is used 40 lines
+   * below: the real bridge runs with only the models mocked, and the senders are spied. The
+   * token scan that remains is a statement about two FILES and nothing more, which is what
+   * its name now says.
    */
   const read = (p: string) => fs.readFileSync(path.join(__dirname, '..', '..', '..', p), 'utf8');
 
@@ -177,9 +183,9 @@ describe('T205 — the bridge cannot send, and the column has a deployment mecha
    * RETITLED AND NARROWED AFTER VERIFICATION, because the previous version asserted
    * something false.
    *
-   * It was called "the bridge module reaches no mailer, queue, dialler or HTTP surface" and
-   * the session log called that "a property of the import graph". **The import graph reaches
-   * a mailer in three hops:** `explorerProfileAtRegistration` imports
+   * It was called "the bridge module reaches no mailer, queue, dialler or HTTP surface",
+   * and I described that as a fact about this module's import graph. **The import graph
+   * reaches a mailer in three hops:** `explorerProfileAtRegistration` imports
    * `explorerIdentityBridge`, which imports `../participantService` (`:8`), which imports
    * `./emailService` (`:8`), which imports `nodemailer` (`:1`). Around 800 modules are
    * statically reachable. This check reads TWO FILES against a token list, so it can only

@@ -73,12 +73,28 @@ import { reconcileOpenHousePayer } from '../../openHouseCreditService';
  * Phase 2 T205 — all THREE registration paths reach the profile bridge.
  *
  * The plan names them individually on purpose, because "the other paths are handled
- * elsewhere" is how T202b failed twice. They are the same three files T203's tripwire
- * derives as the learner-semantics writer set, so the two lists cannot drift apart
- * without that tripwire failing:
+ * elsewhere" is how T202b failed twice:
  *   1. `freeSignupService`        — the portal free signup
  *   2. `enrollmentService`        — the `/enroll` page (createExplorerEnrollment)
  *   3. `openHouseCreditService`   — the $50 Open House seat deposit
+ *
+ * WHAT THESE THREE ARE NOT. An earlier version of this docblock asserted that this list
+ * was the identical set to T203's learner-semantics writer allow-list, and that the two
+ * were therefore coupled so neither could drift without the other failing. Both halves
+ * were false. Worse, the correction reached the commit message and the session log while
+ * this file went on shipping the claim - which is its own lesson: a retraction that does
+ * not reach the artifact is not a retraction.
+ *
+ * The tripwire's set is `{freeAccountRegistration (canonical), enrollmentService,
+ * openHouseCreditService}` (`learnerWriterTripwire.test.ts:60-64`). These bridge call sites
+ * are `{freeSignupService, enrollmentService, openHouseCreditService}`. They differ in one
+ * entry, for a sound reason - the tripwire names the service that DECIDES the two columns,
+ * this list names the service that REGISTERS someone - and the portal path is still fully
+ * covered because `freeSignupService` is the only caller of `resolveFreeAccount`.
+ *
+ * But **nothing couples the two lists**. A fourth registration path could be added, bridge
+ * nothing, and no tripwire would notice. That is a real gap, stated here rather than
+ * papered over with a claim of coupling that does not exist.
  */
 describe('T205 — path 1: the portal free signup', () => {
   beforeEach(() => {
@@ -174,6 +190,11 @@ describe('T205 — path 2: the /enroll page', () => {
 
   it('leaves this path PRE-EXISTING sends intact, so T205 did not silently disable them', async () => {
     await createExplorerEnrollment({ name: 'Maya', email: 'maya@example.com' });
+
+    // `pushLeadToGhl(lead)` is fire-and-forget (not awaited, `enrollmentService.ts:372`),
+    // so without flushing the microtask queue this assertion leans on scheduling order. It
+    // was green three runs in a row, which is exactly how a flake hides.
+    await new Promise((resolve) => setImmediate(resolve));
 
     // Both under the names the production code imports, and both reached. Had T205's
     // insertion landed in the wrong place - inside the lead-capture try/catch, or before

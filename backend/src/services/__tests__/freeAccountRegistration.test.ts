@@ -269,23 +269,44 @@ describe('freeAccountRegistration', () => {
       expect(written.explorer_entered_at).toBeUndefined();
     });
 
-    it('AC4: and it survives a later state change on the same row', async () => {
-      // 'A later state change' read literally: the row is upgraded, then something else
-      // happens to it (here a second learner request after the programme is already
-      // granted), and the original entry time must still be the one recorded. This is the
-      // half of AC4 that asks whether the value SURVIVES, not merely whether it is unique
-      // on one call.
+    /**
+     * AC4, second half: the value SURVIVES a subsequent upgrade of the same row.
+     *
+     * REWRITTEN AFTER VERIFICATION, because the first version's closing assertion could not
+     * fail. `update` was a bare `jest.fn()` that never applied its patch to the row, and the
+     * service never assigns the property directly, so `expect(teammate.explorer_entered_at)
+     * .toBe(first)` held no matter what the service wrote. Proven: with the set-once guard
+     * deleted - so a fresh timestamp is written on EVERY upgrade - that test stayed green.
+     *
+     * The fix is a fixture whose `update` actually mutates the row, which is what a real
+     * Sequelize instance does. Now the row genuinely carries whatever the service wrote, and
+     * the assertion bites.
+     *
+     * Named for what it proves. The state change here is produced BY THE SERVICE - the
+     * upgrade writes `enrollment_type` onto the row through `update` - rather than assigned
+     * in the test body, which is what the previous version did and should not have called a
+     * state change.
+     */
+    it('AC4: the entry time survives the upgrade that the service itself writes', async () => {
       const first = new Date('2026-03-15T09:00:00Z');
       const teammate = row({ explorer_entered_at: first });
+      // THE LOAD-BEARING LINE: apply the patch, as a real model instance would. Without
+      // this the final assertion is unfalsifiable.
+      teammate.update.mockImplementation(async (patch: Record<string, unknown>) => {
+        Object.assign(teammate, patch);
+      });
       findAll.mockResolvedValue([teammate]);
 
-      await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
-      // The upgrade has landed, so the row is now an explorer. A later visit reuses it.
-      teammate.enrollment_type = 'explorer';
-      const second = await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
+      const upgraded = await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
+      expect(upgraded.disposition).toBe('upgraded');
+      // The service's own write landed on the row - this is the state change.
+      expect(teammate.enrollment_type).toBe('explorer');
+      // And it did NOT carry a new entry time with it.
+      expect(teammate.explorer_entered_at).toBe(first);
 
+      // A later visit now reuses the row, writing nothing further.
+      const second = await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
       expect(second.disposition).toBe('reused');
-      // One update total, from the first call, and it never touched the timestamp.
       expect(teammate.update).toHaveBeenCalledTimes(1);
       expect(teammate.explorer_entered_at).toBe(first);
     });
