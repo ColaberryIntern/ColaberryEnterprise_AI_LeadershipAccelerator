@@ -271,8 +271,12 @@ describe('findUnbridgedExplorers', () => {
  * `loadActiveExplorers` is the query that decides who Explorer Growth can see,
  * and making portal free accounts satisfy it is the entire point of the phase.
  * It was uncovered: a verifier inverted `enrollment_type: 'explorer'` to
- * `'standard'` and this suite stayed 22 of 22 green, so the one filter the phase
- * exists to satisfy could have been changed without a single test noticing.
+ * `'standard'` and nothing failed — 16 tests in this suite and 6 in
+ * `explorerRecomputeDiscovery`, all green — so the one filter this phase exists to
+ * satisfy could have been changed without a single test noticing. (An earlier note
+ * gave that as "22 of 22 green" for this suite alone. 22 was the two suites
+ * combined; stating it as one was a retyped figure, which is the habit this phase
+ * is supposed to have stopped.)
  *
  * It is NOT raw SQL — it is `Enrollment.findAll({ where: { … } })`, the same
  * mockable seam `dashboardExplorerExclusion.test.ts` uses. An earlier version of

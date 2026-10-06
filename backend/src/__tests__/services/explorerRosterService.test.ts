@@ -81,6 +81,13 @@ describe('getExplorerRoster', () => {
     const sql = mockQuery.mock.calls[0][0] as string;
     expect(sql).toContain("e.status = 'active'");
     expect(sql).toContain('cm.mgmt_role'); // IS_STAFF_SQL is inlined into the WHERE clause
+    // Growth OS Reset Phase 2 T202b, row 6. The programme filter is what puts a
+    // portal free account on this roster at all once it becomes an Explorer, and
+    // it was the one fragment this test did not assert — mutating it left the
+    // suite 5 of 5 green. Added in this test's own idiom, which is also why the
+    // earlier claim that row 6 had "no object to assert" was wrong: the SQL is
+    // already captured two lines above.
+    expect(sql).toContain("e.enrollment_type = 'explorer'");
   });
 
   it('collapses a duplicate Explorer identity (Gmail "+alias" re-signup) into one roster entry, keeping the earlier signup', async () => {

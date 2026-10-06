@@ -17,7 +17,7 @@ import { stripComments } from '../../scripts/enumerateFreeAccountConsumers';
  *
  * They move in OPPOSITE directions, because each previously had one of the two
  * columns and not the other. `docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md`
- * enumerates all 29 direct consumers with a determination for each; this suite is
+ * enumerates all 28 direct consumers with a determination for each; this suite is
  * the behaviour half for the ones with a testable seam.
  *
  * TWO KINDS OF ASSERTION, labelled so they are not confused:
@@ -361,7 +361,7 @@ describe('T202b — what does NOT move (STRUCTURAL — the real source)', () => 
  * discovered. The artifact marks 14 rows as changing: 12 for population A and 2
  * for B.
  *
- * **11 of 14 are covered by a suite that runs real code, and each was
+ * **12 of 14 are covered by a suite that runs real code, and each was
  * mutation-proved** — the real line was broken and a named test failed:
  *   row 1  v1EnrollmentLookupController   → this file, `isEnrolledMember` (exported, pure)
  *   row 2  contentEntitlement             → `services/access/__tests__/contentEntitlement.test.ts`
@@ -369,6 +369,7 @@ describe('T202b — what does NOT move (STRUCTURAL — the real source)', () => 
  *   row 3  capeTodayPlanService           → `services/cape/__tests__/capeTodayPlanService.test.ts`
  *   row 4  enrollmentPick                 → this file, `pickBestEnrollment` (exported, pure)
  *   row 5  explorerIdentityBridge         → `services/explorerGrowth/__tests__/explorerIdentityBridge.test.ts`
+ *   row 6  explorerRosterService          → `src/__tests__/services/explorerRosterService.test.ts`
  *   row 8  subscriptionService            → `services/__tests__/subscriptionService.test.ts`
  *   row 10 paymentReconciliationService   → its own existing suite
  *   row 11 personHistoryService           → `src/__tests__/services/personHistory.test.ts`
@@ -376,14 +377,30 @@ describe('T202b — what does NOT move (STRUCTURAL — the real source)', () => 
  *   row 13 reeseWelcomeService            → the existing `reeseWelcomeService` suite
  *   row 29 cohortService dashboard        → `services/__tests__/dashboardExplorerExclusion.test.ts`
  *
- * **3 are uncovered: rows 6, 7 and 9** — `explorerRosterService`'s revenue roster,
- * `subscriptionRosterService`'s deposit roster, and `subscriptionAnalyticsService`'s
- * explorer count. All three are `sequelize.query` template strings with no object
- * to assert, so the only available test would re-declare the SQL, which is the
- * tautology class this file was corrected for. Their filters are quoted with line
- * numbers in the artifact's citations. **Said plainly: nothing tests these three.**
- * T213's scenarios 1 and 2 exercise the upstream population shift that reaches
- * them, which is not the same as testing them.
+ * **13 of 14 are now guarded. One is not, and the earlier description of this
+ * group was wrong three ways** — a third recurrence of the same failure, found by
+ * a third verifier:
+ *
+ *   row 6  explorerRosterService        → COVERED. The claim that it had "no object
+ *          to assert" was false: its own suite already captures the SQL and
+ *          asserts fragments of it. One line in `src/__tests__/services/
+ *          explorerRosterService.test.ts` closed it; inverting the programme
+ *          filter previously left that suite 5 of 5 green and now fails by name.
+ *   row 9  subscriptionAnalyticsService → GUARDED, incidentally and not by design.
+ *          Its suite's mock routes on `sql.includes("enrollment_type =
+ *          'explorer'")`, so inverting the filter breaks the routing: **18 of 29
+ *          tests fail.** The claim "nothing tests these three" was simply untrue,
+ *          falsifiable in one command.
+ *   row 7  subscriptionRosterService    → **UNCOVERED, and it is not only a SQL
+ *          string.** `subscriptionRosterService.ts:85` is
+ *          `isExplorer: r.enrollment_type === 'explorer'` inside the **exported**
+ *          `getStaffRoster`, reachable by the same `jest.spyOn` shape used for row
+ *          12. Calling it "a SQL template string" hid a testable site inside a
+ *          group labelled impossible. Carried forward as a named follow-up rather
+ *          than closed here, because the retry cap for this task is spent.
+ *
+ * Row 9's guard is incidental, so it protects the filter today and would not
+ * survive someone rewriting that mock. It is recorded as guarded-not-tested.
  *
  * THREE CLAIMS THAT USED TO BE HERE WERE FALSE, and they were load-bearing because
  * they were the stated reason for not writing tests the plan required:
@@ -391,7 +408,7 @@ describe('T202b — what does NOT move (STRUCTURAL — the real source)', () => 
  *   - "rows 5, 6, 7, 9 … raw sql.query with no callable seam" — false for row 5.
  *     `explorerIdentityBridge.ts:122` is `Enrollment.findAll({ where: { … } })`,
  *     the same seam `dashboardExplorerExclusion.test.ts` uses. Inverting it left
- *     its suite 22 of 22 green: the one filter this entire phase exists to satisfy
+ *     its suite green — 16 tests there and 6 in `explorerRecomputeDiscovery`: the one filter this phase exists to satisfy
  *     was untested, behind a false excuse. Now covered and mutation-proved.
  *   - "rows 11 and 12 … inside large un-exported functions" — false twice. They are
  *     inside `export async function getEnrollmentHistory` and
