@@ -1,0 +1,172 @@
+import { Enrollment } from '../models';
+import { pickBestEnrollment } from './enrollmentPick';
+
+/**
+ * The one place a free account's two semantic columns are decided.
+ *
+ * WHY THIS EXISTS. Two public implementations created free accounts and each
+ * wrote one of the two columns that describe such an account:
+ *
+ *   - `enrollmentService.createExplorerEnrollment` (the `/enroll` page) set
+ *     `enrollment_type: 'explorer'` and left `tier` at its 'member' default.
+ *   - `freeSignupService.createFreeAccount` (the portal signup) set
+ *     `tier: 'guest'` and left `enrollment_type` at its 'standard' default.
+ *
+ * Explorer Growth finds its population by `enrollment_type = 'explorer'`
+ * (`explorerIdentityBridge.loadActiveExplorers`), so every account that arrived
+ * through the second path was a real free AI learner that the growth engine
+ * could not see. The two columns are not duplicates and neither is redundant:
+ *
+ *   `tier`            = ACCESS LEVEL.  'guest' = free, 'member' = paid access.
+ *   `enrollment_type` = PROGRAMME.     'explorer' = the free AI learner course.
+ *
+ * Both are needed because the cross product is real and populated. An org
+ * teammate invited by their employer is `tier: 'guest'` + 'standard': free
+ * access, not a learner. A paid student is 'member' + 'standard'. A free AI
+ * learner is 'guest' + 'explorer'. Collapsing them into one column is what
+ * put the AI Flotation consulting registrations onto learner rosters, which is
+ * the mistake `orgService` carries a comment about.
+ *
+ * The programme is therefore a REQUIRED argument rather than a default. A
+ * default would silently reclassify whichever caller forgot to pass it, and the
+ * first draft of this change defaulted to 'learner' — which would have made
+ * every org owner and every invited corporate teammate an Explorer, put them on
+ * learner rosters and into the nurture the growth engine runs.
+ */
+export type FreeAccountProgramme = 'learner' | 'standard';
+
+export interface FreeAccountIdentity {
+  full_name: string;
+  email: string;
+}
+
+export interface ResolveFreeAccountArgs extends FreeAccountIdentity {
+  /** REQUIRED. 'learner' = the free AI course (Explorer). 'standard' = free access, no programme. */
+  programme: FreeAccountProgramme;
+}
+
+export type FreeAccountDisposition = 'created' | 'reused' | 'upgraded';
+
+export interface ResolveFreeAccountResult {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize instance, shaped by the caller
+  enrollment: any;
+  disposition: FreeAccountDisposition;
+}
+
+/** Normalize inbound identity (pure — email lowercased/trimmed, name trimmed). */
+export function normalizeIdentity(input: FreeAccountIdentity): FreeAccountIdentity {
+  return {
+    full_name: (input.full_name || '').trim(),
+    email: (input.email || '').toLowerCase().trim(),
+  };
+}
+
+/**
+ * The attributes a brand-new free enrollment is created with (pure).
+ *
+ * `tier: 'guest'` on every programme — this function only ever makes FREE
+ * accounts, so access level is not a variable. `enrollment_type` is the
+ * programme, and it is the only field the argument changes.
+ */
+export function freeEnrollmentDefaults(
+  clean: FreeAccountIdentity,
+  programme: FreeAccountProgramme,
+) {
+  return {
+    full_name: clean.full_name,
+    email: clean.email,
+    company: '',                          // not known at signup (NOT NULL column)
+    cohort_id: null,                       // free accounts are not in a cohort
+    tier: 'guest' as const,
+    enrollment_type: programme === 'learner' ? ('explorer' as const) : ('standard' as const),
+    status: 'active' as const,
+    payment_status: 'pending' as const,
+    payment_method: 'credit_card' as const,
+    portal_enabled: true,                  // free accounts get immediate portal access
+    maturity_level: 0,
+    intake_completed: false,
+  };
+}
+
+/**
+ * Does an existing row need the learner programme added to it?
+ *
+ * Pure, and separated out because it is the subtle half of this service.
+ *
+ * `pickBestEnrollment` ranks `[mgmt_role, non-explorer, paid, newest]` — note
+ * that 'explorer' ranks WORSE than a non-learner row, deliberately, so that a
+ * stray free row can never capture the login of someone holding a real seat.
+ * The consequence here runs the other way: an org teammate (`tier: 'guest'`,
+ * `enrollment_type: 'standard'`, never paid) who later signs up for the free AI
+ * course is handed their existing org row. Without this branch they would never
+ * gain the learner programme and would stay invisible to Explorer Growth — the
+ * same outcome this whole service exists to make impossible, reached by a
+ * different route.
+ *
+ * So the learner programme is added IN PLACE. It is an upgrade, not a
+ * conscription: it happens only when the person themselves asked for the
+ * learner programme (`programme: 'learner'`), never when org provisioning
+ * creates an account for them. And a PAID row is never touched, because
+ * flipping a paying student onto the free course would gate them to Week 0.
+ */
+export function needsProgrammeUpgrade(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize instance
+  existing: any,
+  programme: FreeAccountProgramme,
+): boolean {
+  if (programme !== 'learner') return false;
+  if (!existing) return false;
+  if (existing.payment_status === 'paid') return false;
+  return existing.enrollment_type !== 'explorer';
+}
+
+/**
+ * Create, reuse, or upgrade the one free enrollment for this email.
+ *
+ * Idempotency is STATUS-AWARE, and that is the point of this function rather
+ * than an incidental detail. The portal path previously matched on
+ * `Enrollment.findOne({ where: { email } })` with no status filter, while
+ * `enrollmentService.retireRedundantExplorerAccounts` deliberately leaves
+ * `status: 'withdrawn'` rows in place and both `explorerIdentityBridge` and
+ * `explorerRosterService` require `status = 'active'`. The combination meant a
+ * returning person whose email carried a withdrawn row was logged in against
+ * that dead row, never received a learner-programme row, and stayed invisible
+ * to Explorer Growth permanently.
+ *
+ * Failure-first: this function performs no send, enrols nobody in a campaign,
+ * and writes nothing but the enrollment row. Lead capture, welcome messages and
+ * the Explorer profile bridge stay with the callers that already own them, so
+ * this stays a pure account decision that a test can drive without mocking a
+ * mailer.
+ */
+export async function resolveFreeAccount(
+  args: ResolveFreeAccountArgs,
+): Promise<ResolveFreeAccountResult> {
+  const clean = normalizeIdentity(args);
+  if (!clean.email || !clean.full_name) {
+    throw new Error('full_name and email are required');
+  }
+
+  // Only ACTIVE rows are candidates. A withdrawn or completed row is history,
+  // not an account to log into.
+  const active = await Enrollment.findAll({
+    where: { email: clean.email, status: 'active' },
+  });
+
+  const existing = pickBestEnrollment(active as any[]);
+
+  if (!existing) {
+    const created = await Enrollment.create(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
+      freeEnrollmentDefaults(clean, args.programme) as any,
+    );
+    return { enrollment: created, disposition: 'created' };
+  }
+
+  if (needsProgrammeUpgrade(existing, args.programme)) {
+    await (existing as any).update({ enrollment_type: 'explorer' });
+    return { enrollment: existing, disposition: 'upgraded' };
+  }
+
+  return { enrollment: existing, disposition: 'reused' };
+}
