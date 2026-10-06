@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { freeSignup } from '../../services/onboardingApi';
+import { identifyVisitor } from '../../utils/tracker';
 
 // Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
 // the visitor straight in, and drops them on the Today shell — the top of the
@@ -32,6 +33,29 @@ function PortalFreeSignupPage() {
     setLoading(true);
     try {
       const res = await freeSignup({ full_name: fullName.trim(), email: email.trim() });
+
+      /**
+       * Tie the anonymous visitor to the person who just signed up.
+       *
+       * This is the step that answers "who clicked". Until now it did not happen anywhere in
+       * this flow - not here, and not on the backend, which never reads a fingerprint during
+       * signup. EnrollPage, ContactPage, LeadCaptureForm and StrategyCallModal all call this;
+       * the page every landing-page CTA points at did not. So someone could arrive from a
+       * campaign, read the page, click the button and create an account, and their visit stayed
+       * an anonymous fingerprint for ever.
+       *
+       * Deliberately BEFORE `login`/`navigate` so the call is issued while this document is
+       * still alive, and deliberately not awaited - attribution must never be able to delay or
+       * fail someone's signup. `identifyVisitor` backfills their earlier anonymous sessions onto
+       * the lead, so the landing-page view that brought them here is attributed too.
+       */
+      try {
+        identifyVisitor(email.trim(), {
+          name: fullName.trim(),
+          metadata: { source_form: 'portal_free_signup' },
+        });
+      } catch { /* instrumentation must never break the signup */ }
+
       login(res.jwt);
       navigate('/portal/today', { replace: true });
     } catch (err: any) {
