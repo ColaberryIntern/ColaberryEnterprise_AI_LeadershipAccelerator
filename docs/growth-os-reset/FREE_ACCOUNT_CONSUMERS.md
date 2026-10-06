@@ -112,7 +112,7 @@ asserts them from the parsed cells so they cannot drift again:
 | Changes for population B | **2** (rows 1 and 13) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
 | Writers | **3** | `grep -c "\| writer \| writer \|"` |
 | Unchanged, with a stated reason | **11** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **28** | matches the generator's `BRANCHING` count |
+| **Total** | **29** | matches the generator's `BRANCHING` count |
 
 ## REPORTING — 17 files
 

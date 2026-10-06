@@ -220,6 +220,26 @@ describe('free-account consumer enumeration (T202a)', () => {
         expect(doc).toContain(`| Writers | **${writers.length}** |`);
         expect(doc).toContain(`| Unchanged, with a stated reason | **${unchanged.length}** |`);
       });
+
+      /**
+       * THE TOTAL ROW, added after a verifier found it stale.
+       *
+       * The four sub-tallies above were asserted and the Total was not. So when T205 moved a
+       * consumer from REPORTING into BRANCHING, the heading became `29 files`, the four parts
+       * were corrected to sum to 29, and the Total row sat at **28** — unasserted and wrong, in
+       * the one artifact whose entire purpose is to stop stale numbers. A tally nothing checks
+       * is precisely what this file exists to prevent, so it is checked now.
+       *
+       * Derived from the parsed cells AND cross-checked against the parts, so the whole and its
+       * pieces cannot drift in compensating directions — the self-validating arithmetic the
+       * comment above this block already records from the first draft.
+       */
+      it('the document states the TOTAL it actually has, and the parts sum to it', () => {
+        expect(doc).toContain(`| **Total** | **${rows.length}** |`);
+        expect(aChanges.length + bChanges.length + writers.length + unchanged.length)
+          .toBe(rows.length);
+        expect(rows.length).toBe(branching.length);
+      });
     });
   });
 });

@@ -29,6 +29,21 @@ jest.mock('../../../models', () => ({
   CommunityMember: {},
 }));
 
+/**
+ * Sender spies for the behavioural no-send check at the bottom of this file. These are the
+ * two modules the bridge's import graph can actually reach a send through, and they are
+ * spied rather than merely stubbed so the assertion can fail.
+ */
+const sendPortalMagicLink = jest.fn();
+const sendTrainingWelcome = jest.fn();
+jest.mock('../../emailService', () => ({
+  sendPortalMagicLink: (...a: unknown[]) => sendPortalMagicLink(...a),
+  sendTrainingWelcome: (...a: unknown[]) => sendTrainingWelcome(...a),
+}));
+const syncNewLeadToGhl = jest.fn();
+jest.mock('../../ghlService', () => ({ syncNewLeadToGhl: (...a: unknown[]) => syncNewLeadToGhl(...a) }));
+const senderSpies = [sendPortalMagicLink, sendTrainingWelcome, syncNewLeadToGhl];
+
 import { bridgeExplorerProfileAtRegistration } from '../explorerProfileAtRegistration';
 
 /**
@@ -158,7 +173,22 @@ describe('T205 — the bridge cannot send, and the column has a deployment mecha
    */
   const read = (p: string) => fs.readFileSync(path.join(__dirname, '..', '..', '..', p), 'utf8');
 
-  it('the bridge module reaches no mailer, queue, dialler or HTTP surface', () => {
+  /**
+   * RETITLED AND NARROWED AFTER VERIFICATION, because the previous version asserted
+   * something false.
+   *
+   * It was called "the bridge module reaches no mailer, queue, dialler or HTTP surface" and
+   * the session log called that "a property of the import graph". **The import graph reaches
+   * a mailer in three hops:** `explorerProfileAtRegistration` imports
+   * `explorerIdentityBridge`, which imports `../participantService` (`:8`), which imports
+   * `./emailService` (`:8`), which imports `nodemailer` (`:1`). Around 800 modules are
+   * statically reachable. This check reads TWO FILES against a token list, so it can only
+   * ever have been a statement about those two files - which is what it now says.
+   *
+   * The property that actually matters - that the executed bridge path performs no send - is
+   * asserted behaviourally in the test below, on the real call path, where it can fail.
+   */
+  it('neither bridge FILE contains a sender token (a file-scope check, not an import-graph one)', () => {
     const src = read('services/explorerGrowth/explorerIdentityBridge.ts')
       + read('services/explorerGrowth/explorerProfileAtRegistration.ts');
 
@@ -168,6 +198,27 @@ describe('T205 — the bridge cannot send, and the column has a deployment mecha
     // POSITIVE CONTROL: the same read finds something it must find, so a path typo
     // cannot make this pass by reading an empty string.
     expect(src).toContain('ExplorerJourneyProfile');
+  });
+
+  /**
+   * THE REAL NO-SEND CHECK: behavioural, on the executed path, and able to fail.
+   *
+   * `emailService` and `ghlService` are mocked with spies at the top of this file. A
+   * successful bridge must invoke none of them. If someone ever adds a notification to
+   * `resolveExplorerLead` - or to the helper - this goes red, which is a guarantee the
+   * two-file token scan above could never give.
+   */
+  it('a successful bridge invokes nothing from emailService or ghlService', async () => {
+    jest.clearAllMocks();
+    enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'maya@example.com' });
+    leadFindOne.mockResolvedValue({ id: 77 });
+    profileFindByPk.mockResolvedValue(null);
+    profileCreate.mockResolvedValue({});
+
+    await bridgeExplorerProfileAtRegistration('enr-1', 'portal_free_signup');
+
+    expect(profileCreate).toHaveBeenCalledTimes(1);   // the path really ran
+    for (const spy of senderSpies) expect(spy).not.toHaveBeenCalled();
   });
 
   it('the entry-timestamp column is in the drift-guard list, not only on the model', () => {

@@ -24,6 +24,10 @@ const row = (over: Record<string, unknown> = {}) => ({
   cohort_id: null,
   status: 'active',
   created_at: new Date('2026-01-01'),
+  // Declared on the BASE fixture, not just passed through `...over`, so the property
+  // exists on the inferred type and a test can read it back. null is also the honest
+  // default: a row that has not entered the Explorer journey has no entry time.
+  explorer_entered_at: null as Date | null,
   update: jest.fn(),
   ...over,
 });
@@ -239,6 +243,51 @@ describe('freeAccountRegistration', () => {
       // exactly one field and the list stays exhaustive, so a third field arriving later
       // is still a failure rather than a silent widening of what an upgrade may write.
       expect(Object.keys(written).sort()).toEqual(['enrollment_type', 'explorer_entered_at']);
+    });
+
+    /**
+     * AC4 — SET ONCE. This is the test T205 attempt 1 did not have, and its absence was
+     * the acceptance gap the verifier correctly failed the task on.
+     *
+     * `expect.any(Date)` on the upgrade patch proves a write happened; it proves nothing
+     * about uniqueness. The old fixture never set `explorer_entered_at`, so the
+     * `if (!existing.explorer_entered_at)` guard was never exercised against a non-null
+     * value — and a mutation deleting that guard altogether passed 152 tests. A guard no
+     * test can distinguish from its own absence is not a guard.
+     */
+    it('AC4: an already-entered row keeps its ORIGINAL entry time — the write is set-once', async () => {
+      const first = new Date('2026-03-15T09:00:00Z');
+      const teammate = row({ explorer_entered_at: first });
+      findAll.mockResolvedValue([teammate]);
+
+      const res = await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
+
+      expect(res.disposition).toBe('upgraded');
+      // The programme is granted; the timestamp is NOT in the patch at all.
+      const written = teammate.update.mock.calls[0][0];
+      expect(Object.keys(written)).toEqual(['enrollment_type']);
+      expect(written.explorer_entered_at).toBeUndefined();
+    });
+
+    it('AC4: and it survives a later state change on the same row', async () => {
+      // 'A later state change' read literally: the row is upgraded, then something else
+      // happens to it (here a second learner request after the programme is already
+      // granted), and the original entry time must still be the one recorded. This is the
+      // half of AC4 that asks whether the value SURVIVES, not merely whether it is unique
+      // on one call.
+      const first = new Date('2026-03-15T09:00:00Z');
+      const teammate = row({ explorer_entered_at: first });
+      findAll.mockResolvedValue([teammate]);
+
+      await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
+      // The upgrade has landed, so the row is now an explorer. A later visit reuses it.
+      teammate.enrollment_type = 'explorer';
+      const second = await resolveFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner' });
+
+      expect(second.disposition).toBe('reused');
+      // One update total, from the first call, and it never touched the timestamp.
+      expect(teammate.update).toHaveBeenCalledTimes(1);
+      expect(teammate.explorer_entered_at).toBe(first);
     });
 
     it('org provisioning still cannot make a teammate a learner: standard leaves the row alone', async () => {

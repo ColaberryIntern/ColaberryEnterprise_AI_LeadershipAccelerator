@@ -16,7 +16,14 @@ jest.mock('../../../models', () => ({
     findOne: (...a: unknown[]) => enrollmentFindOne(...a),
   },
   Lead: { findOrCreate: (...a: unknown[]) => leadFindOrCreate(...a) },
-  Cohort: { findOne: (...a: unknown[]) => cohortFindOne(...a) },
+  // `findByPk` too: the deposit path's `needsCohortPlacement` resolves the current cohort
+  // to decide whether a row needs placing, and that runs on the MATCHED-existing branch
+  // which the new dry-run test exercises.
+  Cohort: {
+    findOne: (...a: unknown[]) => cohortFindOne(...a),
+    findByPk: async () => ({ id: 'coh-1', name: 'Paid Cohort' }),
+    increment: async () => undefined,
+  },
   Campaign: {},
   // The deposit path's DRY-RUN branch checks credit existence via the model instead of
   // writing, so a preview needs this even though it writes nothing.
@@ -24,14 +31,28 @@ jest.mock('../../../models', () => ({
   CommunicationLog: { create: async () => ({}) },
 }));
 
-// NOTHING SENDS. The /enroll path calls `sendTrainingWelcome` with
-// `delivery_mode: 'live'` and pushes to GHL, so both are replaced by spies that this
-// suite then ASSERTS were never called. A test that merely stubs a mailer proves the
-// mailer was stubbed; asserting it was not called is what proves the path stayed quiet.
-const sendTrainingWelcome = jest.fn();
+/**
+ * The /enroll path DOES send, by design and long before T205: a training welcome with
+ * `delivery_mode: 'live'` and a GHL push. Both are mocked here, so this suite reaches no
+ * real recipient.
+ *
+ * CORRECTED AFTER VERIFICATION. Attempt 1 asserted `not.toHaveBeenCalled()` on both, and
+ * that was wrong twice over. The GHL spy was named `syncLeadToGhl` while `pushLeadToGhl`
+ * imports **`syncNewLeadToGhl`** (`enrollmentService.ts:15`), so the spy sat off the call
+ * path and the assertion could never fail. And the welcome assertion passed only because
+ * the fixture's enrollment had no `update`, so `enrollment.update(...)` threw at
+ * `enrollmentService.ts:402` BEFORE the send at `:407` - the path never reached the send,
+ * which is not what 'it stayed quiet' means.
+ *
+ * Both are now mocked under the names the code imports, the fixture reaches them, and the
+ * assertion is the true one: these pre-existing sends STILL HAPPEN, which proves T205 did
+ * not silently disable them. Whether T205's own addition sends is a question about the
+ * bridge, answered behaviourally in `explorerProfileAtRegistration.test.ts`.
+ */
+const sendTrainingWelcome = jest.fn().mockResolvedValue({ ok: true });
 jest.mock('../../emailService', () => ({ sendTrainingWelcome: (...a: unknown[]) => sendTrainingWelcome(...a) }));
-const syncLeadToGhl = jest.fn();
-jest.mock('../../ghlService', () => ({ syncLeadToGhl: (...a: unknown[]) => syncLeadToGhl(...a) }));
+const syncNewLeadToGhl = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../ghlService', () => ({ syncNewLeadToGhl: (...a: unknown[]) => syncNewLeadToGhl(...a) }));
 
 const grantCredit = jest.fn().mockResolvedValue({ granted: true, alreadyPresent: false });
 jest.mock('../../accountCreditService', () => ({ grantCredit: (...a: unknown[]) => grantCredit(...a) }));
@@ -133,7 +154,11 @@ describe('T205 — path 2: the /enroll page', () => {
     bridge.mockResolvedValue(true);
     cohortFindOne.mockResolvedValue({ id: 'coh-1', name: 'Explorer', seats_taken: 0 });
     enrollmentFindAll.mockResolvedValue([]);
-    enrollmentCreate.mockImplementation(async (attrs: any) => ({ id: 'enr-9', ...attrs }));
+    // `update` is REQUIRED on this fixture: `createExplorerEnrollment` writes a portal
+    // token via `enrollment.update(...)` before sending, and without it the path throws
+    // there and never reaches the send - exactly how attempt 1's assertion passed for the
+    // wrong reason.
+    enrollmentCreate.mockImplementation(async (attrs: any) => ({ id: 'enr-9', ...attrs, update: jest.fn() }));
     leadFindOrCreate.mockResolvedValue([{ id: 5 }, true]);
   });
 
@@ -147,13 +172,25 @@ describe('T205 — path 2: the /enroll page', () => {
     expect(enrollmentCreate.mock.calls[0][0].explorer_entered_at).toBeInstanceOf(Date);
   });
 
-  it('SENDS NOTHING while doing it', async () => {
-    // This path really does send in production — `sendTrainingWelcome` with
-    // `delivery_mode: 'live'` and a GHL push. T205 adds a call to it, so the no-send
-    // property is re-asserted here rather than assumed to have survived.
+  it('leaves this path PRE-EXISTING sends intact, so T205 did not silently disable them', async () => {
     await createExplorerEnrollment({ name: 'Maya', email: 'maya@example.com' });
-    expect(sendTrainingWelcome).not.toHaveBeenCalled();
-    expect(syncLeadToGhl).not.toHaveBeenCalled();
+
+    // Both under the names the production code imports, and both reached. Had T205's
+    // insertion landed in the wrong place - inside the lead-capture try/catch, or before
+    // it - one of these would stop being called and this test fails.
+    expect(syncNewLeadToGhl).toHaveBeenCalledTimes(1);
+    expect(sendTrainingWelcome).toHaveBeenCalledTimes(1);
+    expect(sendTrainingWelcome.mock.calls[0][0]).toMatchObject({ to: 'maya@example.com' });
+  });
+
+  it('bridges AFTER the lead capture here too, so lead_id can resolve', async () => {
+    const order: string[] = [];
+    leadFindOrCreate.mockImplementation(async () => { order.push('lead'); return [{ id: 5 }, true]; });
+    bridge.mockImplementation(async () => { order.push('bridge'); return true; });
+
+    await createExplorerEnrollment({ name: 'Maya', email: 'maya@example.com' });
+
+    expect(order).toEqual(['lead', 'bridge']);
   });
 });
 
@@ -179,11 +216,29 @@ describe('T205 — path 3: the $50 Open House deposit', () => {
     expect(enrollmentCreate.mock.calls[0][0].explorer_entered_at).toEqual(new Date(nowMs));
   });
 
-  it('writes NOTHING on a dry run — a preview must stay side-effect free', async () => {
-    // This service's contract is that `apply: false` previews without touching anything,
-    // and a profile row is a side effect like any other.
+  it('writes NOTHING on a dry run when there is nobody to match', async () => {
     await reconcileOpenHousePayer(payer as any, { cohort: null, grantedBy: 'test', apply: false });
     expect(bridge).not.toHaveBeenCalled();
     expect(enrollmentCreate).not.toHaveBeenCalled();
+  });
+
+  /**
+   * THE CASE THAT ACTUALLY PROTECTS THE GUARD, added after verification.
+   *
+   * The test above leaves `enrollment` null, so `if (opts.apply && enrollment)` is false
+   * either way - deleting `opts.apply` from that condition passed every test in the suite.
+   * The guard is only exercised when a dry run HAS a matched enrollment, which is exactly
+   * the preview that would otherwise write a profile row.
+   */
+  it('writes NOTHING on a dry run that MATCHES an existing enrollment', async () => {
+    const existing = { id: 'enr-existing', cohort_id: 'coh-1', update: jest.fn() };
+    enrollmentFindAll.mockResolvedValue([existing]);
+    enrollmentFindOne.mockResolvedValue(existing);
+
+    const out = await reconcileOpenHousePayer(payer as any, { cohort: null, grantedBy: 'test', apply: false });
+
+    expect(out.enrollmentId).toBe('enr-existing');   // it really did match
+    expect(bridge).not.toHaveBeenCalled();           // and still wrote nothing
+    expect(existing.update).not.toHaveBeenCalled();
   });
 });
