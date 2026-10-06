@@ -15,6 +15,13 @@ jest.mock('../../services/paysimpleService', () => ({
 jest.mock('../../services/enrollmentService', () => ({
   markEnrollmentPaid: jest.fn(),
   markEnrollmentFailed: jest.fn(),
+}));
+
+// `enrollInClassReadinessCampaign` moved to its own module when `enrollmentService`
+// was split at the 500-line ceiling (T206). The mock has to follow it: this suite mocks
+// `../../models` with only `Cohort` and `EnrollmentLead`, so an unmocked call would reach
+// a real `Campaign.findOne` on an undefined model.
+jest.mock('../../services/readinessCampaignService', () => ({
   enrollInClassReadinessCampaign: jest.fn().mockResolvedValue(undefined),
 }));
 

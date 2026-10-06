@@ -5,6 +5,10 @@ import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 import { pickBestEnrollment } from './participantService';
 import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
+import {
+  enrollInPaymentCampaignIfUnpaid,
+  exitPaymentCampaign,
+} from './readinessCampaignService';
 import { redactForLogs } from '../utils/piiRedaction';
 
 // Lazy import (the convention ghlService itself uses for aiEventService): a
@@ -451,97 +455,4 @@ export async function convertExplorerToStandard(enrollmentId: string): Promise<E
     await enrollment.update({ enrollment_type: 'standard' });
   }
   return enrollment;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Payment Readiness Campaign Helpers                                 */
-/* ------------------------------------------------------------------ */
-
-const PAYMENT_READINESS_CAMPAIGN_NAME = 'Payment Readiness Campaign';
-
-async function enrollInPaymentCampaignIfUnpaid(enrollment: Enrollment): Promise<void> {
-  if (enrollment.payment_status === 'paid') return;
-
-  const campaign = await Campaign.findOne({
-    where: { name: PAYMENT_READINESS_CAMPAIGN_NAME, status: 'active' },
-  });
-  if (!campaign) {
-    console.log('[Payment Campaign] No active payment readiness campaign found — skipping');
-    return;
-  }
-
-  // Find or create a Lead record for this enrollee
-  const [lead] = await Lead.findOrCreate({
-    where: { email: enrollment.email.toLowerCase().trim() },
-    defaults: {
-      name: enrollment.full_name,
-      email: enrollment.email.toLowerCase().trim(),
-      company: enrollment.company || '',
-      title: enrollment.title || '',
-      phone: enrollment.phone || '',
-      source: 'enrollment',
-      status: 'engaged',
-    } as any,
-  });
-
-  const { enrollLeadsInCampaign } = await import('./campaignService');
-  const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Class Readiness Campaign                                           */
-/* ------------------------------------------------------------------ */
-
-const CLASS_READINESS_CAMPAIGN_NAME = 'Class Readiness Campaign';
-
-export async function enrollInClassReadinessCampaign(enrollment: Enrollment): Promise<void> {
-  if (enrollment.payment_status !== 'paid') return;
-
-  const campaign = await Campaign.findOne({
-    where: { name: CLASS_READINESS_CAMPAIGN_NAME, status: 'active' },
-  });
-  if (!campaign) {
-    console.log('[Class Readiness] No active campaign found — skipping');
-    return;
-  }
-
-  const [lead] = await Lead.findOrCreate({
-    where: { email: enrollment.email.toLowerCase().trim() },
-    defaults: {
-      name: enrollment.full_name,
-      email: enrollment.email.toLowerCase().trim(),
-      company: enrollment.company || '',
-      title: enrollment.title || '',
-      phone: enrollment.phone || '',
-      source: 'enrollment',
-      status: 'engaged',
-    } as any,
-  });
-
-  const { enrollLeadsInCampaign } = await import('./campaignService');
-  const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
-}
-
-async function exitPaymentCampaign(email: string): Promise<void> {
-  const campaign = await Campaign.findOne({
-    where: { name: PAYMENT_READINESS_CAMPAIGN_NAME },
-  });
-  if (!campaign) return;
-
-  const lead = await Lead.findOne({
-    where: { email: email.toLowerCase().trim() },
-  });
-  if (!lead) return;
-
-  try {
-    const { removeLeadFromCampaign } = await import('./campaignService');
-    await removeLeadFromCampaign(campaign.id, lead.id);
-    console.log(`[Payment Campaign] Exited lead ${lead.id} (${email}) — payment confirmed`);
-  } catch (err: any) {
-    // Lead may not be enrolled (e.g., admin-created enrollment that was always paid)
-    if (err.message?.includes('not enrolled')) return;
-    throw err;
-  }
 }

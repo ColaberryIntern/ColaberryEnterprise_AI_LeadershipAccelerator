@@ -66,7 +66,7 @@ paywall never reads it, which is gap A5 in `GAP_MATRIX.md`:
 
 Path A sets the programme label and leaves access at the paying default:
 
-`backend/src/services/enrollmentService.ts:323` → "    enrollment_type: 'explorer',"
+`backend/src/services/enrollmentService.ts:327` → "    enrollment_type: 'explorer',"
 
 Path B sets the access level and leaves the programme at the paying default:
 
@@ -194,7 +194,7 @@ second name for the same thing, which is what "reuse before build" means here.
 replay finds it already set. Both public paths already dedupe on email, so a second signup
 attempt does not produce a second entry event:
 
-`backend/src/services/enrollmentService.ts:308` → "  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });"
+`backend/src/services/enrollmentService.ts:312` → "  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });"
 `backend/src/services/freeAccountRegistration.ts:171` → "    where: { email: clean.email, status: 'active' },"
 
 **UPDATED by Phase 2 T202b, and the original finding is the reason.** When Phase 1 recorded this,
