@@ -45,6 +45,13 @@ decisions. Nothing today preserves that order across the brand boundary.
 **Missing:** a single canonical entry event. Treated in full in `EXPLORER_ENTRY_SEMANTICS.md`.
 This is the most consequential seam in the map, because §1 of the build prompt rests on it.
 
+> **Dated, as of Phase 1 — this row is the defect, not current behaviour.** "Two paths, writing
+> contradictory labels" was true at `origin/main @ 541305a6`. **Phase 2 T202b closed it:** both
+> public paths now go through one canonical service that writes **both** columns, which is why the
+> second citation above points into `freeAccountRegistration.ts` rather than the file Phase 1 read
+> it from. The row stands because the map records what was wrong; for what is true now, and for the
+> 28 consumers the fix moves, see `FREE_ACCOUNT_CONSUMERS.md`.
+
 ### 3 · Explorer profile
 
 **Intended:** the learner's lifecycle state, scores and overlays.

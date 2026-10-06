@@ -23,14 +23,32 @@ import { stripComments } from '../../scripts/enumerateFreeAccountConsumers';
  * TWO KINDS OF ASSERTION, labelled so they are not confused:
  *
  *   BEHAVIOUR — the real decision function is called and its answer flips.
- *   STRUCTURAL — the consumer is a raw SQL string with no seam, so the test
- *                asserts the filter is present, with a positive control proving
- *                the assertion can fail. A structural assertion is weaker and is
- *                never described as a behaviour test.
+ *   STRUCTURAL — the consumer has no callable seam, so the test asserts the
+ *                source, with a positive control proving the assertion can fail.
+ *                Weaker, and never described as a behaviour test.
  *
- * Consumers with no seam at all are named in the artifact and left to the
- * acceptance scenarios (T213), rather than given a test that only restates the
- * source.
+ * A THIRD KIND HAS BEEN REMOVED, because it was the worst of the three. The first
+ * version of this file re-declared five predicates inside the tests and asserted
+ * the copies — `isStudent`, the legacy Week-0 gate, the dashboard exclusion, the
+ * customer fact, the internship filter. Every copy was faithful to the real code,
+ * so they read as coverage. A verifier inverted the REAL Reese predicate and the
+ * REAL `cohortService` filter and this suite stayed green on both. A test that
+ * restates the source cannot fail when the source drifts, which is the one thing
+ * a test is for.
+ *
+ * Each of those five is now either pointed at real code, replaced by a suite that
+ * drives the real function, or deleted and cited to the pre-existing suite that
+ * genuinely covers it. Where the cite is the answer, the suite is named so the
+ * claim is checkable:
+ *
+ *   - the legacy Week-0 predicate → `services/access/__tests__/contentEntitlement.test.ts`
+ *     ("flag OFF + explorer → gated (true)", "flag OFF + standard … NOT gated",
+ *     "EXPLORER_WEEK0_ONLY=false → explorer NOT gated"). Its EFFECT, the card
+ *     truncation, is covered by `services/timeline/__tests__/timelineWeekZeroGate.test.ts`.
+ *   - Reese's `isStudent` → the pre-existing `reeseWelcomeService` suite, which
+ *     fails 13 tests when that predicate is inverted.
+ *   - the dashboard exclusion → `services/__tests__/dashboardExplorerExclusion.test.ts`,
+ *     written because inverting the real filter was caught by nothing in the repo.
  */
 describe('T202b — population B: /enroll Explorers gain tier: guest', () => {
   /**
@@ -71,24 +89,29 @@ describe('T202b — population B: /enroll Explorers gain tier: guest', () => {
   });
 
   /**
-   * Reese's first message. `isStudent` is keyed on `tier === 'member'`, which is
-   * why this change also belongs to population B and not A. The predicate is
-   * private, so this reproduces it over the same inputs and asserts the direction
-   * — labelled STRUCTURAL because it does not call the service.
+   * Reese's first message also belongs to population B, because `isStudent` is
+   * keyed on `tier === 'member'`. The predicate is private to
+   * `reeseWelcomeService`, and the first version of this file reproduced it here —
+   * which meant inverting the real one left this suite green.
+   *
+   * STRUCTURAL instead: assert the real source still keys on `tier`, so that if
+   * someone re-keys it on `enrollment_type` the attribution in the artifact
+   * becomes wrong and this fails. The BEHAVIOUR is covered by the pre-existing
+   * `reeseWelcomeService` suite, which fails 13 tests when that line is inverted.
    */
-  describe('Reese intro selection (STRUCTURAL — the private predicate reproduced)', () => {
-    const isStudent = (tier: string, inRealClass: boolean) => tier === 'member' || inRealClass;
-
-    it('today: a free Explorer defaults to member tier and gets the STUDENT intro', () => {
-      expect(isStudent('member', false)).toBe(true);
+  describe('Reese intro selection (STRUCTURAL — the real source, not a copy)', () => {
+    it('isStudent is keyed on tier, which is why this change belongs to population B', () => {
+      const src = stripComments(
+        fs.readFileSync(path.join(__dirname, '..', 'reese', 'reeseWelcomeService.ts'), 'utf8'),
+      );
+      expect(src).toContain("enrollment.tier === 'member'");
     });
 
-    it('after T202b: the same Explorer is guest and gets the ACCOUNT intro', () => {
-      expect(isStudent('guest', false)).toBe(false);
-    });
-
-    it('a guest who IS in a real class still gets the student intro — the other half of the or', () => {
-      expect(isStudent('guest', true)).toBe(true);
+    it('the positive control: it is NOT keyed on enrollment_type, so the attribution is real', () => {
+      const src = stripComments(
+        fs.readFileSync(path.join(__dirname, '..', 'reese', 'reeseWelcomeService.ts'), 'utf8'),
+      );
+      expect(src).not.toContain("enrollment_type === 'explorer'");
     });
   });
 });
@@ -132,48 +155,26 @@ describe('T202b — population A: portal free accounts gain enrollment_type: exp
   });
 
   /**
-   * The Week-0 gate. `isFreePreviewTier` returns TRUE to mean gated, and with the
-   * paid gate dark it keys on `enrollment_type` alone — so population A loses the
-   * full twelve weeks. The predicate is reproduced here; the truncation it drives
-   * lives in `timelineService`, which this suite cannot reach without mocking the
-   * whole curriculum (see the note at the end of the file).
+   * The Week-0 gate and the admin dashboard exclusion both used to be reproduced
+   * predicates here. Both are now covered by code that runs the real thing, and
+   * repeating them would be the same mistake with more words:
+   *
+   *   - the predicate → `services/access/__tests__/contentEntitlement.test.ts`
+   *   - its EFFECT on a learner's cards → `services/timeline/__tests__/timelineWeekZeroGate.test.ts`
+   *   - the dashboard exclusion → `services/__tests__/dashboardExplorerExclusion.test.ts`
+   *
+   * What stays here is the one fact those suites cannot state, because it belongs
+   * to the account rather than to any consumer: population A is never paid, which
+   * is why `paidEnrollments` does not move while the other two counts drop.
    */
-  describe('the legacy Week-0 predicate (STRUCTURAL — reproduced)', () => {
-    const legacyGate = (enrollmentType: string, week0Only = true) =>
-      enrollmentType === 'explorer' && week0Only;
-
-    it('today: a portal free account is standard, so it is NOT gated — full twelve weeks', () => {
-      expect(legacyGate('standard')).toBe(false);
-    });
-
-    it('after T202b: the same account is explorer, so it IS gated to Week 0', () => {
-      expect(legacyGate('explorer')).toBe(true);
-    });
-
-    it('EXPLORER_WEEK0_ONLY=false turns the gate off even for an Explorer', () => {
-      expect(legacyGate('explorer', false)).toBe(false);
-    });
-  });
-
-  /**
-   * The admin dashboard. `cohortService.getDashboardStats` builds ONE
-   * `notExplorer` filter and reuses it for three counts, so two of them drop by
-   * the size of population A. STRUCTURAL: it is a Sequelize operator object
-   * inside an un-exported function.
-   */
-  describe('the dashboard exclusion (STRUCTURAL — the operator object reproduced)', () => {
-    const excluded = (enrollmentType: string) => enrollmentType !== 'explorer';
-
-    it('today: a portal free account counts toward totalEnrollments', () => {
-      expect(excluded('standard')).toBe(true);
-    });
-
-    it('after T202b: it does not — totalEnrollments and pendingInvoice both drop', () => {
-      expect(excluded('explorer')).toBe(false);
-    });
-
-    it('paidEnrollments does not move, because population A is never payment_status paid', () => {
+  describe('why paidEnrollments does not move (BEHAVIOUR — real defaults)', () => {
+    it('a learner account is created unpaid, so it was never in the paid count', () => {
       expect(freeEnrollmentDefaults({ full_name: 'x', email: 'x@y.z' }, 'learner').payment_status)
+        .toBe('pending');
+    });
+
+    it('and neither is a standard free account', () => {
+      expect(freeEnrollmentDefaults({ full_name: 'x', email: 'x@y.z' }, 'standard').payment_status)
         .toBe('pending');
     });
   });
@@ -316,50 +317,73 @@ describe('T202b — both free-account writers write BOTH columns (STRUCTURAL)', 
   });
 
   it('the canonical service decides both columns from the programme', () => {
-    const src = read('services/freeAccountRegistration.ts');
+    // `stripComments` here too. This file's docblock quotes `tier: 'guest'` in
+    // prose more than once, so without stripping, one more explanatory comment
+    // would silently make this assertion unfalsifiable — the exact bug found one
+    // file over, caught there only by running the mutation.
+    const src = stripComments(read('services/freeAccountRegistration.ts'));
     expect(src).toContain("tier: 'guest' as const");
     expect(src).toContain("programme === 'learner' ? ('explorer' as const) : ('standard' as const)");
   });
 });
 
-describe('T202b — what does NOT move', () => {
-  it('the Growth Journey customer fact needs BOTH a non-guest tier AND paid, so neither population becomes a customer', () => {
-    const customerFact = (tier: string, paymentStatus: string) => tier !== 'guest' && paymentStatus === 'paid';
-
-    // Population A: guest, pending.
-    expect(customerFact('guest', 'pending')).toBe(false);
-    // Population B after the change: guest, pending.
-    expect(customerFact('guest', 'pending')).toBe(false);
-    // Population B BEFORE the change: member, pending — still not a customer,
-    // because the paid term is the one doing the work.
-    expect(customerFact('member', 'pending')).toBe(false);
-    // A real paid member is.
-    expect(customerFact('member', 'paid')).toBe(true);
-    // And the incoherent row T206 exists to prevent reads as NOT a customer,
-    // which is why that task is separate and necessary.
-    expect(customerFact('guest', 'paid')).toBe(false);
+describe('T202b — what does NOT move (STRUCTURAL — the real source)', () => {
+  /**
+   * `customerFactFor` is not exported, so it cannot be driven directly. The first
+   * version of this test re-declared the predicate and asserted the copy, which
+   * could not fail if the real rule changed. Asserting the real line instead: it
+   * needs BOTH terms, which is why neither population becomes a customer, and why
+   * T206 exists — a `tier: 'guest'` row marked paid would read as NOT a customer.
+   */
+  it('the customer fact still requires BOTH a non-guest tier and paid', () => {
+    const src = stripComments(
+      fs.readFileSync(
+        path.join(__dirname, '..', 'growthJourney', 'subjectResolver.ts'), 'utf8',
+      ),
+    );
+    expect(src).toContain("enrollment.tier !== 'guest' && enrollment.payment_status === 'paid'");
   });
 
-  it('the internship exclusion is unaffected: neither population is internship', () => {
-    const notInternship = (t: string) => t !== 'internship';
-    expect(notInternship('explorer')).toBe(true);
-    expect(notInternship('standard')).toBe(true);
-    expect(notInternship('internship')).toBe(false);
+  it('the positive control: a one-term version of that rule is not what is there', () => {
+    const src = stripComments(
+      fs.readFileSync(
+        path.join(__dirname, '..', 'growthJourney', 'subjectResolver.ts'), 'utf8',
+      ),
+    );
+    // If the tier term were dropped, the line below would be what remained — and
+    // a guest row marked paid would start reading as a customer.
+    expect(src).not.toContain("if (enrollment && enrollment.payment_status === 'paid') return { paid: true");
   });
 });
 
 /**
- * NOT COVERED HERE, said plainly rather than left to be discovered:
+ * WHERE EVERY CHANGING CONSUMER IS COVERED, so the gaps are visible rather than
+ * discovered. The artifact marks 14 rows as changing: 12 for population A and 2
+ * for B.
  *
- * - `timeline/timelineService.ts:231` is where the Week-0 truncation is actually
- *   performed (`cards = isFreeTier ? allCards.filter(c => c.week === 0) : allCards`).
- *   It consumes the derived flag, not the column, and reaching it needs the whole
- *   curriculum graph mocked. T213's acceptance scenarios own it end to end.
- * - The three roster/analytics SQL queries and `explorerIdentityBridge`'s
- *   population loader are raw `sql.query` strings; their filters are quoted with
- *   line numbers in the artifact's citations, and T213 exercises the population
- *   change for real.
- * - `personHistoryService`'s title and `feedControlService`'s label are string
- *   composition inside large un-exported functions; a reproduction test would
- *   only restate the source, so they are disclosed in the checkpoint instead.
+ * Covered by a suite that runs real code:
+ *   row 1  v1EnrollmentLookupController   → this file, `isEnrolledMember` (exported, pure)
+ *   row 2  contentEntitlement             → `services/access/__tests__/contentEntitlement.test.ts`
+ *          its effect on a learner's cards → `services/timeline/__tests__/timelineWeekZeroGate.test.ts`
+ *   row 3  capeTodayPlanService           → `services/cape/__tests__/capeTodayPlanService.test.ts`
+ *   row 4  enrollmentPick                 → this file, `pickBestEnrollment` (exported, pure)
+ *   row 8  subscriptionService            → `services/__tests__/subscriptionService.test.ts`
+ *   row 10 paymentReconciliationService   → its own existing suite
+ *   row 13 reeseWelcomeService            → the existing `reeseWelcomeService` suite
+ *   row 29 cohortService dashboard        → `services/__tests__/dashboardExplorerExclusion.test.ts`
+ *
+ * NOT covered by a behaviour test, and why:
+ *   rows 5, 6, 7, 9  explorerIdentityBridge, the two rosters, subscriptionAnalytics
+ *     — raw `sql.query` strings with no callable seam. Their filters are quoted
+ *       with line numbers in the artifact's citations. The population change they
+ *       produce is what T213's scenarios 1, 2 and 9 exercise.
+ *   row 11 personHistoryService, row 12 feedControlService
+ *     — string composition inside large un-exported functions. Neither has a
+ *       suite in the repository. A reproduced-predicate test would only restate
+ *       the source, which is the mistake this file was corrected for, so they are
+ *       disclosed in the checkpoint instead and carry no test.
+ *
+ * That is 8 of 14 with real coverage, 4 deferred to T213 with a named scenario,
+ * and 2 disclosed as untested. Stated as a count because "mostly covered" is how
+ * a gap survives.
  */

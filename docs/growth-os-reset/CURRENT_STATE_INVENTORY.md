@@ -130,6 +130,12 @@ Treated in full in `EXPLORER_ENTRY_SEMANTICS.md`. The headline for this inventor
 **no single Explorer entry event**, and the two flags that could define one are written by
 disjoint code paths that never read each other.
 
+> **Dated, as of Phase 1 — what follows is the defect, not current behaviour.** It was true at
+> `origin/main @ 541305a6`. **Phase 2 T202b closed it:** both public paths now write both columns
+> through one canonical service, which is why a citation below points into
+> `freeAccountRegistration.ts` rather than the file Phase 1 read it from. The finding stands because
+> this inventory records what was wrong; for what is true now see `FREE_ACCOUNT_CONSUMERS.md`.
+
 The `/enroll` free-account path sets one flag and leaves the other at its default:
 
 `backend/src/services/enrollmentService.ts:322` → "    enrollment_type: 'explorer',"
