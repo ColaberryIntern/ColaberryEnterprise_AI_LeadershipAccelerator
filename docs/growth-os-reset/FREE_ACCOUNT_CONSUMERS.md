@@ -57,7 +57,14 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 29 files
+## BRANCHING — 28 files
+
+**Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
+used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
+longer contains either column's literals and the scan moved it into REPORTING on its own. **That
+is the delegation working, observed rather than asserted** — the enumeration noticed the
+architectural change without being told. The number is retired rather than reused so the citations
+and determinations that reference other rows by number stay valid.
 
 Counts from the generator's own output. Every row carries a determination; the tripwire fails if
 any row does not.
@@ -80,7 +87,6 @@ any row does not.
 | 14 | `services/leads/prospectAccount.ts` | `enrollment.tier !== 'guest'` (`assignToProspectCohort`) | unchanged | unchanged | **Nothing moves, and the first draft of this row claimed the opposite.** The guard one line above — `if (enrollment.cohort_id) return false;` — fires first for every population-B row, because `createExplorerEnrollment` always creates with `cohort_id: cohort.id`, and its idempotent branch returns that same cohort-bearing row. So the tier guard is **unreachable** and the outcome is `false` before and after. Population A is already `'guest'`. The file's own docblock calls the cohort guard the first of *"two guards, both load-bearing"*, which is exactly right. |
 | 15 | `services/growthJourney/subjectResolver.ts` | `tier !== 'guest' && payment_status === 'paid'` | unchanged | unchanged | The customer fact needs **both** terms, and neither population is paid, so it does not move. **It is the reason T206 exists**: a paid-but-guest row would read as not-a-customer here. |
 | 16 | `services/enrollmentService.ts` | writer | writer | writer | Being wired in T202b. Also the path that **sends** — `sendTrainingWelcome` at `:388`, `delivery_mode: 'live'`, and `pushLeadToGhl` at `:359`. |
-| 17 | `services/freeSignupService.ts` | writer | writer | writer | Being wired in T202b. |
 | 18 | `services/freeAccountRegistration.ts` | writer | writer | writer | The canonical service (T201). |
 | 19 | `services/openHouseCreditService.ts` | writer | writer | writer | Keeps its direct write; the deposit partition is deliberate (T203). Gains a profile at creation. Marked `writer` in both population columns like the other three, rather than `—`: the tally parses those cells, and a fourth spelling made the writer count read 3 while the row counted as nothing at all. |
 | 20 | `services/duplicateAccountSweepService.ts` | `!== 'internship'` | unchanged | unchanged | Guards against sweeping internship rows. Neither population is `'internship'`, and T207 excludes that value for the same reason. |
@@ -103,11 +109,11 @@ asserts them from the parsed cells so they cannot drift again:
 |---|---|---|
 | Changes for population A | **12** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
 | Changes for population B | **2** (rows 1 and 13) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
-| Writers | **4** | `grep -c "\| writer \|"` |
+| Writers | **3** | `grep -c "\| writer \| writer \|"` |
 | Unchanged, with a stated reason | **11** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **29** | matches the generator's `BRANCHING` count |
+| **Total** | **28** | matches the generator's `BRANCHING` count |
 
-## REPORTING — 17 files
+## REPORTING — 18 files
 
 Disclosure, not behaviour tests. **Pasted from the generator's output, after it caught me
 hand-transcribing this list and dropping a file** — see the note below.
@@ -118,7 +124,7 @@ hand-transcribing this list and dropping a file** — see the note below.
 `services/adminOs/metricRegistry.ts` · `services/adminOs/personProfileService.ts` ·
 `services/enrollmentsWithoutProjects.ts` ·
 `services/explorerGrowth/explorerSignalDefinitions.ts` ·
-`services/explorerGrowth/explorerStateMachine.ts` ·
+`services/explorerGrowth/explorerStateMachine.ts` · **`services/freeSignupService.ts`** ·
 `services/growthJourney/outcomes/outcomeNormalizer.ts` · `services/icpProfileService.ts` ·
 `services/internship/internshipReviewQueue.ts` · `services/portalEnrollmentService.ts` ·
 `services/portalSettingsService.ts`
@@ -235,7 +241,7 @@ neither column:**
 
 **The send on the `/enroll` path, which is why T216 creates nothing in production — row 16:**
 
-- `backend/src/services/enrollmentService.ts:388` → "const result = await sendTrainingWelcome({"
+- `backend/src/services/enrollmentService.ts:397` → "const result = await sendTrainingWelcome({"
 
 ## What this enumeration does NOT claim
 

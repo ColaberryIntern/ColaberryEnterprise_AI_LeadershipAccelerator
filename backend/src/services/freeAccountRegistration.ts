@@ -106,8 +106,21 @@ export function freeEnrollmentDefaults(
  * So the learner programme is added IN PLACE. It is an upgrade, not a
  * conscription: it happens only when the person themselves asked for the
  * learner programme (`programme: 'learner'`), never when org provisioning
- * creates an account for them. And a PAID row is never touched, because
- * flipping a paying student onto the free course would gate them to Week 0.
+ * creates an account for them.
+ *
+ * TWO rows are protected, and the second was missed on the first pass.
+ *
+ * A PAID row is never touched, because flipping a paying student onto the free
+ * course would gate them to Week 0.
+ *
+ * And **only a `tier: 'guest'` row is eligible at all**, because `tier` is the
+ * access level and a free programme can only be joined by a free account. An
+ * unpaid `tier: 'member'` row is not a free account — it is someone who enrolled
+ * in a cohort and has not paid yet. Upgrading them would gate their curriculum to
+ * Week 0 and drop them out of `paidEnrollments`/`pendingInvoice` on the admin
+ * dashboard, for the crime of visiting the free-course page. `pickBestEnrollment`
+ * ranks non-explorer ABOVE explorer for exactly this population, so widening the
+ * rule here would have fought a protection the repo already had.
  */
 export function needsProgrammeUpgrade(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize instance
@@ -117,6 +130,7 @@ export function needsProgrammeUpgrade(
   if (programme !== 'learner') return false;
   if (!existing) return false;
   if (existing.payment_status === 'paid') return false;
+  if (existing.tier !== 'guest') return false;
   return existing.enrollment_type !== 'explorer';
 }
 

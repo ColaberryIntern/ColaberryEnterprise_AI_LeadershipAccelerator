@@ -136,7 +136,7 @@ The `/enroll` free-account path sets one flag and leaves the other at its defaul
 
 The portal free-signup path sets the *other* flag and leaves the first at its default:
 
-`backend/src/services/freeSignupService.ts:30` → "tier: 'guest' as const,"
+`backend/src/services/freeAccountRegistration.ts:80` → "tier: 'guest' as const," (moved there by Phase 2 T202b, which made the portal signup path delegate; Phase 1 recorded this literal in freeSignupService at line 30, where it no longer exists)
 
 The Explorer OS gates on the first flag only:
 

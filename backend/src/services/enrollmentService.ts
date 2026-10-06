@@ -320,6 +320,15 @@ export async function createExplorerEnrollment(input: {
     phone: input.phone || undefined,
     cohort_id: cohort.id,
     enrollment_type: 'explorer',
+    // `tier: 'guest'` — the other half of what describes a free account, and it
+    // was missing here. `enrollment_type` is the PROGRAMME (the free AI course);
+    // `tier` is the ACCESS LEVEL. Leaving `tier` at its 'member' default meant a
+    // free Explorer read as a paid-access member to everything that keys on
+    // access rather than programme, and two of those are user-visible:
+    // `v1EnrollmentLookupController` reports them ENROLLED to the partner app,
+    // and `reeseWelcomeService` greets them with the student intro rather than
+    // the account intro. See docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md.
+    tier: 'guest',
     payment_status: 'pending',
     payment_method: 'credit_card',
     status: 'active',

@@ -211,8 +211,13 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
   // `owner_enrollment_id` to nullable in 2026-08 for exactly this shape, and
   // kept the unique index — Postgres treats NULLs as distinct, so any number of
   // enrollment-less client organizations coexist.
+  // 'standard', emphatically. An organization owner did not ask to join a learner
+  // programme, and passing 'learner' here is exactly the mistake the comment above
+  // describes — it would put every org owner onto learner rosters and into the
+  // Explorer nurture. The first draft of the shared service defaulted this
+  // argument to 'learner', which is why it now has no default at all.
   const free = grantsTrainingEnrollment(accountType)
-    ? await createFreeAccount({ full_name: name, email })
+    ? await createFreeAccount({ full_name: name, email, programme: 'standard' })
     : null;
   const ownerEnrollmentId = free?.enrollment.id ?? null;
   const orgName = (input.company || '').trim() || name;
@@ -401,7 +406,13 @@ export async function inviteMembers(
 
   for (const email of emails) {
     // 1) Free member account (idempotent by email).
-    const free = await createFreeAccount({ full_name: displayNameFromEmail(email), email });
+    //
+    // 'standard': a teammate invited by their employer did not sign up for the
+    // free AI course. They get free platform access and no learner programme, so
+    // they stay off learner rosters and out of the Explorer nurture. This is the
+    // single highest-volume caller of this service, which is why defaulting the
+    // programme to 'learner' would have been an incident rather than a bug.
+    const free = await createFreeAccount({ full_name: displayNameFromEmail(email), email, programme: 'standard' });
     const enrollmentId = free.enrollment.id;
 
     // 2) Roster row (idempotent on (org_id, email)).

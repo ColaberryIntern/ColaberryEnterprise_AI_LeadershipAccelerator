@@ -236,7 +236,12 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
       return res.status(400).json({ error: 'A valid email is required' });
     }
-    const result = await createFreeAccount({ full_name: String(full_name), email });
+    // 'learner': this is the public free-AI signup, so the account joins the
+    // Explorer programme and is visible to Explorer Growth from the moment it
+    // exists. Before this argument existed, accounts created here carried
+    // `tier: 'guest'` and no `enrollment_type`, which made them free AI learners
+    // the growth engine could not see.
+    const result = await createFreeAccount({ full_name: String(full_name), email, programme: 'learner' });
     res.status(result.created ? 201 : 200).json(result);
   } catch (err) { next(err); }
 }

@@ -1,10 +1,15 @@
 const findOrCreate = jest.fn();
-const enrollmentFindOne = jest.fn();
+const enrollmentFindAll = jest.fn();
 const enrollmentCreate = jest.fn();
 
 jest.mock('../../models', () => ({
   Enrollment: {
-    findOne: (...args: unknown[]) => enrollmentFindOne(...args),
+    // `findAll`, not `findOne`: the account decision moved into
+    // `freeAccountRegistration`, which queries ACTIVE rows only. That is the fix
+    // for a returning person whose single row was `status: 'withdrawn'` being
+    // logged into that dead row forever, and therefore staying invisible to
+    // Explorer Growth.
+    findAll: (...args: unknown[]) => enrollmentFindAll(...args),
     create: (...args: unknown[]) => enrollmentCreate(...args),
   },
   Lead: {
@@ -41,13 +46,13 @@ describe('free signup captures a lead', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    enrollmentFindOne.mockResolvedValue(null);
+    enrollmentFindAll.mockResolvedValue([]);
     enrollmentCreate.mockResolvedValue(enrollment);
     findOrCreate.mockResolvedValue([{ id: 1 }, true]);
   });
 
   it('writes a lead for a brand-new guest', () => {
-    return createFreeAccount({ full_name: 'Test Person', email: 'test@example.com' }).then(() => {
+    return createFreeAccount({ full_name: 'Test Person', email: 'test@example.com', programme: 'learner' }).then(() => {
       expect(findOrCreate).toHaveBeenCalledTimes(1);
       const call = findOrCreate.mock.calls[0][0] as {
         where: { email: string }; defaults: Record<string, unknown>;
@@ -61,7 +66,7 @@ describe('free signup captures a lead', () => {
     // findOrCreate, not create. The signup path is explicitly idempotent by
     // email for the enrolment; the lead must not be the one thing that
     // duplicates on a repeat visit.
-    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com' });
+    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com', programme: 'learner' });
     const call = findOrCreate.mock.calls[0][0] as { where: { email: string } };
     expect(call.where).toEqual({ email: 'test@example.com' });
   });
@@ -70,8 +75,12 @@ describe('free signup captures a lead', () => {
     // The 37 guests already on production have enrolments but no leads. Someone
     // signing in again is exactly the case that repairs them, so capture must
     // not be skipped just because the account is being reused.
-    enrollmentFindOne.mockResolvedValue(enrollment);
-    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com' });
+    // An ARRAY, and one already on the learner programme: `findAll` returns a
+    // list, and a guest-tier row that is not yet an Explorer would legitimately
+    // be upgraded in place, which is a different case from the reuse this test is
+    // about.
+    enrollmentFindAll.mockResolvedValue([{ ...enrollment, enrollment_type: 'explorer', payment_status: 'pending' }]);
+    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com', programme: 'learner' });
     expect(findOrCreate).toHaveBeenCalledTimes(1);
     expect(enrollmentCreate).not.toHaveBeenCalled();
   });
@@ -80,7 +89,7 @@ describe('free signup captures a lead', () => {
     // If these disagreed, the lead would be written under a different key than
     // the enrolment and the join would still fail — the bug would look fixed
     // while staying broken.
-    await createFreeAccount({ full_name: '  Test Person  ', email: '  TEST@Example.COM ' });
+    await createFreeAccount({ full_name: '  Test Person  ', email: '  TEST@Example.COM ', programme: 'learner' });
     const call = findOrCreate.mock.calls[0][0] as { where: { email: string } };
     expect(call.where.email).toBe('test@example.com');
     expect(normalizeSignupInput({ full_name: ' A ', email: ' B@C.COM ' })).toEqual({
@@ -93,7 +102,7 @@ describe('free signup captures a lead', () => {
     // A free guest is not an inbound prospect to nurture. The source makes them
     // identifiable and excludable in campaign segments rather than silently
     // swept into one.
-    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com' });
+    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com', programme: 'learner' });
     const call = findOrCreate.mock.calls[0][0] as { defaults: Record<string, unknown> };
     expect(call.defaults.source).toBe('free_signup');
   });
@@ -107,6 +116,7 @@ describe('free signup captures a lead', () => {
     const result = await createFreeAccount({
       full_name: 'Test Person',
       email: 'test@example.com',
+      programme: 'learner',
     });
     expect(result.jwt).toBe('test.jwt.token');
     expect(result.enrollment.id).toBe('enr-1');
@@ -117,7 +127,7 @@ describe('free signup captures a lead', () => {
     // and no signal that there should have been one.
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
     findOrCreate.mockRejectedValue(new Error('database unavailable'));
-    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com' });
+    await createFreeAccount({ full_name: 'Test Person', email: 'test@example.com', programme: 'learner' });
     expect(spy).toHaveBeenCalled();
     const [, context] = spy.mock.calls[0] as [string, Record<string, unknown>];
     expect(context.error_class).toBe('Error');
@@ -126,7 +136,7 @@ describe('free signup captures a lead', () => {
 
   it('rejects a signup with no email before touching either table', async () => {
     await expect(
-      createFreeAccount({ full_name: 'Test Person', email: '' }),
+      createFreeAccount({ full_name: 'Test Person', email: '', programme: 'learner' }),
     ).rejects.toThrow(/required/);
     expect(findOrCreate).not.toHaveBeenCalled();
     expect(enrollmentCreate).not.toHaveBeenCalled();

@@ -41,7 +41,7 @@ decisions. Nothing today preserves that order across the brand boundary.
 **Intended:** the canonical Explorer entry event (§1).
 **Owned by:** two paths, writing contradictory labels.
 `backend/src/services/enrollmentService.ts:322` → "    enrollment_type: 'explorer',"
-`backend/src/services/freeSignupService.ts:30` → "tier: 'guest' as const,"
+`backend/src/services/freeAccountRegistration.ts:80` → "tier: 'guest' as const," (moved there by Phase 2 T202b, which made the portal signup path delegate; Phase 1 recorded this literal in freeSignupService at line 30, where it no longer exists)
 **Missing:** a single canonical entry event. Treated in full in `EXPLORER_ENTRY_SEMANTICS.md`.
 This is the most consequential seam in the map, because §1 of the build prompt rests on it.
 

@@ -14,6 +14,15 @@ yet to cite. Nothing in this document is both.
 
 ## Part 1 — What the four things actually are today
 
+> **Dated, as of Phase 1.** This part records the state at `origin/main @ 541305a6`, which is
+> the defect this reset exists to fix — so it is deliberately *not* rewritten as the fix lands.
+> **Phase 2 T202b has since changed paths A, B and C:** every free-account path now goes through
+> one canonical service that writes **both** columns, so the "each writes half" finding below is
+> history rather than current behaviour. Three citations in this part had to be repointed when
+> the code moved, and each says so inline. For what is true now, and for the 28 consumers the
+> change moves, see `FREE_ACCOUNT_CONSUMERS.md`. The DECISIONS in Part 3 are unaffected: they are
+> what Phase 2 implemented.
+
 ### `enrollment_type`
 
 Declared as a two-value union on the model:
@@ -61,7 +70,7 @@ Path A sets the programme label and leaves access at the paying default:
 
 Path B sets the access level and leaves the programme at the paying default:
 
-`backend/src/services/freeSignupService.ts:30` → "tier: 'guest' as const,"
+`backend/src/services/freeAccountRegistration.ts:80` → "tier: 'guest' as const," (moved there by Phase 2 T202b, which made the portal signup path delegate; Phase 1 recorded this literal in freeSignupService at line 30, where it no longer exists)
 
 Path D is the only one that sets both:
 
@@ -186,10 +195,21 @@ replay finds it already set. Both public paths already dedupe on email, so a sec
 attempt does not produce a second entry event:
 
 `backend/src/services/enrollmentService.ts:307` → "  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });"
-`backend/src/services/freeSignupService.ts:104` → "  const existing = await Enrollment.findOne({ where: { email: clean.email } });"
+`backend/src/services/freeAccountRegistration.ts:167` → "    where: { email: clean.email, status: 'active' },"
 
-Note they dedupe *differently* — one picks a best candidate among active rows, the other
-takes the first match on email alone — which is part of why the two paths diverge.
+**UPDATED by Phase 2 T202b, and the original finding is the reason.** When Phase 1 recorded this,
+the two paths deduped *differently*: the paid path picked a best candidate among **active** rows,
+while the portal path ran `Enrollment.findOne({ where: { email: clean.email } })` — **no status
+filter at all**. Combined with `retireRedundantExplorerAccounts` leaving `status: 'withdrawn'` rows
+behind, and both `explorerIdentityBridge` and `explorerRosterService` requiring `status =
+'active'`, a returning person whose email carried a withdrawn row was logged in against that dead
+row, never received a learner-programme row, and **stayed invisible to Explorer Growth
+permanently.**
+
+That divergence is now closed: both paths canonicalise through `pickBestEnrollment` over active
+rows only, and the portal path's lookup moved into the shared service at the citation above. The
+old line no longer exists, which is why this citation changed — the citation gate refused the
+stale one, which is the gate doing its job rather than a document being quietly rewritten.
 
 ### DECISION 5 — Identifier precedence for Phase 2 and beyond
 

@@ -273,7 +273,9 @@ export async function runCommit(outDir: string, sessionId: string): Promise<Comm
 
   const farhatRow = rows.find((r): r is DepartmentCreateRow => r.action === 'created' && r.email === FARHAT_EMAIL);
   if (farhatRow) {
-    const free = await createFreeAccount({ full_name: FARHAT_FULL_NAME, email: FARHAT_EMAIL });
+    // 'standard': this provisions one named teammate inside an organization, the
+    // same shape as `orgService.inviteMembers`. Not a learner signup.
+    const free = await createFreeAccount({ full_name: FARHAT_FULL_NAME, email: FARHAT_EMAIL, programme: 'standard' });
     const [, wasCreated] = await OrgMember.findOrCreate({
       where: { org_id: org.id, email: FARHAT_EMAIL },
       // `as any`: mirrors `orgService.ts::inviteMembers()`'s own identical,

@@ -1,40 +1,63 @@
-import { Enrollment, Lead } from '../models';
+import { Lead } from '../models';
 import { signParticipantJwt } from './participantService';
+import {
+  resolveFreeAccount,
+  normalizeIdentity,
+  freeEnrollmentDefaults,
+  type FreeAccountProgramme,
+  type FreeAccountDisposition,
+  type FreeAccountIdentity,
+} from './freeAccountRegistration';
 
 export interface FreeSignupInput {
   full_name: string;
   email: string;
+  /**
+   * REQUIRED. Which programme this account is joining.
+   *
+   * 'learner'  — the free AI course. Becomes an Explorer, visible to Explorer Growth.
+   * 'standard' — free platform access with no learner programme: an org teammate
+   *              invited by their employer, or a prospect account.
+   *
+   * No default, deliberately. This service has five callers and only ONE of them
+   * is a free-AI signup; the other four create accounts for people who never
+   * asked to be learners. A default would have silently reclassified whichever
+   * caller forgot to pass it, and the first draft of this change defaulted to
+   * 'learner' — which would have put every org owner and every invited corporate
+   * teammate onto learner rosters and into the nurture the growth engine runs.
+   * That is the mistake `orgService` carries a comment about, and it is the one
+   * this argument exists to make impossible.
+   */
+  programme: FreeAccountProgramme;
 }
 
 export interface FreeSignupResult {
   jwt: string;
   enrollment: { id: string; full_name: string; email: string; tier: string };
+  /**
+   * True only when a NEW row was written. `participantController` turns this into
+   * a 201 vs 200, so an account that merely gained the learner programme is a
+   * 200: nothing was created.
+   */
   created: boolean;
+  /** 'created' | 'reused' | 'upgraded'. Additive, so callers can tell the three apart. */
+  disposition: FreeAccountDisposition;
 }
 
-/** Normalize inbound signup identity (pure — email lowercased/trimmed, name trimmed). */
-export function normalizeSignupInput(input: FreeSignupInput): { full_name: string; email: string } {
-  return {
-    full_name: (input.full_name || '').trim(),
-    email: (input.email || '').toLowerCase().trim(),
-  };
-}
+/**
+ * @deprecated Use `normalizeIdentity` from `freeAccountRegistration`.
+ * Kept because two existing suites import it by this name.
+ */
+export const normalizeSignupInput = normalizeIdentity;
 
-/** The attributes a brand-new free/guest enrollment is created with (pure). */
-export function guestEnrollmentDefaults(clean: { full_name: string; email: string }) {
-  return {
-    full_name: clean.full_name,
-    email: clean.email,
-    company: '',                          // guests have no company yet (NOT NULL column)
-    cohort_id: null,                      // guests are not in a cohort
-    tier: 'guest' as const,
-    status: 'active' as const,
-    payment_status: 'pending' as const,   // not meaningful for guests; `tier` is the source of truth
-    payment_method: 'credit_card' as const,
-    portal_enabled: true,                 // free accounts get immediate portal access
-    maturity_level: 0,
-    intake_completed: false,
-  };
+/**
+ * @deprecated Use `freeEnrollmentDefaults(clean, programme)` from
+ * `freeAccountRegistration`, which is the one place the two semantic columns are
+ * decided. Kept because an existing suite imports it by this name, and delegating
+ * rather than duplicating means the old name cannot drift from the new rule.
+ */
+export function guestEnrollmentDefaults(clean: FreeAccountIdentity) {
+  return freeEnrollmentDefaults(clean, 'standard');
 }
 
 /**
@@ -64,7 +87,7 @@ export function guestEnrollmentDefaults(clean: { full_name: string; email: strin
  * nurture like an inbound enquiry, and they should not silently join those
  * lists.
  */
-async function captureGuestAsLead(clean: { full_name: string; email: string }): Promise<void> {
+async function captureGuestAsLead(clean: FreeAccountIdentity): Promise<void> {
   try {
     await Lead.findOrCreate({
       where: { email: clean.email },
@@ -89,27 +112,33 @@ async function captureGuestAsLead(clean: { full_name: string; email: string }): 
 }
 
 /**
- * Create (or reuse) a free self-serve "guest" account and issue a participant
- * session JWT so the visitor lands straight in the platform preview.
+ * Create, reuse or upgrade a free account and issue a participant session JWT so
+ * the visitor lands straight in the platform preview.
  *
- * Idempotent by email: an existing enrollment (guest OR member) is returned and
- * logged in as-is — we never duplicate it, and never downgrade a member to guest.
+ * The account decision itself lives in `freeAccountRegistration.resolveFreeAccount`
+ * — one place, shared with every other free-account path — because this service
+ * and `enrollmentService.createExplorerEnrollment` each used to write ONE of the
+ * two columns that describe a free account. Explorer Growth finds its population
+ * by `enrollment_type = 'explorer'`, so every account created here was a real
+ * free AI learner that the growth engine could not see.
+ *
+ * What stays here is what is specific to this entry point: the acquisition
+ * record and Reese's intro. Both are best-effort and neither may block a signup.
  */
 export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSignupResult> {
-  const clean = normalizeSignupInput(input);
-  if (!clean.email || !clean.full_name) {
-    throw new Error('full_name and email are required');
-  }
+  const clean = normalizeIdentity(input);
 
-  const existing = await Enrollment.findOne({ where: { email: clean.email } });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
-  const enrollment: any = existing || (await Enrollment.create(guestEnrollmentDefaults(clean) as any));
+  const { enrollment, disposition } = await resolveFreeAccount({
+    full_name: input.full_name,
+    email: input.email,
+    programme: input.programme,
+  });
 
-  // Reese's intros. Self-serve signup is the other
-  // way a student reaches the portal for the first time, so it gets the same
-  // greeting as the magic-link path. Fire-and-forget: signup must not wait on a
-  // DM, and maybeSendWelcomes is idempotent, so a returning guest whose account
-  // is merely being reused is short-circuited rather than greeted twice.
+  // Reese's intros. Self-serve signup is the other way a student reaches the
+  // portal for the first time, so it gets the same greeting as the magic-link
+  // path. Fire-and-forget: signup must not wait on a DM, and maybeSendWelcomes
+  // is idempotent, so a returning guest whose account is merely being reused is
+  // short-circuited rather than greeted twice.
   void (async () => {
     try {
       const { maybeSendWelcomes } = await import('./reese/reeseWelcomeService');
@@ -127,6 +156,7 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
       email: enrollment.email,
       tier: enrollment.tier || 'member',
     },
-    created: !existing,
+    created: disposition === 'created',
+    disposition,
   };
 }

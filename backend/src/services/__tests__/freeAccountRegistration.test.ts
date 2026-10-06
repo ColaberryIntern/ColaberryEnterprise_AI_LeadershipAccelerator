@@ -81,6 +81,18 @@ describe('freeAccountRegistration', () => {
       expect(needsProgrammeUpgrade(row(), 'standard')).toBe(false);
     });
 
+    /**
+     * Found while updating the pre-existing freeSignupService suite, after T201
+     * had already been verified. An unpaid `tier: 'member'` row is not a free
+     * account — it is someone who enrolled in a cohort and has not paid yet.
+     * Upgrading them to 'explorer' would gate their curriculum to Week 0 and drop
+     * them from the admin dashboard's paid and pending counts, because they
+     * visited the free-course page.
+     */
+    it('never upgrades an unpaid tier:member row — that is an enrolled member awaiting payment', () => {
+      expect(needsProgrammeUpgrade(row({ tier: 'member', payment_status: 'pending' }), 'learner')).toBe(false);
+    });
+
     it('is a no-op for a row already on the learner programme', () => {
       expect(needsProgrammeUpgrade(row({ enrollment_type: 'explorer' }), 'learner')).toBe(false);
     });
