@@ -3,8 +3,7 @@
 The Phase 4 durable artifact named in the specification's §8. It records how a project's business
 tasks reach human surfaces, and how the controls over those surfaces are specified.
 
-**Status:** the workspace half (P4-T1) is implemented. The control half (P4-T2) follows and will be
-appended to this file.
+**Status:** the workspace half (P4-T1) and the control half (P4-T2) are both implemented.
 
 ---
 
@@ -268,3 +267,171 @@ reviewer.
 | `SURFACE_PROJECT_UNUSABLE` | The project carries no usable tasks, roles or requirements array |
 A test asserts the set of codes the module can actually emit equals this declared list in both
 directions, so the table cannot drift and no code can be decorative.
+
+---
+
+# Part 2 — human controls as typed policies (P4-T2)
+
+Implementation: `backend/src/services/lifecycle/generation/controlSpecification.ts`.
+
+§4.5: *"Manager controls specify policy key, typed value, allowed range, permission, approver
+requirement, preview/diff, version, effective time, and enforcement point. … Only show
+functioning controls; unimplemented capabilities are labeled unavailable and block claims that
+they work."*
+
+## 8. The `unavailable` state is the point, not a nicety
+
+**The dummy switch §4.5 forbids is already shipped in this repository.** `AiAgent` persists
+`max_runs_per_hour`, `max_writes_per_execution` and `max_proposals_per_run`;
+`agentPermissionService` has a check function for each; **all three have zero call sites**.
+Outside their own definitions the only reference in the tree is a doc comment. Meanwhile
+`AgentTrustControlArchitecture.tsx:24` renders them to a human as
+`` `Not set — ${fallback} applies` `` — a sentence asserting an enforcement that does not exist.
+Two independent verifiers confirmed the zero.
+
+So this module does not render a control. It makes **"we have a policy"** and **"the policy is
+enforced"** two separate, separately checkable claims.
+
+`ControlEnforcement` is a two-state union with no default:
+
+```
+{ status: 'enforced', enforcedBy: ControlEnforcementKind, callSite: string }
+{ status: 'unavailable', why: UnavailableReason }
+```
+
+A policy claiming `enforced` with a blank `callSite` is refused
+(`CONTROL_ENFORCEMENT_UNNAMED`). A control whose enforcement nobody has established is
+**unavailable**, never assumed. `renderControlAvailability()` splits what a human may be shown
+from what must be labelled unavailable, and a caller that renders `showable` while ignoring
+`unavailable` is building the production UI this module exists to argue against.
+
+## 9. The precedent is cited, and the enum deliberately not extended
+
+`delivery/execution/executionPolicy.ts:47-48` already states the principle about a different
+layer: *"`enforcedBy` is recorded because 'we have a policy' and 'the policy is enforced' are
+different claims, and Gate 0 found three of these previously had no enforcer at all."*
+
+That union is **not** extended. Its four members are sandbox-layer concepts
+(`runner_isolation | no_provider | branch_protection | policy_gate`); a pause/resume, a rate
+limit or a schedule has no honest member among them, so extending it would force a wrong
+classification or widen a live policy module. The principle carries over; the enum does not.
+
+## 10. Both vocabularies are DERIVED from what this repo measurably does
+
+Every member names a state a survey of this codebase found. An invented taxonomy quietly lacks
+the member that describes the real situation, and the author then picks the nearest flattering
+one.
+
+| member | the measured state it names |
+|---|---|
+| `system_setting_checked` | the kill switch and `llm_safe_mode`, read at named sites |
+| `persisted_column_checked` | `ai_agents.enabled`/`.status`, checked in `workforceAgentRuntime` |
+| `route_permission` | `requireAdmin` and friends on the control routes |
+| `in_memory_only` | the agent-storm rate limit: real, unpersisted, not human-settable |
+| `hardcoded_constant` | the Reese daily send caps: enforced, but unchangeable without a deploy |
+| `no_enforcement_site` | the three execution limits: stored, checked by nothing |
+| `prompt_text_only` | charter authority lists and `ManagerDirective` — persuasion, not a gate |
+| `verdict_discarded` | `ticketAgentDispatcher` computes an authorization verdict and drops it |
+| `shadow_mode_only` | `abac_enforcement` defaults to shadow, so the gate allows anyway |
+| `not_implemented` | spend caps and agent takeover: no mechanism at all |
+| `no_human_surface` | the kill-switch route exists and no UI calls it |
+
+## 11. The spec is NOT an authorization source, and the TYPE says so
+
+`requiredPermission` and `approverRequirement` are **specification data** — what the design says
+should gate a change. `ApproverRequirement.separationEnforcedInCode` is typed as the literal
+**`false`**, so the type refuses to let a spec claim requester-is-not-approver is enforced.
+
+That is not pedantry: §4.6 requires "the proposer cannot fabricate the approver", and
+`approval-and-change-policy.md:36` states it as policy — but no route in this repo implements it,
+and `MANAGER_AUTHORIZATION_MAP.md` records that everything collapses to a single `requireAdmin`
+bit. Making the negative claim **structural** means a future author who wants to assert otherwise
+must change the type, which appears in a diff. A spec arriving as JSON with the field set true is
+refused.
+
+An approval that is `required` with no named approver role is refused
+(`CONTROL_APPROVER_UNNAMED`) — an approval with no nameable human behind it is what the approval
+ladders exist to refuse. An approver role the project does not declare is refused too.
+
+## 12. `controlSurfaceExists()` — a specification of nothing is not a control surface
+
+True only when at least one control is genuinely enforced with a named site. Tested in **both**
+directions, plus the case that matters: an `enforced` claim with no call site returns **false**,
+because the claim alone is not a surface. P4-T3 consumes it — the design brief populates
+`controls` only when it is true, so an all-unavailable specification produces an **open fact**
+rather than an empty array that reads like "no controls needed".
+
+## Refusal codes
+
+| Code | Refuses |
+|---|---|
+| `CONTROL_SPEC_MALFORMED` | Any `JSON.parse`-producible shape the content rules could not read, including a third enforcement status and a `separationEnforcedInCode` that is not `false` |
+| `CONTROL_KEY_DUPLICATE` | One policy key declared twice — the later would silently win |
+| `CONTROL_ENFORCEMENT_UNNAMED` | `enforced` with no named call site |
+| `CONTROL_VALUE_TYPE_MISMATCH` | A value that does not match its declared `valueType` |
+| `CONTROL_VALUE_OUT_OF_RANGE` | A value outside its declared range or set |
+| `CONTROL_RANGE_SHAPE_MISMATCH` | A min/max range on an enum, or a `oneOf` on a number |
+| `CONTROL_PERMISSION_MISSING` | No required permission, so anyone reaching the surface can change it |
+| `CONTROL_APPROVER_UNNAMED` | Approval required with no approver role named |
+| `CONTROL_APPROVER_ROLE_UNKNOWN` | An approver role the project does not declare |
+| `CONTROL_VERSION_INVALID` | A version that is not a positive integer |
+| `CONTROL_EFFECTIVE_AT_INVALID` | An unparseable effective time |
+| `CONTROL_PREVIEW_ABSENT` | `previewDiff: false` — declaring it false declares non-compliance |
+
+A test asserts this table equals the emittable set in both directions.
+
+## What P4-T2 does not do
+
+It enforces nothing. It is a specification checker, and the gap between a specified control and
+an enforced one is the thing it exists to keep visible. Phase 6 owns persisting a control
+specification; nothing consumes this module until P4-T3.
+
+---
+
+# Part 3 — the design brief carries the facts (P4-T3)
+
+Implementation: `backend/src/services/delivery/designBrief.ts`, additive only.
+
+## 13. Additive, because the brief is on a live prospect-facing path
+
+`buildDesignBrief` has exactly one production caller (`appPrototypeService.ts:131`), which
+feeds the flotation preview a prospect sees. Every new field is **optional** and the new
+`facts` argument is **optional**, so that caller is unchanged and the website generator — which
+reads only named fields and never serialises the brief — cannot see any of this. The acceptance
+test is that `designBrief.test.ts` and `websiteDesignGenerator.test.ts` keep passing untouched,
+and they do.
+
+New fields: `task_surfaces`, `allocation_summary`, `controls`, `workspace_count`, `open_facts`.
+
+## 14. A missing fact is OPENED, never substituted
+
+This extends the discipline `not_discussed` already applies to the understanding. A fact nobody
+established is named in `open_facts`; it does not become a default.
+
+The case that makes the rule concrete: **an empty allocation is treated as ABSENT, not as
+"nobody does this work".** An empty array reads as a decision, and it is not one. Same for an
+empty task-surface mapping.
+
+**And absence of the whole `facts` argument is not a finding.** A caller that supplies no facts
+is the prospect-facing path, which knows nothing of the lifecycle; opening four facts there
+would put lifecycle noise into a sales artifact. A caller that supplies *some* facts is making
+a claim, and whatever is missing from it is opened. A test pins both halves — this was caught by
+that test rather than by reading.
+
+## 15. This is where `controlSurfaceExists()` becomes load-bearing
+
+P4-T2 shipped the predicate; until now nothing consumed it, which in this repo is a named
+failure mode. The brief populates `controls` **only** when the predicate is true AND there is
+at least one showable control. Otherwise it opens a fact.
+
+The predicate is **passed, never inferred from the array length**, and that distinction is the
+point:
+
+| situation | `controls` | `open_facts` says |
+|---|---|---|
+| enforced controls exist | populated | — |
+| spec exists, every control unavailable | **absent** | "nothing a human can actually operate yet" |
+| no spec at all | **absent** | "what a human can adjust is unknown" |
+
+An empty array would assert "no controls are needed". The middle row is the whole argument of
+Part 2, and flattening it into `controls: []` would undo it.
