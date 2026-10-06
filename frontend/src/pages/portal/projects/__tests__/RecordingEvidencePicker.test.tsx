@@ -214,3 +214,65 @@ describe('a take that is missing audio or screen says so', () => {
     expect(container.textContent).toContain('Take 2');
   });
 });
+
+/**
+ * Accessibility of the async states.
+ *
+ * A screen reader user presses "Use a Studio recording" and then hears nothing at
+ * all until they go hunting: the fetch, its result, and an empty result were all
+ * silent. Each state now announces itself.
+ */
+describe('every state of the picker announces itself', () => {
+  it('announces the wait', async () => {
+    let release: (v: any) => void = () => undefined;
+    api.get.mockReturnValue(new Promise((res) => { release = res; }));
+    await act(async () => {
+      const r = createRoot(container);
+      root = r;
+      r.render(<RecordingEvidencePicker projectId="p1" storyId="PREP-2" selected="" onSelect={() => undefined} />);
+    });
+    const status = container.querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+    expect(status!.textContent).toContain('Looking for your recordings');
+    await act(async () => { release({ data: { attempts: [] } }); });
+  });
+
+  it('announces how many arrived, without reading the whole list aloud', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [attempt(), attempt({ attemptId: 'b', attemptNo: 1 })] } });
+    await mountPicker();
+    const status = container.querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+    expect(status!.textContent).toContain('2 recordings found');
+  });
+
+  it('uses the singular for one', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [attempt()] } });
+    await mountPicker();
+    expect(container.querySelector('[role="status"]')!.textContent).toContain('1 recording found');
+  });
+
+  it('announces an empty result rather than leaving silence', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [] } });
+    await mountPicker();
+    const status = container.querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+    expect(status!.textContent).toContain('Nothing recorded');
+  });
+
+  // The radio group needs a name a screen reader can read before the options.
+  it('groups the takes under a legend', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [attempt()] } });
+    await mountPicker();
+    expect(container.querySelector('fieldset')).not.toBeNull();
+    expect(container.querySelector('legend')!.textContent).toContain('Your recordings');
+  });
+
+  it('every radio is reachable by its own label', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [attempt()] } });
+    await mountPicker();
+    const input = container.querySelector('input[type="radio"]') as HTMLInputElement;
+    const label = container.querySelector(`label[for="${input.id}"]`);
+    expect(input.id).toBeTruthy();
+    expect(label).not.toBeNull();
+  });
+});
