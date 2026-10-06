@@ -93,7 +93,9 @@ const RecordingEvidencePicker: React.FC<{
   useEffect(() => { void load(); }, [load]);
 
   if (state.phase === 'loading') {
-    return <p className="rt-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>Looking for your recordings…</p>;
+    // role=status so the wait, and its ending, are announced. Without it a screen
+    // reader user hears nothing between pressing the button and the list existing.
+    return <p role="status" className="rt-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>Looking for your recordings…</p>;
   }
 
   if (state.phase === 'error') {
@@ -109,7 +111,7 @@ const RecordingEvidencePicker: React.FC<{
 
   if (state.attempts.length === 0) {
     return (
-      <p className="rt-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
+      <p role="status" className="rt-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
         Nothing recorded for this task yet. Book a practice session in the Studio and record it, or paste a link instead.
         A recording usually takes up to an hour to arrive after the session ends.
       </p>
@@ -119,6 +121,14 @@ const RecordingEvidencePicker: React.FC<{
   return (
     <fieldset style={{ border: 0, padding: 0, margin: '4px 0 0' }}>
       <legend className="rt-muted" style={{ fontSize: 13, padding: 0, marginBottom: 6 }}>Your recordings for this task</legend>
+      {/*
+        The count is announced; the list itself is not, because reading every take
+        aloud on arrival is noise. This is what tells a screen reader user the wait
+        ended and how much is there.
+      */}
+      <p role="status" className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
+        {state.attempts.length} recording{state.attempts.length === 1 ? '' : 's'} found for this task.
+      </p>
       {state.attempts.map((a) => {
         const id = `rec-${a.attemptId}`;
         return (

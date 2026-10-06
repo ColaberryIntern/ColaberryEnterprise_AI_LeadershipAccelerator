@@ -270,7 +270,13 @@ const PresentationStudioPanel: React.FC = () => {
                     That booking does not exist. Nothing can be mapped to it.
                   </p>
                 )}
-                <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                {/* Scrolls inside itself at narrow widths. A table that widens the
+                    page pushes every control off-screen on a phone. */}
+                <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', minWidth: 420, fontSize: 12, borderCollapse: 'collapse' }}>
+                  <caption className="visually-hidden" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+                    What committing this plan would do to each project in the cohort
+                  </caption>
                   <thead>
                     <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line, #E3E8EF)' }}>
                       <th style={{ padding: '4px 6px' }}>Project</th>
@@ -290,6 +296,7 @@ const PresentationStudioPanel: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                </div>
                 <p style={{ margin: '10px 0', fontSize: 13 }}>
                   <strong>{willChange}</strong> of {plan.data.rows.length} would change. Nothing has been
                   written yet.
