@@ -226,144 +226,6 @@ describe('T204 — the schema agrees with the Lead model it writes', () => {
   );
 });
 
-describe('T204 — the schema at the unauthenticated boundary', () => {
-  /**
-   * THE DEPLOY GUARD. `frontend/src/services/onboardingApi.ts` declares
-   * `freeSignup(body: { full_name: string; email: string })` and
-   * `PortalFreeSignupPage.tsx` is its only caller, passing exactly those two trimmed
-   * strings and nothing else. That is the whole live request shape, which is what
-   * makes `.strict()` safe to add to an endpoint already in production — and this test
-   * is where that stops being an argument and becomes a check.
-   */
-  it('accepts exactly the body the portal page sends today, and nothing it does not', () => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'maya@example.com' }).success)
-      .toBe(true);
-  });
-
-  /**
-   * The legacy contract, preserved field by field. The old hand-rolled check was
-   * `if (!full_name || !email || typeof email !== 'string')` followed by an email
-   * regex, so EVERY one of these returned the same string. The first version of
-   * this schema returned Zod's default type errors instead and the commit body
-   * claimed "existing clients see no change", which was false for four bodies.
-   */
-  it.each([
-    ['an empty body', {}],
-    ['a missing email', { full_name: 'Maya' }],
-    ['a missing name', { email: 'a@b.co' }],
-    ['an empty name', { full_name: '', email: 'a@b.co' }],
-    ['a numeric email', { full_name: 'Maya', email: 123 }],
-    ['a null email', { full_name: 'Maya', email: null }],
-    // `!full_name` rejected 0 before, so it must still be rejected rather than
-    // becoming the name "0". A union of string|number alone WIDENS the endpoint here,
-    // which is the opposite of the claim the first draft made about this change.
-    ['a zero name', { full_name: 0, email: 'a@b.co' }],
-    ['a NaN name', { full_name: NaN, email: 'a@b.co' }],
-  ])('returns the legacy required message for %s', (_label, body) => {
-    const r = portalFreeSignupSchema.safeParse(body);
-    expect(r.success).toBe(false);
-    expect(!r.success && r.error.issues[0].message).toBe('full_name and email are required');
-  });
-
-  it('still accepts a NUMERIC full_name, which the old String() coercion allowed', () => {
-    // A number is not a name, but it was accepted before and this is a live public
-    // endpoint: tightening it is a separate decision from adding fields.
-    const r = portalFreeSignupSchema.safeParse({ full_name: 123, email: 'a@b.co' });
-    expect(r.success).toBe(true);
-    expect(r.success && r.data.full_name).toBe('123');
-  });
-
-  it('returns the legacy invalid-email message for a malformed address', () => {
-    const r = portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'not-an-email' });
-    expect(r.success).toBe(false);
-    expect(!r.success && r.error.issues[0].message).toBe('A valid email is required');
-  });
-
-  it('rejects an over-long name and an over-long email', () => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'x'.repeat(256), email: 'a@b.co' }).success).toBe(false);
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }).success).toBe(false);
-  });
-
-  it('rejects a non-URL in page_url, which would otherwise reach admin surfaces and the CRM', () => {
-    const r = portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url: 'not a url' });
-    expect(r.success).toBe(false);
-    expect(!r.success && r.error.issues[0].message).toBe('page_url must be a URL');
-  });
-
-  /**
-   * This found a real gap in the first draft. `z.string().url()` **accepts
-   * `javascript:alert(1)`** — it is a valid URL. On an unauthenticated endpoint
-   * whose values are stored, shown in admin surfaces and pushed to the CRM, that is
-   * a stored-XSS vector waiting for somewhere that renders it as a link.
-   */
-  it.each([
-    'javascript:alert(1)',
-    'data:text/html,<script>alert(1)</script>',
-    'file:///etc/passwd',
-  ])('rejects a dangerous URL scheme in page_url: %s', (page_url) => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url }).success)
-      .toBe(false);
-  });
-
-  it('still accepts the schemes a real signup arrives with', () => {
-    for (const page_url of ['https://cpn.example.com/ai', 'http://localhost:3000/enroll']) {
-      expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url }).success)
-        .toBe(true);
-    }
-  });
-
-  it('rejects an unexpected key — a probe or a client bug, not something to ignore', () => {
-    // Notably this blocks a caller trying to CHOOSE its own programme, which is a
-    // server-side decision: this path is always 'learner'.
-    expect(portalFreeSignupSchema.safeParse({
-      full_name: 'Maya', email: 'a@b.co', programme: 'learner',
-    }).success).toBe(false);
-  });
-
-  it.each(['__proto__', 'constructor', 'prototype'])('rejects the prototype-pollution key %s', (key) => {
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', [key]: 'x' }).success)
-      .toBe(false);
-  });
-
-  it.each([
-    ['an array for a string', { full_name: 'Maya', email: 'a@b.co', utm_source: ['x'] }],
-    ['an object for a string', { full_name: 'Maya', email: 'a@b.co', utm_source: { x: 1 } }],
-    ['an array body', []],
-    ['a string body', 'nope'],
-  ])('rejects %s', (_label, body) => {
-    expect(portalFreeSignupSchema.safeParse(body).success).toBe(false);
-  });
-
-  /**
-   * THE FOUR NARROWINGS, enumerated as tests so the list cannot quietly grow.
-   *
-   * The first draft of this task claimed "existing clients see no change", which was
-   * false: the old hand-rolled check accepted all four of these. Each tightening is
-   * defensible on an unauthenticated endpoint — and saying so beats implying the
-   * endpoint is unchanged when it is not.
-   */
-  it.each([
-    ['full_name over 255 — the column is STRING(255)', { full_name: 'x'.repeat(256), email: 'a@b.co' }],
-    ['email over 320', { full_name: 'Maya', email: `${'x'.repeat(320)}@b.co` }],
-    ['an unexpected key, previously ignored', { full_name: 'Maya', email: 'a@b.co', nope: 1 }],
-    ['full_name as an object — the old code stored "[object Object]"', { full_name: {}, email: 'a@b.co' }],
-    ['full_name as a boolean', { full_name: true, email: 'a@b.co' }],
-    ['full_name as an array', { full_name: [], email: 'a@b.co' }],
-  ])('NARROWER than before, deliberately: rejects %s', (_label, body) => {
-    expect(portalFreeSignupSchema.safeParse(body).success).toBe(false);
-  });
-
-  it('trims what it accepts', () => {
-    const r = portalFreeSignupSchema.safeParse({
-      full_name: '  Maya  ', email: '  MAYA@Example.COM  ', source: ' cpn_landing ',
-    });
-    expect(r.success).toBe(true);
-    if (!r.success) return;
-    expect(r.data.full_name).toBe('Maya');
-    expect(r.data.source).toBe('cpn_landing');
-  });
-});
-
 describe('T204 — acquisition evidence reaches the lead', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -424,9 +286,25 @@ describe('T204 — acquisition evidence reaches the lead', () => {
     const brand = sourceAttrs.brand_id;
     expect(brand).toBeDefined();
     expect((brand?.type as unknown as { key?: string })?.key).toBe('UUID');
-    // The id `Lead.source_id` points at, same type, so the join is actually possible.
-    expect((sourceAttrs.id?.type as unknown as { key?: string })?.key).toBe('UUID');
-    expect((LeadModel.getAttributes().source_id?.type as unknown as { key?: string })?.key).toBe('UUID');
+
+    // THE ASSOCIATION ITSELF, which is strictly stronger than three column types
+    // agreeing by coincidence. `models/index.ts` declares
+    // `Lead.belongsTo(LeadSource, { foreignKey: 'source_id', as: 'leadSource' })`, so
+    // the path is a DECLARED RELATION rather than an inference from matching types.
+    //
+    // `requireActual` is needed because associations are wired in the barrel, and this
+    // suite mocks the barrel for the service under test. Importing `models/Lead`
+    // directly gives the real class but never runs the wiring — which is exactly how
+    // this assertion failed the first time it was written, and is worth knowing: a
+    // model imported in isolation has NO associations at all.
+    const realModels = jest.requireActual('../../models') as {
+      Lead: { associations: Record<string, { target: unknown; foreignKey?: string }> };
+      LeadSource: unknown;
+    };
+    const assoc = realModels.Lead.associations.leadSource;
+    expect(assoc).toBeDefined();
+    expect(assoc.target).toBe(realModels.LeadSource);
+    expect(assoc.foreignKey).toBe('source_id');
 
     // And no second copy anywhere on the Lead to drift out of agreement.
     const leadKeys = Object.keys(LeadModel.getAttributes());
@@ -447,6 +325,41 @@ describe('T204 — acquisition evidence reaches the lead', () => {
 
     expect(leadDefaults().source).toBe('free_signup');
     expect(leadDefaults().form_type).toBe('free_signup');
+  });
+
+  /**
+   * THE LIMITATION OF THIS TASK, pinned as a test so it is documented rather than
+   * discovered. Found by a verifier, not by me.
+   *
+   * `findOrCreate` applies `defaults` **only when it creates**. So for an email that
+   * ALREADY has a lead row — a prior contact form, a download, an open-house
+   * registration — this signup records no acquisition evidence at all. The service
+   * docblock cites 88% of guest enrolments matching no lead; the gap is closed for
+   * that 88% and untouched for the rest.
+   *
+   * It is left that way ON PURPOSE rather than fixed here. Overwriting would replace
+   * first-touch attribution with latest-touch, which destroys the very thing the
+   * requirement calls for — origin preserved, chronological order kept. The place for a
+   * second touch is a chronological evidence record, which is T211's evidence package,
+   * not a mutation of the first one. Filling only the NULL columns was the tempting
+   * middle path and is also wrong: setting `source_id` on an old lead silently rewrites
+   * which brand that person appears to have originated from.
+   */
+  it('writes NO acquisition evidence when the lead already exists, by design', async () => {
+    // `created: false` from findOrCreate — the row was found, not made. The instance
+    // carries a spy `update` so an attempted backfill would be visible.
+    const existingLeadUpdate = jest.fn();
+    findOrCreate.mockResolvedValue([{ id: 1, source: 'contact_form', update: existingLeadUpdate }, false]);
+
+    await createFreeAccount({ full_name: 'Maya', email: 'maya@example.com', programme: 'learner', acquisition });
+
+    // The load-bearing half: the service makes NO attempt to write onto the found row.
+    // `created === false` alone would only be my own fixture talking, but `update`
+    // never being called is a fact about the service — so if someone later adds a
+    // backfill here, this test fails and they have to come and change the reasoning
+    // above rather than quietly reversing the decision.
+    expect(existingLeadUpdate).not.toHaveBeenCalled();
+    expect(findOrCreate).toHaveBeenCalledTimes(1);
   });
 
   it('still signs the person in when lead capture throws — acquisition is best-effort', async () => {

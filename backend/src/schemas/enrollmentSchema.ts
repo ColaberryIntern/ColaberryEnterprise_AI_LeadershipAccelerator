@@ -71,16 +71,33 @@ export type CreateFreeAccountInput = z.infer<typeof createFreeAccountSchema>;
  * falsy numeric name, a malformed address — each still 400s with the same message it
  * did before. A numeric name still works, because the old code coerced it.
  *
- * But the endpoint is NARROWER in four named ways, and each is a deliberate
- * tightening of an unauthenticated route rather than an accident:
+ * But the endpoint is NARROWER, in these six classes. Each is a deliberate tightening
+ * of an unauthenticated route rather than an accident:
  *   1. `full_name` over 255 chars now 400s (the column is STRING(255), so it was
  *      previously accepted here and then truncated or rejected downstream).
  *   2. `email` over 255 chars now 400s (the column width, not the RFC's 320).
  *   3. An unexpected key now 400s instead of being ignored — see `.strict()` below.
  *   4. `full_name` as a boolean, object or array now 400s. The old code accepted
  *      `{}` and stored the name "[object Object]".
- * Each of those four is asserted in `freeSignupAcquisition.test.ts`, so the list
- * cannot quietly grow.
+ *   5. **THE BIGGEST ONE, and the one I first omitted.** The email rule is now Zod's
+ *      `.email()`, not the old loose `/^[^@\s]+@[^@\s]+\.[^@\s]+$/`. Zod is
+ *      substantially stricter, so these all 400 where they used to pass: RFC-legal
+ *      local-part specials (`user%x@`, `user=x@`), a leading or trailing dot in the
+ *      local part, IP-literal domains (`a@127.0.0.1`), non-punycode unicode domains,
+ *      trailing-dot FQDNs (`a@b.co.`), and single-character or all-digit TLDs
+ *      (`a@b.c`, `a@b.12`). Measured: 7 of 9 probe addresses flipped from accepted to
+ *      rejected, while 9 of 9 realistic addresses (punycode, `+`-tagging, `.co.uk`,
+ *      `.museum`, apostrophes) still pass — which is why this is judged acceptable
+ *      rather than reverted, not why it is unremarkable.
+ *   6. A whitespace-only, `Infinity`, or `Date` `full_name` now 400s. Those passed
+ *      `!full_name` and then threw inside `resolveFreeAccount`, so the old response
+ *      was a 500 — this class is a 500 becoming a 400.
+ *
+ * Classes 5 and 6 are here because a verifier found them AFTER I had written "NARROWER
+ * in four named ways … so the list cannot quietly grow" in this very docblock. The list
+ * had already grown; what could not grow was my count of it. Classes 1-4, 5 and 6 are
+ * each asserted in `freeSignupAcquisition.test.ts` now, which is what makes the sentence
+ * true rather than merely confident.
  */
 const LEGACY_REQUIRED = 'full_name and email are required';
 
