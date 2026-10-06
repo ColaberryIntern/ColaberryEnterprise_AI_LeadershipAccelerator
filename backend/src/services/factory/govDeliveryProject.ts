@@ -9,9 +9,11 @@
  *    the flag is on, so deploying it changes nothing until it is deliberately switched on.
  *  - Creating the project NEVER authorizes or runs a build — buildAuthorization + factoryGenerate are untouched.
  *    The tracks ship `unassessed` and every requirement's `evidence_state` is `unassessed` (never fabricated).
- *  - Idempotent + atomic: the project is resolved by a deterministic slug scoped to the fixed gov container
- *    (fail-closed if the container is not configured), tracks + requirements use deterministic `factoryId`s and
- *    `upsert`, and the whole write is one transaction — so approving twice is a no-op, not a duplicate.
+ *  - Idempotent + atomic + REPLAY-SAFE: the project is resolved by a deterministic slug scoped to the fixed gov
+ *    container (fail-closed if not configured), tracks are create-if-absent and requirements create-or-GUARDED-
+ *    update (source-derived fields only), all in one transaction — so re-approving is a no-op that NEVER resets an
+ *    existing track's owner / student-build link / status, or a requirement's human-assessed evidence. (Gov
+ *    ingestion runs LIVE in prod, so a blind upsert here was erasing ownership/links/evidence on every re-approval.)
  *  - Reversible: deleting the `delivery_projects` row cascades the tracks/requirements away.
  */
 import { sequelize } from '../../config/database';
@@ -124,22 +126,42 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
     }
     const deliveryProjectId = project.id as string;
 
+    // Create-if-absent. A re-approval must NEVER reset an existing track's owner, student-build link, or status
+    // (ingestion runs live in prod — a blind upsert here erased them). findOrCreate inserts only when missing.
     for (const trackType of TRACK_TYPES) {
-      await ContractTrack.upsert({
-        id: factoryId('track', [deliveryProjectId, trackType]),
-        delivery_project_id: deliveryProjectId,
-        track_type: trackType,
-        status: 'unassessed',
-        owner_identity_id: null,
-        solution_student_project_id: null,
-      }, { transaction });
+      const trackId = factoryId('track', [deliveryProjectId, trackType]);
+      await ContractTrack.findOrCreate({
+        where: { id: trackId },
+        defaults: {
+          id: trackId,
+          delivery_project_id: deliveryProjectId,
+          track_type: trackType,
+          status: 'unassessed',
+          owner_identity_id: null,
+          solution_student_project_id: null,
+        },
+        transaction,
+      });
     }
 
+    // Replay-safe requirements: create a new one, else GUARD the update to source-derived descriptive fields only.
+    // The reviewer's evidence assessment (evidence_state / source_evidence / human_confirmed) is never overwritten
+    // on an existing row — the established set refreshes WHAT a requirement says, not how far its evidence got.
+    // Stale rows (absent from the new established set) are left in place: non-destructive; marking them superseded
+    // needs an additive column and is a separate task.
     let requirements = 0;
     for (const est of established) {
       const row = toContractRequirementRow(deliveryProjectId, est);
       if (!row) continue;
-      await ContractRequirement.upsert(row, { transaction });
+      const existing = await ContractRequirement.findOne({ where: { id: row.id }, transaction });
+      if (!existing) {
+        await ContractRequirement.create(row, { transaction });
+      } else {
+        await ContractRequirement.update({
+          statement: row.statement, kind: row.kind, priority: row.priority, tracks: row.tracks,
+          source_document: row.source_document, section: row.section, extracted_text: row.extracted_text,
+        }, { where: { id: row.id }, transaction });
+      }
       requirements += 1;
     }
 

@@ -13,10 +13,14 @@ jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ lookupGovContrac
 const dpFindOne = jest.fn();
 const dpCreate = jest.fn();
 jest.mock('../../../models/DeliveryProject', () => ({ __esModule: true, default: { findOne: (...a: any[]) => dpFindOne(...a), create: (...a: any[]) => dpCreate(...a) } }));
-const ctUpsert = jest.fn();
-jest.mock('../../../models/ContractTrack', () => ({ __esModule: true, default: { upsert: (...a: any[]) => ctUpsert(...a) } }));
-const crUpsert = jest.fn();
-jest.mock('../../../models/ContractRequirement', () => ({ __esModule: true, default: { upsert: (...a: any[]) => crUpsert(...a) } }));
+const ctFindOrCreate = jest.fn();
+jest.mock('../../../models/ContractTrack', () => ({ __esModule: true, default: { findOrCreate: (...a: any[]) => ctFindOrCreate(...a) } }));
+const crFindOne = jest.fn();
+const crCreate = jest.fn();
+const crUpdate = jest.fn();
+jest.mock('../../../models/ContractRequirement', () => ({ __esModule: true, default: {
+  findOne: (...a: any[]) => crFindOne(...a), create: (...a: any[]) => crCreate(...a), update: (...a: any[]) => crUpdate(...a),
+} }));
 const gqUpdate = jest.fn();
 jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default: { update: (...a: any[]) => gqUpdate(...a) } }));
 
@@ -55,8 +59,10 @@ describe('ensureGovTwoTrackProject (orchestration, mocked models)', () => {
     jest.clearAllMocks();
     lookupGovContractsContainer.mockResolvedValue({ tenant: { id: 'ten-1' }, org: { id: 'org-1' }, engagement: { id: 'eng-1' } });
     dpCreate.mockResolvedValue({ id: 'dp-1' });
-    ctUpsert.mockResolvedValue([{}, true]);
-    crUpsert.mockResolvedValue([{}, true]);
+    ctFindOrCreate.mockResolvedValue([{}, true]);   // default: track created
+    crFindOne.mockResolvedValue(null);              // default: requirement absent -> created
+    crCreate.mockResolvedValue({});
+    crUpdate.mockResolvedValue([1]);
     gqUpdate.mockResolvedValue([1]);
   });
 
@@ -73,8 +79,8 @@ describe('ensureGovTwoTrackProject (orchestration, mocked models)', () => {
       slug: 'gov-04ac1711-c3f6-418a-9d9b-c5e6211295ec', project_class: 'government_public_sector',
       tenant_id: 'ten-1', organization_id: 'org-1', engagement_id: 'eng-1', name: 'RFP IVR', created_by_identity_id: 'approver-1', status: 'discovery',
     });
-    expect(ctUpsert.mock.calls.map((c) => c[0].track_type).sort()).toEqual(['proposal', 'solution_build']);
-    expect(crUpsert).toHaveBeenCalledTimes(2);
+    expect(ctFindOrCreate.mock.calls.map((c) => c[0].defaults.track_type).sort()).toEqual(['proposal', 'solution_build']);
+    expect(crCreate).toHaveBeenCalledTimes(2);
     expect(gqUpdate).toHaveBeenCalledWith({ delivery_project_id: 'dp-1' }, expect.objectContaining({ where: { id: 'q-1' } }));
   });
 
@@ -83,7 +89,7 @@ describe('ensureGovTwoTrackProject (orchestration, mocked models)', () => {
     const res = await ensureGovTwoTrackProject({ qualificationId: 'q-2', canonicalOpportunityId: GWS, established: [], provenance: null });
     expect(res).toMatchObject({ deliveryProjectId: 'dp-existing', created: false, tracks: 2, requirements: 0 });
     expect(dpCreate).not.toHaveBeenCalled();
-    expect(ctUpsert).toHaveBeenCalledTimes(2);
+    expect(ctFindOrCreate).toHaveBeenCalledTimes(2);
   });
 
   it('fails CLOSED (GovContainerUnavailableError) when the gov container is not configured — writes nothing', async () => {
@@ -98,7 +104,48 @@ describe('ensureGovTwoTrackProject (orchestration, mocked models)', () => {
     dpFindOne.mockResolvedValue({ id: 'dp-3' });
     const res = await ensureGovTwoTrackProject({ qualificationId: 'q-3', canonicalOpportunityId: 'op:gov:abc', established: [{ text: 'no id here' }, { id: 'REQ-9', text: 'ok' }] });
     expect(res.requirements).toBe(1);
-    for (const c of ctUpsert.mock.calls) expect(c[0].solution_student_project_id).toBeNull(); // no build student link
-    expect(crUpsert.mock.calls[0][0].evidence_state).toBe('unassessed');
+    for (const c of ctFindOrCreate.mock.calls) expect(c[0].defaults.solution_student_project_id).toBeNull(); // no build student link
+    expect(crCreate.mock.calls[0][0].evidence_state).toBe('unassessed');
+  });
+
+  // ── Replay safety (the production-live data-loss fix) ──────────────────────
+  it('REPLAY-SAFE: an EXISTING requirement is updated on descriptive fields ONLY — evidence assessment is never overwritten', async () => {
+    dpFindOne.mockResolvedValue({ id: 'dp-r' });
+    // The requirement already exists AND a reviewer has assessed its evidence.
+    crFindOne.mockResolvedValue({ id: 'r', evidence_state: 'verified', source_evidence: [{ docId: 'D1' }], human_confirmed: true });
+    await ensureGovTwoTrackProject({ qualificationId: 'q', canonicalOpportunityId: GWS, established: [{ id: 'REQ-1', text: 'updated statement' }] });
+    expect(crCreate).not.toHaveBeenCalled();     // existing -> not recreated
+    expect(crUpdate).toHaveBeenCalledTimes(1);
+    const patch = crUpdate.mock.calls[0][0];
+    expect(patch).toHaveProperty('statement');   // descriptive fields ARE refreshed
+    expect(patch.statement).toBe('updated statement');
+    // The guard: the evidence assessment is NEVER in the update patch (reverting to a blind upsert fails this).
+    expect(patch).not.toHaveProperty('evidence_state');
+    expect(patch).not.toHaveProperty('source_evidence');
+    expect(patch).not.toHaveProperty('human_confirmed');
+  });
+
+  it('REPLAY-SAFE: tracks are create-if-absent — an existing track is not re-written with null owner/link/status', async () => {
+    dpFindOne.mockResolvedValue({ id: 'dp-e' });
+    // Both tracks already exist with an owner + a student-build link set after first creation.
+    ctFindOrCreate.mockResolvedValue([{ id: 't', owner_identity_id: 'owner-9', solution_student_project_id: 'sp-9', status: 'in_progress' }, false]);
+    await ensureGovTwoTrackProject({ qualificationId: 'q', canonicalOpportunityId: GWS, established: [] });
+    expect(ctFindOrCreate).toHaveBeenCalledTimes(2);
+    for (const c of ctFindOrCreate.mock.calls) {
+      expect(c[0]).toHaveProperty('where');                        // keyed by deterministic id
+      // owner/link/status live ONLY in `defaults` (applied on create), never as an unconditional write.
+      expect(c[0].defaults.owner_identity_id).toBeNull();
+      expect(c[0].defaults.solution_student_project_id).toBeNull();
+    }
+  });
+
+  it('idempotent: a second identical run writes the same end state (no duplicate create, no error)', async () => {
+    dpFindOne.mockResolvedValue({ id: 'dp-i' });
+    ctFindOrCreate.mockResolvedValue([{}, false]);
+    crFindOne.mockResolvedValue({ id: 'r' }); // already present
+    const res = await ensureGovTwoTrackProject({ qualificationId: 'q', canonicalOpportunityId: GWS, established: [{ id: 'REQ-1', text: 't' }] });
+    expect(res).toMatchObject({ created: false, tracks: 2, requirements: 1 });
+    expect(dpCreate).not.toHaveBeenCalled();
+    expect(crCreate).not.toHaveBeenCalled();
   });
 });
