@@ -1,153 +1,106 @@
+#!/usr/bin/env node
 /**
- * capturePresentationStudio.js
+ * Screenshot the Presentation Studio's real emitted DOM at desktop and phone widths,
+ * in light and dark.
  *
- * P2-T8's evidence: real screenshots of the deployed Presentation Studio at the two
- * widths the build spec names — 1440 (desktop) and 390 (iPhone-class).
+ * WHAT THESE IMAGES ARE, PRECISELY. The DOM is produced by the REAL components — it is
+ * dumped by `frontend/src/pages/portal/projects/__tests__/PresentationStudio.domDump.test.tsx`
+ * running under jsdom, which executes effects, so the fetched lesson / assignment /
+ * prompt states are the genuine rendered output rather than loading skeletons. The
+ * stylesheet below is the real `presentationStudio.css`, read from disk, not a copy.
  *
- * Every capture routes through captureHelpers so no PNG exceeds the width ceiling.
- *
- * WHY IT ASSERTS BEFORE IT SHOOTS. A screenshot of a login redirect, or of a page
- * whose panel never rendered, is a photograph of nothing that still looks like
- * evidence. Each stop names a string that MUST be on the page; a stop whose string is
- * missing is recorded as a failure in the summary rather than quietly saved.
+ * WHAT THEY ARE NOT: screenshots of the running application against a live backend.
+ * That needs the app up with an authenticated student and PRESENTATION_STUDIO_ENABLED
+ * on, which belongs to post-deploy verification. Calling these production screenshots
+ * would be a lie. Calling them mockups would also be a lie — nothing here is drawn by
+ * hand; every pixel comes from the components and the shipped CSS.
  *
  * Usage:
- *   node scripts/capturePresentationStudio.js
+ *   1. cd frontend && PS_DOM_DUMP=1 CI=true node ../node_modules/react-scripts/bin/react-scripts.js \
+ *        test --watchAll=false --testPathPattern "PresentationStudio.domDump"
+ *   2. node scripts/capturePresentationStudio.js
  *
- * Env:
- *   CAPTURE_BASE   default https://www.refactored.ai  (the accelerator's public host)
- *   CAPTURE_TOKEN  default reads scripts/.ali_jwt.txt
- *   CAPTURE_OUT    default docs/screenshots/<date>-studio
- *   PROJECT_ID     the project whose PREP tasks are captured
+ * Output: docs/screenshots/2026-10-01-presentation-studio/<stage>-<width>-<theme>.png
  */
-const path = require('path');
 const fs = require('fs');
-const { chromium } = require('playwright');
-const { createSafeContext, safeScreenshot, writeCaptureSummary, readDefaultToken } = require('./captureHelpers');
+const path = require('path');
 
-const REPO_ROOT = path.resolve(__dirname, '..');
-const BASE = process.env.CAPTURE_BASE || 'https://www.refactored.ai';
-const PROJECT_ID = process.env.PROJECT_ID || '6e4bd9da-a22b-4b90-b5b2-55686487f39f';
-const OUT_DIR = process.env.CAPTURE_OUT
-  || path.join(REPO_ROOT, 'docs', 'screenshots', `${new Date().toISOString().slice(0, 10)}-studio`);
+const ROOT = path.resolve(__dirname, '..');
+const DOM_DIR = path.join(ROOT, '.loop-architect', 'runs', '20261001-presentation-studio', 'dom');
+const CSS_FILE = path.join(ROOT, 'frontend', 'src', 'pages', 'portal', 'projects', 'presentation', 'presentationStudio.css');
+const OUT_DIR = path.join(ROOT, 'docs', 'screenshots', '2026-10-01-presentation-studio');
 
-const TOKEN = readDefaultToken();
-if (!TOKEN) {
-  console.error('[studio] No token at scripts/.ali_jwt.txt and no CAPTURE_TOKEN.');
-  console.error('[studio] Every authenticated route would redirect to the login page.');
-  process.exit(1);
-}
-
-/** One stop: a prep task, and a string that proves the page actually rendered. */
-const STOPS = [
-  { id: 'prep1-narrative', task: 'PREP-1', must: 'What to do' },
-  { id: 'prep2-recording', task: 'PREP-2', must: 'Hand it in' },
-  { id: 'prep4-rehearsal', task: 'PREP-4', must: 'What to do' },
-  { id: 'prep6-demo-day', task: 'PREP-6', must: 'Demo Day' },
-];
-
+// 1440 is the repo's desktop review width; 390 is the iPhone-class width the portal is
+// checked at. Both well under captureHelpers' 1800px safe ceiling, so no downscale.
 const WIDTHS = [
-  { label: 'desktop', width: 1440, height: 900 },
-  { label: 'mobile', width: 390, height: 844 },
+  { label: '1440', width: 1440, height: 1400 },
+  { label: '390', width: 390, height: 1600 },
 ];
+const THEMES = ['light', 'dark'];
 
-/**
- * Expand every inner scroll container to its full height before shooting.
- *
- * The workspace puts its main column in `overflow-y: auto`, so a `fullPage`
- * screenshot captures the viewport-sized BOX and slices the content mid-sentence.
- * The first run of this script produced exactly that and it looked like a mobile
- * layout bug — it was not; a probe showed the container scrolls and a real user can
- * read all of it. A screenshot that misrepresents the page is worse than none.
- */
-async function expandScrollers(page) {
-  await page.evaluate(() => {
-    // The app shell is a 100vh box with its own scroller, so releasing the inner
-    // container alone is not enough — the document still cannot grow and fullPage
-    // keeps stopping at one viewport. Both have to give.
-    for (const el of [document.documentElement, document.body]) {
-      el.style.height = 'auto';
-      el.style.minHeight = '0';
-      el.style.maxHeight = 'none';
-      el.style.overflow = 'visible';
-    }
-    document.querySelectorAll('*').forEach((el) => {
-      const cs = getComputedStyle(el);
-      const scrolls = cs.overflowY === 'auto' || cs.overflowY === 'scroll' || cs.overflow === 'hidden';
-      const vhBound = /vh$/.test(el.style.height || '') || cs.height === `${window.innerHeight}px`;
-      if ((scrolls && el.scrollHeight > el.clientHeight + 4) || vhBound) {
-        el.style.height = 'auto';
-        el.style.maxHeight = 'none';
-        el.style.overflow = 'visible';
-      }
-    });
-    // A sticky footer bar that was pinned to the viewport now sits over the content
-    // it used to float above. Un-pin it so it does not cover a panel in the shot.
-    document.querySelectorAll('*').forEach((el) => {
-      const pos = getComputedStyle(el).position;
-      if (pos === 'fixed' || pos === 'sticky') el.style.position = 'static';
-    });
-  });
-  // Let the layout settle after the heights change.
-  await page.waitForTimeout(800);
-}
-
-/** Did the page render the Studio, or did it bounce us to a login? */
-async function assertRendered(page, must) {
-  const url = page.url();
-  if (/\/login/i.test(url)) return { ok: false, why: `redirected to login (${url})` };
-  const body = await page.textContent('body').catch(() => '');
-  if (!body || body.trim().length < 80) return { ok: false, why: 'page body is empty' };
-  if (!body.includes(must)) return { ok: false, why: `expected text not found: "${must}"` };
-  return { ok: true, why: null };
+function shell(bodyHtml, css, theme) {
+  // data-theme on <html> mirrors how ProjectWorkspacePage stamps it
+  // (document.documentElement.setAttribute('data-theme', theme)).
+  return `<!DOCTYPE html>
+<html lang="en" data-theme="${theme}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presentation Studio — ${theme}</title>
+<style>
+  body {
+    margin: 0;
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: ${theme === 'dark' ? '#0f1214' : '#ffffff'};
+  }
+${css}
+</style>
+</head>
+<body>${bodyHtml}</body>
+</html>`;
 }
 
 (async () => {
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  const browser = await chromium.launch();
-  const entries = [];
-  let failures = 0;
-
-  for (const vp of WIDTHS) {
-    const ctx = await createSafeContext(browser, {
-      token: TOKEN,
-      viewport: { width: vp.width, height: vp.height, deviceScaleFactor: 1 },
-    });
-    const page = await ctx.newPage();
-
-    for (const stop of STOPS) {
-      const url = `${BASE}/portal/projects/workspace/${PROJECT_ID}/${stop.task}`;
-      const file = path.join(OUT_DIR, `${stop.id}-${vp.label}.png`);
-      let verdict;
-      try {
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 });
-        // The Studio hydrates its panels after the first paint; without this the
-        // shot is of a skeleton that proves nothing.
-        await page.waitForTimeout(2500);
-        verdict = await assertRendered(page, stop.must);
-        await expandScrollers(page);
-      } catch (e) {
-        verdict = { ok: false, why: `navigation failed: ${e.message}` };
-      }
-
-      await safeScreenshot(page, file, { fullPage: true });
-      if (!verdict.ok) failures += 1;
-      entries.push({
-        name: `${stop.id} @ ${vp.width}`,
-        file: path.basename(file),
-        url,
-        rendered: verdict.ok,
-        note: verdict.why || `found "${stop.must}"`,
-      });
-      console.log(`[studio] ${verdict.ok ? 'OK  ' : 'FAIL'} ${stop.id} @${vp.width}  ${verdict.why || ''}`);
-    }
-
-    await ctx.close();
+  if (!fs.existsSync(DOM_DIR)) {
+    console.error(`[capture] No DOM dump at ${DOM_DIR}. Run the domDump test with PS_DOM_DUMP=1 first.`);
+    process.exit(1);
+  }
+  const css = fs.readFileSync(CSS_FILE, 'utf8');
+  const stages = fs.readdirSync(DOM_DIR).filter((f) => f.endsWith('.html'));
+  if (!stages.length) {
+    console.error('[capture] DOM dump directory is empty.');
+    process.exit(1);
   }
 
-  await browser.close();
-  writeCaptureSummary(OUT_DIR, entries);
-  console.log(`[studio] ${entries.length} captures, ${failures} failed -> ${OUT_DIR}`);
-  // A run where nothing rendered must not exit 0 and look like success.
-  process.exit(failures === entries.length ? 1 : 0);
-})();
+  const { chromium } = require(process.env.PW_PATH || 'playwright');
+  const browser = await chromium.launch();
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  let written = 0;
+  try {
+    for (const file of stages) {
+      const stage = path.basename(file, '.html');
+      const body = fs.readFileSync(path.join(DOM_DIR, file), 'utf8');
+      for (const theme of THEMES) {
+        for (const w of WIDTHS) {
+          const page = await browser.newPage({ viewport: { width: w.width, height: w.height } });
+          await page.setContent(shell(body, css, theme), { waitUntil: 'load' });
+          const out = path.join(OUT_DIR, `${stage}-${w.label}-${theme}.png`);
+          await page.screenshot({ path: out, fullPage: true });
+          await page.close();
+          written += 1;
+          console.log(`[capture] ${path.relative(ROOT, out)}`);
+        }
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+
+  // A count, printed, so a reader can tell a complete run from a truncated one.
+  console.log(`[capture] OK — ${written} screenshots from ${stages.length} stages × ${THEMES.length} themes × ${WIDTHS.length} widths`);
+})().catch((err) => {
+  console.error('[capture] FAILED:', err && err.message ? err.message : err);
+  process.exit(1);
+});
