@@ -48,6 +48,17 @@ const BRANCHING = [
   /\btier\s*(===|!==|==|!=)\s*['"`](guest|member)['"`]/,
   /\btier\s*:\s*['"`](guest|member)['"`]/,
   /\btier\s*(=|<>|!=)\s*'(guest|member)'/i,
+  // Sequelize operator objects. `{ enrollment_type: { [Op.ne]: 'explorer' } }`
+  // is a query filter — the artifact's own definition of branching — but after
+  // the colon comes `{`, not a quote, so none of the rules above see it.
+  //
+  // This gap misfiled `cohortService.ts` as a reporting-only consumer when it
+  // filters three dashboard counts (`totalEnrollments`, `paidEnrollments`,
+  // `pendingInvoice`) on exactly that form. The verifier found it, and it is the
+  // same under-count class as the comment-stripper bug: the file was present in
+  // the artifact, so the completeness tripwire passed, while the thing that
+  // decides whether it gets a behaviour test was wrong.
+  /(enrollment_type|\btier)\s*:\s*\{\s*\[\s*Op\./,
 ];
 
 /**

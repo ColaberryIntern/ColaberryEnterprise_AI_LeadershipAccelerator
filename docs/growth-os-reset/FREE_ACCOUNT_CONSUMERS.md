@@ -47,7 +47,15 @@ Two refinements the first scan needed, both recorded because they changed the an
    exactly how a list stops meaning anything. Comments are now stripped before classification,
    which took branching from 31 to 28.
 
-## BRANCHING — 28 files
+   **That fix then demoted a file that really does branch, and the correction matters more than
+   the fix.** For `config/env.ts` and `withdrawTestDemoRevenueAccounts.ts` the comment was the
+   *only* mention, so demotion was right. For **`cohortService.ts` the comment was only the first
+   thing the regex matched** — the file also carries a real query filter at `:431`, in a form none
+   of the branching rules recognised. So comment-stripping silently moved a genuine branching
+   consumer into the reporting bucket, where it would never have been given a behaviour test. A
+   rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
+
+## BRANCHING — 29 files
 
 Counts from the generator's own output. Every row carries a determination; the tripwire fails if
 any row does not.
@@ -67,12 +75,12 @@ any row does not.
 | 11 | `services/personHistoryService.ts` | `enrollment_type === 'explorer' ? …` | **CHANGES** | — | The timeline's first event title becomes *"Registered as Explorer (free)"* instead of *"Enrolled"*. |
 | 12 | `services/timeline/feedControlService.ts` | `enrollment_type === 'explorer' ? ' · Free'` | **CHANGES** | — | The admin feed-control picker labels population A with `· Free`. |
 | 13 | `services/reese/reeseWelcomeService.ts` | `enrollment.tier === 'member'` | — | **CHANGES** | `isStudent` is keyed on **`tier`**, so population B flips from the **student** intro to the **account** intro. Population A is already `'guest'`. The plan had this on the wrong population. |
-| 14 | `services/leads/prospectAccount.ts` | `enrollment.tier !== 'guest'` (`assignToProspectCohort`) | — | **CHANGES** | **Found during execution; in no audit cycle.** An existing population-B Explorer who later submits a prospect form currently fails this guard and gets no cohort. After the change they pass it and **are assigned a prospect cohort**, which then feeds `hasFullCurriculumAccess` and Reese's real-class-cohort check. Needs its own test. |
+| 14 | `services/leads/prospectAccount.ts` | `enrollment.tier !== 'guest'` (`assignToProspectCohort`) | unchanged | unchanged | **Nothing moves, and the first draft of this row claimed the opposite.** The guard one line above — `if (enrollment.cohort_id) return false;` — fires first for every population-B row, because `createExplorerEnrollment` always creates with `cohort_id: cohort.id`, and its idempotent branch returns that same cohort-bearing row. So the tier guard is **unreachable** and the outcome is `false` before and after. Population A is already `'guest'`. The file's own docblock calls the cohort guard the first of *"two guards, both load-bearing"*, which is exactly right. |
 | 15 | `services/growthJourney/subjectResolver.ts` | `tier !== 'guest' && payment_status === 'paid'` | unchanged | unchanged | The customer fact needs **both** terms, and neither population is paid, so it does not move. **It is the reason T206 exists**: a paid-but-guest row would read as not-a-customer here. |
 | 16 | `services/enrollmentService.ts` | writer | writer | writer | Being wired in T202b. Also the path that **sends** — `sendTrainingWelcome` at `:388`, `delivery_mode: 'live'`, and `pushLeadToGhl` at `:359`. |
 | 17 | `services/freeSignupService.ts` | writer | writer | writer | Being wired in T202b. |
 | 18 | `services/freeAccountRegistration.ts` | writer | writer | writer | The canonical service (T201). |
-| 19 | `services/openHouseCreditService.ts` | writer | — | — | Keeps its direct write; the deposit partition is deliberate (T203). Gains a profile at creation. |
+| 19 | `services/openHouseCreditService.ts` | writer | writer | writer | Keeps its direct write; the deposit partition is deliberate (T203). Gains a profile at creation. Marked `writer` in both population columns like the other three, rather than `—`: the tally parses those cells, and a fourth spelling made the writer count read 3 while the row counted as nothing at all. |
 | 20 | `services/duplicateAccountSweepService.ts` | `!== 'internship'` | unchanged | unchanged | Guards against sweeping internship rows. Neither population is `'internship'`, and T207 excludes that value for the same reason. |
 | 21 | `services/duplicateAliasDetector.ts` | `!== 'internship'` | unchanged | unchanged | Filters internship rows out of alias detection. Neither population is `'internship'`, so the filter's result is identical before and after. |
 | 22 | `models/Enrollment.ts` | `declare tier: 'guest' \| 'member'` | unchanged | unchanged | Type declaration, not behaviour. Listed so the column's declared union stays visible. |
@@ -82,11 +90,22 @@ any row does not.
 | 26 | `services/curriculum/daraIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | Seeds Dara's agent enrollment as `'standard'`. Same reasoning: an agent identity is not a free account and the backfill excludes it. |
 | 27 | `services/reese/reeseIdentitySeed.ts` | writes `'standard'` | unchanged | unchanged | Seeds Reese's agent enrollment as `'standard'`. Also the row `reeseWelcomeService` refuses to greet, so it must not become an Explorer. |
 | 28 | `scripts/internshipJourneyE2E.ts` | `enrollment_type: 'standard', tier: 'standard'` | unchanged | unchanged | **An E2E script writes `tier: 'standard'`, which is not in the column's declared union** (`'guest' \| 'member'`). Pre-existing, out of this phase's scope, recorded because it is why the column has no CHECK constraint to rely on. |
+| 29 | `services/cohortService.ts` | `{ enrollment_type: { [Op.ne]: 'explorer' } }` | **CHANGES** | — | **Added on the fix pass; the first scan misfiled this as reporting-only.** `getDashboardStats()` builds one `notExplorer` filter and reuses it for three counts — `totalEnrollments`, `paidEnrollments` and `pendingInvoice`. Once population A gains `enrollment_type: 'explorer'`, **`totalEnrollments` and `pendingInvoice` on the admin dashboard drop** by the number of portal free accounts. `paidEnrollments` does not move, because those rows are not paid. Appended rather than inserted in theme order so the existing row numbers, and the determinations that reference them, stay stable. |
 
-**Changes: 12 rows for population A, 3 for population B** (rows 1, 13, 14), plus 4 writers.
-**Unchanged with a stated reason: 9 rows.**
+**Tallies, counted from the table's own cells rather than by hand** — the first draft said "12 for
+A" and "9 unchanged", both off by one in **compensating** directions, so the two wrong numbers
+still summed to 28 and the arithmetic validated itself. They are now derived, and the tripwire
+asserts them from the parsed cells so they cannot drift again:
 
-## REPORTING — 18 files
+| Tally | Rows | Command |
+|---|---|---|
+| Changes for population A | **12** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
+| Changes for population B | **2** (rows 1 and 13) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
+| Writers | **4** | `grep -c "\| writer \|"` |
+| Unchanged, with a stated reason | **11** | `grep -c "\| unchanged \| unchanged \|"` |
+| **Total** | **29** | matches the generator's `BRANCHING` count |
+
+## REPORTING — 17 files
 
 Disclosure, not behaviour tests. **Pasted from the generator's output, after it caught me
 hand-transcribing this list and dropping a file** — see the note below.
@@ -95,7 +114,7 @@ hand-transcribing this list and dropping a file** — see the note below.
 `routes/admin/flotationIntakeRoutes.ts` · `routes/projectRoutes.ts` ·
 `scripts/enumerateFreeAccountConsumers.ts` · `server.ts` · `services/adminOrgService.ts` ·
 `services/adminOs/metricRegistry.ts` · `services/adminOs/personProfileService.ts` ·
-`services/cohortService.ts` · `services/enrollmentsWithoutProjects.ts` ·
+`services/enrollmentsWithoutProjects.ts` ·
 `services/explorerGrowth/explorerSignalDefinitions.ts` ·
 `services/explorerGrowth/explorerStateMachine.ts` ·
 `services/growthJourney/outcomes/outcomeNormalizer.ts` · `services/icpProfileService.ts` ·
@@ -194,6 +213,16 @@ row 15:**
 
 - `backend/src/services/growthJourney/subjectResolver.ts:359` → "if (enrollment && enrollment.tier !== 'guest' && enrollment.payment_status === 'paid') return { paid: true, basis: 'payment_status' };"
 
+**The Sequelize operator-object filter that the first scan could not see — row 29, the admin
+dashboard's three counts:**
+
+- `backend/src/services/cohortService.ts:431` → "const notExplorer = { enrollment_type: { [Op.ne]: 'explorer' } };"
+
+**The guard that makes the prospect-cohort row a non-change — row 14:**
+
+- `backend/src/services/leads/prospectAccount.ts:94` → "if (enrollment.cohort_id) return false;"
+- `backend/src/services/enrollmentService.ts:321` → "cohort_id: cohort.id,"
+
 **The send on the `/enroll` path, which is why T216 creates nothing in production — row 16:**
 
 - `backend/src/services/enrollmentService.ts:388` → "const result = await sendTrainingWelcome({"
@@ -205,5 +234,14 @@ row 15:**
 - It does not claim to find consumers that read these columns through a view, a cached JSON blob,
   or a string built at runtime. A regex over source cannot see those, and saying so is the
   difference between a bounded check and a false guarantee.
+- **It recognises only the comparison forms it has rules for**, which is the limitation that
+  actually bit this document. The rules cover `x === 'literal'`, `key: 'literal'`, the SQL
+  comparison forms, and — added after the miss — Sequelize operator objects of the shape
+  `key: { [Op.…]: … }`. A filter expressed some other way would be classified reporting-only and
+  would not be given a behaviour test. Searched exhaustively for the remaining forms at the time
+  of writing: no `IN`, `NOT IN`, `LIKE` or `CASE WHEN` usage on either column anywhere in
+  `backend/src`, and the only operator-object or array occurrences are the dashboard filter cited
+  below plus three column definitions. **This is a known blind spot, not a solved problem** — the
+  completeness tripwire proves a file is *listed*, never that it is in the right bucket.
 - It does not measure production. No row count, no flag value, no claim about how many real
   accounts are in either population — this phase takes no production read before T216.

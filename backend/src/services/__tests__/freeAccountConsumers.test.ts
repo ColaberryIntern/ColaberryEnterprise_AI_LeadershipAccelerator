@@ -46,6 +46,21 @@ describe('free-account consumer enumeration (T202a)', () => {
       expect(c.branching).toBe(true);
     });
 
+    it('classifies a Sequelize operator object as branching — the form that misfiled cohortService', () => {
+      // `cohortService.ts:431` filters three dashboard counts on exactly this,
+      // and the original rules all expected a quote after the colon, so the file
+      // was classified reporting-only: present in the artifact, and therefore
+      // passing the completeness tripwire, while silently exempt from needing a
+      // behaviour test.
+      const c = classify(`const notExplorer = { enrollment_type: { [Op.ne]: 'explorer' } };`);
+      expect(c.branching).toBe(true);
+    });
+
+    it('classifies a tier operator object as branching too', () => {
+      const c = classify(`where: { tier: { [Op.in]: ['guest'] } }`);
+      expect(c.branching).toBe(true);
+    });
+
     it('does NOT classify a comment as branching — the bug that inflated the first scan', () => {
       const c = classify(`// not just enrollment_type='explorer', also staff\nexport const x = 1;`);
       expect(c.branching).toBe(false);
@@ -167,6 +182,42 @@ describe('free-account consumer enumeration (T202a)', () => {
         }
       }
       expect(undecided).toEqual([]);
+    });
+
+    /**
+     * The first draft's two tallies were off by one in compensating directions,
+     * so they still summed to the branching count and the arithmetic validated
+     * itself. Counting from the parsed cells makes that impossible: the parts
+     * must sum to the whole AND each part must match what the document claims.
+     */
+    describe('the per-population tallies are derived, not asserted', () => {
+      const rows = doc.split('\n').filter((l) => /^\| \d+ \| `/.test(l));
+      const cellsOf = (l: string) => l.split(/(?<!\\)\|/).map((c) => c.trim());
+      const aChanges = rows.filter((l) => cellsOf(l)[4] === '**CHANGES**');
+      const bChanges = rows.filter((l) => cellsOf(l)[5] === '**CHANGES**');
+      const writers = rows.filter((l) => cellsOf(l)[4] === 'writer');
+      const unchanged = rows.filter((l) => cellsOf(l)[4] === 'unchanged' && cellsOf(l)[5] === 'unchanged');
+
+      it('the table has one row per branching file', () => {
+        expect(rows).toHaveLength(branching.length);
+      });
+
+      it('the four tallies sum to the branching count, with nothing uncategorised', () => {
+        expect(aChanges.length + bChanges.length + writers.length + unchanged.length).toBe(rows.length);
+      });
+
+      it('the document states the tally it actually has for population A', () => {
+        expect(doc).toContain(`| Changes for population A | **${aChanges.length}** |`);
+      });
+
+      it('the document states the tally it actually has for population B', () => {
+        expect(doc).toContain(`| Changes for population B | **${bChanges.length}**`);
+      });
+
+      it('the document states the writer and unchanged tallies it actually has', () => {
+        expect(doc).toContain(`| Writers | **${writers.length}** |`);
+        expect(doc).toContain(`| Unchanged, with a stated reason | **${unchanged.length}** |`);
+      });
     });
   });
 });
