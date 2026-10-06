@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presentation Studio — P2-T8 review</title>
+<style>
+  :root {
+    --ink: #10243E; --ink-soft: #5B6B7C; --line: #E3E8EF; --surface: #FFFFFF;
+    --bg: #F7F9FC; --accent: #0B5FFF; --warn: #B4530A; --bad: #C20E1E; --good: #0F7B3E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #E8EEF6; --ink-soft: #9FB0C4; --line: #22324A; --surface: #121C2B;
+      --bg: #0B131F; --accent: #6AA3FF; --warn: #E3A15F; --bad: #FF8A94; --good: #5FD08A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #E8EEF6; --ink-soft: #9FB0C4; --line: #22324A; --surface: #121C2B;
+    --bg: #0B131F; --accent: #6AA3FF; --warn: #E3A15F; --bad: #FF8A94; --good: #5FD08A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 48px 16px 80px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 32px; }
+  h1 { font-size: 1.9rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .sub { color: var(--ink-soft); margin: 0; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0 0; }
+  .pill {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+    padding: 6px 14px; font-size: 0.85rem;
+  }
+  .pill b { color: var(--accent); }
+  h2 { font-size: 1.25rem; margin: 40px 0 6px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; margin: 16px 0;
+  }
+  .finding { border-left: 4px solid var(--warn); }
+  .finding.fixed { border-left-color: var(--good); }
+  .finding.nonissue { border-left-color: var(--ink-soft); }
+  .tag {
+    display: inline-block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-soft); margin-bottom: 6px;
+  }
+  .shots { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  @media (min-width: 820px) { .shots { grid-template-columns: 1.6fr 1fr; } }
+  figure { margin: 0; }
+  figcaption { color: var(--ink-soft); font-size: 0.85rem; margin-bottom: 8px; }
+  img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; display: block; }
+  code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; font-size: 0.87em; }
+  .note { color: var(--ink-soft); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Presentation Studio — P2-T8 review</h1>
+  <p class="sub">Real screenshots of the deployed Studio at 1440 and 390, captured 2026-10-06 against
+  <code>www.refactored.ai</code>, signed in as a participant.</p>
+  <div class="bar">
+    <span class="pill"><b>8</b> captures, 0 failed</span>
+    <span class="pill"><b>4</b> prep tasks × 2 widths</span>
+    <span class="pill"><b>2</b> real defects found</span>
+    <span class="pill"><b>1</b> suspected defect disproved</span>
+  </div>
+</header>
+
+<p>These are photographs of production <em>as it was at capture time</em>. Two of the findings below
+are fixed in the same change that adds this document, so the screenshots deliberately still show the
+old behaviour — that is the evidence the defect was real.</p>
+
+<h2>What the sweep found</h2>
+
+<div class="card finding fixed">
+  <span class="tag">Defect · fixed in this change</span>
+  <h3 style="margin:0 0 8px">The page told students to publish their recording publicly, next to a button that made that unnecessary</h3>
+  <p>PREP-2's step 4 reads <em>"Upload the file to Google Drive or OneDrive and set sharing to 'Anyone
+  with the link can view', or upload it to YouTube as Unlisted."</em> Directly beneath it sits
+  <strong>Use a Studio recording</strong>, which takes a recording the platform already holds.</p>
+  <p>The guide copy was written when a link was the only way in. It kept saying so for a day after
+  that stopped being true. A browser probe confirmed both strings on the same rendered page.</p>
+  <p class="note">Fixed: the hand-in advice now leads with the Studio room and keeps uploading as the
+  fallback for recordings made elsewhere.</p>
+</div>
+
+<div class="card finding fixed">
+  <span class="tag">Defect · fixed in this change</span>
+  <h3 style="margin:0 0 8px">A recording task opened on "Paste a link", with the workaround in the loud button</h3>
+  <p>Visible in the mobile shot below: <strong>Paste a link</strong> carries the selected-state
+  treatment and <strong>Use a Studio recording</strong> is the quiet one. The form opened on the old
+  path, so the styling advertised it.</p>
+  <p class="note">Fixed: PREP-2 and PREP-5 now open on the picker. A student who recorded elsewhere is
+  one click from the URL box, and the picker's empty state says so.</p>
+</div>
+
+<div class="card finding nonissue">
+  <span class="tag">Suspected · disproved</span>
+  <h3 style="margin:0 0 8px">The "clipped" mobile card was a capture artifact, not a layout bug</h3>
+  <p>The first capture run sliced the instructions mid-sentence at 390px, which looked like a serious
+  mobile defect. It was not. The workspace puts its main column in <code>overflow-y: auto</code>, and a
+  <code>fullPage</code> screenshot captures the box rather than the content.</p>
+  <p>Measured in the browser rather than argued about: <code>main.rt-mid</code> reports
+  <code>clientHeight 351 → scrollHeight 1990</code> with <code>overflow-y: auto</code> — it scrolls, and
+  a real user reads all of it. The capture script now expands inner scrollers before shooting, which is
+  why the images below are complete.</p>
+</div>
+
+<h2>PREP-2 — Record a first run-through</h2>
+<p class="note">The hand-in form, the practice-room reservation, and the task aside. Both defects above
+are visible here.</p>
+<div class="shots">
+  <figure>
+    <figcaption>1440 × desktop</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep2-recording-desktop.png" alt="PREP-2 at 1440px showing the six stages, the guide, and the hand-in form">
+  </figure>
+  <figure>
+    <figcaption>390 × mobile</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep2-recording-mobile.png" alt="PREP-2 at 390px, stages reflowed to a 3-by-2 grid, full guide and hand-in form">
+  </figure>
+</div>
+
+<h2>PREP-1 — The demo narrative</h2>
+<p class="note">Three ways in: write it, use a Studio recording, or paste a link. Prose is the default
+here, which is right for a narrative.</p>
+<div class="shots">
+  <figure>
+    <figcaption>1440 × desktop</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep1-narrative-desktop.png" alt="PREP-1 at 1440px">
+  </figure>
+  <figure>
+    <figcaption>390 × mobile</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep1-narrative-mobile.png" alt="PREP-1 at 390px">
+  </figure>
+</div>
+
+<h2>PREP-4 — Rehearse with someone</h2>
+<div class="shots">
+  <figure>
+    <figcaption>1440 × desktop</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep4-rehearsal-desktop.png" alt="PREP-4 at 1440px">
+  </figure>
+  <figure>
+    <figcaption>390 × mobile</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep4-rehearsal-mobile.png" alt="PREP-4 at 390px">
+  </figure>
+</div>
+
+<h2>PREP-6 — Demo Day</h2>
+<p class="note">Staff-marked, so it correctly offers no hand-in form at all — only an explanation of
+why. This is the regression that matters most: a student must never be able to mark their own
+presentation.</p>
+<div class="shots">
+  <figure>
+    <figcaption>1440 × desktop</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep6-demo-day-desktop.png" alt="PREP-6 at 1440px, showing no submission form">
+  </figure>
+  <figure>
+    <figcaption>390 × mobile</figcaption>
+    <img src="screenshots/2026-10-06-studio/prep6-demo-day-mobile.png" alt="PREP-6 at 390px, showing no submission form">
+  </figure>
+</div>
+
+<h2>What held up</h2>
+<div class="card">
+  <ul style="margin:0; padding-left: 20px">
+    <li><strong>No horizontal scroll at 390.</strong> The six-stage grid reflows to 3×2 and stays legible.</li>
+    <li><strong>Focus states exist already.</strong> <code>presentationStudio.css</code> carries
+      <code>:focus-visible</code> on every button and link, plus <code>prefers-reduced-motion</code> and a
+      dark-mode block scoped twice because the theme attribute lands on two elements.</li>
+    <li><strong>The stage switcher is keyboard-operable.</strong> <code>TemplateChooser</code> is a real
+      <code>role="radiogroup"</code> of real buttons with <code>aria-checked</code>.</li>
+    <li><strong>Colour is never the only channel.</strong> Checked and cleared — the red warnings carry
+      their meaning in words.</li>
+    <li><strong>PREP-6 shows no form</strong> at either width.</li>
+  </ul>
+</div>
+
+<h2>Still open</h2>
+<div class="card">
+  <p style="margin:0 0 8px">The screenshots above predate the two fixes in this change. They should be
+  retaken after it deploys, to confirm the guide leads with the Studio room and the picker is the
+  default on PREP-2 and PREP-5.</p>
+  <p class="note" style="margin:0">Re-run with
+  <code>node scripts/capturePresentationStudio.js</code> (needs a participant token at
+  <code>scripts/.ali_jwt.txt</code>).</p>
+</div>
+
+</div>
+</body>
+</html>
