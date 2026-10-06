@@ -28,45 +28,91 @@ load-bearing throughout this runbook, and the status box below records both sepa
 
 ## Status — what is true right now
 
-> **Re-measured against production on 2026-09-09.** Everything in the table below
-> this note was written on 2026-08-14 and describes a box at `4078338f`. Production
-> is now at `251b627e4`, six weeks and several hundred commits later, and **four of
-> the claims in that table are no longer true.** They are kept, struck through in
-> the wording, because the reason each was true is still the reason to check it.
+> **Re-measured against production on 2026-10-05.** The table below was written on
+> 2026-08-14 and first corrected on 2026-09-09. **One of the 2026-09-09 corrections was
+> itself wrong**, and it was wrong in the direction that matters: it reported a dead
+> subsystem as working. Re-measure before trusting any number here.
 
-| Claim as of 2026-08-14 | Measured 2026-09-09 |
-|---|---|
-| "Repo provisioning **has never run in production**" | **37 repositories connected, 32 carrying a file tree.** Every module that reads a student repo now has something to read |
-| "0 tasks carry `verified_at`. Wired ≠ run" | **178 tasks verified.** The loop has run, against real repositories |
-| "None of PRs #1461/#1462/#1463 is running on the live box" | All of them are. Production is far past `4078338f` |
-| "`plan_unpublished` 10 → 0" | **3 plans still sit at `draft`**, created 2026-08-10, 08-11 and 08-14. All three predate auto-publish, which fires only on new generations, so they were never going to be rescued by it |
+| Claim | 2026-08-14 | 2026-09-09 | **2026-10-05** |
+|---|---|---|---|
+| Repo provisioning | "has **never run** in production" | "**37 repositories connected**, 32 carrying a file tree" | **45 rows, 41 with a file tree — and ZERO usable.** See below: the 09-09 reading was an artefact of the query |
+| Tasks carrying `verified_at` | "0. Wired ≠ run" | "**178 tasks verified**" | **346 verified**, 317 by `build_pipeline:repo_verification` and every one of those carrying a commit ref. Most recent: today. **This loop is genuinely healthy** |
+| PRs #1461/#1462/#1463 | "none running on the live box" | "all of them are" | Still true |
+| Plans at `draft` | "`plan_unpublished` 10 → 0" | "**3 plans** still at draft (08-10, 08-11, 08-14)" | **4.** The three originals are still there, and `c8949338` joined them on 2026-09-25 — so this is not a frozen legacy set, it still gains members |
 
-Two things that were checked and are **not** wrong today:
+### The correction that matters: "37 repositories connected" was never true
 
-- **Active-project drift is at zero.** 11 enrollments point at a project with no
-  published plan, but **none of those students has a published plan on a different
-  project**, so this is not the `activeProjectDrift` failure. It is 11 students whose
-  active project never got a plan, which is a different problem with a different fix.
-  The first count said 11 and looked alarming; the second query said 0 and was right.
-  That is the same lens-widening lesson as the publish incident below, in the other
-  direction.
+The 2026-09-09 pass ran the query printed below this section and read `repos_connected = 37`
+as "repo provisioning works now". It does not. Measured 2026-10-05:
+
+```
+rows in github_connections ................. 45
+rows with a non-empty access token .......... 2
+rows actually syncable (token + owner + name) 0
+rows ever written to student_github_activity. 0   (never, for anyone)
+```
+
+**41 of 45 connections hold an EMPTY STRING access token, not NULL.** `count(col)` and
+`WHERE col IS NOT NULL` both count an empty string as present, so every "connected
+students" figure in this repo — including the one in this runbook — has been reporting
+45 where the usable number is 0.
+
+It stays hidden because `syncStudentActivity` opens with
+`if (!connection?.access_token_encrypted || !connection.repo_owner || !connection.repo_name) return;`
+An empty string is falsy, so it **returns early and resolves successfully**: running it for
+ten interns printed "done" ten times in 1-2 ms each, logged nothing, and wrote nothing.
+
+**Test `COALESCE(access_token_encrypted, '') <> ''`, never `IS NOT NULL`. And judge a sync by
+the rows it WROTE, never by its exit status** — a function whose first line is a guarded
+`return` succeeds at doing nothing.
+
+What this does and does not break: the **webhook** path is unaffected and is what verifies
+build tasks from pushes (317 verifications, all with commit refs, still running today). It
+authenticates with the webhook secret, not an OAuth token. Only the **polling** sync —
+`commits_last_7d`, `contribution_graph_json`, anything in `student_github_activity` — is dead.
+
+### Two things this pass found that no earlier pass looked for
+
+- **24 tasks are `complete` with no `verified_at`.** 370 complete, 346 verified. Rule 7 says
+  `markTaskVerifiedComplete` is the only path to `complete` and it always stamps `verified_at`,
+  so those 24 either predate that rule or arrived another way. Worth identifying before any
+  points mechanism gates on `verified_at`, because today they would score as unverified.
+- **4 projects have materialised tasks but no STORY-000.** 51 projects with tasks, 47 carrying
+  it. Rule 3 reads "no STORY-000 ⇒ publish did not run" — for these four, tasks exist anyway,
+  so either the row was deleted by hand or a second materialisation path exists. Check before
+  relying on STORY-000 as proof of publish.
+
+### Unchanged and healthy
+
+- **Every cohort has a `start_date`** (3 accelerator, 1 ai_internship, 1 explorer), so rule 4's
+  silent degradation — no dates, no PREP week — is not firing anywhere today.
+- Client writes still cannot set `complete`: 687 tasks sit at `not_started`, and nothing is
+  `in_progress` or `blocked`.
 - The document set, the gate, the repair loop and the schedule behave as described.
+- 46 builds delivered (`published` + `awaiting_repo`) across 37 people with a project, out of
+  549 active enrollments. 1,057 tasks, 97 undated.
 
-**How these were measured**, so the next reader can re-run them rather than trust this:
+**How to re-run this** — and note the second line, which the previous version of this query
+lacked and which is the whole reason it misled:
 
 ```sql
-SELECT (SELECT count(*) FROM github_connections)                                  AS repos_connected,
-       (SELECT count(*) FROM github_connections WHERE file_tree_json IS NOT NULL) AS repos_with_tree,
-       (SELECT count(*) FROM build_plans WHERE status = 'published')              AS published,
-       (SELECT count(*) FROM build_plans WHERE status = 'draft')                  AS still_draft,
-       (SELECT count(*) FROM student_tasks WHERE verified_at IS NOT NULL)         AS tasks_verified;
+SELECT (SELECT count(*) FROM github_connections)                                    AS connection_rows,
+       -- NOT count(access_token_encrypted): an empty string is not a connection.
+       (SELECT count(*) FROM github_connections
+         WHERE COALESCE(access_token_encrypted, '') <> ''
+           AND repo_owner IS NOT NULL AND repo_name IS NOT NULL)                    AS actually_syncable,
+       (SELECT count(*) FROM student_github_activity)                               AS sync_has_ever_written,
+       (SELECT count(*) FROM build_plans WHERE status = 'published')                AS published,
+       (SELECT count(*) FROM build_plans WHERE status = 'draft')                    AS still_draft,
+       (SELECT count(*) FROM student_tasks WHERE verified_at IS NOT NULL)           AS tasks_verified,
+       (SELECT count(*) FROM student_tasks WHERE status = 'complete')               AS tasks_complete;
 ```
 
 | | State | Effect on this runbook |
 |---|---|---|
 | **PR #1463** build-verification loop | **merged into main 2026-08-14** | `markTaskVerifiedComplete` finally has a caller. New column `student_tasks.verification_json`, new `sbp/verification/` subtree, and `.colaberry/progress.json` is now **co-owned and merged**, not overwritten — see "What #1463 changed" below |
-| **PR #1462** auto-publish | **merged into main 2026-08-14. NOT deployed** | A gate-clean plan publishes itself — *in main*. Production has not taken it yet, so rule 1 still applies there exactly as originally written. See "What is actually running in production" below |
-| **PR #1461** audit script | **approved, merging immediately after #1462. NOT deployed** | `auditStudentBuilds.js` replaces the hand-written cohort sweep. Its verdict ladder and this skill's readiness query are deliberately the same definition, and #1463 did **not** change that definition — the script reports verification as a note and deliberately does not gate readiness on it. Not in the running image: to run it before the next deploy, copy it under `/app` in the container so `pg` resolves (node walks up from the script's path, so `/tmp` cannot see `/app/node_modules`) |
+| **PR #1462** auto-publish | **merged 2026-08-14 and LIVE** (re-checked 2026-10-05) | A gate-clean plan publishes itself. Evidence rather than assumption: 46 builds are delivered, several reached `published` today, and exactly **one** build still rests at `drafted` — `6d10e2db`, from 2026-08-14, which predates the deploy and was never going to be rescued by a hook that fires only on new generations. Rule 1 therefore changes meaning on production: `drafted` is no longer the normal resting state, it is a **failure state** meaning the plan is good and something downstream refused. Look for `sbp_autopublish_failed` |
+| **PR #1461** audit script | **merged. Still not in the running image** (re-checked 2026-10-05) | `auditStudentBuilds.js` replaces the hand-written cohort sweep. Its verdict ladder and this skill's readiness query are deliberately the same definition, and #1463 did **not** change that definition — the script reports verification as a note and deliberately does not gate readiness on it. `backend/src/scripts/auditStudentBuilds.js` is on `main`, and a `find` across the running container returns nothing — the image ships compiled `dist/`, and a hand-written `.js` under `src/scripts/` is not compiled into it, so no deploy will ever carry it. The workaround is therefore permanent rather than temporary: copy it under `/app` in the container so `pg` resolves, because node walks up from the script's path and `/tmp` cannot see `/app/node_modules` |
 | Repo provisioning | **has never run in production** | Every publish takes the `awaiting_repo` branch. No student repo has ever received the document set — see Phase 4. This also means the #1463 verification loop has **nothing to read from** until repos exist |
 | Task verification | **wired, but never yet run against a real repo** | The loop exists and is triggered by workspace sync (#1463). It reads `.colaberry/progress.json` out of the student's repo — and there are no student repos, so 0 tasks still carry `verified_at`. Wired ≠ run |
 | The 2026-08-13 backlog | **cleared** | 18 students published by hand; `plan_unpublished` 10 → 0. Latest sweep: READY 14, `tasks_undated` 4 (preserved completed work), `no_project` 35 |
