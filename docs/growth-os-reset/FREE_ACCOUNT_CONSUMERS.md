@@ -14,7 +14,7 @@ arriving later is a failed build rather than a silent behaviour change on a publ
 Three successive revisions of the Phase 2 plan carried a hand-written list of the consumers that
 would move when `enrollment_type` and `tier` start being written together. **It was short every
 time.** Audit cycle 1 found one missing consumer, cycle 2 found two more, and a direct count
-found 33 non-test files mentioning `enrollment_type` where the plan had named 8. A list a human
+found **31** non-test files mentioning `enrollment_type` where the plan had named 8 — `git grep -l enrollment_type workstream/growth-os-reset-phase1 -- "backend/src/**/*.ts" | grep -v __tests__ | wc -l`, measured at the phase-1 base. (An earlier draft said 33, counted mid-task with files this phase had just added, so it was reproducible at no commit at all.) A list a human
 maintains in prose will be short again the next time someone adds a reader, and the cost of being
 short here is an untested behaviour change on the signup path.
 

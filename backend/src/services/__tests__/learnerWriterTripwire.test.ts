@@ -133,13 +133,70 @@ describe('T203 — the scanner can tell a write from a read', () => {
     expect(findWriteSites(`WHERE e.enrollment_type = 'explorer' AND e.status = 'active'`)).toEqual([]);
   });
 
-  it('KNOWN LIMIT, asserted so the boundary is visible: a multi-line SET is missed', () => {
-    // Stated as a test rather than only in a comment, because an undocumented
-    // blind spot in a guard is indistinguishable from a guard that works. No
-    // raw-SQL writer of either column exists in the tree today; this records what
-    // the guard would and would not catch if one arrived.
-    const sites = findWriteSites(`UPDATE enrollments\n  SET\n    enrollment_type = 'explorer'`);
-    expect(sites).toEqual([]);
+  /**
+   * THE FOUR SHAPES THAT DEFEATED ATTEMPT 2, each its own test.
+   *
+   * A verifier put all four in one new file outside the allow-list and the scanner
+   * reported its answer **unchanged** while the tripwire passed 23 of 23. Three
+   * rounds of enumerating write *syntaxes* had still missed this repo's own idioms,
+   * so the rule was inverted: recognise the column and its value co-occurring in
+   * ANY syntax, then subtract reads. These four are the regression tests for that
+   * inversion.
+   */
+  it('FINDS property assignment then save — idiomatic here, and invisible before', () => {
+    const sites = findWriteSites(
+      `row.enrollment_type = 'explorer';\r\nrow.tier = 'guest';\r\nawait row.save();`,
+    );
+    expect(sites).toHaveLength(2);
+  });
+
+  it('FINDS a raw-SQL INSERT, which the SET-only rule never looked for', () => {
+    const sites = findWriteSites(
+      `await q(\`INSERT INTO enrollments (email, enrollment_type, tier)\r\n   VALUES (:email, 'explorer', 'guest')\`);`,
+    );
+    expect(sites.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('FINDS a ternary value', () => {
+    expect(findWriteSites(`  enrollment_type: isFree ? 'explorer' : 'standard',`)).toHaveLength(1);
+  });
+
+  it('FINDS a quoted key', () => {
+    expect(findWriteSites(`  'enrollment_type': 'explorer',`)).toHaveLength(1);
+  });
+
+  it('FINDS a value wrapped onto the next line', () => {
+    expect(findWriteSites(`  enrollment_type:\r\n    'explorer',`)).toHaveLength(1);
+  });
+
+  it('FINDS setDataValue, where the column is a string argument', () => {
+    expect(findWriteSites(`row.setDataValue('enrollment_type', 'explorer');`)).toHaveLength(1);
+  });
+
+  it('FINDS a spread payload, an upsert and a bulkCreate', () => {
+    expect(findWriteSites(`await E.create({ ...defaults, enrollment_type: 'explorer' });`)).toHaveLength(1);
+    expect(findWriteSites(`await E.upsert({ email, tier: 'guest' });`)).toHaveLength(1);
+    expect(findWriteSites(`await E.bulkCreate([{ email, tier: 'guest' }]);`)).toHaveLength(1);
+  });
+
+  it('FINDS a multi-line SET, and the limitation that used to be documented is GONE', () => {
+    // An earlier version asserted this as a known limit and justified it with
+    // "which is how every single-statement update in this repo is written". That
+    // was false — `paymentSyncService.ts:191` opens `UPDATE enrollments SET` with
+    // the assignments on later lines. The rule now looks back for the statement
+    // keyword rather than requiring it on the same line, so the limit is closed
+    // and this test records that rather than the stale claim.
+    expect(findWriteSites(`await q(\`UPDATE enrollments\r\n  SET\r\n    enrollment_type = 'explorer'\`);`))
+      .toHaveLength(1);
+  });
+
+  it('THE ONE LIMIT THAT REMAINS, measured not assumed: a value behind a constant', () => {
+    // `tier: TIERS.GUEST` carries no literal for any regex to find. Asserted so the
+    // boundary is visible in the suite rather than only in a comment — an
+    // undocumented blind spot in a guard is indistinguishable from a guard that
+    // works. Closing it would need type resolution, not a better pattern.
+    expect(findWriteSites(`await E.create({ tier: TIERS.GUEST, enrollment_type: TYPES.EXPLORER });`))
+      .toEqual([]);
   });
 
   it('does NOT count a type union as a write', () => {
@@ -163,10 +220,16 @@ describe('T203 — the writer allow-list', () => {
   const files = [...new Set(writers.map((w) => w.file))].sort();
 
   it('found write sites at all, and states how many — a scan matching nothing must not pass', () => {
-    // 6 sites across 3 files when this was written, from the generator's own
-    // output. The exact site count may move with refactoring; the FILE set is the
-    // property being guarded, so that is asserted exactly below.
-    expect(writers.length).toBeGreaterThanOrEqual(6);
+    // **7** sites across 3 files, from the generator's own output. It was 6 until
+    // the detection rule was inverted to recognise the column-and-value pairing
+    // instead of a list of syntaxes — the seventh is
+    // `freeAccountRegistration.ts:81`, the canonical service's own ternary
+    // (`programme === 'learner' ? 'explorer' : 'standard'`), which every previous
+    // version of the scanner missed. More complete, same file set.
+    //
+    // The site count is a floor because refactoring moves it; the FILE set is the
+    // property being guarded and is asserted exactly below.
+    expect(writers.length).toBeGreaterThanOrEqual(7);
     expect(files).toHaveLength(3);
   });
 

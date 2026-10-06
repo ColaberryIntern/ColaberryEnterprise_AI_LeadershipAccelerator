@@ -6,8 +6,8 @@
  * hand-written list of the consumers that would change behaviour when
  * `enrollment_type` and `tier` start being written together. The list was short
  * every time: audit cycle 1 found one missing consumer, cycle 2 found two more,
- * and a direct count found 33 non-test files mentioning `enrollment_type` where
- * the plan had named 8. A list a human maintains in prose will be short again
+ * and a direct count found 31 non-test files mentioning `enrollment_type` at the
+ * phase-1 base where the plan had named 8. A list a human maintains in prose will be short again
  * the next time someone adds a reader.
  *
  * So the list is generated, committed, and asserted against by a tripwire. A
@@ -205,27 +205,56 @@ export function enumerateConsumers(): ConsumerRow[] {
  * `tier: 'guest'`, and listing a type declaration as a writer would put noise in
  * an allow-list that is supposed to be read by a human and trusted.
  */
+/**
+ * Kept for the consumer scan's own use. **No longer how writers are detected** —
+ * see `findWriteSites`, which recognises the column and the value co-occurring in
+ * ANY syntax instead of enumerating syntaxes.
+ */
 export const LEARNER_WRITE_LITERALS = [
-  /enrollment_type:\s*['"]explorer['"](?!\s*\|)/,
-  /tier:\s*['"]guest['"](?!\s*\|)/,
+  /enrollment_type:\s*['"`]explorer['"`](?!\s*\|)/,
+  /tier:\s*['"`]guest['"`](?!\s*\|)/,
 ];
 
 /**
- * Raw-SQL writes, which the object-literal rules above cannot see at all.
+ * Either column's name in an ASSIGNING position, however it is spelled or quoted.
  *
- * `UPDATE enrollments SET enrollment_type = 'explorer'` is a write;
- * `WHERE enrollment_type = 'explorer'` is a read, and the two differ only by the
- * keyword in front. So the rule requires a `SET` on the same line — which is how
- * every single-statement update in this repo is written — and accepts that a
- * multi-line `SET` with the assignment on a later line would be missed. **That
- * limitation is real and tested**, rather than left for someone to discover: see
- * `learnerWriterTripwire.test.ts`, which asserts both the detected and the
- * undetected form so the boundary is visible in the suite instead of only here.
- *
- * No raw-SQL writer of either column exists in the tree today; this rule is here
- * so the first one is not silent.
+ * The trailing group is the load-bearing part: `:` or a **single** `=`. An earlier
+ * draft used `[:=]`, which matched the first character of `===` — so every
+ * comparison in the tree (`enrollment_type === 'explorer'`, of which there are
+ * many) counted as a write and the derived set jumped from 6 sites to 19. A
+ * comparison reads; only `:` and a lone `=` assign.
  */
-export const LEARNER_SQL_WRITE = /\bSET\b[^;]*\b(enrollment_type|tier)\s*=\s*['"](explorer|guest)['"]/i;
+export const LEARNER_COLUMN =
+  /(^|[^a-zA-Z_!=<>])['"`]?(enrollment_type|tier)['"`]?\s*(:(?!:)|=(?!=))/;
+/** Either column's free-account value, in any quote style. */
+export const LEARNER_VALUE = /['"`](explorer|guest)['"`]/;
+/** A type union — `'guest' | 'member'` — which declares rather than writes. */
+export const LEARNER_UNION = /['"`](explorer|guest|standard|member)['"`]\s*\|/;
+
+/**
+ * Sequelize's `setDataValue('col', value)`, where the column is a string argument
+ * rather than a key, so no `:`/`=` rule can see it. A real API on every model
+ * instance, so it gets its own rule rather than a line in the limitations list.
+ */
+export const LEARNER_SET_DATA_VALUE =
+  /setDataValue\(\s*['"`](enrollment_type|tier)['"`]\s*,\s*['"`](explorer|guest)['"`]/;
+
+/**
+ * Raw SQL that writes, as opposed to filters.
+ *
+ * `UPDATE … SET enrollment_type = 'explorer'` and
+ * `INSERT INTO enrollments … VALUES (… 'explorer' …)` are writes; a `WHERE` on the
+ * same column is a read. The statement keyword is the only difference, so the
+ * keyword is what this looks for — and it looks for it **anywhere in the preceding
+ * window**, not on the same line, because this repo writes multi-line SQL.
+ *
+ * An earlier version required `SET` on the SAME line and justified that with "which
+ * is how every single-statement update in this repo is written". That was false:
+ * `services/paymentSyncService.ts:191` opens `UPDATE enrollments SET` with every
+ * assignment on later lines — the exact missed shape, in the same folder.
+ */
+export const SQL_WRITE_KEYWORD = /\b(SET|INSERT\s+INTO\s+enrollments|VALUES)\b/i;
+export const SQL_READ_KEYWORD = /\bWHERE\b/i;
 
 export interface WriterSite {
   file: string;
@@ -235,22 +264,57 @@ export interface WriterSite {
 }
 
 /**
- * Pure: every line that WRITES one of the two literals.
+ * Pure: every line that WRITES one of the two columns. **The only account of the
+ * rule. If a comment elsewhere disagrees with this one, this one is the code.**
  *
- * Default-write, not default-read, and that choice is deliberate. The first
- * version only looked inside `.create({ … })` and `.update({ … })` blocks, which
- * correctly excluded the two `where` clauses but then **missed the canonical
- * service's own creation defaults** — `freeAccountRegistration.ts:80` returns a
- * plain object literal that `Enrollment.create` receives elsewhere. A tripwire
- * that misses a writer is the dangerous direction: it reports clean while a new
- * writer walks past.
+ * THE RULE. A line is a candidate write when the column name appears in an
+ * assigning position — `:` or a lone `=`, never `===` — with its value on that
+ * line or within the next two; or when `setDataValue('col', 'value')` appears; or
+ * when a value sits inside a raw-SQL statement whose keyword (`SET`,
+ * `INSERT INTO enrollments`, `VALUES`) is found looking back, with a `WHERE` or a
+ * statement boundary ending the search. Candidates are then **subtracted**: a
+ * `where: { … }` span, an operator object nested under the column, a type union, a
+ * declaration, or a SQL `WHERE` ahead of the column all mean read.
  *
- * So a mention counts as a write unless it sits inside a query filter, detected by
- * walking back for an unclosed `where: {`. The error mode is over-counting, which
- * costs an allow-list entry rather than a missed writer.
+ * WHY IT IS SHAPED THAT WAY, in the order the mistakes happened, because three
+ * rounds of this were wrong and the reasons are not obvious:
+ *
+ *  1. Scanning only `.create({ … })`/`.update({ … })` blocks excluded the two known
+ *     `where` reads correctly but missed the canonical service's own defaults at
+ *     `freeAccountRegistration.ts:80`, a returned object literal.
+ *  2. Walking BACK twelve lines for an unclosed `where: {` treated a *balanced*
+ *     one-liner as open, so a single `findOne({ where: { email } })` suppressed
+ *     every write beneath it. A verifier dropped a third writer in exactly that
+ *     shape into a new file and the scan reported its old answer unchanged. The
+ *     docblock then claimed the error mode was over-counting; it was the opposite,
+ *     which is the one direction that makes a guard worthless.
+ *  3. Enumerating write *syntaxes* still missed this repo's idioms — property
+ *     assignment then `save()`, raw `INSERT`, a ternary value, a quoted key. So the
+ *     rule stopped recognising syntaxes and started recognising the column-and-value
+ *     pairing, subtracting reads instead.
+ *
+ * WHAT IT DOES NOT SEE, measured rather than assumed: a value behind a constant
+ * (`tier: TIERS.GUEST`), which would need type resolution rather than a better
+ * pattern. That limit is asserted as a test in `learnerWriterTripwire.test.ts`, as
+ * are all the shapes above, so this comment cannot drift away from the behaviour
+ * without the suite failing.
  */
 export function findWriteSites(content: string): Omit<WriterSite, 'file'>[] {
-  const code = stripComments(content);
+  // Trailing comments are removed HERE and nowhere else. `stripComments` keeps
+  // them on purpose — over-counting is the safe direction for the consumer scan —
+  // but for "who writes this column" a trailing comment is a false positive, and
+  // one was: `subscriptionAnalyticsService.ts:295` is `isExplorer: false, //
+  // fetchPayingMembers already excludes enrollment_type='explorer'`. The `[^:]`
+  // guard protects `https://`, which the suite tests.
+  const code = stripComments(content)
+    .split('\n')
+    // `[^\r\n]*`, NOT `.*$`. JS `.` does not match `\r`, so on this CRLF tree the
+    // anchored form never reached end-of-string and stripped nothing — a trailing
+    // comment survived and `subscriptionAnalyticsService.ts:295` counted as a
+    // writer. The bug was invisible in an isolated test because the fixture I
+    // wrote by hand used LF endings while every file in the repo uses CRLF.
+    .map((l) => l.replace(/(^|[^:])\/\/[^\r\n]*/, '$1'))
+    .join('\n');
   const lines = code.split('\n');
   const raw = content.split('\n');
   const out: Omit<WriterSite, 'file'>[] = [];
@@ -295,21 +359,64 @@ export function findWriteSites(content: string): Omit<WriterSite, 'file'>[] {
   }
   const insideRead = (idx: number) => readSpans.some(([a, b]) => idx >= a && idx <= b);
 
+  /** Does a value literal appear on this line, or within the next two? */
+  const valueNearby = (i: number): boolean =>
+    LEARNER_VALUE.test(lines[i])
+    || (!!lines[i + 1] && LEARNER_VALUE.test(lines[i + 1]))
+    || (!!lines[i + 2] && LEARNER_VALUE.test(lines[i + 2]));
+
+  /** Is this line inside a raw-SQL statement whose keyword says "write"? */
+  const sqlWriteContext = (i: number): boolean => {
+    if (!LEARNER_VALUE.test(lines[i]) && !/\b(enrollment_type|tier)\b/.test(lines[i])) return false;
+    for (let k = i; k >= 0 && i - k < 12; k--) {
+      if (SQL_WRITE_KEYWORD.test(lines[k])) return true;
+      // A WHERE between here and the keyword means this is the filter half.
+      if (k < i && SQL_READ_KEYWORD.test(lines[k])) return false;
+      // Stop at a statement boundary, so a SQL keyword from an EARLIER statement
+      // cannot label a later object literal as SQL. Without this, a `VALUES` twelve
+      // lines up tagged two ordinary `create({ … })` writes as `.sql` — the right
+      // count with the wrong reason printed beside it.
+      if (k < i && /(^|\s)\};?\s*$|\)\s*;\s*$/.test(lines[k])) return false;
+    }
+    return false;
+  };
+
   for (let i = 0; i < lines.length; i++) {
-    const sqlWrite = LEARNER_SQL_WRITE.test(lines[i]);
-    if (!sqlWrite && !LEARNER_WRITE_LITERALS.some((re) => re.test(lines[i]))) continue;
-    // A two-argument update puts the payload and the filter on one line:
-    // `update({ enrollment_type: 'explorer' }, { where: { id } })`. The literal
-    // sits OUTSIDE the where span, so span logic counts it correctly where the
-    // old same-line test discarded the whole line.
-    // The two-argument escape applies ONLY to a line that carries `where:` itself.
-    // Without that guard the helper returned true for every line inside a
-    // MULTI-line where block (they contain no `where:` of their own), which
-    // re-counted the retirement sweep's filter at `enrollmentService.ts:163` as a
-    // write — the exact read this scanner exists to exclude.
-    const sameLineWhere = lines[i].includes('where:');
-    if (!sqlWrite && insideRead(i) && !(sameLineWhere && writeLiteralOutsideReadSpans(lines[i]))) continue;
-    out.push({ line: i + 1, call: sqlWrite ? 'sql' : 'write', evidence: raw[i].trim().slice(0, 160) });
+    const line = lines[i];
+    if (LEARNER_UNION.test(line)) continue;              // a type declaration
+    if (/^\s*(declare|export type|type )/.test(line)) continue;
+
+    // A SQL `WHERE` ahead of the column on the same line makes it a filter, not a
+    // write. Without this, `WHERE e.enrollment_type = 'explorer'` inside a template
+    // literal counted as a write — the roster queries this scanner exists to leave
+    // alone.
+    const whereIdx = line.search(/\bWHERE\b/i);
+    const colIdx = line.search(/\b(enrollment_type|tier)\b/);
+    if (whereIdx !== -1 && colIdx > whereIdx) continue;
+
+    // An operator object under the column is a FILTER, not a write:
+    // `{ enrollment_type: { [Op.ne]: 'explorer' } }` at `cohortService.ts:431` is
+    // assigned to a variable and spread into a `where`, so no span can see it. A
+    // write never nests an object under the column name.
+    if (/(enrollment_type|tier)['"`]?\s*:\s*\{/.test(line)) continue;
+
+    const sql = sqlWriteContext(i) && LEARNER_VALUE.test(line);
+    // A candidate in ANY syntax: the column named, with its value here or just
+    // below. That covers `col: 'explorer'`, `'col': 'explorer'`, a backtick
+    // literal, `row.col = 'explorer'`, a ternary value, and a value wrapped onto
+    // the next line — without this scanner needing to know those shapes exist.
+    const objectOrAssignment = LEARNER_COLUMN.test(line) && valueNearby(i);
+    const setDataValue = LEARNER_SET_DATA_VALUE.test(line);
+    if (!sql && !objectOrAssignment && !setDataValue) continue;
+
+    // Reads are subtracted, rather than writes being recognised. `where: { … }`
+    // spans are computed by forward brace-matching above; the two-argument update
+    // form puts the payload before the filter on one line, so a literal that
+    // precedes the `where:` still counts.
+    const sameLineWhere = line.includes('where:');
+    if (!sql && insideRead(i) && !(sameLineWhere && writeLiteralOutsideReadSpans(line))) continue;
+
+    out.push({ line: i + 1, call: sql ? 'sql' : 'write', evidence: raw[i].trim().slice(0, 160) });
   }
   return out;
 }
