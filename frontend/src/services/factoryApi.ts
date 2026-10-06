@@ -409,6 +409,27 @@ export interface GovQualificationWorkspace {
   provenance?: { title: string | null; agency: string | null } | null;
   /** Decoupled workspace only: the attested solicitation ZIP (evidence of record), or null if not yet attested. */
   zipAttestation?: { sha256: string | null; filename: string | null; reviewedBy: string | null; reviewedAt: string | null } | null;
+  /** Decoupled workspace only: opportunity dossier parsed from the ZIP at attest (contacts/meetings/key-dates/NAICS).
+   *  "Detected — verify", never authoritative; reference info that gates nothing. Null until a ZIP is attested. */
+  dossier?: GovDossier | null;
+  /** Advisory "have we pursued this agency before?" — prior active qualifications for the same agency. Suggestion,
+   *  never authoritative (agency names are free text); gates nothing. Null when the lookup is unavailable. */
+  relationship?: GovRelationship | null;
+}
+
+/** An opportunity dossier detected from the solicitation ZIP — deterministic, source-cited, "detected — verify". */
+export interface GovDossier {
+  contacts: { kind: 'email' | 'phone'; value: string; sourceDocument: string }[];
+  naics: string[];
+  meetings: { text: string; date: string | null; sourceDocument: string }[];
+  keyDates: { text: string; date: string | null; sourceDocument: string }[];
+}
+
+/** Prior pursuits of the same agency — advisory "possible prior work — verify". */
+export interface GovRelationship {
+  agency: string | null;
+  priorCount: number;
+  pursuits: { canonicalOpportunityId: string; title: string | null; agency: string | null; decision: string; date: string | null }[];
 }
 
 /** A reviewer-established, cited applicable requirement (same shape the server coverage/blocking gate evaluates). */

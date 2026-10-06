@@ -11,8 +11,9 @@ jest.mock('../../../models/GovQualification', () => ({
   __esModule: true,
   default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
 }));
-// getDecoupledWorkspace reads the daily-sync state; keep that DB-free in these unit tests.
+// getDecoupledWorkspace reads the daily-sync state + the agency relationship; keep both DB-free in these unit tests.
 jest.mock('../govOpportunitySync', () => ({ getGovSyncEntry: jest.fn().mockResolvedValue(null) }));
+jest.mock('../govRelationship', () => ({ getAgencyRelationship: jest.fn().mockResolvedValue({ agency: null, priorCount: 0, pursuits: [] }) }));
 
 import {
   evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,
@@ -450,6 +451,18 @@ describe('recordZipAttestation — no OP-docId check; forks preserving establish
     expect(out.requirements_json.provenance.title).toBe('T');
   });
 
+  it('Phase 2: add PERSISTS the parsed dossier on requirements_json; revoke does not add one', async () => {
+    const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: ['541512'], meetings: [], keyDates: [] };
+    findOne.mockResolvedValue(current());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const added = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', sha256: 'b'.repeat(64), dossier });
+    expect(added.requirements_json.dossier).toEqual(dossier);
+    expect(added.requirements_json.established).toHaveLength(1); // established still preserved
+    findOne.mockResolvedValue(current({ requirements_json: { established: [{ id: 'R1' }], reviewedDocuments: [{ method: 'solicitation_zip', sha256: 'd'.repeat(64) }] } }));
+    const revoked = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'revoke', dossier });
+    expect(revoked.requirements_json.dossier).toBeUndefined(); // revoke never writes a dossier
+  });
+
   it('stale expectedVersion -> QualificationConflictError (no write)', async () => {
     findOne.mockResolvedValue(current({ version: 3 }));
     await expect(recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', sha256: 'c'.repeat(64) })).rejects.toBeInstanceOf(QualificationConflictError);
@@ -502,6 +515,23 @@ describe('getDecoupledWorkspace — canApprove from ZIP coverage + requirement b
     const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
     expect(ws.canApprove).toBe(false);
     expect(ws.coverage.reasons).toContain('no_requirements_established');
+  });
+
+  it('Phase 2: surfaces the stored dossier (null when none stored)', async () => {
+    const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: [], meetings: [], keyDates: [] };
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip], dossier }));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toEqual(dossier);
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toBeNull();
+  });
+
+  it('Phase 3: surfaces the agency relationship, and is null when the lookup throws (best-effort)', async () => {
+    const { getAgencyRelationship } = require('../govRelationship');
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    getAgencyRelationship.mockResolvedValueOnce({ agency: 'Harris County', priorCount: 1, pursuits: [{ canonicalOpportunityId: 'gws:other', title: 'Prior RFP', agency: 'Harris County', decision: 'no_bid', date: null }] });
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toMatchObject({ agency: 'Harris County', priorCount: 1 });
+    getAgencyRelationship.mockRejectedValueOnce(new Error('db down'));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toBeNull();
   });
 });
 

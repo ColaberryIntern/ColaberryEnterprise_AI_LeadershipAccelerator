@@ -248,11 +248,19 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   const provenance = (recordJson && recordJson.requirements_json && recordJson.requirements_json.provenance) || null;
   const reviewedDocuments = (recordJson && recordJson.requirements_json && recordJson.requirements_json.reviewedDocuments) || [];
   const zipAttestation = (Array.isArray(reviewedDocuments) ? reviewedDocuments : []).find((d: any) => d && d.method === 'solicitation_zip') || null;
+  // Phase 2 dossier (contacts/meetings/key-dates/NAICS) parsed from the ZIP at attest; reference info, never a gate.
+  const dossier = (recordJson && recordJson.requirements_json && recordJson.requirements_json.dossier) || null;
   const evaluation = evaluateRequirements(established);
   const coverage = evaluateZipCoverage(established, reviewedDocuments);
   // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
   let sync: any = null;
   try { const { getGovSyncEntry } = await import('./govOpportunitySync'); sync = await getGovSyncEntry(gwsKey); } catch { sync = null; }
+  // Phase 3: advisory "have we pursued this agency before?" — read-only, best-effort, gates nothing.
+  let relationship: any = null;
+  try {
+    const { getAgencyRelationship } = await import('./govRelationship');
+    relationship = await getAgencyRelationship(tenantId, gwsKey, provenance ? provenance.agency : null);
+  } catch { relationship = null; }
   return {
     canonicalOpportunityId: gwsKey,
     sourceLive: false,
@@ -267,6 +275,8 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     qualification: recordJson,
     provenance,
     zipAttestation,
+    dossier,
+    relationship,
     changedSource: false,
     lastSyncedAt: sync ? sync.syncedAt : null,
     syncChange: sync && sync.change && sync.change.kind !== 'none' ? sync.change : null,
@@ -277,6 +287,8 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
 export interface RecordZipAttestationInput {
   gwsKey: string; biddingEntity: string; expectedVersion: number; reviewerIdentityId: string;
   mode: 'add' | 'revoke'; filename?: string | null; sha256?: string | null; sizeBytes?: number | null;
+  /** Phase 2: the dossier parsed from the ZIP (contacts/meetings/key-dates/NAICS); persisted on 'add'. */
+  dossier?: any;
 }
 
 /**
@@ -300,7 +312,11 @@ export async function recordZipAttestation(input: RecordZipAttestationInput): Pr
   }];
   return forkNewVersion(current, {
     reviewer_identity_id: input.reviewerIdentityId,
-    requirements_json: { ...(current.requirements_json || {}), reviewedDocuments },
+    requirements_json: {
+      ...(current.requirements_json || {}), reviewedDocuments,
+      // persist the parsed dossier on attest; keep any prior dossier on revoke (reference info, not the gate)
+      ...(input.mode === 'add' && input.dossier ? { dossier: input.dossier } : {}),
+    },
   });
 }
 

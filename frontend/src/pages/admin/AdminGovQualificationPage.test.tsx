@@ -360,6 +360,44 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(openBtn.disabled).toBe(false);                                      // enabled even though sourceAvailable:false
   });
 
+  it('Phase 3 journey strip: renders the pipeline and marks the current stage (Requirements, on an empty record)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 1, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Where this is in the journey');
+    expect(text).toContain('Discovered');
+    expect(text).toContain('Requirements established');
+    expect(text).toContain('Build authorized');
+    const current = container.querySelector('[aria-current="step"]');
+    expect(current?.textContent ?? '').toContain('Requirements established'); // first not-done stage is current
+  });
+
+  it('Phase 3 relationship panel: lists prior pursuits for the same agency with their decision', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'RQ1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
+      evaluation: { evals: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+      relationship: { agency: 'City of Fort Worth', priorCount: 1, pursuits: [{ canonicalOpportunityId: 'gws:prior-1', title: 'Prior 311 System RFP', agency: 'City of Fort Worth', decision: 'no_bid', date: '2026-02-01T00:00:00.000Z' }] },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Have we pursued this agency before?');
+    expect(text).toContain('Prior 311 System RFP');
+    expect(text).toContain('no bid'); // decision badge (underscores replaced)
+  });
+
+  it('Phase 3 relationship panel: honest empty-state when there is no prior work with the agency', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      relationship: { agency: 'City of Fort Worth', priorCount: 0, pursuits: [] },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No prior pursuits recorded for');
+  });
+
   it('Next-step banner: 0 established requirements -> tells the reviewer to capture the requirements', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
