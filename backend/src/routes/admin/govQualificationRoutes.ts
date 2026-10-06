@@ -488,10 +488,17 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/attest-zip
   if (!scope) return;
   try {
     const sha256 = file && file.buffer ? crypto.createHash('sha256').update(file.buffer).digest('hex') : null;
+    // Phase 2 dossier: parse the authoritative ZIP once (best-effort) so contacts/meetings/key-dates/NAICS persist
+    // with the attestation. Failure is non-fatal — attestation (the gate) must still record even if parsing fails.
+    let dossier: any = null;
+    if (b.data.mode === 'add' && file && file.buffer) {
+      try { const { extractProposal } = await import('../../services/factory/proposal/proposalExtractor'); dossier = (await extractProposal(file.buffer)).dossier; }
+      catch (dErr: any) { logFail('gov_qualification_dossier_extract_failed', dErr, { canonicalOpportunityId }); dossier = null; }
+    }
     const q = await recordZipAttestation({
       gwsKey: canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
       reviewerIdentityId: actorIdentity(req), mode: b.data.mode,
-      filename: file ? (file.originalname || 'solicitation.zip') : null, sha256, sizeBytes: file ? file.size : null,
+      filename: file ? (file.originalname || 'solicitation.zip') : null, sha256, sizeBytes: file ? file.size : null, dossier,
     });
     res.status(b.data.mode === 'add' ? 201 : 200).json({ qualification: q });
   } catch (err: any) {

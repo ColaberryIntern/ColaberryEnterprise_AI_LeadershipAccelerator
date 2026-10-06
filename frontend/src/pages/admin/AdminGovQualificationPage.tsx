@@ -6,7 +6,7 @@ import {
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
-  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity,
+  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
@@ -99,6 +99,84 @@ function RequirementStageList({ stage, rows }: { stage: string; rows: QualRequir
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * OpportunityDossier — the "who & when" reference pulled from the attested ZIP: contacts (with mailto/tel),
+ * NAICS codes, meeting/event lines, and key dates. Every item is DETECTED (regex over the literal ZIP text) and
+ * labeled "verify" — it cites its source document and gates nothing. Honest empty-state when nothing was detected.
+ */
+function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactElement {
+  const contacts = dossier.contacts ?? [];
+  const naics = dossier.naics ?? [];
+  const meetings = dossier.meetings ?? [];
+  const keyDates = dossier.keyDates ?? [];
+  const empty = contacts.length === 0 && naics.length === 0 && meetings.length === 0 && keyDates.length === 0;
+  if (empty) {
+    return (
+      <div className="small text-secondary">
+        <i className="ri-information-line me-1" aria-hidden="true" />
+        Nothing detected in the ZIP — no contacts, meeting dates, or NAICS codes matched. Open the solicitation
+        documents directly to find the point of contact and key dates.
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="row g-3">
+        {(contacts.length > 0 || naics.length > 0) && (
+          <div className="col-md-6">
+            <h3 className="h6 text-secondary text-uppercase small mb-2"><i className="ri-user-3-line me-1" aria-hidden="true" />Who to contact</h3>
+            {contacts.length === 0 && <div className="small text-secondary mb-2">No contact detected.</div>}
+            <ul className="list-unstyled mb-2">
+              {contacts.map((c, i) => (
+                <li key={`${c.kind}-${c.value}-${i}`} className="mb-1">
+                  <i className={`me-1 ${c.kind === 'email' ? 'ri-mail-line' : 'ri-phone-line'}`} aria-hidden="true" />
+                  <a href={`${c.kind === 'email' ? 'mailto:' : 'tel:'}${c.value}`}>{c.value}</a>
+                  <span className="small text-secondary ms-2">· {c.sourceDocument}</span>
+                </li>
+              ))}
+            </ul>
+            {naics.length > 0 && (
+              <div className="d-flex flex-wrap align-items-center gap-1">
+                <span className="small text-secondary me-1">NAICS:</span>
+                {naics.map((n) => <span key={n} className="badge bg-secondary-subtle text-secondary-emphasis">{n}</span>)}
+              </div>
+            )}
+          </div>
+        )}
+        {(meetings.length > 0 || keyDates.length > 0) && (
+          <div className="col-md-6">
+            <h3 className="h6 text-secondary text-uppercase small mb-2"><i className="ri-calendar-event-line me-1" aria-hidden="true" />Meetings &amp; key dates</h3>
+            {[...meetings, ...keyDates].length === 0 && <div className="small text-secondary">None detected.</div>}
+            <ul className="list-unstyled mb-0">
+              {meetings.map((m, i) => (
+                <li key={`mtg-${i}`} className="mb-2">
+                  <span className="badge bg-info-subtle text-info-emphasis me-1">Meeting</span>
+                  {m.date && <strong className="me-1">{m.date}</strong>}
+                  <span className="small">{m.text}</span>
+                  <div className="small text-secondary">· {m.sourceDocument}</div>
+                </li>
+              ))}
+              {keyDates.map((k, i) => (
+                <li key={`kd-${i}`} className="mb-2">
+                  <span className="badge bg-warning-subtle text-warning-emphasis me-1">Key date</span>
+                  {k.date && <strong className="me-1">{k.date}</strong>}
+                  <span className="small">{k.text}</span>
+                  <div className="small text-secondary">· {k.sourceDocument}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      <div className="small text-secondary mt-3 pt-2 border-top">
+        <i className="ri-alert-line me-1" aria-hidden="true" />
+        Detected automatically from the ZIP text — <strong>verify</strong> against the solicitation before you rely on it.
+        This is reference only and does not change any approval.
+      </div>
+    </>
   );
 }
 
@@ -652,6 +730,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                   <i className="ri-information-line me-1" aria-hidden="true" />Not attested yet — it's recorded automatically when you <strong>Extract &amp; attest</strong> above (one upload does both). To attest a corrected ZIP, just run Extract &amp; attest again with the new file.
                 </div>
               )}
+            </SectionCard>
+          )}
+
+          {isDecoupled && record && ws.dossier && (
+            <SectionCard title="Opportunity dossier — who &amp; when" icon="contacts-book-line" collapsible defaultOpen={true}
+              subtitle="Detected from the solicitation ZIP — verify against the source documents. Reference only; it gates nothing.">
+              <OpportunityDossier dossier={ws.dossier} />
             </SectionCard>
           )}
 

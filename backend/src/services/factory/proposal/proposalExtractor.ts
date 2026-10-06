@@ -39,10 +39,68 @@ export interface ExtractedRequirement {
   evidenceState: string;
   sourceEvidence: string[];
 }
+/** Opportunity dossier — best-effort, DETERMINISTIC facts detected from the ZIP text (no LLM). Every item is a
+ *  literal match and cites its source document; it is "detected — verify", never authoritative. */
+export interface DossierContact { kind: 'email' | 'phone'; value: string; sourceDocument: string; }
+export interface DossierLine { text: string; date: string | null; sourceDocument: string; }
+export interface ExtractedDossier {
+  contacts: DossierContact[];
+  naics: string[];
+  meetings: DossierLine[];
+  keyDates: DossierLine[];
+}
 export interface ProposalExtraction {
   blocks: ExtractedBlock[];
   requirements: ExtractedRequirement[];
+  dossier: ExtractedDossier;
   fileCount: number;
+}
+
+const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+const PHONE_RE = /(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g;
+const NAICS_RE = /\bNAICS\s*(?:code)?\s*[:#]?\s*(\d{6})\b/gi;
+const MEETING_RE = /\b(pre[- ]?bid|pre[- ]?proposal|pre[- ]?submittal|site\s+visit|site\s+inspection|q\s*&\s*a|question\s+and\s+answer|industry\s+day|walk[- ]?through)\b/i;
+// Anchored on the reliable date-announcing tokens; "due" covers "proposals/questions/responses ARE due", "due date",
+// "due by". The key-date path ALSO requires a literal date in the same sentence, so these loose anchors never fire alone.
+const KEYDATE_RE = /\b(due|deadline|closing\s+date|closes|submission\s+deadline|inquir(?:y|ies)|no\s+later\s+than)\b/i;
+const DATE_RE = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
+
+/**
+ * PURE: pull an opportunity dossier (contacts, NAICS, meeting + key-date lines) from the extracted context blocks.
+ * Deterministic regex over the literal text; de-duplicated and capped; each item cites its source document.
+ * Best-effort and "detected — verify": it never invents a value and emits only what literally appears. Total.
+ */
+export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
+  const contacts: DossierContact[] = [];
+  const naics: string[] = [];
+  const meetings: DossierLine[] = [];
+  const keyDates: DossierLine[] = [];
+  const seenContact = new Set<string>();
+  const seenNaics = new Set<string>();
+  const ctx = (Array.isArray(blocks) ? blocks : []).filter((b) => b && b.kind === 'context');
+
+  for (const b of ctx) {
+    const text = String(b.text ?? '');
+    const doc = String(b.locator ?? '');
+    for (const m of text.match(EMAIL_RE) ?? []) {
+      const v = m.toLowerCase();
+      if (!seenContact.has(v) && contacts.length < 12) { seenContact.add(v); contacts.push({ kind: 'email', value: m, sourceDocument: doc }); }
+    }
+    for (const m of text.match(PHONE_RE) ?? []) {
+      const v = m.replace(/[^\d]/g, '');
+      if (v.length >= 10 && !seenContact.has(v) && contacts.length < 20) { seenContact.add(v); contacts.push({ kind: 'phone', value: m.trim(), sourceDocument: doc }); }
+    }
+    let nm: RegExpExecArray | null;
+    NAICS_RE.lastIndex = 0;
+    while ((nm = NAICS_RE.exec(text)) !== null) { const code = nm[1]; if (!seenNaics.has(code) && naics.length < 6) { seenNaics.add(code); naics.push(code); } }
+    for (const s of sentences(text)) {
+      const dateM = s.match(DATE_RE);
+      const date = dateM ? dateM[1] : null;
+      if (meetings.length < 10 && MEETING_RE.test(s)) meetings.push({ text: truncate(s, 240), date, sourceDocument: doc });
+      else if (keyDates.length < 10 && KEYDATE_RE.test(s) && date) keyDates.push({ text: truncate(s, 240), date, sourceDocument: doc });
+    }
+  }
+  return { contacts, naics, meetings, keyDates };
 }
 
 const stripXmlTags = (s: string): string => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -99,7 +157,7 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   try {
     entries = new AdmZip(zipBuffer).getEntries().filter((e: any) => !e.isDirectory);
   } catch {
-    return { blocks, requirements, fileCount: 0 };
+    return { blocks, requirements, dossier: { contacts: [], naics: [], meetings: [], keyDates: [] }, fileCount: 0 };
   }
   entries.sort((a: any, b: any) => String(a.entryName).localeCompare(String(b.entryName)));
 
@@ -159,5 +217,5 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     }
   }
 
-  return { blocks, requirements, fileCount };
+  return { blocks, requirements, dossier: extractDossier(blocks), fileCount };
 }
