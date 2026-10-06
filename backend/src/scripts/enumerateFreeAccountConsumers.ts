@@ -182,6 +182,96 @@ export function enumerateConsumers(): ConsumerRow[] {
   return rows.sort((a, b) => (a.branching === b.branching ? a.file.localeCompare(b.file) : a.branching ? -1 : 1));
 }
 
+/**
+ * Phase 2 T203 — who WRITES learner-programme semantics.
+ *
+ * A separate question from `enumerateConsumers`, and the distinction is the whole
+ * point: `enrollmentService.ts:163` and `explorerIdentityBridge.ts:122` both
+ * contain `enrollment_type: 'explorer'` and neither is a writer — the first is the
+ * retirement sweep's `where` clause, the second is the population loader's. A
+ * tripwire that counted those as writers would report five writers where there are
+ * three, and a reviewer who checked it once and found it wrong would stop trusting
+ * it.
+ *
+ * So this looks only inside `.create({ … })` and `.update({ … })` argument blocks,
+ * which is what "writes" means here. Brace-counted from the opening call so a
+ * nested object cannot end the block early.
+ */
+/**
+ * The negative lookahead excludes a TYPE UNION. `declare tier: 'guest' | 'member'`
+ * and the response schema's `tier: 'guest' | 'member'` both match a bare
+ * `tier: 'guest'`, and listing a type declaration as a writer would put noise in
+ * an allow-list that is supposed to be read by a human and trusted.
+ */
+export const LEARNER_WRITE_LITERALS = [
+  /enrollment_type:\s*'explorer'(?!\s*\|)/,
+  /tier:\s*'guest'(?!\s*\|)/,
+];
+
+export interface WriterSite {
+  file: string;
+  line: number;
+  call: string;
+  evidence: string;
+}
+
+/**
+ * Pure: every line that WRITES one of the two literals.
+ *
+ * Default-write, not default-read, and that choice is deliberate. The first
+ * version only looked inside `.create({ … })` and `.update({ … })` blocks, which
+ * correctly excluded the two `where` clauses but then **missed the canonical
+ * service's own creation defaults** — `freeAccountRegistration.ts:80` returns a
+ * plain object literal that `Enrollment.create` receives elsewhere. A tripwire
+ * that misses a writer is the dangerous direction: it reports clean while a new
+ * writer walks past.
+ *
+ * So a mention counts as a write unless it sits inside a query filter, detected by
+ * walking back for an unclosed `where: {`. The error mode is over-counting, which
+ * costs an allow-list entry rather than a missed writer.
+ */
+export function findWriteSites(content: string): Omit<WriterSite, 'file'>[] {
+  const code = stripComments(content);
+  const lines = code.split('\n');
+  const raw = content.split('\n');
+  const out: Omit<WriterSite, 'file'>[] = [];
+
+  const insideWhere = (idx: number): boolean => {
+    // Walk back up to 12 lines, counting braces, looking for an unclosed `where: {`.
+    let depth = 0;
+    for (let k = idx; k >= 0 && idx - k < 12; k--) {
+      const line = lines[k];
+      if (k < idx) {
+        for (let c = line.length - 1; c >= 0; c--) {
+          if (line[c] === '}') depth++;
+          else if (line[c] === '{') depth--;
+        }
+      }
+      if (/where:\s*\{/.test(line) && depth <= 0) return true;
+    }
+    return false;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!LEARNER_WRITE_LITERALS.some((re) => re.test(lines[i]))) continue;
+    if (/where:\s*\{/.test(lines[i]) || insideWhere(i)) continue;
+    out.push({ line: i + 1, call: 'write', evidence: raw[i].trim().slice(0, 160) });
+  }
+  return out;
+}
+
+/** Scan the tree for every file that writes learner-programme semantics. */
+export function enumerateLearnerWriters(): WriterSite[] {
+  const out: WriterSite[] = [];
+  for (const file of walk(SRC)) {
+    const rel = path.relative(SRC, file).split(path.sep).join('/');
+    for (const site of findWriteSites(fs.readFileSync(file, 'utf8'))) {
+      out.push({ file: rel, ...site });
+    }
+  }
+  return out.sort((a, b) => (a.file === b.file ? a.line - b.line : a.file.localeCompare(b.file)));
+}
+
 if (require.main === module) {
   const rows = enumerateConsumers();
   const branching = rows.filter((r) => r.branching);
@@ -192,4 +282,9 @@ if (require.main === module) {
   console.log(`\nREPORTING (surfaces the value; needs disclosure): ${reporting.length}`);
   for (const r of reporting) console.log(`  ${r.file}`);
   console.log(`\nTOTAL: ${rows.length}`);
+
+  const writers = enumerateLearnerWriters();
+  const byFile = [...new Set(writers.map((w) => w.file))];
+  console.log(`\nLEARNER-SEMANTICS WRITERS: ${writers.length} write sites across ${byFile.length} files`);
+  for (const w of writers) console.log(`  ${w.file}:${w.line} (.${w.call})\n      ${w.evidence}`);
 }
