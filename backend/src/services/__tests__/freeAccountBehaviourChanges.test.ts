@@ -361,29 +361,45 @@ describe('T202b — what does NOT move (STRUCTURAL — the real source)', () => 
  * discovered. The artifact marks 14 rows as changing: 12 for population A and 2
  * for B.
  *
- * Covered by a suite that runs real code:
+ * **11 of 14 are covered by a suite that runs real code, and each was
+ * mutation-proved** — the real line was broken and a named test failed:
  *   row 1  v1EnrollmentLookupController   → this file, `isEnrolledMember` (exported, pure)
  *   row 2  contentEntitlement             → `services/access/__tests__/contentEntitlement.test.ts`
  *          its effect on a learner's cards → `services/timeline/__tests__/timelineWeekZeroGate.test.ts`
  *   row 3  capeTodayPlanService           → `services/cape/__tests__/capeTodayPlanService.test.ts`
  *   row 4  enrollmentPick                 → this file, `pickBestEnrollment` (exported, pure)
+ *   row 5  explorerIdentityBridge         → `services/explorerGrowth/__tests__/explorerIdentityBridge.test.ts`
  *   row 8  subscriptionService            → `services/__tests__/subscriptionService.test.ts`
  *   row 10 paymentReconciliationService   → its own existing suite
+ *   row 11 personHistoryService           → `src/__tests__/services/personHistory.test.ts`
+ *   row 12 feedControlService             → `services/timeline/__tests__/feedControlService.listEnrollments.test.ts`
  *   row 13 reeseWelcomeService            → the existing `reeseWelcomeService` suite
  *   row 29 cohortService dashboard        → `services/__tests__/dashboardExplorerExclusion.test.ts`
  *
- * NOT covered by a behaviour test, and why:
- *   rows 5, 6, 7, 9  explorerIdentityBridge, the two rosters, subscriptionAnalytics
- *     — raw `sql.query` strings with no callable seam. Their filters are quoted
- *       with line numbers in the artifact's citations. The population change they
- *       produce is what T213's scenarios 1, 2 and 9 exercise.
- *   row 11 personHistoryService, row 12 feedControlService
- *     — string composition inside large un-exported functions. Neither has a
- *       suite in the repository. A reproduced-predicate test would only restate
- *       the source, which is the mistake this file was corrected for, so they are
- *       disclosed in the checkpoint instead and carry no test.
+ * **3 are uncovered: rows 6, 7 and 9** — `explorerRosterService`'s revenue roster,
+ * `subscriptionRosterService`'s deposit roster, and `subscriptionAnalyticsService`'s
+ * explorer count. All three are `sequelize.query` template strings with no object
+ * to assert, so the only available test would re-declare the SQL, which is the
+ * tautology class this file was corrected for. Their filters are quoted with line
+ * numbers in the artifact's citations. **Said plainly: nothing tests these three.**
+ * T213's scenarios 1 and 2 exercise the upstream population shift that reaches
+ * them, which is not the same as testing them.
  *
- * That is 8 of 14 with real coverage, 4 deferred to T213 with a named scenario,
- * and 2 disclosed as untested. Stated as a count because "mostly covered" is how
- * a gap survives.
+ * THREE CLAIMS THAT USED TO BE HERE WERE FALSE, and they were load-bearing because
+ * they were the stated reason for not writing tests the plan required:
+ *
+ *   - "rows 5, 6, 7, 9 … raw sql.query with no callable seam" — false for row 5.
+ *     `explorerIdentityBridge.ts:122` is `Enrollment.findAll({ where: { … } })`,
+ *     the same seam `dashboardExplorerExclusion.test.ts` uses. Inverting it left
+ *     its suite 22 of 22 green: the one filter this entire phase exists to satisfy
+ *     was untested, behind a false excuse. Now covered and mutation-proved.
+ *   - "rows 11 and 12 … inside large un-exported functions" — false twice. They are
+ *     inside `export async function getEnrollmentHistory` and
+ *     `export async function listEnrollments`.
+ *   - "Neither has a suite in the repository" — false twice. Both did.
+ *
+ * A false reason for skipping a test is worse than no reason, and this is the
+ * second time in this task that a deferral turned out to be fiction. The count
+ * above is stated as a number for that reason: "mostly covered" is how a gap
+ * survives.
  */

@@ -64,6 +64,51 @@ describe('getEnrollmentHistory', () => {
     expect(h!.timeline.some((ev) => ev.kind === 'registered')).toBe(true);
   });
 
+  /**
+   * Growth OS Reset Phase 2 T202b, row 11 of
+   * `docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md`.
+   *
+   * The registration event's TITLE is keyed on `enrollment_type`, so when T202b
+   * gives portal free accounts `'explorer'`, every one of their timelines changes
+   * from "Enrolled" to "Registered as Explorer (free)". That is an
+   * operator-visible change on existing accounts, and it was untested: swapping
+   * the ternary left this suite 4 of 4 green.
+   *
+   * An earlier version of T202b's coverage note said this line sat "inside a
+   * large un-exported function" with "no suite in the repository". Both were
+   * false — it is inside the exported `getEnrollmentHistory`, and this suite is
+   * the one that drives it.
+   */
+  it('titles the registration event by programme: an Explorer gets the free label (T202b row 11)', async () => {
+    findByPk.mockResolvedValue({
+      toJSON: () => ({
+        id: 'e1', email: 'a@b.com', full_name: 'Ada', enrollment_type: 'explorer',
+        created_at: '2026-07-01T00:00:00Z',
+      }),
+    });
+    leadFindOne.mockResolvedValue(null);
+
+    const h = await getEnrollmentHistory('e1');
+
+    const registered = h!.timeline.find((ev) => ev.kind === 'registered');
+    expect(registered!.title).toBe('Registered as Explorer (free)');
+  });
+
+  it('and a non-learner row still reads Enrolled — the label follows the programme', async () => {
+    findByPk.mockResolvedValue({
+      toJSON: () => ({
+        id: 'e2', email: 'c@d.com', full_name: 'Grace', enrollment_type: 'standard',
+        created_at: '2026-07-01T00:00:00Z',
+      }),
+    });
+    leadFindOne.mockResolvedValue(null);
+
+    const h = await getEnrollmentHistory('e2');
+
+    const registered = h!.timeline.find((ev) => ev.kind === 'registered');
+    expect(registered!.title).toBe('Enrolled');
+  });
+
   it('reports free_access true when the active comp subscription lives on a SIBLING enrollment, not the one being viewed (Brianna Woodard shape, 2026-07-31)', async () => {
     findByPk.mockResolvedValue({
       toJSON: () => ({

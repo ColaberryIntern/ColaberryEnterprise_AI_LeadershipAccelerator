@@ -263,3 +263,56 @@ describe('findUnbridgedExplorers', () => {
     await expect(findUnbridgedExplorers()).resolves.toEqual([]);
   });
 });
+
+/**
+ * Growth OS Reset Phase 2 T202b, row 5 of
+ * `docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md`.
+ *
+ * `loadActiveExplorers` is the query that decides who Explorer Growth can see,
+ * and making portal free accounts satisfy it is the entire point of the phase.
+ * It was uncovered: a verifier inverted `enrollment_type: 'explorer'` to
+ * `'standard'` and this suite stayed 22 of 22 green, so the one filter the phase
+ * exists to satisfy could have been changed without a single test noticing.
+ *
+ * It is NOT raw SQL — it is `Enrollment.findAll({ where: { … } })`, the same
+ * mockable seam `dashboardExplorerExclusion.test.ts` uses. An earlier version of
+ * T202b's coverage note claimed otherwise and used that claim to justify leaving
+ * it untested. The claim was false, and a false reason for skipping a test is
+ * worse than no reason.
+ */
+describe('loadActiveExplorers — the population filter (T202b row 5)', () => {
+  const whereOf = () => enrollmentFindAll.mock.calls[0][0].where as Record<string, unknown>;
+
+  beforeEach(() => {
+    enrollmentFindAll.mockResolvedValue([]);
+    profileFindAll.mockResolvedValue([]);
+  });
+
+  it('selects on the learner programme, which is how a free AI account becomes visible', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    expect(whereOf().enrollment_type).toBe('explorer');
+  });
+
+  it('selects only ACTIVE rows, so a withdrawn row is never treated as a live Explorer', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    expect(whereOf().status).toBe('active');
+  });
+
+  it('filters on exactly those two things and nothing else', async () => {
+    // A third condition would narrow the population silently — for example
+    // excluding deposit holders, which the REVENUE roster does deliberately and
+    // this loader deliberately does not.
+    await repairAllExplorerBridges({ dryRun: true });
+
+    expect(Object.keys(whereOf()).sort()).toEqual(['enrollment_type', 'status']);
+  });
+
+  it('asks for the communityMember include that pickBestEnrollment needs to canonicalise', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    const include = enrollmentFindAll.mock.calls[0][0].include as Array<{ as: string }>;
+    expect(include.map((i) => i.as)).toContain('communityMember');
+  });
+});
