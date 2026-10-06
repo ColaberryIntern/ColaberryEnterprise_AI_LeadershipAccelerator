@@ -29,6 +29,13 @@ export interface RecordedAttempt {
   endedAt: string | null;
   parts: number;
   durationSeconds: number | null;
+  /** Null means the provider did not say — which is NOT the same as "no". */
+  hasAudio?: boolean | null;
+  hasSharedScreen?: boolean | null;
+  /** Server-written, student-readable. Empty when there is nothing to warn about. */
+  warnings?: string[];
+  /** The student pointed us at this file; we never captured or checked it. */
+  recoveredFromLink?: boolean;
 }
 
 type State =
@@ -132,6 +139,16 @@ const RecordingEvidencePicker: React.FC<{
               <strong>Take {a.attemptNo}</strong>
               {a.isFinalTake ? <span className="rt-muted"> · marked final</span> : null}
               {describeAttempt(a) ? <span className="rt-muted"> · {describeAttempt(a)}</span> : null}
+              {a.recoveredFromLink ? <span className="rt-muted"> · your own link, not captured here</span> : null}
+              {/*
+                A take with no audio, or no shared screen, is still offered — it is
+                the student's recording and hiding it helps nobody. It is offered
+                WITH the warning, so handing in a silent video is a choice and not
+                something a reviewer discovers later.
+              */}
+              {(a.warnings ?? []).map((w) => (
+                <span key={w} style={{ display: 'block', fontSize: 12, color: 'var(--cherry-deep, #C20E1E)' }}>{w}</span>
+              ))}
             </span>
           </label>
         );

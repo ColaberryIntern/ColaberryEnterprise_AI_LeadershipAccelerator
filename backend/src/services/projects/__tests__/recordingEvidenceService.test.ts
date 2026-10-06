@@ -22,6 +22,7 @@ import {
   listRecordedAttemptsForOwner,
   resolveRecordingEvidence,
   RECORDING_REF_PREFIX,
+  describeTakeContents,
 } from '../recordingEvidenceService';
 
 const q = sequelize.query as unknown as jest.Mock;
@@ -165,5 +166,58 @@ describe('ownership', () => {
     const r = await listRecordedAttemptsForOwner('enr-1', PROJECT, 'PREP-2');
     expect(mockTree).toHaveBeenCalledWith('enr-1', PROJECT);
     expect(r.ok).toBe(true);
+  });
+});
+
+/**
+ * What a take actually contains.
+ *
+ * A recording with no audio is still the student's recording and is still offered —
+ * hiding it helps nobody. It is offered WITH the warning, so handing in a silent
+ * video is a choice rather than an accident discovered by a reviewer.
+ */
+describe('saying what is actually on the recording', () => {
+  it('warns about a take with no audio, and one with no shared screen', () => {
+    expect(describeTakeContents(false, true).warnings).toEqual([
+      'This recording has no audio track. Nobody reviewing it will hear you.',
+    ]);
+    expect(describeTakeContents(true, false).warnings).toEqual([
+      'This recording has no shared screen — it is camera only, so your demo will not be visible.',
+    ]);
+    expect(describeTakeContents(false, false).warnings).toHaveLength(2);
+  });
+
+  /**
+   * THE RULE. Zoom does not always tell us what a file contains. Reporting "we do
+   * not know" as "no audio" would send a student to re-record a perfectly good take.
+   */
+  it('says nothing when the provider did not tell us — null is not false', () => {
+    expect(describeTakeContents(null, null)).toEqual({ hasAudio: null, hasSharedScreen: null, warnings: [] });
+    expect(describeTakeContents(undefined, undefined).warnings).toEqual([]);
+    expect(describeTakeContents(true, true).warnings).toEqual([]);
+  });
+
+  it('carries the flags and the warning through to the picker', async () => {
+    q.mockResolvedValueOnce([[row({ has_audio: false, has_shared_screen: true })], {}]);
+    const [a] = await listRecordedAttempts(PROJECT, 'PREP-2');
+    expect(a.hasAudio).toBe(false);
+    expect(a.warnings).toHaveLength(1);
+    expect(a.recoveredFromLink).toBe(false);
+  });
+
+  // A take the student pointed us at is not one we captured, and a reviewer must be
+  // able to tell. Nobody fetched it or checked what is on the other end.
+  it('marks a take the student recovered by link', async () => {
+    q.mockResolvedValueOnce([[row({ recovered: true })], {}]);
+    const [a] = await listRecordedAttempts(PROJECT, 'PREP-2');
+    expect(a.recoveredFromLink).toBe(true);
+  });
+
+  it('asks the database for the flags across parts with bool_or, not just the first part', async () => {
+    q.mockResolvedValueOnce([[row()], {}]);
+    await listRecordedAttempts(PROJECT, 'PREP-2');
+    const sql = String(q.mock.calls[0][0]);
+    expect(sql).toMatch(/bool_or\(r\.has_audio\)/);
+    expect(sql).toMatch(/bool_or\(r\.has_shared_screen\)/);
   });
 });

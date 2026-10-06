@@ -225,6 +225,7 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
      has_audio BOOLEAN,
      has_shared_screen BOOLEAN,
      review_reason TEXT,
+     recovery_url TEXT,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
@@ -243,6 +244,12 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_audio BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS has_shared_screen BOOLEAN`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS review_reason TEXT`,
+  // Where the student says the file actually is, when Zoom never delivered one.
+  // A row carrying this is a RECOVERY, not an ingest: nothing was fetched, nobody
+  // verified the contents, and `ingest_provenance = 'student_recovery'` says so.
+  // It is the only URL this table holds, and it is deliberately the student's own
+  // public link rather than anything of ours — see presentationRecoveryService.
+  `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS recovery_url TEXT`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`,
   `ALTER TABLE presentation_recordings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
   // The constraint that makes duplicate/late/out-of-order webhook delivery safe.
