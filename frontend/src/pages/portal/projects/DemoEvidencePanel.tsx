@@ -3,6 +3,7 @@ import portalApi from '../../../utils/portalApi';
 import { refreshProjectsFromBackend } from './projectSync';
 import type { ProjectTask } from './projectsStore';
 import { guideFor } from './demoPrepGuide';
+import RecordingEvidencePicker from './RecordingEvidencePicker';
 
 /**
  * The workspace for a demo-prep task: submit the evidence it asks for.
@@ -23,22 +24,27 @@ import { guideFor } from './demoPrepGuide';
  */
 export const PREP_RE = /^PREP-([1-6])$/;
 export const DEMO_DAY_STORY_ID = 'PREP-6';
-/** The two recordings: a link is the only evidence that fits. */
+/** The two recordings: prose about one does not count. A recording does. */
 const LINK_ONLY = new Set(['PREP-2', 'PREP-5']);
 
 const ASK: Record<string, { lead: string; placeholder: string }> = {
   'PREP-1': { lead: 'Write the demo narrative here, or paste a link to it.', placeholder: 'The problem is… The one moment is… The guardrail is…' },
-  'PREP-2': { lead: 'Paste the share link to your run-through recording.', placeholder: 'https://drive.google.com/… or https://youtu.be/…' },
+  'PREP-2': { lead: 'Hand in your run-through: pick a recording you made in the Studio, or paste a share link.', placeholder: 'https://drive.google.com/… or https://youtu.be/…' },
   'PREP-3': { lead: 'Paste a link to your slides, or describe them here.', placeholder: 'https://… (Google Slides, PowerPoint, PDF)' },
   'PREP-4': { lead: 'Who did you rehearse with, and what did they tell you?', placeholder: 'Rehearsed with… Their notes: …' },
-  'PREP-5': { lead: 'Paste the share link to your final demo video.', placeholder: 'https://drive.google.com/… or https://youtu.be/…' },
+  'PREP-5': { lead: 'Hand in your final demo: pick a recording you made in the Studio, or paste a share link.', placeholder: 'https://drive.google.com/… or https://youtu.be/…' },
 };
 
 export function isPrepStory(storyId: string | null | undefined): boolean {
   return !!storyId && PREP_RE.test(storyId);
 }
 
-type Kind = 'link' | 'text';
+/**
+ * `recording` names a take this platform already holds, by attempt id. It exists
+ * so a student who rehearsed HERE is not sent to republish the video publicly
+ * just to produce a link. The server proves the id against this task.
+ */
+type Kind = 'link' | 'text' | 'recording';
 
 const DemoEvidencePanel: React.FC<{
   task: ProjectTask;
@@ -90,6 +96,11 @@ const DemoEvidencePanel: React.FC<{
   );
   const handInNo = guide ? 2 : 1;
 
+  // Switching how you hand in CLEARS what was typed. An attempt id left behind in
+  // the link box would be posted as `kind: 'link'` and rejected as a malformed
+  // URL, which reads as the picker being broken.
+  const choose = (k: Kind) => { setKind(k); setValue(''); setError(null); };
+
   const submit = async () => {
     if (demo) return;
     setBusy(true); setError(null);
@@ -134,13 +145,16 @@ const DemoEvidencePanel: React.FC<{
       </div>
       <div className="rt-card">
         <p className="rt-muted" style={{ marginTop: 0 }}>{ask.lead}</p>
-        {!linkOnly && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <button type="button" className={`rt-btn${kind === 'text' ? ' cta' : ''}`} onClick={() => setKind('text')} aria-pressed={kind === 'text'}>Write it</button>
-            <button type="button" className={`rt-btn${kind === 'link' ? ' cta' : ''}`} onClick={() => setKind('link')} aria-pressed={kind === 'link'}>Paste a link</button>
-          </div>
-        )}
-        {kind === 'link' ? (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+          {!linkOnly && (
+            <button type="button" className={`rt-btn${kind === 'text' ? ' cta' : ''}`} onClick={() => choose('text')} aria-pressed={kind === 'text'}>Write it</button>
+          )}
+          <button type="button" className={`rt-btn${kind === 'recording' ? ' cta' : ''}`} onClick={() => choose('recording')} aria-pressed={kind === 'recording'}>Use a Studio recording</button>
+          <button type="button" className={`rt-btn${kind === 'link' ? ' cta' : ''}`} onClick={() => choose('link')} aria-pressed={kind === 'link'}>Paste a link</button>
+        </div>
+        {kind === 'recording' ? (
+          <RecordingEvidencePicker projectId={projectId} storyId={storyId} selected={value} onSelect={setValue} />
+        ) : kind === 'link' ? (
           <input
             type="url"
             className="rt-in"

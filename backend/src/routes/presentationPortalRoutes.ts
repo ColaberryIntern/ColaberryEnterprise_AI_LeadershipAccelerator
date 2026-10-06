@@ -22,6 +22,7 @@
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/presentation-session
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/presentation-sessions
  *   POST /api/portal/projects/:projectId/tasks/:storyId/presentation-practice
+ *   GET  /api/portal/projects/:projectId/tasks/:storyId/recording-evidence
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
@@ -212,6 +213,25 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/presentation-sessions
     const r = await listSessionsForAssignment(eid(req), String(req.params.projectId), String(req.params.storyId));
     if (!r.ok) return res.status(404).json({ error: 'Project not found' });
     res.json({ sessions: r.sessions });
+  } catch (e) { fail(res, e, next); }
+});
+
+// The student's own takes that this platform already holds, so a recording task can
+// be handed in WITHOUT republishing the video somewhere public. Read-only, and it
+// returns no playback URL: a take is opened through the Studio's own surfaces, which
+// apply their own access checks, and a URL handed out here would outlive them.
+//
+// An empty list is a 200, not a 404 — the task is yours, nothing has been recorded.
+// Listing is NOT completing: handing one in is a separate POST on the evidence route,
+// which proves the attempt again rather than trusting anything echoed back from here.
+router.get('/api/portal/projects/:projectId/tasks/:storyId/recording-evidence', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const { listRecordedAttemptsForOwner } = await import('../services/projects/recordingEvidenceService');
+    const r = await listRecordedAttemptsForOwner(eid(req), String(req.params.projectId), String(req.params.storyId));
+    if (!r.ok) return res.status(404).json({ error: 'Project not found' });
+    res.json({ attempts: r.attempts });
   } catch (e) { fail(res, e, next); }
 });
 
