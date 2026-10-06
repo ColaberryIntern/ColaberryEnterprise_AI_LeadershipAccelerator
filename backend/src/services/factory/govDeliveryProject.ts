@@ -20,6 +20,7 @@ import { sequelize } from '../../config/database';
 import { factoryId } from './factoryIds';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 import type { ContractRequirementAttributes } from '../../models/ContractRequirement';
+import type { SourceLinkRefusal } from '../delivery/projectSourceLink';
 
 const TRACK_TYPES = ['proposal', 'solution_build'] as const;
 
@@ -37,7 +38,26 @@ export function govProjectSlug(canonicalOpportunityId: string): string {
 }
 
 /**
- * Map one reviewer-ESTABLISHED requirement onto a `contract_requirements` row for both tracks. PURE + deterministic
+ * A technical/solution signal in a requirement's text/section/kind. Its PRESENCE is what adds the solution_build
+ * track; its absence keeps the requirement proposal-only. Deliberately broad on build words, so an administrative
+ * form (pricing, execution-of-offer, a legal schedule, a certification, a registration) carries NO build signal.
+ */
+const BUILD_SIGNAL_RE = /\b(system|software|application|platform|database|integration|api|interface|data\s+(migration|conversion|search)|search\s+database|report(ing)?|dashboard|workflow|hosting|deployment|encryption|security\s+control|uptime|sla|performance|scalab|architecture|develop|implement|configure|technical|functional\s+requirement|user\s+interface)\b/i;
+
+/**
+ * Classify which track(s) a requirement belongs to, deterministically. EVERY requirement maps to `proposal` (the
+ * bid must respond to it); `solution_build` is added ONLY when the requirement carries a technical/build signal —
+ * so an ADMINISTRATIVE requirement (a pricing schedule, an execution-of-offer form, a legal schedule, a SAM
+ * registration) is never mapped to the build track and cannot generate a software feature. Build stories appear
+ * "where relevant" (the spec's rule), not for every form. Pure + total; reviewable/overridable later.
+ */
+export function classifyRequirementTracks(est: any): string[] {
+  const hay = `${String(est?.text ?? '')} ${String(est?.section ?? '')} ${String(est?.kind ?? '')}`.toLowerCase();
+  return BUILD_SIGNAL_RE.test(hay) ? ['proposal', 'solution_build'] : ['proposal'];
+}
+
+/**
+ * Map one reviewer-ESTABLISHED requirement onto a `contract_requirements` row for its classified track(s). PURE + deterministic
  * (the id is `factoryId('contract_requirement', [deliveryProjectId, canonical_req_id])`, so a re-run upserts the
  * same row). Fabricates nothing: `evidence_state` is always `unassessed` (the factory has not assessed evidence),
  * and only fields the established requirement actually carries are copied. `human_confirmed` is true because the
@@ -53,7 +73,7 @@ export function toContractRequirementRow(deliveryProjectId: string, est: any): C
     statement: String(est?.text ?? ''),
     kind: String(est?.kind ?? 'compliance'),
     priority: est?.bindingStatus === 'binding_solicitation_requirement' ? 'must' : 'should',
-    tracks: ['proposal', 'solution_build'],
+    tracks: classifyRequirementTracks(est),
     source_document: String(est?.sourceDocument ?? ''),
     amendment_version: '',
     section: String(est?.section ?? ''),
@@ -169,4 +189,42 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
 
     return { deliveryProjectId, created, tracks: TRACK_TYPES.length, requirements };
   });
+}
+
+export interface LinkGovBuildResult { ok: true; linkId: string; created: boolean; }
+
+/**
+ * Link a gov project's SOLUTION_BUILD track to a student build project. Reuses the existing bridge
+ * (`linkStudentProject` — idempotent, verifies both ends exist, NEVER mutates the student row), and only on a
+ * real link sets `ContractTrack.solution_student_project_id` — so the link is never fabricated. Only the
+ * solution_build track is wired (the proposal track never carries a build link). Idempotent; on a refusal
+ * (no such project / reason required) nothing is wired. Replay-safe (ensureGovTwoTrackProject preserves it).
+ */
+export async function linkGovBuildToStudentProject(input: {
+  deliveryProjectId: string;
+  studentProjectId: string;
+  reason: string;
+  actorIdentityId?: string | null;
+}): Promise<LinkGovBuildResult | SourceLinkRefusal> {
+  const { default: DeliveryProject } = await import('../../models/DeliveryProject');
+  const { default: Project } = await import('../../models/Project');
+  const { default: DeliveryProjectSourceLink } = await import('../../models/DeliveryProjectSourceLink');
+  const { default: ContractTrack } = await import('../../models/ContractTrack');
+  const { linkStudentProject } = await import('../delivery/projectSourceLink');
+
+  const link = await linkStudentProject({
+    deliveryProjectId: input.deliveryProjectId,
+    studentProjectId: input.studentProjectId,
+    reason: input.reason,
+    actorIdentityId: input.actorIdentityId ?? null,
+    models: { DeliveryProject, Project, DeliveryProjectSourceLink },
+  });
+  if (!link.ok) return link; // refusal: no such delivery/student project, or reason required — wire nothing.
+
+  // Only now (a real, existence-checked link) set the column, and ONLY on the solution_build track.
+  await ContractTrack.update(
+    { solution_student_project_id: input.studentProjectId },
+    { where: { delivery_project_id: input.deliveryProjectId, track_type: 'solution_build' } },
+  );
+  return { ok: true, linkId: link.linkId, created: link.created };
 }
