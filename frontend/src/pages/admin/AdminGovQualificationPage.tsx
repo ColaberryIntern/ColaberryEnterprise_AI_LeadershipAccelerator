@@ -6,13 +6,14 @@ import {
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
-  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier,
+  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier, type GovRelationship,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
 import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
 import { deriveBidDecision } from './govBidDecision';
+import { deriveJourney, type Journey } from './govJourney';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -176,6 +177,70 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
         Detected automatically from the ZIP text — <strong>verify</strong> against the solicitation before you rely on it.
         This is reference only and does not change any approval.
       </div>
+    </>
+  );
+}
+
+/**
+ * GovJourneyStrip — a compact stepper showing where this opportunity sits in our pursuit pipeline. Done stages
+ * carry a check, the current stage is highlighted and shows its detail, upcoming stages are muted. Advisory.
+ */
+function GovJourneyStrip({ journey }: { journey: Journey }): React.ReactElement {
+  return (
+    <ol className="list-unstyled d-flex flex-wrap gap-2 mb-0">
+      {journey.steps.map((s, i) => {
+        const icon = s.state === 'done' ? 'ri-checkbox-circle-fill text-success'
+          : s.state === 'current' ? 'ri-focus-3-line text-primary' : 'ri-circle-line text-secondary';
+        const cls = s.state === 'current' ? 'border-primary bg-primary-subtle'
+          : s.state === 'done' ? 'border-success-subtle' : 'border-secondary-subtle';
+        return (
+          <li key={s.key} className={`flex-grow-1 border rounded px-2 py-2 ${cls}`} style={{ minWidth: 150 }}
+            aria-current={s.state === 'current' ? 'step' : undefined}>
+            <div className="d-flex align-items-center gap-1">
+              <i className={icon} aria-hidden="true" />
+              <span className={`small fw-${s.state === 'todo' ? 'normal' : 'semibold'}`}>{i + 1}. {s.label}</span>
+            </div>
+            {s.state === 'current' && <div className="small text-secondary mt-1">{s.detail}</div>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
+ * RelationshipPanel — "have we pursued this agency before?" Lists prior pursuits of the same agency with their
+ * decision + date, or an honest empty-state. Matched by agency name only, so it is explicitly "verify"; it is
+ * advisory and changes no decision. The current opportunity is excluded server-side and again here defensively.
+ */
+function RelationshipPanel({ relationship, currentKey }: { relationship: GovRelationship; currentKey: string }): React.ReactElement {
+  const pursuits = (relationship.pursuits ?? []).filter((p) => p.canonicalOpportunityId !== currentKey);
+  const agency = relationship.agency || 'this agency';
+  if (pursuits.length === 0) {
+    return (
+      <div className="small text-secondary">
+        <i className="ri-information-line me-1" aria-hidden="true" />
+        No prior pursuits recorded for <strong>{agency}</strong> — this looks like the first opportunity we've worked with them.
+      </div>
+    );
+  }
+  const badge = (d: string) => {
+    const t = d === 'approved_bid_pursuit' || d === 'rfi_response' ? 'success' : d === 'no_bid' ? 'secondary' : 'info';
+    return <span className={`badge bg-${t}-subtle text-${t}-emphasis`}>{d.replace(/_/g, ' ')}</span>;
+  };
+  return (
+    <>
+      <div className="small mb-2">We have <strong>{pursuits.length}</strong> prior pursuit{pursuits.length === 1 ? '' : 's'} on record with <strong>{agency}</strong>:</div>
+      <ul className="list-unstyled mb-2">
+        {pursuits.map((p) => (
+          <li key={p.canonicalOpportunityId} className="d-flex flex-wrap align-items-center gap-2 py-1 border-bottom">
+            <span className="fw-semibold small flex-grow-1">{p.title ?? p.canonicalOpportunityId}</span>
+            {badge(p.decision)}
+            {p.date && <span className="small text-secondary">{new Date(p.date).toLocaleDateString()}</span>}
+          </li>
+        ))}
+      </ul>
+      <div className="small text-secondary"><i className="ri-alert-line me-1" aria-hidden="true" />Matched by agency name — verify these are the same agency. Reference only; it changes no decision.</div>
     </>
   );
 }
@@ -523,6 +588,19 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
+          {isDecoupled && (
+            <SectionCard title="Where this is in the journey" icon="route-line"
+              subtitle="Our pursuit pipeline for this opportunity. Mirrors the real gates; it changes nothing.">
+              <GovJourneyStrip journey={deriveJourney({
+                hasRecord: !!record,
+                establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
+                zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
+                assessed: !!ws.evaluation && !!ws.coverage,
+                decision: record ? record.decision : null,
+              })} />
+            </SectionCard>
+          )}
+
           <div className="row g-3 mb-3">
             <div className="col-6 col-lg-3"><StatCard label="Source state" value={ws.sourceState} icon="git-commit-line" tone={ws.sourceState === 'available' ? 'success' : ws.sourceState === 'unavailable' || ws.sourceState === 'auth_failed' || ws.sourceState === 'malformed' ? 'danger' : 'warning'} hint={ws.snapshotRecorded ? `snapshot v${ws.sourceSnapshotVersion}` : 'snapshot unrecorded'} /></div>
             <div className="col-6 col-lg-3"><StatCard label="Blocking requirements" value={ws.evaluation ? ws.evaluation.blocking.length : '—'} icon="error-warning-line" tone={ws.evaluation && ws.evaluation.blocking.length > 0 ? 'danger' : 'success'} /></div>
@@ -564,6 +642,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               </SectionCard>
             );
           })()}
+
+          {isDecoupled && ws.relationship && (
+            <SectionCard title="Have we pursued this agency before?" icon="history-line" collapsible defaultOpen={true}
+              subtitle="Possible prior work with the same agency — advisory, verify. It feeds no gate.">
+              <RelationshipPanel relationship={ws.relationship} currentKey={canonical} />
+            </SectionCard>
+          )}
 
           <DeadlineCard
             value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? null) : (ws.source?.deadline.utc ?? null)}
