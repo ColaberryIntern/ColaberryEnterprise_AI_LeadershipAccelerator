@@ -57,7 +57,7 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 29 files
+## BRANCHING — 30 files
 
 **Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
 used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
@@ -100,6 +100,7 @@ any row does not.
 | 28 | `scripts/internshipJourneyE2E.ts` | `enrollment_type: 'standard', tier: 'standard'` | unchanged | unchanged | **An E2E script writes `tier: 'standard'`, which is not in the column's declared union** (`'guest' \| 'member'`). Pre-existing, out of this phase's scope, recorded because it is why the column has no CHECK constraint to rely on. |
 | 29 | `services/cohortService.ts` | `{ enrollment_type: { [Op.ne]: 'explorer' } }` | **CHANGES** | — | **Added on the fix pass; the first scan misfiled this as reporting-only.** `getDashboardStats()` builds one `notExplorer` filter and reuses it for three counts — `totalEnrollments`, `paidEnrollments` and `pendingInvoice`. Once population A gains `enrollment_type: 'explorer'`, **`totalEnrollments` and `pendingInvoice` on the admin dashboard drop** by the number of portal free accounts. `paidEnrollments` does not move, because those rows are not paid. Appended rather than inserted in theme order so the existing row numbers, and the determinations that reference them, stay stable. |
 | 30 | `services/freeSignupService.ts` | `enrollment.enrollment_type === 'explorer'` | **CHANGES** | unchanged | **Added by T205, and it is row 17 returning under a new number.** T202b retired row 17 because delegating to the canonical service removed both column literals from this file, and the scan moved it to REPORTING on its own. T205 reintroduces a branch here deliberately: the Explorer profile is created only when the RESOLVED row is an Explorer, so a `programme: 'standard'` account — an org teammate, a prospect — gets no journey profile and stays invisible to Explorer Growth. Population A gains a profile at registration; population B is unaffected because it never takes this branch. Renumbered rather than reusing 17, so citations that reference other rows by number stay valid. |
+| 31 | `services/appPaymentReconcileService.ts` | `tier = 'member'` in a raw-SQL UPDATE | writer | writer | **Added by T206, and it is the FIFTH paid-status writer — the plan named three.** Found by deriving the writer set from source rather than trusting the written list, which is the fifth time in this phase a population in the plan came up short when derived. It marks an enrolment paid in raw SQL while linking the payment id; in the happy path `activateByRef` has already granted membership, so this is a no-op re-assertion, but on the ERROR path it would otherwise leave paid-but-guest. Now writes the pair in the same statement. Neither population changes: it only ever touches rows that already carry a `paysimple_customer_id`, which no free Explorer or deposit holder has. |
 
 **Tallies, counted from the table's own cells rather than by hand** — the first draft said "12 for
 A" and "9 unchanged", both off by one in **compensating** directions, so the two wrong numbers
@@ -110,11 +111,21 @@ asserts them from the parsed cells so they cannot drift again:
 |---|---|---|
 | Changes for population A | **13** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
 | Changes for population B | **2** (rows 1 and 13) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
-| Writers | **3** | `grep -c "\| writer \| writer \|"` |
+| Writers | **4** | `grep -c "\| writer \| writer \|"` |
 | Unchanged, with a stated reason | **11** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **29** | matches the generator's `BRANCHING` count |
+| **Total** | **30** | matches the generator's `BRANCHING` count |
 
-## REPORTING — 17 files
+## REPORTING — 18 files
+
+**`paymentSyncService.ts` is listed as REPORTING although it is a WRITER**, and the
+mismatch is recorded rather than corrected. It writes both columns, but in raw SQL via a
+`CASE WHEN :status = 'paid'` expression, which the generator does not read as a branch.
+The classification is the scanner's, and the scanner is deliberately not being taught to
+understand SQL `CASE` — that is the write-shape classification T203 failed three times
+trying to build. What matters is that the file is in the enumeration at all, with a
+determination saying what it really does; its coherence is proved behaviourally in
+`services/__tests__/writerPairCoherence.test.ts`, not by its row here.
+
 
 Disclosure, not behaviour tests. **Pasted from the generator's output, after it caught me
 hand-transcribing this list and dropping a file** — see the note below.
@@ -125,7 +136,7 @@ hand-transcribing this list and dropping a file** — see the note below.
 `services/adminOs/metricRegistry.ts` · `services/adminOs/personProfileService.ts` ·
 `services/enrollmentsWithoutProjects.ts` ·
 `services/explorerGrowth/explorerSignalDefinitions.ts` ·
-`services/explorerGrowth/explorerStateMachine.ts` ·
+`services/explorerGrowth/explorerStateMachine.ts` · **`services/paymentSyncService.ts`** ·
 `services/growthJourney/outcomes/outcomeNormalizer.ts` · `services/icpProfileService.ts` ·
 `services/internship/internshipReviewQueue.ts` · `services/portalEnrollmentService.ts` ·
 `services/portalSettingsService.ts`

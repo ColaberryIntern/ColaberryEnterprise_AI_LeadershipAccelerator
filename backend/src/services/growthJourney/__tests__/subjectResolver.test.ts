@@ -549,6 +549,39 @@ describe('T407: the lead -> enrolment walk, and what a customer is', () => {
       expect(subscriptionFindOne).toHaveBeenCalledWith({ where: { enrollment_id: 'enr-1', status: 'active' }, attributes: ['id'] });
     });
 
+    /**
+     * T206 (AC5): the row shape each paid-marking writer now produces IS a customer.
+     *
+     * Each of these is the state a writer leaves behind after T206 made it write the pair.
+     * Before T206, `reconcilePayment`, `paymentSyncService` and `appPaymentReconcileService`
+     * left `tier: 'guest'` on a row they had just marked paid - the case the test directly
+     * above proves is NOT a customer. So the defect was not that the fact was computed
+     * wrongly; it was that three writers produced a row the fact correctly rejected.
+     *
+     * STATED PLAINLY: the link between 'a writer produces this shape' and 'this shape is a
+     * customer' spans two suites. That the writers produce it is proved in
+     * `services/__tests__/writerPairCoherence.test.ts` by capturing each real patch; that the
+     * shape reads as a customer is proved here against the real resolver. The connection
+     * between the two is DOCUMENTATION, not an assertion - worth saying rather than implying
+     * a single end-to-end test exists when it does not.
+     */
+    it.each([
+      ['reconcilePayment (model update)'],
+      ['paymentSyncService (raw SQL)'],
+      ['appPaymentReconcileService (raw SQL)'],
+    ])('T206: the row %s leaves behind is a customer by payment_status', async () => {
+      enrollmentFindByPk.mockResolvedValue({
+        id: 'enr-1', email: 'a@example.test',
+        payment_status: 'paid', tier: 'member', enrollment_type: 'standard',
+      });
+      const r = await resolveSubject({ enrollmentId: 'enr-1' });
+      if (r.status !== 'resolved') throw new Error(r.status);
+      expect(r.subject.customer).toEqual({ paid: true, basis: 'payment_status' });
+      // And the subscription fallback is never consulted, because the enrolment already
+      // answers the question - which is only true once the pair is coherent.
+      expect(subscriptionFindOne).not.toHaveBeenCalled();
+    });
+
     it('no enrolment at all: not a customer, and nothing is asked', async () => {
       const r = await resolveSubject({ visitorId: 'vis-1' });
       if (r.status !== 'resolved') throw new Error(r.status);

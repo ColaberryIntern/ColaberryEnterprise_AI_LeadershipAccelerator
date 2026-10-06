@@ -446,13 +446,36 @@ export async function createExplorerEnrollment(input: {
   return { enrollment, created: true, cohort_id: cohort.id };
 }
 
-// Admin "Convert to enrolled": flip an Explorer into a standard enrollment. Seat
-// reservation + payment follow the normal enrollment path, not this flag flip.
+/**
+ * Admin "Convert to enrolled": move an Explorer onto a standard enrollment. Seat
+ * reservation and payment follow the normal enrollment path, not this flag flip.
+ *
+ * WRITES BOTH SEMANTIC COLUMNS, Phase 2 T206, and the reason is the whole task.
+ *
+ * This used to write `enrollment_type: 'standard'` alone. Once T202 gave `/enroll`
+ * Explorers `tier: 'guest'`, that produced **`standard` + `guest`**: a non-learner
+ * programme with free access. Invisible to Explorer Growth because the row is no longer
+ * `'explorer'`, and gated out of nothing because the legacy entitlement branch only gates
+ * explorers. Crucially the row is **never paid**, so a `payment_status: 'paid'` +
+ * `tier: 'guest'` tripwire cannot see it either — which is exactly why T206 has two
+ * tripwires rather than one.
+ *
+ * It was latent rather than live: this function has no callers (`grep -rn
+ * convertExplorerToStandard backend/src --include=*.ts` finds only its own definition).
+ * Fixed here so it is not a trap for whoever wires the admin button.
+ *
+ * `grantMembership` (`subscriptionService.ts:525`) is the reference implementation — its
+ * own comment says it is "kept in one place so the two callers can never drift apart" —
+ * and this function now agrees with it rather than offering a second opinion.
+ */
 export async function convertExplorerToStandard(enrollmentId: string): Promise<Enrollment> {
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) throw new AppError('Enrollment not found', 404);
   if (enrollment.enrollment_type === 'explorer') {
-    await enrollment.update({ enrollment_type: 'standard' });
+    // The PAIR, written together. `tier` is the access level and `enrollment_type` the
+    // programme; converting the programme without granting the access leaves the row in a
+    // state no consumer reads correctly.
+    await enrollment.update({ enrollment_type: 'standard', tier: 'member' });
   }
   return enrollment;
 }
