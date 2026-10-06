@@ -1,6 +1,7 @@
 import {
   CAPACITY_CONSUMING_ROLES,
   assignBuilderToProject,
+  revokeBuilderFromProject,
   consumesCapacity,
 } from '../builderAssignment';
 
@@ -184,5 +185,47 @@ describe('assignBuilderToProject', () => {
     };
     const out = await assign(models);
     expect(out.assigned).toBe(true);
+  });
+});
+
+const revoke = (models: any, over: Partial<Parameters<typeof revokeBuilderFromProject>[0]> = {}) =>
+  revokeBuilderFromProject({
+    projectId: PROJECT,
+    builderIdentityId: BUILDER,
+    role: 'builder',
+    actorIdentityId: OWNER,
+    now: new Date('2026-08-30T12:00:00Z'),
+    models,
+    ...over,
+  });
+
+describe('revokeBuilderFromProject (the counterpart the assignment path shipped without)', () => {
+  it('revokes an ACTIVE membership: sets status revoked + revoked_at and emits a builder_revoked event', async () => {
+    const update = jest.fn(async () => undefined);
+    const events: any[] = [];
+    const models = {
+      DeliveryProjectMember: { findOne: async () => ({ id: 'm-9', update }) },
+      DeliveryEvent: { create: async (r: any) => { events.push(r); return r; } },
+    };
+    const out = await revoke(models);
+    expect(out).toMatchObject({ revoked: true, membershipId: 'm-9' });
+    // The actual revocation — the guard honours only status:'active', so this is what stops access.
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'revoked', revoked_at: expect.any(Date) }));
+    expect(events[0]).toMatchObject({ event_type: 'builder_revoked', outcome: 'success' });
+  });
+
+  it('is a no-op (not_assigned) when there is no active membership — never an error, never an event', async () => {
+    const create = jest.fn();
+    const models = { DeliveryProjectMember: { findOne: async () => null }, DeliveryEvent: { create } };
+    const out = await revoke(models);
+    expect(out).toMatchObject({ revoked: false, reason: 'not_assigned' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('targets only an ACTIVE membership (the lookup filters status:active, so an already-revoked row is left alone)', async () => {
+    const findOne = jest.fn(async () => null);
+    const models = { DeliveryProjectMember: { findOne }, DeliveryEvent: { create: async () => undefined } };
+    await revoke(models);
+    expect(findOne).toHaveBeenCalledWith({ where: expect.objectContaining({ status: 'active', delivery_project_id: PROJECT, platform_identity_id: BUILDER, delivery_role: 'builder' }) });
   });
 });

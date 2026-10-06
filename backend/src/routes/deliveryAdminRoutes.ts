@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express';
 import { requireAdmin } from '../middlewares/authMiddleware';
-import { assignBuilderToProject } from '../services/delivery/builderAssignment';
+import { assignBuilderToProject, revokeBuilderFromProject } from '../services/delivery/builderAssignment';
 import { evaluateStoryGate, recordEvidence, upsertStory } from '../services/delivery/storyEvidence';
 import { mentorQueueFor } from '../services/delivery/mentorState';
 import {
@@ -109,6 +109,63 @@ router.post(
         }),
       );
       res.status(500).json({ error: 'Could not complete the assignment.' });
+    }
+  },
+);
+
+/**
+ * POST /api/refactored/admin/projects/:projectId/revoke
+ *
+ * Body: { builderIdentityId, role }. Revokes an active membership so the access guard (which honours only
+ * status:'active') stops serving that builder on their next request. Idempotent: 200 whether or not there was
+ * an active membership to revoke. This is the counterpart the assignment surface shipped without.
+ */
+router.post(
+  '/api/refactored/admin/projects/:projectId/revoke',
+  requireAdmin,
+  async (req: Request, res: Response) => {
+    const projectId = typeof req.params?.projectId === 'string' ? req.params.projectId : '';
+    const builderIdentityId =
+      typeof req.body?.builderIdentityId === 'string' ? req.body.builderIdentityId : '';
+    const role = typeof req.body?.role === 'string' ? req.body.role : '';
+
+    if (!projectId || !builderIdentityId || !role) {
+      res.status(400).json({ error: 'projectId, builderIdentityId and role are all required.' });
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const models = require('../models');
+      const actorIdentityId = actorOf(req);
+
+      const outcome = await revokeBuilderFromProject({
+        projectId,
+        builderIdentityId,
+        role,
+        actorIdentityId: actorIdentityId as string,
+        models,
+      });
+
+      // Idempotent: revoking an already-revoked / never-assigned membership is a successful no-op, not an error.
+      res.status(200).json({
+        revoked: outcome.revoked,
+        reason: outcome.reason ?? null,
+        membershipId: outcome.membershipId ?? null,
+      });
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          service: 'delivery-admin',
+          event: 'builder_revocation_failed',
+          outcome: 'failure',
+          error_class: (err as Error)?.constructor?.name ?? 'Error',
+          context: { projectId },
+        }),
+      );
+      res.status(500).json({ error: 'Could not complete the revocation.' });
     }
   },
 );
