@@ -445,8 +445,22 @@ four import sites run that way and zero run this way), so `showableControls` mir
 `enforcedBy` widened to `string`. A hand-mirrored type is exactly how two definitions drift
 apart, so the mirror is pinned on the lifecycle side: a composition test passes
 `renderControlAvailability().showable` and `controlSurfaceExists()` straight into
-`buildDesignBrief` and asserts both branches, which makes `tsc` check the assignability at
-the one place the data actually crosses.
+`buildDesignBrief` and asserts **at runtime** that both branches come out right.
+
+**No gate in this repo type-checks that mirror, and an earlier version of this paragraph
+claimed one did.** `backend/tsconfig.json` excludes `**/*.test.ts` and `**/__tests__/**`, so
+the composition test is not in the typecheck program at all:
+
+```
+node ../node_modules/typescript/bin/tsc -p tsconfig.json --listFilesOnly | wc -l        # 5762
+node ../node_modules/typescript/bin/tsc -p tsconfig.json --listFilesOnly | grep -c __tests__   # 0
+```
+
+And `ts-jest` runs with `isolatedModules`, which strips types without checking them — the
+same trap this phase recorded two sections earlier and then walked into. So the mirror is
+guarded by a **runtime** assertion and by nothing else. Closing the compile-time half means
+putting the composition in a module the gate compiles, which is work for the phase that
+builds the design-stage orchestrator; the register holds it.
 
 The predicate is **passed, never inferred from the array length**, and that distinction is the
 point:

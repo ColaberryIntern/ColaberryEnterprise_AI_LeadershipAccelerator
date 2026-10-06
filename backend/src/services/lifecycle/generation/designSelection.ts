@@ -188,17 +188,19 @@ function journeyIssues(
       issues.push(err('JOURNEY_STEPS_EMPTY', `Journey '${kind}' is declared with no steps, which claims a path without describing one.`, kind));
       continue;
     }
-    // The two `isStr` operands are TYPE guards whose runtime effect is subsumed by the lookup
-    // that follows: `servedBy` is a `Map<string, Set<string>>`, so any non-string `t` misses the
-    // map and any non-string `w` misses the set, and either way the step is flagged. Dropping
-    // each of them individually therefore SURVIVES the mutation harness, and that is expected
-    // rather than a hole — stated here because an unexplained survivor is indistinguishable from
-    // an untested guard.
+    // Both `isStr` operands are LOAD-BEARING AT RUNTIME, and each has its own isolating test.
     //
-    // They are kept, not deleted like the three operands Amendment 4 removed from
-    // `designAlternatives`, because those were inert in both senses while these two are
-    // load-bearing at COMPILE time: without them `servedBy.get(t)` needs an `as string` cast,
-    // which trades a narrowing the compiler checks for one it does not.
+    // An earlier version of this comment claimed the opposite: that `servedBy` being typed
+    // `Map<string, Set<string>>` meant a non-string key missed it either way, so dropping either
+    // operand could not change an answer. **That was false and a verifier falsified it.** The
+    // map is populated verbatim from caller-supplied `chosen.surfaces`, and a type annotation
+    // does not constrain runtime keys: hand it a surface whose `taskId` is `7` and the map really
+    // holds the key `7`, the lookup really hits, and the step is ACCEPTED — with a
+    // `selectedDesignRef` attached to a journey that walks through a screen named by a number.
+    //
+    // The lesson is narrower than "be careful": an argument that an operand cannot matter has to
+    // be about runtime values, and reasoning from a declared type is not that argument. It is the
+    // same mistake as trusting a green `ts-jest` run, which strips types without checking them.
     const off = steps.filter((s) => {
       const t = s?.taskId;
       const w = s?.workspaceId;

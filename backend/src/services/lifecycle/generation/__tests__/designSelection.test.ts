@@ -382,3 +382,64 @@ describe('AMENDMENT 4: every operand of a compound guard is isolated', () => {
       .toEqual([]);
   });
 });
+
+describe('AMENDMENT 4 CORRECTION: both isStr operands are load-bearing at RUNTIME', () => {
+  // These two shipped as "expected survivors" with an argument that was FALSE, and an
+  // independent verifier falsified it by building the input below. The argument was that
+  // `servedBy` being typed `Map<string, Set<string>>` made a non-string key miss it either
+  // way. A type annotation does not constrain runtime keys: the map is populated verbatim
+  // from caller-supplied `chosen.surfaces`, so a surface whose id is a NUMBER puts a number
+  // key in the map, the lookup hits, and dropping the operand flips the answer from refused
+  // to ACCEPTED WITH A REF.
+  //
+  // The bar I had written for declaring a survivor expected was "a concrete argument that no
+  // input can make the operand decide an answer". Reasoning from the declared type is not
+  // that argument, and this is the only place in the run where that hatch was used.
+
+  /** An alternative whose surface carries a bent id, mirrored into the journey step. */
+  const bent = (over: { taskId?: unknown; workspaceId?: unknown }) => {
+    const surface = { taskId: 't-review', workspaceId: 'ws-t-review', workspaceTitle: 'Review',
+      action: 'record the decision', records: [], ...over };
+    const set = {
+      alternatives: [{
+        alternativeId: 'alt-bent',
+        pattern: 'case_workspace',
+        structure: { pattern: 'case_workspace', navigation: [],
+          slots: [{ slotId: 'case', depth: 0, taskIds: ['t-review'], workspaceIds: ['ws-t-review'] }] },
+        surfaces: [surface],
+      }],
+      excluded: [],
+    };
+    const step = { taskId: surface.taskId, workspaceId: surface.workspaceId,
+      action: 'record the decision' };
+    return selectDesign(input({
+      set: set as never,
+      chosenAlternativeId: 'alt-bent',
+      // One hand-built alternative is below MIN_VARIANTS, so without this the sole-structure
+      // rule fires and masks the operand under test. The step ids must be the only variable.
+      soleStructureAcceptance: { rationale: 'one hand-built shape for this control',
+        acceptedBy: 'counsel-lead@example.test', origin: 'owner_recorded' },
+      journeys: JOURNEY_KINDS.map((kind) => ({ kind, status: 'declared', steps: [step] })) as never,
+    }));
+  };
+
+  it('a surface whose taskId is a NUMBER is refused, isolating the first operand', () => {
+    const { selected, issues } = bent({ taskId: 7 });
+    expect(selected).toBeNull();
+    expect([...new Set(codes(issues))]).toEqual(['JOURNEY_STEP_OFF_DESIGN']);
+  });
+
+  it('a surface whose workspaceId is a NUMBER is refused, isolating the second operand', () => {
+    const { selected, issues } = bent({ workspaceId: 42 });
+    expect(selected).toBeNull();
+    expect([...new Set(codes(issues))]).toEqual(['JOURNEY_STEP_OFF_DESIGN']);
+  });
+
+  it('PASSING COUNTERPART: the same shape with both ids as strings is accepted', () => {
+    // Without this the two tests above would also pass against a function that refused every
+    // hand-built alternative, which would prove nothing about either operand.
+    const { selected, issues } = bent({});
+    expect(issues).toEqual([]);
+    expect(selected?.selectedDesignRef).toBe('alt-bent@vc1');
+  });
+});

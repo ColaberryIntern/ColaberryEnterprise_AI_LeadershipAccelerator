@@ -16,6 +16,8 @@
  * not hypothetical: NO fixture in the reference corpus has a rework edge (see `reworkProject`).
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   DESIGN_PATTERNS,
   alternativesDifferMeaningfully,
@@ -348,9 +350,11 @@ describe('malformed input is refused rather than thrown through', () => {
 });
 
 describe('AMENDMENT 4: every operand of the binding filter is isolated', () => {
-  // `b && b.kind === 'workspace' && typeof b.taskId === 'string' && ids.has(b.taskId) && b.ref`
-  // - four operands after the un-isolatable typeof was removed. `b.kind` and
-  // `b.ref` had controls; `b` itself and `ids.has` now have these.
+  // The shipped guard is `b && b.kind === 'workspace' && ids.has(b.taskId) && b.ref` — four
+  // operands. An earlier version of THIS COMMENT quoted a fifth, `typeof b.taskId ===
+  // 'string'`, which the adjacent prose said had been removed: the comment described the
+  // draft rather than the code. `b.kind` and `b.ref` already had controls; `b` itself and
+  // `ids.has` get them here.
   const bound = (bs: unknown[]) => generateDesignAlternatives(manualOnlyProject(), bs as never)
     .alternatives.flatMap((a) => a.structure.slots.flatMap((x) => x.taskIds));
 
@@ -382,5 +386,40 @@ describe('AMENDMENT 4: every operand of the binding filter is isolated', () => {
       .toContain('exception_first');
     expect(generateDesignAlternatives(flat, bs).alternatives.map((a) => a.pattern))
       .not.toContain('exception_first');
+  });
+});
+
+describe('the corpus claim this suite rests on is ASSERTED, not stated', () => {
+  // Amendment 3: no apparatus number in prose unless a test asserts it. Three documents and
+  // this file say the reference corpus has no rework edge, which is why this suite supplies
+  // its own. That is a present-tense claim about two other files, so it is checked here.
+  //
+  // WHEN THIS FAILS, it is probably good news: it means Fixture B finally has the
+  // exception/rework edge its own documented coverage in `reference-fixtures.md` promises.
+  // Then update this test, the register entry, and the "reached ONLY by the rework input"
+  // assertion above — all three describe the same fact.
+  const FIXTURES = ['referenceFixtures.ts', 'manualOnly.ts'] as const;
+
+  it('no transition in either fixture file is flagged is_rework', () => {
+    let transitions = 0;
+    let rework = 0;
+    for (const f of FIXTURES) {
+      const src = readFileSync(join(__dirname, 'fixtures', f), 'utf8');
+      transitions += [...src.matchAll(/is_rework:\s*(true|false)/g)].length;
+      rework += [...src.matchAll(/is_rework:\s*true/g)].length;
+    }
+    // POSITIVE CONTROL on the extraction: a regex matching nothing would report zero rework
+    // edges for the wrong reason, which is the whole failure mode of a grep count.
+    expect(transitions).toBeGreaterThan(0);
+    expect(rework).toBe(0);
+  });
+
+  it('and no ProcessRecord in either fixture declares an exception', () => {
+    for (const f of FIXTURES) {
+      const src = readFileSync(join(__dirname, 'fixtures', f), 'utf8');
+      const decls = [...src.matchAll(/exceptions:\s*\[([^\]]*)\]/g)].map((m) => m[1].trim());
+      expect(decls.length).toBeGreaterThan(0);
+      expect(decls.every((d) => d === '')).toBe(true);
+    }
   });
 });

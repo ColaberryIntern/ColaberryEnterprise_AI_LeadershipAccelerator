@@ -119,6 +119,21 @@ describe('THE P4-T2 CONSUMER: controlSurfaceExists is passed, never inferred', (
     expect(b.open_facts?.join(' ')).toContain('nothing a human can actually operate');
   });
 
+  it('a TRUE predicate with NO showable list at all opens rather than dereferencing it', () => {
+    // THE THIRD OPERAND of the same guard, and a second verifier had to find this one too.
+    // `DesignFacts` makes both fields independently optional, so a caller can legally supply the
+    // predicate and omit the list. Attempt 2 added a control for the FIRST operand and left this
+    // one untested: deleting `f.showableControls &&` survived the suite, because no input ever
+    // reached `.length` on an absent list. Amendment 4 says one control PER OPERAND, and I had
+    // run that sweep over P4-T4's guards while skipping the guard that motivated the amendment.
+    const facts = { ...FULL };
+    delete (facts as Record<string, unknown>).showableControls;
+    expect(() => buildDesignBrief(understanding(), blueprint(), facts)).not.toThrow();
+    const b = buildDesignBrief(understanding(), blueprint(), facts);
+    expect(b.controls).toBeUndefined();
+    expect(b.open_facts).toBeDefined();
+  });
+
   it('a TRUE predicate with an EMPTY showable list still opens rather than claiming controls', () => {
     // Defends against a caller that passes the predicate but forgets the list.
     const b = buildDesignBrief(understanding(), blueprint(), {
