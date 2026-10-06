@@ -175,3 +175,42 @@ describe('the hand-in form offers it', () => {
     expect((container.querySelector('input[type="url"]') as HTMLInputElement).value).toBe('');
   });
 });
+
+/**
+ * What the take actually contains, shown next to it.
+ *
+ * The server decides the wording; the picker's job is to put it where the student
+ * sees it BEFORE choosing, not after a reviewer complains.
+ */
+describe('a take that is missing audio or screen says so', () => {
+  it('shows the server-written warning against that take', async () => {
+    api.get.mockResolvedValue({
+      data: { attempts: [attempt({ hasAudio: false, warnings: ['This recording has no audio track. Nobody reviewing it will hear you.'] })] },
+    });
+    await mountPicker();
+    expect(container.textContent).toContain('no audio track');
+    // Still offered — it is their recording, and hiding it helps nobody.
+    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(1);
+  });
+
+  it('says nothing when the provider did not tell us', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [attempt({ hasAudio: null, warnings: [] })] } });
+    await mountPicker();
+    expect(container.textContent).not.toContain('no audio');
+    expect(container.textContent).not.toContain('no shared screen');
+  });
+
+  // A reviewer must be able to tell a take we captured from one the student
+  // pointed us at. Nobody fetched the second or checked what is on the far end.
+  it('marks a take the student recovered by link', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [attempt({ recoveredFromLink: true })] } });
+    await mountPicker();
+    expect(container.textContent).toContain('your own link, not captured here');
+  });
+
+  it('a take with no warnings field at all still renders', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [attempt()] } });
+    await mountPicker();
+    expect(container.textContent).toContain('Take 2');
+  });
+});

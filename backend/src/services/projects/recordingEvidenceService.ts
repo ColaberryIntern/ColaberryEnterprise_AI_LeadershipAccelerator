@@ -74,6 +74,17 @@ export interface RecordedAttempt {
   parts: number;
   /** Summed across parts; null when no part reported one. */
   durationSeconds: number | null;
+  /**
+   * What the file contains, where the provider told us. NULL IS NOT FALSE — Zoom
+   * does not always say, and "we do not know" must never be shown as "no audio",
+   * which would send someone to re-record a good take.
+   */
+  hasAudio: boolean | null;
+  hasSharedScreen: boolean | null;
+  /** Student-readable warnings; empty when there is nothing to warn about. */
+  warnings: string[];
+  /** True when the student supplied this link because nothing was ever captured. */
+  recoveredFromLink: boolean;
 }
 
 export type RecordingEvidenceResolution =
@@ -94,7 +105,12 @@ const ATTEMPT_SQL = `
          a.started_at,
          a.ended_at,
          COUNT(r.id) FILTER (WHERE r.ingest_status NOT IN ('missing', 'failed')) AS usable_parts,
-         SUM(r.duration_seconds) FILTER (WHERE r.ingest_status NOT IN ('missing', 'failed')) AS duration_seconds
+         SUM(r.duration_seconds) FILTER (WHERE r.ingest_status NOT IN ('missing', 'failed')) AS duration_seconds,
+         -- bool_or is exactly the rule we want across parts: true if ANY part had
+         -- it, false only when every part said no, and NULL when nobody told us.
+         bool_or(r.has_audio) FILTER (WHERE r.ingest_status NOT IN ('missing', 'failed')) AS has_audio,
+         bool_or(r.has_shared_screen) FILTER (WHERE r.ingest_status NOT IN ('missing', 'failed')) AS has_shared_screen,
+         bool_or(r.ingest_provenance = 'student_recovery') FILTER (WHERE r.ingest_status NOT IN ('missing', 'failed')) AS recovered
     FROM presentation_attempts a
     JOIN presentation_assignments s ON s.id = a.assignment_id
     LEFT JOIN presentation_recordings r ON r.attempt_id = a.id
@@ -105,6 +121,10 @@ function toAttempt(row: Record<string, any>): RecordedAttempt {
   const duration = row.duration_seconds === null || row.duration_seconds === undefined
     ? null
     : Number(row.duration_seconds);
+  // A take with no audio, or no shared screen, is still offered — it is the
+  // student's recording and hiding it helps nobody — but it is offered WITH the
+  // warning attached, so handing in a silent video is a choice and not an accident.
+  const contents = describeTakeContents(row.has_audio, row.has_shared_screen);
   return {
     attemptId: String(row.attempt_id),
     attemptNo: Number(row.attempt_no ?? 1),
@@ -114,6 +134,8 @@ function toAttempt(row: Record<string, any>): RecordedAttempt {
     endedAt: row.ended_at ? new Date(row.ended_at).toISOString() : null,
     parts: Number(row.usable_parts ?? 0),
     durationSeconds: Number.isFinite(duration as number) ? (duration as number) : null,
+    ...contents,
+    recoveredFromLink: row.recovered === true,
   };
 }
 
@@ -207,4 +229,32 @@ export async function resolveRecordingEvidence(
       submitted_at: new Date().toISOString(),
     },
   };
+}
+
+/** What a recording actually contains, said plainly rather than implied. */
+export interface TakeContents {
+  hasAudio: boolean | null;
+  hasSharedScreen: boolean | null;
+  /** Student-readable warnings. Empty when there is nothing to warn about. */
+  warnings: string[];
+}
+
+/**
+ * Turn the two capture flags into something a student can act on.
+ *
+ * NULL IS NOT FALSE. Zoom does not always tell us what a file contains, and
+ * "we do not know" must never be reported as "your recording has no audio" —
+ * that would send someone to re-record a perfectly good take. Only an explicit
+ * `false` produces a warning. Pure.
+ */
+export function describeTakeContents(
+  hasAudio: boolean | null | undefined,
+  hasSharedScreen: boolean | null | undefined,
+): TakeContents {
+  const audio = hasAudio === undefined ? null : hasAudio;
+  const screen = hasSharedScreen === undefined ? null : hasSharedScreen;
+  const warnings: string[] = [];
+  if (audio === false) warnings.push('This recording has no audio track. Nobody reviewing it will hear you.');
+  if (screen === false) warnings.push('This recording has no shared screen — it is camera only, so your demo will not be visible.');
+  return { hasAudio: audio, hasSharedScreen: screen, warnings };
 }

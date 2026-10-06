@@ -23,6 +23,8 @@
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/presentation-sessions
  *   POST /api/portal/projects/:projectId/tasks/:storyId/presentation-practice
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/recording-evidence
+ *   POST /api/portal/projects/:projectId/tasks/:storyId/recording-recovery
+ *   POST /api/portal/projects/:projectId/tasks/:storyId/final-take
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
@@ -232,6 +234,53 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/recording-evidence', 
     const r = await listRecordedAttemptsForOwner(eid(req), String(req.params.projectId), String(req.params.storyId));
     if (!r.ok) return res.status(404).json({ error: 'Project not found' });
     res.json({ attempts: r.attempts });
+  } catch (e) { fail(res, e, next); }
+});
+
+// RECOVERY — the recording never arrived, and the student has their own copy.
+//
+// Neither of the two routes below completes a task or pays anything; they change
+// which takes exist and which one counts. Handing a take in is still the evidence
+// POST, which proves the attempt again rather than trusting either of these.
+//
+// 409 rather than 422 for "already recorded": the request was well formed and the
+// state refused it, and a student who sees 'invalid' would go and edit a link that
+// was fine.
+const recoverySchema = z.object({
+  attempt_id: z.string().trim().uuid(),
+  url: z.string().trim().min(1).max(2000),
+}).strict();
+router.post('/api/portal/projects/:projectId/tasks/:storyId/recording-recovery', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const body = recoverySchema.parse(req.body || {});
+    const { recoverMissingRecordingForOwner } = await import('../services/presentation/presentationRecoveryService');
+    const r = await recoverMissingRecordingForOwner(eid(req), String(req.params.projectId), String(req.params.storyId), body.attempt_id, body.url);
+    if (r.ok) return res.json({ recovered: r.recovered });
+    if (r.reason === 'not_found') return res.status(404).json({ error: 'Not found' });
+    if (r.reason === 'already_recorded') {
+      return res.status(409).json({ error: 'There is already a recording for that take. A link cannot replace one we captured.' });
+    }
+    if (r.reason === 'private_link') {
+      return res.status(422).json({ error: 'That link only opens on your own computer. Upload the file to Google Drive or OneDrive and set sharing to "Anyone with the link can view" (or upload it to YouTube as Unlisted), then paste that link.' });
+    }
+    return res.status(422).json({ error: 'A link must be a full http(s) URL.' });
+  } catch (e) { fail(res, e, next); }
+});
+
+// FINAL TAKE — which of several attempts is the one being handed in. Moves a flag
+// and nothing else: every earlier take keeps its recording and stays selectable.
+const finalTakeSchema = z.object({ attempt_id: z.string().trim().uuid() }).strict();
+router.post('/api/portal/projects/:projectId/tasks/:storyId/final-take', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const body = finalTakeSchema.parse(req.body || {});
+    const { selectFinalTakeForOwner } = await import('../services/presentation/presentationRecoveryService');
+    const r = await selectFinalTakeForOwner(eid(req), String(req.params.projectId), String(req.params.storyId), body.attempt_id);
+    if (!r.ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ attempt_id: r.attemptId, previous_final_attempt_id: r.previousFinalAttemptId, takes_kept: r.takesKept });
   } catch (e) { fail(res, e, next); }
 });
 
