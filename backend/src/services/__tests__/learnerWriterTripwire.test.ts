@@ -4,7 +4,6 @@ import {
   enumerateLearnerWriters,
   findWriteSites,
   stripComments,
-  LEARNER_WRITE_LITERALS,
 } from '../../scripts/enumerateFreeAccountConsumers';
 
 /**
@@ -42,6 +41,21 @@ import {
  * `explorerIdentityBridge.ts:122` both contain `enrollment_type: 'explorer'` and
  * neither writes it — the first is the retirement sweep's `where`, the second is
  * the population loader's.
+ *
+ * WHAT THIS GUARD IS, STATED HONESTLY, because three verification rounds found it
+ * narrower than its own description. **It is not a proof that only three files can
+ * write these columns.** It catches the shapes enumerated in the tests below —
+ * object payloads in any quoting, ternaries, spreads, `upsert`, `bulkCreate`,
+ * `findOrCreate` defaults, two-argument `update`, property assignment then `save`,
+ * `setDataValue`, and raw-SQL `SET`/`INSERT` on one line or across lines — and it
+ * **misses a value that is behind a constant** (`tier: TIERS.GUEST`), which would
+ * need type resolution rather than a better pattern. Each of those claims is a test
+ * here, so the description cannot drift from the behaviour without the suite going
+ * red.
+ *
+ * Every earlier version of this docblock overstated the guarantee, and each time a
+ * verifier found a shape the prose had implicitly promised to catch. The guarantee
+ * is now the test list, not a sentence.
  */
 const CANONICAL = 'services/freeAccountRegistration.ts';
 const ALLOW_LISTED = [
@@ -190,6 +204,39 @@ describe('T203 — the scanner can tell a write from a read', () => {
       .toHaveLength(1);
   });
 
+  /**
+   * THE SHAPES THAT SURVIVED THREE ATTEMPTS, because the inversion was applied to
+   * candidate detection and not to the read-subtraction escape hatch. On any line
+   * that also contains `where:`, the scanner reverted to the old narrow literal
+   * list — so these two forms, which are everywhere in this repo (`findOrCreate`
+   * 366 times in non-test backend source, one-line two-arg `update` 32 times), were
+   * invisible. A verifier put all three in a new file and the generator reported
+   * its answer unchanged for the third time running.
+   */
+  it('FINDS a one-line findOrCreate defaults payload — the single most common shape here', () => {
+    expect(findWriteSites(
+      `await Enrollment.findOrCreate({ where: { email }, defaults: { enrollment_type: 'explorer', tier: 'guest' } });`,
+    )).toHaveLength(1);
+  });
+
+  it('FINDS a one-line two-arg update whose payload is a ternary', () => {
+    expect(findWriteSites(
+      `await Enrollment.update({ enrollment_type: isFree ? 'explorer' : 'standard' }, { where: { email } });`,
+    )).toHaveLength(1);
+  });
+
+  it('FINDS a one-line two-arg update whose payload uses a quoted key', () => {
+    expect(findWriteSites(`await Enrollment.update({ 'tier': 'guest' }, { where: { email } });`))
+      .toHaveLength(1);
+  });
+
+  it('and still does NOT count the filter half of those calls', () => {
+    // The whole point: the write half counts, the `where` half does not. If this
+    // started counting, the guard would flag every lookup in the repo.
+    expect(findWriteSites(`await Enrollment.findOrCreate({ where: { enrollment_type: 'explorer' } });`))
+      .toEqual([]);
+  });
+
   it('THE ONE LIMIT THAT REMAINS, measured not assumed: a value behind a constant', () => {
     // `tier: TIERS.GUEST` carries no literal for any regex to find. Asserted so the
     // boundary is visible in the suite rather than only in a comment — an
@@ -209,7 +256,6 @@ describe('T203 — the scanner can tell a write from a read', () => {
   });
 
   it('guards both columns, not just one', () => {
-    expect(LEARNER_WRITE_LITERALS).toHaveLength(2);
     expect(findWriteSites(`  tier: 'guest',`)).toHaveLength(1);
     expect(findWriteSites(`  enrollment_type: 'explorer',`)).toHaveLength(1);
   });

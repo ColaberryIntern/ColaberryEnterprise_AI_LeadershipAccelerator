@@ -14,7 +14,7 @@ import {
  * WHY A TRIPWIRE AND NOT A DOCUMENT. Three revisions of the Phase 2 plan
  * carried a hand-written consumer list and it was short every time — one
  * missing consumer found by the first audit, two more by the second, and a
- * direct count showing 33 files where the plan named 8. The cost of being short
+ * direct count showing 31 non-test files at the phase-1 base where the plan named 8. The cost of being short
  * is an untested behaviour change on a public signup path, so the list is
  * generated and this suite fails when the generated list and the committed one
  * disagree.

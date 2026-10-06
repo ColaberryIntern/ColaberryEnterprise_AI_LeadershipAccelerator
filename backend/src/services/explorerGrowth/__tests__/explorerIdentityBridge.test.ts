@@ -319,4 +319,51 @@ describe('loadActiveExplorers — the population filter (T202b row 5)', () => {
     const include = enrollmentFindAll.mock.calls[0][0].include as Array<{ as: string }>;
     expect(include.map((i) => i.as)).toContain('communityMember');
   });
+
+  /**
+   * T203 acceptance 2, BEHAVIOURALLY — the version the plan asked for and that
+   * three attempts had only ever asserted as a source-string match.
+   *
+   * The whole no-reroute decision rests on one claim: a $50 Open-House deposit
+   * holder is already visible to Explorer Growth, so the deposit path's direct
+   * write does not need routing through the canonical service. The source-text
+   * tests in `learnerWriterTripwire.test.ts` pin the SQL and are bypassable by a
+   * trailing comment; this drives the real function and asserts the person comes
+   * back.
+   */
+  it('a deposit-holding free account IS in the population — the claim the no-reroute decision rests on', async () => {
+    // Exactly what `openHouseCreditService` writes: explorer + guest, unpaid,
+    // placed in the deposit cohort. Nothing about holding a credit excludes it.
+    enrollmentFindAll.mockResolvedValue([
+      {
+        id: ENR_A,
+        email: 'deposit@example.com',
+        enrollment_type: 'explorer',
+        payment_status: 'pending',
+        created_at: new Date('2026-07-16'),
+        communityMember: null,
+      },
+    ]);
+    enrollmentFindByPk.mockResolvedValue({ id: ENR_A, email: 'deposit@example.com' });
+    leadFindOne.mockResolvedValue({ id: 77 });
+
+    const report = await repairAllExplorerBridges();
+
+    expect(report.scanned).toBe(1);
+    expect(report.resolved).toBe(1);
+    expect(profileCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ enrollment_id: ENR_A }),
+    );
+  });
+
+  it('and the loader asks for no credit or deposit join at all, so none can exclude them', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    const args = enrollmentFindAll.mock.calls[0][0] as Record<string, unknown>;
+    // `account_credits` is how a deposit is recorded. If the loader ever joined it,
+    // the revenue roster's `ac.enrollment_id IS NULL` exclusion would become a
+    // journey-visibility exclusion and the deposit path WOULD need rerouting.
+    expect(JSON.stringify(args)).not.toContain('account_credit');
+    expect(JSON.stringify(args)).not.toContain('AccountCredit');
+  });
 });

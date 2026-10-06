@@ -11,7 +11,7 @@
  * the next time someone adds a reader.
  *
  * So the list is generated, committed, and asserted against by a tripwire. A
- * thirty-fourth consumer arriving later is a failed build rather than a silent
+ * consumer arriving later that nobody has classified is a failed build rather than a silent
  * behaviour change on a public signup path.
  *
  * TWO CLASSES, because they need different treatment and conflating them is
@@ -189,9 +189,12 @@ export function enumerateConsumers(): ConsumerRow[] {
  * point: `enrollmentService.ts:163` and `explorerIdentityBridge.ts:122` both
  * contain `enrollment_type: 'explorer'` and neither is a writer — the first is the
  * retirement sweep's `where` clause, the second is the population loader's.
- * Counting those two reads would report **8 sites across 4 files** where there are
- * 6 across 3, and a reviewer who checked the guard once and found it wrong would
- * stop trusting it.
+ * Counting those two reads would report **9 sites across 4 files** where there are
+ * **7 across 3**, and a reviewer who checked the guard once and found it wrong would
+ * stop trusting it. (Both figures were stale here through two verification rounds —
+ * the text said 8 and 6 while the suite asserted 7. A derived number in a comment
+ * goes out of date the moment the derivation improves, which is why the suite, not
+ * this comment, is the authority.)
  *
  * The rule itself is documented on `findWriteSites`, which is the only account of
  * it. An earlier draft of this comment described a different rule — scanning only
@@ -205,15 +208,16 @@ export function enumerateConsumers(): ConsumerRow[] {
  * `tier: 'guest'`, and listing a type declaration as a writer would put noise in
  * an allow-list that is supposed to be read by a human and trusted.
  */
-/**
- * Kept for the consumer scan's own use. **No longer how writers are detected** —
- * see `findWriteSites`, which recognises the column and the value co-occurring in
- * ANY syntax instead of enumerating syntaxes.
+/*
+ * `LEARNER_WRITE_LITERALS` used to live here — the narrow syntax list from the
+ * first three attempts. **Deleted rather than kept**, because it had a comment
+ * saying "No longer how writers are detected" while `writeLiteralOutsideReadSpans`
+ * was still using it on every line containing `where:`. That is how the one-line
+ * `findOrCreate({ where, defaults })` and two-argument `update(payload, { where })`
+ * forms stayed invisible through three verification rounds: the inversion was
+ * applied to detection and not to subtraction, and a reassuring comment covered the
+ * gap. A constant nobody uses cannot drift back into use.
  */
-export const LEARNER_WRITE_LITERALS = [
-  /enrollment_type:\s*['"`]explorer['"`](?!\s*\|)/,
-  /tier:\s*['"`]guest['"`](?!\s*\|)/,
-];
 
 /**
  * Either column's name in an ASSIGNING position, however it is spelled or quoted.
@@ -224,19 +228,19 @@ export const LEARNER_WRITE_LITERALS = [
  * many) counted as a write and the derived set jumped from 6 sites to 19. A
  * comparison reads; only `:` and a lone `=` assign.
  */
-export const LEARNER_COLUMN =
+const LEARNER_COLUMN =
   /(^|[^a-zA-Z_!=<>])['"`]?(enrollment_type|tier)['"`]?\s*(:(?!:)|=(?!=))/;
 /** Either column's free-account value, in any quote style. */
-export const LEARNER_VALUE = /['"`](explorer|guest)['"`]/;
+const LEARNER_VALUE = /['"`](explorer|guest)['"`]/;
 /** A type union — `'guest' | 'member'` — which declares rather than writes. */
-export const LEARNER_UNION = /['"`](explorer|guest|standard|member)['"`]\s*\|/;
+const LEARNER_UNION = /['"`](explorer|guest|standard|member)['"`]\s*\|/;
 
 /**
  * Sequelize's `setDataValue('col', value)`, where the column is a string argument
  * rather than a key, so no `:`/`=` rule can see it. A real API on every model
  * instance, so it gets its own rule rather than a line in the limitations list.
  */
-export const LEARNER_SET_DATA_VALUE =
+const LEARNER_SET_DATA_VALUE =
   /setDataValue\(\s*['"`](enrollment_type|tier)['"`]\s*,\s*['"`](explorer|guest)['"`]/;
 
 /**
@@ -253,8 +257,8 @@ export const LEARNER_SET_DATA_VALUE =
  * `services/paymentSyncService.ts:191` opens `UPDATE enrollments SET` with every
  * assignment on later lines — the exact missed shape, in the same folder.
  */
-export const SQL_WRITE_KEYWORD = /\b(SET|INSERT\s+INTO\s+enrollments|VALUES)\b/i;
-export const SQL_READ_KEYWORD = /\bWHERE\b/i;
+const SQL_WRITE_KEYWORD = /\b(SET|INSERT\s+INTO\s+enrollments|VALUES)\b/i;
+const SQL_READ_KEYWORD = /\bWHERE\b/i;
 
 export interface WriterSite {
   file: string;
@@ -390,9 +394,18 @@ export function findWriteSites(content: string): Omit<WriterSite, 'file'>[] {
     // write. Without this, `WHERE e.enrollment_type = 'explorer'` inside a template
     // literal counted as a write — the roster queries this scanner exists to leave
     // alone.
+    // A `defaults:` payload is the WRITE half of a `findOrCreate`, and it is tested
+    // BEFORE the WHERE-ahead guard below. On a one-line
+    // `findOrCreate({ where: { email }, defaults: { enrollment_type: 'explorer' } })`
+    // the column sits after `where:`, so that guard — added for SQL — was throwing
+    // the write away. `findOrCreate` appears 366 times in non-test backend source,
+    // so this was the single most common shape the guard could miss.
+    const defaultsAt = line.indexOf('defaults:');
+    const defaultsWrite = defaultsAt !== -1 && LEARNER_COLUMN.test(line.slice(defaultsAt));
+
     const whereIdx = line.search(/\bWHERE\b/i);
     const colIdx = line.search(/\b(enrollment_type|tier)\b/);
-    if (whereIdx !== -1 && colIdx > whereIdx) continue;
+    if (!defaultsWrite && whereIdx !== -1 && colIdx > whereIdx) continue;
 
     // An operator object under the column is a FILTER, not a write:
     // `{ enrollment_type: { [Op.ne]: 'explorer' } }` at `cohortService.ts:431` is
@@ -422,17 +435,34 @@ export function findWriteSites(content: string): Omit<WriterSite, 'file'>[] {
 }
 
 /**
- * True when a line carries one of the literals at a position that is not inside
- * that same line's `where: { … }`. Keeps the two-argument update form visible.
+ * True when a line that also carries `where:` nonetheless writes.
+ *
+ * **This was the hole that survived three attempts, and it survived because the
+ * inversion was applied to detection and not to subtraction.** The previous version
+ * looped `LEARNER_WRITE_LITERALS` — the narrow syntax list the rest of the scanner
+ * had stopped using — so on any line containing `where:` the whole thing reverted
+ * to attempt 1's behaviour. Two forms fall in that gap and both are everywhere in
+ * this repo: a one-line `findOrCreate({ where: …, defaults: { … } })`
+ * (`findOrCreate` appears 366 times in non-test backend source) and a one-line
+ * two-argument `update(payload, { where })` (32 occurrences) whenever the payload
+ * uses a quoted key, a ternary or `sequelize.literal`.
+ *
+ * Now it applies the same rule as detection — the column in an assigning position
+ * with its value — and treats a `defaults:` payload as outside the filter, because
+ * that is exactly what it is.
  */
 function writeLiteralOutsideReadSpans(line: string): boolean {
   const whereAt = line.indexOf('where:');
   if (whereAt === -1) return true;
-  for (const re of LEARNER_WRITE_LITERALS) {
-    const m = re.exec(line);
-    if (m && m.index < whereAt) return true;
-  }
-  return false;
+
+  // `defaults: { … }` in a findOrCreate is the WRITE half of that call, wherever it
+  // sits relative to `where:`.
+  const defaultsAt = line.indexOf('defaults:');
+  if (defaultsAt !== -1 && LEARNER_COLUMN.test(line.slice(defaultsAt))) return true;
+
+  // Otherwise: the column, assigning, before the filter.
+  const before = line.slice(0, whereAt);
+  return LEARNER_COLUMN.test(before) && LEARNER_VALUE.test(before);
 }
 
 /** Scan the tree for every file that writes learner-programme semantics. */
