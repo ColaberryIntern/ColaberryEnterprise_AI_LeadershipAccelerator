@@ -233,9 +233,13 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
     // Phase 2 T204: a Zod schema replaces two hand-rolled `if` checks. This route
     // is UNAUTHENTICATED and now accepts caller-supplied URLs, UTM values and a
     // visitor id, which is exactly when CLAUDE.md's Contract Enforcement Layer
-    // applies rather than being a formality. The schema's messages reproduce the
-    // two original strings, so existing clients see no change on the paths they
-    // already exercise.
+    // applies rather than being a formality.
+    //
+    // The two original error strings are preserved, and so is every body the old
+    // code rejected. The endpoint is NARROWER in four named ways — over-long name,
+    // over-long email, unexpected key, non-string/non-number name — all four
+    // enumerated in the schema and asserted in `freeSignupAcquisition.test.ts`.
+    // It is NOT "no change", which is what the first draft of this task claimed.
     const parsed = portalFreeSignupSchema.safeParse(req.body || {});
     if (!parsed.success) {
       // Zod v4: `.issues`, not `.errors`.

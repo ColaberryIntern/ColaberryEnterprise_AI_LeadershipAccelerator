@@ -62,22 +62,79 @@ export type CreateFreeAccountInput = z.infer<typeof createFreeAccountSchema>;
  * Every acquisition field is OPTIONAL. The portal page does not send them today and
  * a signup must never fail because a tracking value was missing: absent means "not
  * known", recorded as null, never a default that would invent attribution.
+ *
+ * WHAT CHANGES FOR EXISTING CALLERS, stated exactly, because the first draft of this
+ * change claimed "existing clients see no change" and that was false.
+ *
+ * The two legacy error STRINGS are preserved, and so is every body the old code
+ * rejected — `{}`, a missing name, a missing or non-string email, an empty name, a
+ * falsy numeric name, a malformed address — each still 400s with the same message it
+ * did before. A numeric name still works, because the old code coerced it.
+ *
+ * But the endpoint is NARROWER in four named ways, and each is a deliberate
+ * tightening of an unauthenticated route rather than an accident:
+ *   1. `full_name` over 255 chars now 400s (the column is STRING(255), so it was
+ *      previously accepted here and then truncated or rejected downstream).
+ *   2. `email` over 255 chars now 400s (the column width, not the RFC's 320).
+ *   3. An unexpected key now 400s instead of being ignored — see `.strict()` below.
+ *   4. `full_name` as a boolean, object or array now 400s. The old code accepted
+ *      `{}` and stored the name "[object Object]".
+ * Each of those four is asserted in `freeSignupAcquisition.test.ts`, so the list
+ * cannot quietly grow.
  */
+const LEGACY_REQUIRED = 'full_name and email are required';
+
 export const portalFreeSignupSchema = z.object({
-  full_name: z.string().trim().min(1, 'full_name and email are required').max(255),
-  email: z.string().trim().email('A valid email is required').max(320),
+  // A union with an explicit error, because the old hand-rolled check accepted a
+  // NUMBER for `full_name` (it called `String(full_name)`) and returned the legacy
+  // message for anything falsy. Both of THOSE behaviours are preserved; the four
+  // narrowings listed above are the deliberate exceptions. 255 matches
+  // `Enrollment.full_name` and `Lead.name`, both `STRING(255)`.
+  full_name: z.union([
+    z.string(),
+    // A NUMBER is accepted because the old code called `String(full_name)`, and a
+    // FALSY number is rejected because the old check was `!full_name` — so `0` was
+    // a 400 before and must stay one, rather than becoming the name "0". Getting
+    // this wrong would have WIDENED a public endpoint while the commit body claimed
+    // nothing changed.
+    z.number().refine((n) => Boolean(n), LEGACY_REQUIRED),
+  ], { error: LEGACY_REQUIRED })
+    .transform((v) => String(v).trim())
+    .refine((s) => s.length > 0, LEGACY_REQUIRED)
+    .refine((s) => s.length <= 255, 'full_name must be 255 characters or fewer'),
+  // 255, NOT the RFC's 320. `Lead.email` and `Enrollment.email` are both
+  // `STRING(255)`, and this is the same defect as the acquisition fields: a schema
+  // wider than its column accepts a value the write then cannot store. I missed it on
+  // the first pass of this fix precisely because I was only checking the NEW fields,
+  // which is why the test derives this width from the model rather than trusting me.
+  email: z.string({ error: LEGACY_REQUIRED })
+    .trim()
+    .min(1, LEGACY_REQUIRED)
+    .email('A valid email is required')
+    .max(255),
 
   // Acquisition evidence, kept SEPARATE from journey ownership: these describe
   // where the person came from, which is a different question from which
   // programme they joined. Origin brand is DERIVED from `source_id` →
   // `LeadSource.brand_id`, so it is never stored twice and cannot disagree with
   // itself.
-  source: z.string().trim().max(120).optional(),
-  form_type: z.string().trim().max(120).optional(),
-  source_id: z.coerce.number().int().positive().optional(),
-  entry_point_id: z.coerce.number().int().positive().optional(),
-  utm_source: z.string().trim().max(255).optional(),
-  utm_campaign: z.string().trim().max(255).optional(),
+  //
+  // EVERY LIMIT HERE MATCHES `models/Lead.ts`, and the first draft of this schema
+  // did not — it disagreed on six of nine fields, which is the most serious defect
+  // of this phase. `source_id` and `entry_point_id` are `DataTypes.UUID`, and the
+  // draft coerced them to positive integers: so the endpoint accepted exactly the
+  // values that can never join to a `LeadSource` row and rejected the only values
+  // that could, making the origin-brand derivation unachievable. And because
+  // `captureGuestAsLead` swallows its errors, a caller supplying `source_id` would
+  // have **lost the whole lead row** — a silent regression on a live public path
+  // where a lead was previously always created. A schema is only as good as its
+  // agreement with the column it writes.
+  source: z.string().trim().max(50).optional(),            // Lead.source      STRING(50)
+  form_type: z.string().trim().max(100).optional(),        // Lead.form_type   STRING(100)
+  source_id: z.string().trim().uuid().optional(),          // Lead.source_id   UUID
+  entry_point_id: z.string().trim().uuid().optional(),     // Lead.entry_point_id UUID
+  utm_source: z.string().trim().max(255).optional(),       // Lead.utm_source  STRING(255)
+  utm_campaign: z.string().trim().max(255).optional(),     // Lead.utm_campaign STRING(255)
   // URLs validated as URLs **and restricted to http/https**.
   //
   // `.url()` alone is not enough, and a test written for this task found it the
@@ -85,14 +142,24 @@ export const portalFreeSignupSchema = z.object({
   // These values are stored, rendered in admin surfaces and pushed to the CRM, so a
   // `javascript:` or `data:` scheme arriving on an unauthenticated endpoint is a
   // stored-XSS vector waiting for somewhere that renders it as a link.
-  page_url: z.string().trim().url('page_url must be a URL').max(2048)
+  // 500, matching `Lead.page_url` STRING(500). The draft allowed 2048, so a long
+  // but legal URL would have been accepted here and then rejected by the column.
+  page_url: z.string().trim().url('page_url must be a URL').max(500)
     .refine((u) => /^https?:\/\//i.test(u), 'page_url must be a URL')
     .optional(),
-  referrer: z.string().trim().url('referrer must be a URL').max(2048)
-    .refine((u) => /^https?:\/\//i.test(u), 'referrer must be a URL')
-    .optional(),
-  // Opaque client-generated id: bounded, not parsed.
-  visitor_id: z.string().trim().max(128).optional(),
+
+  // `referrer` IS NOT ACCEPTED, and that is deliberate rather than an omission.
+  // `Lead` has no `referrer` column — zero matches for `refer` in `models/Lead.ts`
+  // — so the draft's write was dead: Sequelize silently dropped the key and the
+  // test that claimed to assert it was reading the service's own argument object.
+  // The repo's convention for this fact is `referrer_url` on `VisitorSession` —
+  // `models/VisitorSession.ts` is the only model in the tree that carries it. **Preserving a referrer needs a column, and adding one is
+  // T205's mechanism** (the `ALTER TABLE … ADD COLUMN IF NOT EXISTS` drift-guard
+  // list in `server.ts`), so it moves there rather than being half-shipped here.
+
+  // `Lead.visitor_id` is `DataTypes.UUID`, so this is a UUID — not an arbitrary
+  // bounded string, which is what the draft allowed.
+  visitor_id: z.string().trim().uuid().optional(),
 }).strict();
 
 export type PortalFreeSignupInput = z.infer<typeof portalFreeSignupSchema>;

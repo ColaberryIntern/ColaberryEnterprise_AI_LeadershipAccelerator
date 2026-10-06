@@ -44,15 +44,22 @@ export interface FreeSignupInput {
    * `Lead.source_id → LeadSource.brand_id`, so there is no second brand column to
    * disagree with the first.
    */
+  /**
+   * Field types match `models/Lead.ts` exactly, which the first draft did not: the
+   * three ids are **UUID strings**, not numbers, and there is no `referrer` because
+   * `Lead` has no such column. The draft disagreed with the model on six of nine
+   * fields and — because this capture swallows its errors — would have silently
+   * lost the lead row rather than reporting anything. See the schema for the full
+   * account.
+   */
   acquisition?: {
     source?: string;
     form_type?: string;
-    source_id?: number;
-    entry_point_id?: number;
+    source_id?: string;
+    entry_point_id?: string;
     utm_source?: string;
     utm_campaign?: string;
     page_url?: string;
-    referrer?: string;
     visitor_id?: string;
   };
 }
@@ -138,7 +145,9 @@ async function captureGuestAsLead(
         utm_source: acquisition?.utm_source ?? null,
         utm_campaign: acquisition?.utm_campaign ?? null,
         page_url: acquisition?.page_url ?? null,
-        referrer: acquisition?.referrer ?? null,
+        // No `referrer`: `Lead` has no such column, so writing it was a key
+        // Sequelize silently dropped. Preserving a referrer needs a column and
+        // that belongs to T205, which owns the drift-guard list.
         visitor_id: acquisition?.visitor_id ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
       } as any,
