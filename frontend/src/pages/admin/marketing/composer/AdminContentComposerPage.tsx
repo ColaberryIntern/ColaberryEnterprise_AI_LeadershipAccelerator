@@ -478,10 +478,10 @@ export default function AdminContentComposerPage() {
   return (
     <div className="admin-page">
       <PageHeader
-        title={item ? `Composer: ${item.title}` : 'New post'}
+        title={item ? item.title : 'New post'}
         subtitle="Draft once, publish per network - with tracked links, validation and a confirmation you can read."
         icon="quill-pen-line"
-        breadcrumb={[{ label: 'Marketing', to: '/admin/marketing' }, { label: 'Composer' }]}
+        breadcrumb={[{ label: 'Marketing', to: '/admin/marketing' }, { label: 'New post' }]}
         trust={{ level: item ? 'live' : 'unverified', source: 'content', updatedAt: item?.updated_at ?? null, summary: item ? `Revision ${item.revision}, ${item.status.replace(/_/g, ' ')}` : 'Not saved yet' }}
       />
 
