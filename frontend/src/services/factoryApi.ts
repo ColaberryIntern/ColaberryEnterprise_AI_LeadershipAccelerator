@@ -415,14 +415,37 @@ export interface GovQualificationWorkspace {
   /** Advisory "have we pursued this agency before?" — prior active qualifications for the same agency. Suggestion,
    *  never authoritative (agency names are free text); gates nothing. Null when the lookup is unavailable. */
   relationship?: GovRelationship | null;
+  /** The proposal response checklist — one cited slot per established requirement the bid must answer. Each slot
+   *  is read-only `unanswered` today (authoring is a later phase); the citation anchor is the requirement's own
+   *  evidence doc reference. Mirrors the backend `deriveResponseSlots`. */
+  responseSlots?: GovResponseSlot[];
 }
+
+/** One line of the proposal response checklist — cites the requirement it answers; never a fabricated "done". */
+export interface GovResponseSlot {
+  requirementId: string;
+  statement: string;
+  sourceRef: string | null;
+  status: 'unanswered';
+}
+
+/** A procurement code detected in the ZIP, tagged with its code SYSTEM (never assume NAICS). */
+export interface GovDossierCode { system: 'naics' | 'nigp'; code: string; sourceDocument: string }
+
+/** A detected meeting / key-date line. `time`/`timezone` are only present when literally stated — a non-null
+ *  `time` with a null `timezone` means the deadline's zone was NOT stated and must be verified (a missed-by-zone
+ *  deadline loses the bid). Never inferred. */
+export interface GovDossierLine { text: string; date: string | null; time?: string | null; timezone?: string | null; sourceDocument: string }
 
 /** An opportunity dossier detected from the solicitation ZIP — deterministic, source-cited, "detected — verify". */
 export interface GovDossier {
   contacts: { kind: 'email' | 'phone'; value: string; sourceDocument: string }[];
+  /** Legacy bare NAICS strings, retained for compat; `codes` is the forward, system-tagged model. */
   naics: string[];
-  meetings: { text: string; date: string | null; sourceDocument: string }[];
-  keyDates: { text: string; date: string | null; sourceDocument: string }[];
+  /** Every detected procurement code, each tagged with its system (naics | nigp). May be absent on older records. */
+  codes?: GovDossierCode[];
+  meetings: GovDossierLine[];
+  keyDates: GovDossierLine[];
 }
 
 /** Prior pursuits of the same agency — advisory "possible prior work — verify". */

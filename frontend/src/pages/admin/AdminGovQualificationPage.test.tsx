@@ -583,4 +583,71 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(call[0]).toBe(GWS);
     expect(call[1].decision).toBe('approved_bid_pursuit');
   });
+
+  // ── P2-T4: the 7-tab shared workspace shell ──
+  const navTabs = () => Array.from(container.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
+  const tabByLabel = (label: string) => navTabs().find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+
+  it('7-tab shell: renders all seven workspace tabs with Overview active by default', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    const labels = navTabs().map((b) => (b.textContent ?? '').trim());
+    for (const t of ['Overview', 'Proposal', 'Build', 'Documents', 'Dates & Messages', 'Complete Your Submission', 'Outcome & Case Study']) {
+      expect(labels.some((l) => l.includes(t))).toBe(true);
+    }
+    expect(tabByLabel('Overview').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Proposal').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('7-tab shell: the active tab is restored from the URL (?tab=) so a reload keeps your place', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    expect(tabByLabel('Build').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Overview').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('7-tab shell: clicking a tab activates it', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    await act(async () => { tabByLabel('Documents').dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(tabByLabel('Documents').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Overview').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('Proposal tab: renders the response checklist from responseSlots, each citing its requirement source', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      responseSlots: [
+        { requirementId: 'R1', statement: 'Offeror shall register in SAM.', sourceRef: 'SOLICITATION', status: 'unanswered' },
+      ],
+    }));
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Response checklist');
+    expect(text).toContain('Offeror shall register in SAM.');
+    expect(text).toContain('cites SOLICITATION');   // the citation anchor is shown
+    expect(text).toContain('unanswered');            // honest status, never a fabricated "done"
+  });
+
+  it('Dates tab dossier: shows a system-tagged NIGP code and flags a stated time with no zone as "verify tz"', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
+      dossier: {
+        contacts: [], naics: ['541512'],
+        codes: [{ system: 'nigp', code: '920-05', sourceDocument: 'rfp.pdf' }, { system: 'naics', code: '541512', sourceDocument: 'rfp.pdf' }],
+        meetings: [],
+        keyDates: [{ text: 'Proposals are due.', date: '03/15/2026', time: '2:00 PM', timezone: null, sourceDocument: 'rfp.pdf' }],
+      },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=dates`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('nigp');          // the system tag (lowercased in the badge, uppercased via CSS)
+    expect(text).toContain('920-05');        // the normalised NIGP code
+    expect(text).toContain('2:00 PM');       // the captured time
+    expect(text).toContain('verify tz');     // a stated time with no zone is flagged, never assumed local
+  });
 });
