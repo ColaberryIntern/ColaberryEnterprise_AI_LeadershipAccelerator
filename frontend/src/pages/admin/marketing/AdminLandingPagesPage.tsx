@@ -139,7 +139,7 @@ export default function AdminLandingPagesPage() {
         setFeedback('');
         say('success', 'Revised. Read it again before publishing.');
       } else {
-        say('warning', 'The model returned the same page - nothing changed. Name the section and '
+        say('info', 'The model returned the same page - nothing changed. Name the section and '
           + 'what it should say instead. (Images are not something it can add: a human adds those.)');
       }
     } catch (err) { fail(err, 'The revision could not be applied.'); } finally { setBusy(false); }
