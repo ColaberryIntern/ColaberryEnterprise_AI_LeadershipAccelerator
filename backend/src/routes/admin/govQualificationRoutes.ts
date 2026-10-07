@@ -533,7 +533,9 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-re
       id: r.canonicalReqId, text: r.statement, extractedText: r.extractedText,
       sourceDocument: r.sourceDocument, section: r.section, kind: r.kind, priority: r.priority,
     }));
-    res.json({ candidates, fileCount: result.fileCount });
+    // Surface the per-file extraction outcomes so the reviewer sees EVERY file and what happened to it (nothing
+    // silently skipped) — unsupported / unreadable / scanned-PDF / truncated are flagged for manual review.
+    res.json({ candidates, fileCount: result.fileCount, files: result.files });
   } catch (err: any) {
     logFail('gov_qualification_extract_requirements_failed', err, { canonicalOpportunityId: p.data.canonicalOpportunityId });
     res.status(500).json({ error: 'Could not extract requirements from the document.' });

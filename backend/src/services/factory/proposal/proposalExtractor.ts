@@ -16,6 +16,8 @@ const CHARS_PER_FILE = 8000;
 const CHARS_TOTAL = 80000;
 const MAX_REQUIREMENTS = 200;
 const MIN_SENTENCE_LEN = 12;
+/** The file types the extractor can pull text from. Anything else is recorded as 'unsupported', never silently dropped. */
+const SUPPORTED_EXT = new Set(['txt', 'md', 'docx', 'xlsx', 'pdf']);
 /** An obligation keyword marks a sentence as a candidate requirement (what the RFP says you must do/submit). */
 const OBLIGATION = /\b(shall|must|will\s+provide|is\s+required|are\s+required|required\s+to|submit|provide)\b/i;
 
@@ -49,11 +51,28 @@ export interface ExtractedDossier {
   meetings: DossierLine[];
   keyDates: DossierLine[];
 }
+/** Per-file extraction outcome — one row per file in the ZIP, so NOTHING is silently dropped. A reviewer sees
+ *  every file and exactly what happened to it (extracted / empty / unsupported / unreadable / scanned PDF /
+ *  not-read-because-the-budget-filled), plus whether the text was truncated. */
+export type FileExtractStatus =
+  | 'extracted' | 'empty' | 'unsupported' | 'unreadable' | 'image_only_pdf' | 'skipped_budget';
+export interface ExtractedFileOutcome {
+  name: string;
+  status: FileExtractStatus;
+  /** Characters captured (after truncation). 0 for anything not extracted. */
+  chars: number;
+  /** True when the captured text was cut short by the per-file or total char budget. */
+  truncated: boolean;
+  /** Human-readable note; null only for a file cleanly extracted in full. */
+  warning: string | null;
+}
 export interface ProposalExtraction {
   blocks: ExtractedBlock[];
   requirements: ExtractedRequirement[];
   dossier: ExtractedDossier;
   fileCount: number;
+  /** Every file in the ZIP with its extraction outcome — the honesty rail: no file is silently skipped. */
+  files: ExtractedFileOutcome[];
 }
 
 const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
@@ -148,6 +167,7 @@ function sentences(text: string): string[] {
 export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtraction> {
   const blocks: ExtractedBlock[] = [];
   const requirements: ExtractedRequirement[] = [];
+  const files: ExtractedFileOutcome[] = [];
   const seen = new Set<string>();
   let total = 0;
   let reqN = 0;
@@ -157,7 +177,7 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   try {
     entries = new AdmZip(zipBuffer).getEntries().filter((e: any) => !e.isDirectory);
   } catch {
-    return { blocks, requirements, dossier: { contacts: [], naics: [], meetings: [], keyDates: [] }, fileCount: 0 };
+    return { blocks, requirements, dossier: { contacts: [], naics: [], meetings: [], keyDates: [] }, fileCount: 0, files };
   }
   entries.sort((a: any, b: any) => String(a.entryName).localeCompare(String(b.entryName)));
 
@@ -165,10 +185,23 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   let PDFParse: any = null;
 
   for (const entry of entries) {
-    if (total >= CHARS_TOTAL) break;
     const name: string = entry.entryName;
     const ext = (name.split('.').pop() || '').toLowerCase();
+
+    // Record an outcome for EVERY file — never silently skip. Budget-first, then type, then read.
+    if (total >= CHARS_TOTAL) {
+      files.push({ name, status: 'skipped_budget', chars: 0, truncated: false,
+        warning: `Not read: the ${CHARS_TOTAL}-character extraction budget was already reached by earlier files — review this one manually.` });
+      continue;
+    }
+    if (!SUPPORTED_EXT.has(ext)) {
+      files.push({ name, status: 'unsupported', chars: 0, truncated: false,
+        warning: `Unsupported file type (.${ext || 'none'}) — not extracted; review it manually.` });
+      continue;
+    }
+
     let raw = '';
+    let threw = false;
     try {
       if (ext === 'pdf') {
         if (!PDFParse) PDFParse = require('pdf-parse').PDFParse;
@@ -178,14 +211,32 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
         raw = textFromEntry(name, entry.getData());
       }
     } catch {
-      raw = '';
+      threw = true;
     }
-    if (!raw.trim()) continue;
-    fileCount++;
 
+    if (threw) {
+      files.push({ name, status: 'unreadable', chars: 0, truncated: false,
+        warning: 'Could not read this file (corrupt, encrypted, or an unsupported internal format) — review it manually.' });
+      continue;
+    }
+    if (!raw.trim()) {
+      const scanned = ext === 'pdf';
+      files.push({ name, status: scanned ? 'image_only_pdf' : 'empty', chars: 0, truncated: false,
+        warning: scanned
+          ? 'No extractable text (likely a scanned / image-only PDF) — review it manually or run OCR.'
+          : 'No extractable text found in this file — review it manually.' });
+      continue;
+    }
+
+    fileCount++;
     let text = raw.slice(0, CHARS_PER_FILE);
     if (total + text.length > CHARS_TOTAL) text = text.slice(0, Math.max(0, CHARS_TOTAL - total));
+    const truncated = text.length < raw.length;
     total += text.length;
+    files.push({ name, status: 'extracted', chars: text.length, truncated,
+      warning: truncated
+        ? `Only the first ${text.length} characters were extracted (the file is longer) — review the source for anything beyond that.`
+        : null });
 
     const ctxId = `blk-ctx-${slug(name)}`;
     blocks.push({ id: ctxId, locator: name, text, kind: 'context' });
@@ -217,5 +268,5 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     }
   }
 
-  return { blocks, requirements, dossier: extractDossier(blocks), fileCount };
+  return { blocks, requirements, dossier: extractDossier(blocks), fileCount, files };
 }
