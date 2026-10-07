@@ -4,6 +4,7 @@ import { MarketingBrandProvider, useMarketingBrand } from './MarketingBrandConte
 import { ALL_BRANDS } from './brandScope';
 import ConnectionBanner from './ConnectionBanner';
 import { listChannelAccounts, type ChannelAccount } from '../../../services/channelAccountApi';
+import ReportAProblem from './bugReport/ReportAProblem';
 
 /**
  * The frame every Marketing page sits in.
@@ -68,12 +69,29 @@ function ConnectionWatch() {
   return <ConnectionBanner accounts={accounts} brandNames={brandNames} />;
 }
 
+/**
+ * The reporter needs the brand the section is scoped to, which only exists inside the provider -
+ * so it is its own component rather than a line in the shell below.
+ */
+function ReportProblemButton() {
+  const { brandId, brands } = useMarketingBrand();
+  const label = brandId === ALL_BRANDS ? null : (brands.find((b) => b.id === brandId)?.name ?? null);
+  return <ReportAProblem brandLabel={label} />;
+}
+
 export default function MarketingShell() {
   return (
     <MarketingBrandProvider>
       <ConnectionWatch />
       <BrandBar />
       <Outlet />
+      {/*
+        MARKETING ONLY, and mounted here precisely because this is a ROUTE layout: a page is
+        inside it by being routed here, so the button cannot leak onto Revenue, the portal or
+        any other admin screen by somebody forgetting where it belongs. Ali asked for it on
+        "the marketing pages ONLY".
+      */}
+      <ReportProblemButton />
     </MarketingBrandProvider>
   );
 }
