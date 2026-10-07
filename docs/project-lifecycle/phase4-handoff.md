@@ -286,9 +286,18 @@ This is the dependency that matters, and it is not a small one.
    establish it either.
 2. **An orchestrator that calls these validators.** Measured: nothing outside
    `services/lifecycle/generation/` imports any of them, and no route, controller, service or
-   job calls them. They are correct and they are unwired. `controlSurfaceExists()` has no
-   production call site at all, and `validateTaskSurfaces` and `validateWorkspaceStates` are
-   two more — see the register’s accumulating-risk entry.
+   job calls them. They are correct and they are unwired. **THREE** validators have no caller
+   outside their own module and tests — `validateTaskSurfaces`, `validateWorkspaceStates` and
+   `validateControlSpec` — alongside `controlSurfaceExists()`, which has no production call
+   site either. `validateProcess` is the one genuinely wired, into `blueprintGeneration.ts`.
+   Derived, after an earlier version of this list said "two" while §1 of this document already
+   recorded `controlSpecification.ts` at zero importers 290 lines above it:
+
+   ```
+   for v in validateTaskSurfaces validateWorkspaceStates validateControlSpec validateProcess; do
+     grep -rln "$v" --include=*.ts src/ | grep -v __tests__ | grep -v "<its own file>" | wc -l
+   done     # -> 0 0 0 1
+   ```
 3. **A writer for the manifest.** Production never creates an
    `operating_blueprint_manifests` row — it only reads and updates one. Until something writes
    it, `refs_json` is empty, the content hash has nothing to hash, and the §4.1 rule cannot be
@@ -304,6 +313,21 @@ gate anything, and 1 is what lets a human see any of it.
 Full text and reasoning in `carried-forward-obligations.md`. This is the index, so nothing is
 owed by nobody.
 
+**DERIVED, not hand-written** — because "every deferral this phase recorded" is a totality claim
+and this run’s standing rule says such a claim ships with the enumeration that produced it.
+An earlier version of this table was hand-written and silently dropped two owner-bearing
+entries, one of whose owners had already shipped:
+
+```
+grep -n "Owner:" docs/project-lifecycle/carried-forward-obligations.md
+```
+
+That returns eight owner-bearing register entries. Each has a row below; the set difference
+{register owners} \ {rows below} is **empty**. The remaining rows cover deferrals the register
+states without an `Owner:` tag (the Phase 5 pixel deferral, the token-file finding, the size
+residual and the unreproduced flake), so the index is a superset of the tagged entries rather
+than a sample of them.
+
 | deferral | owner | why it is deferred rather than done |
 |---|---|---|
 | Screenshots and real responsive behaviour | **Phase 5** | needs a rendered surface |
@@ -312,7 +336,9 @@ owed by nobody.
 | The `gatherEvidence` stubs the design gate depends on | **Phase 6** | `lifecycleStatus.ts:142` hardcodes `selectedDesignRef: null`, so `design_ready` cannot be reached end to end |
 | Acceptance-evidence rows LC-01…07, LC-13, LC-14 | **Phases 1-3 retroactively, or Phase 8 when it assembles** | writing them now would mean inventing evidence from plans that did not measure it |
 | A stronger LC-08 guarantee ("proves a workflow", not just "a human interacts somewhere") | **Phase 6** | needs the release-level view |
-| `ensureProjectLifecycleSchema.ts` at 426 lines | **the next change to that file** | under the 500 ceiling today; the seam is named in the register |
-| Two unwired gates in `lifecycle/generation/` | **whoever composes the pipeline** | wiring was in no packet; the risk is that it accumulates quietly |
+| `ensureProjectLifecycleSchema.ts` approaching the 500-line ceiling | **the next change to that file** | no line count is quoted here: an earlier version said 426 and **the same commit that wrote it then edited that file**, which is the Amendment 3 trap in miniature. Run `wc -l` on it; the seam is named in the register |
+| THREE unwired validators in `lifecycle/generation/` | **whoever composes the pipeline** | `validateTaskSurfaces`, `validateWorkspaceStates`, `validateControlSpec`; wiring was in no packet, and the risk is that it accumulates quietly. Said "two" until a verifier counted |
+| `SURFACE_ACCEPTANCE_SELF_SUPPLIED` is a marker, not an enforcement | **Phase 6** | `origin` is generator-supplied, and `owner_recorded` names nothing in this repo a reviewer can check it against. Phase 6 persists a manifest an acceptance could be attested against |
+| `unboundProposedSurfaces` is a producer with no consumer | **REASSIGNED to whoever composes the pipeline** | the register named P4-T3 as owner and **P4-T3 shipped without closing it** — measured, zero callers. Reassigned rather than left pointing at a task that is done |
 | Six design-system token pairs below WCAG AA | **whoever owns `tokens.css`** | a finding about the existing design system, not about Phase 4; Phase 4 constrains only itself |
 | A flake seen once under heavy load | **nobody yet** | unreproduced in three runs; recorded with its measurements rather than closed or dismissed |

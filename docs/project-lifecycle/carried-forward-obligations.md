@@ -318,8 +318,11 @@ blast radius.
   An earlier version of this entry said the position set must be derived and that every
   *guarded body* needs a control. Both were overstatements of what was built; the
   correction is above. Full history and measured figures in `plan-phase4.md`.
-- **The combined public export surface of `workspaceMapping` + `workspaceBindingChecks` exceeds
-  CLAUDE.md’s per-module ceiling of 12** (15 and 20). The split that brought both files under
+- **CLOSED by P4-T5: the combined public export surface of `workspaceMapping` +
+  `workspaceBindingChecks`** once exceeded CLAUDE.md’s per-module ceiling of 12 (15 and 20).
+  Now 10 / 10 / 5 across three modules — see the CLOSED section further down. This entry was
+  still phrased as open after the fix landed, which a verifier caught: a register stating the
+  same item as both open and closed is worse than one that omits it. The original text follows. The split that brought both files under
   the 500-line ceiling forced **ten** internal helpers to become exported — the count was
   stated as nine in three places until a verifier caught that this commit had added `label` as
   the twentieth export. None is accidental and all ten are consumed, but the ceiling is
@@ -338,8 +341,10 @@ blast radius.
   calls it and the Phase 4 plan schedules no caller. It ships because the gap it reports is real
   and because auto-binding on a string match would manufacture traceability rather than establish
   it — but a producer nobody reads is a named failure mode here, so it is recorded rather than
-  left to look wired. **Owner: P4-T3**, which carries `task_surfaces` into the design brief and is
-  the natural reader.
+  left to look wired. **Owner: REASSIGNED to whoever composes the generation pipeline.** It was
+  P4-T3, "which carries `task_surfaces` into the design brief and is the natural reader" — and
+  **P4-T3 shipped without closing it.** Measured: zero callers. An owner who has already
+  finished is the same as no owner, which is precisely what this register exists to prevent.
 - **A workspace binding proves interaction, not a chained workflow.** `SURFACE_NO_HUMAN_PATH` and
   the per-task rules together prove a human interacts somewhere; an ingestion task bound to an
   "Imports" admin screen satisfies all of them. Stronger than the measured-unworkable
@@ -587,9 +592,12 @@ actually there:
 - **nothing in production writes `refs_json`**, and the root cause is a level deeper than it
   looks: **production never CREATES a manifest row at all.** `blueprintApproval.ts` only
   `findOne`s one and `update`s it; every `INSERT` into `operating_blueprint_manifests` is in a
-  test, and after P4-T6 there are three of them (`blueprintApproval.test.ts`, the raw-SQL
-  concurrency test, and P4-T6’s own `designPersistence.test.ts`). An earlier version of this
-  line named two and was stale the moment this task added the third;
+  test, and there are exactly **two**: the raw-SQL concurrency test and P4-T6’s own
+  `designPersistence.test.ts`. This line previously said three and named
+  `blueprintApproval.test.ts`, which a verifier showed **inserts nothing** — it `jest.mock`s the
+  model with `{ findOne, update }` and merely sets `refs_json` on an in-memory fixture. Two
+  documents this task was charged with reconciling disagreed, and the policy document was the
+  one that had it right;
 - **no material-vs-cosmetic classifier exists anywhere in `backend/src`**;
 - ~~and the policy it would implement is not written down either~~ — **CLOSED by P4-T7.**
   `approval-and-change-policy.md` said only *"Follows a documented narrower rule"*: a document
@@ -634,24 +642,30 @@ incident whose row should cite the incident and the fix, not a summary written m
 someone reading the plan. **Owner: whoever next touches those phases, or Phase 8 when it
 assembles the table.**
 
-### SIZE RESIDUAL: `ensureProjectLifecycleSchema.ts` is now 426 lines
+### SIZE RESIDUAL: `ensureProjectLifecycleSchema.ts` is approaching the 500-line ceiling
 
 Against CLAUDE.md’s 500-line hard ceiling and a ~300 soft target. P4-T6 added two tables and
-their documentation to a file that was already 326 lines. **The next change to it should split
+their documentation to a file that was already 326 lines. **No current count is quoted here:**
+this entry said 426 and a later commit in the same phase edited the file, so run `wc -l`. A
+verifier caught the stale number, and a line count in prose is the most reliable way to be
+wrong in this repo. **The next change to it should split
 it before adding** — the natural seam is the three assertion lists plus `assertProjectLifecycle
 Schema` on one side and the DDL statement list on the other, which is how the P4-T1 folder was
 eventually arranged. Recorded now rather than discovered at the ceiling, because P4-T1 proved
 that discovering it mid-task costs a split under time pressure.
 
-### ACCUMULATING RISK: the generation folder now holds two unwired gates
+### ACCUMULATING RISK: the generation folder holds THREE unwired validators
 
-Flagged by the P4-T5 verifier and worth carrying forward. `validateTaskSurfaces` (P4-T1) and
-`validateWorkspaceStates` (P4-T5) both have **no production call site** — only their own tests.
+Flagged by the P4-T5 verifier, then **under-counted by me and corrected by the P4-T7 verifier**.
+Three validators have no production call site — only their own tests: `validateTaskSurfaces`
+(P4-T1), `validateWorkspaceStates` (P4-T5) and `validateControlSpec` (P4-T2). Alongside
+`controlSurfaceExists`, `unboundProposedSurfaces`, `consolidationAssessment` and `selectDesign`,
+that is most of what the phase built.
 Their sibling `validateProcess` *is* composed into `blueprintGeneration.ts`, so the pattern is
 available and simply not applied yet.
 
 Neither task claimed otherwise and wiring was in neither packet, so this is not a defect in
 either. But this repo has a named failure mode for exactly this shape — a producer with no
-consumer — and it is now accumulating at two. **Owner: whoever composes the generation
+consumer — and it is accumulating. **Owner: whoever composes the generation
 pipeline.** The question to ask then is not "are these functions correct" but "is anything
 calling them", which is the question nobody asked about `controlSurfaceExists`.

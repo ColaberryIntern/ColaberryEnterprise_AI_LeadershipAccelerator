@@ -86,6 +86,22 @@ as though the question had been settled.
 That is the whole definition. It is deliberately not a list of safe fields and not a judgement
 about whether wording "alters meaning".
 
+#### "Gate" means this enumerable set, and nothing else
+
+The rule turns on the word, so the word needs a referent rather than an intuition. A **gate**
+is an exported function in the lifecycle generation or delivery-design modules that returns
+refusals or a verdict. Derive the current set rather than trusting a list here:
+
+```
+grep -rn "^export function \(validate\|select\|consolidation\|unbound\|render\|controlSurfaceExists\)" \
+  backend/src/services/lifecycle/generation/ backend/src/services/delivery/deliveryDesignLoop.ts
+```
+
+**An earlier version of this section did not define it, and the omission immediately produced a
+false worked example** — see the `workspaceTitle` case below. If a later phase adds a gate, it
+joins the set by being written, and the comparison widens automatically. That is the advantage
+of defining the rule over a derivable set instead of over a list of fields.
+
 #### Why it is defined by re-running the gates rather than by a field list
 
 Three reasons, in order of how much they matter:
@@ -109,9 +125,23 @@ Three reasons, in order of how much they matter:
 - **Default MATERIAL.** A change whose gate verdicts have not been compared is material. The
   unsafe direction must be the one someone has to argue for, not the one you fall into by not
   checking.
-- **A gate that merely requires a field to be non-empty does not make that field material.**
-  Editing `workspaceTitle` from one non-empty string to another cannot change
-  `SURFACE_FIELD_EMPTY`’s verdict, so it is cosmetic. Emptying it is not.
+- **A gate that merely requires a field to be non-empty does not, BY ITSELF, make that field
+  material.** Emptying such a field is material; editing it between two non-empty values
+  cannot change *that* gate’s verdict. But "that gate" is not "every gate", and the rule is an
+  iff over all of them.
+- **The cautionary case, which an earlier version of this section got WRONG.** It said editing
+  `workspaceTitle` from one non-empty string to another "cannot change `SURFACE_FIELD_EMPTY`’s
+  verdict, **so it is cosmetic**". The first clause is true and the conclusion does not follow:
+  `unboundProposedSurfaces` compares `workspaceTitle`, lowercased and trimmed, by **set
+  membership** against the understanding’s `proposed_surfaces`. Rename a workspace and a
+  previously-covered proposed surface becomes unbound — a changed verdict, so the rename is
+  **MATERIAL**. A verifier falsified this by building the input; the next bullet of this very
+  section ("a field any gate COMPARES is material… a set membership") already said so four
+  lines below the example that contradicted it.
+- **A genuinely cosmetic example, measured:** a design decision’s `title`.
+  `grep -n "\.title" backend/src/services/delivery/deliveryDesignLoop.ts` returns nothing — no
+  gate reads it — so editing it cannot change any verdict. That is what cosmetic looks like,
+  and note how much weaker a claim it is than "this field is only used for display".
 - **A field any gate COMPARES is material.** An id, a set membership, a hash input, a
   threshold, an enum member. Renaming `workspaceId` is material even though it looks like a
   label, because bindings and journey steps are matched on it — which is precisely why P4-T4’s
