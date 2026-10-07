@@ -241,6 +241,21 @@ describe('the project-lifecycle DDL is additive-only, bar one permitted ALTER', 
     }
   });
 
+  // RECOVERED. This test was DROPPED when the 528-line file was split: the split moved the
+  // additive describe wholesale and this assertion did not come with it. Found by diffing the
+  // `it(...)` names either side of the split rather than by trusting the total, which had gone
+  // UP - five other names changed in the same change because tests were renamed or divided, so
+  // the count could not have shown a single silent loss.
+  it('foreign keys reference only pre-existing tables or this schema\'s own new tables', () => {
+    const refs = PROJECT_LIFECYCLE_STATEMENTS
+      .join('\n')
+      .match(/REFERENCES\s+(\w+)\s*\(/gi)
+      ?.map((r) => r.replace(/REFERENCES\s+/i, '').replace(/\s*\(/, '').trim()) ?? [];
+    expect(refs.length).toBeGreaterThan(0);
+    const allowed = [...PRE_EXISTING, ...REQUIRED_TABLES];
+    for (const t of refs) expect(allowed).toContain(t);
+  });
+
   it('the one permitted ALTER targets a table this module OWNS', () => {
     for (const sql of PROJECT_LIFECYCLE_STATEMENTS) {
       const m = /ALTER TABLE \s+([a-z_]+)/i.exec(sql);
