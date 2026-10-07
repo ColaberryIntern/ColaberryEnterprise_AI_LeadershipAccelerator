@@ -52,7 +52,10 @@ export function deriveGovBuildPlan(established: any[]): GovBuildPlan {
   const seen = new Set<string>();
   for (const r of rows) {
     if (!r) continue;
-    if (!classifyRequirementTracks(r).includes('solution_build')) continue; // never a story for a non-build requirement
+    // Prefer the requirement's OWN stored tracks (reviewer-set, authoritative — e.g. a ContractRequirement row);
+    // fall back to classifying its text only when no tracks are recorded (e.g. a freshly-established requirement).
+    const tracks = Array.isArray(r.tracks) && r.tracks.length ? r.tracks.map((t: any) => String(t)) : classifyRequirementTracks(r);
+    if (!tracks.includes('solution_build')) continue; // never a story for a non-build requirement
     const requirementId = String(r.id ?? r.canonicalReqId ?? '').trim();
     if (!requirementId || seen.has(requirementId)) continue;
     seen.add(requirementId);

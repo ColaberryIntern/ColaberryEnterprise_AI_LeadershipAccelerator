@@ -12,10 +12,15 @@
  * project (any other class or an archived one resolves to null -> the route answers 404).
  */
 
+import { deriveGovBuildPlan, buildGovStoryPrompt, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
+
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
 }
+/** A student-facing build story — the derived story plus its Claude Code prompt (what the student actually works). */
+export interface StudentGovBuildStory extends GovBuildStory { prompt: string; }
+export interface StudentGovBuildPlan { releases: GovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number; }
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -23,6 +28,8 @@ export interface StudentGovProjectView {
   tracks: StudentGovTrackView[];
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
+  /** The Build-track plan for this project — releases → stories → the prompt the student works from. */
+  build: StudentGovBuildPlan;
 }
 
 /**
@@ -43,6 +50,14 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     tracks: Array.isArray(r?.tracks) ? r.tracks.map((x: any) => String(x)) : [],
     evidenceState: String(r?.evidence_state ?? ''),
   }));
+  // The Build-track plan: derive stories from the requirements' OWN tracks (solution_build only — admin
+  // requirements never become a feature), each enriched with the student's Claude Code prompt. Deterministic.
+  const planBase = deriveGovBuildPlan(reqRows);
+  const build: StudentGovBuildPlan = {
+    releases: planBase.releases,
+    stories: planBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) })),
+    buildStoryCount: planBase.buildStoryCount,
+  };
   return {
     projectId: String(project?.id ?? ''),
     name: String(project?.name ?? ''),
@@ -54,6 +69,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
       proposal: reqRows.filter((r) => r.tracks.includes('proposal')).length,
       build: reqRows.filter((r) => r.tracks.includes('solution_build')).length,
     },
+    build,
   };
 }
 

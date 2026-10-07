@@ -15,6 +15,15 @@ const VIEW = {
   ],
   requirements: [{ canonicalReqId: 'REQ-1', statement: 'Provide a claims search database', priority: 'must', tracks: ['proposal', 'solution_build'], evidenceState: 'unassessed' }],
   requirementCounts: { total: 1, proposal: 1, build: 1 },
+  build: {
+    buildStoryCount: 1,
+    releases: [{ key: 'r0', name: 'Release 0 — initial build', storyIds: ['STORY-REQ-1'] }],
+    stories: [{
+      id: 'STORY-REQ-1', requirementId: 'REQ-1', title: 'Provide a claims search database', release: 'r0', status: 'unassigned',
+      statement: 'Provide a claims search database', acceptance: ['The solution demonstrably satisfies: Provide a claims search database'],
+      prompt: '# STORY-REQ-1\nProvide a claims search database\ntraced back to REQ-1',
+    }],
+  },
 };
 
 let container: HTMLDivElement; let root: Root;
@@ -43,6 +52,18 @@ describe('GovProjectPortalPage (student restricted view)', () => {
     expect(text).toContain('Build project linked');
     expect(text).toContain('Provide a claims search database');
     expect(api.getStudentGovProject).toHaveBeenCalledWith('dp-A');
+  });
+
+  it('P3-T3: shows the build story and reveals its prompt on demand (the student works a real generated prompt)', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue(VIEW);
+    await render();
+    expect(container.textContent ?? '').toContain('Build stories');
+    expect(container.textContent ?? '').toContain('STORY-REQ-1');
+    expect(container.textContent ?? '').not.toContain('traced back to REQ-1'); // prompt hidden until opened
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open the build prompt')) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    await act(async () => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(container.textContent ?? '').toContain('traced back to REQ-1'); // revealed on click
   });
 
   it('shows a "not found" page on a 404 (unassigned project) — never leaks that it exists', async () => {

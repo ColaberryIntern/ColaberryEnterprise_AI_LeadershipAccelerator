@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStudentGovProject, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
+import { getStudentGovProject, type StudentGovProjectView, type StudentGovBuildStory } from '../../../services/govProjectPortalApi';
 
 /**
  * GovProjectPortalPage — the STUDENT view of an assigned government project (restricted shell).
@@ -13,6 +13,30 @@ import { getStudentGovProject, type StudentGovProjectView } from '../../../servi
 
 const TRACK_LABEL: Record<string, string> = { proposal: 'Proposal', solution_build: 'Build' };
 const EVIDENCE_TONE: Record<string, string> = { verified: 'success', unassessed: 'secondary' };
+
+/** One build story for the student: its requirement citation, acceptance, and the Claude Code prompt they run. */
+function StudentBuildStoryRow({ story }: { story: StudentGovBuildStory }): React.ReactElement {
+  const [showPrompt, setShowPrompt] = useState(false);
+  return (
+    <li className="list-group-item">
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+        <span className="badge bg-secondary-subtle text-secondary-emphasis">{story.id}</span>
+        <span className="flex-grow-1 fw-semibold">{story.title}</span>
+        <span className="badge bg-light text-dark border">{story.status}</span>
+        <span className="small text-secondary">from {story.requirementId}</span>
+      </div>
+      <div className="small mb-1">{story.statement}</div>
+      {story.acceptance.length > 0 && (
+        <ul className="small text-secondary mb-1">{story.acceptance.map((a, i) => <li key={i}>{a}</li>)}</ul>
+      )}
+      <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setShowPrompt((v) => !v)} aria-expanded={showPrompt}>
+        <i className={`ri-${showPrompt ? 'arrow-down-s-line' : 'terminal-box-line'} me-1`} aria-hidden="true" />
+        {showPrompt ? 'Hide prompt' : 'Open the build prompt'}
+      </button>
+      {showPrompt && <pre className="small bg-body-secondary rounded p-2 mt-2 mb-0" style={{ whiteSpace: 'pre-wrap' }}>{story.prompt}</pre>}
+    </li>
+  );
+}
 
 export default function GovProjectPortalPage(): React.ReactElement {
   const { projectId = '' } = useParams();
@@ -99,6 +123,26 @@ export default function GovProjectPortalPage(): React.ReactElement {
             </li>
           ))}
         </ul>
+      )}
+
+      <div className="d-flex flex-wrap align-items-baseline gap-2 mb-2 mt-4">
+        <h2 className="h5 mb-0">Build stories</h2>
+        <span className="small text-secondary">{view.build.buildStoryCount} to build — each with a prompt to run</span>
+      </div>
+      {view.build.stories.length === 0 ? (
+        <p className="text-secondary small">No build stories — this project’s requirements are all administrative, so there’s nothing to build here.</p>
+      ) : (
+        view.build.releases.map((rel) => (
+          <div className="mb-3" key={rel.key}>
+            <h3 className="h6 text-uppercase text-secondary small mb-2">{rel.name}</h3>
+            <ul className="list-group">
+              {rel.storyIds.map((sid) => {
+                const s = view.build.stories.find((x) => x.id === sid);
+                return s ? <StudentBuildStoryRow key={sid} story={s} /> : null;
+              })}
+            </ul>
+          </div>
+        ))
       )}
     </div>
   );

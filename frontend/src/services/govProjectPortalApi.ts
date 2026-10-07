@@ -11,6 +11,13 @@ export interface StudentGovTrackView { trackType: string; status: string; hasBui
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
 }
+/** A build story the student works — cites its requirement, carries the Claude Code prompt, honestly unassigned. */
+export interface StudentGovBuildStory {
+  id: string; requirementId: string; title: string; statement: string;
+  release: string; acceptance: string[]; status: 'unassigned'; prompt: string;
+}
+export interface StudentGovBuildRelease { key: string; name: string; storyIds: string[] }
+export interface StudentGovBuildPlan { releases: StudentGovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number }
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -18,6 +25,7 @@ export interface StudentGovProjectView {
   tracks: StudentGovTrackView[];
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
+  build: StudentGovBuildPlan;
 }
 
 export async function getStudentGovProject(projectId: string): Promise<StudentGovProjectView> {
