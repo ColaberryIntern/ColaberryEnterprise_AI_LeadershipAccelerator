@@ -354,6 +354,18 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
       .attach('document', Buffer.from('z'), 'p.zip');
     expect(res.status).toBe(500);
   });
+
+  it('413 on a zip-bomb upload (rejected at the upload boundary, extractor never called)', async () => {
+    const AdmZip = require('adm-zip');
+    const bomb = new AdmZip();
+    bomb.addFile('zeros.bin', Buffer.alloc(2 * 1024 * 1024, 0)); // ~2 MB of zeros -> tiny compressed, huge ratio
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry')
+      .attach('document', bomb.toBuffer(), 'bomb.zip');
+    expect(res.status).toBe(413);
+    expect(res.body.reason).toBe('ratio_too_high');
+    expect(extractProposal).not.toHaveBeenCalled(); // refused before the route body opened it
+  });
 });
 
 describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {

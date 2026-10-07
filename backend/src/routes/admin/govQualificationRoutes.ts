@@ -23,6 +23,7 @@ import { fetchGovOpportunityCandidatesV2 } from '../../services/factory/opportun
 // Gov step 6 — the two-track delivery project, created on approval behind FLAGS.govIngestion (ships dark).
 import { FLAGS } from '../../config/featureFlags';
 import { ensureGovTwoTrackProject } from '../../services/factory/govDeliveryProject';
+import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -415,11 +416,18 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/authorize-
 });
 
 // Manual document review upload: in-memory, 100 MB cap. Multer errors (e.g. size) become a 400, not a 500. The
-// ZIP bytes are hashed server-side and discarded — never stored.
+// ZIP bytes are hashed server-side and discarded — never stored. The 100 MB cap bounds the COMPRESSED bytes, so
+// before any route opens the archive we also verdict it against zip-bomb limits (entry count / declared
+// uncompressed size / compression ratio) and refuse a hostile archive with 413 — see inspectZipSafety.
 const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 function uploadDocumentZip(req: Request, res: Response, next: (err?: any) => void): void {
   documentUpload.single('document')(req as any, res as any, (err: any) => {
     if (err) { res.status(400).json({ error: 'Upload failed (file too large or malformed).' }); return; }
+    const f: any = (req as any).file;
+    if (f && f.buffer) {
+      const verdict = inspectZipSafety(f.buffer);
+      if (!verdict.ok) { res.status(413).json({ error: 'The uploaded archive is unsafe to open (possible zip bomb).', reason: verdict.reason }); return; }
+    }
     next();
   });
 }
