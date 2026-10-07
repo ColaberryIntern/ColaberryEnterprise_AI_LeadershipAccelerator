@@ -130,6 +130,32 @@ describe('the sidebar advertises only what exists', () => {
     built.forEach((p) => expect(advertised).toContain(p));
   });
 
+  it('names each link for what the operator is doing, not for the component behind it', () => {
+    // From Ali's prototype, 2026-10-07. "Composer" and "Content" were the system's words for
+    // itself; somebody arriving to write a post looks for "New post". Pinned because a label is
+    // exactly the kind of thing a later edit reverts to the internal name without noticing.
+    const marketing = NAV_GROUPS.find((g) => g.label === 'Marketing')!;
+    const byPath = Object.fromEntries(marketing.links.map((l) => [l.path, l.label]));
+    expect(byPath['/admin/marketing/composer']).toBe('New post');
+    expect(byPath['/admin/marketing/content']).toBe('All posts');
+    expect(byPath['/admin/marketing/publishing']).toBe('Publishing queue');
+    expect(byPath['/admin/marketing/brands']).toBe('Brands & channels');
+    // The internal names must not come back as labels.
+    expect(marketing.links.map((l) => l.label)).not.toContain('Composer');
+    expect(marketing.links.map((l) => l.label)).not.toContain('Content');
+  });
+
+  it('orders the links the way the work happens', () => {
+    // Write it, see them all, see when, build where it points, watch it go out, read the
+    // result, set it up. Landing pages sits before the queue because you choose a destination
+    // before anything is sent.
+    const marketing = NAV_GROUPS.find((g) => g.label === 'Marketing')!;
+    expect(marketing.links.map((l) => l.label)).toEqual([
+      'Overview', 'New post', 'All posts', 'Calendar',
+      'Landing pages', 'Publishing queue', 'Performance', 'Brands & channels',
+    ]);
+  });
+
   it('groups those links under a Marketing heading, not inside Campaigns', () => {
     const marketing = NAV_GROUPS.find((g) => g.label === 'Marketing');
     expect(marketing).toBeDefined();
