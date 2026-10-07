@@ -591,13 +591,21 @@ actually there:
   concurrency test, and P4-T6’s own `designPersistence.test.ts`). An earlier version of this
   line named two and was stale the moment this task added the third;
 - **no material-vs-cosmetic classifier exists anywhere in `backend/src`**;
-- and the policy it would implement is not written down either:
-  `approval-and-change-policy.md:73` says only *"Follows a documented narrower rule"* — a
-  document shipped in Phase 1 promising a rule it never states.
+- ~~and the policy it would implement is not written down either~~ — **CLOSED by P4-T7.**
+  `approval-and-change-policy.md` said only *"Follows a documented narrower rule"*: a document
+  shipped in Phase 1 promising a rule it never stated. **§4.1 now states it.** Writing it
+  needed neither `refs_json` nor a classifier, which is why it was unbundled from this
+  deferral rather than waiting on it — and a verifier flagged that leaving this bullet as-is
+  would make the register contradict a document in the same commit.
 
 **The three parts, so none of them is forgotten separately:**
 1. Write `refs_json` on the production manifest path.
-2. State the narrower cosmetic-vs-material rule in `approval-and-change-policy.md` §4.
+2. ~~State the narrower cosmetic-vs-material rule~~ — **DONE**, §4.1 (P4-T7). The rule is
+   mechanical: **a change is cosmetic if and only if every gate returns an identical verdict
+   on the old and new revision.** Defined that way rather than as a list of safe fields,
+   because a list goes stale silently the moment a new gate reads a listed field; and rather
+   than as a judgement about "altering meaning", because that is unfalsifiable and is
+   exactly the judgement a motivated author makes in their own favour.
 3. Implement the classifier, and only then assert invalidation.
 
 **What P4-T6 did instead of asserting it:** `blueprint_design_decisions.manifest_content_hash`

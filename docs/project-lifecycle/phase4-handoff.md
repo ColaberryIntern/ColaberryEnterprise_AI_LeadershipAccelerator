@@ -90,6 +90,7 @@ Against a throwaway Postgres 16 container, not against production:
 | model round trip through `BlueprintDesignDecision` / `BlueprintVisualContract` | write and read back, JSONB arrays intact |
 | the partial index, the revision index, and **all three** CHECK constraints | each proven by a write that was **refused**, with the assertion naming the constraint that fired |
 | **every operand of the two compound CHECKs** | one isolating control each; deleting any single conjunct fails exactly one NAMED test |
+| a THIRD operand found afterwards — `acceptable_variance IS NULL` | **removed, not tested.** A Postgres CHECK whose expression evaluates to NULL is SATISFIED, so that disjunct could not change any answer. Amendment 4 category 2. Removal proven behaviour-preserving at 12/12 on a fresh database, NULL-variance insert included |
 
 The negative control is the part worth keeping: without it, "exit 0" only means the script ran.
 
@@ -110,6 +111,18 @@ delete `acceptable_variance >= 0`               11/12  OPERAND 1 of 2 on the var
 delete `acceptable_variance <= 1`               11/12  the variance CHECK refuses a value outside 0..1...
 SURVIVORS: none
 ```
+
+**That table said "SURVIVORS: none" and a verifier then found one.** The variance CHECK had a
+THIRD operand I had not counted — `acceptable_variance IS NULL` — and deleting it left 12/12.
+It is inert rather than untested: a Postgres CHECK whose expression evaluates to NULL is
+satisfied, so a NULL variance passes without that disjunct being there at all. Amendment 4 has
+a category for exactly this and the remedy is deletion, not a test that cannot fail. Removed,
+and the removal is proven behaviour-preserving at 12/12 on a fresh database.
+
+Worth naming the shape: **"every operand" is itself a count**, and I had not enumerated the
+operands before claiming to have covered them all. Two of the three were conjuncts of an `AND`
+and the third was a disjunct of the enclosing `OR`, which is exactly the kind of thing a reader
+skims past.
 
 **Phase 4 does not deploy**, so it cannot run step 2 — which is why step 2 is written as an
 obligation here rather than claimed as done.
@@ -168,3 +181,138 @@ Stated here so the next phase does not inherit a false impression from a passing
 - **Six design-system token pairs fail WCAG AA for normal text**, two of them in the repo's own
   four-state status family. Phase 4 constrains only itself, via an allow-list; the token file
   belongs to whoever owns it, and the finding is in the register.
+
+---
+
+## 7. How to see what Phase 4 produced, if you are not a developer
+
+### Read this first: THERE IS NOTHING TO CLICK
+
+No page, no button, no screen. Phase 4 produced **a set of rules that refuse bad input, and
+two empty database tables.** If you were expecting a demo, the honest answer is that there is
+nothing to demo and inventing one would be the exact failure the phase spent its time
+preventing.
+
+What you *can* do is watch the rules refuse something, which is the only thing they claim to
+do. Each step below is one command and what you should see.
+
+### Step 1 — watch every rule run (about 20 seconds)
+
+From the `backend` folder:
+
+```
+node ../node_modules/jest/bin/jest.js --runInBand --runTestsByPath src/services/lifecycle/generation/__tests__/designSelection.test.ts
+```
+
+You should see `Tests: 53 passed`. Each line is one rule. The names are written to be read —
+for example *"a surface whose taskId is a NUMBER is refused"* and *"PASSING COUNTERPART: the
+same shape with both ids as strings is accepted"*. Those two together are the point: the rule
+refuses the bad case **and** accepts the good one, so it is not just refusing everything.
+
+### Step 2 — break a rule on purpose and watch it complain
+
+This is the step worth doing, because a test that cannot fail proves nothing.
+
+Open `backend/src/services/lifecycle/generation/designSelection.ts`, find the line
+
+```
+  if (count === 0) {
+```
+
+change the `0` to `99`, save, and re-run the command from step 1. Measured, so you can check
+you got the same thing: **`Tests: 3 failed, 50 passed, 53 total`**, and the three that fail are
+
+```
+ALTERNATIVES_NO_STRUCTURE fires
+zero structures refuses on the set alone, before any journey is considered
+an entirely absent input does not throw
+```
+
+**Change it back to `0`** and re-run; all 53 pass again.
+
+What you just proved: the rule about "a design with no options at all must be refused" is
+genuinely being checked, not merely described in a comment.
+
+### Step 3 — see the two tables, and see that they are empty
+
+This one needs a database, so it is for whoever has access to one. The expected answer is
+**zero rows in both** — nothing writes to them until a later phase.
+
+```sql
+SELECT count(*) FROM blueprint_design_decisions;
+SELECT count(*) FROM blueprint_visual_contracts;
+```
+
+Two empty tables is the correct and intended result. They exist so that the next phase has
+somewhere to put a design decision; they are not evidence that anything has been designed.
+
+### Step 4 — the post-deploy check (REQUIRED, and it is §2 of this document)
+
+After the next deploy, somebody must run the command in §2 and confirm it exits 0. **It is not
+optional and it is not a formality.** The code that creates those two tables logs a warning and
+carries on if it fails, so a failed migration leaves the deploy looking completely normal. The
+check in §2 is the only thing that would tell you.
+
+### Step 5 — read what Phase 4 says it did NOT do
+
+§6 of this document. It is short and it is the most useful page here if you are deciding what
+to expect from the next phase.
+
+---
+
+## 8. Phase 4’s contribution to the run handoff, and what Phase 5 must build first
+
+### What Phase 4 contributes
+
+A **checked contract** for the design stage. Concretely: every business task must resolve to a
+workspace action or an explicitly enumerated headless reason; a proposed screen must carry
+a set of named fields or be refused (the list is the WorkspaceRef interface; no count is quoted here because no test asserts one); a workspace must declare an empty, a loading and an error
+state with an accessible label; a manager control that names no enforcement point is `unavailable`
+rather than shown as working; a design decision offers between two and four structurally
+distinct options, or records why there is only one with a named human accepting that; and the
+selection records both the chosen variant and the visual-contract revision.
+
+Plus the persistence for the last of those, and a rule for which later edits invalidate an
+approval (`approval-and-change-policy.md` §4.1).
+
+### What Phase 5 must build before ANY of it is demonstrable
+
+This is the dependency that matters, and it is not a small one.
+
+1. **A rendered surface.** Every "journey" Phase 4 checks is a DECLARED path — a list of
+   (task, workspace, action) steps asserted against a structure. Nothing renders, nothing
+   receives a click. Until there is a surface, "the design can be demonstrated" is a claim no
+   test in this phase can make, and §4.5 of the request says a screenshot alone would not
+   establish it either.
+2. **An orchestrator that calls these validators.** Measured: nothing outside
+   `services/lifecycle/generation/` imports any of them, and no route, controller, service or
+   job calls them. They are correct and they are unwired. `controlSurfaceExists()` has no
+   production call site at all, and `validateTaskSurfaces` and `validateWorkspaceStates` are
+   two more — see the register’s accumulating-risk entry.
+3. **A writer for the manifest.** Production never creates an
+   `operating_blueprint_manifests` row — it only reads and updates one. Until something writes
+   it, `refs_json` is empty, the content hash has nothing to hash, and the §4.1 rule cannot be
+   implemented even though it is now written down.
+
+The order matters: 3 unblocks the approval-invalidation deferral, 2 makes the contract actually
+gate anything, and 1 is what lets a human see any of it.
+
+---
+
+## 9. Every deferral this phase recorded, with its owner
+
+Full text and reasoning in `carried-forward-obligations.md`. This is the index, so nothing is
+owed by nobody.
+
+| deferral | owner | why it is deferred rather than done |
+|---|---|---|
+| Screenshots and real responsive behaviour | **Phase 5** | needs a rendered surface |
+| Whether the running surface enforces its declared permission views | **the phase that builds the routes** | a route-authorisation question; note this repo’s route-auth lint is per FILE, so an unguarded route inside a guarded file passes it |
+| The hash / approval-invalidation binding — 3 parts, one now closed | **the phase that ships a persisted manifest** | nothing writes `refs_json` and no classifier exists; part 2 (stating the rule) is DONE as of §4.1 |
+| The `gatherEvidence` stubs the design gate depends on | **Phase 6** | `lifecycleStatus.ts:142` hardcodes `selectedDesignRef: null`, so `design_ready` cannot be reached end to end |
+| Acceptance-evidence rows LC-01…07, LC-13, LC-14 | **Phases 1-3 retroactively, or Phase 8 when it assembles** | writing them now would mean inventing evidence from plans that did not measure it |
+| A stronger LC-08 guarantee ("proves a workflow", not just "a human interacts somewhere") | **Phase 6** | needs the release-level view |
+| `ensureProjectLifecycleSchema.ts` at 426 lines | **the next change to that file** | under the 500 ceiling today; the seam is named in the register |
+| Two unwired gates in `lifecycle/generation/` | **whoever composes the pipeline** | wiring was in no packet; the risk is that it accumulates quietly |
+| Six design-system token pairs below WCAG AA | **whoever owns `tokens.css`** | a finding about the existing design system, not about Phase 4; Phase 4 constrains only itself |
+| A flake seen once under heavy load | **nobody yet** | unreproduced in three runs; recorded with its measurements rather than closed or dismissed |

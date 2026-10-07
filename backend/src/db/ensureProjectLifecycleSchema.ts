@@ -323,6 +323,14 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
      ON blueprint_design_decisions (tenant_id, manifest_id, tier)
      WHERE status = 'approved'`,
 
+  // NOTE on `ck_visual_contract_variance_fraction` below: there is no
+  // `acceptable_variance IS NULL OR` disjunct, and the absence is deliberate. A Postgres CHECK
+  // whose expression evaluates to NULL is SATISFIED, so a NULL variance passes without being
+  // named. A verifier removed that disjunct and the suite stayed at 12/12 — an operand that
+  // could not change an answer, which Amendment 4 of this run classifies as category 2:
+  // remove it rather than write a test that cannot fail. Nullable remains deliberate (a
+  // contract can exist before its threshold is agreed) and `validateVisualContract` is what
+  // refuses to let a null one gate anything.
   // The Visual Contract a decision was approved against. 4.5 requires the approval record to
   // reference the selected variant AND the contract revision, which is why `revision` is a
   // column here and why it is half of the unique index: a reference that can resolve to two
@@ -344,8 +352,7 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
        jsonb_typeof(required_regions) = 'array' AND jsonb_typeof(required_actions) = 'array'
      ),
      CONSTRAINT ck_visual_contract_variance_fraction CHECK (
-       acceptable_variance IS NULL
-       OR (acceptable_variance >= 0 AND acceptable_variance <= 1)
+       acceptable_variance >= 0 AND acceptable_variance <= 1
      )
    )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_visual_contract_decision_revision
