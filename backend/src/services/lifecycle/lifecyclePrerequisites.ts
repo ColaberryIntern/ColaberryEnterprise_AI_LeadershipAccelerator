@@ -333,9 +333,20 @@ const PREREQUISITES: Readonly<Record<LifecycleStage, Predicate>> = {
     if (e.approval.superseded) {
       gaps.push({ rule: 'approval_superseded', kind: 'unmet', message: 'The approved revision has been superseded.' });
     }
+
+    // EVERY further field read here is guarded. An earlier version of this predicate read
+    // `proposedBy` and `currentManifestRevision` raw, while the commit claimed all thirteen
+    // predicates consulted `assessedFields` — a verifier probed it and found both a permitted
+    // stage and a fabricated refusal. The `approval` early-return above hid it from today’s
+    // reader, which populates nothing; it becomes reachable as soon as fields are added.
+
     // Separation of duty. A null proposer does NOT pass: that is the ceremonial loophole this
     // whole column exists to close, and it is why `proposer_unrecorded` blocks the stage before.
-    if (!e.proposedBy || e.proposedBy === e.approval.approvedBy) {
+    // But UNMEASURED is not the same as null. Claiming 'no proposer recorded' about a field
+    // nobody read is the same fabrication as asserting a graph has no start node unread.
+    if (!e.assessedFields.has('proposedBy')) {
+      gaps.push(unassessed('approval_self_approved', 'The recorded proposer'));
+    } else if (!e.proposedBy || e.proposedBy === e.approval.approvedBy) {
       gaps.push({
         rule: 'approval_self_approved',
         kind: 'unmet',
@@ -344,7 +355,13 @@ const PREREQUISITES: Readonly<Record<LifecycleStage, Predicate>> = {
           : 'No proposer recorded, so the approver cannot be shown to differ from it.',
       });
     }
-    if (e.currentManifestRevision !== null && e.currentManifestRevision !== e.approval.revision) {
+
+    // This one PERMITTED the stage when unassessed, which is the worse direction: the
+    // placeholder is null, `null !== null` is false, so the comparison was skipped and the
+    // stale-revision refusal silently vanished. That refusal is what LC-11 rests on.
+    if (!e.assessedFields.has('currentManifestRevision')) {
+      gaps.push(unassessed('approval_revision_moved', 'The current manifest revision'));
+    } else if (e.currentManifestRevision !== null && e.currentManifestRevision !== e.approval.revision) {
       gaps.push({
         rule: 'approval_revision_moved',
         kind: 'unmet',

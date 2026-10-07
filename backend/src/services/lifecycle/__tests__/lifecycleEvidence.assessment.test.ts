@@ -23,8 +23,13 @@ import {
   ADVISORY_RULES,
   type LifecycleEvidence,
   type EvidenceField,
+  type PrerequisiteGap,
 } from '../lifecyclePrerequisites';
-import { readLifecycleEvidence, ASSESSED_EVIDENCE_FIELDS } from '../lifecycleStatus';
+import {
+  readLifecycleEvidence,
+  ASSESSED_EVIDENCE_FIELDS,
+  EVIDENCE_MEASUREMENTS,
+} from '../lifecycleStatus';
 
 const ROW = {
   id: 'proj-1',
@@ -210,20 +215,31 @@ describe('the read-field set is honest in BOTH directions', () => {
     expect(phantom).toEqual([]);
   });
 
-  it('every field NOT named as assessed is absent from assessedFields', async () => {
-    const stub = await readLifecycleEvidence(ROW);
-    const measurable = Object.keys(stub).filter(
-      (k) => k !== 'tenantId' && k !== 'assessedFields',
-    );
+  it('the assessed set is DERIVED from the measurement map, not hand-written', () => {
+    // THE DEFECT THIS REPLACES. The previous version of this test compared
+    // `ASSESSED_EVIDENCE_FIELDS ∩ Object.keys(stub)` against `[...ASSESSED_EVIDENCE_FIELDS]`
+    // — and `stub.assessedFields` IS `ASSESSED_EVIDENCE_FIELDS`, the same object. So it was
+    // tautological. A verifier set the assessed set to three field names while the reader
+    // still returned `[]` for all three: 811 tests passed. Three fields declared measured
+    // that nobody measured.
+    //
+    // A value-based check cannot close that, because `[]` is a legitimate MEASURED value
+    // meaning "assessed, nothing wrong". So the fix is structural: the set is derived from
+    // the measurement map, and this asserts the derivation holds. Sorted, so a legitimate
+    // addition in T1.3 produces a meaningful failure rather than an order mismatch.
+    expect([...ASSESSED_EVIDENCE_FIELDS].sort()).toEqual(Object.keys(EVIDENCE_MEASUREMENTS).sort());
+  });
 
-    // The keyspace is derived from the object the reader actually returns — the code under
-    // test — not from `LifecycleEvidence`, which is a TypeScript interface and erased at
-    // runtime. The link that forces a newly added field to appear here at all is `tsc`
-    // (TS2739 on the return literal), NOT jest: this suite runs under ts-jest with
-    // `isolatedModules`, so a green run here is not a typecheck. The property is exactly as
-    // strong as the `tsc --noEmit` run recorded alongside this commit, and no stronger.
-    const claimed = measurable.filter((k) => stub.assessedFields.has(k as EvidenceField));
-    expect(claimed).toEqual([...ASSESSED_EVIDENCE_FIELDS]);
+  it('every field claimed as assessed carries the value its measurement returned', async () => {
+    const stub = await readLifecycleEvidence(ROW);
+
+    // Direction 2, order-insensitive: a field in the set must hold the overlay’s output, not
+    // the placeholder. Vacuous while the map is empty — and it CANNOT be vacuously satisfied
+    // by a non-empty map, which is the point.
+    for (const [field, take] of Object.entries(EVIDENCE_MEASUREMENTS)) {
+      expect(ASSESSED_EVIDENCE_FIELDS.has(field as EvidenceField)).toBe(true);
+      expect((stub as unknown as Record<string, unknown>)[field]).toEqual(take!(ROW));
+    }
   });
 
   it('reports a NOT_ASSESSED gap for every stage that reads an unassessed field', async () => {
@@ -239,5 +255,88 @@ describe('the read-field set is honest in BOTH directions', () => {
     }
 
     expect(silent).toEqual([]);
+  });
+});
+
+describe('blueprint_approved guards EVERY field it reads, not just `approval`', () => {
+  /** `approval` measured, one named field deliberately not. */
+  function withhold(field: EvidenceField): LifecycleEvidence {
+    const e = complete();
+    return {
+      ...e,
+      assessedFields: new Set(
+        [...e.assessedFields].filter((f) => f !== field),
+      ) as Set<EvidenceField>,
+    };
+  }
+
+  it('THE SECOND GATE BYPASS: an unassessed currentManifestRevision must not permit the stage', () => {
+    const gaps = prerequisiteGaps('blueprint_approved', withhold('currentManifestRevision'));
+
+    // Attempt 1 read this field raw. The placeholder is null, `null !== null` is false, so
+    // the comparison was skipped and the stage emitted ZERO gaps — it PERMITTED. A verifier
+    // probed it and got `blocking(blueprint_approved) = 0`. The stale-revision refusal that
+    // vanishes here is what LC-11 rests on.
+    expect(blockingGaps(gaps).length).toBeGreaterThan(0);
+    expect(gaps.find((g) => g.rule === 'approval_revision_moved')?.kind).toBe('not_assessed');
+  });
+
+  it('and does not permit it one stage later either, through composition', () => {
+    // `planning`, `building` and `operating` all compose `blueprint_approved`, so the bypass
+    // propagated. The verifier measured `blocking(planning) = 0`.
+    for (const stage of ['planning', 'building', 'operating'] as LifecycleStage[]) {
+      const gaps = prerequisiteGaps(stage, withhold('currentManifestRevision'));
+      expect(blockingGaps(gaps).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('an unassessed proposedBy is NOT_ASSESSED, never a fabricated self-approval claim', () => {
+    const gaps = prerequisiteGaps('blueprint_approved', withhold('proposedBy'));
+    const g = gaps.find((x) => x.rule === 'approval_self_approved');
+
+    // Attempt 1 emitted `kind: unmet` with "No proposer recorded, so the approver cannot be
+    // shown to differ from it" — a measured claim about a field nobody read. Same species as
+    // the `graphHasStart: false` defect this suite exists to prevent.
+    expect(g?.kind).toBe('not_assessed');
+    expect(g?.message).not.toContain('No proposer recorded');
+  });
+
+  it('PASSING COUNTERPART: with both measured, a clean approval yields no gaps', () => {
+    // Without this, the three above would pass against a predicate that refuses everything.
+    expect(prerequisiteGaps('blueprint_approved', complete())).toEqual([]);
+  });
+
+  it('PASSING COUNTERPART: a genuinely moved revision is still UNMET, not not_assessed', () => {
+    const e = complete();
+    const gaps = prerequisiteGaps('blueprint_approved', { ...e, currentManifestRevision: 9 });
+    const g = gaps.find((x) => x.rule === 'approval_revision_moved');
+
+    expect(g?.kind).toBe('unmet');
+    expect(g?.message).toContain('current revision is 9');
+  });
+});
+
+describe('notAssessedGaps actually discriminates', () => {
+  it('excludes unmet gaps from a MIXED list', () => {
+    // A verifier collapsed this function to `filter(() => true)` and 811 tests still passed:
+    // both existing callers passed it lists in which every gap was already not_assessed, so
+    // the discriminating operand was isolated by nothing. Amendment 4 allows two categories
+    // only — tested or removed — and this function has a real consumer in P5-T2, so: tested.
+    const mixed: PrerequisiteGap[] = [
+      { rule: 'graph_no_start', kind: 'not_assessed', message: 'not looked at' },
+      { rule: 'graph_no_end', kind: 'unmet', message: 'measured and missing' },
+      { rule: 'no_requirements', kind: 'unmet', message: 'measured and missing' },
+    ];
+
+    const picked = notAssessedGaps(mixed);
+    expect(picked).toHaveLength(1);
+    expect(picked[0].rule).toBe('graph_no_start');
+  });
+
+  it('returns an empty list when nothing is unassessed', () => {
+    const allUnmet: PrerequisiteGap[] = [
+      { rule: 'graph_no_end', kind: 'unmet', message: 'measured and missing' },
+    ];
+    expect(notAssessedGaps(allUnmet)).toEqual([]);
   });
 });

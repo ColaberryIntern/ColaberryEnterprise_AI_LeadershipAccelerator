@@ -125,7 +125,35 @@ async function loadAndAuthorize(
  *
  * `tenantId` is not listed: it comes off the row itself and is always known.
  */
-export const ASSESSED_EVIDENCE_FIELDS: ReadonlySet<EvidenceField> = new Set<EvidenceField>([]);
+
+/**
+ * THE MEASUREMENTS THIS READER CAN ACTUALLY TAKE, and the single source of the assessed set.
+ *
+ * Empty today. Nothing outside `lifecycle/generation/` imports the validators that would
+ * populate these, and production never writes an `operating_blueprint_manifests` row, so there
+ * is nothing to read. P5-T1.3 and P5-T1.4 add entries here as they add the writer and the
+ * orchestrator.
+ *
+ * WHY A MAP RATHER THAN A HAND-WRITTEN SET. A verifier set the assessed set to three field
+ * names while this function still returned `[]` for all three: 811 tests passed. Three fields
+ * declared measured that nobody measured, and nothing noticed. A value-based assertion cannot
+ * close that, because **`[]` is a legitimate MEASURED value** meaning "assessed, nothing
+ * wrong" — so "declared measured but actually a placeholder" is undecidable from the value.
+ *
+ * Deriving the set from this map makes the two impossible to separate: there is one list, and
+ * a field cannot appear in it without a function that measures it. `Partial` keyed on
+ * `EvidenceField` also means a typo is a compile error rather than a phantom claim.
+ */
+type Measurement = (row: LifecycleRow) => unknown;
+export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> = {};
+
+/**
+ * The fields `readLifecycleEvidence` actually measures. DERIVED from `MEASUREMENTS` above, so
+ * it cannot claim a field no function measures — and declared AFTER it, because `const` is not
+ * hoisted and the reverse order throws on module load rather than at a call site.
+ */
+export const ASSESSED_EVIDENCE_FIELDS: ReadonlySet<EvidenceField> =
+  new Set(Object.keys(EVIDENCE_MEASUREMENTS) as EvidenceField[]);
 
 /**
  * Gather the evidence a prerequisite predicate needs.
@@ -145,7 +173,10 @@ export const ASSESSED_EVIDENCE_FIELDS: ReadonlySet<EvidenceField> = new Set<Evid
  * returns cannot be written against a private function.
  */
 export async function readLifecycleEvidence(row: LifecycleRow): Promise<LifecycleEvidence> {
-  return {
+  // Placeholders for everything unmeasured. Their VALUES carry no meaning — `assessedFields`
+  // is the authority, and a predicate that reads one of these without consulting it is a bug
+  // (one such bug shipped in attempt 1 and a verifier found it in `blueprint_approved`).
+  const base: LifecycleEvidence = {
     assessedFields: ASSESSED_EVIDENCE_FIELDS,
     tenantId: row.tenant_id,
     requirementCount: 0,
@@ -173,6 +204,15 @@ export async function readLifecycleEvidence(row: LifecycleRow): Promise<Lifecycl
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
   };
+
+  // Overlay every real measurement. The loop is over the map, so a field in
+  // `ASSESSED_EVIDENCE_FIELDS` necessarily gets its measured value here — the set and the
+  // overlay cannot disagree, because both come from `MEASUREMENTS`.
+  const measured: Record<string, unknown> = { ...base };
+  for (const [field, take] of Object.entries(EVIDENCE_MEASUREMENTS)) {
+    measured[field] = (take as Measurement)(row);
+  }
+  return measured as unknown as LifecycleEvidence;
 }
 
 export async function readLifecycleStatus(input: {
