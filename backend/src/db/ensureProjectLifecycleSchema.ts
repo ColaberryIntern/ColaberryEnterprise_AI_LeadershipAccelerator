@@ -139,10 +139,14 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
   // ALTER rather than a column in the CREATE above, because `CREATE TABLE IF NOT EXISTS`
   // cannot add a column to a table that already exists — production has this table from
   // Phase 2, so a column declared only in the CREATE would never arrive. `ADD COLUMN IF NOT
-  // EXISTS` is the repo-wide convention for this (53 non-test files under src/db/, 91 with
-  // tests; an earlier version of this comment said 52, measured before this very ALTER was
-  // added) and is both
+  // EXISTS` is the repo-wide convention for this — it is how most files under `src/db/` add
+  // a column, which `grep -rl "ADD COLUMN IF NOT EXISTS" src/db/` counts — and is both
   // additive and idempotent.
+  //
+  // NO FIGURE IS QUOTED HERE, and two earlier versions quoted three between them: 52, then
+  // 53/91. The last went stale on its OWN COMMIT, because that commit added a test file to
+  // the set the number counted. A count that cannot survive the change introducing it does
+  // not belong in a comment; the command does.
   `ALTER TABLE operating_blueprint_manifests
      ADD COLUMN IF NOT EXISTS refs_sha256 VARCHAR(64)`,
 
