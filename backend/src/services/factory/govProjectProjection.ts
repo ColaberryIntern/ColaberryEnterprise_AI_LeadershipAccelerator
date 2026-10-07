@@ -13,13 +13,14 @@
  */
 
 import { deriveGovBuildPlan, buildGovStoryPrompt, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
+import type { EvidenceView } from './govBuildEvidence';
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
 }
-/** A student-facing build story — the derived story plus its Claude Code prompt (what the student actually works). */
-export interface StudentGovBuildStory extends GovBuildStory { prompt: string; }
+/** A student-facing build story — the derived story, its Claude Code prompt, and the student's submitted evidence. */
+export interface StudentGovBuildStory extends GovBuildStory { prompt: string; evidence: EvidenceView[]; }
 export interface StudentGovBuildPlan { releases: GovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number; }
 export interface StudentGovProjectView {
   projectId: string;
@@ -55,7 +56,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
   const planBase = deriveGovBuildPlan(reqRows);
   const build: StudentGovBuildPlan = {
     releases: planBase.releases,
-    stories: planBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) })),
+    stories: planBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s), evidence: [] as EvidenceView[] })),
     buildStoryCount: planBase.buildStoryCount,
   };
   return {
@@ -87,5 +88,16 @@ export async function getStudentGovProjectView(deliveryProjectId: string): Promi
 
   const tracks: any[] = await ContractTrack.findAll({ where: { delivery_project_id: deliveryProjectId } });
   const requirements: any[] = await ContractRequirement.findAll({ where: { delivery_project_id: deliveryProjectId } });
-  return toStudentGovProjectView(project, tracks, requirements);
+  const view = toStudentGovProjectView(project, tracks, requirements);
+  // Attach the student's submitted evidence to each build story (best-effort; never blocks the view).
+  try {
+    const { listBuildStoryEvidence } = await import('./govBuildEvidence');
+    const evidence = await listBuildStoryEvidence(deliveryProjectId);
+    if (evidence.length) {
+      const byStory = new Map<string, EvidenceView[]>();
+      for (const e of evidence) { const list = byStory.get(e.storyId) ?? []; list.push(e); byStory.set(e.storyId, list); }
+      view.build.stories = view.build.stories.map((s) => ({ ...s, evidence: byStory.get(s.id) ?? [] }));
+    }
+  } catch { /* evidence is additive; a failure here never blocks the student view */ }
+  return view;
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStudentGovProject, type StudentGovProjectView, type StudentGovBuildStory } from '../../../services/govProjectPortalApi';
+import { getStudentGovProject, submitBuildStoryEvidence, type StudentGovProjectView, type StudentGovBuildStory } from '../../../services/govProjectPortalApi';
 
 /**
  * GovProjectPortalPage — the STUDENT view of an assigned government project (restricted shell).
@@ -14,9 +14,36 @@ import { getStudentGovProject, type StudentGovProjectView, type StudentGovBuildS
 const TRACK_LABEL: Record<string, string> = { proposal: 'Proposal', solution_build: 'Build' };
 const EVIDENCE_TONE: Record<string, string> = { verified: 'success', unassessed: 'secondary' };
 
-/** One build story for the student: its requirement citation, acceptance, and the Claude Code prompt they run. */
-function StudentBuildStoryRow({ story }: { story: StudentGovBuildStory }): React.ReactElement {
+const BUILD_EVIDENCE_TONE: Record<string, string> = { submitted: 'info', verified: 'success', rejected: 'danger' };
+
+/**
+ * One build story for the student: its requirement citation, acceptance, the Claude Code prompt they run, the
+ * evidence they have submitted, and a hand-in form. Submitting records the evidence as `submitted` — the student
+ * cannot mark it verified (that is a reviewer-only act, enforced server-side).
+ */
+function StudentBuildStoryRow(
+  { story, projectId, onSubmitted }: { story: StudentGovBuildStory; projectId: string; onSubmitted: () => void },
+): React.ReactElement {
   const [showPrompt, setShowPrompt] = useState(false);
+  const [description, setDescription] = useState('');
+  const [artifactRef, setArtifactRef] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!description.trim()) { setError('Add a short description of what you built.'); return; }
+    setBusy(true); setError(null);
+    try {
+      await submitBuildStoryEvidence(projectId, story.id, { canonicalReqId: story.requirementId, description, artifactRef: artifactRef || null });
+      setDescription(''); setArtifactRef('');
+      onSubmitted();
+    } catch {
+      setError('Could not submit your evidence. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <li className="list-group-item">
       <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
@@ -29,11 +56,37 @@ function StudentBuildStoryRow({ story }: { story: StudentGovBuildStory }): React
       {story.acceptance.length > 0 && (
         <ul className="small text-secondary mb-1">{story.acceptance.map((a, i) => <li key={i}>{a}</li>)}</ul>
       )}
-      <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setShowPrompt((v) => !v)} aria-expanded={showPrompt}>
+      <button type="button" className="btn btn-outline-primary btn-sm me-2" onClick={() => setShowPrompt((v) => !v)} aria-expanded={showPrompt}>
         <i className={`ri-${showPrompt ? 'arrow-down-s-line' : 'terminal-box-line'} me-1`} aria-hidden="true" />
         {showPrompt ? 'Hide prompt' : 'Open the build prompt'}
       </button>
       {showPrompt && <pre className="small bg-body-secondary rounded p-2 mt-2 mb-0" style={{ whiteSpace: 'pre-wrap' }}>{story.prompt}</pre>}
+
+      {story.evidence.length > 0 && (
+        <ul className="list-unstyled small mt-2 mb-0">
+          {story.evidence.map((e) => (
+            <li key={e.id} className="d-flex flex-wrap align-items-center gap-2 py-1 border-top">
+              <span className={`badge bg-${BUILD_EVIDENCE_TONE[e.status] ?? 'secondary'}-subtle text-${BUILD_EVIDENCE_TONE[e.status] ?? 'secondary'}-emphasis`}>{e.status}</span>
+              <span className="flex-grow-1">{e.description}</span>
+              {e.artifactRef && <a href={e.artifactRef} target="_blank" rel="noopener noreferrer">artifact</a>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-2">
+        <label className="form-label small mb-1">Hand in your evidence <span className="text-secondary">(a reviewer verifies it — you can’t mark it done yourself)</span></label>
+        <textarea className="form-control form-control-sm mb-1" rows={2} value={description} placeholder="What did you build? How does it meet the requirement?"
+          onChange={(e) => setDescription(e.target.value)} />
+        <div className="d-flex flex-wrap gap-2 align-items-center">
+          <input className="form-control form-control-sm" style={{ maxWidth: 320 }} value={artifactRef} placeholder="link to repo PR / screenshot (optional)"
+            onChange={(e) => setArtifactRef(e.target.value)} />
+          <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void submit()}>
+            <i className="ri-upload-2-line me-1" aria-hidden="true" />{busy ? 'Submitting…' : 'Submit evidence'}
+          </button>
+        </div>
+        {error && <div className="small text-danger mt-1" role="alert">{error}</div>}
+      </div>
     </li>
   );
 }
@@ -138,7 +191,7 @@ export default function GovProjectPortalPage(): React.ReactElement {
             <ul className="list-group">
               {rel.storyIds.map((sid) => {
                 const s = view.build.stories.find((x) => x.id === sid);
-                return s ? <StudentBuildStoryRow key={sid} story={s} /> : null;
+                return s ? <StudentBuildStoryRow key={sid} story={s} projectId={view.projectId} onSubmitted={() => void load()} /> : null;
               })}
             </ul>
           </div>

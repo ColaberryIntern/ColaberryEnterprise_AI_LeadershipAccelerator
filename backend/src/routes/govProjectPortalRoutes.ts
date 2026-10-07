@@ -43,4 +43,45 @@ router.get(
   },
 );
 
+/**
+ * POST /api/portal/gov-projects/:projectId/build-stories/:storyId/evidence — the student's completion HAND-IN for
+ * a Build story. Guarded by requireGovProjectAccess('story.execute'): an assigned associate_builder holds
+ * story.execute, so they may submit; they do NOT hold evidence.verify, so they can never self-verify — the
+ * record is recorded `submitted`, and verification is a separate reviewer-only act. The submitter identity is the
+ * one the guard resolved (req.deliveryContext.platformIdentityId), never a client-supplied value.
+ */
+router.post(
+  '/api/portal/gov-projects/:projectId/build-stories/:storyId/evidence',
+  requireParticipant,
+  requireGovProjectAccess('story.execute'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    const storyId = req.params.storyId;
+    if (typeof projectId !== 'string' || !projectId || typeof storyId !== 'string' || !storyId) {
+      res.status(400).json({ error: 'Project and story ids are required' });
+      return;
+    }
+    const body: any = req.body ?? {};
+    // canonical_req_id comes from the body, or is derived from the STORY-<reqId> id as a fallback.
+    const canonicalReqId = String(body.canonicalReqId ?? (storyId.startsWith('STORY-') ? storyId.slice(6) : '')).trim();
+    const submittedByIdentityId = req.deliveryContext?.platformIdentityId ?? null;
+    if (!submittedByIdentityId) {
+      res.status(401).json({ error: 'No resolvable identity' });
+      return;
+    }
+    const { submitBuildStoryEvidence, EvidenceInputError } = await import('../services/factory/govBuildEvidence');
+    try {
+      const evidence = await submitBuildStoryEvidence({
+        deliveryProjectId: projectId, storyId, canonicalReqId,
+        description: String(body.description ?? ''), artifactRef: body.artifactRef ?? null,
+        submittedByIdentityId,
+      });
+      res.status(201).json({ evidence });
+    } catch (err: any) {
+      if (err instanceof EvidenceInputError) { res.status(400).json({ error: err.message }); return; }
+      res.status(500).json({ error: 'Could not submit the evidence.' });
+    }
+  },
+);
+
 export default router;
