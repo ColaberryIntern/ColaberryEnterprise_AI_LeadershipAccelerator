@@ -202,7 +202,9 @@ export const FACTORY_DECOMPOSITION_JSON_SCHEMA = {
     // NULLABLE, not optional. Strict mode forces them into `required`, so `null` is how a
     // model says "nothing to declare" without being forced to invent rows. An absent
     // allocation is MEANT to be caught downstream by lifecyclePrerequisites.allocation_unknown.
-    // That catch is NOT LIVE YET: lifecycleStatus.ts:144 hardcodes unknownAllocationCount: 0
+    // That catch is NOT LIVE YET: `readLifecycleEvidence` in lifecycleStatus.ts leaves
+    // unknownAllocationCount unassessed (cited by symbol, not line: this comment named a
+    // line that moved one commit later)
     // in gatherEvidence, so the rule cannot fire. T6 wires it, along with the three sibling
     // allocation/accountability evidence fields that are stubbed the same permissive way.
     allocation: { type: ['array', 'null'], items: FACTORY_ALLOCATION_JSON_SCHEMA },

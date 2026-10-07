@@ -113,20 +113,6 @@ async function loadAndAuthorize(
 }
 
 /**
- * The fields `readLifecycleEvidence` actually measures today. **Exported so a test can partition
- * the returned object against it in BOTH directions** — every field outside this set must be
- * reported as not-assessed, and every field inside it must carry a real measurement.
- *
- * It is EMPTY, and that is the honest value. Nothing outside `lifecycle/generation/` imports the
- * validators that would populate these, and production never writes an
- * `operating_blueprint_manifests` row — so there is nothing to read yet. P5-T1.3 and P5-T1.4 add
- * the writer and the orchestrator, and each adds its fields here in the same commit that starts
- * reading them.
- *
- * `tenantId` is not listed: it comes off the row itself and is always known.
- */
-
-/**
  * THE MEASUREMENTS THIS READER CAN ACTUALLY TAKE, and the single source of the assessed set.
  *
  * Empty today. Nothing outside `lifecycle/generation/` imports the validators that would
@@ -148,7 +134,8 @@ type Measurement = (row: LifecycleRow) => unknown;
 export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> = {};
 
 /**
- * The fields `readLifecycleEvidence` actually measures. DERIVED from `MEASUREMENTS` above, so
+ * The fields `readLifecycleEvidence` actually measures, as a module-load snapshot of
+ * `EVIDENCE_MEASUREMENTS`. DERIVED from that map, so
  * it cannot claim a field no function measures — and declared AFTER it, because `const` is not
  * hoisted and the reverse order throws on module load rather than at a call site.
  */
@@ -172,12 +159,43 @@ export const ASSESSED_EVIDENCE_FIELDS: ReadonlySet<EvidenceField> =
  * EXPORTED because it was module-private, and an acceptance criterion that asserts what this
  * returns cannot be written against a private function.
  */
+/**
+ * Overlay real measurements onto the placeholder snapshot, and report EXACTLY what was
+ * measured.
+ *
+ * PURE AND EXPORTED so it can be driven with a NON-EMPTY map. The previous version inlined this
+ * loop inside the reader and the only test for it iterated the real map, which is empty — so the
+ * test body never executed and **deleting the whole loop left 850 of 850 tests green.** A
+ * verifier found it. The comment I had written there claimed it "CANNOT be vacuously satisfied
+ * by a non-empty map", which is a declared expectation, and this run allows two categories
+ * only: tested or removed.
+ *
+ * `assessedFields` is computed FROM THE MAP ARGUMENT, at call time, not read from a module-load
+ * snapshot. That is what makes the wiring isolatable: a test can inject one measurement and
+ * watch both the value and the set change together. With a snapshot, substituting an empty set
+ * was undetectable, because at an empty map the snapshot IS empty.
+ */
+export function applyMeasurements(
+  base: LifecycleEvidence,
+  map: Partial<Record<EvidenceField, Measurement>>,
+  row: LifecycleRow,
+): LifecycleEvidence {
+  const out: Record<string, unknown> = { ...base };
+  for (const [field, take] of Object.entries(map)) {
+    out[field] = (take as Measurement)(row);
+  }
+  out.assessedFields = new Set(Object.keys(map) as EvidenceField[]);
+  return out as unknown as LifecycleEvidence;
+}
+
 export async function readLifecycleEvidence(row: LifecycleRow): Promise<LifecycleEvidence> {
   // Placeholders for everything unmeasured. Their VALUES carry no meaning — `assessedFields`
   // is the authority, and a predicate that reads one of these without consulting it is a bug
   // (one such bug shipped in attempt 1 and a verifier found it in `blueprint_approved`).
   const base: LifecycleEvidence = {
-    assessedFields: ASSESSED_EVIDENCE_FIELDS,
+    // Overwritten by `applyMeasurements` from the map it is handed. An empty set here rather
+    // than the module snapshot, so the two cannot agree by coincidence.
+    assessedFields: new Set<EvidenceField>(),
     tenantId: row.tenant_id,
     requirementCount: 0,
     requirementsWithoutProvenance: [],
@@ -205,14 +223,7 @@ export async function readLifecycleEvidence(row: LifecycleRow): Promise<Lifecycl
     storiesWithoutTraceability: [],
   };
 
-  // Overlay every real measurement. The loop is over the map, so a field in
-  // `ASSESSED_EVIDENCE_FIELDS` necessarily gets its measured value here — the set and the
-  // overlay cannot disagree, because both come from `MEASUREMENTS`.
-  const measured: Record<string, unknown> = { ...base };
-  for (const [field, take] of Object.entries(EVIDENCE_MEASUREMENTS)) {
-    measured[field] = (take as Measurement)(row);
-  }
-  return measured as unknown as LifecycleEvidence;
+  return applyMeasurements(base, EVIDENCE_MEASUREMENTS, row);
 }
 
 export async function readLifecycleStatus(input: {

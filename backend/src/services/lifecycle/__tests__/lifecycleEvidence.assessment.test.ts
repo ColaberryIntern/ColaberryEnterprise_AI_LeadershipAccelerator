@@ -29,6 +29,7 @@ import {
   readLifecycleEvidence,
   ASSESSED_EVIDENCE_FIELDS,
   EVIDENCE_MEASUREMENTS,
+  applyMeasurements,
 } from '../lifecycleStatus';
 
 const ROW = {
@@ -230,16 +231,57 @@ describe('the read-field set is honest in BOTH directions', () => {
     expect([...ASSESSED_EVIDENCE_FIELDS].sort()).toEqual(Object.keys(EVIDENCE_MEASUREMENTS).sort());
   });
 
-  it('every field claimed as assessed carries the value its measurement returned', async () => {
-    const stub = await readLifecycleEvidence(ROW);
+  it('DIRECTION 2, RUN rather than reserved: a measured field holds its measurement', async () => {
+    // THE DEFECT THIS REPLACES. The previous version iterated `EVIDENCE_MEASUREMENTS`, which
+    // is empty, so its body never executed. A verifier then deleted the entire overlay loop
+    // from the reader and **850 of 850 tests still passed.** The comment I had left there
+    // said it "CANNOT be vacuously satisfied by a non-empty map" — a declared expectation,
+    // which Amendment 4 forbids as a third category. An operand is tested or removed.
+    //
+    // So this drives the overlay with a NON-EMPTY map instead of waiting for T1.3 to supply
+    // one. `requirementCount` placeholder is 0; the measurement returns 7.
+    const base = await readLifecycleEvidence(ROW);
+    expect(base.requirementCount).toBe(0);
 
-    // Direction 2, order-insensitive: a field in the set must hold the overlay’s output, not
-    // the placeholder. Vacuous while the map is empty — and it CANNOT be vacuously satisfied
-    // by a non-empty map, which is the point.
-    for (const [field, take] of Object.entries(EVIDENCE_MEASUREMENTS)) {
-      expect(ASSESSED_EVIDENCE_FIELDS.has(field as EvidenceField)).toBe(true);
-      expect((stub as unknown as Record<string, unknown>)[field]).toEqual(take!(ROW));
+    const out = applyMeasurements(base, { requirementCount: () => 7 }, ROW);
+
+    expect(out.requirementCount).toBe(7);
+    expect(out.assessedFields.has('requirementCount')).toBe(true);
+    // And it reports ONLY what the map measured, so the set cannot overstate.
+    expect([...out.assessedFields]).toEqual(['requirementCount']);
+  });
+
+  it('the measurement receives the row, so a measurement can actually read it', () => {
+    const seen: string[] = [];
+    const base = {} as LifecycleEvidence;
+
+    applyMeasurements(base, { requirementCount: (r) => { seen.push(r.tenant_id); return 1; } }, ROW);
+
+    // Without this, a measurement map that ignored its argument would pass everything above.
+    expect(seen).toEqual(['tenant-1']);
+  });
+
+  it('THE READER ROUTES THROUGH THE OVERLAY, not around it', async () => {
+    // This is the test that kills "delete the overlay loop". It injects into the real map, so
+    // a reader that ignores the map returns the placeholder and fails here. Restored in
+    // `finally` so the injection cannot leak into another test.
+    const map = EVIDENCE_MEASUREMENTS as Record<string, (r: typeof ROW) => unknown>;
+    expect(Object.keys(map)).toEqual([]);
+
+    map.requirementCount = () => 42;
+    try {
+      const e = await readLifecycleEvidence(ROW);
+      expect(e.requirementCount).toBe(42);
+      expect(e.assessedFields.has('requirementCount')).toBe(true);
+
+      // And the stage that reads it must now treat it as MEASURED, not not-assessed.
+      const gap = prerequisiteGaps('requirements_ready', e)
+        .find((g) => g.rule === 'no_requirements');
+      expect(gap).toBeUndefined();
+    } finally {
+      delete map.requirementCount;
     }
+    expect(Object.keys(map)).toEqual([]);
   });
 
   it('reports a NOT_ASSESSED gap for every stage that reads an unassessed field', async () => {
