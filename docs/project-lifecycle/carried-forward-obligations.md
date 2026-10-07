@@ -516,7 +516,7 @@ EXPORT count worse, turning one over-ceiling file into two.
 |---|---|---|
 | `workspaceBindingTypes.ts` **(new)** | 158 | **10** |
 | `workspaceBindingChecks.ts` | 325 | **10** (was 20) |
-| `workspaceMapping.ts` | 385 | **5** (was 15) |
+| `workspaceMapping.ts` | 383 | **5** (was 15) |
 | `workspaceStateChecks.ts` **(new, P4-T5)** | 279 | **8** |
 
 The seam needed no invention — the types were already a contiguous block between the imports
@@ -530,12 +530,25 @@ in this repo.
 module rather than widen it), which is worth recording as a pattern: the second time a change
 avoids a rule rather than satisfying it, the rule needs its own change, not a third preamble.
 
-**The trap found while doing it, and it would have been silent.**
-`__tests__/workspaceMapping.test.ts` DERIVES the generator keyspace from the dereference sites
-in a **hand-listed set of filenames**. Moving the vocabulary into a file absent from that list
-would have shrunk the keyspace with nothing failing — the corpus would simply stop reaching
-property names the module still reads. The new file is in the list, and the reason is written
-into its header for whoever moves code out of that folder next.
+**The trap found while doing it — and the first description of it was WRONG.**
+`__tests__/workspaceMapping.test.ts` derives both its generator keyspace and its leaf value
+space from a **hand-listed set of filenames**. The original claim here, and in the shipped
+source header, was that removing the new file from that list would shrink the keyspace "with
+nothing failing". A verifier removed it and ran the suite; so did I:
+
+```
+SOURCES without workspaceBindingTypes.ts  ->  97 of 98 pass
+FAIL: THE LEAF VALUE SPACE IS DERIVED: union literals the code compares against
+```
+
+So the keyspace control alone would NOT have caught it — that test stays green — and the
+leaf-value-space control does, by name, because the union literals moved with the types. **The
+real residual is narrower: a symbol that is neither a key nor a union literal can leave this
+folder and neither control will notice.** Corrected in the source header too, because a false
+counterfactual in shipped guidance tells the next engineer they are safe when they are not.
+
+The lesson is this run’s own rule applied to prose: **a claim about what a check
+would do has to be mutation-proven before it is written.** This one was asserted from reading.
 
 **And the split broke 19 tests before it passed.** `workspaceMapping` *uses*
 `HEADLESS_REASONS` and `SURFACE_CODES`, not merely re-exports them, so moving them out from
@@ -554,3 +567,79 @@ against jest’s 5s default timeout, so a timeout is implausible at normal load.
 observed-once-and-unreproduced with the measurements, rather than claimed fixed or waved away:
 if it recurs, the first thing to know is that no test in these suites is anywhere near the
 timeout, so look at module-compile contention rather than at test logic.
+
+---
+
+## Phase 4 open items (P4-T6): two deferrals, a retroactive gap, and one size residual
+
+### DEFERRED: the hash and approval-invalidation binding — three parts, all missing today
+
+**Owner: the phase that ships a persisted manifest** (Phase 5 or 6, whichever writes
+`refs_json` first).
+
+All three plan-audit cycles carried an item asserting that selecting or revising a design
+changes the blueprint hash predictably and invalidates the right approvals. **No file in any
+task's Files list could have produced that**, and the audit was right to block it. What is
+actually there:
+
+- the hash is `manifestContentHash({tenantId, projectId, revision, refs})` at
+  `blueprintApproval.ts:104-116`, computed over `manifest.refs_json`;
+- **nothing in production writes `refs_json`** — the only writers are
+  `blueprintApproval.test.ts:61` and a raw-SQL concurrency test;
+- **no material-vs-cosmetic classifier exists anywhere in `backend/src`**;
+- and the policy it would implement is not written down either:
+  `approval-and-change-policy.md:73` says only *"Follows a documented narrower rule"* — a
+  document shipped in Phase 1 promising a rule it never states.
+
+**The three parts, so none of them is forgotten separately:**
+1. Write `refs_json` on the production manifest path.
+2. State the narrower cosmetic-vs-material rule in `approval-and-change-policy.md` §4.
+3. Implement the classifier, and only then assert invalidation.
+
+**What P4-T6 did instead of asserting it:** `blueprint_design_decisions.manifest_content_hash`
+RECORDS the hash a decision was taken against. That is what lets the classifier arrive later
+without a backfill. It is deliberately not a claim that invalidation works, and the column
+comment says so.
+
+### DEFERRED: the `gatherEvidence` stubs that the design gate depends on
+
+**Owner: Phase 6**, as already recorded in the Phase 6 section above. P4-T6 adds the specific
+implication rather than a second copy of the obligation: `lifecycleStatus.ts:142` hardcodes
+`selectedDesignRef: null`, so the `design_ready` gate that P4-T4 feeds **cannot be reached
+end to end today**. P4-T4 asserts through the exported `prerequisiteGaps` over a constructed
+`LifecycleEvidence` instead, which is a unit proof of the rule and not of the wiring. Whoever
+closes the stub should expect that distinction to be load-bearing.
+
+### RETROACTIVE GAP: the acceptance-evidence rows owed by Phases 1-3
+
+`acceptance-evidence.md` now exists, created by P4-T6 with the **LC-08 and LC-09 rows only**.
+`execution-contract.md:103` requires all eighteen; **LC-01 to LC-07, LC-13 and LC-14 are owed
+by Phases 1-3 and are not written.**
+
+Recorded rather than backfilled, deliberately. Writing those rows now would mean inventing
+evidence from plans that did not measure it — and LC-13 in particular is a real production
+incident whose row should cite the incident and the fix, not a summary written months later by
+someone reading the plan. **Owner: whoever next touches those phases, or Phase 8 when it
+assembles the table.**
+
+### SIZE RESIDUAL: `ensureProjectLifecycleSchema.ts` is now 426 lines
+
+Against CLAUDE.md’s 500-line hard ceiling and a ~300 soft target. P4-T6 added two tables and
+their documentation to a file that was already 326 lines. **The next change to it should split
+it before adding** — the natural seam is the three assertion lists plus `assertProjectLifecycle
+Schema` on one side and the DDL statement list on the other, which is how the P4-T1 folder was
+eventually arranged. Recorded now rather than discovered at the ceiling, because P4-T1 proved
+that discovering it mid-task costs a split under time pressure.
+
+### ACCUMULATING RISK: the generation folder now holds two unwired gates
+
+Flagged by the P4-T5 verifier and worth carrying forward. `validateTaskSurfaces` (P4-T1) and
+`validateWorkspaceStates` (P4-T5) both have **no production call site** — only their own tests.
+Their sibling `validateProcess` *is* composed into `blueprintGeneration.ts`, so the pattern is
+available and simply not applied yet.
+
+Neither task claimed otherwise and wiring was in neither packet, so this is not a defect in
+either. But this repo has a named failure mode for exactly this shape — a producer with no
+consumer — and it is now accumulating at two. **Owner: whoever composes the generation
+pipeline.** The question to ask then is not "are these functions correct" but "is anything
+calling them", which is the question nobody asked about `controlSurfaceExists`.

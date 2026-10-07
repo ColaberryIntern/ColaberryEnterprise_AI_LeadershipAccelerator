@@ -187,6 +187,70 @@ describe('the invariants the approval ladder depends on', () => {
     expect(others).not.toMatch(/ck_role_map_retained_is_array/i);
     expect(others).not.toMatch(/retained_responsibilities/i);
   });
+  it('binds a design decision to a manifest AND records the hash it was taken against', () => {
+    // The hash is RECORDED, not acted on: nothing in production writes `manifest.refs_json`
+    // and no material-vs-cosmetic classifier exists, so approval invalidation is deferred with
+    // its three parts named in the register. Storing the hash now is what makes the later
+    // classifier possible without a backfill.
+    expect(joined).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_design_decisions/i);
+    expect(joined).toMatch(/manifest_id\s+UUID\s+NOT NULL\s+REFERENCES\s+operating_blueprint_manifests\(id\)/i);
+    expect(joined).toMatch(/manifest_content_hash\s+TEXT\s+NOT NULL/i);
+  });
+
+  it('keeps supersession possible: a self-FK, and the approved index is PARTIAL', () => {
+    // `deliveryDesignLoop` is built on "supersession, never silent overwrite", so many rows
+    // per tier over time is CORRECT. A full unique index on (tenant, manifest, tier) would
+    // forbid that; no index at all would let two rows both claim to be what was agreed. The
+    // WHERE clause is the whole distinction, which is why it is asserted separately.
+    expect(joined).toMatch(/supersedes_decision_id\s+UUID\s+REFERENCES\s+blueprint_design_decisions\(id\)/i);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_design_decision_approved_tier/i);
+    expect(joined).toMatch(/WHERE status = 'approved'/i);
+  });
+
+  it('makes a visual-contract revision resolve to exactly one row', () => {
+    // 4.5 requires the approval record to reference the selected variant AND the contract
+    // revision. A reference that can resolve to two rows is not a reference: Gate 9 would
+    // compare an implementation against whichever row came back first.
+    expect(joined).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_visual_contracts/i);
+    expect(joined).toMatch(/revision\s+INTEGER\s+NOT NULL/i);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_visual_contract_decision_revision/i);
+    expect(joined).toMatch(/ON blueprint_visual_contracts \(tenant_id, decision_id, revision\)/i);
+  });
+
+  it('bounds acceptable_variance to a fraction, because an unbounded one gates nothing', () => {
+    // Outside 0..1 the visual diff passes every screen or fails every screen depending on
+    // which default someone picked — the same refusal `validateVisualContract` makes in
+    // memory. Defence in depth for a value whose corruption is silent.
+    expect(joined).toMatch(/CONSTRAINT ck_visual_contract_variance_fraction CHECK/i);
+    expect(joined).toMatch(/acceptable_variance >= 0 AND acceptable_variance <= 1/i);
+    expect(joined).toMatch(/CONSTRAINT ck_visual_contract_regions_is_array CHECK/i);
+  });
+
+  it('does NOT constrain tier or status in DDL, so the vocabulary has one definition', () => {
+    // An absence asserted on purpose. `DesignTier` and `DesignDecisionStatus` are closed
+    // unions in `deliveryDesignLoop`; an IN (...) list here would be a SECOND definition that
+    // a future change to the union would silently disagree with. Same for an upper bound on
+    // variant_count, where MAX_VARIANTS already lives in exactly one place.
+    const decisions = PROJECT_LIFECYCLE_STATEMENTS
+      .filter((sql) => /blueprint_design_decisions/i.test(sql))
+      .join(' ');
+    expect(decisions).not.toMatch(/tier\s+TEXT[^,]*CHECK/i);
+    expect(decisions).not.toMatch(/status\s+TEXT[^,]*CHECK/i);
+    expect(decisions).not.toMatch(/variant_count[^,]*<=/i);
+    // and the control that this filter found the statements at all
+    expect(decisions).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_design_decisions/i);
+  });
+
+  it('POSITIVE CONTROL: the design assertions are not satisfied by any other table', () => {
+    const others = PROJECT_LIFECYCLE_STATEMENTS
+      .filter((sql) => !/blueprint_design_decisions|blueprint_visual_contracts/i.test(sql))
+      .join(' ');
+    expect(others).not.toMatch(/manifest_content_hash/i);
+    expect(others).not.toMatch(/uq_design_decision_approved_tier/i);
+    expect(others).not.toMatch(/uq_visual_contract_decision_revision/i);
+    expect(others).not.toMatch(/ck_visual_contract_variance_fraction/i);
+  });
+
   it('gives exhausted retries somewhere to land', () => {
     const dl = PROJECT_LIFECYCLE_STATEMENTS.find((s) => /CREATE TABLE IF NOT EXISTS lifecycle_stage_failures/i.test(s))!;
     expect(dl).toMatch(/attempts\s+INTEGER\s+NOT NULL/i);

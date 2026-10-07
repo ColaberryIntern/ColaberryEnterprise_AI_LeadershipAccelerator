@@ -59,6 +59,8 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
   'blueprint_approvals',
   'lifecycle_stage_failures',
   'blueprint_role_map',
+  'blueprint_design_decisions',
+  'blueprint_visual_contracts',
 ];
 
 /**
@@ -84,6 +86,17 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
  *       function can appear twice under different new roles and the old->new mapping stops
  *       being a mapping. Two answers to "what happened to this job" is worse than none,
  *       because a reviewer reads whichever row the query happened to return first.
+ *   uq_design_decision_approved_tier (P4-T6)
+ *       At most one APPROVED design decision per (tenant, manifest, tier). PARTIAL, on
+ *       `status = 'approved'`, which is the whole point: `deliveryDesignLoop` is built on
+ *       "supersession, never silent overwrite", so many rows per tier over time is correct
+ *       and many APPROVED rows is not. A full unique index would forbid supersession; no
+ *       index at all would let two rows both claim to be what was agreed at that tier.
+ *   uq_visual_contract_decision_revision (P4-T6)
+ *       One visual contract per (tenant, decision, revision). 4.5 requires the approval
+ *       record to reference a visual-contract revision, and a reference is only a reference
+ *       if the revision resolves to one row. Two rows at revision 3 means Gate 9 compares an
+ *       implementation against whichever one came back first.
  */
 export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'uq_lifecycle_student_project',
@@ -92,16 +105,37 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'uq_blueprint_manifest_revision_delivery',
   'uq_blueprint_approval_revision',
   'uq_role_map_manifest_function',
+  'uq_design_decision_approved_tier',
+  'uq_visual_contract_decision_revision',
 ];
 
 /**
  * CHECK constraints that make "the two identity tables are not merged" a database invariant
  * rather than a convention someone can forget.
+ *
+ * ## What P4-T6 deliberately does NOT constrain here
+ *
+ * No CHECK on `tier` or `status`. Both are closed unions in
+ * `services/delivery/deliveryDesignLoop.ts` (`DesignTier`, `DesignDecisionStatus`), and an
+ * `IN (...)` list in DDL would be a SECOND definition of the same vocabulary — the thing this
+ * phase keeps removing rather than adding. Same reason there is no upper bound on
+ * `variant_count`: `MAX_VARIANTS` lives in one place and duplicating it in a constraint would
+ * mean a future change to the rule silently disagrees with the database.
+ *
+ * The three new constraints are domain SHAPES rather than policy: a JSONB column that must
+ * hold an array, and a variance that must be a fraction. A fraction outside 0..1 cannot
+ * gate anything — it passes every screen or fails every screen depending on which default
+ * someone picked, which is exactly what `validateVisualContract` refuses in memory. Having it
+ * in both places is defence in depth for a value whose corruption is silent, not a duplicated
+ * rule someone can change.
  */
 export const REQUIRED_CONSTRAINTS: ReadonlyArray<string> = [
   'ck_lifecycle_exactly_one_project',
   'ck_manifest_exactly_one_project',
   'ck_role_map_retained_is_array',
+  'ck_design_decision_dna_is_array',
+  'ck_visual_contract_regions_is_array',
+  'ck_visual_contract_variance_fraction',
 ];
 
 /**
@@ -250,6 +284,72 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
   // first. Scoped by tenant for the same reason every other index here is.
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_role_map_manifest_function
      ON blueprint_role_map (tenant_id, manifest_id, previous_function)`,
+
+  // ─── P4-T6. One governed design decision, bound to the blueprint revision it was taken
+  // against. `DesignDecisionLike` in `deliveryDesignLoop` was written for exactly this shape
+  // and had nowhere to live; `blueprint_role_map` is already in the carried-forward register
+  // as open because a table with no model has no reader, so these two ship with models.
+  //
+  // `manifest_content_hash` is RECORDED, not acted on. The hash is computed today at
+  // `blueprintApproval.ts:104-116`, but nothing in production writes `manifest.refs_json` and
+  // no material-vs-cosmetic classifier exists anywhere in `backend/src` — so the rule "a
+  // design change invalidates the right approvals" cannot be implemented here and is deferred
+  // with its three parts named in the register. Storing the hash is what makes the later
+  // classifier possible without a backfill; claiming the invalidation works would be the
+  // third assertion of a dependency that does not exist.
+  `CREATE TABLE IF NOT EXISTS blueprint_design_decisions (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     manifest_id UUID NOT NULL REFERENCES operating_blueprint_manifests(id) ON DELETE CASCADE,
+     manifest_content_hash TEXT NOT NULL,
+     tier TEXT NOT NULL,
+     title TEXT,
+     status TEXT NOT NULL,
+     variant_count INTEGER NOT NULL DEFAULT 0,
+     approved_variant_id TEXT,
+     selected_design_ref TEXT,
+     rationale TEXT,
+     approved_by_identity_id TEXT,
+     supersedes_decision_id UUID REFERENCES blueprint_design_decisions(id) ON DELETE SET NULL,
+     dna_facets JSONB NOT NULL DEFAULT '[]'::jsonb,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     CONSTRAINT ck_design_decision_dna_is_array CHECK (
+       jsonb_typeof(dna_facets) = 'array'
+     )
+   )`,
+  // PARTIAL on purpose — see REQUIRED_INDEXES. Supersession means many rows per tier over
+  // time; only one of them may be the approved one.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_design_decision_approved_tier
+     ON blueprint_design_decisions (tenant_id, manifest_id, tier)
+     WHERE status = 'approved'`,
+
+  // The Visual Contract a decision was approved against. 4.5 requires the approval record to
+  // reference the selected variant AND the contract revision, which is why `revision` is a
+  // column here and why it is half of the unique index: a reference that can resolve to two
+  // rows is not a reference.
+  `CREATE TABLE IF NOT EXISTS blueprint_visual_contracts (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     decision_id UUID NOT NULL REFERENCES blueprint_design_decisions(id) ON DELETE CASCADE,
+     revision INTEGER NOT NULL,
+     required_regions JSONB NOT NULL DEFAULT '[]'::jsonb,
+     required_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+     hierarchy TEXT,
+     responsive_rules JSONB,
+     accessibility_rules JSONB,
+     reference_snapshot_ref TEXT,
+     acceptable_variance NUMERIC,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     CONSTRAINT ck_visual_contract_regions_is_array CHECK (
+       jsonb_typeof(required_regions) = 'array' AND jsonb_typeof(required_actions) = 'array'
+     ),
+     CONSTRAINT ck_visual_contract_variance_fraction CHECK (
+       acceptable_variance IS NULL
+       OR (acceptable_variance >= 0 AND acceptable_variance <= 1)
+     )
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_visual_contract_decision_revision
+     ON blueprint_visual_contracts (tenant_id, decision_id, revision)`,
 ];
 
 export async function ensureProjectLifecycleSchema(): Promise<void> {

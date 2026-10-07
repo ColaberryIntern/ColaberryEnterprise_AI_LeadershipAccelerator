@@ -22,11 +22,19 @@
  *
  * ## One thing to know before you move anything else out of this folder
  *
- * `__tests__/workspaceMapping.test.ts` DERIVES the generator keyspace from the dereference
- * sites in these source files, and it reads a hand-listed set of filenames. Moving a type out
- * of a listed file and into an unlisted one shrinks that keyspace **silently** — the corpus
- * stops reaching property names the module still reads, and the suite stays green. This file is
- * in that list for exactly that reason.
+ * `__tests__/workspaceMapping.test.ts` DERIVES both its generator keyspace and its leaf value
+ * space from a **hand-listed set of filenames**, and this file is in that list. Take it out and
+ * the suite does NOT stay green — measured, after an earlier version of this comment claimed it
+ * would:
+ *
+ *   SOURCES without workspaceBindingTypes.ts  ->  97 of 98 pass
+ *   the failure is THE LEAF VALUE SPACE IS DERIVED: union literals the code compares against
+ *
+ * So the keyspace control alone would NOT catch it — that test stays green — and the
+ * leaf-value-space control does, by name, because the union literals moved here with the types.
+ * **If you move something out of this folder that is neither a key nor a union literal, neither
+ * control will notice.** That is the real residual risk, and it is narrower and more useful than
+ * the "silently, nothing fails" version this comment used to carry.
  */
 
 
