@@ -166,3 +166,60 @@ describe('extractProposal — per-file outcome (the honesty rail: no silent loss
     expect((await extractProposal(Buffer.from('not a zip at all'))).files).toEqual([]);
   });
 });
+
+describe('extractProposal — structured office docs (the requirements-matrix path)', () => {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  /** A minimal real .xlsx (inline strings, one sheet) carrying the given rows. */
+  function xlsxBuffer(rows: string[][]): Buffer {
+    const sheetData = rows
+      .map((cells) => `<row>${cells.map((c) => `<c t="inlineStr"><is><t>${esc(c)}</t></is></c>`).join('')}</row>`)
+      .join('');
+    const z = new AdmZip();
+    z.addFile('xl/worksheets/sheet1.xml', Buffer.from(`<worksheet><sheetData>${sheetData}</sheetData></worksheet>`, 'utf8'));
+    return z.toBuffer();
+  }
+  /** A minimal real .docx carrying one table with the given rows. */
+  function docxBuffer(rows: string[][]): Buffer {
+    const trs = rows
+      .map((cells) => `<w:tr>${cells.map((c) => `<w:tc><w:p><w:r><w:t>${esc(c)}</w:t></w:r></w:p></w:tc>`).join('')}</w:tr>`)
+      .join('');
+    const z = new AdmZip();
+    z.addFile('word/document.xml', Buffer.from(`<w:document><w:body><w:tbl>${trs}</w:tbl></w:body></w:document>`, 'utf8'));
+    return z.toBuffer();
+  }
+  /** Outer solicitation zip from a map of name -> pre-built file buffer. */
+  function makeZipBin(files: Record<string, Buffer>): Buffer {
+    const zip = new AdmZip();
+    for (const [name, buf] of Object.entries(files)) zip.addFile(name, buf);
+    return zip.toBuffer();
+  }
+
+  it('pulls an obligation out of an .xlsx requirements ROW (a cell, not the old flat string dump)', async () => {
+    const zip = makeZipBin({
+      'requirements.xlsx': xlsxBuffer([
+        ['ID', 'Requirement'],
+        ['R1', 'The vendor shall provide a reporting dashboard.'],
+        ['R2', 'This column is just a note with nothing to do.'],
+      ]),
+    });
+    const { requirements, files, fileCount } = await extractProposal(zip);
+    expect(requirements.some((r) => r.extractedText.includes('shall provide a reporting dashboard'))).toBe(true);
+    expect(requirements.some((r) => r.extractedText.includes('nothing to do'))).toBe(false); // non-obligation row dropped
+    expect(files.find((f) => f.name === 'requirements.xlsx')!.status).toBe('extracted');
+    expect(fileCount).toBe(1);
+  });
+
+  it('pulls an obligation out of a .docx TABLE row (cells kept distinct, not run together)', async () => {
+    const zip = makeZipBin({
+      'compliance.docx': docxBuffer([
+        ['Requirement', 'Response'],
+        ['The offeror must submit three past-performance references.', 'Comply'],
+      ]),
+    });
+    const { requirements, blocks, files } = await extractProposal(zip);
+    expect(requirements.some((r) => r.extractedText.includes('must submit three past-performance references'))).toBe(true);
+    // the two cells of the header row did NOT fuse into one token (structure preserved)
+    expect(blocks.some((b) => b.text.includes('RequirementResponse'))).toBe(false);
+    expect(files.find((f) => f.name === 'compliance.docx')!.status).toBe('extracted');
+  });
+});
