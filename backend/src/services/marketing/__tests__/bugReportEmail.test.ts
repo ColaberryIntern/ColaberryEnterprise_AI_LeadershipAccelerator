@@ -169,3 +169,39 @@ describe('the screenshot becomes a real attachment, not an inline data URI', () 
     expect(decodeScreenshot(ok)).not.toBeNull();
   });
 });
+
+describe('who the report is sent to', () => {
+  /**
+   * These settings sit in a JSONB column, so the value can arrive parsed, as an array, or still
+   * wearing its JSON quotes. The last case is the dangerous one: `"ali@colaberry.com` contains an
+   * `@`, passes a naive check, and is simply never delivered to - a bug reporter would get
+   * "sent!" for a report nobody receives.
+   */
+  const { parseRecipients } = require('../../../routes/admin/marketingBugReportRoutes');
+
+  it('reads a plain comma-separated string', () => {
+    expect(parseRecipients('ali@colaberry.com,ram@colaberry.com'))
+      .toEqual(['ali@colaberry.com', 'ram@colaberry.com']);
+  });
+
+  it('strips JSON quotes rather than mailing a malformed address', () => {
+    expect(parseRecipients('"ali@colaberry.com,ram@colaberry.com"'))
+      .toEqual(['ali@colaberry.com', 'ram@colaberry.com']);
+  });
+
+  it('accepts an array, which is what a JSONB list would parse to', () => {
+    expect(parseRecipients(['ali@colaberry.com', 'ram@colaberry.com']))
+      .toEqual(['ali@colaberry.com', 'ram@colaberry.com']);
+  });
+
+  it('tolerates semicolons, spaces and newlines between addresses', () => {
+    expect(parseRecipients('ali@colaberry.com; ram@colaberry.com\n sohail@colaberry.com'))
+      .toHaveLength(3);
+  });
+
+  it.each([null, undefined, '', '   ', '[]', 'not-an-email', '@nope', 'a@b'])(
+    'returns nothing for %p rather than a junk recipient', (value) => {
+      expect(parseRecipients(value)).toEqual([]);
+    },
+  );
+});

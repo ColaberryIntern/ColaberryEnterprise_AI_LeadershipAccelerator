@@ -58,12 +58,28 @@ const BugReportSchema = z.object({
   screenshot: z.string().max(12 * 1024 * 1024).optional(),
 });
 
-/** Where reports go. The dedicated setting wins; otherwise the admin notification list. */
+/**
+ * Where reports go. The dedicated setting wins; otherwise the admin notification list.
+ *
+ * These settings live in a JSONB column, so the value can arrive as a parsed string, as an array,
+ * or - if it was ever written as a raw JSON literal - as a string still wearing its quotes. All
+ * three are handled, because the failure they cause is invisible: a recipient of
+ * `"ali@colaberry.com` still contains an `@`, would pass a naive filter, and would simply never
+ * be delivered to.
+ */
+export function parseRecipients(value: unknown): string[] {
+  const flat = Array.isArray(value) ? value.join(',') : String(value ?? '');
+  return flat
+    .split(/[,;\s]+/)
+    .map((s) => s.trim().replace(/^["']+|["']+$/g, '').trim())
+    .filter((s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s));
+}
+
 async function recipients(): Promise<string[]> {
   const dedicated = await getSetting('marketing_bug_report_emails').catch(() => null);
-  const fallback = await getSetting('admin_notification_emails').catch(() => null);
-  const raw = String(dedicated || fallback || '').trim();
-  return raw ? raw.split(/[,;\s]+/).map((s) => s.trim()).filter((s) => s.includes('@')) : [];
+  const fromDedicated = parseRecipients(dedicated);
+  if (fromDedicated.length > 0) return fromDedicated;
+  return parseRecipients(await getSetting('admin_notification_emails').catch(() => null));
 }
 
 /** Decode `data:image/png;base64,...` into something nodemailer can attach. */

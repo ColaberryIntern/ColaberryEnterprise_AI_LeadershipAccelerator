@@ -283,10 +283,10 @@ function AdminBrandsPage() {
   return (
     <>
       <PageHeader
-        title={brandName ? `Brand setup: ${brandName}` : 'Brand setup'}
+        title={brandName ? `Setup: ${brandName}` : 'Brands & channels'}
         icon="price-tag-3-line"
         subtitle="Everything this brand needs in order to publish, in one place."
-        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing', to: '/admin/marketing' }, { label: 'Brands' }]}
+        breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing', to: '/admin/marketing' }, { label: 'Brands & channels' }]}
         trust={trust}
       />
 
