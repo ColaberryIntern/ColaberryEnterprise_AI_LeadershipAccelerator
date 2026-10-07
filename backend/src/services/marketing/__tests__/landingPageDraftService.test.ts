@@ -298,8 +298,77 @@ describe('the prompt states the rules it is relied on for', () => {
     const svc = require('fs').readFileSync(
       require('path').resolve(__dirname, '..', 'landingPageDraftService.ts'), 'utf8',
     );
-    expect(svc).toContain("prompt_version: 'landing-page-draft-v3'");
-    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v2'");
+    expect(svc).toContain("prompt_version: 'landing-page-draft-v4'");
+    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v3'");
+  });
+
+  /**
+   * Ali, 2026-10-07, on a page he had just generated: a broken-image placeholder in the hero, and
+   * a warning that two bullet sections "could not be turned into a section". Both came from the
+   * generator, and both are asserted here rather than left to be noticed on a live page again.
+   */
+  describe('it never invents something that renders broken', () => {
+    it('does not offer the model an image field at all', async () => {
+      create.mockResolvedValueOnce(reply(GOOD_PAGE));
+      await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+      const system = create.mock.calls[0][0].messages[0].content;
+      // The old guide listed `"image":{"src":str,"alt":str}?` on the hero, so the model filled it
+      // in with a path that does not exist and the page rendered a broken picture.
+      //
+      // Asserted against the FIELD OFFER, not the bare word: the replacement rule says "there is
+      // no \"image\" field for you to fill", so a search for the word alone matches the fix
+      // itself and would fail on correct output.
+      expect(system).not.toContain('"image":{');
+      expect(system).not.toMatch(/"image":\s*\{/);
+      expect(system).toContain('NEVER emit an image');
+    });
+
+    it('tells the model to omit a CTA it cannot source, instead of defaulting to /apply', async () => {
+      create.mockResolvedValueOnce(reply(GOOD_PAGE));
+      await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+      const system = create.mock.calls[0][0].messages[0].content;
+      // The old rule said to use "/apply", which is not a route - it shipped a live page whose
+      // only button 404'd. Asserted as the absence of the instruction, because a later rule
+      // outweighing it is not the same as the instruction being gone.
+      expect(system).not.toContain('use "/apply"');
+      expect(system).toMatch(/omit the "cta" object entirely/);
+    });
+
+    it('drops a section whose only fault is a null, instead of throwing the section away', async () => {
+      // Exactly the payload that lost Ali two bullet lists: zod accepts a MISSING key but refuses
+      // an explicit null, and a model writes null when it means "nothing here".
+      const withNulls = {
+        title: 'A page', description: null,
+        sections: [
+          { type: 'hero', headline: 'Start learning AI for $0', subhead: null, image: null },
+          { type: 'bullets', heading: 'What you learn', intro: null,
+            items: [{ label: 'AI fundamentals', detail: null }] },
+        ],
+      };
+      create.mockResolvedValueOnce(reply(withNulls));
+      const out = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+
+      expect(out.droppedSections).toEqual([]);
+      expect(out.content.sections).toHaveLength(2);
+      const bullets = out.content.sections.find((s) => s.type === 'bullets') as any;
+      expect(bullets.items[0].label).toBe('AI fundamentals');
+      // The null became absence, not an empty string that would render as a blank line.
+      expect('detail' in bullets.items[0]).toBe(false);
+      expect('intro' in bullets).toBe(false);
+    });
+
+    it('still rejects a section that is genuinely malformed, so nulls are not a blanket excuse', async () => {
+      const bad = {
+        sections: [
+          { type: 'hero', headline: 'Fine' },
+          { type: 'bullets', heading: 'Broken', items: [{ label: 42 }] },
+        ],
+      };
+      create.mockResolvedValueOnce(reply(bad));
+      create.mockResolvedValueOnce(reply(bad));
+      const out = await draftLandingPage({ source: BRIEF, brandId: 'b-1' });
+      expect(out.droppedSections.join(' ')).toContain('bullets (section 2)');
+    });
   });
 
   it('lists every section type the schema allows, and no others', async () => {

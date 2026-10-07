@@ -119,12 +119,29 @@ export default function AdminLandingPagesPage() {
     if (!selected) return;
     setBusy(true);
     try {
+      /**
+       * Say whether anything actually changed.
+       *
+       * Ali, 2026-10-07: "I told it to fix the picture links. It came back with no comment and
+       * nothing changed." Both halves were true - this said "Revised" unconditionally and wiped
+       * the box, so a model that returned the same page was indistinguishable from one that had
+       * done the work. The feedback is kept on a no-op so it can be reworded rather than retyped.
+       */
+      const before = JSON.stringify(draft?.content ?? null);
       const result = await lp.reviseLandingPage(selected.id, feedback);
+      const changed = JSON.stringify(result.content) !== before;
+
       setDraft(result);
-      setFeedback('');
       await load(brandId);
       await loadPreview(selected.id);
-      say('success', 'Revised. Read it again before publishing.');
+
+      if (changed) {
+        setFeedback('');
+        say('success', 'Revised. Read it again before publishing.');
+      } else {
+        say('info', 'The model returned the same page - nothing changed. Name the section and '
+          + 'what it should say instead. (Images are not something it can add: a human adds those.)');
+      }
     } catch (err) { fail(err, 'The revision could not be applied.'); } finally { setBusy(false); }
   };
 

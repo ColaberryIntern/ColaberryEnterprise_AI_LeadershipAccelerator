@@ -188,9 +188,41 @@ export type LandingPageSectionType = LandingPageSection['type'];
  * Is this row renderable? A published page whose content does not parse is a blank public URL,
  * so the answer has to be known before anything is served, not discovered mid-render.
  */
+/**
+ * Drop every null before validating.
+ *
+ * `z.optional()` accepts a MISSING key but refuses an explicit `null` - they are different things
+ * to zod and the same thing to a language model. A generated section carrying `"intro": null`
+ * failed with "Invalid input: expected string, received null" and the whole section was thrown
+ * away, which is how Ali's page lost two of its bullet lists on 2026-10-07 while the copy that
+ * mattered was sitting right there in the payload.
+ *
+ * Dropping the key is the correct reading rather than a lenient one: `null` here means "I had
+ * nothing for this field", which is exactly what absence means. Nothing else is coerced - a
+ * number stays a number and still fails, because that really is a malformed section.
+ */
+function dropNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(dropNulls);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      if (inner === null) continue;
+      out[key] = dropNulls(inner);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Exported for the generator, which validates section-by-section before this runs. */
+export function withoutNulls(raw: unknown): unknown {
+  return dropNulls(raw);
+}
+
 export function parseLandingPageContent(
   raw: unknown,
 ): { ok: true; content: LandingPageContentShape } | { ok: false; problems: string[] } {
+  raw = dropNulls(raw);
   const parsed = landingPageContentSchema.safeParse(raw);
   if (parsed.success) return { ok: true, content: parsed.data };
   // Zod 4: `issues`, not `errors`.
