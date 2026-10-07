@@ -22,6 +22,7 @@ const VIEW = {
       id: 'STORY-REQ-1', requirementId: 'REQ-1', title: 'Provide a claims search database', release: 'r0', status: 'unassigned',
       statement: 'Provide a claims search database', acceptance: ['The solution demonstrably satisfies: Provide a claims search database'],
       prompt: '# STORY-REQ-1\nProvide a claims search database\ntraced back to REQ-1',
+      evidence: [],
     }],
   },
 };
@@ -64,6 +65,19 @@ describe('GovProjectPortalPage (student restricted view)', () => {
     expect(btn).toBeTruthy();
     await act(async () => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
     expect(container.textContent ?? '').toContain('traced back to REQ-1'); // revealed on click
+  });
+
+  it('P3-T3 evidence hand-in: a student submits evidence for a story (recorded; reviewer verifies, not self)', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue(VIEW);
+    (api.submitBuildStoryEvidence as jest.Mock).mockResolvedValue({ id: 'ev-1', storyId: 'STORY-REQ-1', canonicalReqId: 'REQ-1', description: 'built it', artifactRef: null, status: 'submitted', submittedAt: null });
+    await render();
+    expect(container.textContent ?? '').toContain('a reviewer verifies it'); // honest about who verifies
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => { setValue.call(textarea, 'Built the search database; screenshot attached.'); textarea.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    const submitBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Submit evidence')) as HTMLButtonElement;
+    await act(async () => { submitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(api.submitBuildStoryEvidence).toHaveBeenCalledWith('dp-A', 'STORY-REQ-1', expect.objectContaining({ canonicalReqId: 'REQ-1', description: 'Built the search database; screenshot attached.' }));
   });
 
   it('shows a "not found" page on a 404 (unassigned project) — never leaks that it exists', async () => {
