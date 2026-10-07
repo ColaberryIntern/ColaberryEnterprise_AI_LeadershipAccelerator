@@ -63,7 +63,7 @@ describe('extractProposal', () => {
     expect(res.requirements).toEqual([]);
     expect(res.blocks).toEqual([]);
     expect(res.fileCount).toBe(0);
-    expect(res.dossier).toEqual({ contacts: [], naics: [], meetings: [], keyDates: [] });
+    expect(res.dossier).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [] });
   });
 
   it('surfaces a dossier (contacts + key date) parsed from the same ZIP', async () => {
@@ -103,6 +103,36 @@ describe('extractDossier (pure)', () => {
     expect(d.naics).toEqual(['541512']);
   });
 
+  it('tags a NAICS code with its system in `codes` while keeping the `naics` string mirror', () => {
+    const d = extractDossier([ctx('Primary NAICS code: 541512.', 'rfp.pdf')]);
+    expect(d.codes).toContainEqual({ system: 'naics', code: '541512', sourceDocument: 'rfp.pdf' });
+    expect(d.naics).toEqual(['541512']); // compat mirror still populated
+  });
+
+  it('detects an NIGP commodity code (label-anchored) and tags it nigp, normalised to NNN-NN', () => {
+    const d = extractDossier([ctx('The applicable NIGP code is 920-05.', 'rfp.pdf')]);
+    expect(d.codes).toContainEqual({ system: 'nigp', code: '920-05', sourceDocument: 'rfp.pdf' });
+    expect(d.naics).toEqual([]); // an NIGP code is NOT a NAICS code
+  });
+
+  it('normalises NIGP formats (92005 / "920 05") to the same NNN-NN code and dedupes', () => {
+    const d = extractDossier([ctx('See NIGP 92005 and also NIGP code 920 05 for the commodity.')]);
+    const nigp = d.codes.filter((c) => c.system === 'nigp');
+    expect(nigp).toHaveLength(1);
+    expect(nigp[0].code).toBe('920-05');
+  });
+
+  it('requires the NIGP label — a bare "920-05" with no NIGP context is NOT captured as a code', () => {
+    const d = extractDossier([ctx('Invoice line 920-05 was paid on the reference schedule.')]);
+    expect(d.codes.filter((c) => c.system === 'nigp')).toHaveLength(0);
+  });
+
+  it('captures BOTH systems distinctly when a solicitation cites each', () => {
+    const d = extractDossier([ctx('Industry: NAICS 541512. Commodity: NIGP 920-05.')]);
+    expect(d.codes.some((c) => c.system === 'naics' && c.code === '541512')).toBe(true);
+    expect(d.codes.some((c) => c.system === 'nigp' && c.code === '920-05')).toBe(true);
+  });
+
   it('captures a meeting line and a dated key-date line', () => {
     const d = extractDossier([
       ctx('A pre-bid conference will be held on 02/01/2026 at the county office.'),
@@ -119,7 +149,7 @@ describe('extractDossier (pure)', () => {
 
   it('returns empty arrays when nothing matches and ignores non-context blocks', () => {
     const empty = extractDossier([ctx('This is a plain background paragraph with no contacts or dates.')]);
-    expect(empty).toEqual({ contacts: [], naics: [], meetings: [], keyDates: [] });
+    expect(empty).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [] });
     const reqOnly = extractDossier([
       { id: 'blk-REQ-001', locator: 'RFP.txt', text: 'email in-a-requirement@agency.gov', kind: 'requirement' },
     ]);
@@ -127,7 +157,7 @@ describe('extractDossier (pure)', () => {
   });
 
   it('is total — never throws on a non-array/garbage input', () => {
-    expect(extractDossier(undefined as any)).toEqual({ contacts: [], naics: [], meetings: [], keyDates: [] });
+    expect(extractDossier(undefined as any)).toEqual({ contacts: [], naics: [], codes: [], meetings: [], keyDates: [] });
   });
 });
 

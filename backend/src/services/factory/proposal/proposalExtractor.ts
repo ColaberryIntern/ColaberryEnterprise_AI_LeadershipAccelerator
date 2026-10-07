@@ -56,9 +56,16 @@ export interface DossierLine {
   timezone: string | null;
   sourceDocument: string;
 }
+/** A detected procurement commodity/industry code WITH its code SYSTEM made explicit — never assume NAICS.
+ *  `naics` (North American Industry Classification, 6 digits) and `nigp` (NIGP commodity code, class-item
+ *  NNN-NN) are different systems a solicitation may cite; labelling which one a code belongs to is the point. */
+export interface DossierCode { system: 'naics' | 'nigp'; code: string; sourceDocument: string; }
 export interface ExtractedDossier {
   contacts: DossierContact[];
+  /** Retained for existing consumers: the NAICS codes only, as bare strings (mirrors the `naics` entries in `codes`). */
   naics: string[];
+  /** Every detected procurement code, each tagged with its explicit system (naics | nigp). The forward model. */
+  codes: DossierCode[];
   meetings: DossierLine[];
   keyDates: DossierLine[];
 }
@@ -89,6 +96,11 @@ export interface ProposalExtraction {
 const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 const PHONE_RE = /(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}\b/g;
 const NAICS_RE = /\bNAICS\s*(?:code)?\s*[:#]?\s*(\d{6})\b/gi;
+// NIGP commodity code — REQUIRES the "NIGP" label (like NAICS), so a bare "920-05" number is never mislabelled.
+// Allows up to 20 NON-DIGIT chars of filler between the label and the code ("code is", "commodity code", ":",
+// "-") so real phrasings match, but the non-digit bound keeps the match LOCAL to the label (it can't reach a
+// number in another clause). Accepts class-item "920-05" / "920 05" / "92005"; normalised to "NNN-NN" at capture.
+const NIGP_RE = /\bNIGP\b[^\d]{0,20}?(\d{3}[-\s]?\d{2})\b/gi;
 const MEETING_RE = /\b(pre[- ]?bid|pre[- ]?proposal|pre[- ]?submittal|site\s+visit|site\s+inspection|q\s*&\s*a|question\s+and\s+answer|industry\s+day|walk[- ]?through)\b/i;
 // Anchored on the reliable date-announcing tokens; "due" covers "proposals/questions/responses ARE due", "due date",
 // "due by". The key-date path ALSO requires a literal date in the same sentence, so these loose anchors never fire alone.
@@ -109,10 +121,12 @@ const TZ_RE = /\b(C[SD]T|E[SD]T|M[SD]T|P[SD]T|UTC|GMT|(?:Central|Eastern|Mountai
 export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
   const contacts: DossierContact[] = [];
   const naics: string[] = [];
+  const codes: DossierCode[] = [];
   const meetings: DossierLine[] = [];
   const keyDates: DossierLine[] = [];
   const seenContact = new Set<string>();
   const seenNaics = new Set<string>();
+  const seenCode = new Set<string>();
   const ctx = (Array.isArray(blocks) ? blocks : []).filter((b) => b && b.kind === 'context');
 
   for (const b of ctx) {
@@ -128,7 +142,20 @@ export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
     }
     let nm: RegExpExecArray | null;
     NAICS_RE.lastIndex = 0;
-    while ((nm = NAICS_RE.exec(text)) !== null) { const code = nm[1]; if (!seenNaics.has(code) && naics.length < 6) { seenNaics.add(code); naics.push(code); } }
+    while ((nm = NAICS_RE.exec(text)) !== null) {
+      const code = nm[1];
+      if (!seenNaics.has(code) && naics.length < 6) { seenNaics.add(code); naics.push(code); }
+      const key = `naics:${code}`;
+      if (!seenCode.has(key) && codes.length < 20) { seenCode.add(key); codes.push({ system: 'naics', code, sourceDocument: doc }); }
+    }
+    let gm: RegExpExecArray | null;
+    NIGP_RE.lastIndex = 0;
+    while ((gm = NIGP_RE.exec(text)) !== null) {
+      const digits = gm[1].replace(/\D/g, ''); // "920 05" / "920-05" / "92005" → "92005"
+      const code = `${digits.slice(0, 3)}-${digits.slice(3)}`; // normalise to class-item NNN-NN
+      const key = `nigp:${code}`;
+      if (!seenCode.has(key) && codes.length < 20) { seenCode.add(key); codes.push({ system: 'nigp', code, sourceDocument: doc }); }
+    }
     for (const s of sentences(text)) {
       const dateM = s.match(DATE_RE);
       const date = dateM ? dateM[1] : null;
@@ -140,7 +167,7 @@ export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
       else if (keyDates.length < 10 && KEYDATE_RE.test(s) && date) keyDates.push({ text: truncate(s, 240), date, time, timezone, sourceDocument: doc });
     }
   }
-  return { contacts, naics, meetings, keyDates };
+  return { contacts, naics, codes, meetings, keyDates };
 }
 
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'file';
@@ -192,7 +219,7 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   try {
     entries = new AdmZip(zipBuffer).getEntries().filter((e: any) => !e.isDirectory);
   } catch {
-    return { blocks, requirements, dossier: { contacts: [], naics: [], meetings: [], keyDates: [] }, fileCount: 0, files };
+    return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [] }, fileCount: 0, files };
   }
   entries.sort((a: any, b: any) => String(a.entryName).localeCompare(String(b.entryName)));
 
