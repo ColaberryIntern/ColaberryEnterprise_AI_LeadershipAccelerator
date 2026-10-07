@@ -30,6 +30,7 @@ jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }
 // below (regression: identical behavior to before this gate existed);
 // denial is exercised by its own dedicated describe block.
 jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
+jest.mock('../reeseGovernedActionLog', () => ({ recordHeldAction: jest.fn(), recordSentAction: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import RoomMessage from '../../../models/RoomMessage';
@@ -44,6 +45,7 @@ import { countAutonomousSendsToday } from '../reeseAutonomousOutreachService';
 import { createClosureChecklistInstance } from '../closureChecklist';
 import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
 import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
+import { recordHeldAction, recordSentAction } from '../reeseGovernedActionLog';
 import { processDueReeseOutreachFollowUps } from '../reeseOutreachFollowUpService';
 
 const mockReeseOutreachFindAll = ReeseOutreach.findAll as unknown as jest.Mock;
@@ -62,6 +64,8 @@ const mockCountAutonomousSendsToday = countAutonomousSendsToday as unknown as je
 const mockCreateClosureChecklistInstance = createClosureChecklistInstance as unknown as jest.Mock;
 const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
 const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
+const mockRecordHeldAction = recordHeldAction as unknown as jest.Mock;
+const mockRecordSentAction = recordSentAction as unknown as jest.Mock;
 
 function makeRow(overrides: Record<string, any> = {}) {
   return {
@@ -93,6 +97,8 @@ beforeEach(() => {
   mockRecordEvidence.mockResolvedValue({ id: 'evidence-1' });
   mockCreateClosureChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
   mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: null, verdict: 'would_allow', reason: 'ok', allowed: true });
+  mockRecordHeldAction.mockResolvedValue('written');
+  mockRecordSentAction.mockResolvedValue('written');
 });
 
 describe('processDueReeseOutreachFollowUps — branch: signal cleared', () => {
@@ -279,6 +285,55 @@ describe('processDueReeseOutreachFollowUps — branch: under cap, sends one more
     expect(row.update).not.toHaveBeenCalled();
   });
 
+  it('records the held follow-up as a skipped activity row — this path previously left no record anywhere', async () => {
+    const row = makeRow({ attempt_count: 1 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 14, completionPct: 5 });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-1', verdict: 'would_block', reason: 'level_forbids:write', allowed: false });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
+    expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_outreach_followup',
+      riskTier: 'R3',
+      verdict: 'would_block',
+      reasonCode: 'level_forbids:write',
+      decisionId: 'ar-1',
+      // The attempt that was held — unbumped, because the hold wrote nothing.
+      unitKey: 'outreach:outreach-1:attempt:2',
+    }));
+    expect(mockRecordSentAction).not.toHaveBeenCalled();
+  });
+
+  it('a log layer that is down still leaves the held follow-up a clean hold', async () => {
+    const row = makeRow({ attempt_count: 1 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 14, completionPct: 5 });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-1', verdict: 'would_block', reason: 'held', allowed: false });
+    mockRecordHeldAction.mockResolvedValue('log_unavailable');
+
+    const result = await processDueReeseOutreachFollowUps(false);
+
+    expect(result.decisions[0].branch).toBe('held_for_approval');
+    expect(result.followUpSent).toBe(0);
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+  });
+
+  it('a real follow-up is still recorded as success, never as skipped', async () => {
+    const row = makeRow({ attempt_count: 1 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 14, completionPct: 5 });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockRecordHeldAction).not.toHaveBeenCalled();
+    expect(mockRecordSentAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_outreach_followup',
+      reason: 'follow_up_attempt_2_sent',
+    }));
+  });
+
   it('the authorization check runs BEFORE the real send, with the real risk tier and prepared-action replay data', async () => {
     const row = makeRow({ attempt_count: 1 });
     mockReeseOutreachFindAll.mockResolvedValue([row]);
@@ -350,6 +405,37 @@ describe('processDueReeseOutreachFollowUps — branch: at cap, escalates', () =>
     expect(mockAddTicketComment).not.toHaveBeenCalled();
     expect(row.update).not.toHaveBeenCalled();
     expect(mockEmitReeseLedgerEvent).not.toHaveBeenCalled();
+  });
+
+  it('records the held escalation as a skipped activity row — the safety path leaves a trace now', async () => {
+    const row = makeRow({ attempt_count: 3 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 28, completionPct: 5 });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-2', verdict: 'would_block', reason: 'level_forbids:write', allowed: false });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
+    expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_outreach_escalated',
+      riskTier: 'R3',
+      verdict: 'would_block',
+      unitKey: 'outreach:outreach-1:escalate',
+    }));
+    expect(mockRecordSentAction).not.toHaveBeenCalled();
+  });
+
+  it('a real escalation is still recorded as success', async () => {
+    const row = makeRow({ attempt_count: 3 });
+    mockReeseOutreachFindAll.mockResolvedValue([row]);
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 28, completionPct: 5 });
+
+    await processDueReeseOutreachFollowUps(false);
+
+    expect(mockRecordHeldAction).not.toHaveBeenCalled();
+    expect(mockRecordSentAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_outreach_escalated',
+    }));
   });
 });
 
