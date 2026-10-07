@@ -43,10 +43,10 @@ import { reconcilePayment } from '../paymentReconciliationService';
 // test is the tautology that cost T203 five of its tests: inverting the real function left
 // the suite green. `isEnrolledMember` is what the partner app actually calls.
 import { isEnrolledMember } from '../../controllers/v1EnrollmentLookupController';
-import { sequelize } from '../../config/database';
-
-// The raw-SQL writer calls `sequelize.query` on the module-level instance, so spying on
-// that instance's method is what intercepts it.
+// `config/database` is still imported for its side effect of constructing a real Sequelize:
+// this module graph reaches `SystemSetting.init(...)`, and `Model.init` needs a real instance.
+// The spy that used to live here went with the test that used it.
+import '../../config/database';
 
 /**
  * Phase 2 T206 — WRITER-PAIR COHERENCE.
