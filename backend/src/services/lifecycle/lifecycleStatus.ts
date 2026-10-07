@@ -143,23 +143,6 @@ export const ASSESSED_EVIDENCE_FIELDS: ReadonlySet<EvidenceField> =
   new Set(Object.keys(EVIDENCE_MEASUREMENTS) as EvidenceField[]);
 
 /**
- * Gather the evidence a prerequisite predicate needs.
- *
- * STILL STUBBED, and now HONESTLY stubbed. The previous version returned the "nothing assessed
- * yet" VALUE for each field — but `false` is not a non-answer, it is the strongest possible claim.
- * `graphHasStart: false` asserts that somebody read the transition graph and found no start node.
- * Three fields did that, and every array returned `[]`, which reads as "checked, nothing wrong"
- * and made `allocation_ready` and `plan_ready` permit unconditionally.
- *
- * Transitions were still refused overall, which is why this never bit — but the moment a surface
- * renders the blocker list (P5-T2), those become fabricated blockers shown to a human. So the
- * values stay as placeholders and `assessedFields` carries the truth: the predicates consult it
- * before trusting any field, and an unassessed prerequisite BLOCKS.
- *
- * EXPORTED because it was module-private, and an acceptance criterion that asserts what this
- * returns cannot be written against a private function.
- */
-/**
  * Overlay real measurements onto the placeholder snapshot, and report EXACTLY what was
  * measured.
  *
@@ -188,6 +171,23 @@ export function applyMeasurements(
   return out as unknown as LifecycleEvidence;
 }
 
+/**
+ * Gather the evidence a prerequisite predicate needs.
+ *
+ * STILL STUBBED, and now HONESTLY stubbed. The previous version returned the "nothing assessed
+ * yet" VALUE for each field — but `false` is not a non-answer, it is the strongest possible claim.
+ * `graphHasStart: false` asserts that somebody read the transition graph and found no start node.
+ * Three fields did that, and every array returned `[]`, which reads as "checked, nothing wrong"
+ * and made `allocation_ready` and `plan_ready` permit unconditionally.
+ *
+ * Transitions were still refused overall, which is why this never bit — but the moment a surface
+ * renders the blocker list (P5-T2), those become fabricated blockers shown to a human. So the
+ * values stay as placeholders and `assessedFields` carries the truth: the predicates consult it
+ * before trusting any field, and an unassessed prerequisite BLOCKS.
+ *
+ * EXPORTED because it was module-private, and an acceptance criterion that asserts what this
+ * returns cannot be written against a private function.
+ */
 export async function readLifecycleEvidence(row: LifecycleRow): Promise<LifecycleEvidence> {
   // Placeholders for everything unmeasured. Their VALUES carry no meaning — `assessedFields`
   // is the authority, and a predicate that reads one of these without consulting it is a bug

@@ -382,3 +382,63 @@ describe('notAssessedGaps actually discriminates', () => {
     expect(notAssessedGaps(allUnmet)).toEqual([]);
   });
 });
+
+describe('EVERY guarded read is bound to the field it actually reads', () => {
+  /**
+   * Withhold one field from an otherwise-complete snapshot and collect the `not_assessed`
+   * rules that appear across every stage.
+   */
+  function rulesWhenWithheld(field: EvidenceField): string[] {
+    const e = complete();
+    const withheld: LifecycleEvidence = {
+      ...e,
+      assessedFields: new Set(
+        [...e.assessedFields].filter((f) => f !== field),
+      ) as Set<EvidenceField>,
+    };
+    const rules = new Set<string>();
+    for (const stage of LIFECYCLE_STAGES) {
+      for (const g of notAssessedGaps(prerequisiteGaps(stage, withheld))) rules.add(g.rule);
+    }
+    return [...rules].sort();
+  }
+
+  it('every assessed field, withheld alone, produces at least one not_assessed gap', () => {
+    // A mis-bound `field` argument produces NONE: the guard it names is still assessed, so
+    // nothing fires. That is how `condGaps(e, ’actorStillAuthorized’, …)` mis-bound to
+    // `’approval’` would silently drop the TOCTOU authority refusal — the same shape as the
+    // `currentManifestRevision` bypass this task shipped in attempt 1.
+    const silent = [...complete().assessedFields].filter((f) => rulesWhenWithheld(f).length === 0);
+
+    // Named, not counted, so a failure says WHICH field is unbound.
+    expect(silent).toEqual([]);
+  });
+
+  it('no two fields produce the same not_assessed rule set', () => {
+    // The other half: a field mis-bound to a SIBLING collides with it. Injectivity catches
+    // what emptiness does not — e.g. `graphHasEnd` mis-bound to `graphHasStart` makes the
+    // latter emit both rules and the former emit none.
+    const seen = new Map<string, EvidenceField>();
+    const collisions: string[] = [];
+
+    for (const f of [...complete().assessedFields].sort()) {
+      const key = rulesWhenWithheld(f).join(
+);
+      if (!key) continue; // covered by the test above; do not double-report
+      const prior = seen.get(key);
+      if (prior) collisions.push(`${prior} and ${f} both yield [${key}]`);
+      else seen.set(key, f);
+    }
+
+    expect(collisions).toEqual([]);
+  });
+
+  it('PASSING COUNTERPART: withholding nothing yields no not_assessed gap at all', () => {
+    // Without this, both tests above would pass against a predicate layer that reported
+    // everything as unassessed regardless of the set.
+    const e = complete();
+    for (const stage of LIFECYCLE_STAGES) {
+      expect(notAssessedGaps(prerequisiteGaps(stage, e))).toEqual([]);
+    }
+  });
+});

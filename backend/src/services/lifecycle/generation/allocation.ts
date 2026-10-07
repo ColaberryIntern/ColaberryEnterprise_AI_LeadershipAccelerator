@@ -122,7 +122,8 @@ function assignmentsByTask(project: FactoryProject): Map<string, Assignment[]> {
  * unknown is INTENDED to block full approval while still permitting a draft. That path is not
  * live yet - `readLifecycleEvidence` in `lifecycleStatus.ts` leaves `unknownAllocationCount`
  * unassessed (cited by symbol rather than line, which moved) in
- * `gatherEvidence`, so the rule cannot fire until T6 loads a real project there. The count
+ * `readLifecycleEvidence` (renamed from `gatherEvidence` by P5-T1.1), so the rule cannot fire
+ * until a later task loads a real project there. The count
  * this module returns is correct and tested at both ends; only the middle is stubbed.
  * Defaulting to `human` here would make a blank look like a decision somebody took.
  */

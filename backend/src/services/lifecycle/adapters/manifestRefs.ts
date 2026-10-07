@@ -132,21 +132,34 @@ export interface RefIntegrityReport {
  * both a source and a track mapping's `canonicalReqId`, because those are the same requirement
  * seen from two angles. What must not happen is one id standing for two different *things*.
  */
+/**
+ * The top-level ref collections `checkRefIntegrity` actually walks.
+ *
+ * EXPORTED so a test can hold it against the shape `emptyRefs()` really returns. It was an
+ * inline literal inside the function, hand-maintained against `ManifestRefs` with nothing
+ * connecting them — so adding a collection to the interface left the integrity check silently
+ * skipping it, and the check went on passing while its coverage shrank. That is the
+ * producer-with-no-consumer failure this repo names, one level down: not a function nobody
+ * calls, but a check that stops covering what it claims to.
+ *
+ * `agents` and `trackMappings` are deliberately absent: they are objects holding arrays, not
+ * arrays, so they are not walkable by the `PinnedRef[]` loop below. The test asserts this set
+ * equals exactly the ARRAY-valued top-level keys of a fresh `emptyRefs()`, so that carve-out
+ * is measured rather than remembered.
+ */
+export const INTEGRITY_CHECKED_LISTS = [
+  'sources', 'processes', 'businessTasks', 'assignments',
+  'surfaces', 'policies', 'designDecisions', 'downstream',
+] as const satisfies ReadonlyArray<keyof ManifestRefs>;
+
 export function checkRefIntegrity(refs: ManifestRefs): RefIntegrityReport {
   const malformed: string[] = [];
   const seen = new Map<string, string>(); // id -> which list claimed it
   const collisions: string[] = [];
 
-  const lists: Array<[string, PinnedRef[]]> = [
-    ['sources', refs.sources],
-    ['processes', refs.processes],
-    ['businessTasks', refs.businessTasks],
-    ['assignments', refs.assignments],
-    ['surfaces', refs.surfaces],
-    ['policies', refs.policies],
-    ['designDecisions', refs.designDecisions],
-    ['downstream', refs.downstream],
-  ];
+  const lists: Array<[string, PinnedRef[]]> = INTEGRITY_CHECKED_LISTS.map(
+    (k) => [k, refs[k] as PinnedRef[]],
+  );
 
   for (const [listName, list] of lists) {
     for (const r of list) {
