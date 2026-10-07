@@ -34,6 +34,7 @@ import {
   REQUIRED_TABLES,
   REQUIRED_INDEXES,
   REQUIRED_CONSTRAINTS,
+  REQUIRED_COLUMNS,
 } from '../db/projectLifecycleSchemaContract';
 
 interface VerifyResult {
@@ -44,6 +45,9 @@ interface VerifyResult {
   indexesMissing: string[];
   constraintsPresent: string[];
   constraintsMissing: string[];
+  /** `table.column`. Added by P5-T1.3 — see REQUIRED_COLUMNS for why it is its own category. */
+  columnsPresent: string[];
+  columnsMissing: string[];
   error?: string;
 }
 
@@ -59,6 +63,7 @@ export async function verifyProjectLifecycleSchema(
     tablesPresent: [], tablesMissing: [],
     indexesPresent: [], indexesMissing: [],
     constraintsPresent: [], constraintsMissing: [],
+    columnsPresent: [], columnsMissing: [],
   };
 
   /**
@@ -79,6 +84,24 @@ export async function verifyProjectLifecycleSchema(
     return names.map((_, i) => row[`n${i}`] === true);
   }
 
+  /**
+   * The same aggregate read, for a TWO-predicate question: a column is identified by its
+   * table as well as its name, so `bool_or(column_name = ...)` alone would report a column
+   * present because some other table happens to have one by that name.
+   */
+  async function columnPresence(qualified: ReadonlyArray<string>): Promise<boolean[]> {
+    const selects = qualified.map((q, i) => {
+      const [t, c] = q.split('.');
+      return `bool_or(table_name = '${t}' AND column_name = '${c}') AS n${i}`;
+    }).join(', ');
+    const rows = (await query(
+      `SELECT ${selects} FROM information_schema.columns WHERE table_schema = 'public'`,
+    )) as any;
+    const list = Array.isArray(rows) && Array.isArray(rows[0]) ? rows[0] : rows;
+    const row = ((list as any[]) || [])[0] || {};
+    return qualified.map((_, i) => row[`n${i}`] === true);
+  }
+
   try {
     const tables = await presence(
       REQUIRED_TABLES, 'table_name',
@@ -93,13 +116,17 @@ export async function verifyProjectLifecycleSchema(
       "information_schema.table_constraints WHERE table_schema = 'public'",
     );
 
+    const columns = await columnPresence(REQUIRED_COLUMNS);
+
     REQUIRED_TABLES.forEach((t, i) => (tables[i] ? result.tablesPresent : result.tablesMissing).push(t));
     REQUIRED_INDEXES.forEach((n, i) => (indexes[i] ? result.indexesPresent : result.indexesMissing).push(n));
     REQUIRED_CONSTRAINTS.forEach((n, i) => (constraints[i] ? result.constraintsPresent : result.constraintsMissing).push(n));
+    REQUIRED_COLUMNS.forEach((q, i) => (columns[i] ? result.columnsPresent : result.columnsMissing).push(q));
 
     result.ok = result.tablesMissing.length === 0
       && result.indexesMissing.length === 0
-      && result.constraintsMissing.length === 0;
+      && result.constraintsMissing.length === 0
+      && result.columnsMissing.length === 0;
   } catch (err: any) {
     // An introspection failure is NOT a pass. Reported as a failure with the reason, because a
     // check that cannot run is indistinguishable from a check that found nothing wrong only if
@@ -127,6 +154,7 @@ async function main(): Promise<void> {
       tables: `${result.tablesPresent.length}/${REQUIRED_TABLES.length}`,
       indexes: `${result.indexesPresent.length}/${REQUIRED_INDEXES.length}`,
       constraints: `${result.constraintsPresent.length}/${REQUIRED_CONSTRAINTS.length}`,
+      columns: `${result.columnsPresent.length}/${REQUIRED_COLUMNS.length}`,
       tables_missing: result.tablesMissing,
       indexes_missing: result.indexesMissing,
       constraints_missing: result.constraintsMissing,

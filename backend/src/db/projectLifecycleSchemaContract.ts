@@ -66,6 +66,8 @@ export const REQUIRED_TABLES: ReadonlyArray<string> = [
 export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'uq_lifecycle_student_project',
   'uq_lifecycle_delivery_project',
+  'uq_blueprint_manifest_refs_student',
+  'uq_blueprint_manifest_refs_delivery',
   'uq_blueprint_manifest_revision_student',
   'uq_blueprint_manifest_revision_delivery',
   'uq_blueprint_approval_revision',
@@ -94,6 +96,23 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = [
  * in both places is defence in depth for a value whose corruption is silent, not a duplicated
  * rule someone can change.
  */
+/**
+ * COLUMNS that must exist, as `table.column`.
+ *
+ * A NEW CATEGORY, added by P5-T1.3, and the reason it is needed is specific:
+ * `ensureProjectLifecycleSchema` logs a warning and carries on when a statement fails, so a
+ * column whose `ALTER` silently did not run leaves a deploy looking entirely normal and the
+ * writer failing at runtime. A table-and-index assert cannot see that, because the table and
+ * the index both already exist.
+ *
+ * Deliberately NOT every column. These are the ones whose absence is silent and load-bearing
+ * — i.e. added by `ALTER` after the table shipped. A column inside a `CREATE TABLE` cannot be
+ * missing while its table is present, so listing it would be asserting that Postgres works.
+ */
+export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
+  'operating_blueprint_manifests.refs_sha256',
+];
+
 export const REQUIRED_CONSTRAINTS: ReadonlyArray<string> = [
   'ck_lifecycle_exactly_one_project',
   'ck_manifest_exactly_one_project',
@@ -133,6 +152,21 @@ export async function assertProjectLifecycleSchema(): Promise<boolean> {
     const idxRow = (((idxRows as any[]) || [])[0] || {}) as Record<string, boolean>;
     REQUIRED_INDEXES.forEach((n, i) => {
       if (!idxRow[`i${i}`]) problems.push(`index ${n} missing (a correctness guarantee, not an optimisation)`);
+    });
+
+    // THE COLUMNS. A column added by ALTER after its table shipped is the one schema failure
+    // a table-and-index assert cannot see: the table exists, the index exists, and the write
+    // fails at runtime. Same bool_or-aliased single-row form as above.
+    const colSelects = REQUIRED_COLUMNS.map((q, i) => {
+      const [t, c] = q.split('.');
+      return `bool_or(table_name = '${t}' AND column_name = '${c}') AS k${i}`;
+    }).join(', ');
+    const [colRows] = await sequelize.query(
+      `SELECT ${colSelects} FROM information_schema.columns WHERE table_schema = 'public'`,
+    );
+    const colRow = (((colRows as any[]) || [])[0] || {}) as Record<string, boolean>;
+    REQUIRED_COLUMNS.forEach((q, i) => {
+      if (!colRow[`k${i}`]) problems.push(`column ${q} missing (its ALTER did not run)`);
     });
 
     // The CHECK constraints keeping the two identity tables unmerged.

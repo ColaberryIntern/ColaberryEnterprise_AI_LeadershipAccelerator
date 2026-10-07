@@ -21,7 +21,8 @@ jest.mock('../../config/database', () => ({
 import { sequelize } from '../../config/database';
 import { PROJECT_LIFECYCLE_STATEMENTS } from '../ensureProjectLifecycleSchema';
 import {
-  REQUIRED_TABLES,
+  REQUIRED_TABLES,
+  REQUIRED_COLUMNS,
   assertProjectLifecycleSchema,
 } from '../projectLifecycleSchemaContract';
 
@@ -42,14 +43,37 @@ function mentionedInAnyCheck(sql: string, column: string): boolean {
   return clauses.some((c) => new RegExp(`\\b${column}\\b`, 'i').test(c));
 }
 
-/** The additive predicate, extracted so the positive control can exercise the same code path. */
+/**
+ * The additive predicate, extracted so the positive control exercises the same code path.
+ *
+ * P5-T1.3 NARROWED this rather than bypassing it. The previous version banned `ALTER TABLE`
+ * outright, which is over-broad against this repo’s own convention — 52 files under `src/db/`
+ * use `ADD COLUMN IF NOT EXISTS` — and which makes it impossible to add a column to a table
+ * that already shipped. `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so a
+ * column declared only there never reaches production.
+ *
+ * Exactly ONE alter form is permitted, and every destructive shape is still refused. The
+ * positive control below grew from four cases to ten in the same change, because a safety
+ * predicate that gets loosened without its controls growing is how a guard stops guarding.
+ */
 function isAdditive(sql: string): boolean {
-  const s = sql.trim().toUpperCase();
-  const startsRight =
+  const s = sql.trim().toUpperCase().replace(/\s+/g, ' ');
+  const isCreate =
     s.startsWith('CREATE TABLE IF NOT EXISTS') ||
     s.startsWith('CREATE INDEX IF NOT EXISTS') ||
     s.startsWith('CREATE UNIQUE INDEX IF NOT EXISTS');
-  return startsRight && !/\bALTER\s+TABLE\b/.test(s) && !/\bDROP\b/.test(s) && !/\bTRUNCATE\b/.test(s);
+
+  // The one permitted ALTER. `IF NOT EXISTS` makes it idempotent; the exclusions below are
+  // the shapes that lose or rewrite data, plus NOT NULL without a DEFAULT, which does not
+  // merely risk anything — it fails outright on a table that already has rows.
+  const isAddColumn = /^ALTER TABLE \S+ ADD COLUMN IF NOT EXISTS /.test(s)
+    && !/\bALTER COLUMN\b/.test(s)
+    && !/\bRENAME\b/.test(s)
+    && !/\bUSING\b/.test(s)
+    && (!/\bNOT NULL\b/.test(s) || /\bDEFAULT\b/.test(s));
+
+  if (!isCreate && !isAddColumn) return false;
+  return !/\bDROP\b/.test(s) && !/\bTRUNCATE\b/.test(s);
 }
 
 describe('ensureProjectLifecycleSchema is additive-only', () => {
@@ -65,10 +89,37 @@ describe('ensureProjectLifecycleSchema is additive-only', () => {
   });
 
   it('positive control: the additive predicate rejects a destructive statement', () => {
-    expect(isAdditive('ALTER TABLE projects ADD COLUMN stage TEXT')).toBe(false);
+    // The four this control started with.
+    expect(isAdditive('ALTER TABLE projects ADD COLUMN stage TEXT')).toBe(false); // no IF NOT EXISTS
     expect(isAdditive('DROP TABLE project_lifecycle_states')).toBe(false);
     expect(isAdditive('CREATE TABLE project_lifecycle_states (id UUID)')).toBe(false); // missing IF NOT EXISTS
     expect(isAdditive('TRUNCATE project_lifecycle_states')).toBe(false);
+
+    // Six added when P5-T1.3 narrowed the rule to permit ADD COLUMN IF NOT EXISTS. Each is a
+    // shape the permitted form must NOT have opened a door to.
+    expect(isAdditive('ALTER TABLE t DROP COLUMN c')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ALTER COLUMN c TYPE INTEGER')).toBe(false);
+    expect(isAdditive('ALTER TABLE t RENAME COLUMN c TO d')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT NOT NULL')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ALTER COLUMN c TYPE INT USING c::INT')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, DROP COLUMN d')).toBe(false);
+
+    // And the PASSING COUNTERPARTS, without which the above would hold against a predicate
+    // that refuses everything — which is the state the rule was in for ALTER until now.
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c VARCHAR(64)')).toBe(true);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT NOT NULL DEFAULT \'x\'')).toBe(true);
+  });
+
+  it('an ALTER may only target a table this module OWNS', () => {
+    // The permitted ALTER form is safe in shape; this is about blast radius. Altering a table
+    // another module created would make this file a second author of that schema, which is
+    // the cross-contamination the lifecycle coordinator exists to avoid.
+    const altered = PROJECT_LIFECYCLE_STATEMENTS
+      .map((sql) => /ALTER\s+TABLE\s+(\w+)/i.exec(sql)?.[1])
+      .filter((t): t is string => Boolean(t));
+
+    expect(altered.length).toBeGreaterThan(0); // else this scans nothing
+    for (const t of altered) expect(REQUIRED_TABLES).toContain(t);
   });
 
   it('every CREATE TABLE targets one of the new REQUIRED_TABLES, never an existing table', () => {
@@ -295,6 +346,12 @@ describe('assertProjectLifecycleSchema checks tables, indexes AND constraints', 
     for (const [, name, alias] of sql.matchAll(/bool_or\((?:\w+) = '([^']+)'\) AS (\w+)/g)) {
       row[alias] = !absent.includes(name);
     }
+    // The column query asks a TWO-predicate question, so it needs its own pattern. Keyed on
+    // `table.column` to match REQUIRED_COLUMNS.
+    const colRe = /bool_or\(table_name = '([^']+)' AND column_name = '([^']+)'\) AS (\w+)/g;
+    for (const [, t, c, alias] of sql.matchAll(colRe)) {
+      row[alias] = !absent.includes(`${t}.${c}`);
+    }
     return row;
   }
   function answerAll(absent: ReadonlyArray<string> = []) {
@@ -308,11 +365,12 @@ describe('assertProjectLifecycleSchema checks tables, indexes AND constraints', 
   });
   afterEach(() => { jest.restoreAllMocks(); });
 
-  it('returns true when every table, index and constraint reports present', async () => {
+  it('returns true when every table, index, column and constraint reports present', async () => {
     answerAll();
     await expect(assertProjectLifecycleSchema()).resolves.toBe(true);
-    // Three queries, not one: tables, indexes, constraints.
-    expect(queryMock).toHaveBeenCalledTimes(3);
+    // FOUR queries, not one: tables, indexes, columns, constraints. Pinned deliberately — a
+    // category added without its query would make the assert quietly narrower than its name.
+    expect(queryMock).toHaveBeenCalledTimes(4);
   });
 
   it('POSITIVE CONTROL: returns false and names the table when one is absent', async () => {
@@ -347,13 +405,28 @@ describe('assertProjectLifecycleSchema checks tables, indexes AND constraints', 
     await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
   });
 
-  it('asks for one bool_or alias per required name, across all three queries', async () => {
+  it('POSITIVE CONTROL: returns false and names the COLUMN when its ALTER did not run', async () => {
+    // The category this control exists for is the one a table-and-index assert cannot see:
+    // `refs_sha256` is added by an ALTER, and `ensureProjectLifecycleSchema` logs a warning
+    // and carries on if that statement fails. The table is present, both indexes are present,
+    // and the writer fails at runtime. Without this control the column list would be a check
+    // that cannot fail.
+    answerAll([REQUIRED_COLUMNS[0]]);
+    const errSpy = jest.spyOn(console, 'error');
+    await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
+    const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).toContain(REQUIRED_COLUMNS[0]);
+    expect(logged).toContain('project_lifecycle_schema_invariant_violated');
+  });
+
+  it('asks for one bool_or alias per required name, across all four queries', async () => {
     answerAll();
     await assertProjectLifecycleSchema();
     const sqls = queryMock.mock.calls.map((c) => String(c[0]));
     REQUIRED_TABLES.forEach((t, i) => expect(sqls[0]).toContain(`bool_or(table_name = '${t}') AS t${i}`));
     expect(sqls[0]).toContain("table_schema = 'public'");
     expect(sqls[1]).toContain('pg_indexes');
-    expect(sqls[2]).toContain('table_constraints');
+    expect(sqls[2]).toContain('information_schema.columns');
+    expect(sqls[3]).toContain('table_constraints');
   });
 });

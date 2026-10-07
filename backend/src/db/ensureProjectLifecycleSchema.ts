@@ -120,6 +120,41 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
        OR (student_project_id IS NULL AND delivery_project_id IS NOT NULL)
      )
    )`,
+  // THE IDEMPOTENCY KEY’S STORAGE, added by P5-T1.3.
+  //
+  // Separate from `content_sha256` on purpose. That column is LC-10’s "exact version/hash"
+  // binding — `manifestContentHash` covers tenant + project + REVISION + refs, and
+  // `approveBlueprint` writes it into `blueprint_approvals.content_sha256`. Parking a
+  // revision-INDEPENDENT hash there would silently weaken that binding, because such a hash
+  // cannot bind an approval to an exact version. Two hashes answer two questions: one binds
+  // the approval, one identifies the write.
+  //
+  // ALTER rather than a column in the CREATE above, because `CREATE TABLE IF NOT EXISTS`
+  // cannot add a column to a table that already exists — production has this table from
+  // Phase 2, so a column declared only in the CREATE would never arrive. `ADD COLUMN IF NOT
+  // EXISTS` is the repo-wide convention for this (52 files under src/db/) and is both
+  // additive and idempotent.
+  `ALTER TABLE operating_blueprint_manifests
+     ADD COLUMN IF NOT EXISTS refs_sha256 VARCHAR(64)`,
+
+  // WHY UNIQUE, AND WHY IT BLOCKS A REVERT ON PURPOSE. This is what makes a concurrent
+  // replay impossible rather than merely unlikely: the writer is read-then-insert in
+  // application code, so without the index two simultaneous writes of identical refs both
+  // see "no existing row" and both insert. It also refuses a later revision whose refs are
+  // byte-identical to an earlier one — correct, because identical refs mean there is nothing
+  // new to record. A revert and a replay are indistinguishable by construction, and returning
+  // the existing row is the right answer to both.
+  //
+  // Two partial indexes because exactly one project FK is ever set, matching the revision
+  // backstop below. NULL refs_sha256 is excluded so the Phase 2 rows, written before this
+  // column existed, do not all collide on NULL.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_student
+     ON operating_blueprint_manifests (tenant_id, student_project_id, refs_sha256)
+     WHERE student_project_id IS NOT NULL AND refs_sha256 IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_delivery
+     ON operating_blueprint_manifests (tenant_id, delivery_project_id, refs_sha256)
+     WHERE delivery_project_id IS NOT NULL AND refs_sha256 IS NOT NULL`,
+
   // THE BACKSTOP. The approval CAS is a read-then-compare in application code; this index is
   // what actually makes a concurrent double-approval impossible, by rejecting the second insert
   // at the same revision. Two partial indexes because exactly one project FK is ever set.
