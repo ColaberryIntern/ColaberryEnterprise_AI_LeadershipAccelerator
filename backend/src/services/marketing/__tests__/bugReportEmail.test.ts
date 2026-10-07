@@ -153,8 +153,19 @@ describe('the screenshot becomes a real attachment, not an inline data URI', () 
     expect(decodeScreenshot(value as string | undefined)).toBeNull();
   });
 
-  it('refuses an image too large to email', () => {
+  it('refuses an image too large to email, without blowing the regex stack', () => {
+    // This is the one that found the bug. `([A-Za-z0-9+/=]+)$` against 9MB threw
+    // `RangeError: Maximum call stack size exceeded` - so an over-size upload crashed the
+    // request instead of being rejected, which is a 4K monitor away from happening for real.
     const huge = `data:image/png;base64,${'A'.repeat(9 * 1024 * 1024)}`;
+    expect(() => decodeScreenshot(huge)).not.toThrow();
     expect(decodeScreenshot(huge)).toBeNull();
+  });
+
+  it('still accepts an image just under the cap, so the limit is a limit and not a wall', () => {
+    // A positive control for the size check: without this, returning null unconditionally would
+    // pass every rejection test above.
+    const ok = `data:image/png;base64,${'A'.repeat(1024)}`;
+    expect(decodeScreenshot(ok)).not.toBeNull();
   });
 });

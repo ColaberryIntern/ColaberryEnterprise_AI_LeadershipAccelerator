@@ -67,15 +67,48 @@ async function recipients(): Promise<string[]> {
 }
 
 /** Decode `data:image/png;base64,...` into something nodemailer can attach. */
+/**
+ * Is every character legal in base64? Checked by scanning, NOT by a regex.
+ *
+ * `([A-Za-z0-9+/=]+)$` against a multi-megabyte string overflows the regex engine's stack -
+ * `RangeError: Maximum call stack size exceeded` - which turns an over-size upload from a
+ * rejection into a crashed request. A linear scan has no such cliff. Found by the test that
+ * sends a 9MB payload, which is exactly the input an operator produces on a 4K monitor.
+ */
+function isBase64Payload(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const c = value.charCodeAt(i);
+    const ok = (c >= 65 && c <= 90)      // A-Z
+      || (c >= 97 && c <= 122)           // a-z
+      || (c >= 48 && c <= 57)            // 0-9
+      || c === 43 || c === 47 || c === 61; // + / =
+    if (!ok) return false;
+  }
+  return true;
+}
+
 export function decodeScreenshot(dataUrl: string | undefined): { buffer: Buffer; filename: string } | null {
   if (!dataUrl) return null;
-  const match = /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl.trim());
+  const raw = dataUrl.trim();
+
+  // SIZE IS CHECKED FIRST, before anything walks the string. base64 inflates by 4/3, so an
+  // image at the byte cap encodes to roughly that; anything beyond is refused without being
+  // parsed at all.
+  if (raw.length > Math.ceil((MAX_SCREENSHOT_BYTES * 4) / 3) + 64) return null;
+
+  // The prefix is matched with a BOUNDED pattern - it can only ever look at the first few dozen
+  // characters - and the payload is validated separately by the scan above.
+  const prefix = /^data:image\/(png|jpeg|jpg|webp);base64,/.exec(raw);
   // Anything that is not plainly a base64 image is dropped rather than guessed at: this value
   // reaches an email attachment, and a mislabelled one is somebody else's problem to open.
-  if (!match) return null;
-  const buffer = Buffer.from(match[2], 'base64');
+  if (!prefix) return null;
+
+  const payload = raw.slice(prefix[0].length);
+  if (payload.length === 0 || !isBase64Payload(payload)) return null;
+
+  const buffer = Buffer.from(payload, 'base64');
   if (buffer.length === 0 || buffer.length > MAX_SCREENSHOT_BYTES) return null;
-  const ext = match[1] === 'jpg' ? 'jpeg' : match[1];
+  const ext = prefix[1] === 'jpg' ? 'jpeg' : prefix[1];
   return { buffer, filename: `screenshot.${ext}` };
 }
 
