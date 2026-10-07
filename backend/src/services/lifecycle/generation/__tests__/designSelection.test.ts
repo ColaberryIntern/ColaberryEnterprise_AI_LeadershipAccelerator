@@ -27,7 +27,7 @@ import {
 } from '../designSelection';
 import { generateDesignAlternatives, type AlternativeSet } from '../designAlternatives';
 import { MIN_VARIANTS } from '../../../delivery/deliveryDesignLoop';
-import { prerequisiteGaps, type LifecycleEvidence } from '../../lifecyclePrerequisites';
+import { prerequisiteGaps, type LifecycleEvidence, type EvidenceField } from '../../lifecyclePrerequisites';
 import { manualOnlyProject } from './fixtures/manualOnly';
 import type { TaskSurfaceBinding, WorkspaceRef } from '../workspaceBindingTypes';
 
@@ -258,33 +258,41 @@ describe('malformed selection input is refused rather than thrown through', () =
 
 describe('THE CONSUMER: a refused selection cannot clear design_ready', () => {
   /** Evidence with design_ready satisfied except for the selected design. */
-  const evidence = (selectedDesignRef: string | null): LifecycleEvidence => ({
-    tenantId: 'tenant-1',
-    requirementCount: 2,
-    requirementsWithoutProvenance: [],
-    uncitedRequirementSourceBlocks: [],
-    unresolvedSourceBlocks: [],
-    processesWithoutTasks: [],
-    graphHasStart: true,
-    graphHasEnd: true,
-    unreachableTasks: [],
-    unboundedReworkLoops: [],
-    tasksWithoutExecutionClass: [],
-    tasksWithoutAccountableHuman: [],
-    agentTasksAccountableForThemselves: [],
-    tasksUnmappedToSurface: [],
-    screensWithoutRationale: [],
-    selectedDesignRef,
-    manifestContentHash: 'a'.repeat(64),
-    unknownAllocationCount: 0,
-    effortCoverageDisclosed: true,
-    proposedBy: 'architect@example.test',
-    approval: null,
-    currentManifestRevision: 1,
-    actorStillAuthorized: true,
-    mustHaveRequirementsWithoutStory: [],
-    storiesWithoutTraceability: [],
-  });
+  const evidence = (selectedDesignRef: string | null): LifecycleEvidence => {
+    const measured = {
+      tenantId: 'tenant-1',
+      requirementCount: 2,
+      requirementsWithoutProvenance: [],
+      uncitedRequirementSourceBlocks: [],
+      unresolvedSourceBlocks: [],
+      processesWithoutTasks: [],
+      graphHasStart: true,
+      graphHasEnd: true,
+      unreachableTasks: [],
+      unboundedReworkLoops: [],
+      tasksWithoutExecutionClass: [],
+      tasksWithoutAccountableHuman: [],
+      agentTasksAccountableForThemselves: [],
+      tasksUnmappedToSurface: [],
+      screensWithoutRationale: [],
+      selectedDesignRef,
+      manifestContentHash: 'a'.repeat(64),
+      unknownAllocationCount: 0,
+      effortCoverageDisclosed: true,
+      proposedBy: 'architect@example.test',
+      approval: null,
+      currentManifestRevision: 1,
+      actorStillAuthorized: true,
+      mustHaveRequirementsWithoutStory: [],
+      storiesWithoutTraceability: [],
+    };
+    // Derived from the object itself, so adding an evidence field cannot silently flip
+    // this fixture to "not assessed" and make these assertions pass for the wrong reason.
+    const assessedFields = new Set(
+      Object.keys(measured).filter((k) => k !== 'tenantId'),
+    ) as Set<EvidenceField>;
+    return { ...measured, assessedFields };
+  };
 
   const rules = (ref_: string | null) => prerequisiteGaps('design_ready', evidence(ref_)).map((g) => g.rule);
 

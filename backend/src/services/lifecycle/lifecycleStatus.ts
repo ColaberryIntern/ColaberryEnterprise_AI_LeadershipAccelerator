@@ -16,7 +16,7 @@
  * load and breaks every route test that stubs `config/database`.
  */
 import type { LifecycleStage, LifecycleCondition } from './lifecycleStages';
-import type { PrerequisiteGap, LifecycleEvidence } from './lifecyclePrerequisites';
+import type { PrerequisiteGap, LifecycleEvidence, EvidenceField } from './lifecyclePrerequisites';
 import type { TransitionDecision } from './lifecycleTransition';
 import type { ApprovalScope, ApproveBlueprintResult } from './blueprintApproval';
 
@@ -113,17 +113,40 @@ async function loadAndAuthorize(
 }
 
 /**
+ * The fields `readLifecycleEvidence` actually measures today. **Exported so a test can partition
+ * the returned object against it in BOTH directions** — every field outside this set must be
+ * reported as not-assessed, and every field inside it must carry a real measurement.
+ *
+ * It is EMPTY, and that is the honest value. Nothing outside `lifecycle/generation/` imports the
+ * validators that would populate these, and production never writes an
+ * `operating_blueprint_manifests` row — so there is nothing to read yet. P5-T1.3 and P5-T1.4 add
+ * the writer and the orchestrator, and each adds its fields here in the same commit that starts
+ * reading them.
+ *
+ * `tenantId` is not listed: it comes off the row itself and is always known.
+ */
+export const ASSESSED_EVIDENCE_FIELDS: ReadonlySet<EvidenceField> = new Set<EvidenceField>([]);
+
+/**
  * Gather the evidence a prerequisite predicate needs.
  *
- * STUBBED DELIBERATELY, and visibly. Every field is the honest "nothing assessed yet" value, not
- * a value that would let a stage pass. The adapters (P2-T5) produce the pinned references and
- * Phase 3 produces the allocation and effort measures that fill these in; wiring those here
- * before they exist would mean inventing readiness. The consequence is that a transition request
- * is currently REFUSED with the real list of what is missing, which is the correct behaviour for
- * a feature that ships dark — not a stub that waves projects through.
+ * STILL STUBBED, and now HONESTLY stubbed. The previous version returned the "nothing assessed
+ * yet" VALUE for each field — but `false` is not a non-answer, it is the strongest possible claim.
+ * `graphHasStart: false` asserts that somebody read the transition graph and found no start node.
+ * Three fields did that, and every array returned `[]`, which reads as "checked, nothing wrong"
+ * and made `allocation_ready` and `plan_ready` permit unconditionally.
+ *
+ * Transitions were still refused overall, which is why this never bit — but the moment a surface
+ * renders the blocker list (P5-T2), those become fabricated blockers shown to a human. So the
+ * values stay as placeholders and `assessedFields` carries the truth: the predicates consult it
+ * before trusting any field, and an unassessed prerequisite BLOCKS.
+ *
+ * EXPORTED because it was module-private, and an acceptance criterion that asserts what this
+ * returns cannot be written against a private function.
  */
-async function gatherEvidence(row: LifecycleRow): Promise<LifecycleEvidence> {
+export async function readLifecycleEvidence(row: LifecycleRow): Promise<LifecycleEvidence> {
   return {
+    assessedFields: ASSESSED_EVIDENCE_FIELDS,
     tenantId: row.tenant_id,
     requirementCount: 0,
     requirementsWithoutProvenance: [],
@@ -166,7 +189,7 @@ export async function readLifecycleStatus(input: {
 
   const stage = stages.isLifecycleStage(row.stage) ? row.stage : 'discovery';
   const nextStage = stages.ADVANCE[stage];
-  const blockers = nextStage ? blockingGaps(prerequisiteGaps(nextStage, await gatherEvidence(row))) : [];
+  const blockers = nextStage ? blockingGaps(prerequisiteGaps(nextStage, await readLifecycleEvidence(row))) : [];
 
   return {
     projectId: input.projectId,
@@ -200,7 +223,7 @@ export async function requestTransition(input: {
     // No lifecycle row means nothing to transition. Returned as a refusal rather than thrown, so
     // the route maps it like any other refusal instead of a 500.
     return evaluateTransition({
-      from: null, to: input.to, actorPermissions: [], evidence: await gatherEvidence({
+      from: null, to: input.to, actorPermissions: [], evidence: await readLifecycleEvidence({
         id: '', tenant_id: '', stage: 'discovery', condition: null, condition_reason: null,
       }),
     });
@@ -215,7 +238,7 @@ export async function requestTransition(input: {
     to: input.to,
     actorPermissions: deliveryPermissionsFor(roles),
     isDraftScenario: input.isDraftScenario,
-    evidence: await gatherEvidence(row),
+    evidence: await readLifecycleEvidence(row),
   });
 
   if (!decision.allowed) return decision;
