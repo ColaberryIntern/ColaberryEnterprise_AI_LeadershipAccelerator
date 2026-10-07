@@ -131,6 +131,45 @@ describe('extractDossier (pure)', () => {
   });
 });
 
+describe('extractDossier — deadline time + timezone (never fabricated; a missed-by-zone deadline loses the bid)', () => {
+  it('captures the time AND an explicitly-stated timezone on a key-date', () => {
+    const d = extractDossier([ctx('Proposals are due by March 15, 2026 at 2:00 PM CST.')]);
+    const k = d.keyDates.find((x) => x.date === 'March 15, 2026');
+    expect(k).toBeTruthy();
+    expect(k!.time).toBe('2:00 PM');
+    expect(k!.timezone).toBe('CST');
+  });
+
+  it('captures a spelled-out timezone ("Central Time")', () => {
+    const d = extractDossier([ctx('Responses are due 03/15/2026 at 2:00 PM Central Time.')]);
+    expect(d.keyDates[0].timezone).toBe('Central Time');
+  });
+
+  it('leaves timezone NULL when a time is stated but no zone is — the deadline must be verified, never assumed local', () => {
+    const d = extractDossier([ctx('Proposals are due 03/15/2026 by 2:00 PM.')]);
+    expect(d.keyDates[0].time).toBe('2:00 PM');
+    expect(d.keyDates[0].timezone).toBeNull();
+  });
+
+  it('does NOT match the ambiguous 2-letter zone "CT" — leaves it null to force verification', () => {
+    const d = extractDossier([ctx('Proposals are due March 15, 2026 at 2:00 PM CT.')]);
+    expect(d.keyDates[0].time).toBe('2:00 PM');
+    expect(d.keyDates[0].timezone).toBeNull(); // CT deliberately unmatched (Connecticut/court collision)
+  });
+
+  it('leaves both time and timezone null when only a date is stated (never invents a time)', () => {
+    const d = extractDossier([ctx('Responses are due 03/15/2026.')]);
+    expect(d.keyDates[0]).toMatchObject({ date: '03/15/2026', time: null, timezone: null });
+  });
+
+  it('captures time + zone on a meeting line too', () => {
+    const d = extractDossier([ctx('A pre-bid conference will be held on 02/01/2026 at 10:00 AM EST.')]);
+    const m = d.meetings.find((x) => /pre-bid/i.test(x.text));
+    expect(m!.time).toBe('10:00 AM');
+    expect(m!.timezone).toBe('EST');
+  });
+});
+
 describe('extractProposal — per-file outcome (the honesty rail: no silent loss)', () => {
   it('records an outcome for EVERY file — extracted, unsupported, empty — never silently dropping one', async () => {
     const zip = makeZip({

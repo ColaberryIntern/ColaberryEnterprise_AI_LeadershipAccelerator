@@ -45,7 +45,17 @@ export interface ExtractedRequirement {
 /** Opportunity dossier — best-effort, DETERMINISTIC facts detected from the ZIP text (no LLM). Every item is a
  *  literal match and cites its source document; it is "detected — verify", never authoritative. */
 export interface DossierContact { kind: 'email' | 'phone'; value: string; sourceDocument: string; }
-export interface DossierLine { text: string; date: string | null; sourceDocument: string; }
+export interface DossierLine {
+  text: string;
+  date: string | null;
+  /** Time-of-day if literally stated in the same sentence (e.g. "2:00 PM"); null otherwise. */
+  time: string | null;
+  /** Timezone ONLY if an UNAMBIGUOUS one is literally stated (CST/CDT/EST/.../UTC/GMT/"Central Time"…); null
+   *  otherwise. NEVER inferred. A non-null `time` with a null `timezone` means the zone was not stated and the
+   *  deadline's absolute moment MUST be verified before relying on it — a missed-by-timezone deadline loses the bid. */
+  timezone: string | null;
+  sourceDocument: string;
+}
 export interface ExtractedDossier {
   contacts: DossierContact[];
   naics: string[];
@@ -84,6 +94,12 @@ const MEETING_RE = /\b(pre[- ]?bid|pre[- ]?proposal|pre[- ]?submittal|site\s+vis
 // "due by". The key-date path ALSO requires a literal date in the same sentence, so these loose anchors never fire alone.
 const KEYDATE_RE = /\b(due|deadline|closing\s+date|closes|submission\s+deadline|inquir(?:y|ies)|no\s+later\s+than)\b/i;
 const DATE_RE = /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{2,4})\b/i;
+// Time-of-day: "2:00 PM", "14:00", "2:00", "2 p.m.", "2pm". Best-effort; within a key-date sentence a "2:00" is a time.
+const TIME_RE = /\b(\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)\b/i;
+// Timezone: ONLY unambiguous forms. The 3-letter US zones (CST/CDT/EST/EDT/MST/MDT/PST/PDT), UTC/GMT, and the
+// spelled-out "<Region> Time". Deliberately NOT the 2-letter CT/ET/MT/PT — those collide with ordinary words
+// (CT=Connecticut/court, ET=et al.), and a false zone is worse than a null that tells the reviewer to verify.
+const TZ_RE = /\b(C[SD]T|E[SD]T|M[SD]T|P[SD]T|UTC|GMT|(?:Central|Eastern|Mountain|Pacific)(?:\s+(?:Standard|Daylight))?\s+Time)\b/i;
 
 /**
  * PURE: pull an opportunity dossier (contacts, NAICS, meeting + key-date lines) from the extracted context blocks.
@@ -116,8 +132,12 @@ export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
     for (const s of sentences(text)) {
       const dateM = s.match(DATE_RE);
       const date = dateM ? dateM[1] : null;
-      if (meetings.length < 10 && MEETING_RE.test(s)) meetings.push({ text: truncate(s, 240), date, sourceDocument: doc });
-      else if (keyDates.length < 10 && KEYDATE_RE.test(s) && date) keyDates.push({ text: truncate(s, 240), date, sourceDocument: doc });
+      const timeM = s.match(TIME_RE);
+      const time = timeM ? timeM[1].replace(/\s+/g, ' ').trim() : null;
+      const tzM = s.match(TZ_RE);
+      const timezone = tzM ? tzM[1].replace(/\s+/g, ' ').trim() : null;
+      if (meetings.length < 10 && MEETING_RE.test(s)) meetings.push({ text: truncate(s, 240), date, time, timezone, sourceDocument: doc });
+      else if (keyDates.length < 10 && KEYDATE_RE.test(s) && date) keyDates.push({ text: truncate(s, 240), date, time, timezone, sourceDocument: doc });
     }
   }
   return { contacts, naics, meetings, keyDates };
