@@ -78,6 +78,7 @@ import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
+import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -2784,6 +2785,10 @@ async function start(): Promise<void> {
   // additive NEW table so a reviewer can hide a discovered v1 candidate from the whole team's feed (reversible).
   // No existing table is altered; it FKs to nothing (keyed by tenant_id + OP's opportunity uuid).
   await ensureGovOpportunityDismissalSchema();
+  // Gov source bundles (gov_source_bundles): the private solicitation-ZIP evidence of record retained by the gov
+  // qualification workspace. A single additive NEW table (no existing table altered); keyed by tenant_id +
+  // qualification key + sha256, with the bytes on the uploads volume. See ensureGovSourceBundleSchema.
+  await ensureGovSourceBundleSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).
