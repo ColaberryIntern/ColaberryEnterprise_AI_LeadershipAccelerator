@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-10-06T21:50:13.289Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "name": "prep1-narrative @ 1440",
+      "file": "prep1-narrative-desktop.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-1",
+      "rendered": true,
+      "note": "found \"What to do\""
+    },
+    {
+      "name": "prep2-recording @ 1440",
+      "file": "prep2-recording-desktop.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-2",
+      "rendered": true,
+      "note": "found \"Hand it in\""
+    },
+    {
+      "name": "prep4-rehearsal @ 1440",
+      "file": "prep4-rehearsal-desktop.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-4",
+      "rendered": true,
+      "note": "found \"What to do\""
+    },
+    {
+      "name": "prep6-demo-day @ 1440",
+      "file": "prep6-demo-day-desktop.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-6",
+      "rendered": true,
+      "note": "found \"Demo Day\""
+    },
+    {
+      "name": "prep1-narrative @ 390",
+      "file": "prep1-narrative-mobile.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-1",
+      "rendered": true,
+      "note": "found \"What to do\""
+    },
+    {
+      "name": "prep2-recording @ 390",
+      "file": "prep2-recording-mobile.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-2",
+      "rendered": true,
+      "note": "found \"Hand it in\""
+    },
+    {
+      "name": "prep4-rehearsal @ 390",
+      "file": "prep4-rehearsal-mobile.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-4",
+      "rendered": true,
+      "note": "found \"What to do\""
+    },
+    {
+      "name": "prep6-demo-day @ 390",
+      "file": "prep6-demo-day-mobile.png",
+      "url": "https://www.refactored.ai/portal/projects/workspace/6e4bd9da-a22b-4b90-b5b2-55686487f39f/PREP-6",
+      "rendered": true,
+      "note": "found \"Demo Day\""
+    }
+  ]
+}
