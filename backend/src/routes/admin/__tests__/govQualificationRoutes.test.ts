@@ -477,6 +477,24 @@ describe('POST link + authorize-build', () => {
     expect(authorizeBuild.mock.calls[0][0].approverIdentityId).toBe('reviewer@test');
   });
 
+  it('T7: ACCEPTS a gws (decoupled) key for authorize-build — keyed on the body deliveryProjectId, not the path key', async () => {
+    // Previously a gws key hit canonicalParam and 400'd, so a decoupled pursuit (what step 6 creates projects for)
+    // could never be build-authorized. authorize-build never consults the OP snapshot, so it safely accepts gws.
+    authorizeBuild.mockResolvedValue({ id: 'ba-gws' });
+    const res = await request(app).post('/api/admin/factory/qualification/gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec/authorize-build')
+      .send({ deliveryProjectId: PID, scope: 'proposal-solution', resourceLimit: '2 agents / 8h' });
+    expect(res.status).toBe(201);
+    expect(authorizeBuild.mock.calls[0][0].deliveryProjectId).toBe(PID);       // the body project, not the path key
+    expect(authorizeBuild.mock.calls[0][0].approverIdentityId).toBe('reviewer@test');
+  });
+
+  it('T7: the gate is unchanged for gws — a missing scope/resourceLimit is still a 400', async () => {
+    const res = await request(app).post('/api/admin/factory/qualification/gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec/authorize-build')
+      .send({ deliveryProjectId: PID }); // no scope, no resourceLimit
+    expect(res.status).toBe(400);
+    expect(authorizeBuild).not.toHaveBeenCalled(); // rejected at the body schema, before the service
+  });
+
   it('400s an empty build authorization (BuildNotAuthorizedError from validate-before-write)', async () => {
     authorizeBuild.mockRejectedValue(new BuildNotAuthorizedError('missing_resource_limit'));
     const res = await request(app).post(`/api/admin/factory/qualification/${CLEAN_CANONICAL}/authorize-build`)

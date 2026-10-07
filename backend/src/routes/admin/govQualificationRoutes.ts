@@ -48,7 +48,9 @@ const GWS_RE = /^gws:[0-9a-f-]{36}$/;
 const isGwsKey = (k: string): boolean => GWS_RE.test(k);
 // The shared key param for the routes that serve BOTH paths (GET, create, approve, decision, extract-requirements):
 // accepts a canonical id OR a gws key; anything else → 400. The handlers branch on isGwsKey. The write routes that
-// are canonical-only by design (link, authorize-build, review-documents) keep `canonicalParam` (a gws key → 400 there).
+// are canonical-only by design because they validate against the OP snapshot (link, review-documents) keep
+// `canonicalParam` (a gws key → 400 there). authorize-build accepts BOTH (qualKeyParam): it never consults the OP
+// snapshot — the build is keyed on the body's deliveryProjectId, which step 6 sets for a decoupled pursuit too.
 const qualKeyParam = z.object({ canonicalOpportunityId: z.string().regex(/^(op:gov:[0-9a-f]{32}|gws:[0-9a-f-]{36})$/) });
 const biddingEntityField = z.string().min(1).max(120);
 
@@ -386,10 +388,14 @@ const authorizeBuildBody = z.object({
 });
 
 /** POST /api/admin/factory/qualification/:canonicalOpportunityId/authorize-build — record the SEPARATE build
- *  authorization (a pursuit approval is not a build authorization). The approver is the request identity. */
+ *  authorization (a pursuit approval is not a build authorization). The approver is the request identity.
+ *  Accepts a canonical id OR a gws key (qualKeyParam): unlike link/review-documents this never consults the OP
+ *  snapshot — the authorization is keyed on the body's deliveryProjectId, which step 6 sets for a DECOUPLED
+ *  (gws) pursuit too — so a decoupled pursuit's project can be build-authorized. The gate is unchanged:
+ *  authorizeBuild still requires an approver + scope + resource_limit and confers no generation (parked). */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/authorize-build', requireSection('program'), async (req: Request, res: Response) => {
-  const p = canonicalParam.safeParse(req.params);
-  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
   const b = authorizeBuildBody.safeParse(req.body ?? {});
   if (!b.success) { res.status(400).json({ error: 'Invalid authorize-build body.', issues: b.error.issues }); return; }
   const { canonicalOpportunityId } = p.data;
