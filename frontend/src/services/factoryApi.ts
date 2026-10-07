@@ -419,6 +419,9 @@ export interface GovQualificationWorkspace {
    *  is read-only `unanswered` today (authoring is a later phase); the citation anchor is the requirement's own
    *  evidence doc reference. Mirrors the backend `deriveResponseSlots`. */
   responseSlots?: GovResponseSlot[];
+  /** The Build-track plan (releases → stories → prompts) for the solution_build requirements. Mirrors the
+   *  backend `deriveGovBuildPlan`; absent on older records / when no build requirements exist. */
+  build?: GovBuildPlan;
 }
 
 /** One line of the proposal response checklist — cites the requirement it answers; never a fabricated "done". */
@@ -428,6 +431,22 @@ export interface GovResponseSlot {
   sourceRef: string | null;
   status: 'unanswered';
 }
+
+/** One Build-track story — a solution_build requirement turned into buildable work, citing the requirement. */
+export interface GovBuildStory {
+  id: string;
+  requirementId: string;
+  title: string;
+  statement: string;
+  release: string;
+  acceptance: string[];
+  status: 'unassigned';
+  /** The student's Claude Code prompt for this story (deterministic, cites the requirement). */
+  prompt?: string;
+}
+export interface GovBuildRelease { key: string; name: string; storyIds: string[] }
+/** The Build-track plan: releases → stories → prompts, a deterministic projection of solution_build requirements. */
+export interface GovBuildPlan { releases: GovBuildRelease[]; stories: GovBuildStory[]; buildStoryCount: number }
 
 /** A procurement code detected in the ZIP, tagged with its code SYSTEM (never assume NAICS). */
 export interface GovDossierCode { system: 'naics' | 'nigp'; code: string; sourceDocument: string }

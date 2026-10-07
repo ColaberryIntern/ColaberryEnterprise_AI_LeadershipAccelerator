@@ -523,6 +523,20 @@ describe('getDecoupledWorkspace — canApprove from ZIP coverage + requirement b
     expect(ws.responseSlots).toEqual([{ requirementId: 'R1', statement: 'x', sourceRef: 'D1', status: 'unanswered' }]);
   });
 
+  it('Phase 3 (P3-T1): surfaces the Build plan — a story per solution_build requirement (with its prompt), admin reqs excluded', async () => {
+    findOne.mockResolvedValue(rec({ established: [
+      { id: 'B1', text: 'The vendor shall provide a claims search database system.' }, // build signal -> story
+      { id: 'A1', text: 'Submit a completed Execution of Offer form.' },               // admin -> no story
+    ], reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.build.buildStoryCount).toBe(1);
+    expect(ws.build.stories.map((s: any) => s.requirementId)).toEqual(['B1']); // admin A1 excluded
+    expect(ws.build.stories[0].id).toBe('STORY-B1');
+    expect(ws.build.stories[0].status).toBe('unassigned');
+    expect(ws.build.stories[0].prompt).toContain('claims search database system'); // the prompt cites the requirement verbatim
+    expect(ws.build.releases[0].storyIds).toEqual(['STORY-B1']);
+  });
+
   it('Phase 2: surfaces the stored dossier (null when none stored)', async () => {
     const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: [], meetings: [], keyDates: [] };
     findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip], dossier }));
