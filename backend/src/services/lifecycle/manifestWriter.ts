@@ -1,0 +1,237 @@
+/**
+ * THE FIRST THING IN PRODUCTION THAT CREATES AN OPERATING BLUEPRINT MANIFEST.
+ *
+ * Phase 4 closed with this named as a dependency: "Production never CREATES an
+ * `operating_blueprint_manifests` row — it only reads and updates one." Until something wrote
+ * it, `refs_json` was empty, the content hash had nothing to hash, and the §4.1 approval-
+ * invalidation rule could not be implemented even though it was written down. The only two
+ * INSERTs in the repository were in tests.
+ *
+ * ## Idempotency, and why the key is the refs rather than the revision
+ *
+ * Writing a manifest is side-effecting, so it needs a key. The obvious one — (tenant, project,
+ * revision) — cannot work, because THIS function is what chooses the revision: keying on it
+ * cannot distinguish a replay from a legitimate new revision, since every replay looks new and
+ * every new revision looks like a replay depending on who incremented first.
+ *
+ * So the key is `(tenant, project, sha256(refs))`, stored in `refs_sha256` with a pair of
+ * partial unique indexes behind it. A second call with identical refs returns the existing row.
+ *
+ * That also refuses a later revision whose refs are byte-identical to an earlier one, and that
+ * is deliberate rather than a limitation: identical refs mean there is nothing new to record, so
+ * a revert and a replay are indistinguishable BY CONSTRUCTION and returning the existing row is
+ * the right answer to both.
+ *
+ * ## Two different conflicts, two different answers
+ *
+ * The table carries two unique constraints, so a failed insert means one of two things:
+ *
+ *   - the REFS index fired — someone already wrote exactly this. A replay. Re-read and return it.
+ *   - the REVISION index fired — a concurrent writer took the revision we picked, with DIFFERENT
+ *     refs. Not a replay: our write still needs to happen, at the next free revision.
+ *
+ * Collapsing them would be a silent data-loss bug in the second case: we would re-read, find
+ * nothing matching our refs, and return something that is not what we wrote. So the two are
+ * distinguished by re-reading on the refs key, and the revision case retries on a recomputed
+ * revision — BOUNDED, because CLAUDE.md forbids unbounded retry and an unbounded loop here would
+ * spin forever against a writer that keeps winning.
+ *
+ * ## What this does NOT do
+ *
+ * It does not approve, supersede, or validate the refs it is handed. `checkRefIntegrity` is the
+ * caller's to run, and P5-T1.4's orchestrator is what will run it — this module would otherwise
+ * be a second place where "is this blueprint any good" is decided.
+ */
+import { createHash } from 'crypto';
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
+import type { ManifestRefs, RefOrigin } from './adapters/manifestRefs';
+import { manifestContentHash } from './blueprintApproval';
+
+/** How many times to retry a revision collision before giving up. */
+const MAX_REVISION_ATTEMPTS = 3;
+
+export interface WriteManifestInput {
+  tenantId: string;
+  /** Which identity space the project id lives in; decides which FK column is set. */
+  origin: RefOrigin;
+  projectId: string;
+  refs: ManifestRefs;
+  /**
+   * REQUIRED, not optional. Separation of duty cannot be enforced without a proposer to compare
+   * the approver against, and `proposer_unrecorded` blocks the approval stage precisely so that
+   * a manifest cannot reach approval without one. Accepting a null here would push that failure
+   * to the gate instead of the write.
+   */
+  proposedBy: string;
+  /**
+   * TEST SEAM, and the only way the revision-conflict branch can be reached deliberately.
+   *
+   * `Promise.all` over this function does NOT produce a revision collision: the pool
+   * serialises the `MAX(revision)` read, so no caller ever picks a revision another caller
+   * already took. Three mutations survived because of that — collapsing the two conflicts,
+   * and reducing the retry budget to one, both cost nothing.
+   *
+   * Overriding this lets a test hand back a revision that is already in use, which is exactly
+   * the state a real concurrent writer creates. The same dependency-injection reason
+   * `verifyProjectLifecycleSchema` takes its `query` as a parameter.
+   */
+  nextRevisionFor?: (tenantId: string, origin: RefOrigin, projectId: string) => Promise<number>;
+}
+
+export interface WriteManifestResult {
+  manifestId: string;
+  revision: number;
+  /** Binds tenant + project + revision + refs. This is LC-10's "exact version/hash". */
+  contentSha256: string;
+  /** Revision-INDEPENDENT. The idempotency key, not an approval binding. */
+  refsSha256: string;
+  /** False when this call found an existing row rather than inserting one. */
+  created: boolean;
+}
+
+export class ManifestWriteError extends Error {
+  readonly error_class = 'ManifestWriteConflict';
+  constructor(message: string) {
+    super(message);
+    this.name = 'ManifestWriteError';
+  }
+}
+
+/**
+ * The idempotency hash: refs only, deliberately excluding the revision.
+ *
+ * Separate from `manifestContentHash`, which includes the revision and is what an approval binds
+ * to. Two hashes answer two questions — one identifies the write, one binds the approval — and
+ * parking a revision-independent hash in `content_sha256` would silently weaken LC-10.
+ *
+ * NUL-joined for the same domain-separation reason `manifestContentHash` gives: NUL cannot occur
+ * in a UUID or in JSON text, so ("t","p") and ("t\0p","") cannot collide.
+ */
+export function refsContentHash(parts: {
+  tenantId: string;
+  projectId: string;
+  refs: unknown;
+}): string {
+  const canonical = [
+    parts.tenantId,
+    parts.projectId,
+    JSON.stringify(parts.refs ?? null),
+  ].join('\0');
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+/** Which FK column an origin writes to. The CHECK constraint enforces exactly one being set. */
+function projectColumn(origin: RefOrigin): 'student_project_id' | 'delivery_project_id' {
+  return origin === 'sbp' ? 'student_project_id' : 'delivery_project_id';
+}
+
+interface ExistingRow {
+  id: string;
+  revision: number;
+  content_sha256: string | null;
+}
+
+/** Find a manifest already written with these exact refs. The replay path. */
+async function findByRefs(
+  tenantId: string,
+  origin: RefOrigin,
+  projectId: string,
+  refsSha: string,
+): Promise<ExistingRow | null> {
+  const col = projectColumn(origin);
+  const rows = await sequelize.query<ExistingRow>(
+    `SELECT id, revision, content_sha256
+       FROM operating_blueprint_manifests
+      WHERE tenant_id = $1 AND ${col} = $2 AND refs_sha256 = $3
+      LIMIT 1`,
+    { bind: [tenantId, projectId, refsSha], type: QueryTypes.SELECT },
+  );
+  return rows[0] ?? null;
+}
+
+async function nextRevision(
+  tenantId: string,
+  origin: RefOrigin,
+  projectId: string,
+): Promise<number> {
+  const col = projectColumn(origin);
+  const rows = await sequelize.query<{ next: number | null }>(
+    `SELECT MAX(revision) + 1 AS next
+       FROM operating_blueprint_manifests
+      WHERE tenant_id = $1 AND ${col} = $2`,
+    { bind: [tenantId, projectId], type: QueryTypes.SELECT },
+  );
+  return Number(rows[0]?.next ?? 1) || 1;
+}
+
+/**
+ * Create the manifest, or return the one that already records these refs.
+ *
+ * Idempotent on `(tenant, project, refs)`. Safe to call twice; safe to call concurrently.
+ */
+export async function writeBlueprintManifest(
+  input: WriteManifestInput,
+): Promise<WriteManifestResult> {
+  const { tenantId, origin, projectId, refs, proposedBy } = input;
+  const refsSha = refsContentHash({ tenantId, projectId, refs });
+  const col = projectColumn(origin);
+  const pickRevision = input.nextRevisionFor ?? nextRevision;
+
+  // NO CHEAP PRE-READ. An earlier version checked for an existing row before attempting the
+  // insert, to spare a write on the common replay. Removing it cost ZERO tests, which makes it
+  // an untested branch by Amendment 4’s reckoning — and the rule allows two categories, tested
+  // or removed. The conflict path below reaches the identical answer, so this is the second.
+
+  for (let attempt = 1; attempt <= MAX_REVISION_ATTEMPTS; attempt += 1) {
+    const revision = await pickRevision(tenantId, origin, projectId);
+    const contentSha = manifestContentHash({ tenantId, projectId, revision, refs });
+
+    // ON CONFLICT DO NOTHING rather than a caught exception: a unique violation inside a
+    // transaction poisons it, and Sequelize reports every integrity violation as the same
+    // "Validation error" regardless of which constraint fired.
+    const inserted = await sequelize.query<{ id: string }>(
+      `INSERT INTO operating_blueprint_manifests
+         (tenant_id, ${col}, revision, status, refs_json, refs_sha256, content_sha256, proposed_by)
+       VALUES ($1, $2, $3, 'draft', $4::jsonb, $5, $6, $7)
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
+      {
+        bind: [tenantId, projectId, revision, JSON.stringify(refs), refsSha, contentSha, proposedBy],
+        type: QueryTypes.SELECT,
+      },
+    );
+
+    if (inserted[0]?.id) {
+      return {
+        manifestId: inserted[0].id,
+        revision,
+        contentSha256: contentSha,
+        refsSha256: refsSha,
+        created: true,
+      };
+    }
+
+    // Nothing inserted, so one of the two unique indexes fired. WHICH ONE decides what happens
+    // next, and conflating them would return a row we did not write.
+    const raced = await findByRefs(tenantId, origin, projectId, refsSha);
+    if (raced) {
+      // The refs index. Someone wrote exactly this between our read and our insert: a replay.
+      return {
+        manifestId: raced.id,
+        revision: raced.revision,
+        contentSha256: raced.content_sha256
+          ?? manifestContentHash({ tenantId, projectId, revision: raced.revision, refs }),
+        refsSha256: refsSha,
+        created: false,
+      };
+    }
+    // The revision index: a concurrent writer took our revision with different refs. Our write
+    // still has to happen. Loop and recompute — bounded, never a bare `while (true)`.
+  }
+
+  throw new ManifestWriteError(
+    `Could not allocate a manifest revision for project ${projectId} after `
+    + `${MAX_REVISION_ATTEMPTS} attempts; a concurrent writer is winning every race.`,
+  );
+}
