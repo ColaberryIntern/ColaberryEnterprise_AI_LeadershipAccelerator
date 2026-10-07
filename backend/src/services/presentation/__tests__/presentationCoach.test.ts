@@ -232,6 +232,35 @@ describe('private practice scores stay private', () => {
     expect(canRead(aiPrivate, OWNER, { enrollmentId: 'peer-1', teammateOf: ['owner-1'] })).toBe(false);
   });
 
+  /**
+   * A PUBLISHED private row. The draft-based tests above pass on the draft rule and
+   * never reach the visibility switch at all — a mutation that made `private` readable
+   * broke none of them. This is the case that actually exercises the rule.
+   */
+  const aiPrivatePublished: FeedbackRow = {
+    attemptId: 'a1', evaluatorRole: 'ai', visibility: 'private', reviewState: 'published',
+  };
+
+  it('a peer cannot read a PUBLISHED private score either', () => {
+    expect(canRead(aiPrivatePublished, OWNER, { enrollmentId: 'peer-1' })).toBe(false);
+  });
+
+  it('a teammate cannot read a PUBLISHED private score', () => {
+    expect(canRead(aiPrivatePublished, OWNER, { enrollmentId: 'peer-1', teammateOf: ['owner-1'] })).toBe(false);
+  });
+
+  it('shared_with_instructor is not readable by a peer, published or not', () => {
+    const row: FeedbackRow = {
+      attemptId: 'a1', evaluatorRole: 'self', visibility: 'shared_with_instructor', reviewState: 'published',
+    };
+    expect(canRead(row, OWNER, { enrollmentId: 'peer-1' })).toBe(false);
+    expect(canRead(row, OWNER, { enrollmentId: 'staff-1', isStaff: true })).toBe(true);
+  });
+
+  it('visibleTo hides a published private row from a peer', () => {
+    expect(visibleTo([aiPrivatePublished], OWNER, { enrollmentId: 'peer-1' })).toEqual([]);
+  });
+
   it('staff can, because they are the ones who have to help', () => {
     expect(canRead(aiPrivate, OWNER, { enrollmentId: 'staff-1', isStaff: true })).toBe(true);
   });
