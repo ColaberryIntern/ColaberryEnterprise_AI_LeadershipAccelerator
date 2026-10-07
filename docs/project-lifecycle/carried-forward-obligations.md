@@ -657,7 +657,17 @@ incident whose row should cite the incident and the fix, not a summary written m
 someone reading the plan. **Owner: whoever next touches those phases, or Phase 8 when it
 assembles the table.**
 
-### SIZE RESIDUAL: `ensureProjectLifecycleSchema.ts` is approaching the 500-line ceiling
+### CLOSED by P5-T1.3: `ensureProjectLifecycleSchema.ts` split at the prescribed seam
+
+Split into `ensureProjectLifecycleSchema.ts` (287 lines, the DDL and the ensure path) and
+`projectLifecycleSchemaContract.ts` (167, the three assertion lists and the assert), at
+exactly the seam this entry named. Three importers repointed, no re-export barrel. The
+split broke the `assertProjectLifecycleSchema()` call at the end of the ensure path and
+`tsc` caught it as one TS2552 above the 4-error baseline — the entry below was right that
+discovering this at the ceiling costs a split under pressure, and right to say so in
+advance. The original text follows.
+
+### SIZE RESIDUAL (original text): `ensureProjectLifecycleSchema.ts` is approaching the 500-line ceiling
 
 Against CLAUDE.md’s 500-line hard ceiling and a ~300 soft target. P4-T6 added two tables and
 their documentation to a file that was already 326 lines. **No current count is quoted here:**

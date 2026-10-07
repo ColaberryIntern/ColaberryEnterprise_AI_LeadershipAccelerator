@@ -34,7 +34,7 @@ import {
   REQUIRED_TABLES,
   REQUIRED_INDEXES,
   REQUIRED_CONSTRAINTS,
-} from '../db/ensureProjectLifecycleSchema';
+} from '../db/projectLifecycleSchemaContract';
 
 interface VerifyResult {
   ok: boolean;

@@ -12,7 +12,7 @@ import {
 } from '../verifyProjectLifecycleSchema';
 import {
   REQUIRED_TABLES, REQUIRED_INDEXES, REQUIRED_CONSTRAINTS,
-} from '../../db/ensureProjectLifecycleSchema';
+} from '../../db/projectLifecycleSchemaContract';
 
 /**
  * A fake connection that answers the aggregate presence query.

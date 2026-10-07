@@ -19,11 +19,11 @@ jest.mock('../../config/database', () => ({
 }));
 
 import { sequelize } from '../../config/database';
+import { PROJECT_LIFECYCLE_STATEMENTS } from '../ensureProjectLifecycleSchema';
 import {
-  PROJECT_LIFECYCLE_STATEMENTS,
   REQUIRED_TABLES,
   assertProjectLifecycleSchema,
-} from '../ensureProjectLifecycleSchema';
+} from '../projectLifecycleSchemaContract';
 
 const queryMock = sequelize.query as unknown as jest.Mock;
 
