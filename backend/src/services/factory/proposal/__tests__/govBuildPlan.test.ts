@@ -45,6 +45,15 @@ describe('deriveGovBuildPlan', () => {
     expect(deriveGovBuildPlan([null, undefined] as any).stories).toEqual([]);
   });
 
+  it('prefers the requirement\'s OWN stored tracks over classifying its text (reviewer-set tracks are authoritative)', () => {
+    // Stored tracks say build, but the TEXT has no build signal → still a story (stored wins).
+    const yesStored = deriveGovBuildPlan([{ id: 'R1', statement: 'Provide a client reference binder.', tracks: ['proposal', 'solution_build'] }]);
+    expect(yesStored.stories.map((s) => s.requirementId)).toEqual(['R1']);
+    // Stored tracks say proposal-only, but the TEXT has a build signal → NO story (stored wins over text).
+    const noStored = deriveGovBuildPlan([{ id: 'R2', statement: 'Provide a software system.', tracks: ['proposal'] }]);
+    expect(noStored.stories).toEqual([]);
+  });
+
   it('an all-admin requirement set yields an EMPTY plan (no releases, no stories)', () => {
     const plan = deriveGovBuildPlan([buildReq('R1', 'Provide three client references.'), buildReq('R2', 'Register in SAM.')]);
     expect(plan).toEqual({ releases: [], stories: [], buildStoryCount: 0 });

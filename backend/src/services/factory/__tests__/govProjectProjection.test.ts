@@ -52,7 +52,16 @@ describe('toStudentGovProjectView (pure) — student-safe', () => {
   });
 
   it('is total on empty/garbage input', () => {
-    expect(toStudentGovProjectView(null, null as any, null as any)).toMatchObject({ projectId: '', tracks: [], requirements: [], requirementCounts: { total: 0, proposal: 0, build: 0 } });
+    expect(toStudentGovProjectView(null, null as any, null as any)).toMatchObject({ projectId: '', tracks: [], requirements: [], requirementCounts: { total: 0, proposal: 0, build: 0 }, build: { releases: [], stories: [], buildStoryCount: 0 } });
+  });
+
+  it('P3-T3: surfaces the Build plan — a story+prompt for the solution_build requirement, none for the admin one', () => {
+    expect(view.build.buildStoryCount).toBe(1);
+    expect(view.build.stories.map((s) => s.requirementId)).toEqual(['REQ-1']); // REQ-2 (proposal-only) has no story
+    expect(view.build.stories[0].id).toBe('STORY-REQ-1');
+    expect(view.build.stories[0].status).toBe('unassigned');
+    expect(view.build.stories[0].prompt).toContain('Provide a search database'); // the prompt cites the requirement verbatim
+    expect(view.build.releases[0].storyIds).toEqual(['STORY-REQ-1']);
   });
 });
 
