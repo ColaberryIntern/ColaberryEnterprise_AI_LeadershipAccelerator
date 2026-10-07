@@ -650,4 +650,41 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('2:00 PM');       // the captured time
     expect(text).toContain('verify tz');     // a stated time with no zone is flagged, never assumed local
   });
+
+  // ── P3-T1: the Build tab renders the release/story/prompt plan ──
+  it('Build tab: renders the release + story (cited, unassigned) and reveals the prompt on demand', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      build: {
+        buildStoryCount: 1,
+        releases: [{ key: 'r0', name: 'Release 0 — initial build', storyIds: ['STORY-B1'] }],
+        stories: [{
+          id: 'STORY-B1', requirementId: 'B1', title: 'Claims search database', release: 'r0', status: 'unassigned',
+          statement: 'The vendor shall provide a claims search database.',
+          acceptance: ['The solution demonstrably satisfies: The vendor shall provide a claims search database.'],
+          prompt: '# STORY-B1\nThe vendor shall provide a claims search database.\ntraced back to B1',
+        }],
+      },
+    }));
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('STORY-B1');
+    expect(text).toContain('from B1');                                   // traced to its requirement
+    expect(text).toContain('The vendor shall provide a claims search database.');
+    expect(text).toContain('unassigned');                               // honest status
+    expect(text).not.toContain('traced back to B1');                    // the prompt body is hidden until revealed
+    const promptBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('student build prompt')) as HTMLButtonElement;
+    expect(promptBtn).toBeTruthy();
+    await act(async () => { promptBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(container.textContent ?? '').toContain('traced back to B1'); // prompt revealed on click
+  });
+
+  it('Build tab: honest empty state when the requirements are all administrative (no build stories)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      build: { buildStoryCount: 0, releases: [], stories: [] },
+    }));
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No build stories');
+  });
 });

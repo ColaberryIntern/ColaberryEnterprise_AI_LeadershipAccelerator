@@ -7,7 +7,7 @@ import {
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
   type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier, type GovRelationship,
-  type GovResponseSlot,
+  type GovResponseSlot, type GovBuildPlan, type GovBuildStory,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
@@ -204,6 +204,73 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
         Detected automatically from the ZIP text — <strong>verify</strong> against the solicitation before you rely on it.
         This is reference only and does not change any approval.
       </div>
+    </>
+  );
+}
+
+/**
+ * GovBuildStoryRow — one Build-track story: its requirement citation, acceptance, and an expandable student
+ * prompt (read-only). Honest: the story is `unassigned` and nothing here runs a build.
+ */
+function GovBuildStoryRow({ story }: { story: GovBuildStory }): React.ReactElement {
+  const [showPrompt, setShowPrompt] = useState(false);
+  return (
+    <li className="py-2 border-bottom">
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        <span className="fw-semibold small">{story.id}</span>
+        <StatusBadge label={story.status} tone="neutral" />
+        <span className="small text-secondary">· from {story.requirementId}</span>
+      </div>
+      <div className="small">{story.statement}</div>
+      {story.acceptance.length > 0 && (
+        <ul className="small text-secondary mb-1 mt-1">{story.acceptance.map((a, i) => <li key={i}>{a}</li>)}</ul>
+      )}
+      {story.prompt && (
+        <>
+          <button type="button" className="btn btn-link btn-sm px-0" onClick={() => setShowPrompt((v) => !v)} aria-expanded={showPrompt}>
+            <i className={`ri-${showPrompt ? 'arrow-down-s-line' : 'arrow-right-s-line'} me-1`} aria-hidden="true" />
+            {showPrompt ? 'Hide' : 'Show'} the student build prompt
+          </button>
+          {showPrompt && <pre className="small bg-body-secondary rounded p-2 mb-0" style={{ whiteSpace: 'pre-wrap' }}>{story.prompt}</pre>}
+        </>
+      )}
+    </li>
+  );
+}
+
+/**
+ * GovBuildPlanPanel — the Build-track plan: releases → stories → prompts, projected from the solution_build
+ * requirements. Honest empty-state (an all-admin requirement set has no build stories, by design — admin forms
+ * never become software features). Nothing here assigns or runs a build; assignment + (disabled) execution later.
+ */
+function GovBuildPlanPanel({ build }: { build: GovBuildPlan | undefined }): React.ReactElement {
+  const releases = build?.releases ?? [];
+  const stories = build?.stories ?? [];
+  if (stories.length === 0) {
+    return (
+      <div className="small text-secondary">
+        <i className="ri-information-line me-1" aria-hidden="true" />
+        No build stories — this opportunity's established requirements are all administrative/compliance (no technical build signal), so there is no software to build. Build stories appear here only for requirements that carry a build signal.
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="small text-secondary mb-2">
+        {stories.length} build {stories.length === 1 ? 'story' : 'stories'} across {releases.length} release{releases.length === 1 ? '' : 's'},
+        each traced to its requirement. Read-only — assignment to a student and execution are later, gated steps.
+      </div>
+      {releases.map((rel) => (
+        <div key={rel.key} className="mb-3">
+          <h3 className="h6 text-secondary text-uppercase small mb-2">{rel.name} <span className="fw-normal">({rel.storyIds.length})</span></h3>
+          <ul className="list-unstyled mb-0">
+            {rel.storyIds.map((sid) => {
+              const s = stories.find((x) => x.id === sid);
+              return s ? <GovBuildStoryRow key={sid} story={s} /> : null;
+            })}
+          </ul>
+        </div>
+      ))}
     </>
   );
 }
@@ -1165,12 +1232,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           <GovTabPanel active={activeTab === 'build'}>
           {/* ── Build tab: the solution-build track (forward) + the separate build authorization ─ */}
           {(
-            <SectionCard title="Solution build track" icon="tools-line"
-              subtitle="The Build track turns a won proposal into a delivered solution. Build stories and prompts are generated in a later phase.">
-              <div className="small text-secondary">
-                <i className="ri-information-line me-1" aria-hidden="true" />
-                No build stories yet. A pursuit approval is not a build authorization, and the autonomous builder stays parked — recording an authorization below never runs a build.
-              </div>
+            <SectionCard title="Solution build track — releases, stories & prompts" icon="tools-line"
+              subtitle="The won proposal's technical requirements, projected into buildable stories (each citing its requirement) with a student Claude Code prompt. A pursuit approval is NOT a build authorization, and the autonomous builder stays parked — nothing here runs a build.">
+              <GovBuildPlanPanel build={ws.build} />
             </SectionCard>
           )}
           {(

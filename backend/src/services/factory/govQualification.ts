@@ -256,6 +256,16 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   // Deterministic projection; every slot is honestly `unanswered` (response authoring is the follow-on).
   const { deriveResponseSlots } = await import('./proposal/responseSlots');
   const responseSlots = deriveResponseSlots(established);
+  // Phase 3 (P3-T1): the Build-track plan — releases → stories → prompts, a deterministic projection of the
+  // solution_build-classified requirements (admin requirements never become a feature). Each story is honestly
+  // `unassigned` + carries its student Claude Code prompt; assignment + (disabled) execution are later steps.
+  const { deriveGovBuildPlan, buildGovStoryPrompt } = await import('./proposal/govBuildPlan');
+  const buildPlanBase = deriveGovBuildPlan(established);
+  const build = {
+    releases: buildPlanBase.releases,
+    stories: buildPlanBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) })),
+    buildStoryCount: buildPlanBase.buildStoryCount,
+  };
   // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
   let sync: any = null;
   try { const { getGovSyncEntry } = await import('./govOpportunitySync'); sync = await getGovSyncEntry(gwsKey); } catch { sync = null; }
@@ -281,6 +291,7 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     zipAttestation,
     dossier,
     responseSlots,
+    build,
     relationship,
     changedSource: false,
     lastSyncedAt: sync ? sync.syncedAt : null,
