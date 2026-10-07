@@ -41,9 +41,13 @@ jest.mock('../../../services/factory/opportunities/govOpportunityAlias', () => {
 });
 const extractProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalExtractor', () => ({ extractProposal: (...a: any[]) => extractProposal(...a) }));
-// Phase 2 private byte-store — mocked so attest-zip tests don't touch the DB or the uploads volume.
+// Phase 2 private byte-store — mocked so attest-zip / download tests don't touch the DB or the uploads volume.
 const storeGovSourceBundle = jest.fn();
-jest.mock('../../../services/factory/proposal/govSourceBundleStore', () => ({ storeGovSourceBundle: (...a: any[]) => storeGovSourceBundle(...a) }));
+const loadGovSourceBundleScoped = jest.fn();
+jest.mock('../../../services/factory/proposal/govSourceBundleStore', () => ({
+  storeGovSourceBundle: (...a: any[]) => storeGovSourceBundle(...a),
+  loadGovSourceBundleScoped: (...a: any[]) => loadGovSourceBundleScoped(...a),
+}));
 // Step 6 — the two-track project creator, mocked so the flag-on tests don't touch the DB.
 const ensureGovTwoTrackProject = jest.fn();
 jest.mock('../../../services/factory/govDeliveryProject', () => ({ ensureGovTwoTrackProject: (...a: any[]) => ensureGovTwoTrackProject(...a) }));
@@ -76,7 +80,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(10);
+    expect(routeLines.length).toBe(11); // +1: GET source-bundle/:bundleId (the retained-ZIP download)
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -509,6 +513,45 @@ describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
       .attach('document', Buffer.from('z'), 's.zip');
     expect(res.status).toBe(400);
     expect(recordZipAttestation).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET source-bundle/:bundleId (download the retained evidence-of-record ZIP)', () => {
+  const nodeFs = require('fs');
+  const nodeOs = require('os');
+  const nodePath = require('path');
+  const GWS = 'gws:11111111-1111-4111-a111-111111111111';
+  const BUNDLE_ID = '22222222-2222-4222-a222-222222222222';
+  const url = `/api/admin/factory/qualification/${GWS}/source-bundle/${BUNDLE_ID}`;
+  let tmpFile = '';
+
+  beforeAll(() => {
+    tmpFile = nodePath.join(nodeOs.tmpdir(), `gov-bundle-test-${Date.now()}.zip`);
+    nodeFs.writeFileSync(tmpFile, Buffer.from('PK pretend-zip-bytes'));
+  });
+  afterAll(() => { try { nodeFs.unlinkSync(tmpFile); } catch { /* best effort */ } });
+
+  it('200: streams the retained bundle, scoped to this tenant + qualification, as an attachment', async () => {
+    loadGovSourceBundleScoped.mockResolvedValue({ path: tmpFile, mime: 'application/zip', filename: 'solicitation.zip' });
+    const res = await request(app).get(url);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/zip');
+    expect(res.headers['content-disposition']).toContain('attachment');
+    expect(res.headers['content-disposition']).toContain('solicitation.zip');
+    // scoped on all three — tenant from scopeOrFail, the gws key from the path, the bundle id from the path
+    expect(loadGovSourceBundleScoped).toHaveBeenCalledWith('ten-1', GWS, BUNDLE_ID);
+  });
+
+  it('404 when the bundle is not this tenant/qualification (loader returns null — enumeration-safe)', async () => {
+    loadGovSourceBundleScoped.mockResolvedValue(null);
+    const res = await request(app).get(url);
+    expect(res.status).toBe(404);
+  });
+
+  it('400 on a malformed bundle id (never calls the loader)', async () => {
+    const res = await request(app).get(`/api/admin/factory/qualification/${GWS}/source-bundle/not-a-uuid`);
+    expect(res.status).toBe(400);
+    expect(loadGovSourceBundleScoped).not.toHaveBeenCalled();
   });
 });
 

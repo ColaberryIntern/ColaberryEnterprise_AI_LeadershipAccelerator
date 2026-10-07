@@ -88,3 +88,32 @@ export async function storeGovSourceBundle(
     throw err;
   }
 }
+
+export interface ResolvedBundle {
+  path: string;
+  mime: string;
+  filename: string;
+}
+
+/** Map a row to a file on disk, or null if the row is absent OR its bytes are missing from the volume. */
+async function resolve(row: GovSourceBundle | null): Promise<ResolvedBundle | null> {
+  if (!row) return null;
+  // basename() guards against a stored_name that somehow contains a path separator.
+  const p = path.join(GOV_SOURCE_BUNDLE_DIR, path.basename(row.stored_name));
+  try { await fs.access(p); } catch { return null; }
+  return { path: p, mime: row.mime, filename: row.filename };
+}
+
+/**
+ * Resolve a retained source bundle to a file on disk, SCOPED to its tenant AND its qualification. Null covers
+ * "no such id", "not this tenant's", "not this qualification's", and "file missing" alike — the caller answers
+ * 404 for all four, so probing a bundle id tells you nothing. The qualification scope means a reviewer cannot
+ * fetch a bundle through a path that names a different qualification than the one it belongs to.
+ */
+export async function loadGovSourceBundleScoped(
+  tenantId: string,
+  qualificationKey: string,
+  id: string,
+): Promise<ResolvedBundle | null> {
+  return resolve(await GovSourceBundle.findOne({ where: { id, tenant_id: tenantId, qualification_key: qualificationKey } }));
+}

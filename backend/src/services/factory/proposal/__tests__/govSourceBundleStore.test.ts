@@ -16,12 +16,13 @@ jest.mock('fs/promises', () => ({
 
 import fs from 'fs/promises';
 import GovSourceBundle from '../../../../models/GovSourceBundle';
-import { storeGovSourceBundle } from '../govSourceBundleStore';
+import { storeGovSourceBundle, loadGovSourceBundleScoped } from '../govSourceBundleStore';
 
 const mockFindOne = GovSourceBundle.findOne as unknown as jest.Mock;
 const mockCreate = GovSourceBundle.create as unknown as jest.Mock;
 const mockWrite = fs.writeFile as unknown as jest.Mock;
 const mockUnlink = fs.unlink as unknown as jest.Mock;
+const mockAccess = fs.access as unknown as jest.Mock;
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const OTHER_TENANT = '99999999-9999-4999-8999-999999999999';
@@ -100,5 +101,27 @@ describe('storeGovSourceBundle — idempotency & scoping', () => {
     mockFindOne.mockResolvedValue(null); // still nothing after the failure
     mockCreate.mockRejectedValue(new Error('connection terminated'));
     await expect(storeGovSourceBundle(TENANT, KEY, zip())).rejects.toThrow('connection terminated');
+  });
+});
+
+describe('loadGovSourceBundleScoped — tenant + qualification scoping (enumeration-safe)', () => {
+  it('resolves a bundle owned by this tenant AND this qualification', async () => {
+    mockFindOne.mockResolvedValue({ mime: 'application/zip', stored_name: 'abc.zip', filename: 'solicitation.zip' });
+    mockAccess.mockResolvedValue(undefined);
+    const r = await loadGovSourceBundleScoped(TENANT, KEY, 'bundle-id');
+    expect(r).toMatchObject({ mime: 'application/zip', filename: 'solicitation.zip' });
+    // the lookup is scoped on all three — a bundle id alone is not enough
+    expect(mockFindOne.mock.calls[0][0].where).toEqual({ id: 'bundle-id', tenant_id: TENANT, qualification_key: KEY });
+  });
+
+  it('returns null when the row is not this tenant/qualification (no row) — caller answers 404', async () => {
+    mockFindOne.mockResolvedValue(null);
+    expect(await loadGovSourceBundleScoped(OTHER_TENANT, KEY, 'bundle-id')).toBeNull();
+  });
+
+  it('returns null when the row exists but the file is missing from the volume', async () => {
+    mockFindOne.mockResolvedValue({ mime: 'application/zip', stored_name: 'gone.zip', filename: 'solicitation.zip' });
+    mockAccess.mockRejectedValue(new Error('ENOENT'));
+    expect(await loadGovSourceBundleScoped(TENANT, KEY, 'bundle-id')).toBeNull();
   });
 });

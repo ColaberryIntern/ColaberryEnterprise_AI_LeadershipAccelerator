@@ -565,6 +565,38 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-re
   }
 });
 
+/**
+ * GET /api/admin/factory/qualification/:canonicalOpportunityId/source-bundle/:bundleId — download the retained
+ * solicitation ZIP (the evidence of record that attest-zip stored). Access-checked three ways: program-gated
+ * (requireSection), tenant-scoped (scopeOrFail), and scoped to THIS qualification — loadGovSourceBundleScoped
+ * answers 404 for any bundle that is not this tenant's AND this qualification's (and for a missing file), so a
+ * bundle id reveals nothing about another tenant's or qualification's evidence. Streams the bytes as an
+ * attachment. (Session+section+tenant is the authorization here, matching the sibling qualification routes; a
+ * signed-URL variant for header-less/student-portal embedding is a later slice.)
+ */
+router.get('/api/admin/factory/qualification/:canonicalOpportunityId/source-bundle/:bundleId', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const bundleId = String((req.params as any).bundleId || '');
+  if (!/^[0-9a-f-]{36}$/i.test(bundleId)) { res.status(400).json({ error: 'Invalid bundle id.' }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_qualification_source_bundle_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const { loadGovSourceBundleScoped } = await import('../../services/factory/proposal/govSourceBundleStore');
+    const bundle = await loadGovSourceBundleScoped(scope.tenantId, canonicalOpportunityId, bundleId);
+    if (!bundle) { res.status(404).json({ error: 'Source bundle not found.' }); return; }
+    const safeName = (bundle.filename || 'solicitation.zip').replace(/[^\w.\-]/g, '_');
+    res.setHeader('Content-Type', bundle.mime || 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.sendFile(bundle.path);
+  } catch (err: any) {
+    logFail('gov_qualification_source_bundle_download_failed', err, { canonicalOpportunityId });
+    res.status(500).json({ error: 'Could not download the source bundle.' });
+  }
+});
+
 export const QUALIFICATION_DECISION_STATES = QUALIFICATION_DECISIONS;
 export const QUALIFICATION_APPROVAL_STATES = APPROVAL_DECISIONS;
 export default router;
