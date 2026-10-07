@@ -42,6 +42,7 @@ export const PRESENTATION_DECK_STATEMENTS: string[] = [
      prompt_version VARCHAR(120),
      prompt_sha VARCHAR(64),
      content_html TEXT,
+     grounding_json JSONB,
      error_class VARCHAR(60),
      error_detail TEXT,
      tries INTEGER NOT NULL DEFAULT 0,
@@ -57,6 +58,10 @@ export const PRESENTATION_DECK_STATEMENTS: string[] = [
   `ALTER TABLE presentation_decks ADD COLUMN IF NOT EXISTS prompt_version VARCHAR(120)`,
   `ALTER TABLE presentation_decks ADD COLUMN IF NOT EXISTS prompt_sha VARCHAR(64)`,
   `ALTER TABLE presentation_decks ADD COLUMN IF NOT EXISTS content_html TEXT`,
+  // Which figures in the generated deck appear in nothing the student wrote. Stored
+  // WITH the deck rather than recomputed on read: the student edits their project, and
+  // then the same deck would silently change which of its numbers look invented.
+  `ALTER TABLE presentation_decks ADD COLUMN IF NOT EXISTS grounding_json JSONB`,
   `ALTER TABLE presentation_decks ADD COLUMN IF NOT EXISTS error_class VARCHAR(60)`,
   `ALTER TABLE presentation_decks ADD COLUMN IF NOT EXISTS error_detail TEXT`,
   `ALTER TABLE presentation_decks ADD COLUMN IF NOT EXISTS tries INTEGER DEFAULT 0`,

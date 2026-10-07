@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { classifyError, type ErrorClass } from '../../utils/errorClassifier';
+import { checkGrounding, type MetricClaim } from './presentationGrounding';
 
 /**
  * Turning a student's assembled prompt into a deck, through the AI client this repo
@@ -83,6 +84,8 @@ export interface DeckRow {
   errorClass: string | null;
   /** Present only when ready. */
   contentHtml: string | null;
+  /** Figures in the deck that appear in nothing the student wrote. */
+  unsupported: MetricClaim[];
 }
 
 export type GenerateResult =
@@ -105,6 +108,7 @@ function toRow(r: Record<string, any>): DeckRow {
     tries: Number(r.tries ?? 0),
     errorClass: r.error_class ?? null,
     contentHtml: r.content_html ?? null,
+    unsupported: Array.isArray(r.grounding_json?.unsupported) ? r.grounding_json.unsupported : [],
   };
 }
 
@@ -133,7 +137,7 @@ async function claimSlot(assignmentId: string, promptVersion: string, sha: strin
 
 async function finish(
   id: string,
-  patch: { state: DeckState; tries: number; contentHtml?: string | null; errorClass?: string | null; errorDetail?: string | null },
+  patch: { state: DeckState; tries: number; contentHtml?: string | null; errorClass?: string | null; errorDetail?: string | null; grounding?: unknown },
 ): Promise<DeckRow> {
   const sequelize = await db();
   const [rows] = await sequelize.query(
@@ -143,6 +147,7 @@ async function finish(
             content_html = :html,
             error_class = :ec,
             error_detail = :ed,
+            grounding_json = :grounding,
             finished_at = NOW(),
             updated_at = NOW()
       WHERE id = :id
@@ -157,6 +162,7 @@ async function finish(
         // Capped: an upstream error body can be enormous, and this column is read by a
         // human triaging, not by a parser.
         ed: patch.errorDetail ? String(patch.errorDetail).slice(0, 2000) : null,
+        grounding: patch.grounding ? JSON.stringify(patch.grounding) : null,
       },
     },
   ) as [Array<Record<string, any>>, unknown];
@@ -177,6 +183,13 @@ export interface GenerateInput {
   prompt: string;
   /** `<template>@<version>`, so a deck can be traced to the template that produced it. */
   promptVersion: string;
+  /**
+   * The student's OWN material - narrative, project description, task titles, submitted
+   * evidence. Deliberately NOT the prompt: the template text contains example figures,
+   * and grounding against the thing that asked for a number would make every
+   * fabrication look supported.
+   */
+  sources?: string[];
 }
 
 /**
@@ -219,7 +232,21 @@ export async function generateDeck(input: GenerateInput): Promise<GenerateResult
         // would be filed as plain "Error".
         throw Object.assign(new Error('The model returned an empty deck.'), { name: 'ContractViolation' });
       }
-      const deck = await finish(claimed.id, { state: 'ready', tries: attempt, contentHtml: html });
+      // Checked BEFORE the deck is stored, and stored WITH it. The prompt carries no
+      // figures, so any number here came from the model unless the student wrote it.
+      // Flagged rather than deleted: silently cutting numbers from someone's slides is
+      // its own kind of lying, and a true figure they never typed here is a real case.
+      const grounding = checkGrounding(html, input.sources ?? []);
+      const deck = await finish(claimed.id, {
+        state: 'ready', tries: attempt, contentHtml: html, grounding,
+      });
+      if (!grounding.clean) {
+        log('deck_unsupported_figures', {
+          assignmentId: input.assignmentId,
+          unsupported: grounding.unsupported.map((c) => c.text),
+          claims: grounding.claims.length,
+        }, 'failure');
+      }
       log('deck_generated', { assignmentId: input.assignmentId, attemptNo: deck.attemptNo, tries: attempt, promptVersion: input.promptVersion });
       return { ok: true, deck };
     } catch (err) {
