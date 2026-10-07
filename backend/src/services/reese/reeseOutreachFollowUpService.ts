@@ -13,6 +13,7 @@ import { countAutonomousSendsToday, DAILY_SEND_CAP, FOLLOW_UP_DAYS, RISK_TIER } 
 import { createClosureChecklistInstance } from './closureChecklist';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+import { recordHeldAction, recordSentAction } from './reeseGovernedActionLog';
 
 // Reese Phase 2 (Autonomous Outreach) — the follow-up + closure loop. Mirrors
 // M5's outcomeMeasurementService.ts structurally (a `status`/due-timestamp
@@ -172,6 +173,24 @@ async function escalate(row: ReeseOutreach): Promise<{ escalated: boolean }> {
       event: 'escalation_held_for_approval', outcome: 'partial', correlation_id: eventId,
       context: { ticket_id: row.ticket_id, outreach_id: row.id, reason: authResult.reason },
     }));
+    // This path previously left NO record anywhere: no activity row, and
+    // (unlike the welcome path's ReeseWelcome claim) no domain-table row
+    // either — the ReeseOutreach row is deliberately not advanced to
+    // 'escalated' for a held escalation. The console line was the only trace,
+    // which is why 10 held escalations in approval_requests correspond to
+    // nothing queryable. Bookkeeping only; the hold is unchanged.
+    await recordHeldAction({
+      action: 'reese_outreach_escalated',
+      riskTier: RISK_TIER,
+      verdict: authResult.verdict,
+      reasonCode: authResult.reason,
+      // At most one escalation per outreach row — the row's status is the
+      // terminal step — so the row IS the unit.
+      unitKey: `outreach:${row.id}:escalate`,
+      eventId,
+      decisionId: authResult.decisionId,
+      details: { ticket_id: row.ticket_id, outreach_id: row.id, enrollment_id: row.enrollment_id },
+    });
     return { escalated: false };
   }
 
@@ -207,6 +226,16 @@ async function escalate(row: ReeseOutreach): Promise<{ escalated: boolean }> {
     sourceRecordId: row.id,
   });
 
+  // Added alongside the held write above, same reason: an action whose log
+  // holds only its holds reads as 100% held. Bookkeeping only.
+  await recordSentAction({
+    action: 'reese_outreach_escalated',
+    riskTier: RISK_TIER,
+    reason: 'attempt_cap_reached_escalated',
+    eventId,
+    details: { ticket_id: row.ticket_id, outreach_id: row.id },
+  });
+
   return { escalated: true };
 }
 
@@ -220,13 +249,19 @@ async function escalate(row: ReeseOutreach): Promise<{ escalated: boolean }> {
  * attempt). Returns whether the follow-up actually sent, so the caller
  * never records 'follow_up_sent' for a held action. */
 async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, any>): Promise<{ sent: boolean }> {
+  // Read ONCE, before any update below: `row.attempt_count` is a live Sequelize
+  // instance field that `row.update()` mutates in place, so reading it after
+  // the update would make the number this function reports depend on call
+  // ordering rather than on which attempt was actually evaluated.
+  const attemptNumber = row.attempt_count + 1;
+
   const message = await generateOutreachMessage({
     enrollmentId: row.enrollment_id,
     signalType: row.signal_type,
     signalSnapshot: currentSnapshot,
     goal: row.goal,
     isFollowUp: true,
-    attemptNumber: row.attempt_count + 1,
+    attemptNumber,
   });
 
   const eventId = crypto.randomUUID();
@@ -245,12 +280,29 @@ async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, 
       event: 'follow_up_held_for_approval', outcome: 'partial', correlation_id: eventId,
       context: { ticket_id: row.ticket_id, enrollment_id: row.enrollment_id, reason: authResult.reason },
     }));
+    // Previously no record anywhere — a held follow-up deliberately does not
+    // bump attempt_count or last_contacted_at, so the ReeseOutreach row looks
+    // exactly as it did before the sweep ran. 39 held rows in
+    // approval_requests, nothing queryable. Bookkeeping only.
+    await recordHeldAction({
+      action: 'reese_outreach_followup',
+      riskTier: RISK_TIER,
+      verdict: authResult.verdict,
+      reasonCode: authResult.reason,
+      // Keyed on the ATTEMPT, not the row: a hold leaves attempt_count where
+      // it was, so the same attempt held again on a later sweep is the same
+      // unit, while a genuinely new attempt (after a real send) is its own.
+      unitKey: `outreach:${row.id}:attempt:${attemptNumber}`,
+      eventId,
+      decisionId: authResult.decisionId,
+      details: { ticket_id: row.ticket_id, outreach_id: row.id, enrollment_id: row.enrollment_id },
+    });
     return { sent: false };
   }
 
   const dm = await initiateDm(row.enrollment_id, message);
   await row.update({
-    attempt_count: row.attempt_count + 1,
+    attempt_count: attemptNumber,
     last_contacted_at: new Date(),
     next_follow_up_due_at: new Date(Date.now() + FOLLOW_UP_DAYS * 24 * 60 * 60 * 1000),
     signal_snapshot: currentSnapshot,
@@ -278,6 +330,17 @@ async function sendFollowUp(row: ReeseOutreach, currentSnapshot: Record<string, 
     result: 'success',
     sourceRecordType: 'room_message',
     sourceRecordId: dm.messageId,
+  });
+
+  // Added alongside the held write above: without it, recording only holds
+  // would make `reese_outreach_followup` read 100% held in the activity log.
+  // Bookkeeping only — the send already happened.
+  await recordSentAction({
+    action: 'reese_outreach_followup',
+    riskTier: RISK_TIER,
+    reason: `follow_up_attempt_${attemptNumber}_sent`,
+    eventId,
+    details: { ticket_id: row.ticket_id, outreach_id: row.id, message_id: dm.messageId },
   });
 
   return { sent: true };

@@ -248,11 +248,16 @@ describe('4. the AGENT_REGISTRY row and the group map', () => {
 
   it('POSITIVE CONTROL: the sliced map spans every group, so "exactly once" means across all of them', () => {
     // Without this the count above could be 1 because the slice only covered
-    // one group. First group, a middle one, the declared-empty one, and the
-    // group immediately before the new key.
+    // one group. First group, a middle one, another middle one, and the group
+    // immediately before the new key.
+    //
+    // The third anchor used to be 'content_engine: [],' - the declared-empty group. It was
+    // deleted on 2026-10-07 when its super agent was repointed at `marketing`, so the anchor
+    // moved to the key that followed it. A positive control pinned to a key that no longer
+    // exists is a control that fails for the wrong reason.
     expect(groupMap).toContain("campaign_ops: [");
     expect(groupMap).toContain("'AdmissionsAssistantAgent'");
-    expect(groupMap).toContain('content_engine: [],');
+    expect(groupMap).toContain("analytics_engine: [");
     expect(groupMap).toContain("'FinanceIntelligenceArchitect'");
     expect(groupMap.trimEnd().endsWith('}')).toBe(true);
   });
@@ -268,16 +273,14 @@ describe('4. the AGENT_REGISTRY row and the group map', () => {
   });
 });
 
-describe('the supervision gap, pinned so it is a decision and not a surprise', () => {
-  it('no super agent reads agent_group marketing today', () => {
-    // Deliberate and recorded in AGENT_GROUP_MAP: this agent is visible on the
-    // Trust Command Center (run_count, last_result, activity log) but appears in
-    // NO department health report. The day somebody adds
-    // runSuperAgentCycle('marketing', …) this test fails, and the comment in
-    // agentRegistrySeed.ts must be updated in the same change — which is the
-    // point. Filing the agent under campaign_ops to borrow its super agent
-    // would have produced a supervised-LOOKING group, which is how
-    // content_engine published 9,369 "0/0 healthy" reports.
+describe('the supervision gap, closed on purpose', () => {
+  it('exactly one super agent reads agent_group marketing, and it is the repointed one', () => {
+    // This test used to assert the OPPOSITE - that nothing read `marketing` - precisely so that
+    // adding a supervisor could not happen by accident. The product owner decided it on
+    // 2026-10-07 and ContentEngineSuperAgent was repointed here from `content_engine`, a group
+    // that was structurally incapable of holding a member and had published 9,412 "0/0 healthy"
+    // reports as a result. The assertion is inverted rather than deleted, so the invariant is now
+    // "exactly one, and we know which" - and a SECOND supervisor appearing still fails here.
     const sources = fs
       .readdirSync(SUPER_AGENTS)
       .filter((f) => f.endsWith('.ts'))
@@ -286,9 +289,13 @@ describe('the supervision gap, pinned so it is a decision and not a surprise', (
     expect(sources.length).toBeGreaterThan(8);
     expect(
       sources.filter((s) => s.src.includes("runSuperAgentCycle('marketing'")).map((s) => s.file),
-    ).toEqual([]);
-    // POSITIVE CONTROL: the same search finds the groups that DO have one.
-    for (const group of ['campaign_ops', 'content_engine', 'analytics_engine', 'finance']) {
+    ).toEqual(['contentEngineSuperAgent.ts']);
+
+    // And the group it left behind is gone, not merely emptied.
+    expect(sources.some((s) => s.src.includes("runSuperAgentCycle('content_engine'"))).toBe(false);
+
+    // POSITIVE CONTROL: the same search still finds the groups that have their own.
+    for (const group of ['campaign_ops', 'analytics_engine', 'finance']) {
       expect(sources.some((s) => s.src.includes(`runSuperAgentCycle('${group}'`))).toBe(true);
     }
   });

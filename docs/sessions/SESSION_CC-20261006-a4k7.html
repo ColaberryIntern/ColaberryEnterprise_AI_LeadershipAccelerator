@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, October 6, 2026 at 7:13 PM</div>
-    <div><span class="sid">CC-20261006-a4k7</span><span class="count">10 changes</span></div>
+    <div class="meta">Generated Wednesday, October 7, 2026 at 10:30 AM</div>
+    <div><span class="sid">CC-20261006-a4k7</span><span class="count">13 changes</span></div>
   </header>
   <main>
     
@@ -207,6 +207,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">all 14 of its colours traced to real tokens in `frontend/src/styles/tokens.css`; zero</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">an earlier revision built the agent slide on the ten `Workforce*Director` rows and their persona</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>The approval queue stopped recording held work as performed</h2>
+          <span class="badge">2026-10-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`approvalRequestReplayService.ts` now decides whether it can perform an action</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">44 tests on the approval path, 113 across everything touched, graded PASS by an</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">NOTHING WAS MADE TO SEND, deliberately. `REPLAYABLE_ACTIONS` is still the single entry</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>ContentEngineSuperAgent repointed at the marketing group</h2>
+          <span class="badge">2026-10-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`runSuperAgentCycle(&#39;content_engine&#39;, &#39;Content Engine&#39;, …)` became</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">335 tests across 8 suites green. Checked first that `marketing` has a seeded</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`agent_name` deliberately unchanged - `ai_agents` rows are keyed on it, so a rename would</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>Executive Intelligence &amp; Governance owner decided</h2>
+          <span class="badge">2026-10-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`HUMAN_OWNERSHIP_MAP.md` and `AI_EMPLOYEE_ROSTER.md` record Ali Muwwakkil</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">docs only. He was already the only `org_members` row with role `manager` on team</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">this was the last of the five identity questions the Phase 0 map left open. That domain</span></div>
           
         </div>
       </article>

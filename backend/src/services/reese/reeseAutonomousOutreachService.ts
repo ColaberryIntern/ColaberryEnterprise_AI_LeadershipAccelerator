@@ -5,6 +5,7 @@ import type { ReeseOutreachSignalType } from '../../models/ReeseOutreach';
 import { createTicket } from '../ticketService';
 import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
+import { recordHeldAction } from './reeseGovernedActionLog';
 import { getReeseAdminUserId, getReeseAgentId } from './reeseIdentitySeed';
 import { isEligibleForAutonomousOutreach } from './reeseEligibilityService';
 import {
@@ -204,6 +205,25 @@ async function sendNewOutreach(
       event: 'outreach_held_for_approval', outcome: 'partial', correlation_id: eventId,
       context: { ticket_id: ticket.id, enrollment_id: enrollmentId, signal_type: signalType, reason: authResult.reason },
     }));
+    // Make the hold visible in the one table Reese's own scorecard reads. Pure
+    // bookkeeping, deliberately placed AFTER the branch above has already
+    // decided not to send — see reeseGovernedActionLog.ts's header for why a
+    // console line alone left a held send indistinguishable from "nothing to
+    // do". Fail-open: recordHeldAction() resolves to a status and never throws.
+    await recordHeldAction({
+      action: 'reese_autonomous_outreach',
+      riskTier: RISK_TIER,
+      verdict: authResult.verdict,
+      reasonCode: authResult.reason,
+      // The sweep re-evaluates a held signal on every run (a hold deliberately
+      // writes no ReeseOutreach row, so duplicate_open_outreach never
+      // suppresses it), so the unit is the student's signal, not the attempt:
+      // one honest "this signal is held" row, not one per sweep.
+      unitKey: `enrollment:${enrollmentId}:signal:${signalType}`,
+      eventId,
+      decisionId: authResult.decisionId,
+      details: { ticket_id: ticket.id, enrollment_id: enrollmentId, signal_type: signalType },
+    });
     // Workspace mission, Phase 2 slice 2 — the real, correct existing status
     // value for exactly this case, same as the reply path's own precedent.
     if (workUnitId) await updateWorkUnitStatus(workUnitId, 'blocked');

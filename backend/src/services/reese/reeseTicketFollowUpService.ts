@@ -9,6 +9,7 @@ import { generateTicketFollowUpMessage } from './reeseTicketFollowUpMessageServi
 import { initiateDm } from './reeseInitiateDmService';
 import { RISK_TIER } from './reeseAutonomousOutreachService';
 import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+import { recordHeldAction, recordSentAction } from './reeseGovernedActionLog';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 
 // Reese ticket follow-up (2026-10-02) — closes the real gap this session's own
@@ -62,12 +63,18 @@ async function sendTicketFollowUp(
   row: InstanceType<typeof ReeseTicketFollowUp>,
   quietDays: number,
 ): Promise<{ sent: boolean }> {
+  // Read ONCE, before any update below: `row.attempt_count` is a live
+  // Sequelize instance field that `row.update()` mutates in place, so reading
+  // it after the update would make the number this function reports depend on
+  // call ordering rather than on which attempt was actually evaluated.
+  const attemptNumber = row.attempt_count + 1;
+
   const message = await generateTicketFollowUpMessage({
     roomId: row.room_id,
     studentEnrollmentId: row.student_enrollment_id,
     ticketTitle: ticket.title,
     quietDays,
-    attemptNumber: row.attempt_count + 1,
+    attemptNumber,
   });
 
   const eventId = crypto.randomUUID();
@@ -86,11 +93,27 @@ async function sendTicketFollowUp(
       event: 'follow_up_held_for_approval', outcome: 'partial', correlation_id: eventId,
       context: { ticket_id: ticket.id, student_enrollment_id: row.student_enrollment_id, reason: authResult.reason },
     }));
+    // The largest silent hold in production: 47 held rows over 12 tickets, and
+    // all 12 reese_ticket_follow_ups rows still read status 'active' with
+    // attempt_count 0 — "never once fired" and "held 47 times" were
+    // indistinguishable. Bookkeeping only; the hold is unchanged.
+    await recordHeldAction({
+      action: 'reese_ticket_followup',
+      riskTier: RISK_TIER,
+      verdict: authResult.verdict,
+      reasonCode: authResult.reason,
+      // Keyed on the attempt: a hold leaves attempt_count where it was, so a
+      // later sweep holding the same attempt is the same unit.
+      unitKey: `ticket_follow_up:${row.id}:attempt:${attemptNumber}`,
+      eventId,
+      decisionId: authResult.decisionId,
+      details: { ticket_id: ticket.id, follow_up_id: row.id, student_enrollment_id: row.student_enrollment_id },
+    });
     return { sent: false };
   }
 
   const dm = await initiateDm(row.student_enrollment_id, message);
-  await row.update({ attempt_count: row.attempt_count + 1, last_followup_at: new Date() } as any);
+  await row.update({ attempt_count: attemptNumber, last_followup_at: new Date() } as any);
 
   const reeseAdminUserId = await getReeseAdminUserId();
   await addTicketComment(ticket.id, `[Reese] Checked in after ${quietDays} quiet day(s): "${message}"`, 'ai_staff', reeseAdminUserId || 'Reese');
@@ -115,6 +138,17 @@ async function sendTicketFollowUp(
     result: 'success',
     sourceRecordType: 'room_message',
     sourceRecordId: dm.messageId,
+  });
+
+  // Added alongside the held write above: an action whose activity log holds
+  // only its holds reads as 100% held. Bookkeeping only — the send already
+  // happened.
+  await recordSentAction({
+    action: 'reese_ticket_followup',
+    riskTier: RISK_TIER,
+    reason: `follow_up_attempt_${attemptNumber}_sent`,
+    eventId,
+    details: { ticket_id: ticket.id, follow_up_id: row.id, message_id: dm.messageId },
   });
 
   return { sent: true };
@@ -143,6 +177,22 @@ async function escalateTicketFollowUp(
       event: 'escalation_held_for_approval', outcome: 'partial', correlation_id: eventId,
       context: { ticket_id: ticket.id, follow_up_id: row.id, reason: authResult.reason },
     }));
+    // The only one of the seven held paths with ZERO rows in production
+    // (`reese_ticket_followup_escalated` is absent from approval_requests) —
+    // unreachable so far because the send path above is held at attempt 1, so
+    // the 3-attempt cap is never reached. Instrumented anyway: the day it does
+    // fire is exactly the day nobody should have to read logs to find out.
+    await recordHeldAction({
+      action: 'reese_ticket_followup_escalated',
+      riskTier: RISK_TIER,
+      verdict: authResult.verdict,
+      reasonCode: authResult.reason,
+      // At most one escalation per follow-up row, so the row IS the unit.
+      unitKey: `ticket_follow_up:${row.id}:escalate`,
+      eventId,
+      decisionId: authResult.decisionId,
+      details: { ticket_id: ticket.id, follow_up_id: row.id },
+    });
     return { escalated: false };
   }
 
@@ -174,6 +224,15 @@ async function escalateTicketFollowUp(
     result: 'success',
     sourceRecordType: 'reese_ticket_follow_up',
     sourceRecordId: row.id,
+  });
+
+  // Added alongside the held write above, same reason. Bookkeeping only.
+  await recordSentAction({
+    action: 'reese_ticket_followup_escalated',
+    riskTier: RISK_TIER,
+    reason: 'attempt_cap_reached_escalated',
+    eventId,
+    details: { ticket_id: ticket.id, follow_up_id: row.id },
   });
 
   return { escalated: true };

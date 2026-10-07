@@ -134,16 +134,28 @@ describe('AGENT_GROUP_MAP — every listed name must have a registry row', () =>
 });
 
 describe('AGENT_GROUP_MAP — structurally empty groups are declared, never accidental', () => {
-  it('content_engine is the ONLY empty group, and it is declared empty rather than duplicated', () => {
-    // A tripwire in both directions. If content_engine is ever given real
-    // members this fails and the list must be updated deliberately; if any
-    // OTHER group becomes unreachable, this fails naming it.
-    expect(auditAgentGroups().emptyGroups).toEqual(['content_engine']);
-    expect(AGENT_GROUP_MAP.content_engine).toEqual([]);
+  it('NO group is empty any more, and the list is asserted exactly so a new one cannot hide', () => {
+    // This replaced a tripwire that asserted content_engine was the one declared-empty group.
+    // The product owner resolved it on 2026-10-07: the key is deleted and its super agent now
+    // reads `marketing`. So the honest invariant became stronger - not "one known empty group"
+    // but NONE. If any group becomes unreachable in future this fails and names it, which is the
+    // same protection pointed at a cleaner baseline.
+    expect(auditAgentGroups().emptyGroups).toEqual([]);
   });
 
-  it('content_engine still EXISTS as a key — the super agent is left running and honest, not deleted', () => {
-    expect(Object.keys(AGENT_GROUP_MAP)).toContain('content_engine');
+  it('content_engine is GONE as a key — a subset-of-another-group must not come back', () => {
+    // The inverse of the assertion that used to live here. content_engine could never hold a
+    // member: it was defined as a subset of campaign_ops, and assignAgentGroups only writes where
+    // agent_group IS NULL, so the second listing was a silent no-op for seven months. Re-adding
+    // the key is re-adding the bug.
+    expect(Object.keys(AGENT_GROUP_MAP)).not.toContain('content_engine');
+  });
+
+  it('marketing is supervised: exactly one super agent reads it', () => {
+    // The decision this change records. ContentEngineSuperAgent was repointed here rather than
+    // retired, because retiring it would have left this group - the only populated group in the
+    // fleet without a supervisor - watched by nobody.
+    expect(AGENT_GROUP_MAP.marketing).toEqual(['DeptCampaignPerformanceAgent']);
   });
 
   it('POSITIVE CONTROL: a group whose every member is claimed above it is reported empty', () => {
@@ -254,8 +266,8 @@ describe('assignAgentGroups() — what the boot path actually writes', () => {
     // way to exercise the runtime path is to hand it a broken map, so this
     // mutates the real exported map and restores it in `finally`. Declared
     // last in the file so nothing can observe the mutation even on a throw.
-    const original = [...AGENT_GROUP_MAP.content_engine];
-    AGENT_GROUP_MAP.content_engine.push('ContentOptimizationAgent');
+    const original = [...AGENT_GROUP_MAP.marketing];
+    AGENT_GROUP_MAP.marketing.push('ContentOptimizationAgent');
 
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
@@ -270,10 +282,10 @@ describe('assignAgentGroups() — what the boot path actually writes', () => {
       expect(lines[0]).toContain("only 'campaign_ops' can ever win");
     } finally {
       errorSpy.mockRestore();
-      AGENT_GROUP_MAP.content_engine.length = 0;
-      AGENT_GROUP_MAP.content_engine.push(...original);
+      AGENT_GROUP_MAP.marketing.length = 0;
+      AGENT_GROUP_MAP.marketing.push(...original);
     }
 
-    expect(AGENT_GROUP_MAP.content_engine).toEqual(original);
+    expect(AGENT_GROUP_MAP.marketing).toEqual(original);
   }, 120_000);
 });
