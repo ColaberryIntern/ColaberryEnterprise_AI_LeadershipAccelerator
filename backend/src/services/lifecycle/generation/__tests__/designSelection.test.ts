@@ -29,7 +29,7 @@ import { generateDesignAlternatives, type AlternativeSet } from '../designAltern
 import { MIN_VARIANTS } from '../../../delivery/deliveryDesignLoop';
 import { prerequisiteGaps, type LifecycleEvidence } from '../../lifecyclePrerequisites';
 import { manualOnlyProject } from './fixtures/manualOnly';
-import type { TaskSurfaceBinding, WorkspaceRef } from '../workspaceMapping';
+import type { TaskSurfaceBinding, WorkspaceRef } from '../workspaceBindingTypes';
 
 const ROLE = 'role-counsel';
 

@@ -76,7 +76,7 @@
  * sibling module. A verifier caught it. This is the corrected statement:
  *
  * `shapeIssue`, `refIssues`, `audienceIssues`, the acceptance predicates, the types and the refusal
- * codes live in `./workspaceBindingChecks`. This file keeps the orchestration and re-exports the
+ * codes live in `./workspaceBindingChecks` and the vocabulary in `./workspaceBindingTypes`.
  * public surface, so every prior import path still resolves. Both files are under the ceiling; use
  * `wc -l` rather than any number written here, because attempt 2 wrote "478 lines" and the act of
  * adding that sentence made it 487.
@@ -105,10 +105,11 @@ import type { FactoryProject, FactoryTask } from '../../factory/contracts/factor
 
 
 // Shape, content, audience and acceptance checks, plus the types and refusal codes, live in
-// the sibling module. They are re-exported so every existing import of `./workspaceMapping`
-// keeps resolving: the split is an internal reorganisation, not a contract change.
+// the sibling modules: the check HELPERS from `./workspaceBindingChecks` and the VOCABULARY
+// from `./workspaceBindingTypes`. Nothing is re-exported — P4-T5 removed the facade, because
+// re-exporting ten symbols for the convenience of older import paths is what put this file at
+// 15 public symbols against a ceiling of 12.
 import {
-  SURFACE_CODES,
   audienceIssues,
   blank,
   err,
@@ -120,23 +121,14 @@ import {
   refIssues,
   shapeIssue,
 } from './workspaceBindingChecks';
-import { HEADLESS_REASONS } from './workspaceBindingChecks';
+import {
+  HEADLESS_REASONS,
+} from './workspaceBindingTypes';
 import type {
-  AcceptanceOrigin,
   HeadlessAcceptance,
-  HeadlessReason,
-  PermissionView,
   SurfaceAudience,
-  SurfaceCode,
   TaskSurfaceBinding,
-  WorkspaceRef,
-} from './workspaceBindingChecks';
-
-export { HEADLESS_REASONS, SURFACE_CODES };
-export type {
-  AcceptanceOrigin, HeadlessAcceptance, HeadlessReason, PermissionView, SurfaceAudience,
-  SurfaceCode, TaskSurfaceBinding, WorkspaceRef,
-};
+} from './workspaceBindingTypes';
 
 /**
  * Tasks that are business work, and so need a surface decision.

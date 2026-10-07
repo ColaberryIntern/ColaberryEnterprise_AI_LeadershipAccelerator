@@ -554,9 +554,14 @@ describe('COMPOSITION: controlSurfaceExists() output fits the design brief field
   // The P4-T2 verifier was right that the function has NO production call site: P4-T3
   // consumes a passed boolean of the same name, and no design-stage orchestrator exists yet
   // to call one and supply the other. That wire is in the carried-forward register with an
-  // owner. What this test can do is pin that the two halves FIT, so they cannot drift while
-  // the wire is open — and it is a real call site for the function, in the correct
-  // dependency direction (lifecycle → delivery).
+  // owner. What this test can do is pin that the two halves FIT TODAY, at runtime, in both
+  // branches — and be a real call site for the function, in the correct dependency direction
+  // (lifecycle → delivery).
+  //
+  // What it CANNOT do, and an earlier version of this comment claimed it could: stop them
+  // drifting. A widened `enforcedBy` or an added element field would leave this green, and no
+  // gate type-checks the mirror because `tsconfig.json` excludes `**/__tests__/**`. The
+  // compile-time half is in the register.
   const facts = (spec: ControlPolicy[]) => ({
     controlSurfaceExists: controlSurfaceExists(spec),
     showableControls: renderControlAvailability(spec).showable,

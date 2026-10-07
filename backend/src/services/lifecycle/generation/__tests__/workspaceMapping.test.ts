@@ -11,16 +11,18 @@
  */
 
 import {
-  HEADLESS_REASONS,
-  SURFACE_CODES,
   businessTasks,
   consolidationAssessment,
   unboundProposedSurfaces,
   validateTaskSurfaces,
+} from '../workspaceMapping';
+import {
+  HEADLESS_REASONS,
+  SURFACE_CODES,
   type HeadlessAcceptance,
   type TaskSurfaceBinding,
   type WorkspaceRef,
-} from '../workspaceMapping';
+} from '../workspaceBindingTypes';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { manualOnlyProject } from './fixtures/manualOnly';
@@ -370,7 +372,11 @@ describe('MALFORMED INPUT IS REFUSED, NEVER THROWN', () => {
   // dereferences a new name, it enters the keyspace automatically, and the assertion below
   // fails if it somehow does not.
   const SRC_DIR = join(__dirname, '..');
-  const SOURCES = ['workspaceMapping.ts', 'workspaceBindingChecks.ts']
+  // `workspaceBindingTypes.ts` is in this list because P4-T5 moved the vocabulary there.
+  // Leaving it out would shrink the derived keyspace SILENTLY: the corpus would stop
+  // reaching property names the module still dereferences, and nothing would fail. The
+  // assertion below is what makes that recoverable rather than invisible.
+  const SOURCES = ['workspaceMapping.ts', 'workspaceBindingChecks.ts', 'workspaceBindingTypes.ts']
     .map((f) => readFileSync(join(SRC_DIR, f), 'utf8'));
 
   /** Names that are JS/stdlib machinery rather than input fields. Deliberately small. */

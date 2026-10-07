@@ -33,7 +33,7 @@
 import { MAX_VARIANTS } from '../../delivery/deliveryDesignLoop';
 import type { FactoryProject, FactoryTask } from '../../factory/contracts/factoryContract';
 import { businessTasks } from './workspaceMapping';
-import type { TaskSurfaceBinding, WorkspaceRef } from './workspaceBindingChecks';
+import type { TaskSurfaceBinding, WorkspaceRef } from './workspaceBindingTypes';
 
 /** The three patterns §4.5 names. Not a taxonomy this module invented. */
 export const DESIGN_PATTERNS = ['queue_detail', 'case_workspace', 'exception_first'] as const;

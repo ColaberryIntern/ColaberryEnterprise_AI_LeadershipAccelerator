@@ -26,12 +26,8 @@ import {
   type DesignPatternKey,
   type DesignStructure,
 } from '../designAlternatives';
-import {
-  businessTasks,
-  validateTaskSurfaces,
-  type TaskSurfaceBinding,
-  type WorkspaceRef,
-} from '../workspaceMapping';
+import { businessTasks, validateTaskSurfaces } from '../workspaceMapping';
+import type { TaskSurfaceBinding, WorkspaceRef } from '../workspaceBindingTypes';
 import { MAX_VARIANTS, MIN_VARIANTS } from '../../../delivery/deliveryDesignLoop';
 import { CONCEPT_VARIANTS } from '../../../delivery/designBrief';
 import { manualOnlyProject } from './fixtures/manualOnly';
@@ -408,9 +404,12 @@ describe('the corpus claim this suite rests on is ASSERTED, not stated', () => {
       transitions += [...src.matchAll(/is_rework:\s*(true|false)/g)].length;
       rework += [...src.matchAll(/is_rework:\s*true/g)].length;
     }
-    // POSITIVE CONTROL on the extraction: a regex matching nothing would report zero rework
-    // edges for the wrong reason, which is the whole failure mode of a grep count.
-    expect(transitions).toBeGreaterThan(0);
+    // The COUNT is asserted, not just the property. Three documents and this file say "all
+    // eight transitions", and `toBeGreaterThan(0)` left that number unpinned: a ninth
+    // non-rework edge would stale all three while the suite stayed green, which is exactly
+    // what Amendment 3 exists to catch. Asserting 8 also keeps the extraction control — a
+    // regex matching nothing yields 0, which is not 8.
+    expect(transitions).toBe(8);
     expect(rework).toBe(0);
   });
 

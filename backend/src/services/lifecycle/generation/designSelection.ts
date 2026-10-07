@@ -36,7 +36,7 @@
 import { MIN_VARIANTS } from '../../delivery/deliveryDesignLoop';
 import type { ValidationIssue } from '../../factory/factoryValidate';
 import type { AlternativeSet, DesignAlternative, DesignPatternKey } from './designAlternatives';
-import type { AcceptanceOrigin } from './workspaceBindingChecks';
+import type { AcceptanceOrigin } from './workspaceBindingTypes';
 import { isStr, label } from './workspaceBindingChecks';
 
 /** The five §4.5 names, verbatim in meaning. Not a set this module chose the size of. */

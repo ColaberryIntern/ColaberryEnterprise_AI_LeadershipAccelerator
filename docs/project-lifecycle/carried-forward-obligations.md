@@ -429,8 +429,15 @@ were recorded rather than patched mid-phase.
   **passed boolean of the same name**, and the claim is genuinely gated on it in both
   directions — but nothing calls the function, and nothing supplies the field, because no
   design-stage orchestrator exists yet. **The phase that builds that orchestrator closes the
-  wire.** A composition test now pins that the function’s output fits the field, so the two
-  halves cannot drift apart while the wire is open.
+  wire**, and **the compile-time half is part of that obligation**: the composition belongs in
+  a module the typecheck gate compiles, because `backend/tsconfig.json` excludes
+  `**/__tests__/**` and a test cannot carry a compile-time guarantee here.
+
+  A composition test pins that the function’s output is ACCEPTED by the field **today**, at
+  runtime, in both branches. It does **not** stop the two halves drifting, and an earlier
+  version of this entry said it did: a widened `enforcedBy`, or an added element field, would
+  leave it green. That is the same drift §15 of the design doc names as the risk, so claiming
+  the test closes it was the overclaim one notch quieter.
 
 ### Corrections made to earlier Phase 4 records
 
@@ -452,3 +459,98 @@ were recorded rather than patched mid-phase.
 modules passed their suites **green with three real `tsc` errors in them** — a widened
 `includes` that narrowed nothing, and an `Array.isArray` on a `ReadonlyArray` silently
 producing `any[]`. A green jest run is not a typecheck, and only `tsc --noEmit` is.
+
+---
+
+## Phase 4 open items (P4-T5), and a design-system finding with an owner
+
+### The design system cannot meet WCAG AA for small text in six token pairs
+
+Measured with `node scripts/checkTokenContrast.js`, which parses the hex values out of
+`frontend/src/styles/tokens.css` and carries a positive control (21.00 black-on-white,
+1.00 white-on-white) so a broken calculator cannot report a clean result:
+
+| pair | ratio | note |
+|---|---|---|
+| `--color-muted` on `--color-bg` | 2.54:1 | **below even the 3:1 non-text bar** — must not carry text or a meaningful boundary at all |
+| `--status-partial-text` on `--status-partial-bg` | 3.61:1 | one of the four pairs in the repo’s own status family |
+| `--color-danger` on `--color-bg` | 3.76:1 | |
+| `--color-primary` on `--color-bg` | 3.85:1 | fine for headings, which are large text; **not** for a label at `--font-size-sm` |
+| `--status-verified-text` on `--status-verified-bg` | 3.95:1 | also from the status family |
+| `--color-text-light` on `--color-bg` | 4.02:1 | the nearest usable neutral, and still short |
+
+**This is a finding about the EXISTING design system, not about Phase 4’s work**, and it
+belongs to whoever owns `tokens.css`. Phase 4 only constrains itself: `AA_LABEL_PAIRS` in
+`workspaceStateChecks.ts` admits the measured-passing pairs and nothing else, and a test
+derives the AA-passing set from `tokens.css` so the list cannot drift from the file.
+
+**Two of the six are in the four-state status family**, which is the family a reviewer would
+naturally reach for when labelling a workspace state — the reason the check exists rather
+than a note asking people to be careful.
+
+### There is no dark theme, so §4.5’s dark-mode option is closed
+
+`grep -rn "prefers-color-scheme|data-theme" frontend/src/styles/*.css` returns nothing. §4.5
+permits dark "only if supported by existing tokens", and it is not supported — not partially.
+A contract declaring a dark variant would declare something nothing can render. Closed by
+measurement, so it does not need re-litigating on taste.
+
+### Deferred to Phase 5, with the reason
+
+- **Screenshots and real responsive behaviour.** Both need a rendered surface, and Phase 4
+  produces contracts. §4.5 itself says "a screenshot or matching domain vocabulary alone does
+  not establish usability", so the deferral is not a weaker position than taking them now.
+- **Whether the running surface enforces the permission views it declares.** That is a
+  route-authorisation question and belongs where the routes are. Worth flagging for whoever
+  does it: this repo’s route-auth lint is per FILE, so an unguarded route in a guarded file
+  passes it.
+
+### CLOSED: the export-surface breach from P4-T1 — and the plan’s premise for T5 was stale
+
+The T5 packet says `workspaceMapping.ts` is "478 lines against the 500-line hard ceiling" and
+must extract `shapeIssue`/`refIssues` first. **That was done in P4-T1 and the measurement was
+stale.** What was NOT done was the surface: the P4-T1 split fixed a LINE count and made the
+EXPORT count worse, turning one over-ceiling file into two.
+
+| file | lines | exported symbols (ceiling 12) |
+|---|---|---|
+| `workspaceBindingTypes.ts` **(new)** | 158 | **10** |
+| `workspaceBindingChecks.ts` | 325 | **10** (was 20) |
+| `workspaceMapping.ts` | 385 | **5** (was 15) |
+| `workspaceStateChecks.ts` **(new, P4-T5)** | 279 | **8** |
+
+The seam needed no invention — the types were already a contiguous block between the imports
+and the first function. **Removing the re-export facade is what actually closed it:**
+`workspaceMapping` was re-exporting ten of the sibling’s symbols so older import paths kept
+resolving, and that convenience was two thirds of its budget. CLAUDE.md permits that as a
+single coordinated change with every consumer updated in the same diff, and every consumer is
+in this repo.
+
+**Two tasks stepped around this before it was fixed** (P4-T4 and P4-T5 each added a sibling
+module rather than widen it), which is worth recording as a pattern: the second time a change
+avoids a rule rather than satisfying it, the rule needs its own change, not a third preamble.
+
+**The trap found while doing it, and it would have been silent.**
+`__tests__/workspaceMapping.test.ts` DERIVES the generator keyspace from the dereference sites
+in a **hand-listed set of filenames**. Moving the vocabulary into a file absent from that list
+would have shrunk the keyspace with nothing failing — the corpus would simply stop reaching
+property names the module still reads. The new file is in the list, and the reason is written
+into its header for whoever moves code out of that folder next.
+
+**And the split broke 19 tests before it passed.** `workspaceMapping` *uses*
+`HEADLESS_REASONS` and `SURFACE_CODES`, not merely re-exports them, so moving them out from
+under its imports left two `ReferenceError`s. Caught by running the suites — and `tsc` would
+have caught it sooner, which is the argument for running the typecheck before believing a
+refactor.
+
+### A flake observed once and NOT reproduced
+
+A verifier saw `designAlternatives.test.ts` fail one test under six-suite parallel load while a
+second verifier was simultaneously running jest and a 14-minute `tsc` on the same machine. Run
+alone it was 41/41, and serially 206/206.
+
+**Three further parallel runs of seven suites: 252/252 each time.** Slowest single test 424ms
+against jest’s 5s default timeout, so a timeout is implausible at normal load. Recorded as
+observed-once-and-unreproduced with the measurements, rather than claimed fixed or waved away:
+if it recurs, the first thing to know is that no test in these suites is anywhere near the
+timeout, so look at module-compile contention rather than at test logic.
