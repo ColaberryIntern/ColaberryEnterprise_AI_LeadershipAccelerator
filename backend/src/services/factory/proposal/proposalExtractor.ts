@@ -8,6 +8,7 @@
  * that literally appears in the zip, and it is an HONEST first-pass capture — every row is `unassessed` and
  * NOT human-confirmed, for a person to assess. Real comprehension is the later (separately-approved) LLM step.
  */
+import { docxToText, xlsxToText } from './ooxmlText';
 // adm-zip is an undeclared/untyped dep (resolves via hoisted node_modules); the require() form keeps strict
 // tsc from rejecting it (TS7016), matching backend/src/scripts/lib/govBidContentExtractor.js.
 const AdmZip = require('adm-zip');
@@ -122,24 +123,18 @@ export function extractDossier(blocks: ExtractedBlock[]): ExtractedDossier {
   return { contacts, naics, meetings, keyDates };
 }
 
-const stripXmlTags = (s: string): string => s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || 'file';
 const truncate = (s: string, n: number): string => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
 
-/** Text out of one in-zip file buffer, by extension. Never throws — returns '' on unreadable/unsupported. */
+/** Text out of one in-zip file buffer, by extension. Never throws — returns '' on unreadable/unsupported.
+ *  .docx/.xlsx delegate to the structure-aware ooxmlText reader so table rows and spreadsheet cells keep
+ *  their boundaries (a requirements matrix reads as rows, not one run-on blob). */
 function textFromEntry(name: string, buf: Buffer): string {
   const ext = (name.split('.').pop() || '').toLowerCase();
   try {
     if (ext === 'txt' || ext === 'md') return buf.toString('utf8');
-    if (ext === 'docx') {
-      const doc = new AdmZip(buf).getEntry('word/document.xml');
-      return doc ? stripXmlTags(doc.getData().toString('utf8')) : '';
-    }
-    if (ext === 'xlsx') {
-      const inner = new AdmZip(buf);
-      const strings = inner.getEntry('xl/sharedStrings.xml');
-      return strings ? stripXmlTags(strings.getData().toString('utf8')) : '';
-    }
+    if (ext === 'docx') return docxToText(buf);
+    if (ext === 'xlsx') return xlsxToText(buf);
     if (ext === 'pdf') {
       // pdf-parse v2 is a class-based, async API; extracted lazily via a synchronous shim is not possible,
       // so PDF text is pulled in extractProposal (async). This branch is unused (see extractProposal).
