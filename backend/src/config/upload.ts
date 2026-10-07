@@ -237,6 +237,15 @@ export const agentAttachmentUpload = multer({
 });
 export { AGENT_ATTACHMENT_DIR, AGENT_ATTACHMENT_MIMES, MAX_AGENT_ATTACHMENT_SIZE };
 
+// Gov source bundles: the private solicitation-ZIP evidence of record retained by the gov qualification
+// workspace. Deliberately a separate dir from agent attachments — these are tenant-scoped procurement evidence,
+// not student chat files, and are served (later) through a different, access-checked route. The gov upload route
+// (govQualificationRoutes.ts) does its own multer with its own 100 MB cap + zip-bomb guard; this dir is only the
+// destination the store writes to.
+const GOV_SOURCE_BUNDLE_DIR = process.env.GOV_SOURCE_BUNDLE_DIR || path.resolve('/app/uploads/gov-source-bundles');
+try { fs.mkdirSync(GOV_SOURCE_BUNDLE_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+export { GOV_SOURCE_BUNDLE_DIR };
+
 // ── Room Resource uploads (Docs & Files) — documents attached to a Community
 // Room, one of its bookings, or the Global Library ──────────────────────────
 // Disk storage on the persistent `uploads` volume (survives deploys), same as

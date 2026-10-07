@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../../utils/api';
-
-interface DepartmentHealth {
-  name: string;
-  health: string;
-  agent_count: number;
-  last_report_at: string | null;
-}
+import DepartmentHealthCard, {
+  departmentHealthCounts,
+  type DepartmentHealth,
+} from './DepartmentHealthCard';
 
 interface InsightItem {
   id: string;
@@ -168,6 +165,7 @@ export default function CoryCOOTab() {
   const { status, recent_insights, department_reports, recent_tasks, strategic_initiatives, initiative_stats } = data;
   const fleet = status.agent_fleet;
   const tasks = status.tasks;
+  const deptCounts = departmentHealthCounts(status.departments);
   const initiatives = strategic_initiatives || [];
   const iStats = initiative_stats || { total: 0, proposed: 0, approved: 0, in_progress: 0, completed: 0, cancelled: 0 };
 
@@ -233,12 +231,12 @@ export default function CoryCOOTab() {
               <div className="fs-2 fw-bold">{status.departments.length}</div>
               <small className="text-muted">Departments</small>
               <div className="mt-1">
-                <span className="badge bg-success me-1">
-                  {status.departments.filter(d => d.health === 'healthy').length} healthy
-                </span>
-                <span className="badge bg-warning">
-                  {status.departments.filter(d => d.health === 'degraded').length} degraded
-                </span>
+                <span className="badge bg-success me-1">{deptCounts.healthy} healthy</span>
+                <span className="badge bg-warning me-1">{deptCounts.degraded} degraded</span>
+                {/* Without this badge an 'unknown' department is in neither
+                    count, so the row silently under-reports the fleet — the
+                    same "no news reads as good news" failure one level up. */}
+                <span className="badge bg-secondary">{deptCounts.unknown} unknown</span>
               </div>
             </div>
           </div>
@@ -311,31 +309,7 @@ export default function CoryCOOTab() {
       <div className="row g-3">
         {/* Left Column — Departments */}
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white fw-semibold">Department Health</div>
-            <div className="card-body p-0">
-              {status.departments.length === 0 ? (
-                <div className="p-3 text-muted text-center small">No department reports yet</div>
-              ) : (
-                <div className="list-group list-group-flush">
-                  {status.departments.map((dept) => (
-                    <div key={dept.name} className="list-group-item d-flex justify-content-between align-items-center">
-                      <div>
-                        <span
-                          className={`me-2 ${dept.health === 'healthy' ? 'text-success' : 'text-warning'}`}
-                          style={{ fontSize: '0.75rem' }}
-                        >
-                          ●
-                        </span>
-                        <span className="small fw-medium">{dept.name}</span>
-                      </div>
-                      <span className="badge bg-light text-dark">{dept.agent_count} agents</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <DepartmentHealthCard departments={status.departments} />
 
           {/* Last Strategic Cycle */}
           <div className="card border-0 shadow-sm mt-3">

@@ -41,6 +41,13 @@ jest.mock('../../../services/factory/opportunities/govOpportunityAlias', () => {
 });
 const extractProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalExtractor', () => ({ extractProposal: (...a: any[]) => extractProposal(...a) }));
+// Phase 2 private byte-store — mocked so attest-zip / download tests don't touch the DB or the uploads volume.
+const storeGovSourceBundle = jest.fn();
+const loadGovSourceBundleScoped = jest.fn();
+jest.mock('../../../services/factory/proposal/govSourceBundleStore', () => ({
+  storeGovSourceBundle: (...a: any[]) => storeGovSourceBundle(...a),
+  loadGovSourceBundleScoped: (...a: any[]) => loadGovSourceBundleScoped(...a),
+}));
 // Step 6 — the two-track project creator, mocked so the flag-on tests don't touch the DB.
 const ensureGovTwoTrackProject = jest.fn();
 jest.mock('../../../services/factory/govDeliveryProject', () => ({ ensureGovTwoTrackProject: (...a: any[]) => ensureGovTwoTrackProject(...a) }));
@@ -63,13 +70,17 @@ app.use(express.json());
 app.use(govQualificationRoutes);
 
 const CONTAINER = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
-beforeEach(() => { jest.clearAllMocks(); lookupGovContractsContainer.mockResolvedValue(CONTAINER); });
+beforeEach(() => {
+  jest.clearAllMocks();
+  lookupGovContractsContainer.mockResolvedValue(CONTAINER);
+  storeGovSourceBundle.mockResolvedValue({ id: 'bundle-default', filename: 'solicitation.zip', mime: 'application/zip', byte_size: 9, sha256: 'a'.repeat(64), deduped: false });
+});
 
 describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(10);
+    expect(routeLines.length).toBe(11); // +1: GET source-bundle/:bundleId (the retained-ZIP download)
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -297,6 +308,10 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
     extractProposal.mockResolvedValue({
       blocks: [],
       fileCount: 3,
+      files: [
+        { name: 'rfp.pdf', status: 'extracted', chars: 1200, truncated: false, warning: null },
+        { name: 'scan.pdf', status: 'image_only_pdf', chars: 0, truncated: false, warning: 'No extractable text (likely a scanned / image-only PDF) — review it manually or run OCR.' },
+      ],
       requirements: [
         { canonicalReqId: 'RQ1', statement: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' },
         { canonicalReqId: 'RQ2', statement: 'Submit three past-performance references.', extractedText: '...past performance...', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission', priority: 'should' },
@@ -307,6 +322,9 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
       .attach('document', Buffer.from('pretend-zip-bytes'), 'solicitation.zip');
     expect(res.status).toBe(200);
     expect(res.body.fileCount).toBe(3);
+    // The per-file outcomes are surfaced so the reviewer sees the scanned-PDF (nothing silently dropped).
+    expect(res.body.files).toHaveLength(2);
+    expect(res.body.files.find((f: any) => f.name === 'scan.pdf').status).toBe('image_only_pdf');
     expect(res.body.candidates).toHaveLength(2);
     expect(res.body.candidates[0]).toEqual({ id: 'RQ1', text: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' });
     // read-only: the extractor got the uploaded bytes; no qualification record was read or written
@@ -346,6 +364,18 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
       .field('biddingEntity', 'colaberry')
       .attach('document', Buffer.from('z'), 'p.zip');
     expect(res.status).toBe(500);
+  });
+
+  it('413 on a zip-bomb upload (rejected at the upload boundary, extractor never called)', async () => {
+    const AdmZip = require('adm-zip');
+    const bomb = new AdmZip();
+    bomb.addFile('zeros.bin', Buffer.alloc(2 * 1024 * 1024, 0)); // ~2 MB of zeros -> tiny compressed, huge ratio
+    const res = await request(app).post(url)
+      .field('biddingEntity', 'colaberry')
+      .attach('document', bomb.toBuffer(), 'bomb.zip');
+    expect(res.status).toBe(413);
+    expect(res.body.reason).toBe('ratio_too_high');
+    expect(extractProposal).not.toHaveBeenCalled(); // refused before the route body opened it
   });
 });
 
@@ -435,12 +465,39 @@ describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
     expect(arg.reviewerIdentityId).toBe('reviewer@test');
   });
 
-  it('attest-zip: revoke needs no file (200)', async () => {
+  it('attest-zip add: RETAINS the solicitation ZIP (private byte-store) keyed to the tenant + gws key, and surfaces the bundle', async () => {
+    recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
+    storeGovSourceBundle.mockResolvedValue({ id: 'bundle-xyz', filename: 'solicitation.zip', mime: 'application/zip', byte_size: 9, sha256: 'b'.repeat(64), deduped: false });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .attach('document', Buffer.from('zip-bytes'), 'solicitation.zip');
+    expect(res.status).toBe(201);
+    expect(storeGovSourceBundle).toHaveBeenCalledTimes(1);
+    expect(storeGovSourceBundle.mock.calls[0][0]).toBe('ten-1'); // scope.tenantId
+    expect(storeGovSourceBundle.mock.calls[0][1]).toBe(GWS);     // qualification key
+    expect(Buffer.isBuffer(storeGovSourceBundle.mock.calls[0][2].buffer)).toBe(true);
+    expect(res.body.sourceBundle).toMatchObject({ id: 'bundle-xyz', stored: true, deduped: false });
+  });
+
+  it('attest-zip add: a byte-store FAILURE is non-fatal but SURFACED — the attestation gate still records (201), sourceBundle.stored=false', async () => {
+    recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
+    storeGovSourceBundle.mockRejectedValue(new Error('disk full'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .attach('document', Buffer.from('zip-bytes'), 'solicitation.zip');
+    expect(res.status).toBe(201);
+    expect(recordZipAttestation).toHaveBeenCalledTimes(1); // the gate recorded regardless
+    expect(res.body.sourceBundle).toEqual({ stored: false, reason: 'storage_failed' });
+  });
+
+  it('attest-zip: revoke needs no file (200), retains nothing (never calls the byte-store), sourceBundle null', async () => {
     recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
     const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
       .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'revoke');
     expect(res.status).toBe(200);
     expect(recordZipAttestation.mock.calls[0][0].mode).toBe('revoke');
+    expect(storeGovSourceBundle).not.toHaveBeenCalled();
+    expect(res.body.sourceBundle).toBeNull();
   });
 
   it('attest-zip: 400 when add has no file', async () => {
@@ -456,6 +513,45 @@ describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
       .attach('document', Buffer.from('z'), 's.zip');
     expect(res.status).toBe(400);
     expect(recordZipAttestation).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET source-bundle/:bundleId (download the retained evidence-of-record ZIP)', () => {
+  const nodeFs = require('fs');
+  const nodeOs = require('os');
+  const nodePath = require('path');
+  const GWS = 'gws:11111111-1111-4111-a111-111111111111';
+  const BUNDLE_ID = '22222222-2222-4222-a222-222222222222';
+  const url = `/api/admin/factory/qualification/${GWS}/source-bundle/${BUNDLE_ID}`;
+  let tmpFile = '';
+
+  beforeAll(() => {
+    tmpFile = nodePath.join(nodeOs.tmpdir(), `gov-bundle-test-${Date.now()}.zip`);
+    nodeFs.writeFileSync(tmpFile, Buffer.from('PK pretend-zip-bytes'));
+  });
+  afterAll(() => { try { nodeFs.unlinkSync(tmpFile); } catch { /* best effort */ } });
+
+  it('200: streams the retained bundle, scoped to this tenant + qualification, as an attachment', async () => {
+    loadGovSourceBundleScoped.mockResolvedValue({ path: tmpFile, mime: 'application/zip', filename: 'solicitation.zip' });
+    const res = await request(app).get(url);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/zip');
+    expect(res.headers['content-disposition']).toContain('attachment');
+    expect(res.headers['content-disposition']).toContain('solicitation.zip');
+    // scoped on all three — tenant from scopeOrFail, the gws key from the path, the bundle id from the path
+    expect(loadGovSourceBundleScoped).toHaveBeenCalledWith('ten-1', GWS, BUNDLE_ID);
+  });
+
+  it('404 when the bundle is not this tenant/qualification (loader returns null — enumeration-safe)', async () => {
+    loadGovSourceBundleScoped.mockResolvedValue(null);
+    const res = await request(app).get(url);
+    expect(res.status).toBe(404);
+  });
+
+  it('400 on a malformed bundle id (never calls the loader)', async () => {
+    const res = await request(app).get(`/api/admin/factory/qualification/${GWS}/source-bundle/not-a-uuid`);
+    expect(res.status).toBe(400);
+    expect(loadGovSourceBundleScoped).not.toHaveBeenCalled();
   });
 });
 
@@ -475,6 +571,24 @@ describe('POST link + authorize-build', () => {
       .send({ deliveryProjectId: PID, scope: 'proposal-solution', resourceLimit: '2 agents / 8h' });
     expect(res.status).toBe(201);
     expect(authorizeBuild.mock.calls[0][0].approverIdentityId).toBe('reviewer@test');
+  });
+
+  it('T7: ACCEPTS a gws (decoupled) key for authorize-build — keyed on the body deliveryProjectId, not the path key', async () => {
+    // Previously a gws key hit canonicalParam and 400'd, so a decoupled pursuit (what step 6 creates projects for)
+    // could never be build-authorized. authorize-build never consults the OP snapshot, so it safely accepts gws.
+    authorizeBuild.mockResolvedValue({ id: 'ba-gws' });
+    const res = await request(app).post('/api/admin/factory/qualification/gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec/authorize-build')
+      .send({ deliveryProjectId: PID, scope: 'proposal-solution', resourceLimit: '2 agents / 8h' });
+    expect(res.status).toBe(201);
+    expect(authorizeBuild.mock.calls[0][0].deliveryProjectId).toBe(PID);       // the body project, not the path key
+    expect(authorizeBuild.mock.calls[0][0].approverIdentityId).toBe('reviewer@test');
+  });
+
+  it('T7: the gate is unchanged for gws — a missing scope/resourceLimit is still a 400', async () => {
+    const res = await request(app).post('/api/admin/factory/qualification/gws:04ac1711-c3f6-418a-9d9b-c5e6211295ec/authorize-build')
+      .send({ deliveryProjectId: PID }); // no scope, no resourceLimit
+    expect(res.status).toBe(400);
+    expect(authorizeBuild).not.toHaveBeenCalled(); // rejected at the body schema, before the service
   });
 
   it('400s an empty build authorization (BuildNotAuthorizedError from validate-before-write)', async () => {

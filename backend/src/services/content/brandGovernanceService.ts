@@ -83,7 +83,14 @@ export async function publishRules(
     try {
       new RegExp(claim.pattern, 'i');
     } catch {
-      throw new Error(`Prohibited-claim rule "${claim.id}" has an invalid pattern.`);
+      const err = new Error(`Prohibited-claim rule "${claim.id}" has an invalid pattern.`);
+      // `classifyError` falls back to `name` for shapes it does not recognise, and a bare
+      // `Error` therefore classifies as the literal string "Error" - which root CLAUDE.md's
+      // Observability Framework names as not an acceptable classification in a production
+      // path. This is a validation refusal at a write boundary, so it says so, and the
+      // caller's log line carries `ValidationError` instead of nothing useful.
+      err.name = 'ValidationError';
+      throw err;
     }
   }
 

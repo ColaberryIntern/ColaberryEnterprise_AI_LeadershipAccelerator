@@ -11,6 +11,12 @@ import { classifyNewAgentAutonomyLevel, maybeReclassifyAutonomyLevel } from './a
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from './agentRegistry/growthJourneyAgents';
 
 import type { AgentSeedEntry } from './agentRegistry/agentSeedTypes';
+import {
+  auditAgentGroupMap,
+  formatAgentGroupMapDefects,
+  type AgentGroupMapDefects,
+} from './agentRegistry/agentGroupMapIntegrity';
+import type { ErrorClass } from '../utils/errorClassifier';
 
 const AGENT_REGISTRY: AgentSeedEntry[] = [
   // --- schedulerService.ts cron jobs ---
@@ -1915,6 +1921,29 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     config: { department_slug: 'marketing', agent_name: 'MarketingAutomationArchitect' },
   },
   {
+    // Marketing department, funnel performance analysis. Registered 2026-10-06:
+    // the module had existed since the department tree was written and was
+    // DEAD CODE — nothing imported it, no AiAgent row carried its name, and
+    // runAgent() returns null on a findOne miss, so a cron entry alone would
+    // have fired into a silent no-op. The schedule here must stay identical to
+    // its SCHEDULE_REGISTRY row in aiOpsScheduler.ts ('25 */6 * * *'); a
+    // disagreement is what the cron-registry ratchet reports.
+    // Seeded ENABLED, unlike MarketingPublishingWorker: this agent only runs
+    // SELECTs. It writes no campaign, lead or email row and sends nothing, so
+    // there is no blast radius to hold for review, and the admin pause button
+    // still stops it through runAgent()'s enabled/paused gate.
+    agent_name: 'DeptCampaignPerformanceAgent',
+    agent_type: 'performance_tracker',
+    module: 'campaignPerformanceAgent',
+    source_file: 'backend/src/services/agents/departments/marketing/campaignPerformanceAgent.ts',
+    trigger_type: 'cron',
+    schedule: '25 */6 * * *',
+    category: 'reporting',
+    description:
+      'Marketing funnel performance analysis. Per active campaign: enrolled leads, emails sent/pending/failed, the bounded failure rate, and a healthy/degraded/empty verdict. READ-ONLY - three bounded SELECTs, no writes, nothing sent. Output is PARTITIONED BY TENANT: one action per tenant_id, so no report ever mixes two tenants, and campaigns with no tenant form their own partition. campaigns_processed is derived from the report array, not a counter, after the previous version reported 0 while analysing 6.',
+    enabled: true,
+  },
+  {
     agent_name: 'AdmissionsConversionArchitect',
     agent_type: 'dept_strategy_architect',
     module: 'strategyArchitectAgent',
@@ -3225,8 +3254,22 @@ export async function seedAgentRegistry(): Promise<void> {
 // ─── Agent Group Assignment ────────────────────────────────────────────────
 // Maps agent names to their super-agent group. This is additive — does not
 // remove agents or change any other field.
+//
+// THE INVARIANT, AND WHY IT IS NOT OPTIONAL. `ai_agents.agent_group` is a
+// SINGLE column and assignAgentGroups() below writes only where it IS NULL, so
+// the FIRST key here to list an agent claims it permanently and any later
+// listing of the same name is an update that matches no row. Two rules follow;
+// both are checked by agentGroupMapIntegrity.ts, logged at boot, and failed in
+// CI by __tests__/agentGroupMapIntegrity.test.ts:
+//   1. an agent name appears under EXACTLY ONE group — a group defined as a
+//      subset of a group above it can never have a member;
+//   2. every name here matches an AGENT_REGISTRY entry — the REGISTERED
+//      agent_name, which is not always the name of its source file.
+// A silent no-op here cost seven months of false all-clears; see
+// agentGroupMapIntegrity.ts's header for the production numbers.
 
-const AGENT_GROUP_MAP: Record<string, string[]> = {
+// Exported so the CI integrity test asserts on the SHIPPED map, not a copy.
+export const AGENT_GROUP_MAP: Record<string, string[]> = {
   campaign_ops: [
     'CampaignHealthScanner', 'CampaignRepairAgent', 'CampaignQAAgent', 'MandrillOpenClickPoll',
     'CampaignSelfHealingAgent', 'ContentOptimizationAgent', 'ConversationOptimizationAgent',
@@ -3236,9 +3279,21 @@ const AGENT_GROUP_MAP: Record<string, string[]> = {
     'IntentScoreRecomputer', 'BehavioralTriggerEvaluator', 'OpportunityScoreRecomputer',
     'ICPInsightComputer',
   ],
-  content_engine: [
-    'ContentOptimizationAgent', 'ConversationOptimizationAgent',
-  ],
+  // DECLARED EMPTY, deliberately — not an oversight, and not a list waiting to
+  // be refilled. This group used to list ContentOptimizationAgent and
+  // ConversationOptimizationAgent, both already claimed by campaign_ops above,
+  // so both updates matched nothing and the group has held ZERO rows in
+  // production since it was written. ContentEngineSuperAgent nonetheless
+  // published 9,369 reports of "Content Engine: 0/0 healthy ... 0 anomalies
+  // detected" (2026-03-17 → 2026-10-06). The unreachable listing is removed so
+  // the emptiness is visible in the data instead of hiding in key order.
+  // ContentEngineSuperAgent stays registered and running: an empty group now
+  // reports UNKNOWN rather than healthy (superAgentHealth.ts), and whether
+  // this department gets real agents or the super agent is retired is the
+  // product owner's decision, not this seed file's.
+  // Do NOT "fix" this by re-listing agents that belong to another group —
+  // that is precisely the bug, and the integrity check will reject it.
+  content_engine: [],
   analytics_engine: [
     'InsightArchitect',
   ],
@@ -3251,8 +3306,14 @@ const AGENT_GROUP_MAP: Record<string, string[]> = {
     'AdmissionsProactiveOutreachAgent', 'AdmissionsConversationContinuityAgent',
     'AdmissionsHighIntentLeadAgent', 'AdmissionsInsightsAgent', 'AdmissionsExecutiveUpdateAgent',
     'AdmissionsDocumentDeliveryAgent', 'AdmissionsEmailAgent', 'AdmissionsSMSAgent',
-    'AdmissionsAppointmentAgent', 'AdmissionsSynthflowCallAgent', 'AdmissionsCallGovernanceAgent',
-    'AdmissionsCallComplianceAgent', 'AdmissionsCallbackAgent', 'AdmissionsConversationTaskMonitor',
+    // Registered agent_names, NOT source-file names. These three used to read
+    // 'AdmissionsAppointmentAgent' / 'AdmissionsCallComplianceAgent' /
+    // 'AdmissionsCallbackAgent' — the .ts filenames, for which no AiAgent row
+    // has ever existed — so admissions carried 17 rows in production where
+    // this map intended 20.
+    'AdmissionsAppointmentSchedulingAgent', 'AdmissionsSynthflowCallAgent',
+    'AdmissionsCallGovernanceAgent', 'AdmissionsCallComplianceMonitor',
+    'AdmissionsCallbackManagementAgent', 'AdmissionsConversationTaskMonitor',
     'AdmissionsAssistantAgent', 'AdmissionsKnowledgeSyncAgent',
   ],
   partnership: [
@@ -3261,9 +3322,61 @@ const AGENT_GROUP_MAP: Record<string, string[]> = {
   finance: [
     'FinanceIntelligenceArchitect',
   ],
+  // Marketing department, opened 2026-10-06 with its first reachable member.
+  // 'DeptCampaignPerformanceAgent' is claimed by no group above — checked
+  // before adding it, because a second listing of a name is the silent no-op
+  // documented at the top of this map.
+  //
+  // KNOWN AND DELIBERATE: no super agent reads this group. The eight groups
+  // above each have one (runSuperAgentCycle('campaign_ops', …) and its
+  // siblings); 'marketing' has none, so this agent's health appears in NO
+  // department report. Its run_count, last_result and activity log are still
+  // visible on the Trust Command Center, which is where it is actually read
+  // today. Recorded here rather than papered over by filing the agent under
+  // campaign_ops: a supervised-looking group is how content_engine published
+  // 9,369 "0/0 healthy" reports. Whether Marketing gets a super agent is the
+  // product owner's call; campaignPerformanceAgent's wiring test pins the
+  // absence, so adding one fails that test and the decision is made on
+  // purpose.
+  marketing: [
+    'DeptCampaignPerformanceAgent',
+  ],
 };
 
+/**
+ * The agent_names AGENT_REGISTRY actually registers. The group map can only
+ * ever write to a name in here — anything else is an update matching no row.
+ * Derived rather than hand-maintained so it cannot drift from the registry.
+ */
+function seededAgentNames(): Set<string> {
+  return new Set(AGENT_REGISTRY.map((entry) => entry.agent_name));
+}
+
+/**
+ * The real map audited against the real registry. Exported for the CI test,
+ * which is the gate that actually fails on a breach.
+ */
+export function auditAgentGroups(): AgentGroupMapDefects {
+  return auditAgentGroupMap(AGENT_GROUP_MAP, seededAgentNames());
+}
+
+// Not classifyError(): there is no exception here to classify, and feeding it a
+// hand-rolled Error would return the bare string 'Error', which errorClassifier
+// itself documents as unacceptable. 'ContractViolation' is the canonical
+// ErrorClass member for a broken internal contract, which is what this is.
+const AGENT_GROUP_MAP_DEFECT_CLASS: ErrorClass = 'ContractViolation';
+
 async function assignAgentGroups(): Promise<void> {
+  // Static contract check BEFORE any write. These defects live in the map, not
+  // the database, so they are identical on every boot. This LOGS rather than
+  // throws on purpose: the CI test fails the change before it can ever reach a
+  // boot, and a mistake in static seed data must not abort group assignment
+  // for the other ~240 agents (aiOpsService.ts awaits seedAgentRegistry()).
+  // What it must never do again is say nothing.
+  for (const line of formatAgentGroupMapDefects(auditAgentGroups())) {
+    console.error(`[AI Ops] ${AGENT_GROUP_MAP_DEFECT_CLASS}: AGENT_GROUP_MAP — ${line}`);
+  }
+
   for (const [group, agentNames] of Object.entries(AGENT_GROUP_MAP)) {
     for (const name of agentNames) {
       await AiAgent.update(

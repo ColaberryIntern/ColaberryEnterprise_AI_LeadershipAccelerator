@@ -23,6 +23,7 @@ import { fetchGovOpportunityCandidatesV2 } from '../../services/factory/opportun
 // Gov step 6 — the two-track delivery project, created on approval behind FLAGS.govIngestion (ships dark).
 import { FLAGS } from '../../config/featureFlags';
 import { ensureGovTwoTrackProject } from '../../services/factory/govDeliveryProject';
+import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -48,7 +49,9 @@ const GWS_RE = /^gws:[0-9a-f-]{36}$/;
 const isGwsKey = (k: string): boolean => GWS_RE.test(k);
 // The shared key param for the routes that serve BOTH paths (GET, create, approve, decision, extract-requirements):
 // accepts a canonical id OR a gws key; anything else → 400. The handlers branch on isGwsKey. The write routes that
-// are canonical-only by design (link, authorize-build, review-documents) keep `canonicalParam` (a gws key → 400 there).
+// are canonical-only by design because they validate against the OP snapshot (link, review-documents) keep
+// `canonicalParam` (a gws key → 400 there). authorize-build accepts BOTH (qualKeyParam): it never consults the OP
+// snapshot — the build is keyed on the body's deliveryProjectId, which step 6 sets for a decoupled pursuit too.
 const qualKeyParam = z.object({ canonicalOpportunityId: z.string().regex(/^(op:gov:[0-9a-f]{32}|gws:[0-9a-f-]{36})$/) });
 const biddingEntityField = z.string().min(1).max(120);
 
@@ -386,10 +389,14 @@ const authorizeBuildBody = z.object({
 });
 
 /** POST /api/admin/factory/qualification/:canonicalOpportunityId/authorize-build — record the SEPARATE build
- *  authorization (a pursuit approval is not a build authorization). The approver is the request identity. */
+ *  authorization (a pursuit approval is not a build authorization). The approver is the request identity.
+ *  Accepts a canonical id OR a gws key (qualKeyParam): unlike link/review-documents this never consults the OP
+ *  snapshot — the authorization is keyed on the body's deliveryProjectId, which step 6 sets for a DECOUPLED
+ *  (gws) pursuit too — so a decoupled pursuit's project can be build-authorized. The gate is unchanged:
+ *  authorizeBuild still requires an approver + scope + resource_limit and confers no generation (parked). */
 router.post('/api/admin/factory/qualification/:canonicalOpportunityId/authorize-build', requireSection('program'), async (req: Request, res: Response) => {
-  const p = canonicalParam.safeParse(req.params);
-  if (!p.success) { res.status(400).json({ error: 'Invalid canonical opportunity id.' }); return; }
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
   const b = authorizeBuildBody.safeParse(req.body ?? {});
   if (!b.success) { res.status(400).json({ error: 'Invalid authorize-build body.', issues: b.error.issues }); return; }
   const { canonicalOpportunityId } = p.data;
@@ -409,11 +416,18 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/authorize-
 });
 
 // Manual document review upload: in-memory, 100 MB cap. Multer errors (e.g. size) become a 400, not a 500. The
-// ZIP bytes are hashed server-side and discarded — never stored.
+// ZIP bytes are hashed server-side and discarded — never stored. The 100 MB cap bounds the COMPRESSED bytes, so
+// before any route opens the archive we also verdict it against zip-bomb limits (entry count / declared
+// uncompressed size / compression ratio) and refuse a hostile archive with 413 — see inspectZipSafety.
 const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 function uploadDocumentZip(req: Request, res: Response, next: (err?: any) => void): void {
   documentUpload.single('document')(req as any, res as any, (err: any) => {
     if (err) { res.status(400).json({ error: 'Upload failed (file too large or malformed).' }); return; }
+    const f: any = (req as any).file;
+    if (f && f.buffer) {
+      const verdict = inspectZipSafety(f.buffer);
+      if (!verdict.ok) { res.status(413).json({ error: 'The uploaded archive is unsafe to open (possible zip bomb).', reason: verdict.reason }); return; }
+    }
     next();
   });
 }
@@ -500,7 +514,22 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/attest-zip
       reviewerIdentityId: actorIdentity(req), mode: b.data.mode,
       filename: file ? (file.originalname || 'solicitation.zip') : null, sha256, sizeBytes: file ? file.size : null, dossier,
     });
-    res.status(b.data.mode === 'add' ? 201 : 200).json({ qualification: q });
+    // Phase 2 private byte-store: the attestation is the gate and records only sha256/size; retain the ACTUAL
+    // solicitation ZIP (the evidence of record) keyed to the tenant + this qualification so the workspace can
+    // re-open it later. Storage failure is NON-FATAL (the attestation gate already recorded) but SURFACED in the
+    // response — never a silent loss. Only on 'add'; 'revoke' touches the gate, never the retained bytes.
+    let sourceBundle: any = null;
+    if (b.data.mode === 'add' && file && file.buffer) {
+      try {
+        const { storeGovSourceBundle } = await import('../../services/factory/proposal/govSourceBundleStore');
+        const stored = await storeGovSourceBundle(scope.tenantId, canonicalOpportunityId, file);
+        sourceBundle = { id: stored.id, filename: stored.filename, byteSize: stored.byte_size, sha256: stored.sha256, deduped: stored.deduped, stored: true };
+      } catch (sErr: any) {
+        logFail('gov_qualification_source_bundle_store_failed', sErr, { canonicalOpportunityId });
+        sourceBundle = { stored: false, reason: 'storage_failed' };
+      }
+    }
+    res.status(b.data.mode === 'add' ? 201 : 200).json({ qualification: q, sourceBundle });
   } catch (err: any) {
     if (mapQualificationError(res, err)) return;
     logFail('gov_qualification_attest_zip_failed', err, { canonicalOpportunityId });
@@ -527,10 +556,44 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/extract-re
       id: r.canonicalReqId, text: r.statement, extractedText: r.extractedText,
       sourceDocument: r.sourceDocument, section: r.section, kind: r.kind, priority: r.priority,
     }));
-    res.json({ candidates, fileCount: result.fileCount });
+    // Surface the per-file extraction outcomes so the reviewer sees EVERY file and what happened to it (nothing
+    // silently skipped) — unsupported / unreadable / scanned-PDF / truncated are flagged for manual review.
+    res.json({ candidates, fileCount: result.fileCount, files: result.files });
   } catch (err: any) {
     logFail('gov_qualification_extract_requirements_failed', err, { canonicalOpportunityId: p.data.canonicalOpportunityId });
     res.status(500).json({ error: 'Could not extract requirements from the document.' });
+  }
+});
+
+/**
+ * GET /api/admin/factory/qualification/:canonicalOpportunityId/source-bundle/:bundleId — download the retained
+ * solicitation ZIP (the evidence of record that attest-zip stored). Access-checked three ways: program-gated
+ * (requireSection), tenant-scoped (scopeOrFail), and scoped to THIS qualification — loadGovSourceBundleScoped
+ * answers 404 for any bundle that is not this tenant's AND this qualification's (and for a missing file), so a
+ * bundle id reveals nothing about another tenant's or qualification's evidence. Streams the bytes as an
+ * attachment. (Session+section+tenant is the authorization here, matching the sibling qualification routes; a
+ * signed-URL variant for header-less/student-portal embedding is a later slice.)
+ */
+router.get('/api/admin/factory/qualification/:canonicalOpportunityId/source-bundle/:bundleId', requireSection('program'), async (req: Request, res: Response) => {
+  const p = qualKeyParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const bundleId = String((req.params as any).bundleId || '');
+  if (!/^[0-9a-f-]{36}$/i.test(bundleId)) { res.status(400).json({ error: 'Invalid bundle id.' }); return; }
+  const { canonicalOpportunityId } = p.data;
+  const scope = await scopeOrFail(res, 'gov_qualification_source_bundle_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const { loadGovSourceBundleScoped } = await import('../../services/factory/proposal/govSourceBundleStore');
+    const bundle = await loadGovSourceBundleScoped(scope.tenantId, canonicalOpportunityId, bundleId);
+    if (!bundle) { res.status(404).json({ error: 'Source bundle not found.' }); return; }
+    const safeName = (bundle.filename || 'solicitation.zip').replace(/[^\w.\-]/g, '_');
+    res.setHeader('Content-Type', bundle.mime || 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.sendFile(bundle.path);
+  } catch (err: any) {
+    logFail('gov_qualification_source_bundle_download_failed', err, { canonicalOpportunityId });
+    res.status(500).json({ error: 'Could not download the source bundle.' });
   }
 });
 

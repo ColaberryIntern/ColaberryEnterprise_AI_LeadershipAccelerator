@@ -186,7 +186,7 @@ Mention exciting updates for Colaberry alumni. Ask them to check their email.`,
     ai_tone: 'consultative, helpful',
     ai_instructions: `Write an email from Ali offering genuine value.
 Share a specific AI use case relevant to their industry or role.
-Offer a free strategy call — no commitment, just exploring options.
+Offer a strategy call — no commitment, just exploring options.
 Keep under 200 words. Focus on their benefit, not the sale.`,
   },
   // Day 6 — Final SMS

@@ -609,7 +609,7 @@ async function emailAli({ state, aiSummary, humanQueue, escalations, nurturePost
 
 <tr><td style="background:linear-gradient(135deg,#1a365d 0%,#2c5282 100%);color:#fff;padding:28px 32px">
 <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#fbbf24;font-weight:700">Launch PMO - Daily Update</div>
-<h1 style="margin:6px 0 8px;font-size:24px;font-weight:800;color:white">AI Systems Architect Accelerator &mdash; ${today}</h1>
+<h1 style="margin:6px 0 8px;font-size:24px;font-weight:800;color:white">AI Systems Architect Accelerator - ${today}</h1>
 <div style="font-size:13px;color:#e2e8f0;line-height:1.6">${state.daysToPlatform}d to platform launch (${shortDate(LAUNCH.platformLaunchDate)}) &middot; ${state.daysToProgram}d to program launch (${shortDate(LAUNCH.programLaunchDate)}) &middot; ${state.overall}% overall ready &middot; ${state.totalAi} AI-doable &middot; ${state.totalHuman} human-needed &middot; ${state.totalOverdue} overdue &middot; ${nurturePosted.length} nurture posts today</div>
 </td></tr>
 

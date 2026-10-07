@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261006-a4k7 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, October 6, 2026 at 7:13 PM</div>
+    <div><span class="sid">CC-20261006-a4k7</span><span class="count">10 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>SBP agent scoping enabled for the intern roster in production</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`SBP_AGENT_SCOPING` in `/opt/colaberry-accelerator/.env` widened from one enrollment</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">ran the real compiled gate inside the prod container against the real env value, with</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Two corrections worth recording. The roster query returned Ali&#39;s enrollment as one of the 10, so</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Session start for the enterprise-agents workstream</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Created the isolated worktree `acc-agents-wt` on `workstream/enterprise-agents` from</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`CLAUDE.md` diffed against `origin/main` — identical, so the copy in context is not stale.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The build targets in the run prompt arrived as an unfilled `&lt;Dhee: list the agents/features here&gt;`</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Super agent health verdicts made falsifiable</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New pure module `superAgentHealth.ts` plus `superAgentSubordinateRows.ts`, consumed by</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">223 tests across 3 suites. An independent adversarial grader re-ran them, drove the real</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">my first attempt recreated the original defect through `status` instead of `enabled`, and a</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>The displayed health verdict corrected where it is actually rendered</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `briefings/departmentHealthVerdict.ts` giving a three-state verdict that cannot</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">29 tests on the verdict module plus new suites for `coryBrain` and</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">I originally told the builders this verdict was emailed in the daily briefing. It is not.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Cron registry reconciliation guard</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `services/__tests__/cronRegistryReconciliation.test.ts` and four fixtures, asserting</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">33 tests, three full adversarial grading cycles. The accounting is over the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">it measured 33 `instrumentCronJob` names with no `ai_agents` row at all, including</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>AGENT_GROUP_MAP duplicate-listing guard</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `agentRegistry/agentGroupMapIntegrity.ts` and its test; the unreachable</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">graded PASS. The guard fails if any agent name appears under two groups, with a positive</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`ContentEngineSuperAgent` was deliberately left running rather than retired. Whether it gets</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Marketing Intelligence and Brand: two fabricating agents deleted, one rewritten and wired</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Deleted `departments/marketing/contentGenerationAgent.ts` and</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">graded PASS. 111 tests green across the rewrite, its wiring test, a deleted-agents test,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the stale `capability_agent_maps` row is a production write and was NOT executed. The exact</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>The email preflight was blind to entity-encoded dashes</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`mandrillPreflight.js` now refuses `&amp;mdash;`, `&amp;ndash;` and the decimal and hex numeric</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">103 tests across 2 suites. The change is additive: the literal U+2014 check is</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">I closed two further bypasses the grader disclosed - leading-zero and semicolon-less numeric</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Brand governance rules and the banned-word ratchet</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `content/brandGovernanceSeed.ts` publishing a rule set with &quot;free&quot; as a prohibited</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">graded PASS. The matcher has zero false positives on `freedom`, `freely`, `freeform`,</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">NO PRODUCTION WRITE was executed. Publishing the rule set activates the existing conditional</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>Intern programme kickoff deck</h2>
+          <span class="badge">2026-10-06</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `docs/INTERN_AGENT_PROGRAM_KICKOFF.html`, 8 slides, keyboard-navigable, print to PDF.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">all 14 of its colours traced to real tokens in `frontend/src/styles/tokens.css`; zero</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">an earlier revision built the agent slide on the ten `Workforce*Director` rows and their persona</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261006-a4k7.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
