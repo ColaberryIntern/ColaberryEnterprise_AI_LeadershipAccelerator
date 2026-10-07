@@ -514,7 +514,22 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/attest-zip
       reviewerIdentityId: actorIdentity(req), mode: b.data.mode,
       filename: file ? (file.originalname || 'solicitation.zip') : null, sha256, sizeBytes: file ? file.size : null, dossier,
     });
-    res.status(b.data.mode === 'add' ? 201 : 200).json({ qualification: q });
+    // Phase 2 private byte-store: the attestation is the gate and records only sha256/size; retain the ACTUAL
+    // solicitation ZIP (the evidence of record) keyed to the tenant + this qualification so the workspace can
+    // re-open it later. Storage failure is NON-FATAL (the attestation gate already recorded) but SURFACED in the
+    // response — never a silent loss. Only on 'add'; 'revoke' touches the gate, never the retained bytes.
+    let sourceBundle: any = null;
+    if (b.data.mode === 'add' && file && file.buffer) {
+      try {
+        const { storeGovSourceBundle } = await import('../../services/factory/proposal/govSourceBundleStore');
+        const stored = await storeGovSourceBundle(scope.tenantId, canonicalOpportunityId, file);
+        sourceBundle = { id: stored.id, filename: stored.filename, byteSize: stored.byte_size, sha256: stored.sha256, deduped: stored.deduped, stored: true };
+      } catch (sErr: any) {
+        logFail('gov_qualification_source_bundle_store_failed', sErr, { canonicalOpportunityId });
+        sourceBundle = { stored: false, reason: 'storage_failed' };
+      }
+    }
+    res.status(b.data.mode === 'add' ? 201 : 200).json({ qualification: q, sourceBundle });
   } catch (err: any) {
     if (mapQualificationError(res, err)) return;
     logFail('gov_qualification_attest_zip_failed', err, { canonicalOpportunityId });

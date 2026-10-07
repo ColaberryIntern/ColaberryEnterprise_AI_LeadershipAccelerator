@@ -41,6 +41,9 @@ jest.mock('../../../services/factory/opportunities/govOpportunityAlias', () => {
 });
 const extractProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalExtractor', () => ({ extractProposal: (...a: any[]) => extractProposal(...a) }));
+// Phase 2 private byte-store — mocked so attest-zip tests don't touch the DB or the uploads volume.
+const storeGovSourceBundle = jest.fn();
+jest.mock('../../../services/factory/proposal/govSourceBundleStore', () => ({ storeGovSourceBundle: (...a: any[]) => storeGovSourceBundle(...a) }));
 // Step 6 — the two-track project creator, mocked so the flag-on tests don't touch the DB.
 const ensureGovTwoTrackProject = jest.fn();
 jest.mock('../../../services/factory/govDeliveryProject', () => ({ ensureGovTwoTrackProject: (...a: any[]) => ensureGovTwoTrackProject(...a) }));
@@ -63,7 +66,11 @@ app.use(express.json());
 app.use(govQualificationRoutes);
 
 const CONTAINER = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
-beforeEach(() => { jest.clearAllMocks(); lookupGovContractsContainer.mockResolvedValue(CONTAINER); });
+beforeEach(() => {
+  jest.clearAllMocks();
+  lookupGovContractsContainer.mockResolvedValue(CONTAINER);
+  storeGovSourceBundle.mockResolvedValue({ id: 'bundle-default', filename: 'solicitation.zip', mime: 'application/zip', byte_size: 9, sha256: 'a'.repeat(64), deduped: false });
+});
 
 describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
@@ -454,12 +461,39 @@ describe('DECOUPLED (discovery-ZIP) workspace — gws keys', () => {
     expect(arg.reviewerIdentityId).toBe('reviewer@test');
   });
 
-  it('attest-zip: revoke needs no file (200)', async () => {
+  it('attest-zip add: RETAINS the solicitation ZIP (private byte-store) keyed to the tenant + gws key, and surfaces the bundle', async () => {
+    recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
+    storeGovSourceBundle.mockResolvedValue({ id: 'bundle-xyz', filename: 'solicitation.zip', mime: 'application/zip', byte_size: 9, sha256: 'b'.repeat(64), deduped: false });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .attach('document', Buffer.from('zip-bytes'), 'solicitation.zip');
+    expect(res.status).toBe(201);
+    expect(storeGovSourceBundle).toHaveBeenCalledTimes(1);
+    expect(storeGovSourceBundle.mock.calls[0][0]).toBe('ten-1'); // scope.tenantId
+    expect(storeGovSourceBundle.mock.calls[0][1]).toBe(GWS);     // qualification key
+    expect(Buffer.isBuffer(storeGovSourceBundle.mock.calls[0][2].buffer)).toBe(true);
+    expect(res.body.sourceBundle).toMatchObject({ id: 'bundle-xyz', stored: true, deduped: false });
+  });
+
+  it('attest-zip add: a byte-store FAILURE is non-fatal but SURFACED — the attestation gate still records (201), sourceBundle.stored=false', async () => {
+    recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
+    storeGovSourceBundle.mockRejectedValue(new Error('disk full'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
+      .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'add')
+      .attach('document', Buffer.from('zip-bytes'), 'solicitation.zip');
+    expect(res.status).toBe(201);
+    expect(recordZipAttestation).toHaveBeenCalledTimes(1); // the gate recorded regardless
+    expect(res.body.sourceBundle).toEqual({ stored: false, reason: 'storage_failed' });
+  });
+
+  it('attest-zip: revoke needs no file (200), retains nothing (never calls the byte-store), sourceBundle null', async () => {
     recordZipAttestation.mockResolvedValue({ id: 'q2', version: 2 });
     const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/attest-zip`)
       .field('biddingEntity', 'colaberry').field('expectedVersion', '1').field('mode', 'revoke');
     expect(res.status).toBe(200);
     expect(recordZipAttestation.mock.calls[0][0].mode).toBe('revoke');
+    expect(storeGovSourceBundle).not.toHaveBeenCalled();
+    expect(res.body.sourceBundle).toBeNull();
   });
 
   it('attest-zip: 400 when add has no file', async () => {
