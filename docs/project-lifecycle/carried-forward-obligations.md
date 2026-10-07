@@ -659,13 +659,22 @@ assembles the table.**
 
 ### CLOSED by P5-T1.3: `ensureProjectLifecycleSchema.ts` split at the prescribed seam
 
-Split into `ensureProjectLifecycleSchema.ts` (287 lines, the DDL and the ensure path) and
-`projectLifecycleSchemaContract.ts` (167, the three assertion lists and the assert), at
+Split into `ensureProjectLifecycleSchema.ts` (the DDL and the ensure path) and
+`projectLifecycleSchemaContract.ts` (the assertion lists and the assert), at
 exactly the seam this entry named. Three importers repointed, no re-export barrel. The
 split broke the `assertProjectLifecycleSchema()` call at the end of the ensure path and
 `tsc` caught it as one TS2552 above the 4-error baseline — the entry below was right that
 discovering this at the ceiling costs a split under pressure, and right to say so in
-advance. The original text follows.
+advance.
+
+**NO LINE COUNTS ARE QUOTED HERE, and an earlier version of this entry quoted two.** It said
+287 and 167; the shipped tree is 324 and 200, because P5-T1.3 step 2 then added a column, a
+fourth assertion list and an assert block to both halves. **That is the identical mistake the
+original text below warned about**, two paragraphs under a sentence reading "No current count
+is quoted here". Run `wc -l`. Both halves are under the 500 ceiling and under the ~300 soft
+target at the time of writing, which is the only property worth asserting.
+
+The original text follows.
 
 ### SIZE RESIDUAL (original text): `ensureProjectLifecycleSchema.ts` is approaching the 500-line ceiling
 

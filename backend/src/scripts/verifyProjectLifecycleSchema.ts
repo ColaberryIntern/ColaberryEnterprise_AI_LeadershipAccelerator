@@ -158,6 +158,9 @@ async function main(): Promise<void> {
       tables_missing: result.tablesMissing,
       indexes_missing: result.indexesMissing,
       constraints_missing: result.constraintsMissing,
+      // NAMED, not just counted. The other three categories name their gaps; a post-deploy
+      // gate that reports "columns 0/1" without saying which one scales badly past one.
+      columns_missing: result.columnsMissing,
       ...(result.error ? { introspection_error: result.error } : {}),
       ...(result.ok ? {} : {
         impact: 'Project lifecycle registration or blueprint approval will fail, or the approval '

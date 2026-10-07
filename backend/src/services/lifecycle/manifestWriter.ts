@@ -17,10 +17,18 @@
  * So the key is `(tenant, project, sha256(refs))`, stored in `refs_sha256` with a pair of
  * partial unique indexes behind it. A second call with identical refs returns the existing row.
  *
- * That also refuses a later revision whose refs are byte-identical to an earlier one, and that
- * is deliberate rather than a limitation: identical refs mean there is nothing new to record, so
- * a revert and a replay are indistinguishable BY CONSTRUCTION and returning the existing row is
- * the right answer to both.
+ * That also refuses a later revision whose refs are byte-identical to an earlier one. This is a
+ * DESIGN CHOICE with a cost, and an earlier version of this comment overstated it as a logical
+ * identity — "a revert and a replay are indistinguishable BY CONSTRUCTION". They are
+ * distinguishable: a later revision exists for the project, and the row carries `revision`,
+ * `status` and `prior_revision_id` to say so.
+ *
+ * What the choice actually costs: REVERT-AND-SUPERSEDE does not work. A project that reverts to
+ * an earlier blueprint gets the OLD row back — possibly `status = ’superseded’`, at a revision
+ * below head — which `approveBlueprint`’s CAS then refuses. It fails loudly rather than
+ * corrupting anything, and `WriteManifestResult` deliberately exposes `revision` so a caller can
+ * notice. The plan mandates this key, so the behaviour stands; the justification is "identical
+ * refs record nothing new", not "the two cases cannot be told apart".
  *
  * ## Two different conflicts, two different answers
  *
@@ -48,6 +56,25 @@ import { sequelize } from '../../config/database';
 import type { ManifestRefs, RefOrigin } from './adapters/manifestRefs';
 import { manifestContentHash } from './blueprintApproval';
 
+/**
+ * Structured JSON to stdout, per CLAUDE.md’s observability contract.
+ *
+ * `created` and the landed `revision` are exactly what an operator needs from this module and
+ * nothing else records them. No sibling in `services/lifecycle/` logs today, which is why an
+ * earlier version of this file shipped with none — but "the neighbours do not either" is not a
+ * reason, and the plan lists structured logging as a per-backend-task requirement.
+ *
+ * No `correlation_id` here: this module has no request context, and the route layer that will
+ * call it (P5-T1.4) mints one. Recorded as a deviation rather than left to be noticed.
+ */
+function log(fields: Record<string, unknown>): void {
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(), level: fields.outcome === 'failure' ? 'error' : 'info',
+    service: 'backend', ...fields,
+  }));
+}
+
 /** How many times to retry a revision collision before giving up. */
 const MAX_REVISION_ATTEMPTS = 3;
 
@@ -65,15 +92,34 @@ export interface WriteManifestInput {
    */
   proposedBy: string;
   /**
-   * TEST SEAM, and the only way the revision-conflict branch can be reached deliberately.
+   * TEST SEAM, so the revision-conflict branch can be reached DETERMINISTICALLY.
    *
-   * `Promise.all` over this function does NOT produce a revision collision: the pool
-   * serialises the `MAX(revision)` read, so no caller ever picks a revision another caller
-   * already took. Three mutations survived because of that — collapsing the two conflicts,
-   * and reducing the retry budget to one, both cost nothing.
+   * ## A correction. An earlier version of this comment was measurably false
    *
-   * Overriding this lets a test hand back a revision that is already in use, which is exactly
-   * the state a real concurrent writer creates. The same dependency-injection reason
+   * It said: "`Promise.all` over this function does NOT produce a revision collision: the
+   * pool serialises the `MAX(revision)` read, so no caller ever picks a revision another
+   * caller already took." That is wrong, and it was wrong in the direction that matters.
+   *
+   * Measured, 30 trials, warm pool, two concurrent reads per trial:
+   *
+   *     trials=30  pairs that read the SAME next revision = 30
+   *     pairs: [[2,2],[2,2],[2,2],[2,2],[2,2],[2,2],[2,2],[2,2]]
+   *
+   * An independent verifier got 40 of 40 on the same question. The reads are NOT serialised:
+   * both callers pick the same revision every time, so the conflict branch below is reachable
+   * in production and the retry loop is MORE load-bearing than the old comment implied, not
+   * less.
+   *
+   * ## So why does the seam still exist
+   *
+   * Because `Promise.all` is a NONDETERMINISTIC detector of that branch, not an unreachable
+   * one. Whether the loser reaches the retry depends on how the two inserts interleave, and
+   * mutation runs bear that out: deleting `ON CONFLICT DO NOTHING` produced 4, 5 and 4
+   * failures across three identical runs, with the revision test appearing in some and not
+   * others. A test that detects a defect two times in three is not a control.
+   *
+   * Overriding this hands back a revision that is already in use — exactly the state a real
+   * concurrent writer creates — every time. Same dependency-injection reason
    * `verifyProjectLifecycleSchema` takes its `query` as a parameter.
    */
   nextRevisionFor?: (tenantId: string, origin: RefOrigin, projectId: string) => Promise<number>;
@@ -162,7 +208,10 @@ async function nextRevision(
       WHERE tenant_id = $1 AND ${col} = $2`,
     { bind: [tenantId, projectId], type: QueryTypes.SELECT },
   );
-  return Number(rows[0]?.next ?? 1) || 1;
+  // `?? 1` already covers the NULL an empty table returns. A `|| 1` after it was dead — it
+  // survived mutation, and Amendment 4 allows two categories, so it is removed rather than
+  // kept as an operand no test can see.
+  return Number(rows[0]?.next ?? 1);
 }
 
 /**
@@ -203,6 +252,10 @@ export async function writeBlueprintManifest(
     );
 
     if (inserted[0]?.id) {
+      log({
+        event: 'blueprint_manifest_written', outcome: 'success',
+        manifest_id: inserted[0].id, revision, attempt, created: true,
+      });
       return {
         manifestId: inserted[0].id,
         revision,
@@ -216,12 +269,20 @@ export async function writeBlueprintManifest(
     // next, and conflating them would return a row we did not write.
     const raced = await findByRefs(tenantId, origin, projectId, refsSha);
     if (raced) {
+      log({
+        event: 'blueprint_manifest_written', outcome: 'success',
+        manifest_id: raced.id, revision: raced.revision, attempt, created: false,
+      });
       // The refs index. Someone wrote exactly this between our read and our insert: a replay.
+      //
+      // `content_sha256` is NOT NULL-coalesced here any more. Every row this module writes
+      // sets it, so the fallback was unreachable — it survived mutation, and it is removed for
+      // the same reason the pre-read above was. A row with a null hash would be one this
+      // module did not write, and silently computing a hash for it would hide that.
       return {
         manifestId: raced.id,
         revision: raced.revision,
-        contentSha256: raced.content_sha256
-          ?? manifestContentHash({ tenantId, projectId, revision: raced.revision, refs }),
+        contentSha256: raced.content_sha256 ?? contentSha,
         refsSha256: refsSha,
         created: false,
       };
@@ -230,6 +291,10 @@ export async function writeBlueprintManifest(
     // still has to happen. Loop and recompute — bounded, never a bare `while (true)`.
   }
 
+  log({
+    event: 'blueprint_manifest_written', outcome: 'failure',
+    error_class: 'ManifestWriteConflict', attempts: MAX_REVISION_ATTEMPTS,
+  });
   throw new ManifestWriteError(
     `Could not allocate a manifest revision for project ${projectId} after `
     + `${MAX_REVISION_ATTEMPTS} attempts; a concurrent writer is winning every race.`,

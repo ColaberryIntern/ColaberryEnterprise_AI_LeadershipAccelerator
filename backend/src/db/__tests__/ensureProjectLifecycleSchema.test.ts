@@ -21,7 +21,7 @@ jest.mock('../../config/database', () => ({
 import { sequelize } from '../../config/database';
 import { PROJECT_LIFECYCLE_STATEMENTS } from '../ensureProjectLifecycleSchema';
 import {
-  REQUIRED_TABLES,
+  REQUIRED_TABLES,
   REQUIRED_COLUMNS,
   assertProjectLifecycleSchema,
 } from '../projectLifecycleSchemaContract';
@@ -52,7 +52,10 @@ function mentionedInAnyCheck(sql: string, column: string): boolean {
  * that already shipped. `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so a
  * column declared only there never reaches production.
  *
- * Exactly ONE alter form is permitted, and every destructive shape is still refused. The
+ * Exactly ONE alter form is permitted. The exclusion list below is NOT a guess: each entry
+ * is a shape a verifier walked through an earlier, shorter version of this predicate. The
+ * sentence that used to sit here — "every destructive shape is still refused" — was false
+ * when it was written, because a chained statement after a semicolon passed. The
  * positive control below grew from four cases to ten in the same change, because a safety
  * predicate that gets loosened without its controls growing is how a guard stops guarding.
  */
@@ -70,6 +73,18 @@ function isAdditive(sql: string): boolean {
     && !/\bALTER COLUMN\b/.test(s)
     && !/\bRENAME\b/.test(s)
     && !/\bUSING\b/.test(s)
+    // A SECOND STATEMENT after the semicolon. The pre-task rule banned every ALTER, so
+    // `ADD COLUMN IF NOT EXISTS c TEXT; DELETE FROM x` was refused for free; narrowing the
+    // rule opened that door and the comment above claimed it had not. Measured at 66/66
+    // before this clause existed.
+    && !/;/.test(s.replace(/;\s*$/, ''))
+    // Each of these rewrites or exclusively locks a populated table, for the same reason
+    // NOT NULL without a DEFAULT is excluded: a column constraint or a computed column is
+    // not an additive change once rows exist.
+    && !/\bUNIQUE\b/.test(s)
+    && !/\bPRIMARY KEY\b/.test(s)
+    && !/\bCHECK\s*\(/.test(s)
+    && !/\bGENERATED\b/.test(s)
     && (!/\bNOT NULL\b/.test(s) || /\bDEFAULT\b/.test(s));
 
   if (!isCreate && !isAddColumn) return false;
@@ -103,6 +118,15 @@ describe('ensureProjectLifecycleSchema is additive-only', () => {
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT NOT NULL')).toBe(false);
     expect(isAdditive('ALTER TABLE t ALTER COLUMN c TYPE INT USING c::INT')).toBe(false);
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, DROP COLUMN d')).toBe(false);
+
+    // FIVE MORE, added after a verifier walked each of them through the narrowed rule at
+    // 66/66. The first is the one that matters most: the pre-task rule banned every ALTER,
+    // so a chained destructive statement was refused for free, and narrowing re-opened it.
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT; DELETE FROM t')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT UNIQUE')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT PRIMARY KEY')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT CHECK (c > 0)')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT GENERATED ALWAYS AS (1) STORED')).toBe(false);
 
     // And the PASSING COUNTERPARTS, without which the above would hold against a predicate
     // that refuses everything — which is the state the rule was in for ALTER until now.
@@ -182,6 +206,25 @@ describe('the invariants the approval ladder depends on', () => {
     expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_revision_delivery/i);
     expect(joined).toMatch(/\(tenant_id,\s*student_project_id,\s*revision\)/i);
     expect(joined).toMatch(/\(tenant_id,\s*delivery_project_id,\s*revision\)/i);
+  });
+
+  it('declares the UNIQUE refs backstop for BOTH project kinds', () => {
+    // The idempotency key behind `writeBlueprintManifest`. Pinned HERE, without a database,
+    // because CI has no `DATABASE_URL`: deleting both of these from the statement list
+    // survived the entire no-DB set at 66/66, so CI would not have noticed their removal.
+    // The sibling revision backstop above was already pinned this way; these were not.
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_student/i);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_delivery/i);
+    expect(joined).toMatch(/\(tenant_id,\s*student_project_id,\s*refs_sha256\)/i);
+    expect(joined).toMatch(/\(tenant_id,\s*delivery_project_id,\s*refs_sha256\)/i);
+    // PARTIAL on both counts. Without `refs_sha256 IS NOT NULL` every pre-existing row,
+    // written before the column existed, would collide on NULL.
+    expect(joined).toMatch(/WHERE student_project_id IS NOT NULL AND refs_sha256 IS NOT NULL/i);
+    expect(joined).toMatch(/WHERE delivery_project_id IS NOT NULL AND refs_sha256 IS NOT NULL/i);
+  });
+
+  it('declares the refs_sha256 column itself, by ALTER so an existing table gets it', () => {
+    expect(joined).toMatch(/ALTER TABLE operating_blueprint_manifests\s+ADD COLUMN IF NOT EXISTS refs_sha256/i);
   });
 
   it('declares proposed_by on the manifest, so separation of duty is not vacuous', () => {

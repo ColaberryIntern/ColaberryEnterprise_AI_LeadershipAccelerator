@@ -340,6 +340,35 @@ describeIfDb('writeBlueprintManifest against a real database', () => {
     expect(await rowCount()).toBe(1);
   });
 
+  it('is scoped BY TENANT: identical refs under another tenant are a different manifest', async () => {
+    // MX2. Dropping the tenant predicate from the replay lookup survived mutation, so the
+    // scoping was untested. The hash is tenant-salted, so there was no live cross-tenant
+    // leak — but "a bug would need two mistakes" is not coverage, and this subsystem has a
+    // standing rule that row checks come AFTER an audited tenant guard.
+    const OTHER = '99999999-9999-9999-9999-999999999999';
+    await sequelize.query('INSERT INTO tenants (id) VALUES ($1) ON CONFLICT DO NOTHING', { bind: [OTHER] });
+
+    const refs = refsWith(['proc-shared']);
+    const mine = await writeBlueprintManifest({
+      tenantId: TENANT, origin: 'sbp', projectId: PROJECT, refs, proposedBy: PROPOSER,
+    });
+    const theirs = await writeBlueprintManifest({
+      tenantId: OTHER, origin: 'sbp', projectId: PROJECT, refs, proposedBy: PROPOSER,
+    });
+
+    try {
+      // Byte-identical refs, two tenants, two rows. Neither is reported as a replay of the
+      // other, and the hashes differ because the tenant is an input to the hash.
+      expect(theirs.created).toBe(true);
+      expect(theirs.manifestId).not.toBe(mine.manifestId);
+      expect(theirs.refsSha256).not.toBe(mine.refsSha256);
+      // One row under OUR tenant, so the other tenant’s write was not counted as ours.
+      expect(await rowCount()).toBe(1);
+    } finally {
+      await sequelize.query('DELETE FROM operating_blueprint_manifests WHERE tenant_id = $1', { bind: [OTHER] });
+    }
+  });
+
   it('a delivery-origin write sets the OTHER project column', async () => {
     const DELIVERY = '55555555-5555-5555-5555-555555555555';
     await sequelize.query('INSERT INTO delivery_projects (id) VALUES ($1) ON CONFLICT DO NOTHING', { bind: [DELIVERY] });
