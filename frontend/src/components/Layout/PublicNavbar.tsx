@@ -214,7 +214,7 @@ function PublicNavbar() {
             >
               {SECONDARY_CTA.label}
             </CtaLink>
-            {/* Primary — start a free account (learner + org view). */}
+            {/* Primary — open a $0 account (learner + org view). */}
             <CtaLink
               to={PRIMARY_CTA.path}
               variant="primary"

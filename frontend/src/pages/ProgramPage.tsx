@@ -23,7 +23,7 @@ import PartnerStrip from '../components/visuals/PartnerStrip';
  * weekly live events, and follow a rolling timeline that keeps them current as
  * AI moves. Single persona, same as the rest of the site: a decision-maker who
  * is also the learner, evaluating the platform for their company. One primary
- * CTA everywhere, "Start free" -> /try, with a soft "Book a walkthrough".
+ * CTA everywhere, "$0 to start" -> /try, with a soft "Book a walkthrough".
  *
  * Built on the Colaberry design system, mirroring HomePage's idiom: semantic
  * tokens only, DS core components (Button/Card/Badge), alternating
@@ -32,7 +32,7 @@ import PartnerStrip from '../components/visuals/PartnerStrip';
  */
 
 /** Single-persona destinations (see publicRoutes.tsx). */
-const TRY_PATH = '/try'; // start a free account (learner + org view)
+const TRY_PATH = '/try'; // start an account at $0 (learner + org view)
 const WALKTHROUGH_PATH = '/contact'; // soft secondary — book a guided walkthrough
 
 const h2Style: React.CSSProperties = {
@@ -125,7 +125,7 @@ function ProgramPage() {
             Self-paced, so your people learn on their own time, around the job they already do. Nobody comes
             off the floor. They start any day and build real AI systems with Claude Code. Training is one part
             of a living ecosystem: certification, real projects, weekly live events, and a network of AI
-            Architects that keeps them current as AI moves. You try it all yourself first, free.
+            Architects that keeps them current as AI moves. You try it all yourself first, $0 to start.
           </p>
           <p style={{
             fontFamily: 'var(--font-display)', fontSize: 'var(--fs-body-sm)', fontWeight: 700,
@@ -134,7 +134,7 @@ function ProgramPage() {
             Learn With Claude. Build Through Colaberry. Deploy In The Real World.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', alignItems: 'center', justifyContent: 'center' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="program_hero_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="program_hero_start_free">$0 to start</Button>
             <a href={WALKTHROUGH_PATH} data-track="program_hero_book_walkthrough" style={{
               fontFamily: 'var(--font-body)', fontSize: 'var(--fs-body-sm)', fontWeight: 600,
               color: 'color-mix(in srgb, var(--text-on-inverse) 86%, transparent)', textDecoration: 'none',
@@ -142,7 +142,7 @@ function ProgramPage() {
           </div>
           <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--fs-caption)', color: 'color-mix(in srgb, var(--text-on-inverse) 70%, transparent)' }}>
             Evaluating this for your company? You experience the content yourself, you are the learner too.
-            Try the whole platform free, then invite your team when you are ready. No credit card.
+            Try the whole platform yourself, $0 to start, then invite your team when you are ready. No credit card.
           </p>
           <p style={{
             marginTop: 'var(--space-8)', fontSize: 'var(--fs-caption)', fontWeight: 600, letterSpacing: 'var(--ls-wide)',
@@ -342,18 +342,18 @@ function ProgramPage() {
       <section aria-label="Get started" style={{ background: 'var(--surface-inverse)', color: 'var(--text-on-inverse)', padding: 'var(--space-24) 0' }}>
         <div className="container" style={{ maxWidth: 820, paddingInline: 'var(--space-6)', textAlign: 'center' }}>
           <h2 className="cb-balance" style={{ ...h2Style, color: 'var(--text-on-inverse)', margin: '0 0 var(--space-5)' }}>
-            Start free. Explore it yourself. Bring your team when ready.
+            $0 to start. Explore it yourself. Bring your team when ready.
           </h2>
           <p style={{
             fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-relaxed)',
             color: 'color-mix(in srgb, var(--text-on-inverse) 84%, transparent)', maxWidth: 640, margin: '0 auto var(--space-10)',
           }}>
-            Create your free account and step into the whole ecosystem yourself, as both the learner and the
+            Create your account, $0 to start, and step into the whole ecosystem yourself, as both the learner and the
             admin: certification, real projects, weekly live events, and a network of AI Architects. Watch
-            capability climb on a live dashboard, then invite your team free when you are ready.
+            capability climb on a live dashboard, then invite your team when you are ready.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', alignItems: 'center', justifyContent: 'center' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="program_final_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="program_final_start_free">$0 to start</Button>
             <a href={WALKTHROUGH_PATH} data-track="program_final_book_walkthrough" style={{
               fontFamily: 'var(--font-body)', fontSize: 'var(--fs-body-sm)', fontWeight: 600,
               color: 'color-mix(in srgb, var(--text-on-inverse) 86%, transparent)', textDecoration: 'none',

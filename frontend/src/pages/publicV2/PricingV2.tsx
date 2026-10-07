@@ -26,9 +26,9 @@ function PricingV2(): React.ReactElement {
   return (
     <>
       <SeoV2
-        title="Free to start, licenses when you are ready"
+        title="$0 to start, licenses when you are ready"
         description={
-          'Start free with the whole platform and invite your team free. Activate licenses ' +
+          '$0 to start with the whole platform and invite your team. Activate licenses ' +
           'only when someone is ready to progress rather than evaluate.'
         }
       />
@@ -114,10 +114,10 @@ function PricingV2(): React.ReactElement {
 
       <section className="cbv2-rv cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-pricing-cta">
         <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
-          <h2 id="cbv2-pricing-cta">Start on the free tier and decide later.</h2>
+          <h2 id="cbv2-pricing-cta">Start on the $0 tier and decide later.</h2>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
             <Link className="cbv2-btn cbv2-btn--primary" to="/try">
-              Create a free account
+              $0 to start
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">
               Talk to an Architect

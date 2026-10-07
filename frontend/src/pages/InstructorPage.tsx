@@ -22,14 +22,14 @@ import CohortUrgency from '../components/visuals/CohortUrgency';
  * components (StatCounter, SectionFigure, PartnerStrip, CohortUrgency), and
  * real self-hosted photos. styles.css loads once at the app root.
  *
- * A single primary CTA (Start free) plus a direct "Book a call with Ali"
+ * A single primary CTA ("$0 to start") plus a direct "Book a call with Ali"
  * path via the existing StrategyCallModal.
  */
 
 /* ----------------------------------------------------------------------------
  * Single primary CTA destination (mirrors ProgramPage / publicRoutes.tsx)
  * ------------------------------------------------------------------------- */
-const TRY_PATH = '/try'; // Start free — the one primary CTA everywhere
+const TRY_PATH = '/try'; // "$0 to start" — the one primary CTA everywhere
 
 /* ----------------------------------------------------------------------------
  * Shared layout tokens (inline style objects reference semantic CSS variables
@@ -215,7 +215,7 @@ function InstructorPage() {
               }}
             >
               <Button as="a" href={TRY_PATH} variant="primary" size="lg" data-track="instructor_hero_start_free">
-                Start free
+                $0 to start
               </Button>
               {/* data-theme="dark" re-points --text-strong/--border-strong so the
                   outline button reads correctly on the inverse hero surface. */}
@@ -389,7 +389,7 @@ function InstructorPage() {
               'The outcome credential is the Certified Anthropic AI Systems Architect (CCA-F prep). You put your people in Anthropic-partner hands, and they come out with the credential and a build to prove it.',
             ]}
             side="left"
-            cta={{ label: 'Start free', to: TRY_PATH }}
+            cta={{ label: '$0 to start', to: TRY_PATH }}
           />
         </div>
       </section>
@@ -442,7 +442,7 @@ function InstructorPage() {
             </Button>
             <span data-theme="dark" style={{ display: 'inline-flex' }}>
               <Button as="a" href={TRY_PATH} variant="outline" size="lg" data-track="instructor_talk_start_free">
-                Start free
+                $0 to start
               </Button>
             </span>
           </div>
@@ -454,7 +454,7 @@ function InstructorPage() {
               opacity: 0.6,
             }}
           >
-            Free. No obligation.
+            $0 to start. No obligation.
           </p>
         </div>
       </section>

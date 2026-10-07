@@ -5,19 +5,19 @@ import { Card } from '../colaberry/components/core/Card';
 import { Badge } from '../colaberry/components/core/Badge';
 
 /**
- * PricingPage - "Free to start, licenses only when you are ready."
+ * PricingPage - "$0 to start, licenses only when you are ready."
  *
  * The /pricing page for enterprise.colaberry.ai, framed around the three
- * effortless beats: try it free yourself, invite your employees free, then
+ * effortless beats: try it yourself at $0, invite your employees, then
  * activate licenses for instant access when ready. Built around the whole
  * AI Systems Capability platform (self-paced learning + certification + real
  * projects + the AI Architect network + weekly live events + a stay-current
  * timeline), not a single class. Single persona (a decision-maker who is also
- * the learner), free-first. One primary CTA everywhere, "Start free" -> /try,
+ * the learner), $0-first. One primary CTA everywhere, "$0 to start" -> /try,
  * which grants a dual account (learner experience + their own organization
  * view). The paid tiers are the same platform, activated: licenses are the
  * single, optional paid step, not a separate product.
- *   Free:       start free, no credit card                 -> /try
+ *   $0 tier:    start at $0, no credit card                -> /try
  *   One license: $149/mo billed annually ($199 monthly)    -> /try (activate low-key)
  *   Team licenses: annual reassignable seats, from $950    -> /sponsorship
  *
@@ -97,17 +97,17 @@ const PLANS: PlanCard[] = [
     id: 'free',
     eyebrow: 'Start here',
     solid: true,
-    name: 'Start free',
+    name: 'Try it yourself',
     price: '$0',
     priceUnit: 'to start',
-    blurb: 'Start here. Explore the whole platform yourself, with both the learner experience and your own management dashboard, and invite your team free to test it. Pay nothing to begin.',
+    blurb: 'Start here. Explore the whole platform yourself, with both the learner experience and your own management dashboard, and invite your team to test it. Pay nothing to begin.',
     features: [
       'A dual account: the learner experience plus your own management dashboard',
       'See your organization come to life with sample data',
       'Watch AI readiness and velocity climb on a live dashboard',
-      'Send free test invites so your employees can try it too',
+      'Send test invites so your employees can try it too',
     ],
-    ctaLabel: 'Start free',
+    ctaLabel: '$0 to start',
     ctaHref: TRY_PATH,
     accent: 'green',
     featured: true,
@@ -128,13 +128,13 @@ const PLANS: PlanCard[] = [
       'Weekly live events and office hours to stay current',
       'The AI Architect network across companies and phases',
     ],
-    ctaLabel: 'Start free',
+    ctaLabel: '$0 to start',
     ctaHref: TRY_PATH,
     ctaTone: 'green',
     accent: 'red',
     subNote: (
       <>
-        Start free, activate your license when ready.{' '}
+        $0 to start, activate your license when ready.{' '}
         <a
           href={INDIVIDUAL_PATH}
           data-track="pricing_individual_enroll"
@@ -182,7 +182,7 @@ interface Reassurance { q: string; a: string; }
 const REASSURANCE: Reassurance[] = [
   {
     q: 'Can I try before I pay?',
-    a: 'Yes. Start free with your own account, sample data, and free test invites for your team. No credit card, no commitment. Activate licenses only when you are ready.',
+    a: 'Yes. It is $0 to start, with your own account, sample data, and test invites for your team. No credit card, no commitment. Activate licenses only when you are ready.',
   },
   {
     q: 'Can individuals cancel?',
@@ -198,8 +198,8 @@ function PricingPage() {
   return (
     <>
       <SEOHead
-        title="Pricing: Free to Start, Licenses When You Are Ready"
-        description="Try the whole platform yourself for free with no credit card, then invite your employees free to test it too. Activate licenses for instant full access only when you are ready: one license from $149/mo (billed annually; $199/mo month-to-month), or team licenses on annual reassignable seats from $950/seat/yr. Self-paced learning, certification, real projects, weekly live events, and the AI Architect network."
+        title="Pricing: $0 to Start, Licenses When You Are Ready"
+        description="Try the whole platform yourself, $0 to start and no credit card, then invite your employees to test it too. Activate licenses for instant full access only when you are ready: one license from $149/mo (billed annually; $199/mo month-to-month), or team licenses on annual reassignable seats from $950/seat/yr. Self-paced learning, certification, real projects, weekly live events, and the AI Architect network."
       />
 
       {/* ============================ HERO ============================ */}
@@ -222,27 +222,27 @@ function PricingPage() {
             fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--fs-hero-fluid)',
             lineHeight: 'var(--lh-tight)', letterSpacing: 'var(--ls-tighter)', margin: '0 0 var(--space-6)', color: 'var(--text-on-inverse)',
           }}>
-            Free to start.{' '}
+            $0 to start.{' '}
             <span style={{ color: 'var(--brand-accent)' }}>Licenses only when you are ready.</span>
           </h1>
           <p style={{
             fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-relaxed)',
             color: 'color-mix(in srgb, var(--text-on-inverse) 84%, transparent)', maxWidth: 780, margin: '0 auto var(--space-8)',
           }}>
-            Try the whole platform yourself for free, then invite your employees free to test it too.
+            Try the whole platform yourself, $0 to start, then invite your employees to test it too.
             When you like it, activate licenses for instant full access. Licenses are the single paid
             step, and they are optional. Every plan is the same complete platform: self-paced learning,
             certification, real projects, the AI Architect network, and weekly live events.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', alignItems: 'center', justifyContent: 'center' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="pricing_hero_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="pricing_hero_start_free">$0 to start</Button>
             <a href={WALKTHROUGH_PATH} data-track="pricing_hero_book_walkthrough" style={{
               fontFamily: 'var(--font-body)', fontSize: 'var(--fs-body-sm)', fontWeight: 600,
               color: 'color-mix(in srgb, var(--text-on-inverse) 86%, transparent)', textDecoration: 'none',
             }}>Book a walkthrough &rarr;</a>
           </div>
           <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--fs-caption)', color: 'color-mix(in srgb, var(--text-on-inverse) 70%, transparent)' }}>
-            Free to start, no credit card. A free account gives you both the learner experience and your own organization view.
+            $0 to start, no credit card. Your account gives you both the learner experience and your own organization view.
           </p>
         </div>
       </section>
@@ -252,7 +252,7 @@ function PricingPage() {
         <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
           <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto var(--space-16)' }}>
             <Badge tone="red" style={{ marginBottom: 'var(--space-4)' }}>Three effortless steps</Badge>
-            <h2 className="cb-balance" style={h2Style}>Start free, invite your team free, activate licenses when ready</h2>
+            <h2 className="cb-balance" style={h2Style}>$0 to start, invite your team, activate licenses when ready</h2>
             <p style={leadStyle}>The same platform behind every step. Explore it yourself and invite your employees at no cost, then activate licenses for instant access, only when you are ready.</p>
           </div>
 
@@ -343,7 +343,7 @@ function PricingPage() {
           <div style={{ textAlign: 'center', maxWidth: 720, margin: '0 auto var(--space-12)' }}>
             <Badge tone="warning" style={{ marginBottom: 'var(--space-4)' }}>Good to know</Badge>
             <h2 className="cb-balance" style={h2Style}>Low risk, easy to reassign</h2>
-            <p style={leadStyle}>Free to try first, cancel anytime for individuals, and reassignable seats for employers.</p>
+            <p style={leadStyle}>$0 to try first, cancel anytime for individuals, and reassignable seats for employers.</p>
           </div>
           <div style={{ display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
             {REASSURANCE.map((item) => (
@@ -356,7 +356,7 @@ function PricingPage() {
         </div>
       </section>
 
-      {/* ====================== FINAL CTA (FREE-FIRST) ====================== */}
+      {/* ====================== FINAL CTA ($0-FIRST) ====================== */}
       <section
         aria-label="Get started"
         style={{ background: 'var(--surface-inverse)', color: 'var(--text-on-inverse)', padding: 'var(--space-24) 0', textAlign: 'center' }}
@@ -366,15 +366,15 @@ function PricingPage() {
             fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--fs-h1)',
             lineHeight: 'var(--lh-snug)', margin: '0 0 var(--space-3)', color: 'var(--text-on-inverse)',
           }}>
-            See the whole platform for free.
+            See the whole platform, $0 to start.
           </h2>
           <p style={{ color: 'color-mix(in srgb, var(--text-on-inverse) 82%, transparent)', margin: '0 auto var(--space-8)', maxWidth: 560 }}>
-            Create your free account, explore it yourself as both the learner and the admin, load it with
-            sample data, and invite your team free. No credit card. Activate licenses for instant access
+            Create your account, $0 to start, explore it yourself as both the learner and the admin, load it
+            with sample data, and invite your team. No credit card. Activate licenses for instant access
             whenever you are ready.
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-5)', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="pricing_final_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="pricing_final_start_free">$0 to start</Button>
             <a href={WALKTHROUGH_PATH} data-track="pricing_final_book_walkthrough" style={{
               fontFamily: 'var(--font-body)', fontSize: 'var(--fs-body-sm)', fontWeight: 600,
               color: 'color-mix(in srgb, var(--text-on-inverse) 86%, transparent)', textDecoration: 'none',

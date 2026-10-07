@@ -334,7 +334,7 @@ function DemoDayPage() {
           </p>
           <div className="cbdd-hero-cta">
             <CtaButton to="/try" size="lg" data-track="demoday_hero_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
             <CtaButton to="/contact" size="lg" variant="outline" data-track="demoday_hero_book_walkthrough">
               Book a walkthrough
@@ -406,7 +406,7 @@ function DemoDayPage() {
               ]}
               caption="Season 2 finals — capstone presentations, live online."
               side="right"
-              cta={{ label: 'Start free', to: '/try' }}
+              cta={{ label: '$0 to start', to: '/try' }}
             />
           </div>
         </div>
@@ -488,11 +488,11 @@ function DemoDayPage() {
             <Badge solid>For Employers</Badge>
             <h2 className="cbdd-mt4">Demo Day is the best hour of talent discovery you will run all year.</h2>
             <p>
-              Start free and see the platform yourself first. Then bring your team, watch them present real builds
+              See the platform yourself first, $0 to start. Then bring your team, watch them present real builds
               side by side, and find out who your real AI builders are, without ever taking anyone off the job.
             </p>
             <CtaButton to="/try" variant="solid" tone="red" data-track="demoday_sponsor_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
           </div>
         </div>
@@ -504,12 +504,12 @@ function DemoDayPage() {
           <div className="cbdd-eyebrow">Your Capstone Starts Now</div>
           <h2 className="cb-balance cbdd-mt4">The next stage is open. Earn your slot.</h2>
           <p className="cbdd-lead">
-            Demo Day belongs to the people who built all season. Start free, climb to Silver, and the
+            Demo Day belongs to the people who built all season. $0 to start, climb to Silver, and the
             stage is yours.
           </p>
           <div className="cbdd-closing-cta">
             <CtaButton to="/try" size="lg" data-track="demoday_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
             <CtaButton to="/leaderboard" size="lg" variant="outline">
               View the Leaderboard

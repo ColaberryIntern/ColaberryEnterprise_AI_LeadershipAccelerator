@@ -145,7 +145,7 @@ function ContactPage() {
     <>
       <SEOHead
         title="Contact"
-        description="Prefer to talk first? Reach the Colaberry team or book a walkthrough. The easiest way to see the platform is to start free and explore the whole thing yourself, no credit card."
+        description="Prefer to talk first? Reach the Colaberry team or book a walkthrough. The easiest way to see the platform is to explore the whole thing yourself, $0 to start, no credit card."
       />
 
       {/* Hero */}
@@ -176,7 +176,7 @@ function ContactPage() {
           style={{ position: 'relative', zIndex: 1, maxWidth: 820 }}
         >
           <Badge tone="red" dot style={{ marginBottom: 'var(--space-5)' }}>
-            Start free anytime, no credit card
+            $0 to start anytime, no credit card
           </Badge>
           <h1
             className="cb-balance"
@@ -200,13 +200,13 @@ function ContactPage() {
               margin: '0 auto var(--space-6)',
             }}
           >
-            The easiest way to see the platform is to start free and explore the whole
-            thing yourself, as both the learner and the admin. No credit card. If you would
+            The easiest way to see the platform is to explore the whole thing yourself,
+            as both the learner and the admin, $0 to start. No credit card. If you would
             rather talk first, send a note below and we&rsquo;ll get back within one business day.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <Button as="a" href={TRY_PATH} size="lg" data-track="contact_hero_start_free">
-              Start free
+              $0 to start
             </Button>
           </div>
         </div>
@@ -242,12 +242,12 @@ function ContactPage() {
                     margin: '0 auto var(--space-5)',
                   }}
                 >
-                  Our team will follow up shortly. In the meantime, you can start free and
-                  explore the whole platform yourself, no credit card.
+                  Our team will follow up shortly. In the meantime, you can explore the whole
+                  platform yourself, $0 to start, no credit card.
                 </p>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-5)' }}>
                   <Button as="a" href={TRY_PATH} size="lg" data-track="contact_success_start_free">
-                    Start free
+                    $0 to start
                   </Button>
                 </div>
                 <p style={{ color: 'var(--text-muted)', margin: 0 }}>
@@ -269,7 +269,7 @@ function ContactPage() {
                   margin: '0 0 var(--space-5)',
                 }}
               >
-                This is the optional path. Start free whenever you like, no credit card. Or use
+                This is the optional path. It is $0 to start whenever you like, no credit card. Or use
                 this form to reach us with a question or to book a walkthrough, and we&rsquo;ll
                 respond within one business day.
               </p>
@@ -471,7 +471,7 @@ function ContactPage() {
               maxWidth: 580,
             }}
           >
-            Want a guided tour before you start free? Book a 30-minute walkthrough and we&rsquo;ll
+            Want a guided tour before you start? Book a 30-minute walkthrough and we&rsquo;ll
             show you the learner experience and your management dashboard, side by side.
           </p>
           <Button variant="solid" tone="red" size="lg" onClick={() => setShowBooking(true)}>
@@ -483,7 +483,7 @@ function ContactPage() {
           >
             <span style={{ fontSize: 'var(--fs-body-sm)' }}>30-minute focused session</span>
             <span style={{ fontSize: 'var(--fs-body-sm)' }}>No obligation</span>
-            <span style={{ fontSize: 'var(--fs-body-sm)' }}>Start free whenever you like</span>
+            <span style={{ fontSize: 'var(--fs-body-sm)' }}>$0 to start whenever you like</span>
           </div>
         </div>
       </section>

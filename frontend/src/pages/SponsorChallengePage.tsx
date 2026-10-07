@@ -143,7 +143,7 @@ interface Step {
 }
 
 const HOW_IT_WORKS: Step[] = [
-  { k: '01', title: 'Start free', desc: 'Create a free account and explore the whole platform yourself, as both the learner and the admin. Add your seat or bring your team when you are ready.' },
+  { k: '01', title: '$0 to start', desc: 'Create your account with no card needed and explore the whole platform yourself, as both the learner and the admin. Add your seat or bring your team when you are ready.' },
   { k: '02', title: 'Learn with Claude, build for real', desc: 'Work real projects on your own time. Every shipped build, review, and demo earns points toward your tier.' },
   { k: '03', title: 'Climb the leaderboard', desc: 'Points roll up to a public leaderboard and a private, company-scoped board your sponsor can see.' },
   { k: '04', title: 'Present at Demo Day', desc: 'Top builders each season showcase their capstone live. Winners are crowned and seats are reassigned for the next run.' },
@@ -204,7 +204,7 @@ function SponsorChallengePage() {
       <style>{CSS}</style>
       <SEOHead
         title="The Challenge"
-        description="Start free and explore the whole platform yourself. Learn with Claude, build through Colaberry, and climb the leaderboard. Bronze, Silver, Gold tiers, seasonal play, and a live Demo Day."
+        description="Explore the whole platform yourself, $0 to start. Learn with Claude, build through Colaberry, and climb the leaderboard. Bronze, Silver, Gold tiers, seasonal play, and a live Demo Day."
       />
 
       {/* HERO */}
@@ -220,7 +220,7 @@ function SponsorChallengePage() {
           </p>
           <div className="cbc-hero-cta">
             <CtaButton to="/try" size="lg" data-track="challenge_hero_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
             <CtaButton to="/contact" size="lg" variant="outline" data-track="challenge_hero_book_walkthrough">
               Book a walkthrough
@@ -235,25 +235,25 @@ function SponsorChallengePage() {
         </div>
       </header>
 
-      {/* START FREE, THEN YOUR TEAM */}
+      {/* $0 TO START, THEN YOUR TEAM */}
       <section className="cbc-sec">
         <div className="cbc-wrap">
-          <div className="cbc-eyebrow">Start Free</div>
+          <div className="cbc-eyebrow">$0 to start</div>
           <h2 className="cbc-h2 cbc-mt2">Try it yourself first. Bring your team when ready.</h2>
           <p className="cbc-lead cbc-mt4 cbc-narrow">
-            There is one Challenge, and one way in. Start free and explore the whole platform yourself, as both
+            There is one Challenge, and one way in. Explore the whole platform yourself, $0 to start, as both
             the learner and the admin. When you are ready, bring your team along on reassignable seats.
           </p>
           <div className="cbc-doors">
             <Card accent="red" elevation="md" className="cbc-door">
               <Badge solid>Start here</Badge>
-              <h3>Explore it yourself, free</h3>
+              <h3>Explore it yourself, $0 to start</h3>
               <p>
-                Create a free account and start building this week. Pick a track, ship your first project, and
+                Create your account and start building this week. Pick a track, ship your first project, and
                 get on the public leaderboard. No credit card.
               </p>
               <CtaButton to="/try" tone="red" data-track="challenge_doors_start_free" trailingIcon={<span aria-hidden>→</span>}>
-                Start free
+                $0 to start
               </CtaButton>
             </Card>
             <Card accent="blue" elevation="md" className="cbc-door">
@@ -400,7 +400,7 @@ function SponsorChallengePage() {
             ]}
             caption="Most people consume AI. Very few learn to build with it."
             side="right"
-            cta={{ label: 'Start free', to: '/try' }}
+            cta={{ label: '$0 to start', to: '/try' }}
           />
         </div>
       </section>
@@ -427,14 +427,14 @@ function SponsorChallengePage() {
       <section className="cbc-sec cbc-alt cbc-closing">
         <div className="cbc-wrap">
           <div className="cbc-eyebrow">Ready When You Are</div>
-          <h2 className="cb-balance cbc-mt4">Start free and start building.</h2>
+          <h2 className="cb-balance cbc-mt4">No card needed. Start building.</h2>
           <p className="cbc-lead">
             Explore the whole platform yourself this week, as both the learner and the admin. When you are ready,
             bring your team and find out who your real AI builders are, without taking anyone off the job.
           </p>
           <div className="cbc-closing-cta">
             <CtaButton to="/try" size="lg" data-track="challenge_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
             <CtaButton to="/contact" size="lg" variant="outline" data-track="challenge_final_book_walkthrough">
               Book a walkthrough

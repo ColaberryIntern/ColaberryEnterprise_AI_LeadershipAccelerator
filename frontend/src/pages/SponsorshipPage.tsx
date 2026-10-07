@@ -17,14 +17,14 @@ import OpenHouseModal from '../components/membership/OpenHouseModal';
 /* ------------------------------------------------------------------ *
  * Roll it out to your organization: the org-rollout page for
  * enterprise.colaberry.ai. Single persona (a decision-maker who is also
- * the learner), reached AFTER they have tried the platform free. The
+ * the learner), reached AFTER they have tried the platform themselves. The
  * framing is "you tried it yourself, now bring it to your team."
  *
  * The value prop is a durable, measurable AI capability across your
  * workforce: self-paced learning, certification, real projects, a
  * network of AI Architects, weekly live events, and ONE live dashboard
  * leadership watches. Training is one part of the platform. Hero primary
- * CTA is "Start free" -> /try; the lead form, pricing tiers, and modals
+ * CTA is "$0 to start" -> /try; the lead form, pricing tiers, and modals
  * all stay for when they are ready to roll it out.
  *
  * Design idiom mirrors HomePage: Colaberry DS components + semantic
@@ -32,7 +32,7 @@ import OpenHouseModal from '../components/membership/OpenHouseModal';
  * re-pointed brand palette flows through automatically.
  * ------------------------------------------------------------------ */
 
-/** Single-persona destination: start a free account (learner + org view). */
+/** Single-persona destination: start an account at $0 (learner + org view). */
 const TRY_PATH = '/try';
 
 const h2Style: React.CSSProperties = {
@@ -226,7 +226,7 @@ function SponsorshipPage() {
       <style>{SCOPED_CSS}</style>
       <SEOHead
         title="Roll It Out to Your Organization"
-        description="Tried the platform free? Roll it out across your organization: certification, real projects on your workflows, a network of AI Architects, weekly live events, and one live dashboard leadership watches. Reassignable annual seats. No one comes off the job."
+        description="Tried the platform yourself? Roll it out across your organization: certification, real projects on your workflows, a network of AI Architects, weekly live events, and one live dashboard leadership watches. Reassignable annual seats. No one comes off the job."
       />
 
       <div id="sponsor-team-page" style={{ background: 'var(--surface-page)', color: 'var(--text-body)' }}>
@@ -268,7 +268,7 @@ function SponsorshipPage() {
                 maxWidth: 780, margin: '0 auto var(--space-6)',
               }}
             >
-              You have explored the platform free. Now roll it out to your organization: your people learn
+              You have explored the platform yourself. Now roll it out to your organization: your people learn
               on their own time, build real systems on your workflows, and get certified, while you watch
               capability climb on the same live dashboard you already know. No one comes off the job.
             </p>
@@ -282,14 +282,14 @@ function SponsorshipPage() {
             </p>
             <div style={{ display: 'flex', gap: 'var(--space-4)', justifyContent: 'center', flexWrap: 'wrap' }}>
               <Button as="a" href={TRY_PATH} size="lg" data-track="sponsor_hero_start_free">
-                Start free
+                $0 to start
               </Button>
               <Button variant="outline" size="lg" className="cb-btn--on-dark" onClick={() => setShowBooking(true)} data-track="sponsor_hero_book_call">
                 Book a walkthrough
               </Button>
             </div>
             <p style={{ fontSize: 'var(--fs-caption)', color: 'color-mix(in srgb, var(--text-on-inverse) 72%, transparent)', margin: 'var(--space-6) 0 0' }}>
-              Already tried it free?{' '}
+              Already tried it yourself?{' '}
               <a href="#sponsor-inquiry" style={{ color: 'var(--neutral-0)', fontWeight: 'var(--fw-bold)' }}>
                 Jump to seat tiers &rarr;
               </a>
@@ -595,7 +595,7 @@ function SponsorshipPage() {
             <p style={{ textAlign: 'center', fontSize: 'var(--fs-caption)', color: 'var(--neutral-400)', marginTop: 'var(--space-6)' }}>
               Want to try it yourself first?{' '}
               <a href={TRY_PATH} style={{ color: 'var(--text-link)', fontWeight: 'var(--fw-bold)' }}>
-                Start free
+                $0 to start
               </a>
               .
             </p>
@@ -613,7 +613,7 @@ function SponsorshipPage() {
         personaSlug="employer_info_session"
         submitLabel="Reserve my info-session seat"
         title="Reserve your Live Info Session seat"
-        subtitle="A free, live online session. See the ecosystem your team would join and how the capability builds. No pitch."
+        subtitle="A live online session. See the ecosystem your team would join and how the capability builds. No pitch."
         successMessage="You're registered. We'll email you the Live Info Session details shortly."
       />
     </>

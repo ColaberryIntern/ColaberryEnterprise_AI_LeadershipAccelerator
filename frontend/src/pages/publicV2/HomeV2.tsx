@@ -619,7 +619,7 @@ function HomeV2(): React.ReactElement {
         >
           <div className="cbv2-wrap cbv2-split">
             <div>
-              <p className="cbv2-eyebrow">Free to start</p>
+              <p className="cbv2-eyebrow">$0 to start</p>
               <h2 id="cbv2-free-title">
                 <Claim claimKey="surface.free.workspace" route={ROUTE} />
               </h2>
@@ -680,7 +680,7 @@ function HomeV2(): React.ReactElement {
         <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
           <h2 id="cbv2-cta-title">See what AI could become inside your company.</h2>
           <p className="cbv2-lede" style={{ marginInline: 'auto' }}>
-            Start free, or bring one workflow to an architect.
+            $0 to start, or bring one workflow to an architect.
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
             <Link className="cbv2-btn cbv2-btn--primary" to="/try">

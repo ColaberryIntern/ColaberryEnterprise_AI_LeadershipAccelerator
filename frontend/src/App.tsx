@@ -114,14 +114,16 @@ function App() {
             <Route path="privacy" element={<PrivacyV2 />} />
             {/*
                 /start renders SignupV2 no longer. Ali, 2026-08-21, asked three
-                times: "Startfree page should go to try page." Every "Start free"
-                button now points at /try directly; this redirect catches the
-                inbound links, the sitemap and anyone who typed it.
+                times: "Startfree page should go to try page." Every primary CTA
+                points at /try directly; this redirect catches the inbound links,
+                the sitemap and anyone who typed it. (The CTA read "Start free"
+                when he said that. It reads "$0 to start" since 2026-10-07 -- see
+                PRIMARY_CTA in constants for the rule behind the rename.)
 
                 SignupV2 is left in the tree ON PURPOSE -- it is the
-                account-creation page, and /try's own "Make this real: create
-                your free account" button is where that flow belongs. Check what
-                that button does before calling SignupV2 dead code.
+                account-creation page, and /try's own account-creation button is
+                where that flow belongs. Check what that button does before
+                calling SignupV2 dead code.
             */}
             <Route path="start" element={<Navigate to="/try" replace />} />
             <Route path="pricing" element={<PricingV2 />} />
@@ -206,7 +208,7 @@ function App() {
                 - PublicLayout (V1) calls initTracker() UNCONDITIONALLY. That would
                   fingerprint a client's executive reviewer before they have signed
                   in or consented to anything. They are not a lead.
-                - V1 is the retired navbar and marketing footer, offering "Start free"
+                - V1 is the retired navbar and marketing footer, offering "$0 to start"
                   and "Book a walkthrough" to someone who is already a customer.
                 - V1 mounts the Maya sales chat widget. A prospecting bot does not
                   belong on the door to a delivery review.

@@ -14,7 +14,7 @@ const IntelligenceDemoSection = React.lazy(() => import('../components/intellige
 
 // AIArchitectLandingPage — /ai-architect
 // REFRAME: this is now a ROLE DOOR into the one class. Data professionals and
-// tech leaders enter the same Challenge as everyone else, start free, learn on
+// tech leaders enter the same Challenge as everyone else, start at $0, learn on
 // their own time, ship a real AI build, and climb the leaderboard.
 // DS-only, semantic tokens only. Default export + component name preserved.
 
@@ -196,7 +196,7 @@ function AIArchitectLandingPage() {
     <div className="cbaa-root">
       <style>{CSS}</style>
       <SEOHead
-        title="The AI Builder Door | Start free"
+        title="The AI Builder Door | $0 to Start"
         description="For data professionals and tech leaders: enter the one Colaberry AI Challenge through the builder door. Ship a real AI system, climb the leaderboard, and present at Demo Day, learning on your own time."
       />
 
@@ -212,13 +212,13 @@ function AIArchitectLandingPage() {
           </p>
           <div className="cbaa-hero-cta">
             <CtaButton to="/try" size="lg" onClick={goJoin} data-track="aiarchitect_hero_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
             <CtaButton to="/challenge" size="lg" variant="outline">
               How the Challenge Works
             </CtaButton>
           </div>
-          <p className="cbaa-hero-meta">Start free, then add your own seat from $149/month (billed annually; $199/month month-to-month), or bring your team on reassignable seats when you are ready.</p>
+          <p className="cbaa-hero-meta">No card needed to start, then add your own seat from $149/month (billed annually; $199/month month-to-month), or bring your team on reassignable seats when you are ready.</p>
         </div>
       </header>
 
@@ -277,7 +277,7 @@ function AIArchitectLandingPage() {
           <div className="cbaa-wrap cbaa-narrow"><div className="cbaa-skel" /></div>
         </section>
       }>
-        <IntelligenceDemoSection onOpenBooking={goJoin} ctaLabel="START FREE" />
+        <IntelligenceDemoSection onOpenBooking={goJoin} ctaLabel="$0 TO START" />
       </Suspense>
 
       {/* COHORT URGENCY */}
@@ -298,7 +298,7 @@ function AIArchitectLandingPage() {
                 </p>
                 <div className="cbaa-mt5">
                   <CtaButton to="/try" size="lg" onClick={goJoin} data-track="aiarchitect_cohort_start_free" trailingIcon={<span aria-hidden>→</span>}>
-                    Start free
+                    $0 to start
                   </CtaButton>
                 </div>
               </div>
@@ -314,13 +314,13 @@ function AIArchitectLandingPage() {
             <Badge tone="red" solid>Your Door Into The Challenge</Badge>
             <h2 className="cb-balance cbaa-mt4">If you already work with data, systems, or code — this door is built for you.</h2>
             <p>
-              You see AI changing how work gets done, and you’d rather lead that change than follow it. Start free,
+              You see AI changing how work gets done, and you’d rather lead that change than follow it. It is $0 to start, so
               build on your own time, and let the leaderboard show what you ship. Bringing a whole team? Sponsor a
               seat block when you are ready.
             </p>
             <div className="cbaa-cta-row">
               <CtaButton to="/try" size="lg" tone="red" onClick={goJoin} data-track="aiarchitect_cta_start_free" trailingIcon={<span aria-hidden>→</span>}>
-                Start free
+                $0 to start
               </CtaButton>
               <Button variant="outline" size="lg" onClick={openBooking}>
                 Book a walkthrough
@@ -344,15 +344,15 @@ function AIArchitectLandingPage() {
       {/* CLOSING */}
       <section className="cbaa-sec">
         <div className="cbaa-wrap cbaa-closing">
-          <div className="cbaa-eyebrow">Start Free</div>
+          <div className="cbaa-eyebrow">$0 to start</div>
           <h2 className="cb-balance cbaa-mt4">One platform. Your door is open.</h2>
           <p className="cbaa-lead">
-            Start free and explore it yourself as a builder, then bring your team when you are ready. Either way,
+            Explore it yourself as a builder, $0 to start, then bring your team when you are ready. Either way,
             you end up in the same room, building, ranking, and presenting what you shipped.
           </p>
           <div className="cbaa-closing-cta">
             <CtaButton to="/try" size="lg" onClick={goJoin} data-track="aiarchitect_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
             <CtaButton to="/contact" size="lg" variant="outline" data-track="aiarchitect_final_book_walkthrough">
               Book a walkthrough
@@ -366,7 +366,7 @@ function AIArchitectLandingPage() {
         <div className="cbaa-sticky">
           <span>One platform, and the builder door is yours.</span>
           <CtaButton to="/try" tone="red" onClick={goJoin} data-track="aiarchitect_sticky_start_free" trailingIcon={<span aria-hidden>→</span>}>
-            Start free
+            $0 to start
           </CtaButton>
         </div>
       )}

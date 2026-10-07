@@ -50,11 +50,17 @@ export type NavItem = {
  * Single-persona navigation.
  * There is ONE visitor: a decision-maker who is also the learner, evaluating
  * the platform for their company and wanting to experience it themselves. No
- * two-door split. One primary CTA everywhere: "Start free" -> /try (the
- * free-account funnel that gives them BOTH the learner experience and their own
+ * two-door split. One primary CTA everywhere: "$0 to start" -> /try (the
+ * $0 account funnel that gives them BOTH the learner experience and their own
  * organization / management view). A soft secondary invites a guided walkthrough.
  * Nav carries informational links only; the CTAs render as buttons in
  * PublicNavbar (see PRIMARY_CTA / SECONDARY_CTA).
+ *
+ * THE LABEL IS NOT A COPY CHOICE. It read "Start free" until 2026-10-07. A school
+ * may not advertise the word (40 TAC 807.172(d), Texas Workforce Commission), and
+ * the only approved phrasings are "$0 to start" and "No card needed" - the first
+ * for anything a visitor clicks, because a button names an action, and the second
+ * for the reassurance line beside it. Do not shorten this back to the old label.
  */
 export const NAV_LINKS: NavItem[] = [
   { path: '/', label: 'Home' },
@@ -70,11 +76,11 @@ export const NAV_LINKS: NavItem[] = [
   { path: '/contact', label: 'Contact' },
 ];
 
-/** One primary CTA everywhere: start a free account. Soft secondary for a guided walkthrough. */
-export const PRIMARY_CTA = { path: '/try', label: 'Start free' };
+/** One primary CTA everywhere: open a $0 account. Soft secondary for a guided walkthrough. */
+export const PRIMARY_CTA = { path: '/try', label: '$0 to start' };
 export const SECONDARY_CTA = { path: '/contact', label: 'Book a walkthrough' };
 
-/** Footer link columns. Informational only; the free-start CTA lives in its own column. */
+/** Footer link columns. Informational only; the $0-to-start CTA lives in its own column. */
 export const FOOTER_LINKS = [
   { path: '/program', label: 'How It Works' },
   { path: '/pricing', label: 'Pricing' },

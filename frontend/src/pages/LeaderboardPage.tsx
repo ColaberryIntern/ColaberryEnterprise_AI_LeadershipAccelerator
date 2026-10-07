@@ -395,12 +395,12 @@ function LeaderboardPage() {
           <Badge solid>Not on the board yet?</Badge>
           <h2 style={{ marginTop: 'var(--space-4)' }}>Ship one build this week and claim your rank.</h2>
           <p>
-            Every builder here started at zero. Start free, ship your first project, and your name lands on this
+            Every builder here started at zero. Ship your first project, $0 to start, and your name lands on this
             list. Bring your team when you are ready.
           </p>
           <div className="cblb-cta-row">
             <CtaButton to="/try" size="lg" data-track="leaderboard_cta_start_free" trailingIcon={<span aria-hidden>→</span>}>
-              Start free
+              $0 to start
             </CtaButton>
             <CtaButton to="/contact" size="lg" variant="outline" data-track="leaderboard_cta_book_walkthrough">
               Book a walkthrough

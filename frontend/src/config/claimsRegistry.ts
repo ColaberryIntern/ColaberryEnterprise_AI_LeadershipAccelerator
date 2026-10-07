@@ -397,7 +397,12 @@ export const CLAIMS: readonly Claim[] = [
   /* ── pricing: verified against the LIVE site, not the repo ─────────────── */
   {
     key: 'pricing.free',
-    publicWording: 'Free',
+    // A price slot holds a number. This value renders in `.cbv2-tier__price` at
+    // clamp(2.75rem, 6vw, 4rem) - 44 to 64px, the largest text on the pricing card - so the
+    // previous wording put the one word we may not advertise (40 TAC 807.172(d)) in the most
+    // prominent position on the page. "$0" is both compliant and better pricing-table design.
+    // The CLAIM is unchanged and still VERIFIED: this tier costs nothing. Only its wording moved.
+    publicWording: '$0',
     verification: 'VERIFIED',
     capability: 'live',
     evidenceSource: 'Live probe of enterprise.colaberry.ai/pricing, 2026-08-07.',

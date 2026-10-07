@@ -20,9 +20,9 @@ import ArchitectNetwork from '../components/capability/ArchitectNetwork';
  * Positioned as an Enterprise AI Capability Platform for a SINGLE persona: a
  * decision-maker who is also the learner, evaluating the platform for their
  * company and wanting to experience it themselves. One primary CTA everywhere,
- * "Start free" -> /try, which grants a dual account (learner experience + their
- * own organization / management view). They explore the whole platform free,
- * watch capability climb on a live dashboard, and invite their team free when
+ * "$0 to start" -> /try, which grants a dual account (learner experience + their
+ * own organization / management view). They explore the whole platform at $0,
+ * watch capability climb on a live dashboard, and invite their team when
  * ready. Colaberry design system.
  */
 
@@ -40,8 +40,8 @@ const STEPS: Step[] = [
 
 interface FreeStep { n: string; title: string; body: string; }
 const FREE_TRIAL: FreeStep[] = [
-  { n: '01', title: 'Try it free yourself', body: 'One free account gives you both sides at once: the learner experience and your own management dashboard. Explore the whole platform and watch both perspectives together. No credit card.' },
-  { n: '02', title: 'Invite your employees free', body: 'Send free test invites so your team can try it too. Their progress shows up on your dashboard as they learn and build.' },
+  { n: '01', title: 'Try it yourself, $0 to start', body: 'One account gives you both sides at once: the learner experience and your own management dashboard. Explore the whole platform and watch both perspectives together. No credit card.' },
+  { n: '02', title: 'Invite your employees', body: 'Send test invites so your team can try it too. Their progress shows up on your dashboard as they learn and build.' },
   { n: '03', title: 'Activate licenses when you are ready', body: 'Like what you see? Activate licenses for instant full access. Licenses are the single paid step, and they are optional, only when you are ready.' },
 ];
 
@@ -75,7 +75,7 @@ function HomePage() {
     <>
       <SEOHead
         title="The Enterprise AI Capability Platform"
-        description="Build an internal AI capability that becomes a competitive advantage. You are evaluating this for your company, so try the whole platform yourself free: explore it as both the learner and the admin, watch AI readiness and velocity climb across your organization on a live dashboard, and invite your team free when you are ready. No credit card."
+        description="Build an internal AI capability that becomes a competitive advantage. You are evaluating this for your company, so try the whole platform yourself, $0 to start: explore it as both the learner and the admin, watch AI readiness and velocity climb across your organization on a live dashboard, and invite your team when you are ready. No credit card."
       />
 
       {/* ============================ HERO ============================ */}
@@ -105,19 +105,19 @@ function HomePage() {
             fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-relaxed)',
             color: 'color-mix(in srgb, var(--text-on-inverse) 84%, transparent)', maxWidth: 780, margin: '0 auto var(--space-8)',
           }}>
-            You are evaluating this for your company, so try the whole thing yourself, free. Explore the
+            You are evaluating this for your company, so try the whole thing yourself, $0 to start. Explore the
             platform as both the learner and the admin, watch AI readiness and velocity climb across your
-            organization on a live dashboard, and invite your team free when you are ready.
+            organization on a live dashboard, and invite your team when you are ready.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', alignItems: 'center', justifyContent: 'center' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="hero_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="hero_start_free">$0 to start</Button>
             <a href={WALKTHROUGH_PATH} data-track="hero_book_walkthrough" style={{
               fontFamily: 'var(--font-body)', fontSize: 'var(--fs-body-sm)', fontWeight: 600,
               color: 'color-mix(in srgb, var(--text-on-inverse) 86%, transparent)', textDecoration: 'none',
             }}>Book a walkthrough &rarr;</a>
           </div>
           <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--fs-caption)', color: 'color-mix(in srgb, var(--text-on-inverse) 70%, transparent)' }}>
-            Free to start, no credit card. A free account gives you both the learner experience and your own organization view.
+            $0 to start, no credit card. Your account gives you both the learner experience and your own organization view.
           </p>
           <p style={{
             marginTop: 'var(--space-8)', fontSize: 'var(--fs-caption)', fontWeight: 600, letterSpacing: 'var(--ls-wide)',
@@ -135,13 +135,13 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ================= HOW THE FREE TRIAL WORKS ================= */}
-      <section aria-label="How the free trial works" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
+      {/* =============== HOW STARTING AT $0 WORKS =============== */}
+      <section aria-label="How starting at $0 works" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
         <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
           <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto var(--space-16)' }}>
-            <Badge tone="green" dot style={{ marginBottom: 'var(--space-4)' }}>Free to start</Badge>
-            <h2 className="cb-balance" style={h2Style}>How the free trial works</h2>
-            <p style={leadStyle}>Three effortless steps: free to explore, free to invite your team, and licenses only when you are ready. No credit card to begin.</p>
+            <Badge tone="green" dot style={{ marginBottom: 'var(--space-4)' }}>$0 to start</Badge>
+            <h2 className="cb-balance" style={h2Style}>How starting at $0 works</h2>
+            <p style={leadStyle}>Three effortless steps: $0 to explore, $0 to invite your team, and licenses only when you are ready. No credit card to begin.</p>
           </div>
           <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
             {FREE_TRIAL.map((step) => (
@@ -159,7 +159,7 @@ function HomePage() {
             ))}
           </ol>
           <div style={{ textAlign: 'center', marginTop: 'var(--space-12)' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="freetrial_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="freetrial_start_free">$0 to start</Button>
             <p style={{ marginTop: 'var(--space-4)', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)' }}>No credit card. Licenses only when you are ready.</p>
           </div>
         </div>
@@ -239,7 +239,7 @@ function HomePage() {
             ))}
           </ol>
           <div style={{ textAlign: 'center', marginTop: 'var(--space-12)' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="howitworks_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="howitworks_start_free">$0 to start</Button>
           </div>
         </div>
       </section>
@@ -332,7 +332,7 @@ function HomePage() {
             no one coming off the floor. Because seats are reassignable, the capability you build stays a
             company asset, not a personal perk.
           </p>
-          <Button as="a" href={TRY_PATH} size="lg" data-track="costband_start_free">Start free</Button>
+          <Button as="a" href={TRY_PATH} size="lg" data-track="costband_start_free">$0 to start</Button>
         </div>
       </section>
 
@@ -369,14 +369,14 @@ function HomePage() {
       {/* ====================== FINAL CTA ====================== */}
       <section aria-label="Get started" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
         <div className="container" style={{ maxWidth: 820, paddingInline: 'var(--space-6)', textAlign: 'center' }}>
-          <h2 className="cb-balance" style={{ ...h2Style, margin: '0 0 var(--space-5)' }}>Try it free, then bring your team.</h2>
+          <h2 className="cb-balance" style={{ ...h2Style, margin: '0 0 var(--space-5)' }}>Try it yourself, $0 to start. Then bring your team.</h2>
           <p style={{ fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', maxWidth: 640, margin: '0 auto var(--space-10)' }}>
-            Start free and explore the whole platform yourself, as both the learner and the admin. Watch AI
+            Explore the whole platform yourself, as both the learner and the admin, $0 to start. Watch AI
             readiness and velocity climb across your organization on a live dashboard, then invite your team
-            free when you are ready.
+            when you are ready.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)', alignItems: 'center', justifyContent: 'center' }}>
-            <Button as="a" href={TRY_PATH} size="lg" data-track="final_start_free">Start free</Button>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="final_start_free">$0 to start</Button>
             <a href={WALKTHROUGH_PATH} data-track="final_book_walkthrough" style={{ fontFamily: 'var(--font-body)', fontSize: 'var(--fs-body-sm)', fontWeight: 600, color: 'var(--text-link)', textDecoration: 'none' }}>
               Book a walkthrough &rarr;
             </a>

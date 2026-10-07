@@ -73,14 +73,18 @@ function PublicFooter() {
             </ul>
           </div>
 
-          {/* One way in: try the whole platform yourself, free. */}
+          {/* One way in: try the whole platform yourself, $0 to start. */}
           <div className="col-lg-3 mb-4">
-            <h5 className="text-light">Start free</h5>
+            <h5 className="text-light">Get started</h5>
+            {/* Deliberately does NOT repeat the button's own words. The button below reads
+                "$0 to start"; ending this sentence the same way put the identical phrase twice
+                in three lines inside a 216px column. The reassurance belongs here, the price
+                belongs on the button. */}
             <p className="text-secondary small">
-              Try the whole platform yourself, free. No credit card.
+              Try the whole platform yourself. No card needed.
             </p>
             <div className="d-grid gap-2">
-              {/* Primary — start a free account (learner + org view). */}
+              {/* Primary — open a $0 account (learner + org view). */}
               <CtaLink to={PRIMARY_CTA.path} variant="primary">
                 {PRIMARY_CTA.label}
               </CtaLink>

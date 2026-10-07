@@ -45,19 +45,19 @@ export const PRICING_TIERS: readonly PricingTier[] = [
   {
     key: 'free',
     badge: 'Start here',
-    name: 'Start free',
+    name: 'Your own workspace',
     priceClaim: 'pricing.free',
     unit: 'for the whole platform',
     blurb:
-      'Explore the whole platform yourself, with both the learner experience and your own ' +
-      'management dashboard, and invite your team free to test it.',
+      'Explore the whole platform yourself, $0 to start, with both the learner experience ' +
+      'and your own management dashboard, plus invites so your team can test it too.',
     includes: [
       'A dual account: the learner experience plus your own management dashboard',
       'Your organization view, opening on sample data until your team fills it',
       'Readiness, builder XP and evidence tracked per person as they join',
-      'Free test invites, so your employees can try it before anyone pays',
+      'Test invites for your team, so your employees can try it before anyone pays',
     ],
-    ctaLabel: 'Create a free account',
+    ctaLabel: '$0 to start',
     ctaRoute: '/try',
     icon: 'spark',
     accent: 'green',
@@ -78,7 +78,12 @@ export const PRICING_TIERS: readonly PricingTier[] = [
       'A real, deployed project of your own rather than a toy problem',
       'Weekly live events and office hours',
     ],
-    ctaLabel: 'Start free first',
+    // NOT "$0 to start", even though that is the approved phrase. PricingV2.tsx maps every tier
+    // into one grid, so this button renders beside tier 1's - which already says "$0 to start" and
+    // points at the same /try. A $149 card with a "$0 to start" button that lands on a trial page
+    // reads as bait rather than as a sequence. "first" does the sequencing work the old
+    // "Start free first" was doing.
+    ctaLabel: 'Try it first',
     ctaRoute: '/try',
     icon: 'ladder',
     accent: 'cherry',
@@ -122,17 +127,17 @@ export interface PricingFaq {
 
 export const PRICING_FAQ: readonly PricingFaq[] = [
   {
-    q: 'What does free actually include?',
+    q: 'What does the $0 account actually include?',
     a:
-      'The whole platform, for you, plus free invites for your team to try it. It opens on ' +
+      'The whole platform, for you, plus invites for your team to try it at $0. It opens on ' +
       'sample data shaped to the metrics the product really captures, and fills with your ' +
-      'own as people join. No credit card, and no sales call required to look around.',
+      'own as people join. No card needed, and no sales call required to look around.',
   },
   {
     q: 'When would we pay?',
     a:
       'When you want someone to progress rather than evaluate. A license unlocks the paths, ' +
-      'the certification preparation and the project work. Until then the account stays free.',
+      'the certification preparation and the project work. Until then the account stays at $0.',
   },
   {
     q: 'Can seats move between people?',

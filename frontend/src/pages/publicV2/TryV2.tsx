@@ -22,9 +22,9 @@ function TryV2(): React.ReactElement {
   return (
     <>
       <SeoV2
-        title="Start free"
+        title="See it yourself, no card needed"
         description={
-          'One free account gives a manager both the learner experience and the ' +
+          'One account gives a manager both the learner experience and the ' +
           'organization view. No credit card.'
         }
       />
@@ -32,7 +32,7 @@ function TryV2(): React.ReactElement {
       <section className="cbv2-pagehero" aria-labelledby="cbv2-try-title">
         <div className="cbv2-wrap cbv2-pagehero__split">
           <div>
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Start free</p>
+          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">No card needed</p>
           <h1 id="cbv2-try-title">See it with your own eyes first</h1>
           {canShow('surface.free.workspace', ROUTE) ? (
             <p className="cbv2-pagehero__lede">
@@ -107,7 +107,7 @@ function TryV2(): React.ReactElement {
       <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-try-paid">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
-            <p className="cbv2-eyebrow">Where free stops</p>
+            <p className="cbv2-eyebrow">Where it stops</p>
             <h2 id="cbv2-try-paid">The honest boundary</h2>
             <p className="cbv2-lede">
               Two things are paid. Everything above is not.
