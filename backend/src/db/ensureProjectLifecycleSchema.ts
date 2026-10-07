@@ -132,7 +132,9 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
   // ALTER rather than a column in the CREATE above, because `CREATE TABLE IF NOT EXISTS`
   // cannot add a column to a table that already exists — production has this table from
   // Phase 2, so a column declared only in the CREATE would never arrive. `ADD COLUMN IF NOT
-  // EXISTS` is the repo-wide convention for this (52 files under src/db/) and is both
+  // EXISTS` is the repo-wide convention for this (53 non-test files under src/db/, 91 with
+  // tests; an earlier version of this comment said 52, measured before this very ALTER was
+  // added) and is both
   // additive and idempotent.
   `ALTER TABLE operating_blueprint_manifests
      ADD COLUMN IF NOT EXISTS refs_sha256 VARCHAR(64)`,
@@ -142,8 +144,11 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
   // application code, so without the index two simultaneous writes of identical refs both
   // see "no existing row" and both insert. It also refuses a later revision whose refs are
   // byte-identical to an earlier one — correct, because identical refs mean there is nothing
-  // new to record. A revert and a replay are indistinguishable by construction, and returning
-  // the existing row is the right answer to both.
+  // new to record. What it COSTS is revert-and-supersede: a project reverting to an earlier
+  // blueprint gets the old row back, at a revision below head, which the approval CAS then
+  // refuses. It fails loudly rather than corrupting. An earlier version of this comment said
+  // a revert and a replay are "indistinguishable by construction" — they are not, a later
+  // revision exists — and that sentence outlived its retraction in `manifestWriter.ts`.
   //
   // Two partial indexes because exactly one project FK is ever set, matching the revision
   // backstop below. NULL refs_sha256 is excluded so the Phase 2 rows, written before this

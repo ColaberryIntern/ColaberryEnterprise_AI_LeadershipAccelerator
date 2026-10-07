@@ -671,8 +671,13 @@ advance.
 287 and 167; the shipped tree is 324 and 200, because P5-T1.3 step 2 then added a column, a
 fourth assertion list and an assert block to both halves. **That is the identical mistake the
 original text below warned about**, two paragraphs under a sentence reading "No current count
-is quoted here". Run `wc -l`. Both halves are under the 500 ceiling and under the ~300 soft
-target at the time of writing, which is the only property worth asserting.
+is quoted here". Run `wc -l`. Both halves are under the 500 HARD ceiling, which is what the residual was about.
+**An earlier version of this sentence also claimed both were under the ~300 soft target. They
+are not** - the DDL half measures over it, so this residual is still OPEN and the split
+narrowed it rather than closing it. That is the THIRD stale claim this one entry has made
+about its own subject, which is itself the argument for the rule: run
+`wc -l backend/src/db/ensureProjectLifecycleSchema.ts`, because nothing asserts a line count
+and prose cannot be trusted to carry one.
 
 The original text follows.
 

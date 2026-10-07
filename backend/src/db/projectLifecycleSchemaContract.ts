@@ -77,6 +77,23 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = [
 ];
 
 /**
+ * COLUMNS that must exist, as `table.column`.
+ *
+ * A NEW CATEGORY, added by P5-T1.3, and the reason it is needed is specific:
+ * `ensureProjectLifecycleSchema` logs a warning and carries on when a statement fails, so a
+ * column whose `ALTER` silently did not run leaves a deploy looking entirely normal and the
+ * writer failing at runtime. A table-and-index assert cannot see that, because the table and
+ * the index both already exist.
+ *
+ * Deliberately NOT every column. These are the ones whose absence is silent and load-bearing
+ * — i.e. added by `ALTER` after the table shipped. A column inside a `CREATE TABLE` cannot be
+ * missing while its table is present, so listing it would be asserting that Postgres works.
+ */
+export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
+  'operating_blueprint_manifests.refs_sha256',
+];
+
+/**
  * CHECK constraints that make "the two identity tables are not merged" a database invariant
  * rather than a convention someone can forget.
  *
@@ -96,23 +113,6 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = [
  * in both places is defence in depth for a value whose corruption is silent, not a duplicated
  * rule someone can change.
  */
-/**
- * COLUMNS that must exist, as `table.column`.
- *
- * A NEW CATEGORY, added by P5-T1.3, and the reason it is needed is specific:
- * `ensureProjectLifecycleSchema` logs a warning and carries on when a statement fails, so a
- * column whose `ALTER` silently did not run leaves a deploy looking entirely normal and the
- * writer failing at runtime. A table-and-index assert cannot see that, because the table and
- * the index both already exist.
- *
- * Deliberately NOT every column. These are the ones whose absence is silent and load-bearing
- * — i.e. added by `ALTER` after the table shipped. A column inside a `CREATE TABLE` cannot be
- * missing while its table is present, so listing it would be asserting that Postgres works.
- */
-export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
-  'operating_blueprint_manifests.refs_sha256',
-];
-
 export const REQUIRED_CONSTRAINTS: ReadonlyArray<string> = [
   'ck_lifecycle_exactly_one_project',
   'ck_manifest_exactly_one_project',

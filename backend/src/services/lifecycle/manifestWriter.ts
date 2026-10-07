@@ -114,9 +114,16 @@ export interface WriteManifestInput {
    *
    * Because `Promise.all` is a NONDETERMINISTIC detector of that branch, not an unreachable
    * one. Whether the loser reaches the retry depends on how the two inserts interleave, and
-   * mutation runs bear that out: deleting `ON CONFLICT DO NOTHING` produced 4, 5 and 4
-   * failures across three identical runs, with the revision test appearing in some and not
-   * others. A test that detects a defect two times in three is not a control.
+   * mutation runs bore that out WHILE THE CHEAP PRE-READ STILL EXISTED: deleting
+   * `ON CONFLICT DO NOTHING` produced 4, 5 and 4 failures across three identical runs, the
+   * revision test appearing in some and not others. A detector that fires two times in three
+   * is not a control.
+   *
+   * On THIS tree it is 5, 5, 5 with the same five names, because removing that pre-read makes
+   * every replay attempt an insert — so the conflict path is reached unconditionally rather
+   * than by lucky interleaving. The 4/5/4 figure is kept as the measurement that justified
+   * adding the seam, explicitly NOT as a description of this tree; the seam still earns its
+   * place by making the REVISION branch deterministic, which no amount of racing does.
    *
    * Overriding this hands back a revision that is already in use — exactly the state a real
    * concurrent writer creates — every time. Same dependency-injection reason
@@ -176,6 +183,34 @@ interface ExistingRow {
   id: string;
   revision: number;
   content_sha256: string | null;
+}
+
+/**
+ * The replay result: the row another writer already committed for these exact refs.
+ *
+ * `content_sha256` is NULLABLE in the schema (`content_sha256 VARCHAR(64)`, verified against
+ * the DDL and a live database rather than assumed), so a replayed row can legitimately have
+ * none. When it does, this returns the hash computed for the CALLER's attempt, which keeps the
+ * result usable; the null itself is informative, because a row without a hash is a row this
+ * module did not write.
+ *
+ * Pure, and separate from the writer, for a reason worth stating: inline in the async path the
+ * fallback was reachable only through a DB race, so the only suite that could exercise it was
+ * the one that skips without `DATABASE_URL` — and a verifier deleted the whole operand with 17
+ * of 17 tests still green. An operand no test can reach is not covered by the suite that passes.
+ */
+export function replayedManifest(
+  row: ExistingRow,
+  fallbackContentSha256: string,
+  refsSha256: string,
+): WriteManifestResult {
+  return {
+    manifestId: row.id,
+    revision: row.revision,
+    contentSha256: row.content_sha256 ?? fallbackContentSha256,
+    refsSha256,
+    created: false,
+  };
 }
 
 /** Find a manifest already written with these exact refs. The replay path. */
@@ -274,18 +309,10 @@ export async function writeBlueprintManifest(
         manifest_id: raced.id, revision: raced.revision, attempt, created: false,
       });
       // The refs index. Someone wrote exactly this between our read and our insert: a replay.
-      //
-      // `content_sha256` is NOT NULL-coalesced here any more. Every row this module writes
-      // sets it, so the fallback was unreachable — it survived mutation, and it is removed for
-      // the same reason the pre-read above was. A row with a null hash would be one this
-      // module did not write, and silently computing a hash for it would hide that.
-      return {
-        manifestId: raced.id,
-        revision: raced.revision,
-        contentSha256: raced.content_sha256 ?? contentSha,
-        refsSha256: refsSha,
-        created: false,
-      };
+      // The nullable-hash fallback, and why it is KEPT rather than removed, are stated on
+      // `replayedManifest` beside the tests that reach it — the comment that stood here cited
+      // a test by name that did not exist.
+      return replayedManifest(raced, contentSha, refsSha);
     }
     // The revision index: a concurrent writer took our revision with different refs. Our write
     // still has to happen. Loop and recompute — bounded, never a bare `while (true)`.

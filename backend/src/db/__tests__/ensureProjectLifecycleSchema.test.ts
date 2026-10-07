@@ -47,7 +47,7 @@ function mentionedInAnyCheck(sql: string, column: string): boolean {
  * The additive predicate, extracted so the positive control exercises the same code path.
  *
  * P5-T1.3 NARROWED this rather than bypassing it. The previous version banned `ALTER TABLE`
- * outright, which is over-broad against this repo’s own convention — 52 files under `src/db/`
+ * outright, which is over-broad against this repo’s own convention — 53 non-test files
  * use `ADD COLUMN IF NOT EXISTS` — and which makes it impossible to add a column to a table
  * that already shipped. `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table, so a
  * column declared only there never reaches production.
@@ -61,34 +61,50 @@ function mentionedInAnyCheck(sql: string, column: string): boolean {
  */
 function isAdditive(sql: string): boolean {
   const s = sql.trim().toUpperCase().replace(/\s+/g, ' ');
+
+  // ── APPLIED TO EVERY STATEMENT, ahead of both branches.
+  //
+  // An earlier version put the chained-statement clause on the ALTER branch ONLY, so
+  // `CREATE TABLE IF NOT EXISTS zz (id UUID); ALTER TABLE t ALTER COLUMN c TYPE TEXT`
+  // passed. A verifier found six shapes like it, every one of which the pre-task blanket
+  // `ALTER TABLE` ban had refused incidentally. The root cause was BRANCH ASYMMETRY, not a
+  // missing exclusion — so the check now lives where both branches pass through it.
+  //
+  // Each token here was MEASURED to appear ZERO times in the real statement list, which is
+  // what makes it bannable globally. `PRIMARY KEY`, `UNIQUE`, `CHECK` and `NOT NULL` appear
+  // 7, 12, 12 and 53 times and are ordinary in a CREATE — they stay on the ALTER branch.
+  const destructiveAnywhere =
+    /\bDROP\b/.test(s)
+    || /\bTRUNCATE\b/.test(s)
+    || /\bALTER COLUMN\b/.test(s)
+    || /\bRENAME\b/.test(s)
+    || /\bUSING\b/.test(s)
+    || /\bSET UNLOGGED\b/.test(s)
+    || /\bDISABLE TRIGGER\b/.test(s)
+    || /\bADD CONSTRAINT\b/.test(s)
+    || /\bGENERATED\b/.test(s)
+    || /;/.test(s.replace(/;\s*$/, ''));  // a SECOND statement
+  if (destructiveAnywhere) return false;
+
   const isCreate =
     s.startsWith('CREATE TABLE IF NOT EXISTS') ||
     s.startsWith('CREATE INDEX IF NOT EXISTS') ||
     s.startsWith('CREATE UNIQUE INDEX IF NOT EXISTS');
 
-  // The one permitted ALTER. `IF NOT EXISTS` makes it idempotent; the exclusions below are
-  // the shapes that lose or rewrite data, plus NOT NULL without a DEFAULT, which does not
-  // merely risk anything — it fails outright on a table that already has rows.
+  // ── ALTER BRANCH ONLY: hazardous when ADDED to a table that already holds rows, and
+  // perfectly ordinary inside a CREATE. Moving these up into the global check would reject
+  // every real CREATE TABLE in the list, which is why they cannot go there.
   const isAddColumn = /^ALTER TABLE \S+ ADD COLUMN IF NOT EXISTS /.test(s)
-    && !/\bALTER COLUMN\b/.test(s)
-    && !/\bRENAME\b/.test(s)
-    && !/\bUSING\b/.test(s)
-    // A SECOND STATEMENT after the semicolon. The pre-task rule banned every ALTER, so
-    // `ADD COLUMN IF NOT EXISTS c TEXT; DELETE FROM x` was refused for free; narrowing the
-    // rule opened that door and the comment above claimed it had not. Measured at 66/66
-    // before this clause existed.
-    && !/;/.test(s.replace(/;\s*$/, ''))
-    // Each of these rewrites or exclusively locks a populated table, for the same reason
-    // NOT NULL without a DEFAULT is excluded: a column constraint or a computed column is
-    // not an additive change once rows exist.
     && !/\bUNIQUE\b/.test(s)
     && !/\bPRIMARY KEY\b/.test(s)
     && !/\bCHECK\s*\(/.test(s)
-    && !/\bGENERATED\b/.test(s)
-    && (!/\bNOT NULL\b/.test(s) || /\bDEFAULT\b/.test(s));
+    && (!/\bNOT NULL\b/.test(s) || /\bDEFAULT\b/.test(s))
+    // EVERY add in the statement must carry IF NOT EXISTS, not merely the first:
+    // `ADD COLUMN IF NOT EXISTS c TEXT, ADD COLUMN d TEXT` is not idempotent on a re-run.
+    && (s.match(/\bADD COLUMN\b/g) || []).length
+       === (s.match(/\bADD COLUMN IF NOT EXISTS\b/g) || []).length;
 
-  if (!isCreate && !isAddColumn) return false;
-  return !/\bDROP\b/.test(s) && !/\bTRUNCATE\b/.test(s);
+  return isCreate || isAddColumn;
 }
 
 describe('ensureProjectLifecycleSchema is additive-only', () => {
@@ -103,35 +119,72 @@ describe('ensureProjectLifecycleSchema is additive-only', () => {
     }
   });
 
-  it('positive control: the additive predicate rejects a destructive statement', () => {
-    // The four this control started with.
-    expect(isAdditive('ALTER TABLE projects ADD COLUMN stage TEXT')).toBe(false); // no IF NOT EXISTS
-    expect(isAdditive('DROP TABLE project_lifecycle_states')).toBe(false);
-    expect(isAdditive('CREATE TABLE project_lifecycle_states (id UUID)')).toBe(false); // missing IF NOT EXISTS
-    expect(isAdditive('TRUNCATE project_lifecycle_states')).toBe(false);
+  // ── One test per OPERAND of `isAdditive`, not one test for the predicate. A single
+  // combined control did detect all three mutations of it, but MA1 (global check made inert)
+  // and MA2 (the ADD COLUMN count check deleted) reported the SAME test name, which says
+  // something broke without saying what. These names are the attribution.
 
-    // Six added when P5-T1.3 narrowed the rule to permit ADD COLUMN IF NOT EXISTS. Each is a
-    // shape the permitted form must NOT have opened a door to.
+  it('positive control: rejects a missing IF NOT EXISTS, and any DROP or TRUNCATE', () => {
+    expect(isAdditive('ALTER TABLE projects ADD COLUMN stage TEXT')).toBe(false);
+    expect(isAdditive('CREATE TABLE project_lifecycle_states (id UUID)')).toBe(false);
+    expect(isAdditive('DROP TABLE project_lifecycle_states')).toBe(false);
+    expect(isAdditive('TRUNCATE project_lifecycle_states')).toBe(false);
     expect(isAdditive('ALTER TABLE t DROP COLUMN c')).toBe(false);
+  });
+
+  it('positive control: rejects an ALTER that REWRITES a column instead of adding one', () => {
     expect(isAdditive('ALTER TABLE t ALTER COLUMN c TYPE INTEGER')).toBe(false);
     expect(isAdditive('ALTER TABLE t RENAME COLUMN c TO d')).toBe(false);
-    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT NOT NULL')).toBe(false);
     expect(isAdditive('ALTER TABLE t ALTER COLUMN c TYPE INT USING c::INT')).toBe(false);
-    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, DROP COLUMN d')).toBe(false);
+  });
 
-    // FIVE MORE, added after a verifier walked each of them through the narrowed rule at
-    // 66/66. The first is the one that matters most: the pre-task rule banned every ALTER,
-    // so a chained destructive statement was refused for free, and narrowing re-opened it.
+  it('positive control: rejects a chained SECOND statement, whichever branch the first matched', () => {
+    // THE REGRESSION TEST FOR BRANCH ASYMMETRY. The pre-task rule banned every `ALTER`, so a
+    // chained destructive statement was refused for free; narrowing the rule re-opened it. The
+    // previous attempt closed it on the ALTER branch ONLY — so the two CREATE-prefixed forms
+    // below walked straight past a clause whose comment claimed the class was closed.
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT; DELETE FROM t')).toBe(false);
+    expect(isAdditive('CREATE TABLE IF NOT EXISTS zz (id UUID); ALTER TABLE t ALTER COLUMN c TYPE TEXT')).toBe(false);
+    expect(isAdditive('CREATE TABLE IF NOT EXISTS zz (id UUID); ALTER TABLE t RENAME COLUMN c TO d')).toBe(false);
+  });
+
+  it('positive control: rejects an ADD COLUMN that CONSTRAINS a populated table', () => {
+    // Each of these rewrites or exclusively locks a table that already holds rows, for the same
+    // reason `NOT NULL` without a `DEFAULT` was excluded from the start.
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT UNIQUE')).toBe(false);
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT PRIMARY KEY')).toBe(false);
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT CHECK (c > 0)')).toBe(false);
-    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT GENERATED ALWAYS AS (1) STORED')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT NOT NULL')).toBe(false);
+  });
 
-    // And the PASSING COUNTERPARTS, without which the above would hold against a predicate
-    // that refuses everything — which is the state the rule was in for ALTER until now.
+  it('positive control: rejects a table-level action chained onto an ADD COLUMN', () => {
+    // THE CONTROL ON THE GLOBAL CHECK ITSELF. Nothing else in this predicate catches these
+    // four. An earlier rewrite of `isAdditive` shipped a BACKSPACE byte where a `\b` belonged,
+    // so every global test was a regex matching nothing — and this suite still read 34 passed.
+    // If the global check ever goes inert again, this test is what says so.
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, SET UNLOGGED')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, DISABLE TRIGGER ALL')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, ADD CONSTRAINT fk FOREIGN KEY (c) REFERENCES u(id)')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, DROP COLUMN d')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT GENERATED ALWAYS AS (1) STORED')).toBe(false);
+  });
+
+  it('positive control: rejects a mixed ADD COLUMN list where only the FIRST is guarded', () => {
+    // Its own test because it is the only assertion that dies when the count check does.
+    // `ADD COLUMN IF NOT EXISTS c TEXT, ADD COLUMN d TEXT` is not idempotent on a re-run: the
+    // second add throws on the second pass, and the prefix match alone cannot see it.
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, ADD COLUMN d TEXT')).toBe(false);
+  });
+
+  it('POSITIVE COUNTERPART: the permitted forms pass, so the predicate refuses more than nothing', () => {
+    // Without these, every assertion above would hold against a predicate that returns false
+    // unconditionally — which is what the rule did for ALTER before this task.
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c VARCHAR(64)')).toBe(true);
-    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT NOT NULL DEFAULT \'x\'')).toBe(true);
+    expect(isAdditive("ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT NOT NULL DEFAULT 'x'")).toBe(true);
+    // And the one that keeps the GLOBAL ban honest: a real CREATE TABLE carries PRIMARY KEY,
+    // NOT NULL and CHECK. Without this line, "ban the token globally" could be satisfied by
+    // banning the four tokens the real statement list uses 7, 12, 12 and 53 times.
+    expect(isAdditive('CREATE TABLE IF NOT EXISTS zz (id UUID PRIMARY KEY, n INT NOT NULL, CHECK (n > 0))')).toBe(true);
   });
 
   it('an ALTER may only target a table this module OWNS', () => {

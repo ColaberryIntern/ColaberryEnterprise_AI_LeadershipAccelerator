@@ -66,7 +66,9 @@ describeIfDb('writeBlueprintManifest against a real database', () => {
   /** Distinct refs, so each test can ask for a genuinely different blueprint. */
   function refsWith(ids: string[]) {
     const r = emptyRefs('sbp', PROJECT);
-    for (const id of ids) r.processes.push({ id, revision: 1 });
+    // `source` is required on PinnedRef; see the note in manifestWriter.test.ts. No business-process
+    // table exists yet, so the fixture labels itself instead of naming one.
+    for (const id of ids) r.processes.push({ id, revision: 1, source: 'synthetic-fixture' });
     return r;
   }
 
@@ -279,8 +281,15 @@ describeIfDb('writeBlueprintManifest against a real database', () => {
     //
     // Three mutations survived this suite because nothing reached it: collapsing the two
     // unique-index conflicts, and cutting the retry budget to one, both cost zero tests.
-    // `Promise.all` cannot produce a revision collision — the pool serialises the
-    // MAX(revision) read, so no caller picks a revision another caller already took.
+    // `Promise.all` DOES reach this branch — both callers read the same MAX(revision), which
+    // I measured at 30/30 and a verifier at 40/40. An earlier version of this comment said
+    // the pool serialises that read so no caller could collide. It does not, and that
+    // sentence survived HERE for a whole attempt after being retracted in the module header
+    // 180 lines away — a retraction is not a retraction until a grep says the phrase is gone.
+    //
+    // The seam exists because `Promise.all` is a NONDETERMINISTIC detector: whether the loser
+    // reaches the retry depends on how the two inserts interleave. Injecting the revision
+    // reaches it every time.
     //
     // So the revision is injected, handing back a value that IS in use. That is precisely the
     // state a real concurrent writer creates between another writer’s read and its insert.
