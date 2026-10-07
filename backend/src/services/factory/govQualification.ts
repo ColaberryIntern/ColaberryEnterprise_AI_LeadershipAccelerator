@@ -252,6 +252,10 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   const dossier = (recordJson && recordJson.requirements_json && recordJson.requirements_json.dossier) || null;
   const evaluation = evaluateRequirements(established);
   const coverage = evaluateZipCoverage(established, reviewedDocuments);
+  // Phase 2 (P2-T3): the response checklist — one cited slot per established requirement the bid must answer.
+  // Deterministic projection; every slot is honestly `unanswered` (response authoring is the follow-on).
+  const { deriveResponseSlots } = await import('./proposal/responseSlots');
+  const responseSlots = deriveResponseSlots(established);
   // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
   let sync: any = null;
   try { const { getGovSyncEntry } = await import('./govOpportunitySync'); sync = await getGovSyncEntry(gwsKey); } catch { sync = null; }
@@ -276,6 +280,7 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     provenance,
     zipAttestation,
     dossier,
+    responseSlots,
     relationship,
     changedSource: false,
     lastSyncedAt: sync ? sync.syncedAt : null,
