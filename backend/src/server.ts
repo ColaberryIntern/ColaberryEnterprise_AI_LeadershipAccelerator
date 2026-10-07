@@ -56,6 +56,7 @@ import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema'
 import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
 import { ensurePresenterSlotSchema } from './db/ensurePresenterSlotSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
+import { ensurePresentationDeckSchema } from './db/ensurePresentationDeckSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
@@ -2493,6 +2494,7 @@ async function start(): Promise<void> {
   // the tables must exist before the flag can be turned on, and empty unread tables
   // change no behaviour while it is off.
   await ensurePresentationStudioSchema();
+  await ensurePresentationDeckSchema();
   // Demo-day running order. Its own module rather than columns on the Studio
   // schema: a slot belongs to the SESSION, and the uniqueness that matters (one
   // presenter per position) cannot be expressed on the attempt.
