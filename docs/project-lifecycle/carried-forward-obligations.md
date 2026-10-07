@@ -286,11 +286,26 @@ blast radius.
 - **Minor wording residue:** the covered-element sentence distributes `id`/`title`/`kind` across
   all three project arrays while the code reads `.title`/`.kind` on tasks only and `.id` on all
   three; and one word-spelled apparatus count ("three positions") remains, accurate today.
-- **`unboundProposedSurfaces` has no consumer.** Owner **P4-T3**, the natural reader.
-- **Combined public export surface is 15 and 20 against the per-module ceiling of 12.** Owner
-  **P4-T5**, which must touch these files anyway.
+- **`unboundProposedSurfaces` has no consumer.** Owner **REASSIGNED** — see the full entry
+  below. This bullet said "Owner **P4-T3**, the natural reader" until a verifier found that
+  the reassignment had landed in the detailed entry and not here, so the register named both
+  a finished task and its replacement as owner, 55 lines apart.
+- **CLOSED — combined public export surface.** Was 15 and 20 against the per-module ceiling of
+  12; now 10 / 10 / 5 across three modules. P4-T5 closed it. This bullet asserted the breach
+  in the PRESENT TENSE until a verifier found it 31 lines above the entry recording the fix.
+  Both of these bullets were written as a quick index of the detailed entries below and then
+  not maintained when those entries changed, which is the specific way a register rots: the
+  summary is what people read.
 - **`SURFACE_ACCEPTANCE_SELF_SUPPLIED` is a marker, not an enforcement** — `origin` is
   generator-supplied and names no artifact a reviewer can check it against. Owner **Phase 6**.
+- **The §4.1 cosmetic rule quantifies over "every gate", and the gate set is NOT derivable
+  today.** The section shipped a verb-prefix regex presented as a derivation; a verifier
+  showed it omits `checkApprovalEligibility` and `assessDesignLoop` from the very file it
+  greps, plus ten more verdict-returning exports. The rule is therefore not mechanically
+  checkable, which §4.1 now states. Closing this means the classification lives in code with
+  a test that FAILS when a refusal-code-bearing export is added without being classified —
+  the naming convention cannot carry it. **Owner: whoever implements the comparison** (§4.1
+  step 3), since the set is that implementation’s input.
 
 - **STANDING RULE for the rest of this build (adopted 2026-10-05):** a claim quantified over an
   input space ships with **a seeded generator over that space and the command that enumerated

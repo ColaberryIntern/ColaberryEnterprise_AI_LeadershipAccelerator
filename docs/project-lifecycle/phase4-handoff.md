@@ -294,10 +294,36 @@ This is the dependency that matters, and it is not a small one.
    recorded `controlSpecification.ts` at zero importers 290 lines above it:
 
    ```
+   # from backend/. Resolves each definition site instead of asking the reader to, and prints
+   # the referencing FILES rather than a count, so there is no number here to be wrong about.
    for v in validateTaskSurfaces validateWorkspaceStates validateControlSpec validateProcess; do
-     grep -rln "$v" --include=*.ts src/ | grep -v __tests__ | grep -v "<its own file>" | wc -l
-   done     # -> 0 0 0 1
+     own=$(grep -rl "export function $v" --include=*.ts src/)
+     echo "$v  (defined in ${own#src/})"
+     grep -rln "$v" --include=*.ts src/ | grep -v __tests__ | grep -v "^${own}$" | sed 's/^/    /'
+   done
    ```
+
+   Real output, pasted:
+
+   ```
+   validateTaskSurfaces  (defined in services/lifecycle/generation/workspaceMapping.ts)
+       src/services/lifecycle/generation/workspaceStateChecks.ts
+   validateWorkspaceStates  (defined in services/lifecycle/generation/workspaceStateChecks.ts)
+   validateControlSpec  (defined in services/lifecycle/generation/controlSpecification.ts)
+   validateProcess  (defined in services/lifecycle/generation/processValidation.ts)
+       src/services/lifecycle/generation/blueprintGeneration.ts
+       src/services/lifecycle/generation/workspaceMapping.ts
+   ```
+
+   **The one hit against `validateTaskSurfaces` is a COMMENT**, not a call —
+   `workspaceStateChecks.ts:234`, "Fail CLOSED on an unusable container, exactly as
+   `validateTaskSurfaces` does". So "three validators have no non-test CALLER" is true and
+   "three validators are referenced by nothing" would have been false. **An earlier version of
+   this block pasted a loop containing the literal placeholder `grep -v "<its own file>"` and
+   printed `0 0 0 1` beside it.** Run as written it returns `2 1 1 3`. A verifier ran it. The
+   numbers it was standing in for were right and the command was never executed — which is the
+   same defect as a fabricated measurement, because a reader who runs it concludes the
+   document is wrong about the thing it is right about.
 3. **A writer for the manifest.** Production never creates an
    `operating_blueprint_manifests` row — it only reads and updates one. Until something writes
    it, `refs_json` is empty, the content hash has nothing to hash, and the §4.1 rule cannot be
@@ -316,17 +342,41 @@ owed by nobody.
 **DERIVED, not hand-written** — because "every deferral this phase recorded" is a totality claim
 and this run’s standing rule says such a claim ships with the enumeration that produced it.
 An earlier version of this table was hand-written and silently dropped two owner-bearing
-entries, one of whose owners had already shipped:
+entries, one of whose owners had already shipped.
 
 ```
 grep -n "Owner:" docs/project-lifecycle/carried-forward-obligations.md
 ```
 
-That returns eight owner-bearing register entries. Each has a row below; the set difference
-{register owners} \ {rows below} is **empty**. The remaining rows cover deferrals the register
-states without an `Owner:` tag (the Phase 5 pixel deferral, the token-file finding, the size
-residual and the unreproduced flake), so the index is a superset of the tagged entries rather
-than a sample of them.
+**Nine tags. The mapping, printed rather than asserted** (line numbers as of this commit — they
+move whenever the register is edited, so the subject column is the durable key):
+
+| register line | subject of the tagged entry | row in the table below |
+|---|---|---|
+| 307 | the §4.1 gate set is not derivable | "The §4.1 cosmetic rule quantifies over every gate" |
+| 345 | combined public export surface, 15 and 20 | **NO ROW — see the carve-out below** |
+| 351 | `SURFACE_ACCEPTANCE_SELF_SUPPLIED` is a marker | "…is a marker, not an enforcement" |
+| 359 | `unboundProposedSurfaces` has no consumer | "…is a producer with no consumer" |
+| 366 | a binding proves interaction, not a workflow | "A stronger LC-08 guarantee" |
+| 597 | the hash / approval-invalidation binding | "The hash / approval-invalidation binding" |
+| 641 | the `gatherEvidence` stubs | "The `gatherEvidence` stubs the design gate depends on" |
+| 657 | acceptance-evidence rows owed by Phases 1-3 | "Acceptance-evidence rows LC-01…07, LC-13, LC-14" |
+| 684 | unwired validators in `generation/` | "THREE unwired validators" |
+
+**The unmatched set is `{345}`, and it is not empty.** An earlier version of this section
+claimed `{register owners} \ {rows} is empty` and a verifier ran the grep: eight tags at the
+time, seven rows. **The carve-out is real and belongs in the sentence rather than in a
+reader’s head:** line 345 is inside the preserved original text of an entry marked CLOSED.
+P4-T5 fixed the export surface, the entry records the fix, and the superseded wording is kept
+underneath it deliberately — so the grep sees a historical `Owner:` tag for something that is
+not deferred at all. A closed item has no business in an index of what is owed.
+
+Five further rows cover deferrals the register states WITHOUT an `Owner:` tag, named here
+rather than counted: screenshots and responsive behaviour, whether the running surface
+enforces its declared permission views, the `ensureProjectLifecycleSchema.ts` size residual,
+the six sub-AA token pairs, and the unreproduced flake. **That is five; this sentence said
+"four" and listed four, omitting the permission-views row** — caught by the same verifier pass,
+and the third count in this task alone that was asserted instead of derived.
 
 | deferral | owner | why it is deferred rather than done |
 |---|---|---|
@@ -340,5 +390,6 @@ than a sample of them.
 | THREE unwired validators in `lifecycle/generation/` | **whoever composes the pipeline** | `validateTaskSurfaces`, `validateWorkspaceStates`, `validateControlSpec`; wiring was in no packet, and the risk is that it accumulates quietly. Said "two" until a verifier counted |
 | `SURFACE_ACCEPTANCE_SELF_SUPPLIED` is a marker, not an enforcement | **Phase 6** | `origin` is generator-supplied, and `owner_recorded` names nothing in this repo a reviewer can check it against. Phase 6 persists a manifest an acceptance could be attested against |
 | `unboundProposedSurfaces` is a producer with no consumer | **REASSIGNED to whoever composes the pipeline** | the register named P4-T3 as owner and **P4-T3 shipped without closing it** — measured, zero callers. Reassigned rather than left pointing at a task that is done |
+| The §4.1 cosmetic rule quantifies over "every gate" and the gate set is not derivable | **whoever implements the comparison** | §4.1 shipped a verb-prefix regex presented as a derivation; it omits `checkApprovalEligibility` and `assessDesignLoop` from the file it greps, plus ten more. Closing it means the classification lives in code with a test that fails on an unclassified refusal-bearing export |
 | Six design-system token pairs below WCAG AA | **whoever owns `tokens.css`** | a finding about the existing design system, not about Phase 4; Phase 4 constrains only itself |
 | A flake seen once under heavy load | **nobody yet** | unreproduced in three runs; recorded with its measurements rather than closed or dismissed |

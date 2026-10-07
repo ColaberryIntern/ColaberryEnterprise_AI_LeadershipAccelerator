@@ -86,21 +86,49 @@ as though the question had been settled.
 That is the whole definition. It is deliberately not a list of safe fields and not a judgement
 about whether wording "alters meaning".
 
-#### "Gate" means this enumerable set, and nothing else
+#### "Gate" needs a referent, and the honest status is that it does not have a derivable one
 
-The rule turns on the word, so the word needs a referent rather than an intuition. A **gate**
-is an exported function in the lifecycle generation or delivery-design modules that returns
-refusals or a verdict. Derive the current set rather than trusting a list here:
+The rule turns on the word. A **gate** is an exported function in the lifecycle generation or
+delivery-design modules that returns refusals or a verdict. The CANDIDATE set is derivable —
+every export in those locations, and the command is exact:
 
 ```
-grep -rn "^export function \(validate\|select\|consolidation\|unbound\|render\|controlSurfaceExists\)" \
-  backend/src/services/lifecycle/generation/ backend/src/services/delivery/deliveryDesignLoop.ts
+# from backend/. 50 exports.
+grep -rh "^export function " src/services/lifecycle/generation/*.ts \
+  src/services/delivery/deliveryDesignLoop.ts \
+  | sed "s/.*export function \([A-Za-z0-9_]*\).*/\1/" | sort -u | wc -l
 ```
 
-**An earlier version of this section did not define it, and the omission immediately produced a
-false worked example** — see the `workspaceTitle` case below. If a later phase adds a gate, it
-joins the set by being written, and the comparison widens automatically. That is the advantage
-of defining the rule over a derivable set instead of over a list of fields.
+**Which of those 50 is a gate is HAND-CLASSIFIED, and this section previously claimed
+otherwise.** It pasted a regex matching `validate|select|consolidation|unbound|render|
+controlSurfaceExists` and called it a derivation, with the sentence "if a later phase adds a
+gate, it joins the set by being written, and the comparison widens automatically". A verifier
+ran it. It returns 14 names and **omits `checkApprovalEligibility` and `assessDesignLoop` from
+`deliveryDesignLoop.ts` — the very file the command greps** — along with `checkOwnership`,
+`checkConsolidation`, `checkCapabilityClaims`, `checkTargetDisclosure`, `shapeIssue`,
+`refIssues`, `audienceIssues`, `processErrors`, `allocationErrors` and
+`alternativesDifferMeaningfully`. Twelve verdict-returning exports outside the set, one of
+them the approval-eligibility gate, which is the gate this document is most about.
+
+**A verb prefix is a naming convention, and a naming convention is not a contract.** The
+sentence about the set widening automatically was the load-bearing false claim: it is exactly
+backwards, because a gate named `check*` or `*Errors` joins nothing and is silently outside
+the comparison. That is the same shape as a field list going stale, which is the failure this
+section rejected a field list for.
+
+**Consequence, stated rather than implied: the iff-rule is not mechanically checkable today.**
+"Every gate" quantifies over a set no command returns. The rule is still the right rule and
+still constrains a human reviewer, but a classification run against it would use a
+hand-maintained list, and this run’s standing rule says a claim quantified over an input space
+ships with the enumeration that produced it or is rewritten as a scoped list. This is the
+scoped-list case. Closing it means the classification lives in CODE with a test that fails
+when a refusal-code-bearing export is added without being classified — recorded in
+`carried-forward-obligations.md` with an owner, because that is step 3 below and it is not
+written yet.
+
+**An earlier version of this section did not define "gate" at all, and the omission immediately
+produced a false worked example** — see the `workspaceTitle` case below. Defining it badly then
+produced a second one. Both are kept rather than erased.
 
 #### Why it is defined by re-running the gates rather than by a field list
 
