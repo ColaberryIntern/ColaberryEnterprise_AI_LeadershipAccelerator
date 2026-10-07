@@ -657,7 +657,31 @@ incident whose row should cite the incident and the fix, not a summary written m
 someone reading the plan. **Owner: whoever next touches those phases, or Phase 8 when it
 assembles the table.**
 
-### CLOSED by P5-T1.3: `ensureProjectLifecycleSchema.ts` split at the prescribed seam
+### OPEN, raised by P5-T1.3: NOTHING in this repo typechecks a test file
+
+`backend/tsconfig.json` excludes `**/*.test.ts` and `**/__tests__/**`, and `ts-jest` runs with
+`isolatedModules`. So a green jest run is **not** a typecheck, and the authoritative check skips
+the test tree entirely. Pointing `tsc` at six lifecycle test files with a scoped config found
+two real `TS2345`s immediately — `PinnedRef` requires `source` and two fixtures omitted it —
+both of which had been green in every suite run for two attempts.
+
+**Why this is recorded rather than fixed here.** Making the whole test tree typecheck is a
+repo-wide change: `src/db/__tests__` is one of many, the error count across the tree is unknown,
+and a new required CI gate is a governance decision rather than a task detail. The scoped config
+is deliberately NOT committed, because a config that only covers the files one task touched
+would read as coverage it does not provide.
+
+**The honest shape of the fix**: a `tsconfig.test.json` extending the base with the test paths
+included, run as its own CI step, landed with whatever error count the tree actually has rather
+than with a claim that it is clean. Until then, any task adding test code should run a scoped
+typecheck over its own files and say so.
+
+**And the reason this entry exists at all**: the P5-T1.3 attempt-3 commit body and session note
+both stated this gap was "recorded as a carry-forward" when nothing had been written anywhere.
+That is the same defect the commit was titled for — a retraction citing evidence that does not
+exist — committed inside the fix for it.
+
+### PARTLY CLOSED by P5-T1.3: `ensureProjectLifecycleSchema.ts` split at the prescribed seam
 
 Split into `ensureProjectLifecycleSchema.ts` (the DDL and the ensure path) and
 `projectLifecycleSchemaContract.ts` (the assertion lists and the assert), at
@@ -667,9 +691,10 @@ split broke the `assertProjectLifecycleSchema()` call at the end of the ensure p
 discovering this at the ceiling costs a split under pressure, and right to say so in
 advance.
 
-**NO LINE COUNTS ARE QUOTED HERE, and an earlier version of this entry quoted two.** It said
-287 and 167; the shipped tree is 324 and 200, because P5-T1.3 step 2 then added a column, a
-fourth assertion list and an assert block to both halves. **That is the identical mistake the
+**NO LINE COUNTS ARE QUOTED HERE, and two earlier versions of this entry quoted four.** The
+first pair was stale within the same task; the second pair was quoted in THIS paragraph, under
+that very sentence, and went stale again when the next commit touched the file. **That is the
+identical mistake the
 original text below warned about**, two paragraphs under a sentence reading "No current count
 is quoted here". Run `wc -l`. Both halves are under the 500 HARD ceiling, which is what the residual was about.
 **An earlier version of this sentence also claimed both were under the ~300 soft target. They

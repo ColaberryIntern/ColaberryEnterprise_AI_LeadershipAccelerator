@@ -45,7 +45,11 @@
  *    (it would have short-circuited on a null and passed silently on every existing row — a
  *    ceremonial check, which is worse than none).
  *
- * Every CREATE is `IF NOT EXISTS`; no existing table is altered; the loop is warn-only and a
+ * Every CREATE is `IF NOT EXISTS`. ONE statement alters an existing table — the
+ * `refs_sha256` ADD COLUMN on `operating_blueprint_manifests`, added by P5-T1.3 and
+ * permitted because an `ADD COLUMN IF NOT EXISTS` carrying no constraint cannot fail on a
+ * populated table. An earlier version of this line said no existing table is altered,
+ * which was false from the moment that statement landed. The loop is warn-only and a
  * post-condition assert names anything that failed to appear — the same shape as
  * ensureContractTrackSchema. The warn-only loop is why the assert is not optional: without it a
  * failed migration is silent, and the code that depends on these tables would 500 in production
@@ -57,9 +61,12 @@ import { sequelize } from '../config/database';
 import { assertProjectLifecycleSchema } from './projectLifecycleSchemaContract';
 
 /**
- * Every DDL statement, hoisted so a test can assert the whole set is additive — only
- * CREATE ... IF NOT EXISTS, never an ALTER or DROP of an existing table — and that FKs point
- * only at tables that already exist (tenants, projects, delivery_projects).
+ * Every DDL statement, hoisted so a test can assert the whole set is additive: CREATE ...
+ * IF NOT EXISTS, plus EXACTLY ONE permitted `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`,
+ * never a DROP — and that FKs point only at tables that already exist (tenants, projects,
+ * delivery_projects). A test pins the ALTER count at one, so a second cannot arrive
+ * unnoticed now that the rule permits the shape; see
+ * `__tests__/ensureProjectLifecycleSchema.additive.test.ts`.
  */
 export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
   // The lifecycle position of one project. Exactly one of the two project FKs is set; the CHECK

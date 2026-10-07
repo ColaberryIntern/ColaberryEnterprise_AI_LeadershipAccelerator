@@ -350,10 +350,16 @@ describeIfDb('writeBlueprintManifest against a real database', () => {
   });
 
   it('is scoped BY TENANT: identical refs under another tenant are a different manifest', async () => {
-    // MX2. Dropping the tenant predicate from the replay lookup survived mutation, so the
-    // scoping was untested. The hash is tenant-salted, so there was no live cross-tenant
-    // leak — but "a bug would need two mistakes" is not coverage, and this subsystem has a
-    // standing rule that row checks come AFTER an audited tenant guard.
+    // The OUTER property: two tenants, byte-identical refs, two separate manifests. This one
+    // passes with or without the tenant predicate in the replay lookup, because the hash is
+    // tenant-salted and the refs index is per-tenant — so the insert never conflicts and the
+    // lookup is never reached.
+    //
+    // AN EARLIER VERSION OF THIS COMMENT OPENED BY NAMING THAT MUTATION AS THE REASON THE
+    // TEST EXISTS, which read as a claim that the test closed it. It did not: a verifier
+    // dropped `tenant_id = $1` and this suite stayed 10/10 green on a fresh database. The
+    // isolating control is the test below, which forces the insert to conflict so the lookup
+    // actually runs.
     const OTHER = '99999999-9999-9999-9999-999999999999';
     await sequelize.query('INSERT INTO tenants (id) VALUES ($1) ON CONFLICT DO NOTHING', { bind: [OTHER] });
 
@@ -375,6 +381,54 @@ describeIfDb('writeBlueprintManifest against a real database', () => {
       expect(await rowCount()).toBe(1);
     } finally {
       await sequelize.query('DELETE FROM operating_blueprint_manifests WHERE tenant_id = $1', { bind: [OTHER] });
+    }
+  });
+
+  it('the replay lookup is TENANT-SCOPED: it will not return another tenant’s row', async () => {
+    // THE ISOLATING CONTROL FOR `tenant_id = $1` IN findByRefs. Dropping that predicate
+    // survived every other test in this suite, including the one above, because the lookup is
+    // only reached when the INSERT conflicts — and under normal conditions it never does.
+    //
+    // So this fixture manufactures the conflict. `nextRevisionFor` pins the revision to one
+    // already taken under OUR tenant, which makes every insert attempt fail on the revision
+    // index and forces the replay lookup to run on each of the three attempts.
+    const OTHER = '88888888-8888-8888-8888-888888888888';
+    const refs = refsWith(['proc-tenant-isolation']);
+    // The hash OUR tenant will compute. Planted under the OTHER tenant verbatim, which is a
+    // row only a bug or an attacker could produce — which is exactly what the predicate is
+    // defence against.
+    const ourSha = refsContentHash({ tenantId: TENANT, projectId: PROJECT, refs });
+
+    await sequelize.query(
+      'INSERT INTO tenants (id) VALUES ($1) ON CONFLICT DO NOTHING',
+      { bind: [OTHER] },
+    );
+    try {
+      await sequelize.query(
+        `INSERT INTO operating_blueprint_manifests
+           (tenant_id, student_project_id, revision, status, refs_json, refs_sha256, proposed_by)
+         VALUES ($1, $2, 7, 'draft', '{}'::jsonb, $3, $4)`,
+        { bind: [OTHER, PROJECT, ourSha, PROPOSER] },
+      );
+      // And one under OUR tenant at the revision the writer will be pinned to, so its insert
+      // conflicts on the REVISION index and the replay lookup is reached.
+      expect(await rawInsert('f'.repeat(64), 1)).toBeNull();
+
+      // With the predicate: the lookup finds nothing under our tenant, the retry budget runs
+      // out, and the writer refuses rather than returning a row it did not write.
+      // WITHOUT it: the lookup matches the OTHER tenant’s planted row and this RESOLVES with
+      // `created: false` and a manifestId belonging to someone else. That is the mutation.
+      await expect(writeBlueprintManifest({
+        tenantId: TENANT, origin: 'sbp', projectId: PROJECT, refs, proposedBy: PROPOSER,
+        nextRevisionFor: async () => 1,
+      })).rejects.toThrow(/concurrent writer is winning/);
+
+      // Still exactly the one row we planted: nothing of the other tenant’s was adopted,
+      // and no partial row was left behind.
+      expect(await rowCount()).toBe(1);
+    } finally {
+      await sequelize.query('DELETE FROM operating_blueprint_manifests WHERE tenant_id = $1', { bind: [OTHER] });
+      await sequelize.query('DELETE FROM tenants WHERE id = $1', { bind: [OTHER] });
     }
   });
 
