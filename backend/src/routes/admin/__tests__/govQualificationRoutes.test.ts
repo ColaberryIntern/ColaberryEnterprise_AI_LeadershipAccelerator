@@ -297,6 +297,10 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
     extractProposal.mockResolvedValue({
       blocks: [],
       fileCount: 3,
+      files: [
+        { name: 'rfp.pdf', status: 'extracted', chars: 1200, truncated: false, warning: null },
+        { name: 'scan.pdf', status: 'image_only_pdf', chars: 0, truncated: false, warning: 'No extractable text (likely a scanned / image-only PDF) — review it manually or run OCR.' },
+      ],
       requirements: [
         { canonicalReqId: 'RQ1', statement: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' },
         { canonicalReqId: 'RQ2', statement: 'Submit three past-performance references.', extractedText: '...past performance...', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission', priority: 'should' },
@@ -307,6 +311,9 @@ describe('POST extract-requirements (read-only: extract candidates from the soli
       .attach('document', Buffer.from('pretend-zip-bytes'), 'solicitation.zip');
     expect(res.status).toBe(200);
     expect(res.body.fileCount).toBe(3);
+    // The per-file outcomes are surfaced so the reviewer sees the scanned-PDF (nothing silently dropped).
+    expect(res.body.files).toHaveLength(2);
+    expect(res.body.files.find((f: any) => f.name === 'scan.pdf').status).toBe('image_only_pdf');
     expect(res.body.candidates).toHaveLength(2);
     expect(res.body.candidates[0]).toEqual({ id: 'RQ1', text: 'Offeror shall be registered in SAM.', extractedText: '...SAM registration...', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility', priority: 'must' });
     // read-only: the extractor got the uploaded bytes; no qualification record was read or written
