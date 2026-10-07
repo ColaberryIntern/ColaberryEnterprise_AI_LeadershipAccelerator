@@ -6,6 +6,7 @@ import {
   landingPageContentSchema,
   landingPageSectionSchema,
   parseLandingPageContent,
+  withoutNulls,
   type LandingPageContentShape,
 } from '../../schemas/landingPageContentSchema';
 
@@ -99,7 +100,7 @@ export function visibleText(content: LandingPageContentShape): string {
 
 const SECTION_GUIDE = `Each section is an object with a "type". The allowed types, and their fields:
 
-- {"type":"hero","headline":str,"subhead":str?,"audience":str?,"cta":{"label":str,"href":str}?,"image":{"src":str,"alt":str}?}
+- {"type":"hero","headline":str,"subhead":str?,"audience":str?,"cta":{"label":str,"href":str}?}
 - {"type":"text","heading":str?,"paragraphs":[str,...]}
 - {"type":"bullets","heading":str?,"items":[{"label":str,"detail":str?},...]}
 - {"type":"stats","heading":str?,"items":[{"value":str,"label":str,"source":str},...]}
@@ -108,7 +109,11 @@ const SECTION_GUIDE = `Each section is an object with a "type". The allowed type
 - {"type":"faq","heading":str?,"items":[{"question":str,"answer":str},...]}
 - {"type":"cta","headline":str,"body":str?,"cta":{"label":str,"href":str}}
 
-No other type exists. No HTML in any string. Links must be an absolute https URL or a path starting with "/".`;
+No other type exists. No HTML in any string. Links must be an absolute https URL or a path starting with "/".
+
+NEVER emit an image. There is no "image" field for you to fill and no way for you to know a URL
+that exists, so any you wrote would be a guess that renders as a broken picture on a live page.
+A human adds images afterwards. Omit any field not listed above rather than sending it as null.`;
 
 const SYSTEM = `You turn a marketing brief into the structure of a landing page for a company that teaches AI and data skills to working adults. You return JSON only.
 
@@ -124,7 +129,10 @@ RULES, in order of importance:
 3. Use the brief's own substance. Do not add benefits, modules, guarantees or audiences it does not mention.
 4. Write like a person, not a brochure. No "unlock", "supercharge", "game-changing", "dive into", "transform your career", "in today's fast-paced world". No em-dashes anywhere.
 5. Structure follows the brief. A typical order is hero, who it is for, the problem, what you get, proof, logistics, FAQ, close - but only include what the brief supports. Between 3 and 10 sections.
-6. One CTA label, used consistently. If the brief names no destination, use "/apply" as the href so a human can correct it.
+6. One CTA label, used consistently. A destination is a FACT, so rule 1 applies to it: if the
+   brief does not say where the button goes, omit the "cta" object entirely and let a human add
+   it. Never invent a path. "/apply" was the old instruction here and it shipped a live page
+   whose only button 404'd, which is worse than a page with no button on it.
 7. THE HEADLINE CARRIES A CONCRETE DETAIL FROM THE BRIEF. A hero headline that would fit any
    course on any subject is a failed headline. Take the most specific thing the brief actually
    gives you - a duration, a format, the artefact someone leaves with, who reviews it - and put it
@@ -193,7 +201,7 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
   if (!brand) throw new WorkflowError('Brand not found', 404, 'NotFound');
 
   const client = getInstrumentedOpenAI(
-    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v3' },
+    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v4' },
     { timeout: TIMEOUT_MS, maxRetries: 1 },
   );
 
@@ -319,7 +327,10 @@ function salvageSections(json: unknown): { content: LandingPageContentShape; dro
 
   const kept: unknown[] = [];
   const dropped: string[] = [];
-  raw.sections.forEach((section, i) => {
+  raw.sections.forEach((rawSection, i) => {
+    // A model writes `"intro": null` where it means "nothing here", and zod reads that as a type
+    // error rather than as absence - so a section lost its whole list over one empty field.
+    const section = withoutNulls(rawSection);
     const parsed = landingPageSectionSchema.safeParse(section);
     if (parsed.success) {
       kept.push(section);
