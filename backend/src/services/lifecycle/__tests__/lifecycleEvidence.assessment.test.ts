@@ -383,12 +383,67 @@ describe('notAssessedGaps actually discriminates', () => {
   });
 });
 
+/**
+ * EVERY GUARDED READ, AS A (stage, rule, field) POSITION.
+ *
+ * A SPEC, not a transcript. I derived these 36 positions by probing the predicate layer, then
+ * checked each row against the source: every rule is paired with the field it semantically
+ * depends on. Pasting whatever the code currently does would encode a mis-binding as correct,
+ * which is the exact failure being closed here.
+ *
+ * Hand-written on purpose. Amendment 1 permits a claim over an input space to be a SCOPED
+ * LIST rather than a generator, and the completeness assertion below is what keeps the list
+ * honest when a read is added or removed.
+ *
+ * WHY A POSITION AND NOT A FIELD. An earlier version of this control keyed on the field alone:
+ * withhold it, require a non-empty and unique rule set. Two mutations walked through it.
+ * `proposedBy` is read at TWO positions (`proposer_unrecorded` and `approval_self_approved`),
+ * so mis-binding one leaves the other covering for it; and a mutual SWAP of two fields keeps
+ * both sets non-empty and distinct, so it is invisible. A field is not a position, and
+ * Amendment 2 asks for a control per claimed position.
+ */
+const GUARDED_POSITIONS: ReadonlyArray<[LifecycleStage, string, EvidenceField]> = ([
+  ['requirements_ready', 'no_requirements', 'requirementCount'],
+  ['requirements_ready', 'requirement_without_provenance', 'requirementsWithoutProvenance'],
+  ['requirements_ready', 'source_block_uncited', 'uncitedRequirementSourceBlocks'],
+  ['requirements_ready', 'source_block_unresolved', 'unresolvedSourceBlocks'],
+  ['process_ready', 'process_without_tasks', 'processesWithoutTasks'],
+  ['process_ready', 'graph_no_start', 'graphHasStart'],
+  ['process_ready', 'graph_no_end', 'graphHasEnd'],
+  ['process_ready', 'task_unreachable', 'unreachableTasks'],
+  ['process_ready', 'rework_unbounded', 'unboundedReworkLoops'],
+  ['allocation_ready', 'task_without_execution_class', 'tasksWithoutExecutionClass'],
+  ['allocation_ready', 'task_without_accountable_human', 'tasksWithoutAccountableHuman'],
+  ['allocation_ready', 'agent_accountable_for_itself', 'agentTasksAccountableForThemselves'],
+  ['design_ready', 'task_unmapped_to_surface', 'tasksUnmappedToSurface'],
+  ['design_ready', 'screen_without_rationale', 'screensWithoutRationale'],
+  ['design_ready', 'design_variant_not_selected', 'selectedDesignRef'],
+  ['awaiting_blueprint_approval', 'manifest_hash_missing', 'manifestContentHash'],
+  ['awaiting_blueprint_approval', 'allocation_unknown', 'unknownAllocationCount'],
+  ['awaiting_blueprint_approval', 'effort_coverage_undisclosed', 'effortCoverageDisclosed'],
+  ['awaiting_blueprint_approval', 'proposer_unrecorded', 'proposedBy'],
+  ['blueprint_approved', 'approval_missing', 'approval'],
+  ['blueprint_approved', 'approval_self_approved', 'proposedBy'],
+  ['blueprint_approved', 'approval_revision_moved', 'currentManifestRevision'],
+  ['planning', 'approval_missing', 'approval'],
+  ['planning', 'approval_self_approved', 'proposedBy'],
+  ['planning', 'approval_revision_moved', 'currentManifestRevision'],
+  ['planning', 'authority_revoked', 'actorStillAuthorized'],
+  ['building', 'approval_missing', 'approval'],
+  ['building', 'approval_self_approved', 'proposedBy'],
+  ['building', 'approval_revision_moved', 'currentManifestRevision'],
+  ['building', 'authority_revoked', 'actorStillAuthorized'],
+  ['operating', 'approval_missing', 'approval'],
+  ['operating', 'approval_self_approved', 'proposedBy'],
+  ['operating', 'approval_revision_moved', 'currentManifestRevision'],
+  ['operating', 'authority_revoked', 'actorStillAuthorized'],
+  ['plan_ready', 'requirement_uncovered_by_story', 'mustHaveRequirementsWithoutStory'],
+  ['plan_ready', 'story_without_traceability', 'storiesWithoutTraceability'],
+] as ReadonlyArray<[string, string, string]>) as ReadonlyArray<[LifecycleStage, string, EvidenceField]>;
+
 describe('EVERY guarded read is bound to the field it actually reads', () => {
-  /**
-   * Withhold one field from an otherwise-complete snapshot and collect the `not_assessed`
-   * rules that appear across every stage.
-   */
-  function rulesWhenWithheld(field: EvidenceField): string[] {
+  /** The (stage, rule) pairs that become not_assessed when exactly one field is withheld. */
+  function positionsWhenWithheld(field: EvidenceField): string[] {
     const e = complete();
     const withheld: LifecycleEvidence = {
       ...e,
@@ -396,46 +451,51 @@ describe('EVERY guarded read is bound to the field it actually reads', () => {
         [...e.assessedFields].filter((f) => f !== field),
       ) as Set<EvidenceField>,
     };
-    const rules = new Set<string>();
+    const out: string[] = [];
     for (const stage of LIFECYCLE_STAGES) {
-      for (const g of notAssessedGaps(prerequisiteGaps(stage, withheld))) rules.add(g.rule);
+      for (const g of notAssessedGaps(prerequisiteGaps(stage, withheld))) {
+        out.push(`${stage}/${g.rule}`);
+      }
     }
-    return [...rules].sort();
+    return out.sort();
   }
 
-  it('every assessed field, withheld alone, produces at least one not_assessed gap', () => {
-    // A mis-bound `field` argument produces NONE: the guard it names is still assessed, so
-    // nothing fires. That is how `condGaps(e, ’actorStillAuthorized’, …)` mis-bound to
-    // `’approval’` would silently drop the TOCTOU authority refusal — the same shape as the
-    // `currentManifestRevision` bypass this task shipped in attempt 1.
-    const silent = [...complete().assessedFields].filter((f) => rulesWhenWithheld(f).length === 0);
-
-    // Named, not counted, so a failure says WHICH field is unbound.
-    expect(silent).toEqual([]);
-  });
-
-  it('no two fields produce the same not_assessed rule set', () => {
-    // The other half: a field mis-bound to a SIBLING collides with it. Injectivity catches
-    // what emptiness does not — e.g. `graphHasEnd` mis-bound to `graphHasStart` makes the
-    // latter emit both rules and the former emit none.
-    const seen = new Map<string, EvidenceField>();
-    const collisions: string[] = [];
-
-    for (const f of [...complete().assessedFields].sort()) {
-      const key = rulesWhenWithheld(f).join(
-);
-      if (!key) continue; // covered by the test above; do not double-report
-      const prior = seen.get(key);
-      if (prior) collisions.push(`${prior} and ${f} both yield [${key}]`);
-      else seen.set(key, f);
+  /** Every position the layer actually produces, derived by withholding each field in turn. */
+  function observedPositions(): string[] {
+    const out: string[] = [];
+    for (const f of [...complete().assessedFields]) {
+      for (const p of positionsWhenWithheld(f)) out.push(`${p}/${f}`);
     }
+    return out.sort();
+  }
 
-    expect(collisions).toEqual([]);
+  it.each(GUARDED_POSITIONS)(
+    'PER-POSITION: %s/%s is gated by %s and nothing else',
+    (stage, rule, field) => {
+      // The declared field must produce this exact position...
+      expect(positionsWhenWithheld(field)).toContain(`${stage}/${rule}`);
+
+      // ...and no OTHER field may. This half is what catches a swap: a mis-bound read still
+      // emits its rule, just from the wrong field, so "the rule fires" alone proves nothing.
+      const impostors = [...complete().assessedFields]
+        .filter((f) => f !== field)
+        .filter((f) => positionsWhenWithheld(f).includes(`${stage}/${rule}`));
+      expect(impostors).toEqual([]);
+    },
+  );
+
+  it('the declared position list is COMPLETE — no read is unlisted, none is stale', () => {
+    const declared = GUARDED_POSITIONS.map(([s_, r, f]) => `${s_}/${r}/${f}`).sort();
+
+    // Both directions. A subset assertion would miss a read added to the predicate layer and
+    // never added here, which is how this control would quietly stop covering the thing it
+    // claims to — the same defect `INTEGRITY_CHECKED_LISTS` exists to prevent one file over.
+    expect(observedPositions()).toEqual(declared);
   });
 
   it('PASSING COUNTERPART: withholding nothing yields no not_assessed gap at all', () => {
-    // Without this, both tests above would pass against a predicate layer that reported
-    // everything as unassessed regardless of the set.
+    // Without this, everything above would pass against a layer that reported every field as
+    // unassessed regardless of the set.
     const e = complete();
     for (const stage of LIFECYCLE_STAGES) {
       expect(notAssessedGaps(prerequisiteGaps(stage, e))).toEqual([]);

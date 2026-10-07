@@ -126,13 +126,6 @@ export interface RefIntegrityReport {
 }
 
 /**
- * Check a ref set for the ways a pointer can be wrong.
- *
- * Collision detection is per-list-pair rather than global: the same id legitimately appears as
- * both a source and a track mapping's `canonicalReqId`, because those are the same requirement
- * seen from two angles. What must not happen is one id standing for two different *things*.
- */
-/**
  * The top-level ref collections `checkRefIntegrity` actually walks.
  *
  * EXPORTED so a test can hold it against the shape `emptyRefs()` really returns. It was an
@@ -152,6 +145,13 @@ export const INTEGRITY_CHECKED_LISTS = [
   'surfaces', 'policies', 'designDecisions', 'downstream',
 ] as const satisfies ReadonlyArray<keyof ManifestRefs>;
 
+/**
+ * Check a ref set for the ways a pointer can be wrong.
+ *
+ * Collision detection is per-list-pair rather than global: the same id legitimately appears as
+ * both a source and a track mapping's `canonicalReqId`, because those are the same requirement
+ * seen from two angles. What must not happen is one id standing for two different *things*.
+ */
 export function checkRefIntegrity(refs: ManifestRefs): RefIntegrityReport {
   const malformed: string[] = [];
   const seen = new Map<string, string>(); // id -> which list claimed it
