@@ -62,6 +62,7 @@ import Cohort from '../../models/Cohort';
 import { getReeseEnrollmentId, getReeseAdminUserId, isReeseEnabled } from './reeseIdentitySeed';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+import { recordHeldAction, recordSentAction } from './reeseGovernedActionLog';
 import { RISK_TIER } from './reeseAutonomousOutreachService';
 
 export type WelcomeOutcome =
@@ -236,13 +237,18 @@ async function sendOnce(
     // `AuthorizeTicketDispatchInput` shape `agentActionAuthorizationBridge.ts`
     // added specifically for this case.
     const eventId = crypto.randomUUID();
+    // Hoisted to a single const (2026-10-07): the governed action name is now
+    // read by the authorization call AND the activity-log write below, and the
+    // two MUST agree or the activity row stops joining to its
+    // approval_requests row by action.
+    const welcomeAction = kind === 'student' ? 'reese_welcome_student' : 'reese_welcome_account';
     const authResult = await authorizeTicketDispatch({
       eventId,
       ticketId: null,
       resourceType: 'reese_welcome',
       resourceId: enrollmentId,
       agentName: 'Reese',
-      action: kind === 'student' ? 'reese_welcome_student' : 'reese_welcome_account',
+      action: welcomeAction,
       riskTier: RISK_TIER,
       preparedAction: { studentEnrollmentId: enrollmentId, kind },
     });
@@ -257,6 +263,24 @@ async function sendOnce(
         event: 'welcome_held_for_approval', outcome: 'partial', correlation_id: eventId,
         context: { enrollment_id: enrollmentId, kind, reason: authResult.reason },
       }));
+      // The `reese_welcomes` row above already records the hold honestly
+      // (outcome 'held'); this is the same fact in the table Reese's own
+      // scorecard reads, which showed nothing at all. Production 2026-10-07:
+      // 10 such rows exist with outcome 'held' and no message_id, and zero
+      // corresponding activity rows. Bookkeeping only — the hold is unchanged.
+      await recordHeldAction({
+        action: welcomeAction,
+        riskTier: RISK_TIER,
+        verdict: authResult.verdict,
+        reasonCode: authResult.reason,
+        // One intro per person per kind, enforced by the ReeseWelcome claim
+        // above (a second run returns 'already_sent' before reaching here), so
+        // the enrollment+kind pair IS the unit.
+        unitKey: `enrollment:${enrollmentId}:${kind}`,
+        eventId,
+        decisionId: authResult.decisionId,
+        details: { enrollment_id: enrollmentId, kind },
+      });
       return { kind, outcome: 'held_for_approval' };
     }
 
@@ -288,6 +312,26 @@ async function sendOnce(
       result: 'success',
       sourceRecordType: 'room_message',
       sourceRecordId: messageId,
+    }).catch(() => {});
+
+    // Added alongside the held write above, deliberately: this path had NO
+    // activity-log write at all, so recording only the holds would make
+    // `reese_welcome_student` read 100% held in the log — a new false signal,
+    // not an improvement (production: 125 welcomes really sent vs 10 held).
+    // Bookkeeping only; the send above already happened.
+    //
+    // NOT awaited, matching this file's own design decision 5 and the
+    // emitReeseLedgerEvent call directly above: maybeSendWelcomes() runs on the
+    // LOGIN path, so no bookkeeping write is allowed to add a round-trip to it.
+    // The `.catch` is a guard against an unhandled rejection, not a swallow —
+    // recordSentAction() resolves rather than throwing by contract and logs its
+    // own failures internally (see reeseGovernedActionLog.ts).
+    recordSentAction({
+      action: welcomeAction,
+      riskTier: RISK_TIER,
+      reason: 'welcome_sent',
+      eventId,
+      details: { enrollment_id: enrollmentId, kind, room_id: roomId, message_id: messageId },
     }).catch(() => {});
 
     return { kind, outcome: 'sent', roomId, messageId };

@@ -3287,13 +3287,14 @@ export const AGENT_GROUP_MAP: Record<string, string[]> = {
   // published 9,369 reports of "Content Engine: 0/0 healthy ... 0 anomalies
   // detected" (2026-03-17 → 2026-10-06). The unreachable listing is removed so
   // the emptiness is visible in the data instead of hiding in key order.
-  // ContentEngineSuperAgent stays registered and running: an empty group now
-  // reports UNKNOWN rather than healthy (superAgentHealth.ts), and whether
-  // this department gets real agents or the super agent is retired is the
-  // product owner's decision, not this seed file's.
-  // Do NOT "fix" this by re-listing agents that belong to another group —
-  // that is precisely the bug, and the integrity check will reject it.
-  content_engine: [],
+  // RESOLVED 2026-10-07 by the product owner: the key is DELETED rather than left
+  // declared-empty, and ContentEngineSuperAgent is REPOINTED at `marketing` (see
+  // contentEngineSuperAgent.ts). Repointing beat the alternatives: retiring it would have left
+  // `marketing` with no supervisor at all, and populating `content_engine` could only have taken
+  // members from `campaign_ops`, since `agent_group` is single-valued. Three scripts already
+  // declared this agent as department 'Marketing', so this made the code agree with itself.
+  // Do NOT reintroduce a group as a subset of another group — that was the original bug, and
+  // the integrity check rejects it.
   analytics_engine: [
     'InsightArchitect',
   ],
@@ -3327,17 +3328,12 @@ export const AGENT_GROUP_MAP: Record<string, string[]> = {
   // before adding it, because a second listing of a name is the silent no-op
   // documented at the top of this map.
   //
-  // KNOWN AND DELIBERATE: no super agent reads this group. The eight groups
-  // above each have one (runSuperAgentCycle('campaign_ops', …) and its
-  // siblings); 'marketing' has none, so this agent's health appears in NO
-  // department report. Its run_count, last_result and activity log are still
-  // visible on the Trust Command Center, which is where it is actually read
-  // today. Recorded here rather than papered over by filing the agent under
-  // campaign_ops: a supervised-looking group is how content_engine published
-  // 9,369 "0/0 healthy" reports. Whether Marketing gets a super agent is the
-  // product owner's call; campaignPerformanceAgent's wiring test pins the
-  // absence, so adding one fails that test and the decision is made on
-  // purpose.
+  // SUPERVISED since 2026-10-07: ContentEngineSuperAgent reads this group
+  // (runSuperAgentCycle('marketing', …)). It previously read `content_engine`, which was
+  // structurally incapable of having members, so it published 9,412 "0/0 healthy" reports
+  // instead. The absence of a supervisor here was pinned by campaignPerformanceAgent's wiring
+  // test precisely so that adding one had to be a deliberate decision; the product owner made
+  // it, and that test now pins the presence.
   marketing: [
     'DeptCampaignPerformanceAgent',
   ],
