@@ -22,11 +22,23 @@ export type PrepGuide = {
 
 /** How to make a screen recording with things a learner already has. */
 export const HOW_TO_RECORD =
-  'Any recorder works: Zoom (start a meeting on your own, share your screen, press Record), Loom (free, and it gives you a link as soon as you stop), or the one built into your computer (Windows: Snipping Tool, then Record; Mac: Cmd+Shift+5). Make sure your microphone is on.';
+  'Easiest: book a practice room on the Practice stage and record there — it arrives in the Studio on its own, and you hand it in without uploading anything. '
+  + 'If you would rather record elsewhere, any recorder works: Loom (free, and it gives you a link as soon as you stop), or the one built into your computer (Windows: Snipping Tool, then Record; Mac: Cmd+Shift+5). Make sure your microphone is on.';
 
-/** How to turn a file on your computer into a link someone else can open. */
+/**
+ * How to hand the recording in.
+ *
+ * LEADS WITH THE STUDIO, because as of 2026-10-06 a recording made in a practice
+ * room IS the evidence — "Use a Studio recording" on the hand-in form takes it
+ * directly. This text used to send every student to Google Drive or YouTube, and it
+ * kept saying so for a day after that stopped being necessary: the page offered the
+ * Studio recording and the instructions beside it told you to publish the file
+ * publicly. Uploading is still here, because a recording made somewhere else still
+ * needs a link somebody can open.
+ */
 export const HOW_TO_SHARE =
-  'Upload the file to Google Drive or OneDrive and set sharing to "Anyone with the link can view", or upload it to YouTube as Unlisted. Copy that link. Before you paste it, open it in a private browser window: if it asks you to sign in or request access, nobody else can see it either. A link starting with localhost or a file on your computer only works for you.';
+  'If you recorded in a Studio practice room, choose "Use a Studio recording" on the hand-in form — it is already here and there is nothing to upload. '
+  + 'If you recorded somewhere else: upload the file to Google Drive or OneDrive and set sharing to "Anyone with the link can view", or upload it to YouTube as Unlisted. Copy that link. Before you paste it, open it in a private browser window: if it asks you to sign in or request access, nobody else can see it either. A link starting with localhost or a file on your computer only works for you.';
 
 export const PREP_GUIDE: Readonly<Record<string, PrepGuide>> = {
   'PREP-1': {

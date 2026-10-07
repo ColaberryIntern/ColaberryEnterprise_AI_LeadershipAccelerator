@@ -216,3 +216,65 @@ describe('the prompt that produced a deck is frozen with it', () => {
     expect(promptSha(PROMPT)).not.toBe(promptSha(`${PROMPT} edited`));
   });
 });
+
+/**
+ * The grounding check runs on the way IN, and its verdict is stored with the deck.
+ *
+ * Recomputing it on read would mean the same deck silently changes which of its
+ * numbers look invented the moment the student edits their project.
+ */
+describe('a generated deck is checked against what the student actually wrote', () => {
+  const FABRICATED = '<section><p>Cut costs by 37%.</p><p>Handles 1,200 deliveries.</p></section>';
+  const SOURCES = ['We handle 1,200 deliveries a week.'];
+
+  it('stores the unsupported figures alongside the deck', async () => {
+    wireDb();
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: FABRICATED } }] });
+
+    await generateDeck({ assignmentId: ASSIGNMENT, prompt: PROMPT, promptVersion: PV, sources: SOURCES });
+
+    const update = q.mock.calls.find((c) => String(c[0]).includes('UPDATE presentation_decks'))!;
+    const stored = JSON.parse((update[1] as any).replacements.grounding);
+    const flagged = stored.unsupported.map((u: any) => u.normalized);
+    expect(flagged).toContain('37');
+    // The student supplied 1,200, so it must not be flagged.
+    expect(flagged).not.toContain('1200');
+    expect(stored.clean).toBe(false);
+  });
+
+  it('writes a clean verdict when every figure is the student\'s own', async () => {
+    wireDb();
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: '<p>Handles 1200 deliveries.</p>' } }] });
+    await generateDeck({ assignmentId: ASSIGNMENT, prompt: PROMPT, promptVersion: PV, sources: SOURCES });
+    const update = q.mock.calls.find((c) => String(c[0]).includes('UPDATE presentation_decks'))!;
+    expect(JSON.parse((update[1] as any).replacements.grounding).clean).toBe(true);
+  });
+
+  // With no sources every figure is unsupported, which is the honest answer rather
+  // than a reason to skip the check.
+  it('flags everything when the student supplied nothing', async () => {
+    wireDb();
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: '<p>Up 55%.</p>' } }] });
+    await generateDeck({ assignmentId: ASSIGNMENT, prompt: PROMPT, promptVersion: PV });
+    const update = q.mock.calls.find((c) => String(c[0]).includes('UPDATE presentation_decks'))!;
+    expect(JSON.parse((update[1] as any).replacements.grounding).unsupported).toHaveLength(1);
+  });
+
+  // A flagged deck is still a deck. Refusing to store it would lose the student's work
+  // over a number they may well be able to confirm.
+  it('still returns the deck as ready when figures are flagged', async () => {
+    q.mockReset();
+    q.mockResolvedValueOnce([[dbRow()], {}]);
+    q.mockResolvedValue([[dbRow({
+      state: 'ready', content_html: FABRICATED, tries: 1,
+      grounding_json: { unsupported: [{ text: '37%', normalized: '37', context: 'Cut costs by 37%' }] },
+    })], {}]);
+    mockCreate.mockResolvedValue({ choices: [{ message: { content: FABRICATED } }] });
+
+    const r = await generateDeck({ assignmentId: ASSIGNMENT, prompt: PROMPT, promptVersion: PV, sources: SOURCES });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.deck.state).toBe('ready');
+    expect(r.deck.unsupported.map((u) => u.text)).toEqual(['37%']);
+  });
+});

@@ -517,6 +517,12 @@ describe('getDecoupledWorkspace — canApprove from ZIP coverage + requirement b
     expect(ws.coverage.reasons).toContain('no_requirements_established');
   });
 
+  it('Phase 2 (P2-T3): surfaces a response slot per established requirement, each citing its source ref, all unanswered', async () => {
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.responseSlots).toEqual([{ requirementId: 'R1', statement: 'x', sourceRef: 'D1', status: 'unanswered' }]);
+  });
+
   it('Phase 2: surfaces the stored dossier (null when none stored)', async () => {
     const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: [], meetings: [], keyDates: [] };
     findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip], dossier }));

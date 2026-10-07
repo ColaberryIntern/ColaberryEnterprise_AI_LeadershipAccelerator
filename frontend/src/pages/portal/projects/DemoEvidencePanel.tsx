@@ -57,7 +57,18 @@ const DemoEvidencePanel: React.FC<{
 }> = ({ task, projectId, taskId, points, demo }) => {
   const storyId = task.storyId ?? '';
   const linkOnly = LINK_ONLY.has(storyId);
-  const [kind, setKind] = useState<Kind>(linkOnly ? 'link' : 'text');
+  /**
+   * A recording task OPENS on the Studio recording, not on the URL box.
+   *
+   * It shipped defaulting to `link`, which meant the selected-state styling put the
+   * old workaround — publish it somewhere public, paste the URL — in the loud
+   * button and left the recording we already hold as the quiet one. The page was
+   * still steering students to the thing P4-T6 exists to remove.
+   *
+   * Opening on the picker costs one cheap read, and a student who recorded
+   * elsewhere is not stranded: the empty state says to paste a link instead.
+   */
+  const [kind, setKind] = useState<Kind>(linkOnly ? 'recording' : 'text');
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

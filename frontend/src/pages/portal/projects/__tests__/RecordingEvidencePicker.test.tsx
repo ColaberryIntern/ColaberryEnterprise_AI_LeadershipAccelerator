@@ -276,3 +276,55 @@ describe('every state of the picker announces itself', () => {
     expect(label).not.toBeNull();
   });
 });
+
+/**
+ * Which way in a recording task OPENS on.
+ *
+ * Caught by looking at a real production screenshot, not by a test: the hand-in
+ * form opened on "Paste a link", so the selected-state styling put the old
+ * workaround in the loud button and left the recording we already hold as the
+ * quiet one. The page was steering students to the thing P4-T6 removes.
+ */
+describe('a recording task opens on the Studio recording', () => {
+  function mountPanelFor(storyId: string) {
+    const task = { id: 't1', storyId, title: 'x', state: 'todo', due: 'today' } as unknown as ProjectTask;
+    act(() => {
+      const r = createRoot(container);
+      root = r;
+      r.render(<DemoEvidencePanel task={task} projectId="p1" taskId={storyId} points={40} />);
+    });
+  }
+
+  it.each(['PREP-2', 'PREP-5'])('%s shows the picker first, not a URL box', (storyId) => {
+    api.get.mockResolvedValue({ data: { attempts: [] } });
+    mountPanelFor(storyId);
+    expect(container.querySelector('input[type="url"]')).toBeNull();
+    const studio = Array.from(container.querySelectorAll('button'))
+      .find((b) => (b.textContent || '').includes('Use a Studio recording'))!;
+    expect(studio.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('asks for the recordings on mount, so the student sees their takes immediately', async () => {
+    api.get.mockResolvedValue({ data: { attempts: [] } });
+    await act(async () => { mountPanelFor('PREP-2'); });
+    expect(api.get).toHaveBeenCalledWith('/api/portal/projects/p1/tasks/PREP-2/recording-evidence');
+  });
+
+  // A student who recorded elsewhere must not be stranded on an empty picker.
+  it('still offers the link box one click away', () => {
+    api.get.mockResolvedValue({ data: { attempts: [] } });
+    mountPanelFor('PREP-2');
+    const link = Array.from(container.querySelectorAll('button'))
+      .find((b) => (b.textContent || '').includes('Paste a link'))!;
+    expect(link).toBeTruthy();
+    act(() => { link.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(container.querySelector('input[type="url"]')).not.toBeNull();
+  });
+
+  // A narrative task is unchanged: prose is still the natural first option there.
+  it('leaves a narrative task opening on the text box', () => {
+    api.get.mockResolvedValue({ data: { attempts: [] } });
+    mountPanelFor('PREP-1');
+    expect(container.querySelector('textarea')).not.toBeNull();
+  });
+});
