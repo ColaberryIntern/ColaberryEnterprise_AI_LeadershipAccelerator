@@ -80,12 +80,86 @@ function countSignatureBlocks(body) {
   return blocks;
 }
 
+/**
+ * Dashes that are not the literal character but render as one in a mail client.
+ *
+ * The literal check below tests only U+2014. An HTML body is free to spell the
+ * same glyph as an entity, and every one of these renders as an em- or en-dash
+ * in the recipient's inbox, so a body containing them violates the style rule
+ * just as loudly while passing a literal-character test in silence.
+ *
+ * Why this list and not a decode-then-check: decoding would need an entity
+ * table for every name in HTML5 and would also rewrite the body, which this
+ * module must never do - it is a validator, not a transformer. Matching the
+ * handful of forms that actually mean "dash" is exact and has no false
+ * positives on ordinary text (see the `&m`/`&n` negative controls in the tests).
+ *
+ * Hex is matched case-insensitively on BOTH the `x` and the digits because
+ * `&#X2014;` and `&#x2014;` are the same character to a browser.
+ */
+const ENCODED_DASHES = [
+  { label: 'named em-dash entity (&mdash;)', rx: /&mdash;/ },
+  { label: 'named en-dash entity (&ndash;)', rx: /&ndash;/ },
+  // NUMERIC references tolerate LEADING ZEROS and a MISSING SEMICOLON, and both still reach the
+  // reader. HTML5 permits `&#08212;`, and a missing semicolon is a parse error that flushes the
+  // code point anyway. An adversarial grader walked `&#08212;`, `&#008212;`, `&#x02014;` and
+  // `&#8212` straight past the strict six-form table, so the digits are the anchor and the
+  // semicolon is not.
+  //
+  // The NAMED forms above deliberately keep the required semicolon: `mdash` is NOT in HTML's
+  // legacy no-semicolon table, so `&mdash` alone does not decode and flagging it would be a
+  // false positive.
+  //
+  // The trailing lookahead is why this is not simply `;?`. Without it, `&#8212` matches inside
+  // `&#82125;` (U+140ED), which is a different character entirely — the guard refuses to read a
+  // longer code point as a shorter one.
+  { label: 'decimal em-dash entity (&#8212;)', rx: /&#0*8212(?![0-9])/ },
+  { label: 'decimal en-dash entity (&#8211;)', rx: /&#0*8211(?![0-9])/ },
+  { label: 'hex em-dash entity (&#x2014;)', rx: /&#[xX]0*2014(?![0-9a-fA-F])/ },
+  { label: 'hex en-dash entity (&#x2013;)', rx: /&#[xX]0*2013(?![0-9a-fA-F])/ },
+];
+
+/**
+ * Which encoded-dash forms a body contains, by label.
+ *
+ * Returns labels rather than a boolean so the violation message can name the
+ * form that was found. "Em-dash found" sends the author hunting for a character
+ * that is not in their source; "named em-dash entity (&mdash;)" is greppable.
+ *
+ * @param {string} body html or text body
+ * @returns {string[]} labels of the forms present, in ENCODED_DASHES order
+ */
+function findEncodedDashes(body) {
+  const source = String(body || '');
+  return ENCODED_DASHES.filter(d => d.rx.test(source)).map(d => d.label);
+}
+
 function validateBeforeSend(html, text) {
   const violations = [];
 
   // 1. Em-dashes anywhere
   if (/—/.test(html) || /—/.test(text || '')) {
     violations.push('Em-dash (—) found. Use a slash, comma, hyphen with spaces, or "and"/"but" instead.');
+  }
+
+  // 1b. The same dash spelled as an HTML entity.
+  //
+  // The literal check above was the whole rule for a long time, and it is blind
+  // to every encoded form. That blindness was not hypothetical: the canonical
+  // signature in config/emailSignature.ts rendered "Managing Director &mdash;
+  // AI Systems Architect" against a house rule that says slash, and three
+  // scheduled reports that dutifully call this function shipped an entity dash
+  // in their headline every day while the gate reported them clean.
+  //
+  // Reported separately from the literal violation, and naming the form, so the
+  // author can grep for what was actually in their source.
+  const htmlEncoded = findEncodedDashes(html);
+  const textEncoded = findEncodedDashes(text || '');
+  if (htmlEncoded.length > 0) {
+    violations.push(`Em-dash as HTML entity found in HTML body: ${htmlEncoded.join(', ')}. These render as a dash in the recipient's inbox. Use a slash, comma, hyphen with spaces, or "and"/"but" instead.`);
+  }
+  if (textEncoded.length > 0) {
+    violations.push(`Em-dash as HTML entity found in TEXT body: ${textEncoded.join(', ')}. Use a slash, comma, hyphen with spaces, or "and"/"but" instead.`);
   }
 
   // 2. Double signature - informal signoff WHILE branded signature is present
@@ -138,4 +212,5 @@ module.exports = {
   hasBrandedSignature,
   findInformalSignoff,
   countSignatureBlocks,
+  findEncodedDashes,
 };

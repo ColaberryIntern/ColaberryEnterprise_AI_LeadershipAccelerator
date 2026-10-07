@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Colaberry AI Agent Build Program</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-text:#E5121D; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --leaf:#77BB4A; --leaf-action:#5BA63C; --leaf-text:#468A2E; --leaf-bg:#F1F9EA;
+    --berry:#367895; --berry-hover:#2E6A86; --berry-bg:#EAF2F6;
+    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --bg:#ffffff; --bg-alt:#f7fafc;
+    --ink:#1A202C;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+    color:var(--text); background:#0E1116; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px}
+  .slide{
+    position:absolute; width:1280px; height:720px;
+    background:var(--bg); border-radius:14px; overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);
+    padding:64px 72px 72px 84px;
+    display:none; flex-direction:column;
+    transform-origin:center center;
+  }
+  .slide.on{display:flex}
+  .slide::before{content:"";position:absolute;left:0;top:0;bottom:0;width:10px;background:var(--cherry)}
+
+  .brandbar{position:absolute;top:28px;left:84px;right:72px;display:flex;justify-content:space-between;align-items:center}
+  .wordmark{font-weight:700;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--cherry-text)}
+  .wordmark span{color:var(--muted);font-weight:600}
+  .pagenum{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .kicker{font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--cherry-text);margin:34px 0 14px}
+  h1{font-size:62px;line-height:1.06;font-weight:700;color:var(--ink);margin:0 0 20px;letter-spacing:-.02em}
+  h2{font-size:42px;line-height:1.12;font-weight:700;color:var(--ink);margin:0 0 10px;letter-spacing:-.015em}
+  .sub{font-size:21px;color:var(--muted);margin:0 0 26px;max-width:62ch}
+  .lede{font-size:23px;color:var(--text);max-width:64ch;margin:0 0 26px}
+  p{margin:0 0 14px}
+  strong{color:var(--ink);font-weight:650}
+
+  .pull{
+    margin-top:auto; border-left:5px solid var(--cherry); background:var(--cherry-bg);
+    padding:18px 24px; border-radius:0 10px 10px 0; font-size:19.5px; color:var(--ink);
+  }
+  .pull em{font-style:normal;color:var(--cherry-deep);font-weight:650}
+
+  .ladder{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:8px 0 0}
+  .rung{border:1px solid var(--border);border-radius:12px;padding:20px 20px 22px;background:var(--bg-alt);position:relative;display:flex;flex-direction:column}
+  .rung .n{font-size:12px;font-weight:700;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+  .rung h3{font-size:25px;margin:6px 0 10px;color:var(--ink);font-weight:700;letter-spacing:-.01em}
+  .rung .what{font-size:15.5px;color:var(--text);margin:0 0 12px;flex:1}
+  .rung .tell{font-size:13.5px;color:var(--muted);border-top:1px dashed var(--border);padding-top:10px}
+  .rung .tell b{color:var(--ink);font-weight:650}
+  .rung.r1{border-top:4px solid #CBD5E0}
+  .rung.r2{border-top:4px solid var(--berry)}
+  .rung.r3{border-top:4px solid var(--leaf)}
+  .rung.r4{border-top:4px solid var(--cherry);background:var(--cherry-bg);border-color:#F8C3C6}
+  .rung.r4 h3{color:var(--cherry-deep)}
+  .ours{position:absolute;top:-13px;right:14px;background:var(--cherry);color:#fff;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:999px}
+
+  .cols{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:start}
+  .cols.even{grid-template-columns:1fr 1fr}
+  ul.ticks{list-style:none;padding:0;margin:4px 0 0}
+  ul.ticks li{position:relative;padding-left:34px;margin-bottom:15px;font-size:18px}
+  ul.ticks li::before{
+    content:"";position:absolute;left:0;top:9px;width:18px;height:10px;
+    border-left:3px solid var(--leaf-action);border-bottom:3px solid var(--leaf-action);
+    transform:rotate(-45deg);border-radius:1px;
+  }
+  ul.ticks li b{color:var(--ink);font-weight:650}
+
+  .panel{border:1px solid var(--border);border-radius:12px;padding:22px 24px;background:var(--bg-alt)}
+  .panel.berry{background:var(--berry-bg);border-color:#CBDDE6}
+  .panel.leaf{background:var(--leaf-bg);border-color:#D4EAC2}
+  .panel h4{margin:0 0 12px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--berry-hover);font-weight:700}
+  .panel.leaf h4{color:var(--leaf-text)}
+  .panel p{font-size:16.5px;margin:0 0 10px}
+  .panel p:last-child{margin:0}
+
+  .jobcard{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .jobcard .row{display:grid;grid-template-columns:210px 1fr;border-top:1px solid var(--border)}
+  .jobcard .row:first-child{border-top:0}
+  .jobcard .k{background:var(--bg-alt);padding:12px 18px;font-weight:650;color:var(--ink);font-size:15.5px}
+  .jobcard .v{padding:12px 18px;font-size:16px;color:var(--text)}
+
+  .flow{display:flex;align-items:stretch;margin:6px 0 20px}
+  .node{flex:1;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:#fff;text-align:center}
+  .node .t{font-weight:700;color:var(--ink);font-size:16.5px}
+  .node .d{font-size:13.5px;color:var(--muted)}
+  .arrow{display:flex;align-items:center;padding:0 10px;color:var(--cherry);font-size:22px;font-weight:700}
+
+  .rhythm{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:4px}
+  .rbox{border:1px solid var(--border);border-top:4px solid var(--berry);border-radius:12px;padding:18px 20px;background:#fff}
+  .rbox .big{font-size:30px;font-weight:700;color:var(--ink);line-height:1.1}
+  .rbox .lab{font-size:14px;color:var(--muted);margin-top:4px}
+  .rbox p{font-size:15.5px;margin:10px 0 0}
+
+  .titlewrap{display:flex;flex-direction:column;justify-content:center;height:100%}
+  .meta{display:flex;gap:30px;flex-wrap:wrap;margin-top:28px;padding-top:24px;border-top:1px solid var(--border)}
+  .meta div{font-size:15.5px;color:var(--muted)}
+  .meta b{display:block;color:var(--ink);font-size:17px;font-weight:650;margin-bottom:2px}
+
+
+  .statband{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:4px 0 20px}
+  .stat{border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--bg-alt)}
+  .stat .v{font-size:31px;font-weight:700;color:var(--ink);line-height:1.05;letter-spacing:-.02em}
+  .stat .l{font-size:13px;color:var(--muted);margin-top:2px}
+  .stat.hot{background:var(--cherry-bg);border-color:#F8C3C6}
+  .stat.hot .v{color:var(--cherry-deep)}
+
+  .emp{display:grid;grid-template-columns:18px 1.35fr 1fr 62px 86px;gap:0 12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:14.5px}
+  .emp.hdr{border-bottom:2px solid var(--ink);padding-bottom:7px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .emp .mark{width:8px;height:8px;border-radius:50%;background:#CBD5E0}
+  .emp.live .mark{background:var(--leaf-action)}
+  .emp.open .mark{background:var(--cherry)}
+  .emp .dom{color:var(--ink);font-weight:650}
+  .emp .mgr{color:var(--muted)}
+  .emp .cnt{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);font-weight:650}
+  .emp .st{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:999px;text-align:center}
+  .st.a{background:var(--leaf-bg);color:var(--leaf-text)}
+  .st.b{background:#EDF2F7;color:#4A5568}
+  .st.c{background:var(--berry-bg);color:var(--berry-hover)}
+  .st.d{background:var(--cherry-bg);color:var(--cherry-deep)}
+  .foot{margin-top:12px;font-size:13.5px;color:var(--muted)}
+
+  #bar{position:fixed;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.12);z-index:30}
+  #fill{height:100%;background:var(--cherry);width:0;transition:width .25s ease}
+  #nav{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:9px;z-index:31;align-items:center}
+  .dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.3);border:0;padding:0;cursor:pointer}
+  .dot.on{background:var(--cherry);transform:scale(1.35)}
+  #hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.5);font-size:12.5px;z-index:31;letter-spacing:.04em}
+  #printbtn{position:fixed;top:14px;right:18px;z-index:31;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  #printbtn:hover{background:rgba(255,255,255,.2)}
+
+  @media print{
+    body{background:#fff}
+    #stage{position:static;display:block;padding:0}
+    #bar,#nav,#hint,#printbtn{display:none}
+    .slide{display:flex !important;position:relative;transform:none !important;box-shadow:none;border-radius:0;page-break-after:always;width:100%;height:auto;min-height:9.4in}
+  }
+</style>
+</head>
+<body>
+
+<div id="hint">Arrow keys or click to advance</div>
+<button id="printbtn" onclick="window.print()">Print / PDF</button>
+
+<div id="stage">
+
+  <section class="slide on">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">01 / 08</div></div>
+    <div class="titlewrap">
+      <div class="kicker">AI Agent Build Program</div>
+      <h1>You are not building<br />a chatbot.</h1>
+      <p class="lede">You are going to hire, train, supervise and govern a digital employee. Then you are going to teach it to work with everybody else's.</p>
+      <div class="meta">
+        <div><b>Kes</b>Who you report to</div>
+        <div><b>Twice a week</b>Plus your own cross-agent syncs</div>
+        <div><b>Claude Code and enterprise.colaberry.ai</b>Where all of it happens</div>
+        <div><b>One agent each</b>One system together</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">02 / 08</div></div>
+    <div class="kicker">Know exactly what you are building</div>
+    <h2>Bot. Agent. Agentic. Multi-Agentic.</h2>
+    <p class="sub">These four words get used interchangeably, including by people selling you things. They are not the same, and the difference is not model quality. It is authority.</p>
+    <div class="ladder">
+      <div class="rung r1">
+        <div class="n">Level 1</div><h3>Bot</h3>
+        <div class="what">Fixed rules, fixed triggers. If this, then that. No judgment is ever made, because there is nothing in it capable of judging.</div>
+        <div class="tell"><b>Tell:</b> it cannot surprise you. Not in a good way, and not in a bad one.</div>
+      </div>
+      <div class="rung r2">
+        <div class="n">Level 2</div><h3>Agent</h3>
+        <div class="what">A model makes one judgment call. It drafts, classifies or recommends. You decide when it runs and what happens to the output.</div>
+        <div class="tell"><b>Tell:</b> no tools, no loop, no consequences. It proposes, you dispose.</div>
+      </div>
+      <div class="rung r3">
+        <div class="n">Level 3</div><h3>Agentic</h3>
+        <div class="what">Now it holds tools and authority. It loops: observe, decide, act, read the result, decide again. It owns an outcome rather than a step.</div>
+        <div class="tell"><b>Tell:</b> it can change the world without asking first. That is the whole difference.</div>
+      </div>
+      <div class="rung r4">
+        <div class="ours">We build this</div>
+        <div class="n">Level 4</div><h3>Multi-Agentic</h3>
+        <div class="what">Many agentic agents with distinct jobs, talking to each other. They hand work off, cross-task and escalate. The intelligence lives in the organization.</div>
+        <div class="tell"><b>Tell:</b> no single agent can explain the whole outcome on its own.</div>
+      </div>
+    </div>
+    <div class="pull">The jump from Agent to Agentic is not a better prompt. It is <em>authority</em>. And the moment something holds authority it needs exactly what a new employee needs: a job description, a boundary, an approval path, and a record of what it did.</div>
+  </section>
+
+  <section class="slide">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">03 / 08</div></div>
+    <div class="kicker">The ten employees, and the pile they come out of</div>
+    <h2>256 records. Two employees. Ten jobs.</h2>
+    <div class="statband">
+      <div class="stat"><div class="v">256</div><div class="l">Agent records in production</div></div>
+      <div class="stat hot"><div class="v">2</div><div class="l">Are real employees: Reese, Dara</div></div>
+      <div class="stat hot"><div class="v">229</div><div class="l">Have no accountable manager</div></div>
+      <div class="stat"><div class="v">10</div><div class="l">Employees we consolidate into</div></div>
+    </div>
+    <div class="emp hdr"><div></div><div>Employee domain</div><div>Accountable human</div><div class="cnt">Legacy</div><div>State</div></div>
+    <div class="emp live"><div class="mark"></div><div class="dom">Learner Success</div><div class="mgr">Ali, moving to Kes</div><div class="cnt">11</div><div class="st a">Reese</div></div>
+    <div class="emp live"><div class="mark"></div><div class="dom">Curriculum, Learning &amp; Certification</div><div class="mgr">Swati Raman</div><div class="cnt">8</div><div class="st a">Dara</div></div>
+    <div class="emp"><div class="mark"></div><div class="dom">Marketing Intelligence &amp; Brand</div><div class="mgr">Sohail Syed</div><div class="cnt">40</div><div class="st b">To build</div></div>
+    <div class="emp"><div class="mark"></div><div class="dom">Platform Automation &amp; Reliability</div><div class="mgr">Kes Delele</div><div class="cnt">38</div><div class="st b">To build</div></div>
+    <div class="emp"><div class="mark"></div><div class="dom">Admissions &amp; Applicant Experience</div><div class="mgr">Taiwo Oludimimu</div><div class="cnt">28</div><div class="st b">To build</div></div>
+    <div class="emp"><div class="mark"></div><div class="dom">Sales, Enrollment &amp; Subscriptions</div><div class="mgr">Roselyn</div><div class="cnt">16</div><div class="st b">To build</div></div>
+    <div class="emp"><div class="mark"></div><div class="dom">Website Portfolio &amp; Conversion</div><div class="mgr">Sai Tejesh Kowtharapu</div><div class="cnt">8</div><div class="st c">Greenfield</div></div>
+    <div class="emp"><div class="mark"></div><div class="dom">Internship &amp; Career Readiness</div><div class="mgr">Dhee</div><div class="cnt">1</div><div class="st c">Greenfield</div></div>
+    <div class="emp"><div class="mark"></div><div class="dom">Product Experience &amp; UI/UX</div><div class="mgr">Mohammed Abdul Aleem</div><div class="cnt">0</div><div class="st c">Greenfield</div></div>
+    <div class="emp open"><div class="mark"></div><div class="dom">Executive Intelligence &amp; Governance</div><div class="mgr">Owner not yet decided</div><div class="cnt">75</div><div class="st d">Open</div></div>
+    <div class="foot">A further 21 records (behavioural scoring, alumni, partnerships) have no target domain yet. Four managers still have no admin login.</div>
+    <div class="pull">This is the whole job in one line. Of 256 records, the 2026-09-15 audit classified <em>163 as behaviours, 9 as tools and 62 for retirement</em>. A behaviour is not an employee, it is something an employee <em>does</em>. You are taking a pile of sparse, unmanaged, unaccountable automation and consolidating it into ten employees who each have one human to answer to.</div>
+  </section>
+
+  <section class="slide">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">04 / 08</div></div>
+    <div class="kicker">This is not a sandbox</div>
+    <h2>You get real access to the real system.</h2>
+    <div class="cols">
+      <div>
+        <ul class="ticks">
+          <li><b>A seat inside enterprise.colaberry.ai.</b> The live application, not a copy with the interesting parts taken out.</li>
+          <li><b>Your own agent, and full operation of it.</b> Start it, pause it, re-schedule it, read its run history, see every error it has ever thrown.</li>
+          <li><b>Control of the skills granted to it.</b> You decide which capabilities it holds and which data it may touch. Granting a skill is a decision you will be asked to defend.</li>
+          <li><b>Claude Code as your build environment.</b> This is where you design it, write it, test it and harden it.</li>
+        </ul>
+      </div>
+      <div class="panel berry">
+        <h4>How the work actually goes</h4>
+        <p><b>Build</b> the happy path until it works.</p>
+        <p><b>Break</b> it deliberately. Feed it malformed input. Kill its database mid-run. Fire it twice in one second. Skew its clock.</p>
+        <p><b>Harden</b> every break you found, each with a test that reproduces the original failure.</p>
+        <p style="color:var(--berry-hover);font-weight:650">A feature nobody has tried to break is not finished. It is only untested.</p>
+      </div>
+    </div>
+    <div class="pull">Expect to spend more time testing than writing. That ratio is not a sign you are slow, it is the actual job.</div>
+  </section>
+
+  <section class="slide">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">05 / 08</div></div>
+    <div class="kicker">The standard we are aiming at</div>
+    <h2>Your agent should behave like a colleague.</h2>
+    <p class="sub">You can ask it a question and get a real answer. It opens tickets for work that needs doing. It knows what it is allowed to decide by itself, and what it has to bring to a human.</p>
+    <div class="jobcard">
+      <div class="row"><div class="k">Job description</div><div class="v">The one outcome it owns, written in a sentence, before any code exists.</div></div>
+      <div class="row"><div class="k">Scope of authority</div><div class="v">What it may do unsupervised, and the hard edge where that stops.</div></div>
+      <div class="row"><div class="k">Approval gates</div><div class="v">The actions that need a human to say yes first. Anything irreversible belongs here.</div></div>
+      <div class="row"><div class="k">Escalation rules</div><div class="v">What it does when it is stuck, confused, or asked for something outside its scope. Going quiet is not one of the options.</div></div>
+      <div class="row"><div class="k">Record of work</div><div class="v">Every run, action and failure, in enough detail to reconstruct a bad decision a month later.</div></div>
+    </div>
+    <div class="pull">The hardest requirement is this one. If you cannot tell the difference between your agent working and your agent <em>silently failing</em>, you have not built an employee, you have built a rumour. We hit exactly that in the existing fleet this week: a supervisor that could not distinguish "nothing is wrong" from "I was unable to look", and reported both as healthy.</div>
+  </section>
+
+  <section class="slide">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">06 / 08</div></div>
+    <div class="kicker">Where it gets genuinely hard</div>
+    <h2>One agent each. One system together.</h2>
+    <p class="sub">You own your agent end to end. You will not be working alone, because your agent will not be working alone.</p>
+    <div class="flow">
+      <div class="node"><div class="t">Your agent</div><div class="d">meets a request outside its scope</div></div>
+      <div class="arrow">&#8594;</div>
+      <div class="node"><div class="t">Finds the owner</div><div class="d">which agent owns this decision</div></div>
+      <div class="arrow">&#8594;</div>
+      <div class="node"><div class="t">Hands it off</div><div class="d">files a ticket on their agent</div></div>
+      <div class="arrow">&#8594;</div>
+      <div class="node"><div class="t">Tracks it</div><div class="d">and does not drop it on the floor</div></div>
+    </div>
+    <div class="cols even">
+      <div class="panel">
+        <h4>Agent to agent</h4>
+        <p>Your agent will message other agents directly, pass work across, and cross-task on jobs no single agent can finish alone.</p>
+        <p>Which means you and the other owners have to agree a protocol, not just write good code separately and hope.</p>
+      </div>
+      <div class="panel leaf">
+        <h4>The questions nobody has settled</h4>
+        <p>Who owns a decision that spans two agents? What happens when two agents disagree? How does a handoff get <i>proven</i> rather than assumed?</p>
+        <p>These are the interesting problems, and they are organizational before they are technical.</p>
+      </div>
+    </div>
+    <div class="pull">One agent is an experiment. Ten agents that can delegate to each other, and be held to account for it, is a <em>company</em>.</div>
+  </section>
+
+  <section class="slide">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">07 / 08</div></div>
+    <div class="kicker">How we run</div>
+    <h2>The rhythm of the program.</h2>
+    <div class="rhythm">
+      <div class="rbox">
+        <div class="big">Kes</div><div class="lab">You report here</div>
+        <p>Twice a week, every week. Bring what you built, what broke, and what you decided.</p>
+      </div>
+      <div class="rbox">
+        <div class="big">Each other</div><div class="lab">Owner syncs</div>
+        <p>You meet as agent owners too. Your agents have to interoperate, so you have to first.</p>
+      </div>
+      <div class="rbox">
+        <div class="big">On platform</div><div class="lab">No side channels</div>
+        <p>Schedule the meetings in the app. Collaborate in the app. Build in Claude Code.</p>
+      </div>
+    </div>
+    <div style="margin-top:24px">
+      <ul class="ticks">
+        <li><b>Use the platform you are building on.</b> You will find more real problems as a user of this system than you ever will reading its code.</li>
+        <li><b>Evidence, not adjectives.</b> "It works" means you ran it and can name the test that would have caught it if it did not.</li>
+      </ul>
+    </div>
+    <div class="pull">If something you built cannot be demonstrated live in a twice-weekly meeting, treat that as the finding.</div>
+  </section>
+
+  <section class="slide">
+    <div class="brandbar"><div class="wordmark">Colaberry <span>/ Training</span></div><div class="pagenum">08 / 08</div></div>
+    <div class="kicker">Why this matters past your internship</div>
+    <h2>We are writing the manual, and Anthropic will read it.</h2>
+    <p class="lede">There is no settled, published answer for what it actually takes to turn a language model into a reliable agentic employee, let alone a team of them that cooperate without dropping work. We are going to find out by doing it, and write down every part of it.</p>
+    <div class="cols even">
+      <div class="panel berry">
+        <h4>What gets documented</h4>
+        <p>The decisions. The dead ends. The governance that turned out to matter, and the governance that turned out to be theatre. Everything we had to invent because it did not exist yet.</p>
+      </div>
+      <div class="panel leaf">
+        <h4>What you walk away with</h4>
+        <p>Not a certificate. A system running in production with your name on it, and a written account of how it was built that an AI lab thought was worth reading.</p>
+      </div>
+    </div>
+    <div class="pull">At the end of this you will be able to point at something real and say: <em>I helped build a digital workforce, and here is the manual we wrote while doing it.</em></div>
+  </section>
+
+</div>
+
+<div id="nav"></div>
+<div id="bar"><div id="fill"></div></div>
+
+<script>
+  var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+  var nav = document.getElementById("nav");
+  var fill = document.getElementById("fill");
+  var i = 0;
+
+  slides.forEach(function (_, n) {
+    var b = document.createElement("button");
+    b.className = "dot" + (n === 0 ? " on" : "");
+    b.setAttribute("aria-label", "Go to slide " + (n + 1));
+    b.onclick = function (e) { e.stopPropagation(); go(n); };
+    nav.appendChild(b);
+  });
+  var dots = Array.prototype.slice.call(nav.children);
+
+  function fit() {
+    var pad = 48;
+    var s = Math.min((window.innerWidth - pad) / 1280, (window.innerHeight - pad) / 720, 1);
+    slides.forEach(function (el) { el.style.transform = "scale(" + s + ")"; });
+  }
+
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function (el, k) { el.classList.toggle("on", k === i); });
+    dots.forEach(function (d, k) { d.classList.toggle("on", k === i); });
+    fill.style.width = ((i + 1) / slides.length * 100) + "%";
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); go(i + 1); }
+    if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(i - 1); }
+    if (e.key === "Home") go(0);
+    if (e.key === "End") go(slides.length - 1);
+  });
+  document.getElementById("stage").addEventListener("click", function () { go(i + 1); });
+  window.addEventListener("resize", fit);
+  fit(); go(0);
+</script>
+</body>
+</html>
