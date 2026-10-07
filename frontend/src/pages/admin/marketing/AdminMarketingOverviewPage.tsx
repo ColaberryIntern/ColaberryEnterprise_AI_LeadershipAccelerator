@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, SectionCard, EmptyState } from '../../../components/admin/shell';
 import NeedsAttentionQueue, { type AttentionItem, type ExcludedSignal } from './NeedsAttentionQueue';
+import MarketingStatTiles, { countPastDue } from './MarketingStatTiles';
 import {
   getNeedsAttention, getMarketingOverview,
   type MarketingOverview, type OverviewAccount, type UpcomingPost,
@@ -151,6 +152,19 @@ export default function AdminMarketingOverviewPage() {
       />
 
       <div className="px-3 py-3">
+        {/*
+          The counts open the section, as in the prototype. They render only when the overview
+          actually loaded - see MarketingStatTiles for why a zero here would be a lie rather than
+          a number.
+        */}
+        <MarketingStatTiles
+          scheduled={ready ? null : upcoming.length}
+          pastDue={ready ? null : countPastDue(upcoming)}
+          publishableChannels={ready ? null : usable}
+          publishedRecently={ready ? null : (overview?.recent.published ?? 0)}
+          recentWindowDays={overview?.recent.window_days ?? 30}
+        />
+
         <div className="row g-3">
           <div className="col-12 col-xl-7">
             <SectionCard title="Needs you" icon="alarm-warning-line" padded={false} className="mb-3">
@@ -202,6 +216,19 @@ export default function AdminMarketingOverviewPage() {
           </div>
 
           <div className="col-12 col-xl-5">
+            {/*
+              "Start something" - from the prototype. The header already carries "+ New post", but
+              that is the only way into the section's other two starting points, and a person who
+              has just read a worklist and found nothing to do has nowhere obvious to go next.
+            */}
+            <SectionCard title="Start something" icon="add-circle-line" className="mb-3">
+              <div className="d-grid gap-2" data-testid="start-something">
+                <Link className="btn btn-sm btn-primary" to="/admin/marketing/composer">+ New post</Link>
+                <Link className="btn btn-sm btn-outline-secondary" to="/admin/marketing/landing-pages">Build a landing page</Link>
+                <Link className="btn btn-sm btn-outline-secondary" to="/admin/marketing/calendar">Open the calendar</Link>
+              </div>
+            </SectionCard>
+
             <SectionCard
               title="Accounts"
               icon="link"
