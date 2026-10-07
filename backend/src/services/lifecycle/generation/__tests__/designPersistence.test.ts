@@ -94,6 +94,15 @@ describeIfDb('the design tables round trip through their models', () => {
     );
     manifestId = (Array.isArray(rows) ? rows[0]?.[0]?.id ?? rows[0]?.id : rows?.id) as string;
     expect(typeof manifestId).toBe('string');
+
+    const holder = await BlueprintDesignDecision.create({
+      tenant_id: TENANT,
+      manifest_id: manifestId,
+      manifest_content_hash: HASH,
+      tier: 'page_family',
+      status: 'draft',
+    });
+    contractDecisionId = holder.id;
   });
 
   afterAll(async () => {
@@ -123,6 +132,12 @@ describeIfDb('the design tables round trip through their models', () => {
     }
     throw new Error('the write SUCCEEDED; the constraint under test did not fire');
   }
+
+  // One decision for the raw-SQL contract writes, and a fresh revision per call so the
+  // uniqueness index never masks the CHECK under test.
+  let contractDecisionId = '';
+  let revisionCounter = 100;
+  const nextRevision = () => { revisionCounter += 1; return revisionCounter; };
 
   const decision = (over: Record<string, unknown> = {}) => ({
     tenant_id: TENANT,
@@ -214,6 +229,45 @@ describeIfDb('the design tables round trip through their models', () => {
     const v = await violation(() => BlueprintVisualContract.create({
       tenant_id: TENANT, decision_id: d.id, revision: 1, acceptable_variance: 1.5,
     }));
+    expect(v.constraint).toBe('ck_visual_contract_variance_fraction');
+  });
+
+  // ─── AMENDMENT 4 ON THE COMPOUND CHECKS.
+  //
+  // `ck_visual_contract_regions_is_array` is TWO conjuncts and shipped with zero isolating
+  // controls: a verifier deleted the second one and the suite stayed at 67/67. I wrote the
+  // amendment that forbids exactly this and applied it to P4-T4’s guards, then shipped a
+  // compound guard of my own two tasks later without it. One control per operand, each
+  // failing the OTHER operand while the one under test holds.
+  //
+  // Raw SQL rather than the model, because a JSONB column typed `string[]` in TypeScript is
+  // exactly what a caller bypasses when the value arrives as JSON. The CHECK is the backstop
+  // for that path, so the test has to use that path.
+  const rawContract = (regions: string, actions: string, variance = '0.02') => sequelize.query(
+    `INSERT INTO blueprint_visual_contracts
+       (tenant_id, decision_id, revision, required_regions, required_actions, acceptable_variance)
+     VALUES (:t, :d, :r, '${regions}'::jsonb, '${actions}'::jsonb, ${variance})`,
+    { replacements: { t: TENANT, d: contractDecisionId, r: nextRevision() } },
+  );
+
+  it('OPERAND 1 of 2: a non-array required_regions is refused while required_actions is valid', async () => {
+    const v = await violation(() => rawContract('"header"', '["approve"]'));
+    expect(v.constraint).toBe('ck_visual_contract_regions_is_array');
+  });
+
+  it('OPERAND 2 of 2: a non-array required_actions is refused while required_regions is valid', async () => {
+    // The conjunct a verifier deleted to prove the guard was untested.
+    const v = await violation(() => rawContract('["header"]', '"approve"'));
+    expect(v.constraint).toBe('ck_visual_contract_regions_is_array');
+  });
+
+  it('PASSING COUNTERPART: both arrays are accepted, so the guard is not a blanket refusal', async () => {
+    await expect(rawContract('["header"]', '["approve"]')).resolves.toBeDefined();
+  });
+
+  it('OPERAND 1 of 2 on the variance range: a NEGATIVE variance is refused', async () => {
+    // Only the `<= 1` half was exercised before, by 1.5. Deleting `>= 0` therefore survived.
+    const v = await violation(() => rawContract('[]', '[]', '-0.5'));
     expect(v.constraint).toBe('ck_visual_contract_variance_fraction');
   });
 

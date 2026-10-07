@@ -584,8 +584,12 @@ actually there:
 
 - the hash is `manifestContentHash({tenantId, projectId, revision, refs})` at
   `blueprintApproval.ts:104-116`, computed over `manifest.refs_json`;
-- **nothing in production writes `refs_json`** — the only writers are
-  `blueprintApproval.test.ts:61` and a raw-SQL concurrency test;
+- **nothing in production writes `refs_json`**, and the root cause is a level deeper than it
+  looks: **production never CREATES a manifest row at all.** `blueprintApproval.ts` only
+  `findOne`s one and `update`s it; every `INSERT` into `operating_blueprint_manifests` is in a
+  test, and after P4-T6 there are three of them (`blueprintApproval.test.ts`, the raw-SQL
+  concurrency test, and P4-T6’s own `designPersistence.test.ts`). An earlier version of this
+  line named two and was stale the moment this task added the third;
 - **no material-vs-cosmetic classifier exists anywhere in `backend/src`**;
 - and the policy it would implement is not written down either:
   `approval-and-change-policy.md:73` says only *"Follows a documented narrower rule"* — a

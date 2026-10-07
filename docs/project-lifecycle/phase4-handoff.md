@@ -6,9 +6,26 @@
 
 ## 1. The one thing in Phase 4 that reaches production on the next deploy
 
-**Two new tables. Nothing else.** Everything else Phase 4 built is pure functions with no
-production caller yet — `grep` finds zero importers outside tests — so its blast radius today is
-zero. The DDL is the exception, and it is **not dark**.
+**Two new tables. Nothing else.** Everything else Phase 4 built is pure functions with **no
+production entry point**, so its blast radius today is zero. The DDL is the exception, and it
+is **not dark**.
+
+Stated precisely, because an earlier version of this line said "`grep` finds zero importers
+outside tests" and that is false — the modules import each other. Measured 2026-10-06:
+
+| module | non-test importers | all of them inside `lifecycle/generation/`? |
+|---|---|---|
+| `workspaceBindingTypes.ts` | 5 | yes |
+| `workspaceBindingChecks.ts` | 3 | yes |
+| `workspaceMapping.ts` | 1 | yes |
+| `designAlternatives.ts` | 1 | yes |
+| `designSelection.ts` | 0 | — |
+| `workspaceStateChecks.ts` | 0 | — |
+| `controlSpecification.ts` | 0 | — |
+
+**Nothing outside that folder imports any of it**, and no route, controller, service or job
+calls any of it. That is the claim that matters for blast radius, and it is a different claim
+from "zero importers".
 
 `verifyProjectLifecycleSchema.ts` records why: a boot-registered `ensure*Schema` runs on the next
 backend deploy by **any** session, regardless of `ENABLE_PROJECT_LIFECYCLE`. So the tables arrive
@@ -71,9 +88,28 @@ Against a throwaway Postgres 16 container, not against production:
 | `verifyProjectLifecycleSchema.ts` | exit **0**, `tables 7/7, indexes 8/8, constraints 6/6` |
 | **negative control** — drop `uq_design_decision_approved_tier`, re-run | exit **1**, naming that index |
 | model round trip through `BlueprintDesignDecision` / `BlueprintVisualContract` | write and read back, JSONB arrays intact |
-| the partial index, the revision index, and both CHECK constraints | each proven by a write that was **refused**, with the assertion naming the constraint that fired |
+| the partial index, the revision index, and **all three** CHECK constraints | each proven by a write that was **refused**, with the assertion naming the constraint that fired |
+| **every operand of the two compound CHECKs** | one isolating control each; deleting any single conjunct fails exactly one NAMED test |
 
 The negative control is the part worth keeping: without it, "exit 0" only means the script ran.
+
+**An earlier version of this table said "both CHECK constraints" while §4 said three — and the
+third was the one with no behavioural test at all.** A verifier found it by deleting one
+conjunct of `ck_visual_contract_regions_is_array` and watching 67 of 67 tests still pass. That
+miscount is exactly what concealed the gap from this document, which is why the count is now
+spelled out and the per-operand row is above.
+
+Mutation evidence, each applied to a **fresh** database so the mutated DDL is what gets created
+(against the seeded one `CREATE TABLE IF NOT EXISTS` is a no-op and the mutation is inert):
+
+```
+baseline on a fresh database                    12/12
+delete the required_actions conjunct            11/12  OPERAND 2 of 2: a non-array required_actions is refused...
+delete the required_regions conjunct            11/12  OPERAND 1 of 2: a non-array required_regions is refused...
+delete `acceptable_variance >= 0`               11/12  OPERAND 1 of 2 on the variance range: a NEGATIVE variance is refused
+delete `acceptable_variance <= 1`               11/12  the variance CHECK refuses a value outside 0..1...
+SURVIVORS: none
+```
 
 **Phase 4 does not deploy**, so it cannot run step 2 — which is why step 2 is written as an
 obligation here rather than claimed as done.

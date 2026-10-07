@@ -30,6 +30,18 @@ const queryMock = sequelize.query as unknown as jest.Mock;
 // Tables that already exist at base and may therefore be referenced but never altered.
 const PRE_EXISTING = ['tenants', 'projects', 'delivery_projects'];
 
+/**
+ * Does any CHECK clause in this DDL mention the given column?
+ *
+ * Covers the inline column form AND the table-level `CONSTRAINT name CHECK (...)` form. The
+ * first version of the absence assertion only matched the inline one, which a verifier
+ * demonstrated by adding a table-level constraint that all 30 tests then accepted.
+ */
+function mentionedInAnyCheck(sql: string, column: string): boolean {
+  const clauses = [...sql.matchAll(/CHECK\s*\(([\s\S]*?)\)\s*(?:,|\)|$)/gi)].map((m) => m[1]);
+  return clauses.some((c) => new RegExp(`\\b${column}\\b`, 'i').test(c));
+}
+
 /** The additive predicate, extracted so the positive control can exercise the same code path. */
 function isAdditive(sql: string): boolean {
   const s = sql.trim().toUpperCase();
@@ -234,11 +246,22 @@ describe('the invariants the approval ladder depends on', () => {
     const decisions = PROJECT_LIFECYCLE_STATEMENTS
       .filter((sql) => /blueprint_design_decisions/i.test(sql))
       .join(' ');
-    expect(decisions).not.toMatch(/tier\s+TEXT[^,]*CHECK/i);
-    expect(decisions).not.toMatch(/status\s+TEXT[^,]*CHECK/i);
+    // Reads every CHECK clause, inline or table-level. The first version only matched the
+    // INLINE column form, so a verifier added a table-level
+    // `CONSTRAINT ck_… CHECK (tier IN (…))` and all 30 tests passed — the assertion did not
+    // cover the form someone would most naturally write.
+    expect(mentionedInAnyCheck(decisions, 'tier')).toBe(false);
+    expect(mentionedInAnyCheck(decisions, 'status')).toBe(false);
     expect(decisions).not.toMatch(/variant_count[^,]*<=/i);
     // and the control that this filter found the statements at all
     expect(decisions).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_design_decisions/i);
+  });
+
+  it('POSITIVE CONTROL: the absence helper catches BOTH forms of a vocabulary CHECK', () => {
+    // Without this the assertion above could pass by being unable to see anything.
+    expect(mentionedInAnyCheck("tier TEXT NOT NULL CHECK (tier IN ('a'))", 'tier')).toBe(true);
+    expect(mentionedInAnyCheck("CONSTRAINT ck_x CHECK (tier IN ('a','b'))", 'tier')).toBe(true);
+    expect(mentionedInAnyCheck("CONSTRAINT ck_y CHECK (jsonb_typeof(dna_facets) = 'array')", 'tier')).toBe(false);
   });
 
   it('POSITIVE CONTROL: the design assertions are not satisfied by any other table', () => {
