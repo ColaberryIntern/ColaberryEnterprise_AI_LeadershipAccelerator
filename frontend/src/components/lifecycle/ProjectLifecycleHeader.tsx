@@ -38,7 +38,7 @@ const ProjectLifecycleHeader: React.FC<{ status: LifecycleStatus }> = ({ status 
   return (
     <div className="card border-0 shadow-sm mb-4" data-testid="lifecycle-header">
       <div className="card-body">
-        <div className="d-flex align-items-center gap-2 mb-2">
+        <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
           <span className="fs-5 fw-bold text-primary" data-testid="lifecycle-stage">
             {status.stage}
           </span>

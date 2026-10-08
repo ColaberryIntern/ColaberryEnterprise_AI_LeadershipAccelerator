@@ -53,7 +53,7 @@ const BlueprintChangeRequest: React.FC<Props> = ({ revision, onSubmit }) => {
           data-testid="change-request-text"
           onChange={(e) => setText(e.target.value)}
         />
-        <div className="d-flex align-items-center gap-2 mt-2">
+        <div className="d-flex align-items-center flex-wrap gap-2 mt-2">
           <button
             type="button"
             className="btn btn-primary btn-sm"

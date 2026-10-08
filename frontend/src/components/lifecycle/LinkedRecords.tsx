@@ -33,7 +33,7 @@ const VIA_LABEL: Readonly<Record<ConnectedGroup['via'], string>> = {
 
 const Group: React.FC<{ group: ConnectedGroup }> = ({ group }) => (
   <div className="border-bottom py-2" data-testid={`linked-group-${group.target}`}>
-    <div className="d-flex align-items-baseline gap-2">
+    <div className="d-flex align-items-baseline flex-wrap gap-2">
       <span className="fw-semibold small">{TARGET_LABEL[group.target]}</span>
       {/* The route the connection came through, so a reviewer can tell a traversed edge from a
           guess. An unlabelled link invites more trust than the data supports. */}
