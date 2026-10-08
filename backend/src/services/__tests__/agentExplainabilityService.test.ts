@@ -24,6 +24,12 @@ jest.mock('../../models/ProposedAgentAction', () => ({
   default: { findAll: (...a: any[]) => mockProposedActionFindAll(...a) },
 }));
 
+const mockApprovalRequestFindAll = jest.fn();
+jest.mock('../../models/ApprovalRequest', () => ({
+  __esModule: true,
+  default: { findAll: (...a: any[]) => mockApprovalRequestFindAll(...a) },
+}));
+
 import { Op } from 'sequelize';
 import { getAgentExplainability } from '../agentExplainabilityService';
 
@@ -34,6 +40,7 @@ beforeEach(() => {
   mockAiAgentFindByPk.mockResolvedValue(AGENT);
   mockEventFindAll.mockResolvedValue([]);
   mockProposedActionFindAll.mockResolvedValue([]);
+  mockApprovalRequestFindAll.mockResolvedValue([]);
 });
 
 describe('getAgentExplainability', () => {
@@ -51,6 +58,7 @@ describe('getAgentExplainability', () => {
 
     expect(result!.events).toEqual([]);
     expect(result!.proposedActions).toEqual([]);
+    expect(result!.approvalRequests).toEqual([]);
   });
 
   it('queries ai_events matched under EITHER the real agent UUID or the agent_name — historical authorization events use either', async () => {
@@ -136,5 +144,60 @@ describe('getAgentExplainability', () => {
     });
     expect((result!.proposedActions[0] as any).before_state).toBeUndefined();
     expect((result!.proposedActions[0] as any).proposed_changes).toBeUndefined();
+  });
+
+  // Decision Journal enrichment (2026-10-03) — approval_requests has no agent_id
+  // column; agent_name is the real, indexed match key (ApprovalRequest.ts).
+  it('queries approval_requests by the real agent_name, not agent id', async () => {
+    await getAgentExplainability('agent-uuid-1');
+
+    const call = mockApprovalRequestFindAll.mock.calls[0][0];
+    expect(call.where).toEqual({ agent_name: 'CoryBrain' });
+  });
+
+  it('happy path: an approval request exposes the real decision lifecycle fields, never prepared_action/ticket_id/work_unit_id/run_id/event_id', async () => {
+    mockApprovalRequestFindAll.mockResolvedValue([
+      {
+        action: 'reese_autonomous_outreach', verdict: 'would_require_approval', risk_tier: 'R3',
+        autonomy_level: 'communicate', status: 'approved', reason_code: 'requires_approval:high_risk_tier',
+        decided_by: 'ali@colaberry.com', decided_at: new Date('2026-10-03T12:00:00Z'),
+        decision_channel: 'admin_ui', replayed_at: new Date('2026-10-03T12:00:05Z'),
+        expires_at: new Date('2026-10-03T16:00:00Z'), created_at: new Date('2026-10-03T08:00:00Z'),
+        ticket_id: 'ticket-1', work_unit_id: 'wu-1', run_id: 'run-1', event_id: 'event-1',
+        prepared_action: { studentEnrollmentId: 'enr-1', content: 'hello' },
+      },
+    ]);
+
+    const result = await getAgentExplainability('agent-uuid-1');
+
+    expect(result!.approvalRequests[0]).toEqual({
+      action: 'reese_autonomous_outreach', verdict: 'would_require_approval', riskTier: 'R3',
+      autonomyLevel: 'communicate', status: 'approved', reasonCode: 'requires_approval:high_risk_tier',
+      decidedBy: 'ali@colaberry.com', decidedAt: new Date('2026-10-03T12:00:00Z'),
+      decisionChannel: 'admin_ui', replayedAt: new Date('2026-10-03T12:00:05Z'),
+      expiresAt: new Date('2026-10-03T16:00:00Z'), createdAt: new Date('2026-10-03T08:00:00Z'),
+    });
+    expect((result!.approvalRequests[0] as any).prepared_action).toBeUndefined();
+    expect((result!.approvalRequests[0] as any).ticket_id).toBeUndefined();
+    expect((result!.approvalRequests[0] as any).event_id).toBeUndefined();
+  });
+
+  it('boundary: a pending approval request with no decision yet exposes null decidedBy/decidedAt/decisionChannel/replayedAt, never fabricated', async () => {
+    mockApprovalRequestFindAll.mockResolvedValue([
+      {
+        action: 'reese_reply', verdict: 'would_require_approval', risk_tier: 'R3', autonomy_level: 'communicate',
+        status: 'pending', reason_code: 'requires_approval:high_risk_tier', decided_by: null, decided_at: null,
+        decision_channel: null, replayed_at: null, expires_at: new Date('2026-10-03T16:00:00Z'),
+        created_at: new Date('2026-10-03T12:00:00Z'),
+      },
+    ]);
+
+    const result = await getAgentExplainability('agent-uuid-1');
+
+    expect(result!.approvalRequests[0].decidedBy).toBeNull();
+    expect(result!.approvalRequests[0].decidedAt).toBeNull();
+    expect(result!.approvalRequests[0].decisionChannel).toBeNull();
+    expect(result!.approvalRequests[0].replayedAt).toBeNull();
+    expect(result!.approvalRequests[0].status).toBe('pending');
   });
 });

@@ -49,6 +49,18 @@ const EXPLAINABILITY: AgentExplainability = {
   proposedActions: [
     { actionType: 'propose_content_rewrite', reason: 'Onboarding copy is stale', status: 'pending', confidence: 0.74, createdAt: '2026-09-01T00:00:00Z', reviewedAt: null },
   ],
+  approvalRequests: [
+    {
+      action: 'reese_autonomous_outreach', verdict: 'would_require_approval', riskTier: 'R3', autonomyLevel: 'communicate',
+      status: 'pending', reasonCode: 'requires_approval:high_risk_tier', decidedBy: null, decidedAt: null,
+      decisionChannel: null, replayedAt: null, expiresAt: '2026-09-02T00:00:00Z', createdAt: '2026-09-01T12:00:00Z',
+    },
+    {
+      action: 'reese_reply', verdict: 'would_require_approval', riskTier: 'R3', autonomyLevel: 'communicate',
+      status: 'approved', reasonCode: 'requires_approval:high_risk_tier', decidedBy: 'ali@colaberry.com', decidedAt: '2026-09-01T13:00:00Z',
+      decisionChannel: 'admin_ui', replayedAt: '2026-09-01T13:00:05Z', expiresAt: '2026-09-01T17:00:00Z', createdAt: '2026-09-01T09:00:00Z',
+    },
+  ],
 };
 
 let container: HTMLDivElement;
@@ -311,11 +323,52 @@ describe('AgentWorkDecisionsTab — Decision Journal', () => {
     getAgentExplainability.mockResolvedValue({ agentId: 'agent-1', agentName: 'X', events: [], proposedActions: [] });
     await renderTab();
     expect(container.textContent).toContain('No events or proposals recorded for this agent yet.');
+    // Decision Journal enrichment (2026-10-03) — this fixture has no
+    // approvalRequests key at all (an older response shape), proving the
+    // component treats a missing field as empty rather than crashing.
+    expect(container.textContent).toContain('No approval requests recorded for this agent yet.');
   });
 
   it('shows a real, honest error message when the journal fails to load, never a silent failure', async () => {
     getAgentExplainability.mockRejectedValue({ response: { data: { error: 'Explainability service unavailable' } } });
     await renderTab();
     expect(container.textContent).toContain('Explainability service unavailable');
+  });
+});
+
+describe('AgentWorkDecisionsTab — Approval Requests (Decision Journal enrichment, 2026-10-03)', () => {
+  it('renders the title, hint, and both real rows action/status/verdict text', async () => {
+    await renderTab();
+    expect(container.textContent).toContain('Approval Requests');
+    expect(container.textContent).toContain('ticket-dispatch authorization history');
+    expect(container.textContent).toContain('reese_autonomous_outreach');
+    expect(container.textContent).toContain('reese_reply');
+    expect(container.textContent).toContain('would_require_approval');
+  });
+
+  it('a pending row shows the expiry and a link to the real Approval Requests admin page, never a decided-by line', async () => {
+    await renderTab();
+    expect(container.textContent).toContain('Awaiting review — expires');
+    expect(container.textContent).toContain('Review in Approval Requests');
+    const link = Array.from(container.querySelectorAll('a')).find((a) => a.textContent === 'Review in Approval Requests');
+    expect(link?.getAttribute('href')).toBe('/admin/approval-requests');
+  });
+
+  it('an approved row shows who decided it, via which channel, and that it was replayed', async () => {
+    await renderTab();
+    expect(container.textContent).toContain('Decided by ali@colaberry.com via admin_ui');
+    expect(container.textContent).toContain('replayed');
+  });
+
+  it('shows the honest empty state when there are zero approval requests', async () => {
+    getAgentExplainability.mockResolvedValue({ ...EXPLAINABILITY, approvalRequests: [] });
+    await renderTab();
+    expect(container.textContent).toContain('No approval requests recorded for this agent yet.');
+  });
+
+  it('shows a real, honest error message when the fetch fails, never a silent blank card', async () => {
+    getAgentExplainability.mockRejectedValue({ response: { data: { error: 'Explainability service unavailable' } } });
+    await renderTab();
+    expect(container.textContent).toContain('Could not load approval requests: Explainability service unavailable');
   });
 });
