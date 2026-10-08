@@ -14,7 +14,9 @@ import { LIFECYCLE, LIFECYCLE_STAGES, LifecycleStage } from '../lifecycle';
 import { canSeeStage } from '../personScope';
 import { MGMT_ROLE_DEFS } from '../../access/mgmtRoles';
 import { POST_CONVERSION_STAGES } from '../panels/acquisitionPanels';
+import { modeForStage } from '../strategyBriefService';
 import {
+  ENROLLMENT_FACTS_JOIN,
   ENROLLMENT_FACTS_SQL,
   HAS_PROGRAM_ACCESS_SQL,
   IS_CONVERTED_SQL,
@@ -63,8 +65,24 @@ describe('T209 — role visibility for the new stage, asserted explicitly', () =
   it('hides Explorers from Support, Program and mentors, who deal with students', () => {
     // This is the access CONSEQUENCE of the fix, chosen rather than inherited: a
     // free account is not a student, so the student-facing roles stop seeing them.
+    //
+    // `curriculum` was MISSING here until a verifier's mutation survived: adding
+    // 'explorer' to the `program` section stayed contiguous (so the contiguity
+    // test could not catch it) and nothing else asserted it, while this test's
+    // own title claimed Program was covered. The title promised more than the
+    // assertions delivered — the exact defect class this phase keeps finding.
     expect(canSeeStage(sectionsFor('support'), 'explorer')).toBe(false);
     expect(canSeeStage(sectionsFor('mentor'), 'explorer')).toBe(false);
+    expect(canSeeStage(sectionsFor('curriculum'), 'explorer')).toBe(false);
+  });
+
+  it('names the section each of those roles holds, so the mapping is not assumed', () => {
+    // The role→section indirection is why the gap above was invisible: the
+    // contiguity test guards SECTIONS, and this asserts which section each
+    // student-facing role actually holds.
+    expect(sectionsFor('curriculum')).toContain('program');
+    expect(sectionsFor('mentor')).toContain('career_review');
+    expect(sectionsFor('support')).toContain('students');
   });
 
   it('still gives the owner every stage, including the new one', () => {
@@ -185,6 +203,72 @@ describe('T210 — drift tripwires: one definition, two importers', () => {
       expect(src(file)).toContain('ENROLLMENT_FACTS_SQL');
       expect(src(file)).toContain('ENROLLMENT_FACTS_JOIN');
     }
+  });
+});
+
+describe('T210 — the strategy-brief mode change, which is the operator-visible consequence', () => {
+  /**
+   * T210 acceptance 7, which the first attempt MISSED ENTIRELY — and it is the
+   * most visible effect of the whole fix. `strategyBriefService.ts` had no test
+   * file at all, so this was untested rather than untestable.
+   *
+   * Before: a free Explorer was staged `enrolled_student`, so a rep opening
+   * their brief was told there is NOTHING TO SELL. For ~260 production rows on
+   * 2026-10-07, the brief actively argued against the conversation the whole
+   * Explorer Growth programme exists to have.
+   */
+  it('gives an Explorer a SALES brief, not a coaching one', () => {
+    const m = modeForStage('explorer');
+    expect(m.mode).toBe('sales');
+    // The reason, not just the enum: the framing is what a rep actually reads.
+    expect(m.reason).toContain('have not enrolled');
+  });
+
+  it('still gives a paid learner the COACHING brief, so the fix did not invert it', () => {
+    const m = modeForStage('enrolled_student');
+    expect(m.mode).toBe('coaching');
+    expect(m.reason).toContain('nothing to sell');
+  });
+
+  it('leaves every other stage mapping untouched', () => {
+    expect(modeForStage('lapsed').mode).toBe('winback');
+    expect(modeForStage('lead').mode).toBe('sales');
+    expect(modeForStage('applicant').mode).toBe('sales');
+    for (const stage of ['active_learner', 'graduate', 'returning_customer']) {
+      expect(modeForStage(stage).mode).toBe('coaching');
+    }
+  });
+});
+
+describe('T210 — one DELIBERATE asymmetry, named rather than left to be discovered', () => {
+  /**
+   * `past_due` is treated differently by the two halves of the conversion rule,
+   * and a verifier was right that leaving it unstated was the same split-brain
+   * T210 set out to remove.
+   *
+   *   SQL  (`ENROLLMENT_FACTS_JOIN`): status IN ('active','past_due')
+   *   TS   (`customerFactFor`):       status: 'active' only
+   *
+   * Both are defensible and the difference is intentional. The STAGE must keep a
+   * card-failure student in the programme — demoting them to `explorer` mid-dunning
+   * would strip their curriculum over a billing retry. The CUSTOMER FACT is a
+   * revenue question, and a pre-existing named test pins it to `'active'` alone.
+   * Unifying them would overturn that deliberate decision for no benefit, so the
+   * asymmetry is pinned here instead of being quietly inherited.
+   */
+  it('counts past_due as program access in the SQL half', () => {
+    expect(ENROLLMENT_FACTS_JOIN).toContain("status IN ('active','past_due')");
+  });
+
+  it('does NOT count past_due in the TS customer fact, and that is on purpose', () => {
+    const resolver = src('../growthJourney/subjectResolver.ts');
+    expect(resolver).toContain("status: 'active', plan: { [Op.ne]: 'comp' }");
+    expect(resolver).not.toContain("'past_due'");
+  });
+
+  it('records the asymmetry in the module itself, not only here', () => {
+    // So a reader of the code finds it, not just a reader of the tests.
+    expect(src('conversionState.ts')).toContain('DELIBERATE ASYMMETRY');
   });
 });
 

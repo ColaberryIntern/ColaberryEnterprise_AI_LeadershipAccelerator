@@ -335,7 +335,7 @@ So whichever he picks is already enforceable.
    unpaid Explorer is no longer post-conversion and its temperature and lead score are no
    longer nulled:
 
-`backend/src/services/adminOs/conversionState.ts:94` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
+`backend/src/services/adminOs/conversionState.ts:110` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
    and that stage is treated as post-conversion, which nulls temperature and lead score
    **on the server**, not merely hiding them in the UI:

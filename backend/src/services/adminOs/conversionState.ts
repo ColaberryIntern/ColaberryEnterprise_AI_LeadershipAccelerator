@@ -60,6 +60,22 @@ export const ENROLLMENT_FACTS_JOIN =
   `LEFT JOIN subscriptions s ON s.enrollment_id = e.id AND s.status IN ('active','past_due')`;
 
 /**
+ * DELIBERATE ASYMMETRY on `past_due`, stated here so it is not discovered later.
+ *
+ *   this SQL half          -> status IN ('active','past_due')
+ *   `customerFactFor` (TS) -> status: 'active' only
+ *
+ * The STAGE must keep a card-failure student inside the programme: re-staging
+ * them to `explorer` mid-dunning would strip their curriculum over a billing
+ * retry. The CUSTOMER FACT is a revenue question, and a pre-existing named test
+ * pins it to `'active'` alone — "a canceled or past_due one is not asked for".
+ *
+ * So this is not the drift T210 exists to remove; it is two different questions
+ * answered differently on purpose, and a test pins both sides. Unify them only
+ * if you intend to overturn that pinned decision.
+ */
+
+/**
  * ONE conversion definition, as SQL over the aggregated facts.
  *
  * Deliberately excludes `has_comp_seat`: a granted seat is not revenue. The

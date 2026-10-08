@@ -51,19 +51,30 @@ const stripComments = (s: string): string => s
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/^\s*\/\/.*$/gm, '');
 
-const row = (over: Record<string, unknown> = {}) => ({
-  id: 'h-1',
-  status: 'queued',
-  brand_id: 'brand-1',
-  owner_queue: 'sales',
-  assignment_blocked_reason: null as string | null,
-  evidence: {},
-  update: jest.fn(async function patch(this: Record<string, unknown>, p: Record<string, unknown>) {
-    Object.assign(this, p);
-    return this;
-  }),
-  ...over,
-});
+/**
+ * The patch is applied through a CLOSURE over the row, not through `this`.
+ *
+ * The first version used `jest.fn(async function (this, p) { Object.assign(this, p) })`,
+ * which passed when the suite ran alone and failed in a batch run: the row's
+ * `assignment_blocked_reason` came back null because the `this` binding inside a
+ * mocked method is not something to rely on. A closure is deterministic.
+ */
+const row = (over: Record<string, unknown> = {}) => {
+  const r: Record<string, unknown> = {
+    id: 'h-1',
+    status: 'queued',
+    brand_id: 'brand-1',
+    owner_queue: 'sales',
+    assignment_blocked_reason: null,
+    evidence: {},
+    ...over,
+  };
+  r.update = jest.fn(async (p: Record<string, unknown>) => {
+    Object.assign(r, p);
+    return r;
+  });
+  return r as typeof r & { update: jest.Mock; assignment_blocked_reason: string | null };
+};
 
 beforeEach(() => {
   policyFindOne.mockReset();
@@ -193,9 +204,17 @@ describe('T214 — zero new GHL code paths', () => {
     const repo = path.join(__dirname, '..', '..', '..', '..', '..', '..');
     let out = '';
     try {
+      // EXCLUDES ITS OWN SOURCE, by pathspec. This scan matched the pattern
+      // literal in this very file — three times — the moment the file became
+      // tracked, so the suite was green while untracked and red once committed.
+      // `git grep` only searches TRACKED files, which is why the false green.
+      // The fix is a pathspec exclusion, NOT a narrower pattern: weakening the
+      // pattern to dodge a self-match is how a tripwire stops protecting
+      // anything. The line-206 positive control proves the scan still works.
       out = execFileSync('git', [
         'grep', '-n', '-i', '-E', 'services[.]leadconnectorhq|free-slots',
         '--', 'backend/src',
+        ':!backend/src/services/growthJourney/handoffs/__tests__/ownerIsConfiguration.test.ts',
       ], { cwd: repo, encoding: 'utf8' }) as string;
     } catch {
       out = '';   // git grep exits 1 on no matches, which is the pass

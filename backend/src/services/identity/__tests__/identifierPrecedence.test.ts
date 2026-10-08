@@ -93,16 +93,33 @@ describe('T208 — the existing builders agree with the shared one', () => {
     expect(subjectRefFrom(a)).toBe(expected);
   });
 
-  it('extends it with the two prefixes inputs.subjectRefOf adds, and no more', () => {
-    // `subjectRefOf` is not imported: it pulls the models index and the
-    // classification graph with it. Its two extra cases are asserted by shape
-    // here, and the allowlist tripwire below is what catches a fifth.
-    expect(subjectRefFrom({ orgMemberId: 'om-1' })).toBe('org_member:om-1');
-    expect(subjectRefFrom({ visitorId: 'vis-1' })).toBe('visitor:vis-1');
-    // Enrollment and lead still win over both, so the shared key cannot change
-    // for any subject the other builders already key.
-    expect(subjectRefFrom({ orgMemberId: 'om-1', leadId: 7 })).toBe('lead:7');
-    expect(subjectRefFrom({ visitorId: 'vis-1', enrollmentId: 'enr-1' })).toBe('enrollment:enr-1');
+  /**
+   * Asserted against the REAL `subjectRefOf` too, because the acceptance says
+   * "the existing resolverS agree" — plural.
+   *
+   * Attempt 1 asserted these two prefixes "by shape", i.e. against the new
+   * module's own logic, which is tautological for exactly the two prefixes the
+   * `anchorFromSubjectRef` gap makes load-bearing. The stated reason — that
+   * importing `inputs.ts` pulls the models index and the classification graph —
+   * is literally true and turned out not to be prohibitive: it imports and runs,
+   * it is just slow. An excuse, not a constraint.
+   */
+  it.each([
+    [{ org_member_id: 'om-1' }, 'org_member:om-1'],
+    [{ visitor_id: 'vis-1' }, 'visitor:vis-1'],
+    [{ org_member_id: 'om-1', lead_id: 7 }, 'lead:7'],
+    [{ visitor_id: 'vis-1', enrollment_id: 'enr-1' }, 'enrollment:enr-1'],
+  ])('agrees with classification/inputs.subjectRefOf for %j', (view, expected) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- heavy import, kept local
+    const { subjectRefOf } = require('../../growthJourney/classification/inputs');
+    const v = view as Record<string, unknown>;
+    expect(subjectRefOf(v)).toBe(expected);
+    expect(subjectRefFrom({
+      enrollmentId: v.enrollment_id as string | undefined,
+      leadId: v.lead_id as number | undefined,
+      orgMemberId: v.org_member_id as string | undefined,
+      visitorId: v.visitor_id as string | undefined,
+    })).toBe(expected);
   });
 });
 
@@ -182,10 +199,23 @@ describe('T208 — the tripwire: every file that builds a subject key is account
     .filter((f) => !/__tests__|\.test\./.test(f))
     .sort();
 
-  /** Two SANCTIONED builders. */
+  /**
+   * THREE sanctioned builders, and the third one was missing until a verifier
+   * found this suite RED at the delivered commit.
+   *
+   * `git grep` searches only TRACKED files. This suite was run while
+   * `identifierPrecedence.ts` was still untracked, so the scan could not see the
+   * very module it ships with — and that module builds `enrollment:${...}` and
+   * `lead:${...}`, so it matches this pattern and belongs here. The moment
+   * `git add` ran, the tripwire went red.
+   *
+   * The lesson is about the ORDER of verification, not this list: stage the files
+   * BEFORE running any suite whose assertions shell out to `git`.
+   */
   const SANCTIONED_BUILDERS = [
     'backend/src/models/GrowthJourneyEnrollment.ts',
     'backend/src/services/growthJourney/classification/inputs.ts',
+    'backend/src/services/identity/identifierPrecedence.ts',
   ];
 
   /**

@@ -71,7 +71,7 @@ of type, tier or payment, and post-conversion stages null the score on the serve
 **CLOSED by T210, 2026-10-08** — one shared derivation requiring authoritative paid state,
 plus a new `explorer` lifecycle stage (T209) so the population has a name:
 
-`backend/src/services/adminOs/conversionState.ts:94` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
+`backend/src/services/adminOs/conversionState.ts:110` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
 **Disposition: FIX — Phase 2.** The narrowest correct change is to the stage derivation, not
 to the suppression rule: suppressing intent for someone who really has converted is right.
@@ -252,9 +252,15 @@ external boundary.
 `backend/src/services/leads/ghlAccountRouting.ts:122` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 ### F5 — A corrupt route map fails open to the default account
-**Current:** a deliberate choice with a test asserting it.
-**Disposition: FIX — Phase 4.** A fail-open path inside a fail-closed design contradicts the
-standing constraint, and the standing constraint should win.
+**CLOSED by T214, 2026-10-08** — brought forward from Phase 4 because T214 was already in the
+file. `parseRoutes` now returns `null` for a map that is present but unreadable (and `{}` only
+for a genuinely absent one), and `resolveGhlAccountForSource` returns a `routes_unreadable`
+outcome that callers withhold on. The test that asserted the fail-open was rewritten, and a
+control test asserts an ABSENT map still routes to the default so the fix did not become
+"withhold everything". The withheld activity row that justifies failing closed now has its own
+test. See Part 8.3 of `GHL_CALENDAR_BOUNDARY.md`.
+
+`backend/src/services/leads/ghlAccountRouting.ts:121` → "if (accountKey !== DEFAULT_ACCOUNT) {"
 
 ### F6 — The internal appointment table has no provider id
 **Intent:** §12 requires a mirror carrying external ids for audit and reconciliation.

@@ -77,7 +77,7 @@ Explorer E/I/F and the readiness score.
 requires authoritative paid/subscription state, and the row-existence literal is gone from
 both consumers:
 
-`backend/src/services/adminOs/conversionState.ts:94` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
+`backend/src/services/adminOs/conversionState.ts:110` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
   derives the stage from the mere existence of an enrollment row by email, with no check of
   `enrollment_type`, `tier` or `payment_status`, and that stage is post-conversion, so:
