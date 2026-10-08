@@ -17,7 +17,7 @@ import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
 import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
-import { deriveBidDecision } from './govBidDecision';
+import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -415,6 +415,7 @@ function ResponseSlotRow({ slot, authoring }: { slot: GovResponseSlot; authoring
  * and given commit-bound figures (P4); without it, the checklist is read-only. Honest empty-state.
  */
 function ResponseSlotsChecklist({ slots, authoring }: { slots: GovResponseSlot[]; authoring?: ResponseAuthoring }): React.ReactElement {
+  const [showAll, setShowAll] = useState(false);
   if (!slots || slots.length === 0) {
     return (
       <div className="small text-secondary">
@@ -423,6 +424,9 @@ function ResponseSlotsChecklist({ slots, authoring }: { slots: GovResponseSlot[]
       </div>
     );
   }
+  const LIMIT = 8;
+  const visible = showAll ? slots : slots.slice(0, LIMIT);
+  const hiddenCount = slots.length - visible.length;
   return (
     <>
       <div className="small text-secondary mb-2">
@@ -430,8 +434,13 @@ function ResponseSlotsChecklist({ slots, authoring }: { slots: GovResponseSlot[]
         {authoring?.canAuthor ? ' Draft each, then take it through review → approval; a material amendment reopens an affected answer.' : ' Authoring opens once the pursuit is approved into a project.'}
       </div>
       <ul className="list-unstyled mb-0">
-        {slots.map((s) => <ResponseSlotRow key={s.requirementId} slot={s} authoring={authoring} />)}
+        {visible.map((s) => <ResponseSlotRow key={s.requirementId} slot={s} authoring={authoring} />)}
       </ul>
+      {slots.length > LIMIT && (
+        <button type="button" className="btn btn-link btn-sm px-0 mt-1" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
+          {showAll ? 'Show fewer' : `Show all ${slots.length} (${hiddenCount} more)`}
+        </button>
+      )}
     </>
   );
 }
@@ -1076,35 +1085,17 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {isDecoupled && ws.evaluation && ws.evaluation.evals.length > 0 && (() => {
             const matches = svcMatches ?? [];
             const capability: 'strong' | 'moderate' | 'none' = matches.some((m) => m.strength === 'strong') ? 'strong' : matches.some((m) => m.strength === 'moderate') ? 'moderate' : 'none';
-            const gaps = derivePotentialDisqualifiers(established, ws.evaluation, matches);
-            const decision = deriveBidDecision({
-              establishedCount: ws.evaluation.evals.length,
-              pursuitBlockingCount: (ws.evaluation.pursuitBlocking ?? []).length,
-              openSubmissionCount: (ws.evaluation.openSubmissionRequirements ?? []).length,
-              eligibilityGapCount: gaps.items.filter((g) => g.kind === 'eligibility_gap').length,
-              capability,
-              daysLeft: daysLeft(oppDetail?.opportunity?.closeDate ?? null),
-              estimatedValue: oppDetail?.opportunity?.estimatedValue ?? null,
-            });
-            const tone = decision.band === 'caution' ? 'warning' : decision.band === 'pass' ? 'danger' : 'success';
-            const bandLabel = decision.band === 'strong' ? 'Strong fit' : decision.band === 'pursue' ? 'Worth pursuing' : decision.band === 'caution' ? 'Caution' : 'Lean no-bid';
             return (
-              <SectionCard title="Bid decision — should we pursue this?" icon="scales-3-line"
-                subtitle="A deterministic, advisory read synthesised from the evidence, capability fit, gaps, and deadline. You decide — this feeds no gate and fabricates nothing; every factor below shows its own effect.">
-                <div className="d-flex flex-wrap align-items-center gap-3 mb-3">
-                  <span className={`badge bg-${tone}-subtle text-${tone}-emphasis fs-6 px-3 py-2`}>{bandLabel}</span>
-                  <span className="h4 mb-0">{decision.score}<span className="text-secondary fs-6">/100</span></span>
-                  <span className="fw-semibold">{decision.headline}</span>
-                </div>
-                <ul className="list-unstyled mb-0">
-                  {decision.factors.map((f) => (
-                    <li key={f.key} className="py-1 d-flex align-items-start gap-2">
-                      <i className={`ri-${f.signal === 'good' ? 'checkbox-circle-line text-success' : f.signal === 'concern' ? 'error-warning-line text-danger' : 'information-line text-secondary'} mt-1`} aria-hidden="true" />
-                      <div><span className="fw-semibold small">{f.label}:</span> <span className="small">{f.detail}</span></div>
-                    </li>
-                  ))}
-                </ul>
-              </SectionCard>
+              <BidDecisionDashboard signals={{
+                established,
+                serviceMatches: matches,
+                capability,
+                priorPursuitCount: ws.relationship?.priorCount ?? 0,
+                daysLeft: daysLeft(oppDetail?.opportunity?.closeDate ?? null),
+                estimatedValue: oppDetail?.opportunity?.estimatedValue ?? null,
+                openSubmissionCount: (ws.evaluation.openSubmissionRequirements ?? []).length,
+                establishedCount: ws.evaluation.evals.length,
+              }} />
             );
           })()}
 
@@ -1166,7 +1157,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {isDecoupled && (
-            <SectionCard title="Discovery details" icon="information-line" collapsible defaultOpen={false}
+            <SectionCard title="Discovery details" icon="information-line" collapsible defaultOpen={true}
               subtitle="Why this opportunity surfaced + the source posting. Legacy scores are advisory (not a verified fit); the overview is preliminary and unverified.">
               {oppDetail === null ? (
                 <div className="text-secondary small">Loading discovery details…</div>
@@ -1503,6 +1494,10 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     <i className="ri-shield-check-line me-1" aria-hidden="true" />Approve bid pursuit
                   </button>
                   {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.') : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
+                </div>
+                <div className="small text-secondary mt-2">
+                  <i className="ri-group-line me-1" aria-hidden="true" />
+                  <strong>Separation of duties:</strong> the admin who established the requirements cannot approve the pursuit — a <em>different</em> admin must. Approving as the reviewer is refused server-side (a 403), by design.
                 </div>
               </>
             )}
