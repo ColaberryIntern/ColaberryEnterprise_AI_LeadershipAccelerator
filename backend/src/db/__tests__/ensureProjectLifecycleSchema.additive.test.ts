@@ -25,93 +25,8 @@ import { REQUIRED_TABLES } from '../projectLifecycleSchemaContract';
 /** Tables that existed before this schema. A CREATE here would not be additive. */
 const PRE_EXISTING = ['tenants', 'projects', 'delivery_projects'];
 
-/**
- * Split a comma-separated ALTER action list at PAREN DEPTH ZERO.
- *
- * `NUMERIC(10,2)` and `CHECK (a, b)` carry commas that are not action boundaries, so a plain
- * split on a bare comma would invent actions that are not there, and refuse a
- * legitimate statement for having a precision or a check expression in it.
- */
-function splitActions(body: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let current = '';
-  for (const ch of body) {
-    if (ch === '(') depth += 1;
-    if (ch === ')') depth -= 1;
-    if (ch === ',' && depth === 0) {
-      out.push(current.trim());
-      current = '';
-      continue;
-    }
-    current += ch;
-  }
-  if (current.trim() !== '') out.push(current.trim());
-  return out;
-}
+import { isAdditive, splitActions } from './fixtures/additivePredicate';
 
-/**
- * Is ONE action an additive column add?
- *
- * An ALLOW-LIST, which is the whole point. The previous three versions of this predicate were
- * deny-lists over destructive keywords, and a verifier walked a new shape through each one:
- * a chained second statement, then four constraint forms, then — after I removed the `USING`
- * ban as dead — `ALTER d TYPE INT USING d::INT`, which is valid PostgreSQL that rewrites a
- * populated column and carries NEITHER `ALTER COLUMN` nor `ADD CONSTRAINT`, because `COLUMN`
- * is optional in `ALTER [COLUMN] col [SET DATA] TYPE ty`.
- *
- * A deny-list over SQL is complete only by enumeration, and I was wrong about the grammar
- * twice. This is complete by construction: an action that is not an `ADD COLUMN IF NOT EXISTS`
- * is refused because it is not on the list, not because someone remembered to ban it.
- */
-function isAdditiveAction(action: string): boolean {
-  if (!action.startsWith('ADD COLUMN IF NOT EXISTS ')) return false;
-
-  // Constraints that rewrite, lock or validate a table that already holds rows. These stay as
-  // explicit refusals because they appear INSIDE a permitted action, where the allow-list on
-  // its own cannot see them.
-  if (/\bUNIQUE\b/.test(action)) return false;
-  if (/\bPRIMARY KEY\b/.test(action)) return false;
-  if (/\bCHECK\s*\(/.test(action)) return false;
-  if (/\bGENERATED\b/.test(action)) return false;
-  // An inline FK takes a lock on the REFERENCED table to validate. Every value in a column
-  // added this way is NULL, so it would validate trivially — but the lock is real.
-  if (/\bREFERENCES\b/.test(action)) return false;
-  // NOT NULL without a DEFAULT fails outright on a populated table.
-  if (/\bNOT NULL\b/.test(action) && !/\bDEFAULT\b/.test(action)) return false;
-  return true;
-}
-
-function isAdditive(sql: string): boolean {
-  const s = sql.trim().toUpperCase().replace(/\s+/g, ' ');
-
-  // A SECOND STATEMENT, whichever branch the first one would have matched. The pre-task rule
-  // banned every ALTER, so a chained destructive statement was refused for free; narrowing
-  // re-opened it, and the first fix closed it on the ALTER branch only.
-  const one = s.replace(/;\s*$/, '');
-  if (one.includes(';')) return false;
-
-  const isCreate =
-    one.startsWith('CREATE TABLE IF NOT EXISTS') ||
-    one.startsWith('CREATE INDEX IF NOT EXISTS') ||
-    one.startsWith('CREATE UNIQUE INDEX IF NOT EXISTS');
-
-  // A CREATE of a new object cannot destroy anything, so the branch itself is the guarantee.
-  // DROP and TRUNCATE are still refused here because this predicate guards a HAND-MAINTAINED
-  // statement list: the input it has to survive is what a person might type into that array,
-  // not only what Postgres would accept. Both have controls feeding exactly such a string.
-  if (isCreate) return !/\bDROP\b/.test(one) && !/\bTRUNCATE\b/.test(one);
-
-  // THE ALTER BRANCH. Exactly one table, then an allow-list over every action.
-  const m = /^ALTER TABLE (\S+) (.+)$/.exec(one);
-  if (m === null) return false;
-  // No `actions.length > 0` guard. It survived mutation, so it was measured rather than
-  // assumed: it can only fire for a whitespace-only body, and the regex above cannot
-  // produce one because `s` has already been collapsed, so the character after the table
-  // name is never a space. The premise is pinned by the test named
-  // 'the collapse guarantees a non-empty action list, so no length guard is needed'.
-  return splitActions(m[2]).every(isAdditiveAction);
-}
 
 describe('the project-lifecycle DDL is additive-only, bar one permitted ALTER', () => {
   it('finds a non-trivial statement list, so the sweep cannot pass by scanning nothing', () => {
@@ -183,8 +98,10 @@ describe('the project-lifecycle DDL is additive-only, bar one permitted ALTER', 
   it('positive control: rejects a bare ALTER action that adds no column at all', () => {
     // THE GAP A MUTATION FOUND IN THIS REMEDIATION, not in the original task. Loosening the
     // prefix from `ADD COLUMN IF NOT EXISTS` to any `ALTER TABLE` survived every other test,
-    // because the count check masks it for ADD COLUMN inputs: zero adds equals zero guarded
-    // adds, so the balance holds vacuously. These three carry no ADD COLUMN, so the PREFIX is
+    // because they carry no ADD COLUMN at all, so the allow-list prefix is the only thing
+    // refusing them. (An earlier comment here described a per-statement COUNT CHECK that no
+    // longer exists — the allow-list over actions replaced it. A comment naming a mechanism
+    // the file does not contain is the same defect as a test name asserting one.) The PREFIX is
     // the only thing refusing them — and two of them are genuinely dangerous.
     expect(isAdditive('ALTER TABLE t SET SCHEMA public')).toBe(false);
     expect(isAdditive('ALTER TABLE t OWNER TO someone_else')).toBe(false);
@@ -192,14 +109,15 @@ describe('the project-lifecycle DDL is additive-only, bar one permitted ALTER', 
   });
 
   it('positive control: the DROP operand refuses a drop chained onto a valid ADD COLUMN', () => {
-    // Here the operand IS load-bearing: the prefix matches, the count balances and no column
-    // constraint appears, so only the global DROP ban refuses it.
+    // Here the deny-list is load-bearing: the first action is a permitted ADD COLUMN, so the
+    // allow-list alone would have to rely on the split working to see the second one. LAYER 1
+    // refuses it on the token regardless, which is why both layers exist.
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, DROP COLUMN d')).toBe(false);
   });
 
   it('positive control: the ALTER COLUMN operand refuses a rewrite chained onto an ADD COLUMN', () => {
     // THE SURVIVOR THIS CLOSES. Deleting this operand left the suite green, and the named fix
-    // offered to delete it as dead. It is not dead — this shape reaches `isAddColumn` and the
+    // offered to delete it as dead. It is not dead — this shape reaches the allow-list and the
     // global ban is the only thing refusing it, so deleting it would have opened a hole.
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, ALTER COLUMN d TYPE INT')).toBe(false);
     expect(isAdditive('ALTER TABLE t ALTER COLUMN c TYPE INTEGER')).toBe(false);
@@ -224,6 +142,121 @@ describe('the project-lifecycle DDL is additive-only, bar one permitted ALTER', 
 
   it('positive control: the GENERATED operand refuses a computed column', () => {
     expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT GENERATED ALWAYS AS (1) STORED')).toBe(false);
+  });
+
+  it('GENERATED SWEEP: nothing carrying a destructive token is ever accepted', () => {
+    // THE EVIDENCE THAT WAS MISSING, and it is a TEST rather than a script in a scratch
+    // directory. The previous version of this claim ran a 1,373-case corpus from an uncommitted
+    // generator, so the claim was not re-derivable from the repo (standing rule 1) — and worse,
+    // the corpus contained no CARRIER TOKENS, so it could not see the class of hole it was
+    // supposed to be ruling out. A verifier generated 14,720 cases including carriers and found
+    // 954 distinct destructive shapes accepted.
+    //
+    // Built from components rather than hand-listed, and the carriers are the point: each of
+    // these first-actions ends with an UNBALANCED parenthesis hidden inside a literal, an
+    // identifier or a comment, which is exactly what fooled the splitter.
+    const heads = ['ALTER TABLE t', 'ALTER TABLE operating_blueprint_manifests'];
+    const carriers = [
+      'ADD COLUMN IF NOT EXISTS c TEXT',
+      "ADD COLUMN IF NOT EXISTS c TEXT DEFAULT '('",
+      "ADD COLUMN IF NOT EXISTS c TEXT DEFAULT ')'",
+      "ADD COLUMN IF NOT EXISTS c TEXT DEFAULT 'a (b'",
+      "ADD COLUMN IF NOT EXISTS c TEXT DEFAULT '))('",
+      'ADD COLUMN IF NOT EXISTS c TEXT /* ( */',
+      'ADD COLUMN IF NOT EXISTS c TEXT /* )( */',
+      'ADD COLUMN IF NOT EXISTS "a(b" TEXT',
+      'ADD COLUMN IF NOT EXISTS c TEXT COLLATE "x(y"',
+      'ADD COLUMN IF NOT EXISTS c NUMERIC(10,2)',
+    ];
+    const destructive = [
+      'DROP COLUMN d', 'DROP CONSTRAINT ck', 'TRUNCATE t', 'RENAME COLUMN d TO e',
+      'RENAME TO t2', 'SET UNLOGGED', 'SET LOGGED', 'DISABLE TRIGGER ALL',
+      'ADD CONSTRAINT fk FOREIGN KEY (c) REFERENCES u(id)', 'ADD CONSTRAINT ck CHECK (c > 0)',
+      'ALTER COLUMN d TYPE INTEGER', 'ALTER COLUMN d TYPE INTEGER USING d::INTEGER',
+      'ALTER d TYPE INTEGER', 'ALTER d SET DATA TYPE INTEGER USING d::INTEGER',
+      'ALTER COLUMN d SET NOT NULL', 'ALTER COLUMN d DROP DEFAULT', 'OWNER TO someone_else',
+      'SET SCHEMA public', 'ENABLE ROW LEVEL SECURITY', 'CLUSTER ON i', 'INHERIT parent',
+      'VALIDATE CONSTRAINT ck', 'ADD COLUMN d TEXT',
+    ];
+    const tails = ['', ';'];
+
+    // The tokens that make a statement non-additive. `ADD COLUMN` without `IF NOT EXISTS` counts:
+    // it is not destructive but it is not idempotent, and a re-run throws.
+    const BAD = /DROP|TRUNCATE|RENAME|UNLOGGED|DISABLE TRIGGER|ADD CONSTRAINT|OWNER TO|SET SCHEMA|ROW LEVEL SECURITY|CLUSTER ON|INHERIT|VALIDATE CONSTRAINT|ALTER (COLUMN )?[^ ]+ (SET DATA )?TYPE|ALTER COLUMN/i;
+
+    const wronglyAccepted: string[] = [];
+    let checked = 0;
+    for (const head of heads) {
+      for (const first of carriers) {
+        for (const second of destructive) {
+          for (const tail of tails) {
+            const sql = `${head} ${first}, ${second}${tail}`;
+            checked += 1;
+            if (isAdditive(sql) && BAD.test(sql)) wronglyAccepted.push(sql);
+          }
+        }
+      }
+    }
+
+    // Reported as a LIST, not a count: a bare number tells a reader nothing about which hole.
+    expect(wronglyAccepted).toEqual([]);
+    // Non-vacuity, twice over. Without these the assertion above holds for a generator that
+    // produced nothing, which is how the previous corpus managed to miss an entire class.
+    expect(checked).toBe(heads.length * carriers.length * destructive.length * tails.length);
+    expect(checked).toBeGreaterThan(900);
+    // And the carriers really do carry an unbalanced paren, or they are not carriers at all.
+    const unbalanced = carriers.filter((c) => {
+      const opens = (c.match(/\(/g) ?? []).length;
+      const closes = (c.match(/\)/g) ?? []).length;
+      return opens !== closes;
+    });
+    expect(unbalanced.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it('positive control: a CARRIER TOKEN cannot smuggle a destructive action past the split', () => {
+    // THE REGRESSION THIS CLOSES, and it was mine. `splitActions` counted parens with no idea
+    // what a quote or a comment was, so ONE unbalanced open-paren suppressed the comma split and
+    // glued the destructive action into a string beginning `ADD COLUMN IF NOT EXISTS`. At the
+    // same time I had moved the global DROP / ALTER COLUMN / RENAME bans into the CREATE branch,
+    // so nothing else caught it. A verifier ran the first of these against real Postgres: exit 0,
+    // and a populated column was dropped. 954 distinct destructive shapes were accepted.
+    //
+    // Two layers now. `blankLiterals` stops the carrier reaching the scanner, and the deny-list
+    // is back on BOTH branches so a tokeniser bug cannot be the only thing standing between this
+    // list and a DROP.
+    const NL = String.fromCharCode(10);
+    expect(isAdditive("ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT DEFAULT '(', DROP COLUMN d")).toBe(false);
+    expect(isAdditive("ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT DEFAULT ')', DROP CONSTRAINT ck")).toBe(false);
+    expect(isAdditive("ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT DEFAULT 'a (b', RENAME COLUMN d TO e")).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT /* ( */, ALTER COLUMN d TYPE INTEGER USING d::numeric::INTEGER')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT -- (' + NL + ', DROP COLUMN d')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS "a(b" TEXT, DROP COLUMN d')).toBe(false);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT COLLATE "x(y", DROP COLUMN d')).toBe(false);
+  });
+
+  it('POSITIVE COUNTERPART: a parenthesis in a legitimate literal or precision still passes', () => {
+    // Without these, blanking literals could be satisfied by refusing anything containing a
+    // paren, which would reject the real statement list — it contains VARCHAR(64).
+    expect(isAdditive("ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT DEFAULT 'n/a (unknown)'")).toBe(true);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c NUMERIC(10,2)')).toBe(true);
+    expect(isAdditive('ALTER TABLE t ADD COLUMN IF NOT EXISTS c VARCHAR(64)')).toBe(true);
+  });
+
+  it('positive control: the DENY-LIST refuses a destructive token on the ALTER branch too', () => {
+    // These are the shapes that became acceptable when I moved the deny-list into the CREATE
+    // branch. Each is refused by LAYER 1 now, independently of whether the split works at all —
+    // which is the point of having two layers rather than a better one.
+    for (const action of [
+      'DROP COLUMN d', 'DROP CONSTRAINT ck', 'RENAME COLUMN d TO e', 'SET UNLOGGED',
+      'DISABLE TRIGGER ALL', 'ADD CONSTRAINT fk FOREIGN KEY (c) REFERENCES u(id)',
+      'OWNER TO someone_else', 'SET SCHEMA public', 'ENABLE ROW LEVEL SECURITY',
+      'CLUSTER ON i', 'INHERIT parent', 'VALIDATE CONSTRAINT ck',
+      'ALTER COLUMN d TYPE INTEGER', 'ALTER d TYPE INTEGER', 'ALTER d SET DATA TYPE INTEGER',
+    ]) {
+      expect(isAdditive(`ALTER TABLE t ADD COLUMN IF NOT EXISTS c TEXT, ${action}`)).toBe(false);
+      // and alone, not only when chained behind a permitted action
+      expect(isAdditive(`ALTER TABLE t ${action}`)).toBe(false);
+    }
   });
 
   it('positive control: rejects a chained SECOND statement, whichever branch the first matched', () => {
