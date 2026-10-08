@@ -34,6 +34,16 @@ jest.mock('../../../services/lifecycle/lifecycleStatus', () => ({
   approveLifecycleBlueprint: (...a: any[]) => approveLifecycleBlueprint(...a),
 }));
 
+// The composition module. A factory that enumerates exports silently deletes every one it omits,
+// so this is complete FOR THE ROUTE: `composeBlueprint` is the only symbol the route imports.
+// The composition's own behaviour is tested in its own suite; what is tested here is the route's
+// contract around it — status codes, the id-mismatch refusal, and that both issue lists reach the
+// response.
+const composeBlueprint = jest.fn();
+jest.mock('../../../services/lifecycle/generation/blueprintComposition', () => ({
+  composeBlueprint: (...a: any[]) => composeBlueprint(...a),
+}));
+
 // Partial mocks that KEEP the real helpers, because the route calls refusalStatus and
 // approvalErrorStatus for real and a factory that enumerates exports would delete them.
 jest.mock('../../../services/lifecycle/lifecycleTransition', () => ({
@@ -107,6 +117,7 @@ describe('GATE: the section gate classifies this surface', () => {
     expect(pathToSection(`/api/admin/project-lifecycle/${PROJECT}`)).toBe('program');
     expect(pathToSection(`/api/admin/project-lifecycle/${PROJECT}/transition`)).toBe('program');
     expect(pathToSection(`/api/admin/project-lifecycle/${PROJECT}/approve`)).toBe('program');
+    expect(pathToSection(`/api/admin/project-lifecycle/${PROJECT}/compose`)).toBe('program');
   });
 
   it('does not claim a neighbouring path that merely shares a prefix', () => {
@@ -337,5 +348,101 @@ describe('POST approve', () => {
   it('404s an unknown manifest', async () => {
     approveLifecycleBlueprint.mockRejectedValue(new ManifestNotFoundError());
     expect((await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/approve`).send(body)).status).toBe(404);
+  });
+});
+
+describe('POST /compose, the first non-test caller the pipeline has ever had', () => {
+  // A minimal body that satisfies the SHALLOW schema. It is not a realistic blueprint and is
+  // not meant to be: the composition is mocked here, and its real behaviour is covered by
+  // `blueprintComposition.test.ts` against the generation fixtures.
+  const body = (over: Record<string, unknown> = {}) => ({
+    kind: 'delivery',
+    understanding: [], allocation: [], agents: [], effort: [],
+    project: { id: PROJECT },
+    declaration: { declaration: {}, origin: 'model_turn' },
+    bindings: [], workspaceStates: [], policies: [],
+    design: null,
+    ...over,
+  });
+
+  const composed = (refusals: unknown[] = [], advisories: unknown[] = []) => ({
+    draft: refusals.length === 0 ? { ok: true } : null,
+    selectedDesign: null,
+    refusals,
+    advisories,
+  });
+
+  it('409s with lifecycleDisabled when the flag is off, and never composes', async () => {
+    FLAGS.lifecycleEnforcement = false;
+    const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`).send(body());
+    expect(r.status).toBe(409);
+    expect(r.body.lifecycleDisabled).toBe(true);
+    // The flag check is a REFUSAL, not a skip: nothing downstream may run behind it.
+    expect(composeBlueprint).not.toHaveBeenCalled();
+  });
+
+  it('400s on a body that fails the schema, naming the issues', async () => {
+    const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+      .send({ kind: 'delivery' });
+    expect(r.status).toBe(400);
+    expect(Array.isArray(r.body.issues)).toBe(true);
+    expect(r.body.issues.length).toBeGreaterThan(0);
+    expect(composeBlueprint).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES a body whose project is not the project in the URL', async () => {
+    // Composing project B under project A’s URL would file B’s blueprint against A. Refused
+    // rather than reconciled, because choosing one of the two would be guessing.
+    const other = '33333333-3333-4333-8333-333333333333';
+    const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+      .send(body({ project: { id: other } }));
+    expect(r.status).toBe(400);
+    expect(r.body.errorClass).toBe('ProjectIdMismatch');
+    expect(composeBlueprint).not.toHaveBeenCalled();
+  });
+
+  it('422s when the blueprint refuses, and returns EVERY refusal plus the advisories', async () => {
+    // 422 rather than 400: the request was well formed and the BLUEPRINT is not ready, which
+    // is a different thing for a client to act on.
+    composeBlueprint.mockReturnValue(composed(
+      [{ stage: 'controls', code: 'A' }, { stage: 'design', code: 'B' }],
+      [{ stage: 'workspaces', code: 'W' }],
+    ));
+    const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`).send(body());
+    expect(r.status).toBe(422);
+    expect(r.body.composed).toBe(false);
+    // ALL of them, not the first: a reviewer needs one pass, not a queue of round trips.
+    expect(r.body.refusals.map((x: any) => x.code)).toEqual(['A', 'B']);
+    // And the advisories are carried, because one dropped from the response is a validation
+    // result the reviewer cannot see.
+    expect(r.body.advisories.map((x: any) => x.code)).toEqual(['W']);
+  });
+
+  it('200s when nothing refuses', async () => {
+    composeBlueprint.mockReturnValue(composed());
+    const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`).send(body());
+    expect(r.status).toBe(200);
+    expect(r.body.composed).toBe(true);
+    expect(r.body.refusals).toEqual([]);
+  });
+
+  it('converts roleIds to a SET, because the validator calls .has on it', async () => {
+    // Passing the array straight through would reach `validateControlSpec` as an Array, whose
+    // `.has` is undefined — a 500 at the point a policy names a role, i.e. only on the inputs
+    // that matter. Asserted on the call argument rather than on the response, because the
+    // response is identical either way.
+    composeBlueprint.mockReturnValue(composed());
+    await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+      .send(body({ roleIds: ['role-a', 'role-b'] }));
+    const arg = composeBlueprint.mock.calls[0][0];
+    expect(arg.roleIds instanceof Set).toBe(true);
+    expect(arg.roleIds.has('role-a')).toBe(true);
+  });
+
+  it('threads the correlation id from the header into the composition', async () => {
+    composeBlueprint.mockReturnValue(composed());
+    await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+      .set('X-Correlation-ID', 'corr-abc').send(body());
+    expect(composeBlueprint.mock.calls[0][0].correlationId).toBe('corr-abc');
   });
 });

@@ -657,6 +657,54 @@ incident whose row should cite the incident and the fix, not a summary written m
 someone reading the plan. **Owner: whoever next touches those phases, or Phase 8 when it
 assembles the table.**
 
+### OPEN, raised by P5-T1.4: `EVIDENCE_MEASUREMENTS` cannot be populated from a `LifecycleRow`
+
+`Measurement` is typed `(row: LifecycleRow) => unknown`, and `LifecycleRow` is five columns:
+`id, tenant_id, stage, condition, condition_reason`. **None of the ~25 fields on**
+**`LifecycleEvidence` is derivable from those.** Requirement provenance, process graphs,
+allocation classes and approvals all live elsewhere, so a synchronous function of that row
+cannot measure any of them. The map is empty today for that reason, not by oversight.
+
+**Where the evidence actually lives**, derived rather than guessed: the composition input the
+new `/compose` route accepts carries all of it, and `manifestWriter` persists it as
+`operating_blueprint_manifests.refs_json`. Two fields map EXACTLY onto that shape already:
+
+```
+requirementsWithoutProvenance  <- refs.sources where provenanceKind === null
+                                  (SourceRef: "null means unrecorded. Never inferred.")
+unresolvedSourceBlocks         <- refs.sources where state === open
+                                  (SOURCE_STATES: open = "genuinely undecided")
+```
+
+`requirementCount` deliberately NOT mapped to `refs.sources.length`: `SourceRef` is documented
+as "a requirement **or other captured statement**", so the two are not the same set and
+equating them would be the kind of plausible-looking mapping this phase keeps getting caught on.
+
+**THE BLOCKER IS CONCRETE AND SMALL.** `LifecycleRow` carries no project id, so the manifest
+holding `refs_json` cannot be located from it. The table has `student_project_id` and
+`delivery_project_id` (its CHECK enforces exactly one), so the fix is to widen the SELECT and
+give the measurements a CONTEXT rather than a row:
+
+```
+type Measurement = (ctx: { row: LifecycleRow; refs: ManifestRefs | null }) => unknown;
+```
+
+That keeps `applyMeasurements` pure and synchronous — which is what made it testable with a
+non-empty map after an earlier version could not fail — and moves the I/O into
+`readLifecycleEvidence`, where it belongs.
+
+**WHY IT IS NOT DONE HERE RATHER THAN DONE BADLY.** Populating the map with measurements that
+return empty because no refs were loaded is the worst available state: `assessedFields` would
+then claim those fields were measured, every predicate would trust the empty value, and the
+NOT_ASSESSED refusal that currently blocks would turn into a PASS. That is the gate bypass the
+T1.1 carry-forward warned about in terms — **partial population is more dangerous than empty**
+— and shipping it to make a task look complete would be the same trade this phase has already
+refused four times.
+
+**What it costs to leave open**: every prerequisite currently reports NOT_ASSESSED and blocks,
+which is honest but means no project can advance a stage on measured evidence yet. T1.2’s
+36-row per-position binding table stays precautionary until this lands.
+
 ### OPEN, raised by P5-T1.3: NOTHING in this repo typechecks a test file
 
 `backend/tsconfig.json` excludes `**/*.test.ts` and `**/__tests__/**`, and `ts-jest` runs with

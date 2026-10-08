@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
 import { FLAGS } from '../../config/featureFlags';
 import {
-  lifecycleIdParam, lifecycleStatusQuery, transitionBody, approveBody, zodIssues,
+  lifecycleIdParam, lifecycleStatusQuery, transitionBody, approveBody, composeBody, zodIssues,
 } from '../../schemas/projectLifecycleSchema';
 
 /**
@@ -253,6 +253,84 @@ router.post(`${PREFIX}/:projectId/approve`, requireSection(SECTION), async (req:
       ...(typeof err?.currentRevision === 'number' ? { currentRevision: err.currentRevision } : {}),
       ...(Array.isArray(err?.issues) ? { issues: err.issues } : {}),
     });
+  }
+});
+
+/**
+ * POST /api/admin/project-lifecycle/:projectId/compose
+ *
+ * Validate a proposed blueprint and report every refusal at once.
+ *
+ * THIS ROUTE IS THE POINT OF P5-T1.4, not garnish on it. Before it, `generateBlueprint` had ZERO
+ * non-test callers: the whole generation pipeline was a producer with no consumer, which this
+ * repo has a standing rule about. This is its first.
+ *
+ * EVERY refusal is returned, not the first. A reviewer fixing a blueprint needs the whole list in
+ * one pass; returning the earliest blocker and stopping turns one review into a queue of round
+ * trips, and the stage on each refusal is what says where to look.
+ *
+ * 422 rather than 400 when it refuses. A 400 says "this request was malformed"; the request was
+ * well formed and the BLUEPRINT is not ready, which is a different thing for a client to act on.
+ * 400 stays for a body that failed the schema.
+ */
+router.post(`${PREFIX}/:projectId/compose`, requireSection(SECTION), async (req: Request, res: Response) => {
+  const correlationId = correlationOf(req);
+  if (!FLAGS.lifecycleEnforcement) { disabled(res); return; }
+
+  const p = lifecycleIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid project id.', issues: zodIssues(p.error) }); return; }
+  const b = composeBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid body.', issues: zodIssues(b.error) }); return; }
+
+  // THE URL AND THE PAYLOAD MUST AGREE. `project.id` is what every validator and every ref in the
+  // manifest is keyed on, so composing a body carrying project B under project A's URL would file
+  // B's blueprint against A. Refused rather than reconciled: picking one of the two would be
+  // guessing which the caller meant.
+  const bodyProjectId = b.data.project.id;
+  if (typeof bodyProjectId === 'string' && bodyProjectId !== p.data.projectId) {
+    log('project_lifecycle_compose', correlationId, 'failure', {
+      project_id: p.data.projectId, error_class: 'ProjectIdMismatch',
+    });
+    res.status(400).json({
+      error: 'The project id in the URL and the project in the body are different projects.',
+      errorClass: 'ProjectIdMismatch',
+    });
+    return;
+  }
+
+  try {
+    const { composeBlueprint } = await import('../../services/lifecycle/generation/blueprintComposition');
+    const out = composeBlueprint({
+      ...(b.data as unknown as Parameters<typeof composeBlueprint>[0]),
+      roleIds: new Set(b.data.roleIds ?? []),
+      correlationId,
+    });
+
+    const composed = out.refusals.length === 0;
+    log('project_lifecycle_compose', correlationId, composed ? 'success' : 'partial', {
+      project_id: p.data.projectId,
+      refusals: out.refusals.length,
+      advisories: out.advisories.length,
+      stages_refused: [...new Set(out.refusals.map((r) => r.stage))],
+      ...(composed ? {} : { error_class: 'BlueprintCompositionRefused' }),
+    });
+
+    res.status(composed ? 200 : 422).json({
+      composed,
+      // Both lists, always. An advisory dropped from the response is a validation result the
+      // reviewer cannot see, which is the same defect as dropping it in the mapper.
+      refusals: out.refusals,
+      advisories: out.advisories,
+      selectedDesign: out.selectedDesign,
+    });
+  } catch (err: any) {
+    const errorClass = err?.name ?? 'UnclassifiedError';
+    if (errorClass === 'TenantAccessError') { res.status(err.status ?? 403).json({ error: err.message }); return; }
+    log('project_lifecycle_compose', correlationId, 'failure', {
+      project_id: p.data.projectId, error_class: errorClass,
+      ...(await redactPayload({ message: String(err?.message ?? err) })),
+    });
+    res.status(500).json({ error: 'Could not compose the blueprint.' });
   }
 });
 
