@@ -15,36 +15,63 @@ import type { CollectionDiff, CompareResult } from '../../services/blueprintRevi
 const hasChange = (c: CollectionDiff): boolean =>
   c.added.length > 0 || c.removed.length > 0 || c.revised.length > 0;
 
-const IdList: React.FC<{ label: string; ids: string[]; tone: string; testid: string }> = ({
-  label, ids, tone, testid,
-}) => {
+const IdList: React.FC<{
+  label: string; ids: string[]; tone: string; testid: string;
+  onSelect?: (id: string) => void;
+}> = ({ label, ids, tone, testid, onSelect }) => {
   if (ids.length === 0) return null;
   return (
     <div className="small mb-1" data-testid={testid}>
       <span className={`badge ${tone} me-2`}>{label} {ids.length}</span>
       {/* The IDS, not just the count. A count tells a reviewer something moved; the ids tell
-          them what to go look at. */}
-      <span className="text-muted">{ids.join(', ')}</span>
+          them what to go look at — so when a selection handler is given, each id is the control
+          that follows it, rather than text they have to retype into a picker. */}
+      {onSelect === undefined ? (
+        <span className="text-muted">{ids.join(', ')}</span>
+      ) : (
+        <span className="text-muted">
+          {ids.map((id, i) => (
+            <React.Fragment key={id}>
+              {i > 0 && ', '}
+              <button
+                type="button"
+                className="btn btn-link btn-sm p-0 align-baseline"
+                style={{ fontSize: 'inherit' }}
+                data-testid={`compare-select-${id}`}
+                onClick={() => onSelect(id)}
+              >
+                {id}
+              </button>
+            </React.Fragment>
+          ))}
+        </span>
+      )}
     </div>
   );
 };
 
-const CollectionRow: React.FC<{ diff: CollectionDiff }> = ({ diff }) => (
+const CollectionRow: React.FC<{
+  diff: CollectionDiff; onSelect?: (id: string) => void;
+}> = ({ diff, onSelect }) => (
   <div
     className="border-bottom py-2"
     data-testid={`compare-collection-${diff.collection}`}
     data-identity={diff.identity}
   >
     <div className="fw-semibold small">{diff.collection}</div>
-    <IdList label="added" ids={diff.added} tone="bg-success" testid={`compare-added-${diff.collection}`} />
-    <IdList label="removed" ids={diff.removed} tone="bg-danger" testid={`compare-removed-${diff.collection}`} />
+    <IdList label="added" ids={diff.added} tone="bg-success" testid={`compare-added-${diff.collection}`} onSelect={onSelect} />
+    <IdList label="removed" ids={diff.removed} tone="bg-danger" testid={`compare-removed-${diff.collection}`} onSelect={onSelect} />
     {/* `revised` is kept visually distinct from added/removed because it is the change a
         reviewer is most likely to miss: the same requirement, re-pinned. */}
-    <IdList label="revised" ids={diff.revised} tone="bg-warning text-dark" testid={`compare-revised-${diff.collection}`} />
+    <IdList label="revised" ids={diff.revised} tone="bg-warning text-dark" testid={`compare-revised-${diff.collection}`} onSelect={onSelect} />
   </div>
 );
 
-const BlueprintRevisionCompare: React.FC<{ result: CompareResult }> = ({ result }) => {
+const BlueprintRevisionCompare: React.FC<{
+  result: CompareResult;
+  /** Given, each changed id becomes a control that selects it. Omitted, the ids are plain text. */
+  onSelectEntity?: (id: string) => void;
+}> = ({ result, onSelectEntity }) => {
   if (result.state === 'no_manifest') {
     return (
       <div className="alert alert-secondary" data-testid="compare-no-manifest">
@@ -118,7 +145,9 @@ const BlueprintRevisionCompare: React.FC<{ result: CompareResult }> = ({ result 
           </div>
         ) : (
           <div data-testid="compare-changes">
-            {changed.map((c) => <CollectionRow key={c.collection} diff={c} />)}
+            {changed.map((c) => (
+              <CollectionRow key={c.collection} diff={c} onSelect={onSelectEntity} />
+            ))}
           </div>
         )}
 

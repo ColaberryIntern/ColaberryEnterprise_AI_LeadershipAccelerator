@@ -4,6 +4,7 @@ import ProjectLifecycleHeader from '../components/lifecycle/ProjectLifecycleHead
 import ProjectStageNav from '../components/lifecycle/ProjectStageNav';
 import BlueprintRevisionCompare from '../components/lifecycle/BlueprintRevisionCompare';
 import BlueprintChangeRequest from '../components/lifecycle/BlueprintChangeRequest';
+import LinkedRecords from '../components/lifecycle/LinkedRecords';
 import {
   fetchLifecycleStatus,
   type LifecycleResult,
@@ -15,6 +16,7 @@ import {
   type ChangeRequestOutcome,
   type CompareResult,
 } from '../services/blueprintReviewApi';
+import { fetchLinkedRecords, type LinkedResult } from '../services/linkedRecordsApi';
 
 /**
  * The operator's lifecycle workspace: one surface, mounted under `/admin`.
@@ -44,6 +46,8 @@ const ProjectLifecyclePage: React.FC = () => {
 
   const [result, setResult] = useState<LifecycleResult | null>(null);
   const [compare, setCompare] = useState<CompareResult | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [linked, setLinked] = useState<LinkedResult | null>(null);
 
   // EVERY HOOK RUNS BEFORE ANY EARLY RETURN. The disabled and error branches below return early,
   // and a hook declared after them would run on some renders and not others.
@@ -75,6 +79,15 @@ const ProjectLifecyclePage: React.FC = () => {
     return out;
   }, [projectId, kind, revision, load]);
 
+  const selectEntity = useCallback(async (entityId: string) => {
+    if (!projectId) return;
+    // Cleared first, so the panel can never show one record's connections under another
+    // record's name while the next read is in flight.
+    setSelected(entityId);
+    setLinked(null);
+    setLinked(await fetchLinkedRecords(projectId, kind, entityId));
+  }, [projectId, kind]);
+
   if (!result) {
     return <div className="container py-4" data-testid="lifecycle-loading">Loading…</div>;
   }
@@ -104,7 +117,12 @@ const ProjectLifecyclePage: React.FC = () => {
     <div className="container py-4" data-testid="lifecycle-page">
       <ProjectStageNav status={result.status} stages={result.status.stages} />
       <ProjectLifecycleHeader status={result.status} />
-      {compare !== null && <BlueprintRevisionCompare result={compare} />}
+      {compare !== null && (
+        <BlueprintRevisionCompare result={compare} onSelectEntity={selectEntity} />
+      )}
+      {selected !== null && linked !== null && (
+        <LinkedRecords result={linked} entityId={selected} />
+      )}
       {revision !== null && (
         <BlueprintChangeRequest revision={revision} onSubmit={submitChanges} />
       )}

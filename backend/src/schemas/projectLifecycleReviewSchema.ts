@@ -51,3 +51,18 @@ export const changeRequestBody = z.object({
 
 export type CompareQuery = z.infer<typeof compareQuery>;
 export type ChangeRequestBody = z.infer<typeof changeRequestBody>;
+
+/**
+ * Which record's connections to show.
+ *
+ * `entityId` is a QUERY parameter, not a path segment. Assignment ids are composite —
+ * `factoryAdapter` mints them as `${role_id}:${responsibility}` — so they routinely contain
+ * colons and spaces, and a responsibility containing a slash would silently split a path
+ * segment into two and 404.
+ */
+export const linkedQuery = z.object({
+  kind: projectKind,
+  entityId: z.string().trim().min(1, 'entityId is required').max(500),
+});
+
+export type LinkedQuery = z.infer<typeof linkedQuery>;

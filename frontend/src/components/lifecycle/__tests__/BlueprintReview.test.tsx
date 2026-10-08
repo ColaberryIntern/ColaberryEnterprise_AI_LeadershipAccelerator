@@ -429,3 +429,102 @@ describe('revisionUnderReview picks the revision a reviewer is actually looking 
     expect(noTarget.length).toBe(4);
   });
 });
+
+describe('selecting a changed id reveals that record’s connections', () => {
+  // The producer-to-consumer proof for the linked views: the traversal service and its panel are
+  // both finished and tested, which says nothing about whether any screen can reach them. The
+  // selection starts from the compare list because the ids a reviewer just read are the ids they
+  // want to follow — a separate picker would make them retype one they are looking at.
+
+  const lifecycleStatus = {
+    projectId: 'p-1', kind: 'delivery', stage: 'awaiting_blueprint_approval',
+    condition: null, conditionReason: null,
+    completedStages: ['discovery'], stages: ['discovery', 'awaiting_blueprint_approval'],
+    nextStage: null, blockers: [], nextActorRole: 'architect', nextAction: 'Approve or return it.',
+  };
+
+  const comparePayload = compared({
+    diff: {
+      collections: [col('sources', { revised: ['REQ-1'] })],
+      changed: true,
+      unreadable: [],
+    },
+  });
+
+  const mount = async (linkedPayload: unknown) => {
+    api.get.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes('/linked')) return Promise.resolve({ data: linkedPayload });
+      if (u.includes('/revisions/compare')) return Promise.resolve({ data: comparePayload });
+      return Promise.resolve({ data: lifecycleStatus });
+    });
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin/project-lifecycle/p-1?kind=delivery']}>
+          <Routes>{lifecycleRoutes}</Routes>
+        </MemoryRouter>,
+      );
+    });
+  };
+
+  const linkedFor = (over: Record<string, unknown> = {}) => ({
+    state: 'linked',
+    revision: 2,
+    entity: { id: 'REQ-1', viewKind: 'requirements', collection: 'sources' },
+    groups: [{ target: 'proposal_sections', via: 'track_proposal_section', ids: ['L.3.1'] }],
+    unlinked: null,
+    ...over,
+  });
+
+  it('shows no connections panel until something is selected', async () => {
+    await mount(linkedFor());
+    expect(q('compare-panel')).not.toBeNull();
+    expect(q('linked-panel')).toBeNull();
+    // And the id is a control, not plain text, because the page passed a selection handler.
+    expect(q('compare-select-REQ-1')).not.toBeNull();
+  });
+
+  it('clicking a changed id fetches and renders that record’s connections', async () => {
+    await mount(linkedFor());
+    await act(async () => { (q('compare-select-REQ-1') as HTMLButtonElement).click(); });
+
+    const linkedCall = api.get.mock.calls.find((c: any[]) => String(c[0]).includes('/linked'))!;
+    expect(linkedCall[1].params).toEqual({ kind: 'delivery', entityId: 'REQ-1' });
+    expect(q('linked-panel')).not.toBeNull();
+    expect(q('linked-entity')!.textContent).toBe('REQ-1');
+    expect(q('linked-ids-proposal_sections')!.textContent).toContain('L.3.1');
+  });
+
+  it('renders the explicit no-edge state for a record with no connections', async () => {
+    // The common case, not the rare one: the manifest carries only three kinds of edge.
+    await mount(linkedFor({
+      entity: { id: 'REQ-1', viewKind: 'requirements', collection: 'sources' },
+      groups: [],
+      unlinked: { kind: 'no_edge_recorded', detail: 'This blueprint records no connections for a requirements record.' },
+    }));
+    await act(async () => { (q('compare-select-REQ-1') as HTMLButtonElement).click(); });
+    expect(q('linked-no_edge_recorded')!.textContent).toContain('no connections');
+    expect(q('linked-groups')).toBeNull();
+  });
+
+  it('surfaces a failed connections read without disturbing the rest of the page', async () => {
+    api.get.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes('/linked')) return Promise.reject({ response: { data: { error: 'traversal blew up' } } });
+      if (u.includes('/revisions/compare')) return Promise.resolve({ data: comparePayload });
+      return Promise.resolve({ data: lifecycleStatus });
+    });
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin/project-lifecycle/p-1?kind=delivery']}>
+          <Routes>{lifecycleRoutes}</Routes>
+        </MemoryRouter>,
+      );
+    });
+    await act(async () => { (q('compare-select-REQ-1') as HTMLButtonElement).click(); });
+    expect(q('linked-error')!.textContent).toContain('traversal blew up');
+    // The compare panel and the header are untouched: one failed read is not a failed page.
+    expect(q('compare-panel')).not.toBeNull();
+    expect(q('lifecycle-page')).not.toBeNull();
+  });
+});

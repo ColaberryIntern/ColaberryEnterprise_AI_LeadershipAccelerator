@@ -50,10 +50,17 @@ jest.mock('../../../services/lifecycle/generation/blueprintComposition', () => (
 // is almost entirely STATUS CODES - the one place a 404-for-422 mistake hides.
 const compareBlueprintRevisions = jest.fn();
 const requestBlueprintChanges = jest.fn();
+const loadLatestManifestRefs = jest.fn();
 jest.mock('../../../services/lifecycle/blueprintChangeRequest', () => ({
   compareBlueprintRevisions: (...a: any[]) => compareBlueprintRevisions(...a),
   requestBlueprintChanges: (...a: any[]) => requestBlueprintChanges(...a),
+  loadLatestManifestRefs: (...a: any[]) => loadLatestManifestRefs(...a),
 }));
+
+// The traversal is NOT mocked. It is pure, it is the thing the route is supposed to be wired to,
+// and a mock here would let the route pass while calling nothing — the producer-with-no-consumer
+// failure this repo has shipped before. `linkedViews` has its own suite for the traversal rules;
+// what these tests add is that the route reaches it and maps its answers to status codes.
 
 // Partial mocks that KEEP the real helpers, because the route calls refusalStatus and
 // approvalErrorStatus for real and a factory that enumerates exports would delete them.
@@ -71,6 +78,7 @@ import {
   ApprovalConflictError, ApprovalGateError, SelfApprovalError, ManifestNotFoundError,
 } from '../../../services/lifecycle/blueprintApproval';
 import router from '../projectLifecycleRoutes';
+import reviewRouter from '../projectLifecycleReviewRoutes';
 import { composeBody } from '../../../schemas/projectLifecycleSchema';
 
 const PROJECT = '11111111-1111-4111-8111-111111111111';
@@ -80,6 +88,9 @@ function app() {
   const a = express();
   a.use(express.json());
   a.use(router);
+  // BOTH routers, because the review handlers moved to their own file when the first one
+  // reached 496 lines. Mounting only one would 404 half this suite.
+  a.use(reviewRouter);
   return a;
 }
 
@@ -89,13 +100,42 @@ beforeEach(() => {
 });
 
 describe('SOURCE: the guard is on every route, as the required lint demands', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'projectLifecycleRoutes.ts'), 'utf8');
+  /**
+   * BOTH lifecycle route files, and that is the point of the loop.
+   *
+   * The review handlers moved to `projectLifecycleReviewRoutes.ts` when the first file reached
+   * 496 lines. `lint-route-auth` reads per FILE and is satisfied by one occurrence of a guard
+   * name anywhere in the text, so the new file would pass it with two of its three routes
+   * unguarded. The per-ROUTE guarantee is this assertion's job, and scoping it to one file
+   * silently dropped three routes out of coverage the moment they moved.
+   */
+  const FILES = ['projectLifecycleRoutes.ts', 'projectLifecycleReviewRoutes.ts'];
+  const sources = FILES.map((f) => ({
+    file: f,
+    text: fs.readFileSync(path.join(__dirname, '..', f), 'utf8'),
+  }));
+  const src = sources[0].text;
 
-  it('applies requireSection to every router handler', () => {
-    const handlers = src.match(/router\.(get|post|put|patch|delete)\(/g) ?? [];
-    const guarded = src.match(/requireSection\(SECTION\)/g) ?? [];
-    expect(handlers.length).toBeGreaterThan(0);
-    expect(guarded).toHaveLength(handlers.length);
+  it('covers every lifecycle route file that exists, so none can be added unwatched', () => {
+    // Derived from the directory rather than trusted: a third route file added later and not
+    // listed above would be checked by nothing.
+    const onDisk = fs.readdirSync(path.join(__dirname, '..'))
+      .filter((f) => /^projectLifecycle.*Routes\.ts$/.test(f))
+      .sort();
+    expect(onDisk).toEqual(FILES.slice().sort());
+  });
+
+  it('applies requireSection to every router handler, in every file', () => {
+    const unbalanced = sources
+      .map(({ file, text }) => ({
+        file,
+        handlers: (text.match(/router\.(get|post|put|patch|delete)\(/g) ?? []).length,
+        guarded: (text.match(/requireSection\(SECTION\)/g) ?? []).length,
+      }))
+      .filter((r) => r.handlers === 0 || r.handlers !== r.guarded);
+    // Named, not counted: which file is short a guard is the only useful output.
+    expect(unbalanced).toEqual([]);
+    expect(sources).toHaveLength(2);
   });
 
   it('POSITIVE CONTROL: the handler pattern does match a route declaration', () => {
@@ -109,11 +149,14 @@ describe('SOURCE: the guard is on every route, as the required lint demands', ()
     // explains why not to import config/database, and a bare substring match flagged that prose
     // as a violation. `lint-route-auth.js:19` records the same weakness in itself, where a file's
     // prose containing "requireAdmin" satisfied the guard check.
-    const valueImports = src.split('\n')
+    const valueImports = sources.flatMap(({ file, text }) => text.split('\n')
       .filter((l) => /^import\s/.test(l))
-      .filter((l) => !/^import\s+type\b/.test(l));
-    expect(valueImports.some((l) => /from\s+'[./]*models\//.test(l))).toBe(false);
-    expect(valueImports.some((l) => /from\s+'[./]*config\/database'/.test(l))).toBe(false);
+      .filter((l) => !/^import\s+type\b/.test(l))
+      .map((l) => ({ file, line: l })));
+    expect(valueImports.filter((i) => /from\s+'[./]*models\//.test(i.line))).toEqual([]);
+    expect(valueImports.filter((i) => /from\s+'[./]*config\/database'/.test(i.line))).toEqual([]);
+    // Non-vacuity: both files really do have import statements to inspect.
+    expect(valueImports.length).toBeGreaterThan(8);
     // POSITIVE CONTROL: the predicate does flag a real offender.
     expect(["import X from '../../models/Thing';"].some((l) => /from\s+'[./]*models\//.test(l))).toBe(true);
   });
@@ -716,5 +759,145 @@ describe('POST /request-changes', () => {
     const res = await request(app()).post(url).send(body);
     expect(res.status).toBe(500);
     expect(JSON.stringify(res.body)).not.toContain('postgres://');
+  });
+});
+
+describe('GET /linked', () => {
+  const url = (qs: string) => `/api/admin/project-lifecycle/${PROJECT}/linked?${qs}`;
+
+  /** A refs object shaped like the real thing, with one requirement and one real edge. */
+  const refs = () => ({
+    origin: 'factory',
+    projectId: PROJECT,
+    sources: [{ id: 'REQ-1', revision: 2, source: 'contract_requirements' }],
+    processes: [{ id: 'PROC-1', revision: 2, source: 'x' }],
+    businessTasks: [],
+    assignments: [],
+    agents: { runtime: [], builder: [] },
+    surfaces: [],
+    policies: [],
+    designDecisions: [],
+    downstream: [],
+    trackMappings: {
+      proposalSections: [{ canonicalReqId: 'REQ-1', sectionRef: 'L.3.1' }],
+      solutionStories: [],
+    },
+  });
+
+  it('200s the connections of the selected record, through the REAL traversal', async () => {
+    loadLatestManifestRefs.mockResolvedValue({ refs: refs(), revision: 2 });
+    const res = await request(app()).get(url('kind=delivery&entityId=REQ-1'));
+    expect(res.status).toBe(200);
+    expect(res.body.state).toBe('linked');
+    expect(res.body.revision).toBe(2);
+    expect(res.body.entity).toEqual({ id: 'REQ-1', viewKind: 'requirements', collection: 'sources' });
+    expect(res.body.groups).toEqual([
+      { target: 'proposal_sections', via: 'track_proposal_section', ids: ['L.3.1'] },
+    ]);
+    expect(res.body.unlinked).toBeNull();
+  });
+
+  it('200s the explicit no-edge state, which is NOT an empty response', async () => {
+    loadLatestManifestRefs.mockResolvedValue({ refs: refs(), revision: 2 });
+    const res = await request(app()).get(url('kind=delivery&entityId=PROC-1'));
+    expect(res.status).toBe(200);
+    expect(res.body.groups).toEqual([]);
+    expect(res.body.unlinked.kind).toBe('no_edge_recorded');
+    // The response says which edges DO exist, so the answer is actionable rather than blank.
+    expect(res.body.unlinked.detail).toContain('requirement-to-proposal-section');
+  });
+
+  it('200s "not in this manifest" as its own answer, distinct from having no edges', async () => {
+    loadLatestManifestRefs.mockResolvedValue({ refs: refs(), revision: 2 });
+    const res = await request(app()).get(url('kind=delivery&entityId=NOPE-1'));
+    expect(res.status).toBe(200);
+    expect(res.body.entity).toBeNull();
+    expect(res.body.unlinked.kind).toBe('entity_not_in_manifest');
+  });
+
+  it('404s a project with no blueprint', async () => {
+    loadLatestManifestRefs.mockResolvedValue(null);
+    const res = await request(app()).get(url('kind=student&entityId=REQ-1'));
+    expect(res.status).toBe(404);
+    expect(res.body.state).toBe('no_manifest');
+  });
+
+  it('accepts a COMPOSITE entity id, colons and slashes included', async () => {
+    // Assignment ids are `${role_id}:${responsibility}`. This is why entityId is a query
+    // parameter: as a path segment a responsibility containing a slash would 404.
+    const r = refs();
+    (r as any).assignments = [{ id: 'DELIVERY_OWNER:Approve / sign', revision: 2, source: 'x' }];
+    loadLatestManifestRefs.mockResolvedValue({ refs: r, revision: 2 });
+    const res = await request(app())
+      .get(`/api/admin/project-lifecycle/${PROJECT}/linked`)
+      .query({ kind: 'delivery', entityId: 'DELIVERY_OWNER:Approve / sign' });
+    expect(res.status).toBe(200);
+    expect(res.body.entity.collection).toBe('assignments');
+  });
+
+  it('400s a missing entityId rather than guessing a record', async () => {
+    const res = await request(app()).get(url('kind=student'));
+    expect(res.status).toBe(400);
+    expect(res.body.issues.map((i: any) => i.path)).toContain('entityId');
+    expect(loadLatestManifestRefs).not.toHaveBeenCalled();
+  });
+
+  it('400s a blank entityId', async () => {
+    const res = await request(app()).get(url('kind=student&entityId=%20%20'));
+    expect(res.status).toBe(400);
+    expect(loadLatestManifestRefs).not.toHaveBeenCalled();
+  });
+
+  it('400s a missing kind', async () => {
+    const res = await request(app()).get(url('entityId=REQ-1'));
+    expect(res.status).toBe(400);
+    expect(loadLatestManifestRefs).not.toHaveBeenCalled();
+  });
+
+  it('400s a non-UUID project id', async () => {
+    const res = await request(app())
+      .get('/api/admin/project-lifecycle/not-a-uuid/linked?kind=student&entityId=REQ-1');
+    expect(res.status).toBe(400);
+    expect(loadLatestManifestRefs).not.toHaveBeenCalled();
+  });
+
+  it('409s with lifecycleDisabled when the flag is off', async () => {
+    FLAGS.lifecycleEnforcement = false;
+    const res = await request(app()).get(url('kind=student&entityId=REQ-1'));
+    expect(res.status).toBe(409);
+    expect(res.body.lifecycleDisabled).toBe(true);
+    expect(loadLatestManifestRefs).not.toHaveBeenCalled();
+  });
+
+  it('reads with READ intent: the refs loader is the audited read, not a write', async () => {
+    loadLatestManifestRefs.mockResolvedValue({ refs: refs(), revision: 2 });
+    await request(app()).get(url('kind=student&entityId=REQ-1'));
+    expect(loadLatestManifestRefs).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: PROJECT, kind: 'student',
+    }));
+  });
+
+  it('lets a tenancy denial keep its own status', async () => {
+    loadLatestManifestRefs.mockRejectedValue(
+      Object.assign(new Error('not your tenant'), { name: 'TenantAccessError', status: 403 }),
+    );
+    const res = await request(app()).get(url('kind=student&entityId=REQ-1'));
+    expect(res.status).toBe(403);
+  });
+
+  it('500s an unexpected failure without leaking the message', async () => {
+    loadLatestManifestRefs.mockRejectedValue(new Error('connection string postgres://u:p@h/db'));
+    const res = await request(app()).get(url('kind=student&entityId=REQ-1'));
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('postgres://');
+  });
+
+  it('tolerates a malformed refs payload instead of 500ing', async () => {
+    // `refs_json` is declared `unknown`. A hand-edited or legacy row reaches the traversal with
+    // the same static type as a well-formed one.
+    loadLatestManifestRefs.mockResolvedValue({ refs: 'not an object', revision: 1 });
+    const res = await request(app()).get(url('kind=student&entityId=REQ-1'));
+    expect(res.status).toBe(200);
+    expect(res.body.unlinked.kind).toBe('entity_not_in_manifest');
   });
 });

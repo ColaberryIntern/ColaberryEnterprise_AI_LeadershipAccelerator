@@ -163,6 +163,29 @@ export async function compareBlueprintRevisions(input: {
 }
 
 /**
+ * The newest manifest's pinned references for a project, behind the audited read guard.
+ *
+ * Returns `null` when there is no lifecycle row or no manifest — the caller distinguishes those
+ * from "a manifest with no references", which is a different answer entirely.
+ *
+ * Lives here rather than in `linkedViews.ts` because that module is PURE: it takes a refs object
+ * and returns what is connected to what, with no store import, so it can be tested over
+ * hand-built and adapter-produced manifests alike. Giving it a database would make every
+ * traversal test need one.
+ */
+export async function loadLatestManifestRefs(input: {
+  projectId: string;
+  kind: ProjectKind;
+  admin: AdminIdentity | undefined;
+}): Promise<{ refs: unknown; revision: number } | null> {
+  const row = await loadAndAuthorize(input.projectId, input.kind, input.admin, 'read');
+  if (!row) return null;
+  const rows = await loadManifests(row.tenant_id, input.kind, input.projectId);
+  if (rows.length === 0) return null;
+  return { refs: rows[0].get('refs_json'), revision: Number(rows[0].get('revision')) };
+}
+
+/**
  * Request changes to one exact revision.
  *
  * `revision` is required with no default. A default would record a change request against

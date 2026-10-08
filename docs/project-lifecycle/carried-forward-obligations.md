@@ -895,3 +895,66 @@ either. But this repo has a named failure mode for exactly this shape — a prod
 consumer — and it is accumulating. **Owner: whoever composes the generation
 pipeline.** The question to ask then is not "are these functions correct" but "is anything
 calling them", which is the question nobody asked about `controlSurfaceExists`.
+
+### THE MANIFEST CARRIES ALMOST NO EDGES, and three of the six linked views can show nothing
+
+Found by P5-T4 while deriving ground truth, before any code was written. The plan says the
+linked-views traversal "uses the references P5-T1's manifest writer populates in `refs_json`".
+It does — but `refs_json` holds pinned POINTERS, and almost no edges between them:
+
+- `FactoryTaskLike` and `FactoryProcessLike` are `{ id: string }`. **There is no process→task
+  edge in the manifest.** Same for surfaces, policies and design decisions.
+- Exactly three edges exist: `trackMappings.proposalSections` (requirement→proposal section),
+  `trackMappings.solutionStories` (requirement→story), and the composite `assignments[].id`
+  minted by `factoryAdapter` as `` `${role_id}:${responsibility}` ``, which encodes
+  assignment→role.
+- **`surfaces`, `policies` and `designDecisions` are written by NEITHER adapter.** A test in
+  `linkedViews.test.ts` pins this by running both real adapters and asserting which collections
+  come back populated, so the day one of them starts writing `surfaces` the test changes and this
+  entry gets revisited. Until then the `workspaces`, `controls` and `design` views can only ever
+  render the explicit "no connections recorded" state, whatever a project contains.
+
+T4 therefore implements those three joins and no others. **A fourth would have to be invented,
+and an invented edge on a review screen is worse than a blank one** — a reviewer would act on it.
+The "nothing to show" state names its cause for that reason.
+
+**Owner: whoever extends the adapters or the manifest contract.** The question to ask is not
+"does the traversal work" but "does the manifest record the edge the view claims to show".
+
+### The SBP story→release edge is dropped at the adapter boundary
+
+`SbpStoryLike.release_id` exists on `sbpToManifestRefs`'s INPUT and does not survive into the
+manifest: releases and stories are flattened into one `downstream` list. Asserted by a test
+(`the story→release edge does not survive into the manifest`) so the loss is recorded rather than
+rediscovered.
+
+Not fixed in P5-T4 on purpose: `refs_json` feeds `content_sha256`, so adding a field changes
+T1's manifest contract and every existing manifest's hash. That is a T1-owned change with an
+idempotency consequence, not a view-layer tweak.
+
+### The lifecycle route files have been split once and should not be merged back
+
+`projectLifecycleRoutes.ts` reached 496 lines during P5-T4 — four short of the hard ceiling — so
+the three blueprint-review handlers moved to `projectLifecycleReviewRoutes.ts`. Both are now well
+clear of the ceiling. **No count is quoted here**; an earlier entry in this file went stale
+exactly that way, so run `wc -l`.
+
+Two things that split did NOT do by themselves, and which a future split must repeat:
+
+1. **`adminRoutes.ts` must mount the new router.** A route file that nobody mounts answers 404
+   while its own tests pass.
+2. **The suite's source-level guard assertion must cover every route file.** It read one file's
+   text, so moving three routes silently dropped them out of per-route guard coverage —
+   `lint-route-auth` would not catch it, because that lint is satisfied by one occurrence of a
+   guard name anywhere in a file. The assertion now loops over a list derived from the directory,
+   and a test fails if a third `projectLifecycle*Routes.ts` appears unlisted.
+
+### `linkedViews.ts` is AT the 12-symbol export ceiling, not under it
+
+Measured after P5-T4: twelve public symbols, which is CLAUDE.md's hard ceiling exactly. It is
+compliant and the file is small, so it was not split — unlike `projectLifecycleRoutes.ts`, which
+was split at 496 of 500 lines because line count grows with every edit whereas an export is
+added deliberately. **The next public symbol added here must split the file first.** The natural
+seam is the registry (the view kinds, their collections, the exclusions and `viewKindFor`) on one
+side and the traversal (`connectedRecords`, `roleOfAssignmentId` and the result types) on the
+other.
