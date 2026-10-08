@@ -29,6 +29,8 @@ import { ALL_BRANDS } from './brandScope';
 import { BRAND_TABS, domainNotice, isBrandTab, setupSummary, type BrandSetupFacts, type BrandTabKey } from './brandSetup';
 import BrandSetupTabs from './BrandSetupTabs';
 import { listItems, type ContentItem } from '../../../services/contentComposerApi';
+import api from '../../../utils/api';
+import { forBrand, missingSlug, toMarketingCampaigns, type MarketingCampaign } from './marketingCampaigns';
 
 /**
  * Brand administration — brands, their sending domains, and whether they can actually send.
@@ -88,6 +90,7 @@ function AdminBrandsPage() {
 
   /** Posts waiting for a human on this brand. The Approvals tab's content, and its count. */
   const [awaiting, setAwaiting] = useState<ContentItem[] | null>(null);
+  const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   useEffect(() => {
     if (!selectedBrandId) { setAwaiting([]); return; }
     let cancelled = false;
@@ -232,6 +235,18 @@ function AdminBrandsPage() {
 
   useEffect(() => { fetchBrands(); }, [fetchBrands]);
 
+  // Campaigns are admin-wide rather than per-brand, so this is fetched once and narrowed in
+  // memory. A failure leaves the list EMPTY rather than unset: the tab then says it could not
+  // be loaded, instead of showing a confident "no campaigns" for a request that never landed.
+  const [campaignsFailed, setCampaignsFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/api/admin/campaigns', { params: { limit: 200 } })
+      .then((r) => { if (!cancelled) { setCampaigns(toMarketingCampaigns(r.data.campaigns ?? [])); setCampaignsFailed(false); } })
+      .catch(() => { if (!cancelled) { setCampaigns([]); setCampaignsFailed(true); } });
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (!selectedBrandId) return;
     let cancelled = false;
@@ -278,6 +293,8 @@ function AdminBrandsPage() {
     pendingApprovals: awaiting?.length ?? 0,
   };
   const summary = setupSummary(facts);
+  const brandCampaigns = forBrand(campaigns, selectedBrandId);
+  const unslugged = missingSlug(brandCampaigns);
   const brandName = brands.find((b) => b.id === selectedBrandId)?.name ?? null;
 
   return (
@@ -307,7 +324,7 @@ function AdminBrandsPage() {
         {summary.text}
       </div>
 
-      <BrandSetupTabs active={tab} counts={{ channels: live.length, approvals: facts.pendingApprovals }} onGo={goToTab} />
+      <BrandSetupTabs active={tab} counts={{ channels: live.length, approvals: facts.pendingApprovals, domains: facts.domainCount, campaigns: brandCampaigns.length }} onGo={goToTab} />
 
       <div className="px-3 py-3">
         {tab === 'channels' && (
@@ -371,7 +388,64 @@ function AdminBrandsPage() {
 
         {tab === 'campaigns' && (
           <SectionCard title="Campaigns and slugs" subtitle={BRAND_TABS[3].hint} icon="price-tag-3-line">
+            {/*
+              Ali, 2026-10-07: "what is a UTM slug?" - asked while looking at a picker that
+              offered campaigns with and without one and never said what the difference meant.
+              It is answered here in a sentence instead of assumed, and the campaigns this brand
+              can actually post under are listed rather than linked away to.
+            */}
+            <p className="small text-muted mb-2">
+              A campaign&rsquo;s slug is the tag added to its links (<code>?utm_campaign=&hellip;</code>)
+              so a click can be traced back to the campaign that earned it. A campaign without one
+              still works &mdash; its clicks just arrive unattributed.
+            </p>
             <p className="small mb-2">
+              Only marketing campaigns are listed. Email lifecycle sequences share the same table
+              but are a different machine, and a social post cannot go out under one.
+            </p>
+
+            {!selectedBrandId ? (
+              <p className="small text-muted mb-2">Choose a brand in the bar above.</p>
+            ) : campaignsFailed ? (
+              <p className="small text-muted mb-2" data-testid="brand-campaigns-failed">
+                The campaign list could not be loaded, so this tab cannot say which campaigns this
+                brand has. It is not saying there are none.
+              </p>
+            ) : brandCampaigns.length === 0 ? (
+              <p className="small text-muted mb-2" data-testid="brand-campaigns-empty">
+                No marketing campaigns for this brand yet.
+              </p>
+            ) : (
+              <div className="table-responsive mb-2">
+                <table className="table table-sm align-middle mb-0" data-testid="brand-campaigns-table">
+                  <thead className="table-light">
+                    <tr><th>Campaign</th><th>Tracked-link slug</th></tr>
+                  </thead>
+                  <tbody>
+                    {brandCampaigns.map((c) => (
+                      <tr key={c.id}>
+                        <td>{c.name}</td>
+                        <td>
+                          {c.utm_campaign_slug
+                            ? <code>{c.utm_campaign_slug}</code>
+                            : <span className="badge text-bg-warning" data-testid="campaign-needs-slug">needs a slug</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {unslugged.length > 0 && (
+              <p className="small text-warning-emphasis mb-2" data-testid="brand-campaigns-unslugged">
+                {unslugged.length === 1
+                  ? '1 campaign has no slug, so clicks on its posts cannot be attributed to it.'
+                  : `${unslugged.length} campaigns have no slug, so clicks on their posts cannot be attributed to them.`}
+              </p>
+            )}
+
+            <p className="small text-muted mb-2">
               Campaigns are shared across the whole admin, not owned by one brand, so they are
               managed in one place rather than copied here.
             </p>

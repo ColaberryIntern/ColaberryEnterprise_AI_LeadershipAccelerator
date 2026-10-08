@@ -1,4 +1,4 @@
-import { usableForAPost } from '../composer/AdminContentComposerPage';
+import { usableForAPost } from '../marketingCampaigns';
 
 /**
  * Which campaigns the Composer may offer for a social post.

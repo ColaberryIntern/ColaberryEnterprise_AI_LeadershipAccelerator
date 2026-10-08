@@ -15,7 +15,12 @@ import { BRAND_TABS, type BrandTabKey } from './brandSetup';
 
 export interface BrandSetupTabsProps {
   active: BrandTabKey;
-  counts: { channels: number; approvals: number };
+  /**
+   * `domains` is null until send readiness loads. A null draws NO badge rather than a 0: an
+   * absent number and a genuine zero are different facts, and "0 sending domains" while that
+   * request is still in flight is a confident lie about the brand's setup.
+   */
+  counts: { channels: number; approvals: number; domains: number | null; campaigns: number };
   onGo: (tab: BrandTabKey) => void;
 }
 
@@ -23,6 +28,8 @@ export default function BrandSetupTabs({ active, counts, onGo }: BrandSetupTabsP
   const countFor = (key: BrandTabKey): number | null => {
     if (key === 'channels') return counts.channels;
     if (key === 'approvals') return counts.approvals;
+    if (key === 'domains') return counts.domains;
+    if (key === 'campaigns') return counts.campaigns;
     return null;
   };
 

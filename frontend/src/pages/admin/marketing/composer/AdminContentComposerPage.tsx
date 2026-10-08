@@ -26,6 +26,7 @@ import {
   blockedReason, firstOpenStep, isStepKey, nextOpenStep, previousStep, stepDefinition, stepStates,
   type StepFacts, type StepKey,
 } from './composerSteps';
+import { toMarketingCampaigns } from '../marketingCampaigns';
 
 /**
  * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
@@ -41,41 +42,6 @@ import {
  * links, validation and the confirmation all come back from the API, so what the operator
  * confirms is what the server will act on, not a client-side approximation of it.
  */
-
-/**
- * Campaigns that can actually carry a social post.
- *
- * Ali, 2026-10-07, looking at this dropdown: "This list are not campaigns that exist so I'm
- * confused." They did exist - the list was every row in `campaigns`, filtered by brand and
- * nothing else, so it offered forty-odd EMAIL sequences (warm_nurture, cold_outbound,
- * executive_outreach, behavioral triggers, alumni win-back) alongside anything made for
- * marketing. Most were paused months ago. Choosing one of those for a LinkedIn post is not a
- * thing anybody wants to do, and the UI was inviting it.
- *
- * Two filters, both about whether the row can do THIS job rather than about what it is called:
- *
- *   - A finished or shelved campaign is not a destination for new posts.
- *   - An email-lifecycle `type` is a different machine from a marketing post. The allowlist is
- *     deliberately a list of what IS marketing rather than a list of what is not, so a new
- *     lifecycle type added later does not silently reappear here.
- *
- * Campaigns with no UTM slug are KEPT, because the composer can mint one in place and the
- * dropdown already says "- no UTM slug" against them. Hiding those would turn a fixable gap
- * into an invisible one.
- */
-const POST_CAMPAIGN_TYPES = new Set(['marketing', 'paid_social', 'organic_social', 'content', 'launch']);
-const DEAD_CAMPAIGN_STATUSES = new Set(['completed', 'archived', 'cancelled']);
-
-export function usableForAPost(rows: Record<string, unknown>[]): Record<string, unknown>[] {
-  return rows.filter((c) => {
-    const status = String(c.status ?? '').toLowerCase();
-    if (DEAD_CAMPAIGN_STATUSES.has(status)) return false;
-    const type = String(c.type ?? '').toLowerCase();
-    // No type at all is treated as a marketing campaign: that is what the Campaigns screen
-    // creates when nobody picks one, and hiding a row somebody just made would be the worse bug.
-    return type === '' || POST_CAMPAIGN_TYPES.has(type);
-  });
-}
 
 /** Blank options are dropped before the backend sees them, so "two filled, one empty" is a valid two-option poll. */
 function trimPoll(poll: NonNullable<SetupValues['poll']>): NonNullable<SetupValues['poll']> {
@@ -139,9 +105,7 @@ export default function AdminContentComposerPage() {
     listBrands().then((r) => setBrands(r.brands)).catch(() => setBrands([]));
     composer.listProviders().then(setProviders).catch(() => setProviders([]));
     api.get('/api/admin/campaigns', { params: { limit: 200 } })
-      .then((r) => setCampaigns(usableForAPost(r.data.campaigns ?? []).map((c: Record<string, unknown>) => ({
-        id: String(c.id), name: String(c.name), brand_id: (c.brand_id as string | null) ?? null, utm_campaign_slug: (c.utm_campaign_slug as string | null) ?? null,
-      }))))
+      .then((r) => setCampaigns(toMarketingCampaigns(r.data.campaigns ?? [])))
       .catch(() => setCampaigns([]));
   }, []);
 
