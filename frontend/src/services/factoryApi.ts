@@ -655,6 +655,31 @@ export async function recordGovOutcome(canonicalOpportunityId: string, outcome: 
   return data;
 }
 
+/** AI advisory (strictly downstream of the deterministic bid engine — it explains, never scores). */
+export interface GovRiskNarrative { narrative: string; generatedAt: string; cached: boolean; }
+export interface GovRiskNarrativeFacts {
+  band: 'bid' | 'bid_with_conditions' | 'no_bid';
+  pwin: number | null; preliminary: boolean; expectedValue: number | null; daysLeft: number | null;
+  knockouts: { category: string; text: string; status: 'pass' | 'conditional' | 'hard_fail' }[];
+  factors: { label: string; score: number | null; weight: number }[];
+  buyer?: string | null; title?: string | null;
+}
+/** Generate a plain-English read of a bid decision the deterministic engine already produced. */
+export async function getGovRiskNarrative(canonicalOpportunityId: string, facts: GovRiskNarrativeFacts): Promise<GovRiskNarrative> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/risk-narrative'), facts);
+  return data;
+}
+
+export interface GovProposalSummary { whatTheyWant: string; whatWedBuild: string; generatedAt: string; cached: boolean; }
+/** Generate a "what they want / what we'd build" summary from the established requirement statements. */
+export async function getGovProposalSummary(
+  canonicalOpportunityId: string,
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null },
+): Promise<GovProposalSummary> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/proposal-summary'), body);
+  return data;
+}
+
 /** Record a NON-approval decision and/or the reviewer-established cited requirements. */
 export async function recordGovQualificationDecision(canonicalOpportunityId: string, body: {
   biddingEntity: string; expectedVersion: number; decision: 'pending_review' | 'needs_evidence' | 'no_bid';

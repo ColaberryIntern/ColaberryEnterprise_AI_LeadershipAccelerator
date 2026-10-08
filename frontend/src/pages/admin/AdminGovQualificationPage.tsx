@@ -18,6 +18,7 @@ import { derivePotentialDisqualifiers } from './govGaps';
 import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
+import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -1086,7 +1087,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             const matches = svcMatches ?? [];
             const capability: 'strong' | 'moderate' | 'none' = matches.some((m) => m.strength === 'strong') ? 'strong' : matches.some((m) => m.strength === 'moderate') ? 'moderate' : 'none';
             return (
-              <BidDecisionDashboard signals={{
+              <BidDecisionDashboard canonical={canonical} signals={{
                 established,
                 serviceMatches: matches,
                 capability,
@@ -1095,6 +1096,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 estimatedValue: oppDetail?.opportunity?.estimatedValue ?? null,
                 openSubmissionCount: (ws.evaluation.openSubmissionRequirements ?? []).length,
                 establishedCount: ws.evaluation.evals.length,
+                buyer: oppDetail?.opportunity?.agency ?? null,
+                title: oppDetail?.opportunity?.title ?? null,
               }} />
             );
           })()}
@@ -1328,6 +1331,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               persistent right rail (see RightRail below), visible on every step. */}
 
           <GovTabPanel active={activeStep === 'proposal'}>
+
+          {(ws.source || isDecoupled) && (
+            <SectionCard title="What they want / what we&apos;d build (AI)" icon="sparkling-2-line"
+              subtitle="An advisory read of the opportunity, generated from the established requirements to frame the proposal. It authors nothing and changes no gate.">
+              <ProposalSummaryPanel canonical={canonical}
+                requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
+                title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null} />
+            </SectionCard>
+          )}
 
           {(
             <SectionCard title="Response checklist" icon="draft-line"

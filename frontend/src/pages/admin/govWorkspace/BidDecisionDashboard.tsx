@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { SectionCard, StatCard } from '../../../components/admin/shell';
 import MermaidDiagram from '../../../components/visuals/MermaidDiagram';
 import { fmtValue } from '../govOppFormat';
-import type { EstablishedRequirement, ServiceMatch } from '../../../services/factoryApi';
+import { getGovRiskNarrative } from '../../../services/factoryApi';
+import type { EstablishedRequirement, ServiceMatch, GovRiskNarrative } from '../../../services/factoryApi';
 import {
   assessBid, bidAssessmentMermaid, PWIN_FACTORS,
   type BidAssessmentInput, type KnockoutStatus, type PWinFactorKey,
@@ -26,6 +27,8 @@ export interface BidSignals {
   estimatedValue: number | null;
   openSubmissionCount: number;
   establishedCount: number;
+  buyer?: string | null;
+  title?: string | null;
 }
 
 const BAND_TONE: Record<string, string> = { bid: 'success', bid_with_conditions: 'warning', no_bid: 'danger' };
@@ -34,7 +37,7 @@ const KO_LABEL: Record<KnockoutStatus, string> = { pass: 'we hold it', condition
 const KO_CYCLE: KnockoutStatus[] = ['pass', 'conditional', 'hard_fail'];
 const JUDGMENT: PWinFactorKey[] = ['relationship', 'competition', 'price_to_win', 'teaming', 'strategic'];
 
-export function BidDecisionDashboard({ signals }: { signals: BidSignals }): React.ReactElement {
+export function BidDecisionDashboard({ signals, canonical }: { signals: BidSignals; canonical: string }): React.ReactElement {
   const [operatorFactors, setOperatorFactors] = useState<Partial<Record<PWinFactorKey, number>>>({});
   const [overrides, setOverrides] = useState<Record<string, KnockoutStatus>>({});
   const [pursuitType, setPursuitType] = useState<'new' | 'recompete'>('new');
@@ -50,6 +53,25 @@ export function BidDecisionDashboard({ signals }: { signals: BidSignals }): Reac
 
   const a = useMemo(() => assessBid(input), [input]);
   const tone = BAND_TONE[a.band] ?? 'secondary';
+
+  const [narrative, setNarrative] = useState<GovRiskNarrative | null>(null);
+  const [narrativeBusy, setNarrativeBusy] = useState(false);
+  const [narrativeErr, setNarrativeErr] = useState<string | null>(null);
+  const explain = async (): Promise<void> => {
+    setNarrativeBusy(true); setNarrativeErr(null);
+    try {
+      setNarrative(await getGovRiskNarrative(canonical, {
+        band: a.band, pwin: a.pwin, preliminary: a.preliminary, expectedValue: a.expectedValue, daysLeft: a.daysLeft,
+        knockouts: a.knockouts.map((k) => ({ category: k.categoryLabel, text: k.text, status: k.status })),
+        factors: a.factors.map((f) => ({ label: f.label, score: f.score, weight: f.weight })),
+        buyer: signals.buyer ?? null, title: signals.title ?? null,
+      }));
+    } catch {
+      setNarrativeErr('Could not generate the AI read right now.');
+    } finally {
+      setNarrativeBusy(false);
+    }
+  };
   const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n * 100)}%`);
 
   return (
@@ -63,6 +85,20 @@ export function BidDecisionDashboard({ signals }: { signals: BidSignals }): Reac
           <span className="h4 mb-0">{a.pwin}%<span className="text-secondary fs-6"> PWin{a.preliminary ? ' (preliminary)' : ''}</span></span>
         )}
         <span className="fw-semibold">{a.headline}</span>
+      </div>
+
+      {/* AI read — advisory narrative over the deterministic result */}
+      <div className="mb-3">
+        <button type="button" className="btn btn-outline-primary btn-sm" disabled={narrativeBusy} onClick={() => { void explain(); }}>
+          <i className="ri-sparkling-2-line me-1" aria-hidden="true" />{narrativeBusy ? 'Analyzing…' : narrative ? 'Re-run AI read' : 'Explain this decision (AI)'}
+        </button>
+        {narrativeErr && <div className="alert alert-warning py-2 mt-2 mb-0 small" role="status">{narrativeErr}</div>}
+        {narrative && narrative.narrative && (
+          <div className="alert alert-light border mt-2 mb-0" role="status">
+            <div className="small text-secondary mb-1"><i className="ri-robot-2-line me-1" aria-hidden="true" />AI read — advisory; it explains the deterministic score, never changes it.</div>
+            <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{narrative.narrative}</div>
+          </div>
+        )}
       </div>
 
       {/* KPIs */}
