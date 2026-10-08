@@ -33,13 +33,21 @@
  * IDEMPOTENCY
  *   Row 1 keys on the real unique index `org_members_org_email_unique (org_id, email)`.
  *   Row 2 has no natural key and `program_blueprints.id` carries NO database default, so the id is
- *   DERIVED (uuid5 over a fixed namespace, the same construction as
- *   services/factory/factoryIds.ts) rather than random. A re-run therefore re-mints the SAME id and
- *   conflicts on the primary key instead of inserting a second programme.
+ *   DERIVED (uuid5 over this script own fixed namespace -- see PREREQ_NAMESPACE below, which is
+ *   deliberately NOT factoryIds.ts namespace) rather than random. A re-run therefore re-mints the
+ *   SAME id and conflicts on the primary key instead of inserting a second programme.
  *
  * SAFETY
- *   Dry-run by default. Writes only with `--apply`. Every statement is INSERT ... ON CONFLICT DO
- *   NOTHING; there is no UPDATE and no DELETE anywhere in this file.
+ *   Dry-run by default. Writes only with `--apply`. Both executed statements are
+ *   INSERT ... ON CONFLICT DO NOTHING, and **no UPDATE or DELETE is ever executed**. The word
+ *   DELETE does appear further down, in the printed rollback instructions -- those are strings for
+ *   a human to run, never passed to the driver. An earlier version of this comment claimed "no
+ *   DELETE anywhere in this file", which a task verifier correctly called inaccurate: the
+ *   behavioural claim held, the textual one did not.
+ *
+ * Run: `node backend/src/scripts/seedAgentDomainIdentityPrereqs.js [--apply]`
+ *
+ * Tests: `backend/src/scripts/__tests__/seedAgentDomainIdentityPrereqs.test.ts`
  */
 
 const { createHash } = require('crypto');
@@ -49,9 +57,11 @@ const DECLARED_WRITE_SET = Object.freeze(['org_members', 'program_blueprints']);
 
 /**
  * The Colaberry organisation of record. MEASURED, not assumed: three organisations are named
- * "Colaberry" (acdfa378..., f1ab8d0b..., ae873552...). This one holds 21 members including all
- * eight managers named in HUMAN_OWNERSHIP_MAP.md; the other two hold one member each. Writing into
- * the wrong one would create a member in a stale org and break manager resolution later.
+ * "Colaberry" (acdfa378..., f1ab8d0b..., ae873552...). Before this script ran, this one held 21
+ * members and SEVEN of the eight managers named in HUMAN_OWNERSHIP_MAP.md -- Dhee being the missing
+ * one, which is the whole premise of this task; 22 and all eight afterwards. The other two hold one
+ * member each, neither a named owner. Writing into the wrong one would create a member in a stale
+ * org and break manager resolution later.
  */
 const COLABERRY_ORG_ID = 'acdfa378-3613-4e6f-850f-1bbfb9d3e789';
 
@@ -68,7 +78,24 @@ const DHEE_ENROLLMENT_ID = 'a67fa986-b0ca-4a27-ae1a-61af875eeed2';
  */
 const DHEE_TEAM = 'Operations';
 
-const FACTORY_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+/**
+ * This script's OWN uuid5 namespace, and deliberately **not** `factoryIds.ts`'s.
+ *
+ * `services/factory/factoryIds.ts:10` pins `FACTORY_NAMESPACE` to
+ * 'b7c3f2a0-9e14-5c8b-a3d2-4f6e1a2b3c4d' under the comment "Never change it -- it would re-id the
+ * whole world". That namespace belongs to *factory records*. These two rows are an identity row and
+ * a programme row, neither of which is a factory record, so they are derived here under the
+ * standard RFC-4122 DNS namespace instead.
+ *
+ * An earlier version of this header said the derivation used "the same construction as
+ * factoryIds.ts, so this run keeps ONE id derivation path". A task verifier caught that: the
+ * *algorithm* is byte-identical, but the *namespace* differs, and two namespaces is not one path.
+ * Both ids below are already live in production, so importing `factoryIds.uuid5` now would change
+ * them and require reconciling two live rows -- a worse trade than naming the divergence. The
+ * record-kind prefixes ('org_member:', 'program_blueprint:') do not collide with T14's
+ * ('agent_domain_project'), so nothing is ambiguous in practice.
+ */
+const PREREQ_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
 function uuidToBytes(uuid) {
   const hex = uuid.replace(/-/g, '');
@@ -82,8 +109,12 @@ function bytesToUuid(b) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** uuid5, matching services/factory/factoryIds.ts so this run keeps ONE id derivation path. */
-function uuid5(name, namespace = FACTORY_NAMESPACE) {
+/**
+ * uuid5. Same algorithm as `services/factory/factoryIds.ts`, different namespace -- see
+ * PREREQ_NAMESPACE above. Determinism is what makes a re-run safe: `program_blueprints.id` carries
+ * no database default, so a random id would insert a second programme on every run.
+ */
+function uuid5(name, namespace = PREREQ_NAMESPACE) {
   const hash = createHash('sha1')
     .update(Buffer.concat([uuidToBytes(namespace), Buffer.from(name, 'utf8')]))
     .digest();
