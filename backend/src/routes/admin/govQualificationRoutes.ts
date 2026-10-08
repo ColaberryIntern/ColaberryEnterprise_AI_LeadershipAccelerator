@@ -86,6 +86,14 @@ function actorIdentity(req: Request): string {
   return String((req as any).admin?.email ?? (req as any).admin?.sub ?? 'unknown-admin');
 }
 
+/** The MASTER ADMIN (super_admin role, or the owner account) is exempt from the approve-pursuit separation of
+ *  duties and may approve their own pursuit — matches the platform's existing super_admin/owner precedent. Every
+ *  other admin stays blocked server-side. The exemption, when used, is audit-logged in the service. */
+function isMasterAdmin(req: Request): boolean {
+  const admin = (req as any).admin;
+  return admin?.role === 'super_admin' || admin?.email === 'ali@colaberry.com';
+}
+
 /** Map a qualification-service error to its HTTP status; returns true if it handled the response. */
 function mapQualificationError(res: Response, err: any): boolean {
   if (err instanceof QualificationConflictError) { res.status(409).json({ error: err.message, currentVersion: err.currentVersion }); return true; }
@@ -741,6 +749,7 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/approve', 
       const q = await approveDecoupledQualification({
         gwsKey: canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
         decision: b.data.decision, approverIdentityId: actorIdentity(req), rationale: b.data.rationale ?? null,
+        masterAdminOverride: isMasterAdmin(req),
       });
       const projectWarning = await createTwoTrackProjectAfterApproval(q, canonicalOpportunityId, actorIdentity(req));
       res.json({ qualification: q, ...(projectWarning ? { projectWarning } : {}) });
@@ -761,6 +770,7 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/approve', 
       canonicalOpportunityId, biddingEntity: b.data.biddingEntity, expectedVersion: b.data.expectedVersion,
       decision: b.data.decision, approverIdentityId: actorIdentity(req),
       rationale: b.data.rationale ?? null, effortCap: b.data.effortCap ?? null, reassessmentConditions: b.data.reassessmentConditions ?? null,
+      masterAdminOverride: isMasterAdmin(req),
     });
     const projectWarning = await createTwoTrackProjectAfterApproval(q, canonicalOpportunityId, actorIdentity(req));
     res.json({ qualification: q, ...(projectWarning ? { projectWarning } : {}) });
