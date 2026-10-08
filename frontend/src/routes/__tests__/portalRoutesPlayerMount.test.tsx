@@ -4,6 +4,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import portalRoutes from '../portalRoutes';
 import LiveMiniPlayer from '../../components/portal/LiveMiniPlayer';
+import LiveNowBadge from '../../components/portal/LiveNowBadge';
 import { BroadcastPlayerProvider } from '../../contexts/BroadcastPlayerContext';
 
 /**
@@ -90,6 +91,31 @@ describe('LiveMiniPlayer is mounted where it survives navigation', () => {
     const below = playerParents.slice(providerIndex + 1);
     // The layout <Route> is ABOVE the provider; anything routed below it would be a page.
     expect(below.filter((p) => typeof p.type === 'object' || String(p.type).includes('Route'))).toEqual([]);
+  });
+});
+
+describe('LiveNowBadge is mounted where DISMISSAL survives navigation', () => {
+  // Same gap as the player's, found the same way: a behavioural suite builds its own tree, so
+  // it stays green even after someone moves the real badge into a page. Dismissal held across
+  // route changes is an acceptance criterion, and it is a property of WHERE this is mounted.
+  it('appears exactly once in the portal route tree', () => {
+    expect(occurrencesOf(LiveNowBadge)).toHaveLength(1);
+  });
+
+  it('is a SIBLING of <Outlet/>, not inside a routed page', () => {
+    const [badgeParents] = occurrencesOf(LiveNowBadge);
+    const [outletParents] = occurrencesOf(Outlet);
+    expect(badgeParents[badgeParents.length - 1]).toBe(outletParents[outletParents.length - 1]);
+  });
+
+  it('shares the player provider, so opening from the badge reaches the player', () => {
+    const [badgeParents] = occurrencesOf(LiveNowBadge);
+    const [playerParents] = occurrencesOf(LiveMiniPlayer);
+    expect(badgeParents.some((p) => p.type === BroadcastPlayerProvider)).toBe(true);
+    // The same provider instance, not merely two providers of the same type.
+    const badgeProvider = badgeParents.find((p) => p.type === BroadcastPlayerProvider);
+    const playerProvider = playerParents.find((p) => p.type === BroadcastPlayerProvider);
+    expect(badgeProvider).toBe(playerProvider);
   });
 });
 

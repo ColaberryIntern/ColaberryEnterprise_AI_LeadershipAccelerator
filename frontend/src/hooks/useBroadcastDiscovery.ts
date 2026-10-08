@@ -1,0 +1,184 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import portalApi from '../utils/portalApi';
+
+/**
+ * Polls "what is airing" at the cadence the SERVER chooses.
+ *
+ * WHY POLLING AT ALL — the P3-09 decision, recorded in `rollout-runbook.md`. The only realtime
+ * transport in this app is `useRealtimeAwareness`, an `EventSource` for the ADMIN stream that
+ * authenticates with cookies. `EventSource` cannot send an Authorization header, and the
+ * portal authenticates with a Bearer JWT, so SSE here would mean putting the token in a query
+ * string — where it lands in access logs — or minting a cookie session for the portal. Both
+ * are worse than a 45-second poll of a payload measured in hundreds of bytes.
+ *
+ * THREE THINGS KEEP THIS FROM BECOMING A LOAD PROBLEM, and each is asserted by a test:
+ *
+ *  - The interval comes from `poll_after_ms` in the response, so an operator can slow every
+ *    client with an env change instead of a frontend deploy. It is still clamped CLIENT-side,
+ *    because a compromised or stale server answer must not be able to drive a one-second loop.
+ *  - A hidden tab does not poll. This is the largest saving available: most open portal tabs
+ *    are in a background window, and a badge nobody can see does not need refreshing. It
+ *    refreshes once on becoming visible again, so the first thing a returning viewer sees is
+ *    current.
+ *  - A failing endpoint backs off, capped, and never spins. A 503 from discovery means the
+ *    server could not work out what is airing; hammering it is the wrong response.
+ */
+
+export interface DiscoveryBroadcast {
+  id: string;
+  title: string;
+  access_mode: 'free' | 'paid' | 'preview' | 'private';
+  editorial_state: string;
+  room_id: string | null;
+  content_started_at: number | null;
+  scheduled_start_at: number | null;
+  can_watch: boolean;
+  reason: string;
+  offer_upgrade: boolean;
+  preview_seconds_remaining: number | null;
+}
+
+export interface DiscoveryResponse {
+  states: string[];
+  broadcasts: DiscoveryBroadcast[];
+  poll_after_ms: number;
+}
+
+/** Mirrors the server's clamp. A client must not trust a cadence it was handed. */
+export const CLIENT_MIN_POLL_MS = 15_000;
+export const CLIENT_MAX_POLL_MS = 300_000;
+export const CLIENT_DEFAULT_POLL_MS = 45_000;
+/** Backoff when discovery is unavailable: 1, 2, 4 … capped. */
+export const BACKOFF_CAP_MS = 300_000;
+
+export function clampPollMs(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number.NaN;
+  if (!Number.isFinite(n)) return CLIENT_DEFAULT_POLL_MS;
+  return Math.min(CLIENT_MAX_POLL_MS, Math.max(CLIENT_MIN_POLL_MS, n));
+}
+
+export function backoffMs(consecutiveFailures: number, base: number): number {
+  const factor = 2 ** Math.max(0, consecutiveFailures - 1);
+  return Math.min(BACKOFF_CAP_MS, base * factor);
+}
+
+export interface DiscoveryState {
+  /** Empty while loading, and empty when genuinely nothing is airing — see `unavailable`. */
+  broadcasts: DiscoveryBroadcast[];
+  /**
+   * True when the server could not work out what is airing. Distinct from an empty list on
+   * purpose: "nothing is live" and "we cannot tell" must not render identically, or an outage
+   * reads as a quiet evening.
+   */
+  unavailable: boolean;
+  loading: boolean;
+  refresh: () => void;
+}
+
+export interface DiscoveryDeps {
+  fetchDiscovery?: () => Promise<DiscoveryResponse>;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
+  /** Injected so a test can drive visibility without a real document. */
+  isVisible?: () => boolean;
+  subscribeVisibility?: (fn: () => void) => () => void;
+}
+
+async function defaultFetch(): Promise<DiscoveryResponse> {
+  const res = await portalApi.get('/api/portal/broadcasts/active');
+  return res.data as DiscoveryResponse;
+}
+
+function defaultIsVisible(): boolean {
+  if (typeof document === 'undefined') return true;
+  return document.visibilityState !== 'hidden';
+}
+
+function defaultSubscribeVisibility(fn: () => void): () => void {
+  if (typeof document === 'undefined') return () => undefined;
+  document.addEventListener('visibilitychange', fn);
+  return () => document.removeEventListener('visibilitychange', fn);
+}
+
+export function useBroadcastDiscovery(enabled: boolean, deps: DiscoveryDeps = {}): DiscoveryState {
+  const fetchDiscovery = deps.fetchDiscovery ?? defaultFetch;
+  const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+  const clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  const isVisible = deps.isVisible ?? defaultIsVisible;
+  const subscribeVisibility = deps.subscribeVisibility ?? defaultSubscribeVisibility;
+
+  const [broadcasts, setBroadcasts] = useState<DiscoveryBroadcast[]>([]);
+  const [unavailable, setUnavailable] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const timer = useRef<unknown>(null);
+  const failures = useRef(0);
+  const cadence = useRef(CLIENT_DEFAULT_POLL_MS);
+  const stopped = useRef(false);
+  /** Guards a late response from a superseded request landing on current state. */
+  const generation = useRef(0);
+
+  const clear = useCallback(() => {
+    if (timer.current !== null) { clearTimer(timer.current); timer.current = null; }
+  }, [clearTimer]);
+
+  const tick = useCallback(async () => {
+    if (stopped.current) return;
+    // A hidden tab arms no timer; this is the belt to that braces.
+    if (!isVisible()) return;
+
+    const mine = ++generation.current;
+    setLoading(true);
+    try {
+      const data = await fetchDiscovery();
+      if (stopped.current || mine !== generation.current) return;
+      failures.current = 0;
+      cadence.current = clampPollMs(data?.poll_after_ms);
+      setBroadcasts(Array.isArray(data?.broadcasts) ? data.broadcasts : []);
+      setUnavailable(false);
+    } catch {
+      if (stopped.current || mine !== generation.current) return;
+      failures.current += 1;
+      // The list is NOT cleared. A viewer mid-poll keeps seeing what was airing a minute ago,
+      // flagged as stale by `unavailable`, rather than watching the badge vanish because one
+      // request failed.
+      setUnavailable(true);
+    } finally {
+      if (!stopped.current && mine === generation.current) setLoading(false);
+    }
+
+    if (stopped.current || !isVisible()) return;
+    const delay = failures.current > 0
+      ? backoffMs(failures.current, cadence.current)
+      : cadence.current;
+    clear();
+    timer.current = setTimer(() => { void tick(); }, delay);
+  }, [fetchDiscovery, isVisible, setTimer, clear]);
+
+  const refresh = useCallback(() => { void tick(); }, [tick]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    stopped.current = false;
+    void tick();
+
+    const unsubscribe = subscribeVisibility(() => {
+      if (isVisible()) {
+        // Becoming visible refreshes immediately: the first thing a returning viewer sees
+        // should be current, not up to a cadence out of date.
+        void tick();
+      } else {
+        clear();
+      }
+    });
+
+    return () => {
+      stopped.current = true;
+      generation.current += 1;
+      clear();
+      unsubscribe();
+    };
+  }, [enabled, tick, subscribeVisibility, isVisible, clear]);
+
+  return { broadcasts, unavailable, loading, refresh };
+}

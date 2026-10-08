@@ -11,6 +11,7 @@ const PortalMgmtEnterPage = lazy(() => import('../pages/portal/PortalMgmtEnterPa
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import { BroadcastPlayerProvider } from '../contexts/BroadcastPlayerContext';
 import LiveMiniPlayer from '../components/portal/LiveMiniPlayer';
+import LiveNowBadge from '../components/portal/LiveNowBadge';
 const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage'));
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
@@ -68,6 +69,13 @@ const portalRoutes = (
             arrangements and asserts the node survives this one and is destroyed by the other,
             so a future re-parenting fails a test rather than a release.
           */}
+          {/*
+            Beside the player, and a sibling of <Outlet/> for the same two reasons: the
+            badge must not disappear on navigation, and DISMISSAL must not re-fire on
+            navigation. A dismissal held in page state comes back on every route change,
+            which is the acceptance criterion this placement satisfies.
+          */}
+          <LiveNowBadge />
           <LiveMiniPlayer />
         </BroadcastPlayerProvider>
       </ParticipantAuthProvider>

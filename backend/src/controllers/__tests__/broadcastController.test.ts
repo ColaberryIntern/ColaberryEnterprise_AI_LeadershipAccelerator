@@ -362,4 +362,32 @@ describe('getActiveBroadcasts', () => {
     await getActiveBroadcasts(req(), res);
     expect(res.json.mock.calls[0][0].states).toEqual(['live', 'reconnecting']);
   });
+
+  it('tells the client when to come back, so the cadence is tunable without a frontend deploy', async () => {
+    activeOccurrences.mockResolvedValue([]);
+    const previous = process.env.BROADCAST_DISCOVERY_POLL_MS;
+    process.env.BROADCAST_DISCOVERY_POLL_MS = '90000';
+    try {
+      const res = mockRes();
+      await getActiveBroadcasts(req(), res);
+      expect(res.json.mock.calls[0][0].poll_after_ms).toBe(90_000);
+    } finally {
+      if (previous === undefined) delete process.env.BROADCAST_DISCOVERY_POLL_MS;
+      else process.env.BROADCAST_DISCOVERY_POLL_MS = previous;
+    }
+  });
+
+  it('clamps a nonsense cadence rather than passing it to every open tab', async () => {
+    activeOccurrences.mockResolvedValue([]);
+    const previous = process.env.BROADCAST_DISCOVERY_POLL_MS;
+    process.env.BROADCAST_DISCOVERY_POLL_MS = '250';
+    try {
+      const res = mockRes();
+      await getActiveBroadcasts(req(), res);
+      expect(res.json.mock.calls[0][0].poll_after_ms).toBe(15_000);
+    } finally {
+      if (previous === undefined) delete process.env.BROADCAST_DISCOVERY_POLL_MS;
+      else process.env.BROADCAST_DISCOVERY_POLL_MS = previous;
+    }
+  });
 });

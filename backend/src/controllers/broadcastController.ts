@@ -7,6 +7,7 @@ import { resolveRoomEligibility } from '../services/broadcast/broadcastRoomEligi
 import { loadViewerAccessFacts } from '../services/broadcast/broadcastAccessDeps';
 import { projectDiscovery, DiscoveryEntry } from '../services/broadcast/broadcastDiscovery';
 import { ACTIVE_DISCOVERY_STATES, findActiveOccurrences } from '../services/broadcast/broadcastActiveQuery';
+import { resolvePollAfterMs } from '../services/broadcast/broadcastPollPolicy';
 import { signPlayback } from '../services/broadcast/broadcastPlaybackGrant';
 import BroadcastOccurrence from '../models/BroadcastOccurrence';
 
@@ -227,7 +228,14 @@ export async function getActiveBroadcasts(req: Request, res: Response): Promise<
       });
     }
 
-    res.json({ states: ACTIVE_DISCOVERY_STATES, broadcasts: projectDiscovery(entries) });
+    res.json({
+      states: ACTIVE_DISCOVERY_STATES,
+      broadcasts: projectDiscovery(entries),
+      // The SERVER decides the cadence, so it can be slowed during an incident by an env
+      // change rather than a frontend deploy. A client that picks its own interval cannot
+      // be turned down when it matters.
+      poll_after_ms: resolvePollAfterMs(process.env.BROADCAST_DISCOVERY_POLL_MS),
+    });
   } catch (err) {
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'error', service: 'broadcast',
