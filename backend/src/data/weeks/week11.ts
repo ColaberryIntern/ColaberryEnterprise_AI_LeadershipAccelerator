@@ -980,7 +980,7 @@ export const WEEK11_PACK: WeekPack = {
     ],
 
     beforeAfter: {
-      label: 'Monday → Thursday',
+      label: 'Before → After',
       before: [
         'A system only you can explain',
         'Ten weeks of decisions living in one head',
