@@ -25,10 +25,20 @@ const createDecoupledQualification = jest.fn();
 const getDecoupledWorkspace = jest.fn();
 const recordZipAttestation = jest.fn();
 const approveDecoupledQualification = jest.fn();
+const resolveDecoupledDeliveryProjectId = jest.fn();
 jest.mock('../../../services/factory/govQualification', () => {
   const actual = jest.requireActual('../../../services/factory/govQualification');
-  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a), createDecoupledQualification: (...a: any[]) => createDecoupledQualification(...a), getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a), recordZipAttestation: (...a: any[]) => recordZipAttestation(...a), approveDecoupledQualification: (...a: any[]) => approveDecoupledQualification(...a) };
+  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a), createDecoupledQualification: (...a: any[]) => createDecoupledQualification(...a), getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a), recordZipAttestation: (...a: any[]) => recordZipAttestation(...a), approveDecoupledQualification: (...a: any[]) => approveDecoupledQualification(...a), resolveDecoupledDeliveryProjectId: (...a: any[]) => resolveDecoupledDeliveryProjectId(...a) };
 });
+// P3-T2 build-story assignment — service mocked (its own unit test proves the assignee rail); keep AssignmentError real.
+const assignBuildStory = jest.fn();
+const unassignBuildStory = jest.fn();
+jest.mock('../../../services/factory/govBuildAssignment', () => {
+  const actual = jest.requireActual('../../../services/factory/govBuildAssignment');
+  return { ...actual, assignBuildStory: (...a: any[]) => assignBuildStory(...a), unassignBuildStory: (...a: any[]) => unassignBuildStory(...a) };
+});
+const resolveGovProjectActor = jest.fn();
+jest.mock('../../../middlewares/govProjectAccess', () => ({ resolveGovProjectActor: (...a: any[]) => resolveGovProjectActor(...a), requireGovProjectAccess: () => (_r: any, _s: any, n: any) => n() }));
 const authorizeBuild = jest.fn();
 jest.mock('../../../services/factory/buildAuthorization', () => {
   const actual = jest.requireActual('../../../services/factory/buildAuthorization');
@@ -61,6 +71,7 @@ import {
 } from '../../../services/factory/govQualification';
 import { DocumentNotListedError } from '../../../services/factory/govQualification';
 import { BuildNotAuthorizedError } from '../../../services/factory/buildAuthorization';
+import { AssignmentError } from '../../../services/factory/govBuildAssignment';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
 import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL } from '../../../services/factory/opportunities/govOpportunityFixtures';
 import { FLAGS } from '../../../config/featureFlags';
@@ -79,8 +90,8 @@ beforeEach(() => {
 describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
-    const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(11); // +1: GET source-bundle/:bundleId (the retained-ZIP download)
+    const routeLines = src.split('\n').filter((l) => /router\.(get|post|put|patch|delete)\(/.test(l));
+    expect(routeLines.length).toBe(13); // +2: POST + DELETE build-stories/:storyId/assign (the P3-T2 assignment write)
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -636,5 +647,57 @@ describe('step 6 — two-track project creation on approval (behind FLAGS.govIng
     expect(r.status).toBe(200);
     expect(r.body.qualification).toMatchObject({ id: 'q-approved' });
     expect(r.body.projectWarning).toContain('will be retried');
+  });
+});
+
+describe('POST/DELETE build-stories/:storyId/assign (P3-T2 assignment)', () => {
+  const GWS = 'gws:4d14fa10-5752-4ad3-bbea-061453ac6341';
+  const STORY = 'STORY-REQ-1';
+  const ASSIGNEE = '11111111-1111-4111-8111-111111111111'; // a real v4 UUID (DataTypes.UUIDV4 shape)
+  const assignUrl = `/api/admin/factory/qualification/${GWS}/build-stories/${STORY}/assign`;
+
+  it('assigns: resolves the gws→project, derives the canonical req id, and records the operator as assigner', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    resolveGovProjectActor.mockResolvedValue({ platformIdentityId: 'op-id', email: 'reviewer@test' });
+    assignBuildStory.mockResolvedValue({ id: 'as-1', storyId: STORY, canonicalReqId: 'REQ-1', assigneeIdentityId: ASSIGNEE, assignedByIdentityId: 'op-id', assignedAt: null });
+    const res = await request(app).post(assignUrl).send({ assigneeIdentityId: ASSIGNEE });
+    expect(res.status).toBe(200);
+    expect(assignBuildStory).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryProjectId: 'dp-1', storyId: STORY, canonicalReqId: 'REQ-1', assigneeIdentityId: ASSIGNEE, assignedByIdentityId: 'op-id',
+    }));
+    expect(res.body.assigneeIdentityId).toBe(ASSIGNEE);
+  });
+
+  it('404s when the opportunity has no delivery project yet (not approved)', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue(null);
+    const res = await request(app).post(assignUrl).send({ assigneeIdentityId: ASSIGNEE });
+    expect(res.status).toBe(404);
+    expect(assignBuildStory).not.toHaveBeenCalled();
+  });
+
+  it('422s with the reason when the assignee is not a builder (the service rail)', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    resolveGovProjectActor.mockResolvedValue({ platformIdentityId: 'op-id', email: 'reviewer@test' });
+    assignBuildStory.mockRejectedValue(new AssignmentError('The assignee is not a builder on this project.', 'assignee_not_builder'));
+    const res = await request(app).post(assignUrl).send({ assigneeIdentityId: ASSIGNEE });
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('assignee_not_builder');
+  });
+
+  it('400s a non-uuid assignee and a non-STORY story id, without calling the service', async () => {
+    const bad = await request(app).post(assignUrl).send({ assigneeIdentityId: 'not-a-uuid' });
+    expect(bad.status).toBe(400);
+    const badStory = await request(app).post(`/api/admin/factory/qualification/${GWS}/build-stories/REQ-1/assign`).send({ assigneeIdentityId: ASSIGNEE });
+    expect(badStory.status).toBe(400);
+    expect(assignBuildStory).not.toHaveBeenCalled();
+  });
+
+  it('DELETE removes the assignment (back to unassigned) via the resolved project', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    unassignBuildStory.mockResolvedValue({ ok: true, removed: 1 });
+    const res = await request(app).delete(assignUrl);
+    expect(res.status).toBe(200);
+    expect(unassignBuildStory).toHaveBeenCalledWith('dp-1', STORY);
+    expect(res.body).toMatchObject({ ok: true, removed: 1 });
   });
 });

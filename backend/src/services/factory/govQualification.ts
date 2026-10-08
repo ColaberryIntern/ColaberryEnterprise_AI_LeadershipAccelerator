@@ -259,13 +259,35 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   // Phase 3 (P3-T1): the Build-track plan — releases → stories → prompts, a deterministic projection of the
   // solution_build-classified requirements (admin requirements never become a feature). Each story is honestly
   // `unassigned` + carries its student Claude Code prompt; assignment + (disabled) execution are later steps.
-  const { deriveGovBuildPlan, buildGovStoryPrompt } = await import('./proposal/govBuildPlan');
+  const { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan } = await import('./proposal/govBuildPlan');
   const buildPlanBase = deriveGovBuildPlan(established);
-  const build = {
+  const deliveryProjectId: string | null = (recordJson && recordJson.delivery_project_id) || null;
+  const build: any = {
     releases: buildPlanBase.releases,
     stories: buildPlanBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) })),
+    orphanedStories: [],
     buildStoryCount: buildPlanBase.buildStoryCount,
+    deliveryProjectId,
+    assignableBuilders: [],
   };
+  // P3-T1/T2/T4: once this opportunity has been approved into a delivery project, overlay the PERSISTED assignment
+  // state + reconcile against revisions (orphaned work is surfaced, never dropped) + expose the assignable builders
+  // the admin picker needs. Best-effort: any failure leaves the pure derived plan intact (never breaks the workspace).
+  if (deliveryProjectId) {
+    try {
+      const { listBuildStoryAssignments, listAssignableBuilders } = await import('./govBuildAssignment');
+      const { listBuildStoryEvidence } = await import('./govBuildEvidence');
+      const [assignments, assignableBuilders, evidence] = await Promise.all([
+        listBuildStoryAssignments(deliveryProjectId),
+        listAssignableBuilders(deliveryProjectId),
+        listBuildStoryEvidence(deliveryProjectId),
+      ]);
+      const recon = reconcileGovBuildPlan(buildPlanBase.stories, assignments, evidence);
+      build.stories = recon.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) }));
+      build.orphanedStories = recon.orphanedStories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) }));
+      build.assignableBuilders = assignableBuilders;
+    } catch { /* leave the derived build as-is — the plan is still correct without the overlay */ }
+  }
   // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
   let sync: any = null;
   try { const { getGovSyncEntry } = await import('./govOpportunitySync'); sync = await getGovSyncEntry(gwsKey); } catch { sync = null; }
@@ -298,6 +320,22 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     syncChange: sync && sync.change && sync.change.kind !== 'none' ? sync.change : null,
     canApprove: evaluation.canApprovePursuit && coverage.sufficient,
   };
+}
+
+/**
+ * Resolve a decoupled (gws) opportunity key to the delivery project it was approved into, or null if it has not
+ * been approved yet (no project, so nothing to assign against). Scoped by tenant — a foreign tenant resolves to
+ * null, never another tenant's project. This is the gws → delivery_project bridge the admin build-assignment write
+ * needs so a story can be assigned (and the assignee checked) against the real project.
+ */
+export async function resolveDecoupledDeliveryProjectId(tenantId: string, gwsKey: string, biddingEntity?: string): Promise<string | null> {
+  if (!tenantId || !gwsKey) return null;
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const where: any = { canonical_opportunity_id: gwsKey, tenant_id: tenantId, status: 'active' };
+  if (biddingEntity) where.bidding_entity = biddingEntity;
+  const record: any = await GovQualification.findOne({ where, order: [['version', 'DESC']] });
+  const id = record && record.get ? record.get().delivery_project_id : null;
+  return id || null;
 }
 
 export interface RecordZipAttestationInput {

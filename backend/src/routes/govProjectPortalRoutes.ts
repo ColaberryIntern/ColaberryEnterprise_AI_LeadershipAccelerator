@@ -30,7 +30,10 @@ router.get(
       return;
     }
     try {
-      const view = await getStudentGovProjectView(projectId);
+      // Does THIS viewer hold evidence.verify? (a reviewer does; a student does not) — lights up reviewer controls.
+      const { hasDeliveryPermission } = await import('../modules/delivery/deliveryAuthorization');
+      const viewerCanVerify = !!(req.deliveryContext && hasDeliveryPermission(req.deliveryContext, 'evidence.verify'));
+      const view = await getStudentGovProjectView(projectId, viewerCanVerify);
       // Access already passed the guard; a null here means the project is not a (non-archived) gov project.
       if (!view) {
         res.status(404).json({ error: 'Not found' });

@@ -4,7 +4,7 @@
  * rule), each story CITES its requirement verbatim with a stable id, every story is honestly `unassigned`, and
  * garbage yields an empty plan. buildGovStoryPrompt cites the requirement verbatim and references no files.
  */
-import { deriveGovBuildPlan, buildGovStoryPrompt } from '../govBuildPlan';
+import { deriveGovBuildPlan, buildGovStoryPrompt, applyAssignmentsToStories, reconcileGovBuildPlan } from '../govBuildPlan';
 
 // A build-signal requirement (classifyRequirementTracks → solution_build via words like "system"/"database").
 const buildReq = (id: string, text: string) => ({ id, text, applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' });
@@ -68,5 +68,63 @@ describe('buildGovStoryPrompt', () => {
     expect(prompt).toContain('traced back to R1');                            // evidence traces to the requirement
     expect(prompt).toContain('not a software feature');                      // the anti-invention guard rail
     expect(prompt).not.toMatch(/\.(ts|tsx|js|py)\b/);                        // references no concrete file (no manifest here)
+  });
+});
+
+describe('applyAssignmentsToStories (P3-T2 overlay)', () => {
+  const stories = deriveGovBuildPlan([buildReq('R1', 'A search database system.'), buildReq('R2', 'A reporting dashboard.')]).stories;
+
+  it('overlays a persisted assignment to `assigned` + its assignee, and leaves the rest `unassigned` with no assignee', () => {
+    const out = applyAssignmentsToStories(stories, [{ storyId: 'STORY-R1', canonicalReqId: 'R1', assigneeIdentityId: 'builder-7', assignedAt: '2026-10-08T00:00:00Z' }]);
+    const r1 = out.find((s) => s.id === 'STORY-R1')!;
+    const r2 = out.find((s) => s.id === 'STORY-R2')!;
+    expect(r1.status).toBe('assigned');
+    expect(r1.assigneeIdentityId).toBe('builder-7');
+    expect(r2.status).toBe('unassigned');          // the honesty rail: no assignment ⇒ unassigned, never a phantom
+    expect(r2.assigneeIdentityId).toBeNull();
+  });
+
+  it('NEVER fabricates an assignee — a story with no matching assignment resets to unassigned/null even if one was set before', () => {
+    const preassigned = stories.map((s) => ({ ...s, status: 'assigned' as const, assigneeIdentityId: 'stale' }));
+    const out = applyAssignmentsToStories(preassigned, []); // no assignments at all
+    expect(out.every((s) => s.status === 'unassigned' && s.assigneeIdentityId === null)).toBe(true);
+  });
+
+  it('is total on garbage', () => {
+    expect(applyAssignmentsToStories(undefined as any, undefined as any)).toEqual([]);
+  });
+});
+
+describe('reconcileGovBuildPlan (P3-T4 revision-aware, preserves completed work)', () => {
+  const derived = deriveGovBuildPlan([buildReq('R1', 'A search database system.')]).stories; // only STORY-R1 derives now
+
+  it('surfaces a story whose requirement left the established set but which has EVIDENCE as an orphan — never drops it', () => {
+    const recon = reconcileGovBuildPlan(
+      derived,
+      [],
+      [{ storyId: 'STORY-R9', canonicalReqId: 'R9' }], // evidence for a story no longer derived (requirement revised away)
+    );
+    expect(recon.stories.map((s) => s.id)).toEqual(['STORY-R1']);     // the live plan is the current derivation
+    expect(recon.orphanedStories.map((s) => s.id)).toEqual(['STORY-R9']); // the completed work is PRESERVED, not lost
+    expect(recon.orphanedStories[0].orphaned).toBe(true);
+    expect(recon.orphanedStories[0].requirementId).toBe('R9');        // the traceability anchor survives the revision
+  });
+
+  it('surfaces an ASSIGNED story whose requirement was revised away as an orphan, assignee preserved', () => {
+    const recon = reconcileGovBuildPlan(
+      derived,
+      [{ storyId: 'STORY-R8', canonicalReqId: 'R8', assigneeIdentityId: 'builder-3', assignedAt: null }],
+      [],
+    );
+    const orphan = recon.orphanedStories.find((s) => s.id === 'STORY-R8')!;
+    expect(orphan).toBeTruthy();
+    expect(orphan.status).toBe('assigned');
+    expect(orphan.assigneeIdentityId).toBe('builder-3');
+  });
+
+  it('does NOT orphan a derived story that has evidence (its requirement is still established)', () => {
+    const recon = reconcileGovBuildPlan(derived, [], [{ storyId: 'STORY-R1', canonicalReqId: 'R1' }]);
+    expect(recon.orphanedStories).toEqual([]);
+    expect(recon.stories.map((s) => s.id)).toEqual(['STORY-R1']);
   });
 });

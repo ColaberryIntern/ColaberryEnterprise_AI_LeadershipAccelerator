@@ -10,12 +10,14 @@ import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContai
 import {
   createQualification, recordDecision, approveGovQualification, recordDocumentReview,
   createDecoupledQualification, getDecoupledWorkspace, recordZipAttestation, approveDecoupledQualification,
-  evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom,
+  evaluateRequirements, evaluateEvidenceCoverage, reviewedDocIdsFrom, resolveDecoupledDeliveryProjectId,
   QUALIFICATION_DECISIONS, APPROVAL_DECISIONS,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
   QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
   DocumentNotListedError,
 } from '../../services/factory/govQualification';
+import { assignBuildStory, unassignBuildStory, AssignmentError } from '../../services/factory/govBuildAssignment';
+import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
 import { authorizeBuild, BuildNotAuthorizedError } from '../../services/factory/buildAuthorization';
 import { linkGovOpportunity, AliasProjectNotFoundError, AliasProjectNotGovernmentError, AliasConflictError } from '../../services/factory/opportunities/govOpportunityAlias';
 import { resolveGovOpportunityDetail, isLiveOpDetailConfigured, describeSourceState } from '../../services/factory/opportunities/opDetailClient';
@@ -157,6 +159,72 @@ router.get('/api/admin/factory/qualification/:canonicalOpportunityId', requireSe
   } catch (err: any) {
     logFail('gov_qualification_view_failed', err, { canonicalOpportunityId });
     res.status(500).json({ error: 'Could not load the qualification workspace.' });
+  }
+});
+
+const storyIdParam = z.string().min(7).max(120).regex(/^STORY-/);
+const assignBody = z.object({ assigneeIdentityId: z.string().uuid() });
+
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/build-stories/:storyId/assign
+ * Assign a Build story to a project builder (P3-T2). requireSection('program') gates the OPERATOR; the SERVICE
+ * additionally requires the ASSIGNEE to be a `story.execute`-holding active member of the resolved delivery project
+ * — the gws build-auth gap closed for this write (build work cannot be assigned to a non-builder). The gws/canonical
+ * key resolves to its delivery project (404 before approval); idempotent upsert (one assignment per story).
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/build-stories/:storyId/assign', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const ps = storyIdParam.safeParse(req.params.storyId);
+  const pb = assignBody.safeParse(req.body ?? {});
+  if (!pk.success || !ps.success) { res.status(400).json({ error: 'Invalid opportunity key or story id.' }); return; }
+  if (!pb.success) { res.status(400).json({ error: 'An assignee identity (uuid) is required.' }); return; }
+  const be = biddingEntityField.safeParse((req.body?.biddingEntity as string) ?? (req.query.biddingEntity as string) ?? '');
+  const { canonicalOpportunityId } = pk.data;
+  const storyId = ps.data;
+  const scope = await scopeOrFail(res, 'gov_build_assign_scope', { canonicalOpportunityId, storyId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveDecoupledDeliveryProjectId(scope.tenantId, canonicalOpportunityId, be.success && be.data ? be.data : undefined);
+    if (!deliveryProjectId) { res.status(404).json({ error: 'This opportunity has not been approved into a delivery project yet.' }); return; }
+    const actor = await resolveGovProjectActor(req).catch(() => null);
+    const canonicalReqId = storyId.startsWith('STORY-') ? storyId.slice(6) : storyId;
+    const view = await assignBuildStory({
+      deliveryProjectId, storyId, canonicalReqId,
+      assigneeIdentityId: pb.data.assigneeIdentityId,
+      assignedByIdentityId: actor ? actor.platformIdentityId : null,
+    });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof AssignmentError) {
+      res.status(err.reason === 'assignee_not_builder' ? 422 : 400).json({ error: err.message, reason: err.reason });
+      return;
+    }
+    logFail('gov_build_assign_failed', err, { canonicalOpportunityId, storyId });
+    res.status(500).json({ error: 'Could not assign the build story.' });
+  }
+});
+
+/**
+ * DELETE /api/admin/factory/qualification/:canonicalOpportunityId/build-stories/:storyId/assign
+ * Remove a story's assignment (back to `unassigned`). Idempotent — removing a non-existent assignment is a no-op.
+ */
+router.delete('/api/admin/factory/qualification/:canonicalOpportunityId/build-stories/:storyId/assign', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const ps = storyIdParam.safeParse(req.params.storyId);
+  if (!pk.success || !ps.success) { res.status(400).json({ error: 'Invalid opportunity key or story id.' }); return; }
+  const be = biddingEntityField.safeParse((req.query.biddingEntity as string) ?? '');
+  const { canonicalOpportunityId } = pk.data;
+  const storyId = ps.data;
+  const scope = await scopeOrFail(res, 'gov_build_unassign_scope', { canonicalOpportunityId, storyId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveDecoupledDeliveryProjectId(scope.tenantId, canonicalOpportunityId, be.success && be.data ? be.data : undefined);
+    if (!deliveryProjectId) { res.status(404).json({ error: 'This opportunity has not been approved into a delivery project yet.' }); return; }
+    const result = await unassignBuildStory(deliveryProjectId, storyId);
+    res.json(result);
+  } catch (err: any) {
+    logFail('gov_build_unassign_failed', err, { canonicalOpportunityId, storyId });
+    res.status(500).json({ error: 'Could not remove the assignment.' });
   }
 });
 
