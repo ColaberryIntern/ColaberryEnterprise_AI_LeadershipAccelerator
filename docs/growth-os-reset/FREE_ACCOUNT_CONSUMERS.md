@@ -239,7 +239,10 @@ makes sense with all three:**
 **The customer fact needs both terms, which is why it does not move here and why T206 exists —
 row 15:**
 
-- `backend/src/services/growthJourney/subjectResolver.ts:359` → "if (enrollment && enrollment.tier !== 'guest' && enrollment.payment_status === 'paid') return { paid: true, basis: 'payment_status' };"
+- `backend/src/services/growthJourney/subjectResolver.ts:372` → "enrollment && enrollment.tier !== 'guest' && enrollment.payment_status === 'paid',"
+
+  T210 reshaped this into a call to the one shared conversion definition and added the
+  `plan <> 'comp'` term it never had. The paid/non-guest rule itself is unchanged.
 
 **The Sequelize operator-object filter that the first scan could not see — row 29, the admin
 dashboard's three counts:**

@@ -52,7 +52,7 @@ A file named in prose without a line number is **not** evidence. Only the cited 
 The evidence, one citation per line:
 
 - Claim 1 — `backend/src/models/Lead.ts:102` → "declare ghl_contact_id: string | null;"
-- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:85` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
+- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:112` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
 - Claim 3 — `backend/src/services/ghlService.ts:54` → "const GHL_BASE = 'https://rest.gohighlevel.com/v1';"
 - Claim 4 — `backend/src/routes/calendarRoutes.ts:6` → "router.get('/api/calendar/availability', handleGetAvailability);"
 - Claim 4 — `backend/src/services/calendarService.ts:225` → "export async function createBooking(data: BookingInput): Promise<BookingResult> {"
@@ -83,7 +83,7 @@ constraints require. But "supports different sub-accounts" overstates what is li
 Fail-closed is confirmed at the deciding line — a lead routed to a non-default account
 with no key returns this rather than the default account's credential:
 
-`backend/src/services/leads/ghlAccountRouting.ts:95` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:122` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 The type-level guarantee is stronger than the runtime one: the result union only carries an
 `apiKey` on the ready branch, so a caller cannot reach a credential on the unconfigured
@@ -331,12 +331,16 @@ So whichever he picks is already enforceable.
    derived from the mere existence of an enrollment row by email, with no check of
    `enrollment_type`, `tier` or `payment_status`:
 
-`backend/src/services/adminOs/personProfileService.ts:229` → "WHEN e.email IS NOT NULL THEN 'enrolled_student'"
+**CLOSED by T210, 2026-10-08.** Staging now requires authoritative paid state, so an
+   unpaid Explorer is no longer post-conversion and its temperature and lead score are no
+   longer nulled:
+
+`backend/src/services/adminOs/conversionState.ts:94` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
    and that stage is treated as post-conversion, which nulls temperature and lead score
    **on the server**, not merely hiding them in the UI:
 
-`backend/src/services/adminOs/personProfileService.ts:297` → "row.temperatureUpdatedAt = null;"
+`backend/src/services/adminOs/personProfileService.ts:300` → "row.temperatureUpdatedAt = null;"
 
    with this explanation attached to the suppression:
 

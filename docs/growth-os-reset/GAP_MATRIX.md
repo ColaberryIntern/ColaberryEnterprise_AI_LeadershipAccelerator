@@ -68,7 +68,10 @@ the "source of truth" would have been bypassed silently.
 **Current:** stage is derived from the existence of an enrollment row by email, with no check
 of type, tier or payment, and post-conversion stages null the score on the server.
 
-`backend/src/services/adminOs/personProfileService.ts:229` → "WHEN e.email IS NOT NULL THEN 'enrolled_student'"
+**CLOSED by T210, 2026-10-08** — one shared derivation requiring authoritative paid state,
+plus a new `explorer` lifecycle stage (T209) so the population has a name:
+
+`backend/src/services/adminOs/conversionState.ts:94` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
 **Disposition: FIX — Phase 2.** The narrowest correct change is to the stage derivation, not
 to the suppression rule: suppressing intent for someone who really has converted is right.
@@ -246,7 +249,7 @@ external boundary.
 **Current:** both routed source groups resolve to `unconfigured` and are withheld.
 **Disposition: CONFIGURE — Phase 4**, and **KEEP fail-closed**:
 
-`backend/src/services/leads/ghlAccountRouting.ts:95` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:122` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 ### F5 — A corrupt route map fails open to the default account
 **Current:** a deliberate choice with a test asserting it.
