@@ -123,10 +123,15 @@ const ProjectLifecyclePage: React.FC = () => {
       {selected !== null && linked !== null && (
         <LinkedRecords result={linked} entityId={selected} />
       )}
-      {revision !== null && result.status.permittedActions.includes('request_changes') && (
+      {revision !== null && (result.status.permittedActions ?? []).includes('request_changes') && (
         // GATED ON THE SERVER'S ANSWER, not on a role check written here. Before this, the panel
         // was offered to every viewer and an observer's submit came back 403 — the exact
         // disagreement between visible actions and server permissions that LC-14 forbids.
+        //
+        // `?? []` because the status arrives through an unvalidated cast. A frontend deployed
+        // ahead of its backend — a failure mode this repo has shipped — would otherwise reach
+        // `undefined.includes` and white-screen the page instead of withholding the action.
+        // A missing field must fail CLOSED.
         <BlueprintChangeRequest revision={revision} onSubmit={submitChanges} />
       )}
     </div>

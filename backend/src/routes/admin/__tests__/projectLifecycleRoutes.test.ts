@@ -973,29 +973,61 @@ describe('LC-14 per ROUTE, over a route list derived from the source', () => {
     expect(unbalanced).toEqual([]);
   });
 
+  /**
+   * Handlers with no `TenantAccessError` branch, reading CODE rather than prose.
+   *
+   * Comments are stripped first. A guard name mentioned in a comment is not a guard, and a
+   * sweep satisfied by prose reports coverage it does not have.
+   */
+  const handlersWithoutTenantBranch = (excused: Record<string, string>): string[] => {
+    const out: string[] = [];
+    for (const file of FILES) {
+      const raw = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+      const code = raw
+      // CRLF IS NORMALISED FIRST, and that is not housekeeping. These route files are CRLF in
+      // this worktree, so every line ends with a carriage return. In /\/\/.*$/ the dot does not
+      // match it, so $ never matches and the strip SILENTLY NO-OPS - which left this sweep
+      // reading prose as code, the exact defect it was written to fix. A no-op strip is worse
+      // than no strip: it looks like a control.
+        .replace(/\r\n/g, '\n')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+      const blocks = code.split(/router\.(?:get|post|put|patch|delete)\(/).slice(1);
+      const paths = [...code.matchAll(/router\.(?:get|post|put|patch|delete)\(\s*`\$\{PREFIX\}([^`]*)`/g)]
+        .map((m) => m[1]);
+      blocks.forEach((block, i) => {
+        const suffix = paths[i] ?? `#${i}`;
+        if (Object.keys(excused).some((k) => suffix.endsWith(k))) return;
+        if (!block.includes('TenantAccessError')) out.push(`${file}${suffix}`);
+      });
+    }
+    return out;
+  };
+
+  const NO_TENANT_BRANCH: Record<string, string> = {
+    '/compose': 'composeBlueprint is pure and touches no tenant-scoped row, so it cannot raise '
+      + 'TenantAccessError. The branch was removed rather than left as an expectation nothing '
+      + 'could reach - a mutation deleting it survived every test.',
+  };
+
   it('CROSS-TENANT READ: every route maps a tenancy denial to the guard’s own status', () => {
     // Asserted on the source, because each handler reaches a different service and a
     // behavioural sweep would need a different double per route. The exception list is explicit
     // so a handler losing its branch cannot hide in a count.
-    const NO_TENANT_BRANCH: Record<string, string> = {
-      '/compose': 'composeBlueprint is pure and touches no tenant-scoped row, so it cannot raise '
-        + 'TenantAccessError. The branch was removed rather than left as an expectation nothing '
-        + 'could reach - a mutation deleting it survived every test.',
-    };
-    const missing: string[] = [];
-    for (const file of FILES) {
-      const text = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
-      // One block per handler: split on the declaration, keep what follows it.
-      const blocks = text.split(/router\.(?:get|post|put|patch|delete)\(/).slice(1);
-      const paths = [...text.matchAll(/router\.(?:get|post|put|patch|delete)\(\s*`\$\{PREFIX\}([^`]*)`/g)]
-        .map((m) => m[1]);
-      blocks.forEach((block, i) => {
-        const suffix = paths[i] ?? `#${i}`;
-        const excused = Object.keys(NO_TENANT_BRANCH).some((k) => suffix.endsWith(k));
-        if (!block.includes('TenantAccessError') && !excused) missing.push(`${file}${suffix}`);
-      });
-    }
+    const missing = handlersWithoutTenantBranch(NO_TENANT_BRANCH);
     expect(missing).toEqual([]);
+  });
+
+  it('POSITIVE CONTROL: the exclusion is a LIVE mechanism, not documentation', () => {
+    // The verifier found that `/compose` was excused by an exclusion that never fired: the
+    // handler's own explanatory comment contains the string `TenantAccessError`, so a substring
+    // check already passed. Comments are now stripped before the check — which means the
+    // exclusion has to do real work, and this test proves it does by removing it.
+    //
+    // This repo has recorded the same trap twice: prose containing a guard name satisfied
+    // `lint-route-auth`, and this suite's own module-scope-import check carries a comment saying
+    // to match import statements rather than substrings. The warning was already written here.
+    expect(handlersWithoutTenantBranch({})).toEqual(['projectLifecycleRoutes.ts/:projectId/compose']);
   });
 
   it('CROSS-TENANT READ: a denial keeps the guard’s status rather than becoming a 500', async () => {

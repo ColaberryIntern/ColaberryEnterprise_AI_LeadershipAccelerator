@@ -1022,3 +1022,59 @@ evidence, assumptions, notes — in `docs/sessions/CC-20261001-q7m4.md` and in e
 
 Recorded here so the next verifier does not re-raise it as a finding, and so the phase PR can
 state the deviation rather than have it discovered at merge time.
+
+### A REGEX COMMENT-STRIPPER SILENTLY NO-OPS ON CRLF FILES
+
+The third CRLF trap of this session, and the most instructive. P5-T7's cross-tenant sweep checked
+each route handler for a `TenantAccessError` branch with `block.includes(...)`, which the verifier
+found could be satisfied by a COMMENT — the `/compose` handler's explanatory prose contains the
+string, so its exclusion entry never fired.
+
+The fix was to strip comments first. **That fix was itself a no-op.** These route files are CRLF
+in this worktree, so every line ends with a carriage return, and in `/\/\/.*$/` the `.` does not
+match `` — so `$` never matches, the replacement does nothing, and the sweep went on reading
+prose as code while *looking* like it had been fixed. Caught only because the new positive control
+(assert `/compose` IS flagged when the exclusion is removed) returned an empty list.
+
+**A no-op strip is worse than no strip: it looks like a control.** Normalise CRLF before any
+line-oriented regex, and give every exclusion list a positive control proving it does work.
+
+### Test files in this repo are NOT held to the 500-line source ceiling, measured
+
+The P5-T7 verifier docked a conventions point because `projectLifecycleRoutes.test.ts` is over
+1000 lines against CLAUDE.md's 500-line hard ceiling, which the table does not exempt tests from.
+
+Measured before deciding: `find src -name "*.test.ts" | wc -l` ranked by size shows SIX test files
+over 1000 lines — `caseStudyPublicationService.test.ts` 1748, `coryExecutiveReadiness.test.ts`
+1347, `agentDetailService.test.ts` 1204, `determinismGate.test.ts` 1017 and
+`workspaceMapping.test.ts` 1004, the last of which is from THIS phase. The lifecycle route suite
+is the fourth largest and entirely typical.
+
+So this is a repo-wide convention question, not a task defect. It was NOT split, because making it
+the only split test file would require a shared-harness indirection (jest.mock is hoisted, so the
+doubles cannot simply be imported) that makes the tests harder to read in one sitting — the
+opposite of what the ceiling exists for. **If the DRI wants test files held to the ceiling, that is
+a change to six or more files across several subsystems, and belongs in its own packet.** Raised at
+the phase PR with this evidence.
+
+### What the approval absence-tripwire does NOT catch
+
+Recorded by the P5-T7 verifier, worth keeping rather than fixing. The tripwire asserts the set of
+modules referencing `approveLifecycleBlueprint` is exactly the definition and the one route. It
+catches plain imports and re-exports. It does NOT catch:
+
+- a computed access such as `mod['approve' + 'LifecycleBlueprint']`
+- a worker that calls the ROUTE over HTTP
+
+The second is not a bypass — that path runs `requireSection`, the flag check and
+`loadAndAuthorize(…, 'write')`. So only deliberate concealment escapes the tripwire, which is the
+right bar for a tripwire standing in for an untestable absence. The live refusal is still owed by
+P6-T1.
+
+### `personaMayPerform` has no production caller, deliberately
+
+Grepped across `backend/src` and `frontend/src` excluding tests: nothing calls it. That is the
+CORRECT outcome — a persona is a coarse view and spans roles of different authority, so using one
+as an authorisation decision would grant on the strongest member. Authorisation goes through
+`permittedActionsForRole` (the caller's own role) and the server's own `deliveryPermissionsFor`
+check. The function exists so the published persona matrix is executable rather than prose.

@@ -574,6 +574,29 @@ describe('VISIBLE ACTIONS FOLLOW THE SERVER, not a role check written here', () 
     expect(q('compare-panel')).not.toBeNull();
   });
 
+  it('FAILS CLOSED when the field is absent entirely, rather than throwing', async () => {
+    // The status arrives through an unvalidated cast, so a frontend deployed ahead of its
+    // backend - a failure mode this repo has shipped - would hit `undefined.includes` and
+    // white-screen the page. A missing field must withhold the action, not break the surface.
+    api.get.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes('/revisions/compare')) return Promise.resolve({ data: compared() });
+      const { permittedActions, ...withoutTheField } = statusWith(['request_changes']);
+      return Promise.resolve({ data: withoutTheField });
+    });
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin/project-lifecycle/p-1?kind=delivery']}>
+          <Routes>{lifecycleRoutes}</Routes>
+        </MemoryRouter>,
+      );
+    });
+    expect(q('change-request')).toBeNull();
+    // The page still renders: the absent field withheld one control, it did not break the view.
+    expect(q('lifecycle-page')).not.toBeNull();
+    expect(q('compare-panel')).not.toBeNull();
+  });
+
   it('withholds it when the caller holds OTHER actions but not this one', async () => {
     // Not "has any permission" — the specific action is what gates the specific panel.
     await mount(['execute_story', 'advance_design']);
