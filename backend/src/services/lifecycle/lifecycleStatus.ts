@@ -22,6 +22,8 @@ import type { TransitionDecision } from './lifecycleTransition';
 import type { ManifestRefs } from './adapters/manifestRefs';
 import type { ApprovalScope, ApproveBlueprintResult } from './blueprintApproval';
 import { readLifecycleEvidence, type LifecycleRow } from './lifecycleEvidence';
+import type { Persona } from './lifecyclePersonas';
+import type { GatedAction } from './lifecycleActions';
 
 export type ProjectKind = 'student' | 'delivery';
 
@@ -55,6 +57,20 @@ export interface LifecycleStatus {
    * three times already.
    */
   stages: ReadonlyArray<LifecycleStage>;
+  /**
+   * The review personas this caller holds, and the gated actions they may actually perform.
+   *
+   * SERVED, NOT COMPUTED ON THE CLIENT. A frontend copy of the role-to-permission table would be
+   * a second definition of the grant table, and the drift shows up as a surface offering an
+   * action the server then refuses — which is what happened before this field existed: the
+   * change-request panel was offered to an observer and 403'd on submit.
+   *
+   * `permittedActions` is the authority of THIS caller's role, not of their persona. A persona
+   * spans roles of different authority, so "an author may approve" is true while an associate
+   * builder may not.
+   */
+  viewerPersonas: ReadonlyArray<Persona>;
+  permittedActions: ReadonlyArray<GatedAction>;
   /** The next stage, or null at steady state. */
   nextStage: LifecycleStage | null;
   /** What is missing before the next stage. Empty when it is ready. */
@@ -138,6 +154,13 @@ export async function readLifecycleStatus(input: {
   const { prerequisiteGaps, blockingGaps } = await import('./lifecyclePrerequisites');
   const { STAGE_PERMISSION } = await import('./lifecycleTransition');
 
+  const { personasForRole } = await import('./lifecyclePersonas');
+  const { permittedActionsForRole } = await import('./lifecycleActions');
+  const role = input.admin?.role ?? '';
+  // Both fail closed on an unknown or absent role — see `permittedActionsForRole`, which is
+  // where that behaviour is tested rather than being inline and unreachable from a test.
+  const permittedActions = permittedActionsForRole(role);
+
   const stage = stages.isLifecycleStage(row.stage) ? row.stage : 'discovery';
   const nextStage = stages.ADVANCE[stage];
   const blockers = nextStage ? blockingGaps(prerequisiteGaps(nextStage, await readLifecycleEvidence(row))) : [];
@@ -150,6 +173,8 @@ export async function readLifecycleStatus(input: {
     conditionReason: row.condition_reason,
     completedStages: stages.completedStages(stage),
     stages: LIFECYCLE_STAGES,
+    viewerPersonas: personasForRole(role),
+    permittedActions,
     nextStage,
     blockers,
     nextActorRole: nextStage ? STAGE_PERMISSION[nextStage] : null,

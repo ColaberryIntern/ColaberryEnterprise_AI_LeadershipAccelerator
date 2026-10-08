@@ -123,7 +123,10 @@ const ProjectLifecyclePage: React.FC = () => {
       {selected !== null && linked !== null && (
         <LinkedRecords result={linked} entityId={selected} />
       )}
-      {revision !== null && (
+      {revision !== null && result.status.permittedActions.includes('request_changes') && (
+        // GATED ON THE SERVER'S ANSWER, not on a role check written here. Before this, the panel
+        // was offered to every viewer and an observer's submit came back 403 — the exact
+        // disagreement between visible actions and server permissions that LC-14 forbids.
         <BlueprintChangeRequest revision={revision} onSubmit={submitChanges} />
       )}
     </div>

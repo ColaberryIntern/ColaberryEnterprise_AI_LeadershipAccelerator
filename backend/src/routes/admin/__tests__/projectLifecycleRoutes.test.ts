@@ -79,7 +79,7 @@ import {
 } from '../../../services/lifecycle/blueprintApproval';
 import router from '../projectLifecycleRoutes';
 import reviewRouter from '../projectLifecycleReviewRoutes';
-import { composeBody } from '../../../schemas/projectLifecycleSchema';
+import { composeBody, approveBody } from '../../../schemas/projectLifecycleSchema';
 
 const PROJECT = '11111111-1111-4111-8111-111111111111';
 const MANIFEST = '22222222-2222-4222-8222-222222222222';
@@ -899,5 +899,162 @@ describe('GET /linked', () => {
     const res = await request(app()).get(url('kind=student&entityId=REQ-1'));
     expect(res.status).toBe(200);
     expect(res.body.unlinked.kind).toBe('entity_not_in_manifest');
+  });
+});
+
+describe('LC-14 per ROUTE, over a route list derived from the source', () => {
+  /**
+   * PER ROUTE, not per file, and the list is parsed out of the source rather than typed here.
+   *
+   * `lint-route-auth` reads per FILE and is satisfied by one occurrence of a guard name anywhere
+   * in the text, so an unguarded route inside a guarded file passes it. A hand-written list of
+   * cases has the same blind spot one level up: it cannot fail for a route nobody added to it.
+   * Deriving the list means a new lifecycle route is swept the moment it exists.
+   *
+   * Three of LC-14's four clauses are evidenced here. The fourth — no worker or job bypass — has
+   * no path to test, so an absence tripwire stands in for it in `lifecyclePersonas.test.ts`, and
+   * LC-14 is recorded PARTIAL rather than claimed whole.
+   */
+  const FILES = ['projectLifecycleRoutes.ts', 'projectLifecycleReviewRoutes.ts'];
+
+  /** Every `router.<verb>(` declaration in both files, as a method and a concrete path. */
+  const routes = FILES.flatMap((file) => {
+    const text = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    const out: Array<{ file: string; method: string; path: string; body: string }> = [];
+    const re = /router\.(get|post|put|patch|delete)\(\s*`\$\{PREFIX\}([^`]*)`/g;
+    let m: RegExpExecArray | null = re.exec(text);
+    while (m !== null) {
+      out.push({
+        file,
+        method: m[1],
+        // The declared suffix with its one param substituted for a real UUID.
+        path: `/api/admin/project-lifecycle${m[2].replace(':projectId', PROJECT)}`,
+        body: '',
+      });
+      m = re.exec(text);
+    }
+    return out;
+  });
+
+  it('found every route in both files, and the parser is not silently matching nothing', () => {
+    // Non-vacuity: every sweep below iterates this list, so an empty or short list would make
+    // all of them pass without exercising a single route.
+    expect(routes.length).toBe(7);
+    expect(routes.filter((r) => r.path.includes(':'))).toEqual([]);
+    expect(new Set(routes.map((r) => r.file)).size).toBe(2);
+    // POSITIVE CONTROL: the pattern does match a real declaration.
+    expect('router.get(`${PREFIX}/:projectId/x`, h)')
+      .toMatch(/router\.(get|post|put|patch|delete)\(\s*`\$\{PREFIX\}([^`]*)`/);
+  });
+
+  it('DIRECT API BYPASS: every route refuses when the feature flag is off', async () => {
+    // The flag check runs before validation in every handler, so an empty body still reaches it.
+    // A new route that forgets the check answers something other than 409 and is named here.
+    FLAGS.lifecycleEnforcement = false;
+    const wrong: string[] = [];
+    for (const r of routes) {
+      const res = await (request(app()) as any)[r.method](r.path).send({});
+      if (res.status !== 409 || res.body?.lifecycleDisabled !== true) {
+        wrong.push(`${r.method.toUpperCase()} ${r.path} -> ${res.status}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('DIRECT API BYPASS: every route is behind requireSection, per route not per file', () => {
+    const unbalanced = FILES.map((file) => {
+      const text = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+      return {
+        file,
+        handlers: (text.match(/router\.(get|post|put|patch|delete)\(/g) ?? []).length,
+        guarded: (text.match(/requireSection\(SECTION\)/g) ?? []).length,
+      };
+    }).filter((r) => r.handlers === 0 || r.handlers !== r.guarded);
+    expect(unbalanced).toEqual([]);
+  });
+
+  it('CROSS-TENANT READ: every route maps a tenancy denial to the guard’s own status', () => {
+    // Asserted on the source, because each handler reaches a different service and a
+    // behavioural sweep would need a different double per route. The exception list is explicit
+    // so a handler losing its branch cannot hide in a count.
+    const NO_TENANT_BRANCH: Record<string, string> = {
+      '/compose': 'composeBlueprint is pure and touches no tenant-scoped row, so it cannot raise '
+        + 'TenantAccessError. The branch was removed rather than left as an expectation nothing '
+        + 'could reach - a mutation deleting it survived every test.',
+    };
+    const missing: string[] = [];
+    for (const file of FILES) {
+      const text = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+      // One block per handler: split on the declaration, keep what follows it.
+      const blocks = text.split(/router\.(?:get|post|put|patch|delete)\(/).slice(1);
+      const paths = [...text.matchAll(/router\.(?:get|post|put|patch|delete)\(\s*`\$\{PREFIX\}([^`]*)`/g)]
+        .map((m) => m[1]);
+      blocks.forEach((block, i) => {
+        const suffix = paths[i] ?? `#${i}`;
+        const excused = Object.keys(NO_TENANT_BRANCH).some((k) => suffix.endsWith(k));
+        if (!block.includes('TenantAccessError') && !excused) missing.push(`${file}${suffix}`);
+      });
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('CROSS-TENANT READ: a denial keeps the guard’s status rather than becoming a 500', async () => {
+    // The behavioural half, on one representative route per service seam. The guard's own
+    // status is authoritative: flattening it to 500 would tell an operator the system broke
+    // when it had correctly refused them.
+    readLifecycleStatus.mockRejectedValue(
+      Object.assign(new Error('other tenant'), { name: 'TenantAccessError', status: 403 }),
+    );
+    const res = await request(app()).get(`/api/admin/project-lifecycle/${PROJECT}?kind=student`);
+    expect(res.status).toBe(403);
+    expect(res.body.error).toContain('other tenant');
+  });
+
+  it('FORGED APPROVAL: the approver is never read from the request body', async () => {
+    // The schema has no field for it, so a body carrying one cannot reach the service even if a
+    // handler tried to pass it along.
+    const withForgedApprover = {
+      manifestId: MANIFEST,
+      expectedRevision: 1,
+      scope: 'documented',
+      approvedBy: 'someone-else',
+      approver: 'someone-else',
+      approvedByIdentityId: 'someone-else',
+      admin: { email: 'attacker@test', role: 'DELIVERY_OWNER' },
+    };
+    // The service's real result shape: the handler reads `alreadyApproved` and `approval.*`,
+    // and answers 201 for a new approval, 200 for an idempotent hit.
+    approveLifecycleBlueprint.mockResolvedValue({
+      alreadyApproved: false,
+      approval: { approved_by: 'admin@test', approved_at: '2026-10-08T00:00:00.000Z', revision: 1 },
+    });
+    const res = await request(app())
+      .post(`/api/admin/project-lifecycle/${PROJECT}/approve`)
+      .send(withForgedApprover);
+    expect(res.status).toBe(201);
+    // The recorded approver is the authenticated identity, never the body's claim.
+    expect(res.body.approvedBy).toBe('admin@test');
+
+    const passed = approveLifecycleBlueprint.mock.calls[0][0];
+    // Nothing the body offered about identity survives into the service call.
+    for (const forged of ['approvedBy', 'approver', 'approvedByIdentityId']) {
+      expect(Object.prototype.hasOwnProperty.call(passed, forged)).toBe(false);
+    }
+    // The admin is the one the guard put on the request, not the one in the body.
+    expect(passed.admin.email).toBe('admin@test');
+    expect(JSON.stringify(passed)).not.toContain('attacker@test');
+    expect(JSON.stringify(passed)).not.toContain('someone-else');
+  });
+
+  it('FORGED APPROVAL: the approve schema declares no approver field at all', () => {
+    // A parse that silently dropped the field would also pass the test above; this asserts the
+    // contract rather than one handler's behaviour.
+    const parsed = approveBody.safeParse({
+      manifestId: MANIFEST, expectedRevision: 2, scope: 'full',
+      approvedBy: 'x', approver: 'y',
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) throw new Error('unreachable');
+    expect(Object.keys(parsed.data).sort()).toEqual(['expectedRevision', 'manifestId', 'scope']);
   });
 });

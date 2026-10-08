@@ -325,6 +325,7 @@ describe('the page MOUNTS both panels, so neither is a producer with no consumer
     condition: null, conditionReason: null,
     completedStages: ['discovery'], stages: ['discovery', 'awaiting_blueprint_approval'],
     nextStage: null, blockers: [], nextActorRole: 'architect', nextAction: 'Approve or return it.',
+    viewerPersonas: ['owner'], permittedActions: ['request_changes'],
   };
 
   const mountPage = async (comparePayload: unknown) => {
@@ -441,6 +442,7 @@ describe('selecting a changed id reveals that record’s connections', () => {
     condition: null, conditionReason: null,
     completedStages: ['discovery'], stages: ['discovery', 'awaiting_blueprint_approval'],
     nextStage: null, blockers: [], nextActorRole: 'architect', nextAction: 'Approve or return it.',
+    viewerPersonas: ['owner'], permittedActions: ['request_changes'],
   };
 
   const comparePayload = compared({
@@ -526,5 +528,55 @@ describe('selecting a changed id reveals that record’s connections', () => {
     // The compare panel and the header are untouched: one failed read is not a failed page.
     expect(q('compare-panel')).not.toBeNull();
     expect(q('lifecycle-page')).not.toBeNull();
+  });
+});
+
+describe('VISIBLE ACTIONS FOLLOW THE SERVER, not a role check written here', () => {
+  // Before `permittedActions` existed the page offered the change-request panel to everyone,
+  // including an observer whose submit came back 403. That is the disagreement between visible
+  // actions and server permissions that LC-14 forbids, and it was introduced by P5-T3 and found
+  // by writing this test. The page now offers the panel only when the server says the caller may.
+
+  const statusWith = (permittedActions: string[]) => ({
+    projectId: 'p-1', kind: 'delivery', stage: 'awaiting_blueprint_approval',
+    condition: null, conditionReason: null,
+    completedStages: ['discovery'], stages: ['discovery', 'awaiting_blueprint_approval'],
+    viewerPersonas: permittedActions.length > 0 ? ['owner'] : ['viewer'],
+    permittedActions,
+    nextStage: null, blockers: [], nextActorRole: 'architect', nextAction: 'Approve or return it.',
+  });
+
+  const mount = async (permittedActions: string[]) => {
+    api.get.mockImplementation((url: string) => (
+      String(url).includes('/revisions/compare')
+        ? Promise.resolve({ data: compared() })
+        : Promise.resolve({ data: statusWith(permittedActions) })
+    ));
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/admin/project-lifecycle/p-1?kind=delivery']}>
+          <Routes>{lifecycleRoutes}</Routes>
+        </MemoryRouter>,
+      );
+    });
+  };
+
+  it('OFFERS the change-request panel when the server permits the action', async () => {
+    await mount(['request_changes']);
+    expect(q('change-request')).not.toBeNull();
+  });
+
+  it('WITHHOLDS it when the server does not, rather than showing a button that 403s', async () => {
+    await mount([]);
+    expect(q('change-request')).toBeNull();
+    // The rest of the page is unaffected: a viewer still sees where the project stands.
+    expect(q('lifecycle-page')).not.toBeNull();
+    expect(q('compare-panel')).not.toBeNull();
+  });
+
+  it('withholds it when the caller holds OTHER actions but not this one', async () => {
+    // Not "has any permission" — the specific action is what gates the specific panel.
+    await mount(['execute_story', 'advance_design']);
+    expect(q('change-request')).toBeNull();
   });
 });

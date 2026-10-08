@@ -32,6 +32,15 @@ export interface LifecycleStatus {
   completedStages: string[];
   /** The whole ladder, in order, SERVED by the API so this client keeps no copy of it. */
   stages: string[];
+  /**
+   * What this viewer holds and may do, computed by the SERVER.
+   *
+   * The page offers an action only when it appears in `permittedActions`. Deciding that on the
+   * client would need a copy of the role-to-permission table, and a stale copy offers a button
+   * the server refuses.
+   */
+  viewerPersonas: string[];
+  permittedActions: string[];
   nextStage: string | null;
   blockers: LifecycleGap[];
   nextActorRole: string | null;

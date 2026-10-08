@@ -24,6 +24,8 @@ const status = (over: Partial<LifecycleStatus> = {}): LifecycleStatus => ({
   conditionReason: null,
   completedStages: ['discovery'],
   stages: STAGES,
+  viewerPersonas: ['owner'],
+  permittedActions: ['request_changes'],
   nextStage: 'process_ready',
   blockers: [],
   nextActorRole: 'architect',
