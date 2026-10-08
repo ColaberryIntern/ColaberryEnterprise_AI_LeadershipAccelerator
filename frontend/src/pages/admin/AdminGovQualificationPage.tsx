@@ -18,7 +18,9 @@ import { derivePotentialDisqualifiers } from './govGaps';
 import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './govDeadline';
 import { deriveNextStep } from './govNextStep';
 import { deriveBidDecision } from './govBidDecision';
-import { deriveJourney, type Journey } from './govJourney';
+import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
+import { StepBar } from './govWorkspace/StepBar';
+import { RightRail } from './govWorkspace/RightRail';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -60,19 +62,9 @@ const COVERAGE_REASON: Record<string, string> = {
   document_coverage_unknown: 'Document coverage is unknown or inaccessible',
 };
 
-/** The seven shared-workspace tabs (spec §4) + a qualification drawer. The active tab lives in the URL (?tab=)
- *  so a reload restores it and the view is shareable; an unknown value falls back to Overview. */
-type WorkspaceTab = 'overview' | 'proposal' | 'build' | 'documents' | 'dates' | 'submission' | 'outcome';
-const WORKSPACE_TABS: { key: WorkspaceTab; label: string; icon: string }[] = [
-  { key: 'overview', label: 'Overview', icon: 'dashboard-3-line' },
-  { key: 'proposal', label: 'Proposal', icon: 'file-text-line' },
-  { key: 'build', label: 'Build', icon: 'tools-line' },
-  { key: 'documents', label: 'Documents', icon: 'folder-open-line' },
-  { key: 'dates', label: 'Dates & Messages', icon: 'calendar-event-line' },
-  { key: 'submission', label: 'Complete Your Submission', icon: 'send-plane-line' },
-  { key: 'outcome', label: 'Outcome & Case Study', icon: 'trophy-line' },
-];
-const WORKSPACE_TAB_KEYS: string[] = WORKSPACE_TABS.map((t) => t.key);
+// The seven numbered pursuit STEPS (and the legacy ?tab= → step mapping) live in
+// ./govWorkspace/workspaceSteps. The active step is URL-backed (?tab=<step>) so a reload restores it
+// and the view is shareable; legacy tab values still resolve so old 7-tab links keep working.
 
 interface ActionError { status: number; message: string; reasons?: string[]; changedSource?: boolean; }
 
@@ -659,32 +651,8 @@ function OutcomePanel({ submission, canAct, busy, onRecord }: { submission: GovS
   );
 }
 
-/**
- * GovJourneyStrip — a compact stepper showing where this opportunity sits in our pursuit pipeline. Done stages
- * carry a check, the current stage is highlighted and shows its detail, upcoming stages are muted. Advisory.
- */
-function GovJourneyStrip({ journey }: { journey: Journey }): React.ReactElement {
-  return (
-    <ol className="list-unstyled d-flex flex-wrap gap-2 mb-0">
-      {journey.steps.map((s, i) => {
-        const icon = s.state === 'done' ? 'ri-checkbox-circle-fill text-success'
-          : s.state === 'current' ? 'ri-focus-3-line text-primary' : 'ri-circle-line text-secondary';
-        const cls = s.state === 'current' ? 'border-primary bg-primary-subtle'
-          : s.state === 'done' ? 'border-success-subtle' : 'border-secondary-subtle';
-        return (
-          <li key={s.key} className={`flex-grow-1 border rounded px-2 py-2 ${cls}`} style={{ minWidth: 150 }}
-            aria-current={s.state === 'current' ? 'step' : undefined}>
-            <div className="d-flex align-items-center gap-1">
-              <i className={icon} aria-hidden="true" />
-              <span className={`small fw-${s.state === 'todo' ? 'normal' : 'semibold'}`}>{i + 1}. {s.label}</span>
-            </div>
-            {s.state === 'current' && <div className="small text-secondary mt-1">{s.detail}</div>}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
+/* GovJourneyStrip removed in the 2026-10 redesign — the numbered StepBar (govWorkspace/StepBar)
+   is the pursuit journey now. */
 
 /**
  * RelationshipPanel — "have we pursued this agency before?" Lists prior pursuits of the same agency with their
@@ -859,10 +827,11 @@ function CandidatePicker(): React.ReactElement {
 
 export default function AdminGovQualificationPage(): React.ReactElement {
   const [params, setParams] = useSearchParams();
-  // The active workspace tab is URL-backed (?tab=) so a reload restores it and the view is shareable.
+  // The active pursuit step is URL-backed (?tab=<step>) so a reload restores it and the view is
+  // shareable; legacy tab values resolve to the new steps so old links keep working.
   const tabParam = params.get('tab') ?? '';
-  const activeTab: WorkspaceTab = (WORKSPACE_TAB_KEYS.includes(tabParam) ? tabParam : 'overview') as WorkspaceTab;
-  const setTab = useCallback((key: WorkspaceTab) => {
+  const activeStep: WorkspaceStep = resolveStep(tabParam);
+  const setStep = useCallback((key: WorkspaceStep) => {
     const next = new URLSearchParams(params);
     next.set('tab', key);
     setParams(next);
@@ -1056,18 +1025,24 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </div>
           )}
 
-          <ul className="nav nav-tabs gov-workspace-tabs mb-3 flex-nowrap overflow-auto" role="tablist">
-            {WORKSPACE_TABS.map((t) => (
-              <li key={t.key} className="nav-item">
-                <button type="button" role="tab" aria-selected={activeTab === t.key}
-                  className={`nav-link text-nowrap ${activeTab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-                  <i className={`ri-${t.icon} me-1`} aria-hidden="true" />{t.label}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <StepBar
+            steps={WORKSPACE_STEPS}
+            onStep={setStep}
+            stateByStep={deriveStepState(activeStep, {
+              zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
+              establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
+              decision: record ? record.decision : null,
+              proposalReady: !!(ws.submissionReadiness && ws.submissionReadiness.ready),
+              hasBuild: !!(ws.build && (ws.build.deliveryProjectId || (ws.build.buildStoryCount ?? 0) > 0)),
+              submissionStatus: ws.submission ? ws.submission.status : null,
+              outcome: ws.submission ? ws.submission.outcome : null,
+            })}
+          />
 
-          <GovTabPanel active={activeTab === 'overview'}>
+          <div className="row g-4">
+            <div className="col-12 col-lg-8">{/* ── LEFT: the active step's panel + the always-reachable qualification drawer ── */}
+
+          <GovTabPanel active={activeStep === 'gono'}>
 
           {(() => {
             const ns = deriveNextStep({
@@ -1087,18 +1062,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
-          {isDecoupled && (
-            <SectionCard title="Where this is in the journey" icon="route-line"
-              subtitle="Our pursuit pipeline for this opportunity. Mirrors the real gates; it changes nothing.">
-              <GovJourneyStrip journey={deriveJourney({
-                hasRecord: !!record,
-                establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
-                zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
-                assessed: !!ws.evaluation && !!ws.coverage,
-                decision: record ? record.decision : null,
-              })} />
-            </SectionCard>
-          )}
+          {/* The pursuit journey is now the numbered StepBar at the top of the workspace. */}
 
           {(
           <div className="row g-3 mb-3">
@@ -1151,15 +1115,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          <DeadlineCard
-            value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? null) : (ws.source?.deadline.utc ?? null)}
-            confidence={isDecoupled ? null : (ws.source?.deadline.utcConfidence ?? null)}
-            originalText={isDecoupled ? null : (ws.source?.deadline.originalText ?? null)}
-            loading={isDecoupled && oppDetail === null}
-            decoupled={isDecoupled}
-          />
+          {/* Deadline countdown now lives in the persistent right rail (see RightRail below). */}
 
-          </GovTabPanel>{/* end Overview */}
+          </GovTabPanel>{/* end Go/No-go (was Overview) */}
 
           {ws.changedSource && (
             <div className="alert alert-danger d-flex align-items-center justify-content-between gap-2" role="alert">
@@ -1194,7 +1152,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </div>
           )}
 
-          <GovTabPanel active={activeTab === 'documents'}>
+          <GovTabPanel active={activeStep === 'solicitation'}>
 
           {ws.source && (
             <SectionCard title="Source facts" icon="government-line" collapsible defaultOpen={false} subtitle="Server-fetched by canonical id — not editable here.">
@@ -1323,40 +1281,62 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          </GovTabPanel>{/* end Documents (part 1) */}
+          {/* ── Manual document review (the Bonfire ZIP is downloaded by hand) ─── */}
+          {ws.source && record && (() => {
+            const items = (ws.source.documents.items ?? []).filter((it) => AUTHORITATIVE_ROLES.includes(it.role));
+            const reviewedIds = new Set((record.requirements_json?.reviewedDocuments ?? []).map((d) => d.docId));
+            const stateOf = (it: { docId: string; retrieval: { status: string } }) =>
+              it.retrieval.status === 'downloaded' ? 'downloaded' : reviewedIds.has(it.docId) ? 'manual' : 'not reviewed';
+            const notDownloaded = items.filter((it) => it.retrieval.status !== 'downloaded');
+            const toCover = notDownloaded.map((it) => it.docId);
+            if (items.length === 0) return null;
+            return (
+              <SectionCard title="Manual document review" icon="folder-download-line" collapsible defaultOpen={false}
+                subtitle="Bonfire gates the ZIP behind a portal login — download it by hand, then upload it here to attest the authoritative package was reviewed. The server records a hash of the file; it never stores the bytes.">
+                <ul className="list-unstyled mb-3">
+                  {items.map((it) => {
+                    const st = stateOf(it);
+                    return (
+                      <li key={it.docId} className="d-flex align-items-center justify-content-between gap-2 py-2 border-bottom">
+                        <div className="d-flex align-items-center gap-2">
+                          <i className={`ri-${st === 'not reviewed' ? 'error-warning-line text-danger' : 'checkbox-circle-line text-success'}`} aria-hidden="true" />
+                          <span className="fw-semibold">{it.filename}</span>
+                          <StatusBadge label={it.role} tone="neutral" />
+                          <StatusBadge label={st} tone={st === 'downloaded' ? 'success' : st === 'manual' ? 'info' : 'danger'} />
+                        </div>
+                        {st === 'manual' && (
+                          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
+                            onClick={() => run(() => reviewGovQualificationDocuments(canonical, { biddingEntity, expectedVersion: version, mode: 'revoke', coveredDocIds: [it.docId] }), 'Attestation revoked.')}>
+                            Revoke
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {notDownloaded.length > 0 ? (
+                  <div className="d-flex flex-wrap align-items-center gap-2">
+                    <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
+                      onChange={(e) => setDocFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                    <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !docFile}
+                      onClick={() => run(() => reviewGovQualificationDocuments(canonical, { biddingEntity, expectedVersion: version, mode: 'add', coveredDocIds: toCover, file: docFile }), 'Document review recorded — coverage updated.')}>
+                      <i className="ri-upload-2-line me-1" aria-hidden="true" />Upload ZIP &amp; attest {notDownloaded.length} doc(s)
+                    </button>
+                    <span className="small text-secondary">Attests the {notDownloaded.length} listed-but-undownloaded authoritative doc(s); only OP-listed authoritative docs can be attested.</span>
+                  </div>
+                ) : (
+                  <div className="small text-success"><i className="ri-checkbox-circle-line me-1" aria-hidden="true" />All authoritative documents are reviewed.</div>
+                )}
+              </SectionCard>
+            );
+          })()}
 
-          <GovTabPanel active={activeTab === 'dates'}>
+          </GovTabPanel>{/* end Solicitation */}
 
-          {isDecoupled && record && ws.dossier && (
-            <SectionCard title="Opportunity dossier — who &amp; when" icon="contacts-book-line" collapsible defaultOpen={true}
-              subtitle="Detected from the solicitation ZIP — verify against the source documents. Reference only; it gates nothing.">
-              <OpportunityDossier dossier={ws.dossier} />
-            </SectionCard>
-          )}
-          {!(isDecoupled && record && ws.dossier) && (
-            <SectionCard title="Dates &amp; messages" icon="calendar-event-line">
-              <div className="small text-secondary">
-                <i className="ri-information-line me-1" aria-hidden="true" />
-                Key dates, meetings, and the submission deadline appear here once the solicitation ZIP is attested (see the <strong>Documents</strong> tab). Each date is detected from the ZIP text and flagged for you to verify — a stated time with no time zone is marked “verify tz”, never assumed local.
-              </div>
-            </SectionCard>
-          )}
-          {(
-            <SectionCard title="Agency messages &amp; Q&amp;A / amendments" icon="chat-3-line"
-              subtitle="Record amendments and portal messages with their source. A recorded amendment reopens the responses for the requirements it affects — readiness is never silently kept across a change.">
-              <AmendmentInbox
-                amendments={ws.amendments ?? []}
-                requirementIds={(ws.responseSlots ?? []).map((s) => s.requirementId)}
-                canRecord={!!ws.build?.deliveryProjectId}
-                busy={busy}
-                onRecord={(body) => run(() => recordGovProposalAmendment(canonical, body), 'Inbox entry recorded.')}
-              />
-            </SectionCard>
-          )}
+          {/* The former Dates & Messages tab (dossier, key dates, amendments inbox) now lives in the
+              persistent right rail (see RightRail below), visible on every step. */}
 
-          </GovTabPanel>{/* end Dates &amp; Messages */}
-
-          <GovTabPanel active={activeTab === 'proposal'}>
+          <GovTabPanel active={activeStep === 'proposal'}>
 
           {(
             <SectionCard title="Response checklist" icon="draft-line"
@@ -1371,6 +1351,10 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               }} />
             </SectionCard>
           )}
+
+          </GovTabPanel>{/* end Proposal */}
+
+          <GovTabPanel active={activeStep === 'requirements'}>
 
           {ws.evaluation && (ws.source || isDecoupled) && (
             <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
@@ -1453,60 +1437,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
-          </GovTabPanel>{/* end Proposal */}
+          </GovTabPanel>{/* end Requirements */}
 
-          <GovTabPanel active={activeTab === 'documents'}>
-          {/* ── Manual document review (the Bonfire ZIP is downloaded by hand) ─── */}
-          {ws.source && record && (() => {
-            const items = (ws.source.documents.items ?? []).filter((it) => AUTHORITATIVE_ROLES.includes(it.role));
-            const reviewedIds = new Set((record.requirements_json?.reviewedDocuments ?? []).map((d) => d.docId));
-            const stateOf = (it: { docId: string; retrieval: { status: string } }) =>
-              it.retrieval.status === 'downloaded' ? 'downloaded' : reviewedIds.has(it.docId) ? 'manual' : 'not reviewed';
-            const notDownloaded = items.filter((it) => it.retrieval.status !== 'downloaded');
-            const toCover = notDownloaded.map((it) => it.docId);
-            if (items.length === 0) return null;
-            return (
-              <SectionCard title="Manual document review" icon="folder-download-line" collapsible defaultOpen={false}
-                subtitle="Bonfire gates the ZIP behind a portal login — download it by hand, then upload it here to attest the authoritative package was reviewed. The server records a hash of the file; it never stores the bytes.">
-                <ul className="list-unstyled mb-3">
-                  {items.map((it) => {
-                    const st = stateOf(it);
-                    return (
-                      <li key={it.docId} className="d-flex align-items-center justify-content-between gap-2 py-2 border-bottom">
-                        <div className="d-flex align-items-center gap-2">
-                          <i className={`ri-${st === 'not reviewed' ? 'error-warning-line text-danger' : 'checkbox-circle-line text-success'}`} aria-hidden="true" />
-                          <span className="fw-semibold">{it.filename}</span>
-                          <StatusBadge label={it.role} tone="neutral" />
-                          <StatusBadge label={st} tone={st === 'downloaded' ? 'success' : st === 'manual' ? 'info' : 'danger'} />
-                        </div>
-                        {st === 'manual' && (
-                          <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy}
-                            onClick={() => run(() => reviewGovQualificationDocuments(canonical, { biddingEntity, expectedVersion: version, mode: 'revoke', coveredDocIds: [it.docId] }), 'Attestation revoked.')}>
-                            Revoke
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {notDownloaded.length > 0 ? (
-                  <div className="d-flex flex-wrap align-items-center gap-2">
-                    <input type="file" className="form-control form-control-sm" style={{ maxWidth: 320 }} accept=".zip"
-                      onChange={(e) => setDocFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
-                    <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !docFile}
-                      onClick={() => run(() => reviewGovQualificationDocuments(canonical, { biddingEntity, expectedVersion: version, mode: 'add', coveredDocIds: toCover, file: docFile }), 'Document review recorded — coverage updated.')}>
-                      <i className="ri-upload-2-line me-1" aria-hidden="true" />Upload ZIP &amp; attest {notDownloaded.length} doc(s)
-                    </button>
-                    <span className="small text-secondary">Attests the {notDownloaded.length} listed-but-undownloaded authoritative doc(s); only OP-listed authoritative docs can be attested.</span>
-                  </div>
-                ) : (
-                  <div className="small text-success"><i className="ri-checkbox-circle-line me-1" aria-hidden="true" />All authoritative documents are reviewed.</div>
-                )}
-              </SectionCard>
-            );
-          })()}
-
-          </GovTabPanel>{/* end Documents (part 2) */}
+          {/* Manual document review moved up into the Solicitation step above (one panel per step). */}
 
           {/* ── Qualification drawer: provenance / assessment / approvals. Always reachable from any tab, but
                 de-emphasized (collapsible) so it does not dominate the workspace; open by default only until a
@@ -1575,7 +1508,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             )}
           </SectionCard>
 
-          <GovTabPanel active={activeTab === 'build'}>
+          <GovTabPanel active={activeStep === 'build'}>
           {/* ── Build tab: the solution-build track (forward) + the separate build authorization ─ */}
           {(
             <SectionCard title="Solution build track — releases, stories & prompts" icon="tools-line"
@@ -1606,7 +1539,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
           </GovTabPanel>{/* end Build */}
 
-          <GovTabPanel active={activeTab === 'submission'}>
+          <GovTabPanel active={activeStep === 'submit'}>
           {/* ── Complete Your Submission (forward: readiness mirror + the response checklist) ─ */}
           {(
             <SectionCard title="Complete your submission" icon="send-plane-line"
@@ -1632,7 +1565,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
           </GovTabPanel>{/* end Complete Your Submission */}
 
-          <GovTabPanel active={activeTab === 'outcome'}>
+          <GovTabPanel active={activeStep === 'outcome'}>
           {/* ── Outcome & Case Study (forward) ─ */}
           {(
             <SectionCard title="Outcome &amp; case study" icon="trophy-line"
@@ -1646,6 +1579,61 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
           </GovTabPanel>{/* end Outcome & Case Study */}
+
+            </div>{/* end LEFT column */}
+            <aside className="col-12 col-lg-4">{/* ── RIGHT: persistent pursuit rail (deadline, dates+buyer, messages, team) — on every step ── */}
+              <RightRail
+                deadline={
+                  <DeadlineCard
+                    value={isDecoupled ? (oppDetail?.opportunity?.closeDate ?? null) : (ws.source?.deadline.utc ?? null)}
+                    confidence={isDecoupled ? null : (ws.source?.deadline.utcConfidence ?? null)}
+                    originalText={isDecoupled ? null : (ws.source?.deadline.originalText ?? null)}
+                    loading={isDecoupled && oppDetail === null}
+                    decoupled={isDecoupled}
+                  />
+                }
+                dates={
+                  isDecoupled && record && ws.dossier ? (
+                    <SectionCard title="Opportunity dossier — who &amp; when" icon="contacts-book-line" collapsible defaultOpen={true}
+                      subtitle="Detected from the solicitation ZIP — verify against the source documents. Reference only; it gates nothing.">
+                      <OpportunityDossier dossier={ws.dossier} />
+                    </SectionCard>
+                  ) : (
+                    <SectionCard title="Key dates &amp; buyer" icon="calendar-event-line">
+                      {ws.source ? (
+                        <dl className="row mb-0 small">
+                          <dt className="col-5">Buyer</dt><dd className="col-7">{ws.source.publisher.leadBuyer.name}</dd>
+                          <dt className="col-5">Deadline</dt><dd className="col-7">{ws.source.deadline.originalText ?? 'unstated'}</dd>
+                        </dl>
+                      ) : (
+                        <div className="small text-secondary">
+                          <i className="ri-information-line me-1" aria-hidden="true" />
+                          Key dates, the buyer, and the submission deadline appear here once the solicitation ZIP is attested on <strong>Solicitation</strong>. A stated time with no time zone is marked “verify tz”, never assumed local.
+                        </div>
+                      )}
+                    </SectionCard>
+                  )
+                }
+                messages={
+                  <SectionCard title="Messages &amp; amendments" icon="chat-3-line"
+                    subtitle="Record amendments and portal messages with their source. A recorded amendment reopens the responses for the requirements it affects — readiness is never silently kept across a change.">
+                    <AmendmentInbox
+                      amendments={ws.amendments ?? []}
+                      requirementIds={(ws.responseSlots ?? []).map((s) => s.requirementId)}
+                      canRecord={!!ws.build?.deliveryProjectId}
+                      busy={busy}
+                      onRecord={(body) => run(() => recordGovProposalAmendment(canonical, body), 'Inbox entry recorded.')}
+                    />
+                  </SectionCard>
+                }
+                team={{
+                  biddingEntity,
+                  builders: ws.build?.assignableBuilders ?? [],
+                  deliveryProjectId: ws.build?.deliveryProjectId ?? null,
+                }}
+              />
+            </aside>
+          </div>{/* end two-column row */}
         </>
       )}
     </div>
