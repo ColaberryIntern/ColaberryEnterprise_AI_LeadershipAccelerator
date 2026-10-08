@@ -48,6 +48,18 @@ export interface ComposerSetupProps {
   /** True once the item exists - brand and campaign can no longer change. */
   locked: boolean;
   busy: boolean;
+  /**
+   * Why the brand is already decided, if it is. The marketing shell has ONE brand bar above
+   * every page - its own header says pages below it 'read the choice instead of asking for it
+   * again, which is why the per-page pickers could go'. This one was missed, so the composer
+   * kept a second, independent brand and the bar's promise - 'Everything below is this brand
+   * only' - was false here. Null means nothing has decided yet, and only then is a picker shown.
+   */
+  /** Create a marketing campaign for this brand, in place. Absent when creation is unavailable. */
+  onCreateCampaign?: (name: string) => void;
+  brandFixedBy?: 'scope' | 'draft' | null;
+  /** The decided brand's name, for display when there is no picker. */
+  brandName?: string | null;
   onChange: (next: SetupValues) => void;
   onSubmit: () => void;
   /** Assign the chosen campaign its UTM slug (the composer cannot mint links without one). */
@@ -83,9 +95,12 @@ const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thr
 
 export default function ComposerSetup({
   values, brands, campaigns, locked, busy, onChange, onSubmit, onAssignSlug, onDraftMessage, draftNotes,
+  brandFixedBy = null, brandName = null, onCreateCampaign,
   providers = [], mediaSlot = null, landingPages = [], onCreateLandingPage, builderSlot = null,
 }: ComposerSetupProps) {
   const [topic, setTopic] = React.useState('');
+  const [namingCampaign, setNamingCampaign] = React.useState(false);
+  const [campaignName, setCampaignName] = React.useState('');
   /** 'upload' or 'link', for a video. Local: choosing it is not yet a change to the post. */
   const [videoSource, setVideoSource] = React.useState<'upload' | 'link'>('upload');
   const [videoLink, setVideoLink] = React.useState('');
@@ -105,11 +120,30 @@ export default function ComposerSetup({
     <form onSubmit={(e) => { e.preventDefault(); if (canSubmit) onSubmit(); }}>
       <div className="row g-3">
         <div className="col-md-4">
-          <label className="form-label small mb-1" htmlFor="composer-brand">Brand</label>
-          <select id="composer-brand" className="form-select form-select-sm" value={values.brand_id} disabled={locked || busy} onChange={(e) => set('brand_id', e.target.value)}>
-            <option value="">Choose a brand</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+          {brandFixedBy ? (
+            <>
+              <div className="form-label small mb-1">Brand</div>
+              <div className="form-control form-control-sm bg-light" data-testid="composer-brand-fixed">
+                {brandName ?? 'Not set'}
+              </div>
+              <div className="form-text small">
+                {brandFixedBy === 'scope'
+                  ? 'Set by the brand bar at the top of Marketing. Change it there and every page follows.'
+                  : 'Fixed when this draft was created, so its tracked links keep pointing at one brand.'}
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="form-label small mb-1" htmlFor="composer-brand">Brand</label>
+              <select id="composer-brand" className="form-select form-select-sm" value={values.brand_id} disabled={locked || busy} onChange={(e) => set('brand_id', e.target.value)}>
+                <option value="">Choose a brand</option>
+                {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+              <div className="form-text small">
+                The bar above is on all brands, so this post needs one. Choosing here sets the bar too.
+              </div>
+            </>
+          )}
         </div>
         <div className="col-md-4">
           <label className="form-label small mb-1" htmlFor="composer-campaign">Campaign</label>
@@ -117,6 +151,39 @@ export default function ComposerSetup({
             <option value="">No campaign (links cannot be tracked)</option>
             {visibleCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}{c.utm_campaign_slug ? '' : ' - no UTM slug'}</option>)}
           </select>
+          {/* Creating one in place, for the same reason the landing page builder is here: leaving
+              the composer to make a campaign loses whatever is typed. Until 2026-10-08 the API
+              could not create a marketing campaign at all, so this picker could be empty with no
+              way to fill it. */}
+          {onCreateCampaign && !locked && values.brand_id && (
+            namingCampaign ? (
+              <div className="d-flex flex-wrap gap-2 mt-2" data-testid="campaign-creator">
+                <input
+                  className="form-control form-control-sm" style={{ minWidth: '10rem', flex: 1 }}
+                  placeholder="Name it, e.g. October $0 class"
+                  value={campaignName} disabled={busy}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  data-testid="new-campaign-name"
+                />
+                <button
+                  type="button" className="btn btn-sm btn-primary"
+                  disabled={busy || campaignName.trim().length < 3}
+                  onClick={() => { onCreateCampaign(campaignName.trim()); setCampaignName(''); setNamingCampaign(false); }}
+                  data-testid="create-campaign"
+                >
+                  Create and use
+                </button>
+                <button type="button" className="btn btn-sm btn-link" disabled={busy} onClick={() => { setNamingCampaign(false); setCampaignName(''); }}>
+                  Cancel
+                </button>
+                <div className="form-text small w-100">Its tracked-link slug is made for you, so clicks can be attributed.</div>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-link btn-sm p-0 mt-1" disabled={busy} onClick={() => setNamingCampaign(true)} data-testid="open-campaign-creator">
+                + Create a campaign here
+              </button>
+            )
+          )}
           {chosen && !chosen.utm_campaign_slug && (
             <div className="form-text text-warning d-flex align-items-center gap-2">
               <span>This campaign has no UTM slug; tracked links will be refused until it does.</span>
