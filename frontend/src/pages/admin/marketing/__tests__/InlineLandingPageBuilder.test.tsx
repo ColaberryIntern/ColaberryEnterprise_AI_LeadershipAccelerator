@@ -24,7 +24,11 @@ jest.mock('../../../../services/landingPageApi', () => ({
 }));
 
 import * as lp from '../../../../services/landingPageApi';
-import InlineLandingPageBuilder, { slugify, MIN_BRIEF } from '../composer/InlineLandingPageBuilder';
+import InlineLandingPageBuilder, {
+  slugify,
+  MIN_BRIEF,
+  type InlineLandingPageBuilderProps,
+} from '../composer/InlineLandingPageBuilder';
 
 const mockCreate = lp.createLandingPage as jest.Mock;
 const mockRevise = lp.reviseLandingPage as jest.Mock;
@@ -57,7 +61,12 @@ function type(el: HTMLElement, value: string) {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-async function mount(over: Record<string, unknown> = {}) {
+// Typed as the component's own props rather than a loose bag. A `Record<string, unknown>` does not
+// satisfy the component's props, and the `as never` cast used to paper over that is itself not a
+// spreadable type - TS2698, "Spread types may only be created from object types", which is what
+// turned CI red. Partial<Props> is both spreadable and meaningful: it fails the build if a test
+// overrides a prop that does not exist.
+async function mount(over: Partial<InlineLandingPageBuilderProps> = {}) {
   await act(async () => {
     root.render(
       <InlineLandingPageBuilder
@@ -67,7 +76,7 @@ async function mount(over: Record<string, unknown> = {}) {
         busy={false}
         onClose={onClose}
         onPublished={onPublished}
-        {...over as never}
+        {...over}
       />,
     );
   });
