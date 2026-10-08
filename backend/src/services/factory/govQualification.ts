@@ -252,16 +252,18 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
   const dossier = (recordJson && recordJson.requirements_json && recordJson.requirements_json.dossier) || null;
   const evaluation = evaluateRequirements(established);
   const coverage = evaluateZipCoverage(established, reviewedDocuments);
-  // Phase 2 (P2-T3): the response checklist — one cited slot per established requirement the bid must answer.
-  // Deterministic projection; every slot is honestly `unanswered` (response authoring is the follow-on).
-  const { deriveResponseSlots } = await import('./proposal/responseSlots');
-  const responseSlots = deriveResponseSlots(established);
+  // deliveryProjectId: set once the pursuit is approved into a project — the key to overlaying all persisted state
+  // (responses, assignments, evidence, the amendment inbox). Null before approval (the pure projections still render).
+  const deliveryProjectId: string | null = (recordJson && recordJson.delivery_project_id) || null;
+  // Phase 2 (P2-T3) + P4: the response checklist — one cited slot per established requirement the bid must answer,
+  // overlaid (once a project exists) with the authored response's lifecycle (draft/reviewed/approved/revision_required).
+  const { deriveResponseSlots, applyResponsesToSlots } = await import('./proposal/responseSlots');
+  let responseSlots: any[] = deriveResponseSlots(established);
   // Phase 3 (P3-T1): the Build-track plan — releases → stories → prompts, a deterministic projection of the
   // solution_build-classified requirements (admin requirements never become a feature). Each story is honestly
   // `unassigned` + carries its student Claude Code prompt; assignment + (disabled) execution are later steps.
   const { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan } = await import('./proposal/govBuildPlan');
   const buildPlanBase = deriveGovBuildPlan(established);
-  const deliveryProjectId: string | null = (recordJson && recordJson.delivery_project_id) || null;
   const build: any = {
     releases: buildPlanBase.releases,
     stories: buildPlanBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) })),
@@ -270,23 +272,31 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     deliveryProjectId,
     assignableBuilders: [],
   };
-  // P3-T1/T2/T4: once this opportunity has been approved into a delivery project, overlay the PERSISTED assignment
-  // state + reconcile against revisions (orphaned work is surfaced, never dropped) + expose the assignable builders
-  // the admin picker needs. Best-effort: any failure leaves the pure derived plan intact (never breaks the workspace).
+  // P4: the dates/messages/amendment inbox (empty before a project exists).
+  let amendments: any[] = [];
+  // P3 + P4: once this opportunity has been approved into a delivery project, overlay the PERSISTED state —
+  // build assignment + reconcile (orphaned work surfaced, never dropped), the authored response lifecycle onto the
+  // slots, and the amendment inbox. Best-effort: any failure leaves the pure projections intact (never breaks the view).
   if (deliveryProjectId) {
     try {
       const { listBuildStoryAssignments, listAssignableBuilders } = await import('./govBuildAssignment');
       const { listBuildStoryEvidence } = await import('./govBuildEvidence');
-      const [assignments, assignableBuilders, evidence] = await Promise.all([
+      const { listProposalResponses } = await import('./govProposalResponse');
+      const { listProposalAmendments } = await import('./govProposalAmendment');
+      const [assignments, assignableBuilders, evidence, responses, amendmentRows] = await Promise.all([
         listBuildStoryAssignments(deliveryProjectId),
         listAssignableBuilders(deliveryProjectId),
         listBuildStoryEvidence(deliveryProjectId),
+        listProposalResponses(deliveryProjectId),
+        listProposalAmendments(deliveryProjectId),
       ]);
       const recon = reconcileGovBuildPlan(buildPlanBase.stories, assignments, evidence);
       build.stories = recon.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) }));
       build.orphanedStories = recon.orphanedStories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) }));
       build.assignableBuilders = assignableBuilders;
-    } catch { /* leave the derived build as-is — the plan is still correct without the overlay */ }
+      responseSlots = applyResponsesToSlots(responseSlots, responses);
+      amendments = amendmentRows;
+    } catch { /* leave the pure projections as-is — they are still correct without the overlay */ }
   }
   // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
   let sync: any = null;
@@ -314,6 +324,7 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     dossier,
     responseSlots,
     build,
+    amendments,
     relationship,
     changedSource: false,
     lastSyncedAt: sync ? sync.syncedAt : null,

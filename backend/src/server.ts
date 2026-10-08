@@ -82,6 +82,8 @@ import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDi
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
 import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvidenceSchema';
 import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
+import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseSchema';
+import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmentSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -2800,6 +2802,13 @@ async function start(): Promise<void> {
   // builder. A single additive NEW table (UNIQUE per project+story, so re-assigning upserts); it overlays the derived
   // plan to `assigned` and NEVER confers a built/verified state. See ensureGovBuildStoryAssignmentSchema.
   await ensureGovBuildStoryAssignmentSchema();
+  // Gov proposal production (P4): gov_proposal_response (the authored answer per established requirement, with its
+  // draft->reviewed->approved lifecycle + commit-bound figures) and gov_proposal_amendment (the dates/messages/
+  // amendment inbox, whose `affects` flips affected reviewed/approved responses back to revision_required). Two
+  // additive NEW tables (UNIQUE per project+key); no existing table is altered. The agent never advances a response
+  // to approved or records an amendment on its own — these are operator actions.
+  await ensureGovProposalResponseSchema();
+  await ensureGovProposalAmendmentSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).

@@ -422,14 +422,38 @@ export interface GovQualificationWorkspace {
   /** The Build-track plan (releases → stories → prompts) for the solution_build requirements. Mirrors the
    *  backend `deriveGovBuildPlan`; absent on older records / when no build requirements exist. */
   build?: GovBuildPlan;
+  /** The dates/messages/amendment inbox (P4). An amendment's `affects` invalidates affected responses. */
+  amendments?: GovProposalAmendment[];
 }
 
-/** One line of the proposal response checklist — cites the requirement it answers; never a fabricated "done". */
+/** A figure attached to a proposal response, bound to the git commit it was captured at (provenance). */
+export interface GovResponseFigure { commit: string; ref: string; caption: string }
+
+/** One line of the proposal response checklist — cites the requirement it answers; carries the authored response. */
 export interface GovResponseSlot {
   requirementId: string;
   statement: string;
   sourceRef: string | null;
-  status: 'unanswered';
+  /** `unanswered` until authored; then the response's lifecycle. A material amendment flips it to revision_required. */
+  status: 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required';
+  content?: string;
+  figures?: GovResponseFigure[];
+  authoredByIdentityId?: string | null;
+  reviewedByIdentityId?: string | null;
+  updatedAt?: string | null;
+}
+
+/** One entry in the dates/messages/amendment inbox. `amendment` with `affects` invalidates; `message` is context. */
+export interface GovProposalAmendment {
+  id: string;
+  amendmentKey: string;
+  kind: 'amendment' | 'message';
+  summary: string;
+  affects: string[];
+  provenance: string | null;
+  observedAt: string | null;
+  invalidatedCount: number;
+  createdAt: string | null;
 }
 
 /** One Build-track story — a solution_build requirement turned into buildable work, citing the requirement. */
@@ -530,6 +554,41 @@ export async function assignGovBuildStory(canonicalOpportunityId: string, storyI
 /** Remove a Build story's assignment (back to unassigned). Idempotent. */
 export async function unassignGovBuildStory(canonicalOpportunityId: string, storyId: string): Promise<{ ok: true; removed: number }> {
   const { data } = await api.delete(qUrl(canonicalOpportunityId, `/build-stories/${encodeURIComponent(storyId)}/assign`));
+  return data;
+}
+
+const rUrl = (canonicalOpportunityId: string, requirementId: string, suffix = ''): string =>
+  qUrl(canonicalOpportunityId, `/responses/${encodeURIComponent(requirementId)}${suffix}`);
+
+/** Author/edit the proposal response for one requirement. Any edit resets its status to `draft` (server-side). */
+export async function saveGovProposalResponse(canonicalOpportunityId: string, requirementId: string, content: string): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId), { content });
+  return data;
+}
+
+/** Advance the response lifecycle. The server enforces the order (no draft→approved jump); 409 on an illegal step. */
+export async function reviewGovProposalResponse(canonicalOpportunityId: string, requirementId: string, decision: 'reviewed' | 'approved' | 'revision_required'): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId, '/review'), { decision });
+  return data;
+}
+
+/** Attach a commit-bound figure to a response. The server refuses a figure with no commit (422). */
+export async function addGovProposalFigure(canonicalOpportunityId: string, requirementId: string, figure: GovResponseFigure): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId, '/figures'), figure);
+  return data;
+}
+
+/** Remove a figure by its ref. */
+export async function removeGovProposalFigure(canonicalOpportunityId: string, requirementId: string, ref: string): Promise<GovResponseSlot> {
+  const { data } = await api.delete(rUrl(canonicalOpportunityId, requirementId, `/figures?ref=${encodeURIComponent(ref)}`));
+  return data;
+}
+
+/** Record an amendment/message in the inbox. An amendment's `affects` invalidates affected responses (server-side). */
+export async function recordGovProposalAmendment(canonicalOpportunityId: string, body: {
+  amendmentKey: string; kind?: 'amendment' | 'message'; summary: string; affects?: string[]; provenance?: string | null; observedAt?: string | null;
+}): Promise<GovProposalAmendment> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/amendments'), body);
   return data;
 }
 
