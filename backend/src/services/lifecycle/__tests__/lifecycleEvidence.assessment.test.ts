@@ -29,6 +29,7 @@ import {
   readLifecycleEvidence,
   ASSESSED_EVIDENCE_FIELDS,
   EVIDENCE_MEASUREMENTS,
+  NOT_MEASURED,
   applyMeasurements,
 } from '../lifecycleStatus';
 import { completeEvidence as complete } from './evidenceFixture';
@@ -36,6 +37,10 @@ import { completeEvidence as complete } from './evidenceFixture';
 const ROW = {
   id: 'proj-1',
   tenant_id: 'tenant-1',
+  // Both null: this fixture has no manifest, so nothing is measurable from it and every
+  // field stays unassessed. Tests that need a measurement pass `refs` explicitly.
+  student_project_id: null,
+  delivery_project_id: null,
   stage: 'discovery',
   condition: null,
   condition_reason: null,
@@ -206,7 +211,7 @@ describe('the read-field set is honest in BOTH directions', () => {
     const base = await readLifecycleEvidence(ROW);
     expect(base.requirementCount).toBe(0);
 
-    const out = applyMeasurements(base, { requirementCount: () => 7 }, ROW);
+    const out = applyMeasurements(base, { requirementCount: () => 7 }, { row: ROW, refs: null });
 
     expect(out.requirementCount).toBe(7);
     expect(out.assessedFields.has('requirementCount')).toBe(true);
@@ -218,7 +223,9 @@ describe('the read-field set is honest in BOTH directions', () => {
     const seen: string[] = [];
     const base = {} as LifecycleEvidence;
 
-    applyMeasurements(base, { requirementCount: (r) => { seen.push(r.tenant_id); return 1; } }, ROW);
+    applyMeasurements(base, {
+      requirementCount: (c) => { seen.push(c.row.tenant_id); return 1; },
+    }, { row: ROW, refs: null });
 
     // Without this, a measurement map that ignored its argument would pass everything above.
     expect(seen).toEqual(['tenant-1']);
@@ -228,8 +235,12 @@ describe('the read-field set is honest in BOTH directions', () => {
     // This is the test that kills "delete the overlay loop". It injects into the real map, so
     // a reader that ignores the map returns the placeholder and fails here. Restored in
     // `finally` so the injection cannot leak into another test.
-    const map = EVIDENCE_MEASUREMENTS as Record<string, (r: typeof ROW) => unknown>;
-    expect(Object.keys(map)).toEqual([]);
+    const map = EVIDENCE_MEASUREMENTS as Record<string, (c: { row: typeof ROW }) => unknown>;
+    // The baseline is no longer EMPTY: P5-T1.4 populated two fields. Captured rather than
+    // hardcoded, so this test does not have to be edited every time the map grows — what it
+    // asserts is that the injection is REMOVED afterwards, not what the map happens to hold.
+    const before = Object.keys(map).sort();
+    expect(before).not.toContain('requirementCount');
 
     map.requirementCount = () => 42;
     try {
@@ -244,7 +255,7 @@ describe('the read-field set is honest in BOTH directions', () => {
     } finally {
       delete map.requirementCount;
     }
-    expect(Object.keys(map)).toEqual([]);
+    expect(Object.keys(map).sort()).toEqual(before);
   });
 
   it('reports a NOT_ASSESSED gap for every stage that reads an unassessed field', async () => {
@@ -343,5 +354,103 @@ describe('notAssessedGaps actually discriminates', () => {
       { rule: 'graph_no_end', kind: 'unmet', message: 'measured and missing' },
     ];
     expect(notAssessedGaps(allUnmet)).toEqual([]);
+  });
+});
+
+describe('a measurement that cannot measure leaves the field UNASSESSED', () => {
+  // THE FABRICATION PATH THIS CLOSES. `assessedFields` used to be `Object.keys(map)`, so a field
+  // was claimed assessed because a function for it EXISTED — even on a call where that function
+  // had no data. Every predicate would then trust the placeholder and the NOT_ASSESSED refusal
+  // would silently become a pass: the gate bypass the T1.1 carry-forward named in terms.
+  const base = () => ({
+    assessedFields: new Set<EvidenceField>(),
+    tenantId: 't', requirementCount: 0, requirementsWithoutProvenance: [],
+    uncitedRequirementSourceBlocks: [], unresolvedSourceBlocks: [], processesWithoutTasks: [],
+    graphHasStart: false, graphHasEnd: false, unreachableTasks: [], unboundedReworkLoops: [],
+    tasksWithoutExecutionClass: [], tasksWithoutAccountableHuman: [],
+    agentTasksAccountableForThemselves: [], tasksUnmappedToSurface: [], screensWithoutRationale: [],
+    selectedDesignRef: null, manifestContentHash: null, unknownAllocationCount: 0,
+    effortCoverageDisclosed: false, proposedBy: null, approval: null,
+    currentManifestRevision: null, actorStillAuthorized: true,
+    mustHaveRequirementsWithoutStory: [], storiesWithoutTraceability: [],
+  }) as unknown as LifecycleEvidence;
+
+  const CTX = { row: ROW, refs: null };
+
+  it('NOT_MEASURED keeps the placeholder AND keeps the field out of assessedFields', () => {
+    const out = applyMeasurements(base(), {
+      requirementCount: () => NOT_MEASURED,
+      requirementsWithoutProvenance: () => ['r-1'],
+    }, CTX);
+
+    // The unmeasurable one is absent from the set, so every predicate reading it still refuses.
+    expect(out.assessedFields.has('requirementCount')).toBe(false);
+    expect(out.requirementCount).toBe(0);                 // the placeholder, untouched
+    // The measurable one is present, so its value is now trustworthy.
+    expect(out.assessedFields.has('requirementsWithoutProvenance')).toBe(true);
+    expect(out.requirementsWithoutProvenance).toEqual(['r-1']);
+  });
+
+  it('a field whose measurement returns an EMPTY list is assessed, which is the whole point', () => {
+    // `[]` is a legitimate MEASURED value meaning "assessed, nothing wrong". It must be
+    // distinguishable from the placeholder `[]`, and the only thing that can distinguish them is
+    // membership of assessedFields.
+    const out = applyMeasurements(base(), { unresolvedSourceBlocks: () => [] }, CTX);
+    expect(out.unresolvedSourceBlocks).toEqual([]);
+    expect(out.assessedFields.has('unresolvedSourceBlocks')).toBe(true);
+  });
+
+  it('the real map measures NOTHING when there are no refs, so everything still blocks', () => {
+    // Not an incidental property: a project with no blueprint yet is the normal case, and
+    // reporting it as "assessed, nothing wrong" would advance it on evidence nobody gathered.
+    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: null });
+    expect(out.assessedFields.size).toBe(0);
+  });
+
+  it('with refs present, the two mapped fields are measured from them', () => {
+    const refs = {
+      sources: [
+        { id: 's-1', revision: 1, source: 'x', state: 'confirmed', provenanceKind: 'interview' },
+        { id: 's-2', revision: 1, source: 'x', state: 'open', provenanceKind: null },
+        { id: 's-3', revision: 1, source: 'x', state: 'heard', provenanceKind: null },
+      ],
+    } as unknown as Parameters<typeof applyMeasurements>[2]['refs'];
+
+    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs });
+
+    // provenanceKind === null is documented as "unrecorded. Never inferred by an adapter."
+    expect(out.requirementsWithoutProvenance).toEqual(['s-2', 's-3']);
+    // `open` is the only one of the six SOURCE_STATES that means genuinely undecided.
+    expect(out.unresolvedSourceBlocks).toEqual(['s-2']);
+    expect(out.assessedFields.has('requirementsWithoutProvenance')).toBe(true);
+    expect(out.assessedFields.has('unresolvedSourceBlocks')).toBe(true);
+    // And nothing else got claimed on the way: 2 measured, not 25.
+    expect(out.assessedFields.size).toBe(2);
+  });
+
+  it('a refs object WITHOUT a sources list measures nothing, rather than crashing', () => {
+    // THE SURVIVOR THIS CLOSES. The shape check used to live inside the database loader,
+    // behind a query, so no test could reach it and deleting it changed nothing. Moved into
+    // the measurements, it is reachable with a plain object — and it has to be a REFUSAL, not
+    // an empty measurement: `refs` with no `sources` is data this module cannot read, and
+    // calling that "assessed, nothing wrong" is the fabrication the whole sentinel exists for.
+    for (const bad of [{}, { sources: null }, { sources: 7 }, { sources: {} }]) {
+      const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, {
+        row: ROW,
+        refs: bad as unknown as Parameters<typeof applyMeasurements>[2]['refs'],
+      });
+      expect(out.assessedFields.size).toBe(0);
+      // and it did not throw on the way, which a bare .filter would have
+      expect(out.requirementsWithoutProvenance).toEqual([]);
+    }
+  });
+
+  it('requirementCount is deliberately NOT measured, and that is a decision not an omission', () => {
+    // `SourceRef` is documented as "a requirement OR OTHER CAPTURED STATEMENT", so sources is a
+    // superset of requirements and `sources.length` would be a count meaning something slightly
+    // different from its name. Left unassessed, where it BLOCKS, rather than measured loosely.
+    expect(Object.keys(EVIDENCE_MEASUREMENTS)).not.toContain('requirementCount');
+    expect(Object.keys(EVIDENCE_MEASUREMENTS).sort())
+      .toEqual(['requirementsWithoutProvenance', 'unresolvedSourceBlocks']);
   });
 });
