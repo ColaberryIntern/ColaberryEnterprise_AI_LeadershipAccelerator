@@ -440,13 +440,31 @@ export interface GovBuildStory {
   statement: string;
   release: string;
   acceptance: string[];
-  status: 'unassigned';
+  /** Derived `unassigned`; a persisted assignment overlay (admin) moves it to `assigned`. Never a fabricated built state. */
+  status: 'unassigned' | 'assigned';
+  /** The assignee's identity id — present only on the ADMIN workspace (the student view never carries it). */
+  assigneeIdentityId?: string | null;
+  assignedAt?: string | null;
+  /** True when the story's requirement left the established set but it still carries assignment/evidence — preserved. */
+  orphaned?: boolean;
   /** The student's Claude Code prompt for this story (deterministic, cites the requirement). */
   prompt?: string;
 }
 export interface GovBuildRelease { key: string; name: string; storyIds: string[] }
+/** A delivery-project member a story can be assigned to (holds story.execute). Admin picker source. */
+export interface GovAssignableBuilder { identityId: string; email: string | null; roles: string[] }
 /** The Build-track plan: releases → stories → prompts, a deterministic projection of solution_build requirements. */
-export interface GovBuildPlan { releases: GovBuildRelease[]; stories: GovBuildStory[]; buildStoryCount: number }
+export interface GovBuildPlan {
+  releases: GovBuildRelease[];
+  stories: GovBuildStory[];
+  buildStoryCount: number;
+  /** Stories whose requirement left the established set but which carry persisted work — surfaced, never dropped. */
+  orphanedStories?: GovBuildStory[];
+  /** The delivery project this plan was approved into, or null before approval (assignment needs it). */
+  deliveryProjectId?: string | null;
+  /** The builders a story can be assigned to (admin workspace only; empty before approval). */
+  assignableBuilders?: GovAssignableBuilder[];
+}
 
 /** A procurement code detected in the ZIP, tagged with its code SYSTEM (never assume NAICS). */
 export interface GovDossierCode { system: 'naics' | 'nigp'; code: string; sourceDocument: string }
@@ -499,6 +517,19 @@ const qUrl = (canonicalOpportunityId: string, suffix = ''): string =>
  *  (gws) path: bound to no snapshot; `from`/`agency` carry the clicked discovery row's provenance. Idempotent. */
 export async function createGovQualification(canonicalOpportunityId: string, body: { biddingEntity: string; deliveryProjectId?: string; from?: string; agency?: string }): Promise<{ qualification: QualificationRecord }> {
   const { data } = await api.post(qUrl(canonicalOpportunityId), body);
+  return data;
+}
+
+/** Assign a Build story to a project builder (P3-T2). The server requires the assignee to hold story.execute on
+ *  the resolved delivery project (422 otherwise), and 404s if the opportunity has no project yet. Idempotent. */
+export async function assignGovBuildStory(canonicalOpportunityId: string, storyId: string, assigneeIdentityId: string): Promise<GovBuildStory & { assigneeIdentityId: string }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, `/build-stories/${encodeURIComponent(storyId)}/assign`), { assigneeIdentityId });
+  return data;
+}
+
+/** Remove a Build story's assignment (back to unassigned). Idempotent. */
+export async function unassignGovBuildStory(canonicalOpportunityId: string, storyId: string): Promise<{ ok: true; removed: number }> {
+  const { data } = await api.delete(qUrl(canonicalOpportunityId, `/build-stories/${encodeURIComponent(storyId)}/assign`));
   return data;
 }
 

@@ -9,6 +9,11 @@ const ctFindAll = jest.fn();
 jest.mock('../../../models/ContractTrack', () => ({ __esModule: true, default: { findAll: (...a: any[]) => ctFindAll(...a) } }));
 const crFindAll = jest.fn();
 jest.mock('../../../models/ContractRequirement', () => ({ __esModule: true, default: { findAll: (...a: any[]) => crFindAll(...a) } }));
+const evFindAll = jest.fn();
+jest.mock('../../../models/GovBuildStoryEvidence', () => ({ __esModule: true, default: { findAll: (...a: any[]) => evFindAll(...a) } }));
+const asFindAll = jest.fn();
+jest.mock('../../../models/GovBuildStoryAssignment', () => ({ __esModule: true, default: { findAll: (...a: any[]) => asFindAll(...a) } }));
+const plain = (v: any) => ({ get: () => ({ ...v }) });
 
 import { toStudentGovProjectView, getStudentGovProjectView } from '../govProjectProjection';
 
@@ -71,13 +76,34 @@ describe('toStudentGovProjectView (pure) — student-safe', () => {
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
     const v = await getStudentGovProjectView('dp-1');
     expect(v).not.toBeNull();
     expect(v!.projectId).toBe('dp-1');
+  });
+
+  it('P3-T2/T4: overlays assignment STATUS to the student but NEVER leaks the assignee identity, and surfaces orphaned work', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    // STORY-REQ-1 is derived (REQ-1 is solution_build) and assigned to a builder; it also has evidence.
+    asFindAll.mockResolvedValue([plain({ id: 'as-1', story_id: 'STORY-REQ-1', canonical_req_id: 'REQ-1', assignee_identity_id: 'builder-SECRET', assigned_by_identity_id: 'op-1', assigned_at: new Date('2026-10-08T00:00:00Z') })]);
+    // Evidence exists for the derived story AND for a story whose requirement is no longer established (orphan).
+    evFindAll.mockResolvedValue([
+      plain({ id: 'ev-1', story_id: 'STORY-REQ-1', canonical_req_id: 'REQ-1', description: 'built it', artifact_ref: null, status: 'verified', submitted_by_identity_id: 'sub-SECRET', submitted_at: new Date('2026-10-08T00:00:00Z') }),
+      plain({ id: 'ev-2', story_id: 'STORY-REQ-GONE', canonical_req_id: 'REQ-GONE', description: 'work on a revised-away requirement', artifact_ref: null, status: 'submitted', submitted_by_identity_id: 'sub-SECRET', submitted_at: new Date('2026-10-08T00:00:00Z') }),
+    ]);
+    const v = await getStudentGovProjectView('dp-1');
+    const story = v!.build.stories.find((s) => s.id === 'STORY-REQ-1')!;
+    expect(story.status).toBe('assigned');                 // the STATUS overlays through
+    expect(story.assigneeIdentityId).toBeNull();           // but the student never learns WHO (no leak)
+    expect(story.evidence.map((e) => e.id)).toEqual(['ev-1']); // the student's evidence is attached to the live story
+    expect(JSON.stringify(v)).not.toContain('builder-SECRET'); // the assignee identity is nowhere in the student payload
+    // The orphaned work (requirement revised away) is PRESERVED, not dropped.
+    expect(v!.build.orphanedStories.map((s) => s.id)).toEqual(['STORY-REQ-GONE']);
+    expect(v!.build.orphanedStories[0].orphaned).toBe(true);
+    expect(v!.build.orphanedStories[0].evidence.map((e) => e.id)).toEqual(['ev-2']);
   });
 
   it('returns null for a NON-government project class (this surface serves only gov projects)', async () => {

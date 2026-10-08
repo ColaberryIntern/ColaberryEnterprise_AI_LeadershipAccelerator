@@ -12,7 +12,7 @@
  * project (any other class or an archived one resolves to null -> the route answers 404).
  */
 
-import { deriveGovBuildPlan, buildGovStoryPrompt, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
+import { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan, type GovBuildStory, type GovBuildRelease } from './proposal/govBuildPlan';
 import type { EvidenceView } from './govBuildEvidence';
 
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
@@ -21,7 +21,13 @@ export interface StudentGovRequirementView {
 }
 /** A student-facing build story — the derived story, its Claude Code prompt, and the student's submitted evidence. */
 export interface StudentGovBuildStory extends GovBuildStory { prompt: string; evidence: EvidenceView[]; }
-export interface StudentGovBuildPlan { releases: GovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number; }
+export interface StudentGovBuildPlan {
+  releases: GovBuildRelease[];
+  stories: StudentGovBuildStory[];
+  buildStoryCount: number;
+  /** Stories whose requirement left the established set but which still carry the student's work — preserved, flagged. */
+  orphanedStories: StudentGovBuildStory[];
+}
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -61,6 +67,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     releases: planBase.releases,
     stories: planBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s), evidence: [] as EvidenceView[] })),
     buildStoryCount: planBase.buildStoryCount,
+    orphanedStories: [],
   };
   return {
     projectId: String(project?.id ?? ''),
@@ -93,15 +100,33 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
   const tracks: any[] = await ContractTrack.findAll({ where: { delivery_project_id: deliveryProjectId } });
   const requirements: any[] = await ContractRequirement.findAll({ where: { delivery_project_id: deliveryProjectId } });
   const view = toStudentGovProjectView(project, tracks, requirements, viewerCanVerify);
-  // Attach the student's submitted evidence to each build story (best-effort; never blocks the view).
+  // Overlay persisted assignment + evidence, and reconcile against revisions (orphaned work is surfaced, never
+  // dropped). Best-effort; never blocks the view. STUDENT-SAFE: the status (assigned/unassigned) shows, but the
+  // assignee IDENTITY is stripped — a student must not learn who else is on the project (the API is the boundary).
   try {
     const { listBuildStoryEvidence } = await import('./govBuildEvidence');
-    const evidence = await listBuildStoryEvidence(deliveryProjectId);
-    if (evidence.length) {
-      const byStory = new Map<string, EvidenceView[]>();
-      for (const e of evidence) { const list = byStory.get(e.storyId) ?? []; list.push(e); byStory.set(e.storyId, list); }
-      view.build.stories = view.build.stories.map((s) => ({ ...s, evidence: byStory.get(s.id) ?? [] }));
-    }
-  } catch { /* evidence is additive; a failure here never blocks the student view */ }
+    const { listBuildStoryAssignments } = await import('./govBuildAssignment');
+    const [evidence, assignments] = await Promise.all([
+      listBuildStoryEvidence(deliveryProjectId),
+      listBuildStoryAssignments(deliveryProjectId),
+    ]);
+    const byStory = new Map<string, EvidenceView[]>();
+    for (const e of evidence) { const list = byStory.get(e.storyId) ?? []; list.push(e); byStory.set(e.storyId, list); }
+    // Reconcile over the bare derived stories (drop the student-only prompt/evidence first; re-attach after).
+    const derived: GovBuildStory[] = view.build.stories.map((s) => ({
+      id: s.id, requirementId: s.requirementId, title: s.title, statement: s.statement,
+      release: s.release, acceptance: s.acceptance, status: s.status,
+    }));
+    const recon = reconcileGovBuildPlan(derived, assignments, evidence);
+    const toStudent = (s: GovBuildStory): StudentGovBuildStory => ({
+      ...s,
+      assigneeIdentityId: null, // never leak who else is assigned; the status alone is student-safe
+      assignedAt: null,
+      prompt: buildGovStoryPrompt(s),
+      evidence: byStory.get(s.id) ?? [],
+    });
+    view.build.stories = recon.stories.map(toStudent);
+    view.build.orphanedStories = recon.orphanedStories.map(toStudent);
+  } catch { /* overlay is additive; a failure here never blocks the student view */ }
   return view;
 }

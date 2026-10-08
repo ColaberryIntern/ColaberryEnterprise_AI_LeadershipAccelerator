@@ -19,11 +19,19 @@ export interface GovBuildEvidenceView {
 /** A build story the student works — cites its requirement, carries the Claude Code prompt + submitted evidence. */
 export interface StudentGovBuildStory {
   id: string; requirementId: string; title: string; statement: string;
-  release: string; acceptance: string[]; status: 'unassigned'; prompt: string;
+  release: string; acceptance: string[];
+  /** `assigned` once an operator assigns it (the student never sees WHO — only the status). */
+  status: 'unassigned' | 'assigned'; prompt: string;
+  /** True when the requirement left the established set but the student's work is preserved (revision). */
+  orphaned?: boolean;
   evidence: GovBuildEvidenceView[];
 }
 export interface StudentGovBuildRelease { key: string; name: string; storyIds: string[] }
-export interface StudentGovBuildPlan { releases: StudentGovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number }
+export interface StudentGovBuildPlan {
+  releases: StudentGovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number;
+  /** Stories whose requirement was revised away but whose work is preserved (optional — absent on older backends). */
+  orphanedStories?: StudentGovBuildStory[];
+}
 export interface StudentGovProjectView {
   projectId: string;
   name: string;

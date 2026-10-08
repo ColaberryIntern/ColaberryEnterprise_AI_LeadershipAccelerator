@@ -81,6 +81,7 @@ import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema'
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
 import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
 import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvidenceSchema';
+import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -2795,6 +2796,10 @@ async function start(): Promise<void> {
   // Gov build-story evidence (gov_build_story_evidence): the student's completion hand-in for a Build story,
   // recorded `submitted` (never self-verified). A single additive NEW table; see ensureGovBuildStoryEvidenceSchema.
   await ensureGovBuildStoryEvidenceSchema();
+  // Gov build-story assignment (gov_build_story_assignment): the operator's assignment of a Build story to a student
+  // builder. A single additive NEW table (UNIQUE per project+story, so re-assigning upserts); it overlays the derived
+  // plan to `assigned` and NEVER confers a built/verified state. See ensureGovBuildStoryAssignmentSchema.
+  await ensureGovBuildStoryAssignmentSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).

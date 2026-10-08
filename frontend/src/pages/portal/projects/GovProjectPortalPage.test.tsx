@@ -103,6 +103,25 @@ describe('GovProjectPortalPage (student restricted view)', () => {
     expect(api.verifyBuildStoryEvidence).toHaveBeenCalledWith('dp-A', 'ev-1', 'verified');
   });
 
+  it('P3-T4: surfaces the student\'s PRESERVED work when a requirement was revised away (orphaned, not dropped)', async () => {
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue({
+      ...VIEW,
+      build: {
+        ...VIEW.build,
+        orphanedStories: [{
+          id: 'STORY-OLD', requirementId: 'OLD', title: 'old story', statement: 'old work', release: 'orphaned',
+          acceptance: [], status: 'assigned', orphaned: true, prompt: 'x',
+          evidence: [{ id: 'ev-9', storyId: 'STORY-OLD', canonicalReqId: 'OLD', description: 'my submitted build', artifactRef: null, status: 'submitted', submittedAt: null }],
+        }],
+      },
+    });
+    await render();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Preserved work');        // the honest "kept, not lost" section
+    expect(text).toContain('STORY-OLD');              // the orphaned story is surfaced
+    expect(text).toContain('my submitted build');     // the student's evidence is preserved and shown
+  });
+
   it('shows a "not found" page on a 404 (unassigned project) — never leaks that it exists', async () => {
     (api.getStudentGovProject as jest.Mock).mockRejectedValue({ response: { status: 404 } });
     await render('dp-OTHER');

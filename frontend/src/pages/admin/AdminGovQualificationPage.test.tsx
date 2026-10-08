@@ -687,4 +687,39 @@ describe('AdminGovQualificationPage — journey', () => {
     await flush();
     expect(container.textContent ?? '').toContain('No build stories');
   });
+
+  // ── P3-T2: assign a story to a builder; show the assignee; surface preserved orphans ──
+  it('Build tab: assigns an unassigned story to a builder, shows the assignee for an assigned one, and surfaces preserved orphans', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      build: {
+        buildStoryCount: 2,
+        deliveryProjectId: 'dp-1',
+        assignableBuilders: [{ identityId: 'bld-1', email: 'builder@colaberry.com', roles: ['associate_builder'] }],
+        releases: [{ key: 'r0', name: 'Release 0 — initial build', storyIds: ['STORY-B1', 'STORY-B2'] }],
+        stories: [
+          { id: 'STORY-B1', requirementId: 'B1', title: 'Claims search', release: 'r0', status: 'unassigned', statement: 'A claims search database.', acceptance: [], prompt: 'p1' },
+          { id: 'STORY-B2', requirementId: 'B2', title: 'Reporting', release: 'r0', status: 'assigned', assigneeIdentityId: 'bld-1', assignedAt: null, statement: 'A reporting dashboard.', acceptance: [], prompt: 'p2' },
+        ],
+        orphanedStories: [
+          { id: 'STORY-GONE', requirementId: 'GONE', title: 'orphan', release: 'orphaned', status: 'assigned', assigneeIdentityId: 'bld-1', orphaned: true, statement: '', acceptance: [], prompt: 'p3' },
+        ],
+      },
+    }));
+    (factoryApi.assignGovBuildStory as jest.Mock).mockResolvedValue({ id: 'as-1', storyId: 'STORY-B1', requirementId: 'B1', title: 'Claims search', statement: '', release: 'r0', acceptance: [], status: 'assigned', assigneeIdentityId: 'bld-1' });
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Assigned to builder@colaberry.com');          // the assigned story shows its assignee (B2)
+    expect(text).toContain('Needs attention');                            // the preserved-orphan section header (P3-T4)
+    expect(text).toContain('STORY-GONE');                                 // the orphan is surfaced, not dropped
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Unassign')).toBe(true);
+    // Pick the builder in B1's assign control and click Assign → calls the API with the story + builder.
+    const select = container.querySelector('select[aria-label="Assign STORY-B1 to a builder"]') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!;
+    await act(async () => { setVal.call(select, 'bld-1'); select.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    const assignBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Assign') as HTMLButtonElement;
+    await act(async () => { assignBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(factoryApi.assignGovBuildStory).toHaveBeenCalledWith(CANON, 'STORY-B1', 'bld-1');
+  });
 });

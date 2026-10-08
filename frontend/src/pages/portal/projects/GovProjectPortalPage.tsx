@@ -212,6 +212,18 @@ export default function GovProjectPortalPage(): React.ReactElement {
           </div>
         ))
       )}
+
+      {(view.build.orphanedStories?.length ?? 0) > 0 && (
+        <div className="mb-3 mt-3 pt-2 border-top">
+          <h3 className="h6 text-uppercase small mb-1 text-warning-emphasis"><i className="ri-alert-line me-1" aria-hidden="true" />Preserved work</h3>
+          <p className="small text-secondary mb-2">A requirement changed, so these stories are no longer in the current plan — but your submitted work is kept here, not lost.</p>
+          <ul className="list-group">
+            {view.build.orphanedStories!.map((s) => (
+              <StudentBuildStoryRow key={s.id} story={s} projectId={view.projectId} canVerify={view.viewerCanVerify} onSubmitted={() => void load()} />
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

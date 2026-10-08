@@ -5,9 +5,10 @@ import {
   getGovQualificationWorkspace, createGovQualification, recordGovQualificationDecision, approveGovQualification,
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
+  assignGovBuildStory, unassignGovBuildStory,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
   type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier, type GovRelationship,
-  type GovResponseSlot, type GovBuildPlan, type GovBuildStory,
+  type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
@@ -208,17 +209,35 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
   );
 }
 
+/** Props the assignment controls need: who can be assigned, whether assignment is possible, and how to mutate. */
+interface BuildAssignProps {
+  builders: GovAssignableBuilder[];
+  canAssign: boolean;                 // a delivery project exists AND builders are enrolled
+  busy: boolean;
+  onAssign: (storyId: string, assigneeIdentityId: string) => void;
+  onUnassign: (storyId: string) => void;
+}
+
+/** Label a builder by email, falling back to a short identity id — never a blank option. */
+function builderLabel(b: GovAssignableBuilder): string {
+  return b.email || `${b.identityId.slice(0, 8)}…`;
+}
+
 /**
- * GovBuildStoryRow — one Build-track story: its requirement citation, acceptance, and an expandable student
- * prompt (read-only). Honest: the story is `unassigned` and nothing here runs a build.
+ * GovBuildStoryRow — one Build-track story: its requirement citation, acceptance, an expandable student prompt, and
+ * (P3-T2) the ASSIGNMENT control. Honest: a story is `unassigned` until an operator assigns it to an enrolled
+ * builder; nothing here runs a build. Assignment is only offered once the pursuit is a delivery project with
+ * builders — otherwise the row says why it can't be assigned yet rather than showing a dead control.
  */
-function GovBuildStoryRow({ story }: { story: GovBuildStory }): React.ReactElement {
+function GovBuildStoryRow({ story, assign }: { story: GovBuildStory; assign?: BuildAssignProps }): React.ReactElement {
   const [showPrompt, setShowPrompt] = useState(false);
+  const [pick, setPick] = useState('');
+  const assigneeEmail = assign?.builders.find((b) => b.identityId === story.assigneeIdentityId)?.email ?? null;
   return (
     <li className="py-2 border-bottom">
       <div className="d-flex flex-wrap align-items-center gap-2">
         <span className="fw-semibold small">{story.id}</span>
-        <StatusBadge label={story.status} tone="neutral" />
+        <StatusBadge label={story.status} tone={story.status === 'assigned' ? 'info' : 'neutral'} />
         <span className="small text-secondary">· from {story.requirementId}</span>
       </div>
       <div className="small">{story.statement}</div>
@@ -234,19 +253,41 @@ function GovBuildStoryRow({ story }: { story: GovBuildStory }): React.ReactEleme
           {showPrompt && <pre className="small bg-body-secondary rounded p-2 mb-0" style={{ whiteSpace: 'pre-wrap' }}>{story.prompt}</pre>}
         </>
       )}
+      {assign && (
+        <div className="d-flex flex-wrap align-items-center gap-2 mt-1">
+          {story.status === 'assigned' ? (
+            <>
+              <span className="small"><i className="ri-user-follow-line me-1 text-info" aria-hidden="true" />Assigned to <strong>{assigneeEmail || 'a builder'}</strong></span>
+              <button type="button" className="btn btn-outline-secondary btn-sm" disabled={assign.busy} onClick={() => assign.onUnassign(story.id)}>Unassign</button>
+            </>
+          ) : assign.canAssign ? (
+            <>
+              <select className="form-select form-select-sm" style={{ maxWidth: 260 }} value={pick} onChange={(e) => setPick(e.target.value)} aria-label={`Assign ${story.id} to a builder`}>
+                <option value="">Assign to a builder…</option>
+                {assign.builders.map((b) => <option key={b.identityId} value={b.identityId}>{builderLabel(b)}</option>)}
+              </select>
+              <button type="button" className="btn btn-outline-primary btn-sm" disabled={assign.busy || !pick} onClick={() => assign.onAssign(story.id, pick)}>Assign</button>
+            </>
+          ) : (
+            <span className="small text-secondary"><i className="ri-information-line me-1" aria-hidden="true" />Assignable once the pursuit is approved into a project with enrolled builders.</span>
+          )}
+        </div>
+      )}
     </li>
   );
 }
 
 /**
  * GovBuildPlanPanel — the Build-track plan: releases → stories → prompts, projected from the solution_build
- * requirements. Honest empty-state (an all-admin requirement set has no build stories, by design — admin forms
- * never become software features). Nothing here assigns or runs a build; assignment + (disabled) execution later.
+ * requirements, plus (P3-T2) per-story ASSIGNMENT and (P3-T4) a preserved-orphans section. Honest empty-state (an
+ * all-admin requirement set has no build stories, by design). Assignment is server-gated: the control only offers
+ * enrolled builders and the write is refused if the assignee can't build — this UI mirrors that, never replaces it.
  */
-function GovBuildPlanPanel({ build }: { build: GovBuildPlan | undefined }): React.ReactElement {
+function GovBuildPlanPanel({ build, assign }: { build: GovBuildPlan | undefined; assign?: BuildAssignProps }): React.ReactElement {
   const releases = build?.releases ?? [];
   const stories = build?.stories ?? [];
-  if (stories.length === 0) {
+  const orphans = build?.orphanedStories ?? [];
+  if (stories.length === 0 && orphans.length === 0) {
     return (
       <div className="small text-secondary">
         <i className="ri-information-line me-1" aria-hidden="true" />
@@ -258,7 +299,7 @@ function GovBuildPlanPanel({ build }: { build: GovBuildPlan | undefined }): Reac
     <>
       <div className="small text-secondary mb-2">
         {stories.length} build {stories.length === 1 ? 'story' : 'stories'} across {releases.length} release{releases.length === 1 ? '' : 's'},
-        each traced to its requirement. Read-only — assignment to a student and execution are later, gated steps.
+        each traced to its requirement. Assign a story to an enrolled builder — execution stays a later, gated step (never automatic).
       </div>
       {releases.map((rel) => (
         <div key={rel.key} className="mb-3">
@@ -266,11 +307,20 @@ function GovBuildPlanPanel({ build }: { build: GovBuildPlan | undefined }): Reac
           <ul className="list-unstyled mb-0">
             {rel.storyIds.map((sid) => {
               const s = stories.find((x) => x.id === sid);
-              return s ? <GovBuildStoryRow key={sid} story={s} /> : null;
+              return s ? <GovBuildStoryRow key={sid} story={s} assign={assign} /> : null;
             })}
           </ul>
         </div>
       ))}
+      {orphans.length > 0 && (
+        <div className="mb-1 mt-3 pt-2 border-top">
+          <h3 className="h6 text-warning-emphasis text-uppercase small mb-1"><i className="ri-alert-line me-1" aria-hidden="true" />Needs attention — preserved work ({orphans.length})</h3>
+          <div className="small text-secondary mb-2">These stories carry an assignment or submitted evidence, but their requirement is no longer in the established set (a revision changed or removed it). The work is <strong>kept, not deleted</strong> — reconcile each against the current requirements.</div>
+          <ul className="list-unstyled mb-0">
+            {orphans.map((s) => <GovBuildStoryRow key={s.id} story={s} assign={assign} />)}
+          </ul>
+        </div>
+      )}
     </>
   );
 }
@@ -1234,7 +1284,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {(
             <SectionCard title="Solution build track — releases, stories & prompts" icon="tools-line"
               subtitle="The won proposal's technical requirements, projected into buildable stories (each citing its requirement) with a student Claude Code prompt. A pursuit approval is NOT a build authorization, and the autonomous builder stays parked — nothing here runs a build.">
-              <GovBuildPlanPanel build={ws.build} />
+              <GovBuildPlanPanel build={ws.build} assign={{
+                builders: ws.build?.assignableBuilders ?? [],
+                canAssign: !!(ws.build?.deliveryProjectId && (ws.build?.assignableBuilders?.length ?? 0) > 0),
+                busy,
+                onAssign: (storyId, assigneeIdentityId) => run(() => assignGovBuildStory(canonical, storyId, assigneeIdentityId), 'Story assigned.'),
+                onUnassign: (storyId) => run(() => unassignGovBuildStory(canonical, storyId), 'Assignment removed.'),
+              }} />
             </SectionCard>
           )}
           {(
