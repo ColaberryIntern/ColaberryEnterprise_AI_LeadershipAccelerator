@@ -30,27 +30,15 @@ import { MIN_VARIANTS } from '../../../delivery/deliveryDesignLoop';
 import { prerequisiteGaps, type LifecycleEvidence, type EvidenceField } from '../../lifecyclePrerequisites';
 import { manualOnlyProject } from './fixtures/manualOnly';
 import type { TaskSurfaceBinding, WorkspaceRef } from '../workspaceBindingTypes';
+// ONE DEFINITION of a workspace ref, a workspace binding and a declared journey. These were
+// duplicated into `fixtures/acceptedDesign.ts`, and the copy drifted: two required
+// `WorkspaceRef` fields went missing and no check could see it. Imported now, so there is
+// nothing to drift from.
+import { ref, ws, declared } from './fixtures/acceptedDesign';
 
 const ROLE = 'role-counsel';
 
-const ref = (taskId: string): WorkspaceRef => ({
-  workspaceId: `ws-${taskId}`,
-  workspaceTitle: `Surface for ${taskId}`,
-  action: 'record the decision',
-  primaryJob: 'move one contract to its next state',
-  intendedRoles: [ROLE],
-  records: ['contract'],
-  decisions: [],
-  whyNotExisting: 'no existing workspace shows the contract next to the threshold rule',
-  requirementIds: [],
-  taskIds: [taskId],
-  audience: 'internal',
-  permissionViews: [{ roleId: ROLE, visibleActions: [] }],
-  deepLink: `/contracts/:id/${taskId}`,
-  preservesNavigationState: true,
-});
 
-const ws = (taskId: string): TaskSurfaceBinding => ({ taskId, kind: 'workspace', ref: ref(taskId) });
 const headless = (taskId: string): TaskSurfaceBinding => ({ taskId, kind: 'headless', reason: 'scheduled_ingestion' });
 
 /** Two structures: the ordinary case. */
@@ -61,8 +49,6 @@ const twoStructureSet = (): AlternativeSet =>
 const oneStructureSet = (): AlternativeSet =>
   generateDesignAlternatives(manualOnlyProject(), [headless('t-intake'), ws('t-review')]);
 
-const declared = (kind: JourneyKind, taskId = 't-review'): JourneyDeclaration =>
-  ({ kind, status: 'declared', steps: [{ taskId, workspaceId: `ws-${taskId}`, action: 'record the decision' }] });
 
 const waived = (kind: JourneyKind, over: Partial<Extract<JourneyDeclaration, { status: 'not_applicable' }>> = {}): JourneyDeclaration =>
   ({

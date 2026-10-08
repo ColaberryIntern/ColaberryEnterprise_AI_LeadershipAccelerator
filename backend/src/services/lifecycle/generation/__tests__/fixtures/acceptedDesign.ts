@@ -12,10 +12,14 @@
  * So the fixture has to be one the selector accepts, and the assertion has to be the concrete
  * `selectedDesignRef`. Anything weaker is a test that holds for every implementation.
  *
- * Built from the same helpers as `designSelection.test.ts` (which proves this shape selects, at
- * its "the happy path records the variant AND the visual contract revision" test) rather than
- * hand-rolled, because a second definition of "a valid design" would drift from the first and
- * this one would stop being a test of anything.
+ * THE HELPERS LIVE HERE AND `designSelection.test.ts` IMPORTS THEM. An earlier version of this
+ * header claimed they were "built from the same helpers … because a second definition would
+ * drift" — while hand-copying them, and the copy had ALREADY dropped two required
+ * `WorkspaceRef` fields in the commit making that claim. A mechanism asserted without being
+ * measured is standing rule 14, and the measurement was a scoped `tsc` away.
+ *
+ * One definition now. `designSelection.test.ts` proves this shape selects, at its "the happy
+ * path records the variant AND the visual contract revision" test.
  */
 import { JOURNEY_KINDS, type JourneyDeclaration, type SelectionInput } from '../../designSelection';
 import { generateDesignAlternatives } from '../../designAlternatives';
@@ -24,7 +28,7 @@ import { manualOnlyProject } from './manualOnly';
 
 const ROLE = 'role-counsel';
 
-const ref = (taskId: string): WorkspaceRef => ({
+export const ref = (taskId: string): WorkspaceRef => ({
   workspaceId: `ws-${taskId}`,
   workspaceTitle: `Surface for ${taskId}`,
   action: 'record the decision',
@@ -37,11 +41,18 @@ const ref = (taskId: string): WorkspaceRef => ({
   taskIds: [taskId],
   audience: 'internal',
   permissionViews: [{ roleId: ROLE, visibleActions: [] }],
+  // BOTH REQUIRED on `WorkspaceRef`, and the hand-copied version of this helper dropped
+  // them. The omission was a real TS2739 that NOTHING could see: `tsconfig.json` excludes
+  // `**/__tests__/**` and ts-jest strips types, so a green suite proved nothing about it.
+  // `workspaceBindingChecks` refuses both a blank `deepLink` and a falsy
+  // `preservesNavigationState`, so the drifted shape was one that module would reject.
+  deepLink: `/contracts/:id/${taskId}`,
+  preservesNavigationState: true,
 });
 
-const ws = (taskId: string): TaskSurfaceBinding => ({ taskId, kind: 'workspace', ref: ref(taskId) });
+export const ws = (taskId: string): TaskSurfaceBinding => ({ taskId, kind: 'workspace', ref: ref(taskId) });
 
-const declared = (kind: (typeof JOURNEY_KINDS)[number], taskId = 't-review'): JourneyDeclaration =>
+export const declared = (kind: (typeof JOURNEY_KINDS)[number], taskId = 't-review'): JourneyDeclaration =>
   ({ kind, status: 'declared', steps: [{ taskId, workspaceId: `ws-${taskId}`, action: 'record the decision' }] });
 
 /** The id the two-structure set yields for the chosen alternative. */
