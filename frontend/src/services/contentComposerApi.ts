@@ -252,6 +252,44 @@ export async function runAction(id: string, action: ComposerAction, scheduledFor
   return res.data;
 }
 
+/**
+ * Create a marketing campaign a post can actually be attributed to, and give it its slug.
+ *
+ * WHY BOTH IN ONE CALL. A campaign with no `utm_campaign_slug` cannot carry a tracked link, and
+ * the composer already warns about exactly that. Creating one and leaving it unslugged would
+ * manufacture the very gap the picker complains about, so the slug is minted in the same step
+ * and the campaign arrives usable.
+ *
+ * `type: 'marketing'` is the point of this function. Until 2026-10-08 the create route admitted
+ * only email lifecycle types, so every campaign it could make was one the composer filtered out.
+ *
+ * A FAILED SLUG IS NOT A FAILED CAMPAIGN. The campaign exists by then, and throwing here would
+ * leave a real row behind while telling the operator nothing was created - so the campaign comes
+ * back with a null slug and the picker's existing 'no UTM slug' warning does its job.
+ */
+export async function createMarketingCampaign(
+  input: { name: string; brand_id: string | null },
+): Promise<{ id: string; name: string; brand_id: string | null; utm_campaign_slug: string | null }> {
+  const created = await api.post('/api/admin/campaigns', {
+    name: input.name,
+    type: 'marketing',
+    brand_id: input.brand_id,
+  });
+  const campaign = created.data?.campaign ?? created.data;
+  const id = String(campaign.id);
+
+  let slug: string | null = (campaign.utm_campaign_slug as string | null) ?? null;
+  if (!slug) {
+    try {
+      const r = await assignCampaignSlug(id, { brand_id: input.brand_id });
+      slug = r.utm_campaign_slug;
+    } catch {
+      slug = null;
+    }
+  }
+
+  return { id, name: String(campaign.name ?? input.name), brand_id: (campaign.brand_id as string | null) ?? input.brand_id, utm_campaign_slug: slug };
+}
 export async function assignCampaignSlug(
   campaignId: string,
   inputs: { offer?: string | null; audience?: string | null; brand_id?: string | null } = {},

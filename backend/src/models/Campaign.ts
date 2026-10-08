@@ -1,7 +1,38 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type CampaignType = 'warm_nurture' | 'cold_outbound' | 're_engagement' | 'behavioral_trigger' | 'alumni' | 'alumni_re_engagement' | 'payment_readiness' | 'executive_outreach';
+/**
+ * The two kinds of campaign, kept apart because they are two different machines.
+ *
+ * EMAIL LIFECYCLE campaigns drive sequences at a lead over time. MARKETING campaigns are what a
+ * social post or a landing page is attributed to. A post cannot go out under a `warm_nurture`,
+ * and nobody wants to pick one for a LinkedIn post - the composer's picker filters on exactly
+ * this split (see frontend marketingCampaigns.ts, which must be kept in step with the marketing
+ * list below).
+ *
+ * MARKETING TYPES COULD NOT BE CREATED AT ALL until 2026-10-08: handleCreateCampaign validated
+ * `type` against the email list only, so every campaign the API could make was one the composer
+ * then correctly filtered out, and the picker was empty with no way to fill it. Found by Ali:
+ * "now I have no way to create Landing page campaign".
+ *
+ * THE ARRAYS ARE THE SOURCE OF TRUTH and the union is derived from them, the same ordering used
+ * for the funnel stage below - so a new type cannot be added to the union and forgotten in the
+ * validation that admits it.
+ *
+ * The column is STRING(30), not an enum, so adding a member here needs no migration.
+ */
+export const EMAIL_LIFECYCLE_CAMPAIGN_TYPES = [
+  'warm_nurture', 'cold_outbound', 're_engagement', 'behavioral_trigger',
+  'alumni', 'alumni_re_engagement', 'payment_readiness', 'executive_outreach',
+] as const;
+
+export const MARKETING_CAMPAIGN_TYPES = [
+  'marketing', 'paid_social', 'organic_social', 'content', 'launch',
+] as const;
+
+export const CAMPAIGN_TYPES = [...EMAIL_LIFECYCLE_CAMPAIGN_TYPES, ...MARKETING_CAMPAIGN_TYPES] as const;
+
+export type CampaignType = typeof CAMPAIGN_TYPES[number];
 export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
 export type CampaignMode = 'standard' | 'autonomous';
 export type CampaignChannel = 'email' | 'sms' | 'social' | 'paid_search' | 'paid_social' | 'direct_mail' | 'referral' | 'organic';
