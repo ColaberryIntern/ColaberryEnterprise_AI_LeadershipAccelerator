@@ -18,6 +18,13 @@ export const LIFECYCLE_STAGES = [
   'identified_visitor',
   'lead',
   'applicant',
+  // T209. Inserted BETWEEN applicant and enrolled_student, and the position is
+  // the decision: `personScope` requires every section's stage set to be a
+  // contiguous run of this list, so placing it here forces Admissions and Revenue
+  // to include it, while Support, Program and Career-review start at
+  // enrolled_student and therefore stop seeing free accounts. That is the access
+  // outcome we want, enforced by the contiguity test rather than argued for.
+  'explorer',
   'enrolled_student',
   'active_learner',
   'graduate',
@@ -75,6 +82,20 @@ export const LIFECYCLE: Record<LifecycleStage, LifecycleStageDef> = {
     label: 'Applicant',
     definition: 'A lead who has entered an admissions pipeline stage beyond initial capture.',
     evidence: 'leads.pipeline_stage beyond new_lead',
+    joinable_today: true,
+  },
+  explorer: {
+    stage: 'explorer',
+    label: 'Explorer (free account)',
+    definition:
+      'Someone with a free account on the AI learner programme who has not paid. A real ' +
+      'relationship and a real login — but not a student, and not a conversion.',
+    evidence: "enrollments row with enrollment_type 'explorer' and no paid/subscription state",
+    // THE STAGE THE VOCABULARY WAS MISSING, and its absence was not cosmetic.
+    // Both stage derivations read `WHEN e.email IS NOT NULL THEN
+    // 'enrolled_student'`, so every free Explorer was represented as converted
+    // purely because an enrollments row existed. There was no word for this
+    // population, so they were filed under the nearest one that implied revenue.
     joinable_today: true,
   },
   enrolled_student: {

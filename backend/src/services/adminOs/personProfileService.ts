@@ -3,6 +3,11 @@ import { sequelize } from '../../config/database';
 import { LifecycleStage } from './lifecycle';
 import { normalizeEmail } from './identityResolution';
 import { visibleStagesForSections } from './personScope';
+import {
+  ENROLLMENT_FACTS_JOIN,
+  ENROLLMENT_FACTS_SQL,
+  STAGE_CASE_SQL,
+} from './conversionState';
 import { EventDomain, TimelineEvent, domainsForSections, getPersonTimeline } from './personTimelineService';
 import {
   AcquisitionPanel, AppointmentRow, AutomationRow,
@@ -224,12 +229,7 @@ export async function resolvePersonIdentity(
             COALESCE(e.name, l.name) AS name,
             COALESCE(e.company, l.company) AS company,
             COALESCE(e.title, l.title) AS title,
-            (CASE
-               WHEN e.status = 'withdrawn' THEN 'lapsed'
-               WHEN e.email IS NOT NULL THEN 'enrolled_student'
-               WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
-               ELSE 'lead'
-             END) AS stage,
+            (${STAGE_CASE_SQL}) AS stage,
             (l.email IS NOT NULL) AS traced
      FROM (
        SELECT lower(btrim(email)) AS email, max(name) AS name, max(company) AS company,
@@ -237,8 +237,8 @@ export async function resolvePersonIdentity(
        FROM leads WHERE lower(btrim(email)) = :email GROUP BY lower(btrim(email))
      ) l
      FULL OUTER JOIN (
-       SELECT lower(btrim(email)) AS email, max(full_name) AS name, max(company) AS company,
-              max(title) AS title,
+       SELECT lower(btrim(e.email)) AS email, max(e.full_name) AS name, max(e.company) AS company,
+              max(e.title) AS title,
               -- Any CURRENT enrolment outranks a withdrawn one: someone who left
               -- a cohort and re-enrolled is active, not lapsed.
               --
@@ -247,11 +247,14 @@ export async function resolvePersonIdentity(
               -- had ever re-enrolled — shipped 2026-09-08, caught 2026-09-09 by
               -- a profile that read "lapsed" over a live enrolment.
               CASE
-                WHEN bool_or(status::text = 'active') THEN 'active'
-                WHEN bool_or(status::text = 'completed') THEN 'completed'
+                WHEN bool_or(e.status::text = 'active') THEN 'active'
+                WHEN bool_or(e.status::text = 'completed') THEN 'completed'
                 ELSE 'withdrawn'
-              END AS status
-       FROM enrollments WHERE lower(btrim(email)) = :email GROUP BY lower(btrim(email))
+              END AS status,
+              ${ENROLLMENT_FACTS_SQL}
+       FROM enrollments e
+       ${ENROLLMENT_FACTS_JOIN}
+       WHERE lower(btrim(e.email)) = :email GROUP BY lower(btrim(e.email))
      ) e ON e.email = l.email`,
     { type: QueryTypes.SELECT, replacements: { email } },
   );

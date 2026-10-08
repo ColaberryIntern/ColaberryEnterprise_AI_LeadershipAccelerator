@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 const leadFindByPk = jest.fn();
 const leadCreate = jest.fn();
 const leadUpdate = jest.fn();
@@ -569,7 +570,26 @@ describe('T407: the lead -> enrolment walk, and what a customer is', () => {
       const r = await resolveSubject({ enrollmentId: 'enr-1' });
       if (r.status !== 'resolved') throw new Error(r.status);
       expect(r.subject.customer).toEqual({ paid: true, basis: 'subscription' });
-      expect(subscriptionFindOne).toHaveBeenCalledWith({ where: { enrollment_id: 'enr-1', status: 'active' }, attributes: ['id'] });
+      // T210 added the plan term: a `comp` subscription is an admin-granted $0 seat
+      // ("Free Access, full program access at $0, never billed"), so it is program
+      // ACCESS but not a conversion. Before T210 this lookup had no plan term at all
+      // and a comped person read as a paying customer.
+      expect(subscriptionFindOne).toHaveBeenCalledWith({
+        where: { enrollment_id: 'enr-1', status: 'active', plan: { [Op.ne]: 'comp' } },
+        attributes: ['id'],
+      });
+    });
+
+    it('does NOT count an admin-granted comp seat as a customer', async () => {
+      // The comp term is expressed in the QUERY, so the proof is that the query
+      // excludes it: a comp row cannot come back, and the fact falls through to NONE.
+      enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'pending', tier: 'guest' });
+      subscriptionFindOne.mockResolvedValue(null);
+      const r = await resolveSubject({ enrollmentId: 'enr-1' });
+      if (r.status !== 'resolved') throw new Error(r.status);
+      expect(r.subject.customer).toEqual(NONE);
+      const where = subscriptionFindOne.mock.calls[0][0].where;
+      expect(where.plan).toEqual({ [Op.ne]: 'comp' });
     });
 
     /**

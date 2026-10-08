@@ -97,7 +97,13 @@ describe('person profile', () => {
       sections: sectionsFor('mentor'),
       visibleEnrollmentIds: ['enr-1', 'enr-2'],
     });
-    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('enrollment_type'));
+    // T210 made this selector AMBIGUOUS: the identity query now also contains
+    // `enrollment_type`, via bool_or(e.enrollment_type = 'explorer') in the shared
+    // fact aggregate. Select on the learning query's own camelCase alias instead.
+    // Left as `enrollment_type` this found the identity query, which has no
+    // `IN (:ids)` at all — so one of these two tests was about to pass for the
+    // wrong reason rather than fail.
+    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('"enrollmentType"'));
     expect(String(learningCall![0])).toContain('AND id IN (:ids)');
     expect((learningCall![1] as { replacements: { ids: string[] } }).replacements.ids)
       .toEqual(['enr-1', 'enr-2']);
@@ -122,7 +128,13 @@ describe('person profile', () => {
       sections: sectionsFor('owner'),
       visibleEnrollmentIds: null,
     });
-    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('enrollment_type'));
+    // T210 made this selector AMBIGUOUS: the identity query now also contains
+    // `enrollment_type`, via bool_or(e.enrollment_type = 'explorer') in the shared
+    // fact aggregate. Select on the learning query's own camelCase alias instead.
+    // Left as `enrollment_type` this found the identity query, which has no
+    // `IN (:ids)` at all — so one of these two tests was about to pass for the
+    // wrong reason rather than fail.
+    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('"enrollmentType"'));
     expect(String(learningCall![0])).not.toContain('IN (:ids)');
   });
 
