@@ -81,6 +81,29 @@ const heroSection = z.object({
   audience: text(240).optional(),
   cta: cta.optional(),
   image: z.object({ src: safeUrl, alt: text(300) }).optional(),
+  /**
+   * A card beside the headline, listing what the thing CONTAINS.
+   *
+   * The shape Ali's reference page opens with, and the one thing the hero could not express:
+   * a hero with only a headline and a button leaves half the fold empty at desktop width.
+   *
+   * DELIBERATELY NOT A PROGRESS CARD. The reference shows modules ticked off with "2 of 9
+   * complete" and "In progress". On a page generated for a visitor who has done nothing, those
+   * are claims about that visitor which are not true - and inventing is the one thing this
+   * pipeline refuses to do. So the rows say what is inside, and `note` is a label like
+   * "Module 1", never a state like "Complete".
+   *
+   * At most 8, because this sits beside a headline: a ninth row pushes the fold past the CTA.
+   */
+  panel: z.object({
+    title: text(120),
+    items: z.array(z.object({
+      label: text(160),
+      /** A short marker beside the row. Not a status. */
+      note: text(60).optional(),
+    })).min(2).max(8),
+    footnote: text(160).optional(),
+  }).optional(),
 });
 
 const richTextSection = z.object({

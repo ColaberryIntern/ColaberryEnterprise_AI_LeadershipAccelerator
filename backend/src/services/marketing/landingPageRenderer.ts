@@ -162,10 +162,27 @@ function split(head: string, body: string): string {
     + `<div class="split-body">${body}</div></div>`;
 }
 
+/**
+ * The card beside the hero headline: what this thing contains.
+ *
+ * Not a progress card. See the schema - rows state contents, never a reader's state.
+ */
+function renderPanel(panel: { title: string; items: Array<{ label: string; note?: string }>; footnote?: string }): string {
+  const rows = panel.items.map((i) => `<li><span class="panel-label">${esc(i.label)}</span>`
+    + `${i.note ? `<span class="panel-note">${esc(i.note)}</span>` : ''}</li>`).join('');
+  return `<aside class="panel">`
+    + `<p class="panel-title">${esc(panel.title)}</p>`
+    + `<ul class="panel-list">${rows}</ul>`
+    + `${panel.footnote ? `<p class="panel-foot">${esc(panel.footnote)}</p>` : ''}`
+    + `</aside>`;
+}
+
 function renderSectionBody(section: LandingPageSection): string {
   switch (section.type) {
     case 'hero':
-      return `<div class="hero-grid${section.image ? ' hero-split' : ''}">
+      // Split when there is something to put beside the copy - a panel or an image. With
+      // neither, one column reads better than a column plus a gap.
+      return `<div class="hero-grid${section.image || section.panel ? ' hero-split' : ''}">
 <div class="hero-copy">
 ${renderEyebrow(section.eyebrow)}
 <h1>${renderHeadline(section.headline, section.headlineAccent)}</h1>
@@ -173,7 +190,7 @@ ${section.subhead ? `<p class="lede">${esc(section.subhead)}</p>` : ''}
 ${section.audience ? renderAudience(section.audience) : ''}
 ${section.cta ? `<div class="cta-row">${renderCta(section.cta)}</div>` : ''}
 </div>
-${section.image ? `<div class="hero-img">${renderImage(section.image)}</div>` : ''}
+${section.panel ? renderPanel(section.panel) : ''}${!section.panel && section.image ? `<div class="hero-img">${renderImage(section.image)}</div>` : ''}
 </div>`;
 
     case 'text': {
@@ -284,6 +301,15 @@ function firstCta(content: LandingPageContentShape): Cta | null {
 
 const STYLES = `
 *,*::before,*::after{box-sizing:border-box}
+/* Single-theme on purpose: this is a brand surface, and the accent, the inverse band and the
+   closing band are all chosen against a light ground. Declared rather than left unset so a
+   dark-mode browser does not restyle form controls and scrollbars against the design. */
+:root{color-scheme:light}
+/* Text overflow. A pasted URL, a German compound, a 40-character product name: any unbroken
+   run longer than its column used to push the page sideways, because nothing here said it
+   could break. "anywhere" rather than "break-word" so it also applies inside grid and flex
+   children, which is where every card, check row and panel row lives. */
+body{overflow-wrap:anywhere}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 "Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif}
 img{max-width:100%;height:auto;display:block}
@@ -341,6 +367,24 @@ p{margin:0 0 1rem}
 .hero-grid{display:grid;gap:2.5rem}
 .hero-split{grid-template-columns:1fr}
 @media (min-width:62rem){.hero-split{grid-template-columns:1.05fr .95fr;align-items:center}}
+/* ---- hero panel: what this contains ------------------------------------ */
+.panel{background:var(--bg);border:1px solid var(--line);border-radius:.9rem;padding:1.4rem 1.5rem;box-shadow:0 10px 30px rgba(0,0,0,.07)}
+.band--subtle .panel{background:#FFFFFF}
+.band--inverse .panel{background:#2B2B2B;border-color:#3A3A3A}
+.panel-title{font-size:.74rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-muted);margin:0 0 .9rem}
+.band--inverse .panel-title{color:#D8D8D8}
+.panel-list{list-style:none;margin:0;padding:0;display:grid;gap:.1rem}
+/* Rows wrap rather than collide: the label takes the space it needs and the note drops
+   beneath it on a narrow panel instead of being squeezed to one character per line. */
+.panel-list li{display:flex;flex-wrap:wrap;gap:.25rem .75rem;align-items:baseline;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--line)}
+.band--inverse .panel-list li{border-color:#3A3A3A}
+.panel-list li:last-child{border-bottom:0}
+.panel-label{font-weight:600;min-width:0}
+.panel-note{font-size:.8rem;color:var(--fg-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.band--inverse .panel-note{color:#D8D8D8}
+.panel-foot{margin:.9rem 0 0;font-size:.82rem;color:var(--fg-muted)}
+.band--inverse .panel-foot{color:#D8D8D8}
+
 .pills{list-style:none;display:flex;flex-wrap:wrap;gap:.5rem;padding:0;margin:1.4rem 0 0}
 .pills li{background:var(--accent-soft);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:.35rem .85rem;font-size:.85rem;font-weight:600}
 
@@ -353,7 +397,9 @@ p{margin:0 0 1rem}
 .cta-secondary{background:transparent;color:var(--accent);border:1.5px solid var(--accent);box-shadow:none}
 .band--accent .cta{background:#FFFFFF;color:var(--accent)}
 .cta-sm{padding:.55rem 1.1rem;font-size:.9rem}
-.cta:focus-visible,details summary:focus-visible,.brand:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* Every link, not only the buttons. A link inside prose was reachable by keyboard and gave no
+   sign of where focus was. */
+a:focus-visible,.cta:focus-visible,details summary:focus-visible,.brand:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .band--accent .cta:focus-visible{outline-color:#FFFFFF}
 
 /* ---- bullets: cards / checks / steps ------------------------------------ */

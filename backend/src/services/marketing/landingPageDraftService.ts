@@ -113,7 +113,7 @@ export function visibleText(content: LandingPageContentShape): string {
 
 const SECTION_GUIDE = `Each section is an object with a "type". The allowed types, and their fields:
 
-- {"type":"hero","headline":str,"subhead":str?,"audience":str?,"cta":{"label":str,"href":str}?}
+- {"type":"hero","headline":str,"subhead":str?,"audience":str?,"cta":{"label":str,"href":str}?,"panel":{"title":str,"items":[{"label":str,"note":str?}],"footnote":str?}?}
 - {"type":"text","heading":str?,"paragraphs":[str,...]}
 - {"type":"bullets","heading":str?,"items":[{"label":str,"detail":str?},...]}
 - {"type":"stats","heading":str?,"items":[{"value":str,"label":str,"source":str},...]}
@@ -146,6 +146,14 @@ RULES, in order of importance:
    brief does not say where the button goes, omit the "cta" object entirely and let a human add
    it. Never invent a path. "/apply" was the old instruction here and it shipped a live page
    whose only button 404'd, which is worse than a page with no button on it.
+6b. THE HERO PANEL IS A CONTENTS LIST, AND ONLY WHEN THE BRIEF HAS ONE. Use "panel" when the
+   brief actually enumerates what is inside - modules, sessions, what is covered, what is
+   included. 2 to 8 rows, each a short label; "note" is a marker like "Module 1" or "Week 2".
+   NEVER a status: no "Complete", no "In progress", no percentage. The reader has done none of
+   it, and the page must not imply otherwise. If the brief lists nothing, omit "panel" entirely
+   rather than inventing rows to fill the space - an invented curriculum is the worst thing on
+   this page, because it reads as a promise.
+
 7. THE HEADLINE CARRIES A CONCRETE DETAIL FROM THE BRIEF. A hero headline that would fit any
    course on any subject is a failed headline. Take the most specific thing the brief actually
    gives you - a duration, a format, the artefact someone leaves with, who reviews it - and put it
