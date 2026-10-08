@@ -5,12 +5,13 @@
  */
 const evCreate = jest.fn();
 const evFindAll = jest.fn();
+const evFindOne = jest.fn();
 jest.mock('../../../models/GovBuildStoryEvidence', () => ({
   __esModule: true,
-  default: { create: (...a: any[]) => evCreate(...a), findAll: (...a: any[]) => evFindAll(...a) },
+  default: { create: (...a: any[]) => evCreate(...a), findAll: (...a: any[]) => evFindAll(...a), findOne: (...a: any[]) => evFindOne(...a) },
 }));
 
-import { submitBuildStoryEvidence, listBuildStoryEvidence, EvidenceInputError } from '../govBuildEvidence';
+import { submitBuildStoryEvidence, listBuildStoryEvidence, verifyBuildStoryEvidence, EvidenceInputError, EvidenceVerifyError } from '../govBuildEvidence';
 
 const input = (over: any = {}) => ({
   deliveryProjectId: 'dp-1', storyId: 'STORY-R1', canonicalReqId: 'R1',
@@ -56,5 +57,42 @@ describe('listBuildStoryEvidence', () => {
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ storyId: 'STORY-R1', canonicalReqId: 'R1', status: 'submitted' });
     expect(JSON.stringify(list)).not.toContain('secret-id'); // the submitter identity is not in the safe view
+  });
+});
+
+describe('verifyBuildStoryEvidence — reviewer decision + separation of duties', () => {
+  // A mock row: get() returns the current plain state; update() mutates it for the re-read.
+  const mockRow = (over: any = {}) => {
+    const state: any = { id: 'ev-1', delivery_project_id: 'dp-1', story_id: 'STORY-R1', canonical_req_id: 'R1', description: 'done', artifact_ref: null, status: 'submitted', submitted_by_identity_id: 'student-1', submitted_at: new Date('2026-10-07T00:00:00Z'), reviewed_by_identity_id: null, reviewed_at: null, ...over };
+    return { get: () => ({ ...state }), update: jest.fn(async (patch: any) => { Object.assign(state, patch); }) };
+  };
+  const verifyInput = (over: any = {}) => ({ evidenceId: 'ev-1', deliveryProjectId: 'dp-1', reviewerIdentityId: 'reviewer-9', decision: 'verified' as const, ...over });
+
+  it('verifies a submitted hand-in: sets status + reviewer, returns the decided view', async () => {
+    const row = mockRow();
+    evFindOne.mockResolvedValue(row);
+    const r = await verifyBuildStoryEvidence(verifyInput());
+    expect(row.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'verified', reviewed_by_identity_id: 'reviewer-9' }));
+    expect(r.status).toBe('verified');
+  });
+
+  it('SEPARATION OF DUTIES: a reviewer cannot verify evidence THEY submitted (self_review, nothing updated)', async () => {
+    const row = mockRow({ submitted_by_identity_id: 'reviewer-9' }); // same identity as the reviewer
+    evFindOne.mockResolvedValue(row);
+    await expect(verifyBuildStoryEvidence(verifyInput({ reviewerIdentityId: 'reviewer-9' }))).rejects.toMatchObject({ reason: 'self_review' });
+    expect(row.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to re-decide an already-reviewed hand-in (already_reviewed)', async () => {
+    const row = mockRow({ status: 'verified', reviewed_by_identity_id: 'someone' });
+    evFindOne.mockResolvedValue(row);
+    await expect(verifyBuildStoryEvidence(verifyInput())).rejects.toMatchObject({ reason: 'already_reviewed' });
+    expect(row.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a cross-project / missing row (not_found) and a bad decision', async () => {
+    evFindOne.mockResolvedValue(null);
+    await expect(verifyBuildStoryEvidence(verifyInput())).rejects.toMatchObject({ reason: 'not_found' });
+    await expect(verifyBuildStoryEvidence(verifyInput({ decision: 'approved' }))).rejects.toBeInstanceOf(EvidenceVerifyError);
   });
 });

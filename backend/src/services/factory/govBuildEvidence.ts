@@ -68,3 +68,34 @@ export async function listBuildStoryEvidence(deliveryProjectId: string): Promise
   const rows = await GovBuildStoryEvidence.findAll({ where: { delivery_project_id: deliveryProjectId }, order: [['submitted_at', 'DESC']] });
   return rows.map((r) => toView(r.get({ plain: true }) as GovBuildStoryEvidenceAttributes));
 }
+
+export type VerifyDecision = 'verified' | 'rejected';
+export class EvidenceVerifyError extends Error {
+  constructor(message: string, readonly reason: string) { super(message); this.name = 'EvidenceVerifyError'; }
+}
+
+export interface VerifyEvidenceInput {
+  evidenceId: string;
+  deliveryProjectId: string;
+  reviewerIdentityId: string;
+  decision: VerifyDecision;
+}
+
+/**
+ * A reviewer decides a submitted hand-in: verified or rejected. The RAILS: the row is scoped to its delivery
+ * project (no cross-project verify); SEPARATION OF DUTIES — a reviewer may never decide evidence THEY submitted;
+ * and only a still-`submitted` hand-in is decided here (a decided one is not silently re-decided). The route
+ * additionally gates this on `evidence.verify`, which the submitting student's role does not hold.
+ */
+export async function verifyBuildStoryEvidence(input: VerifyEvidenceInput): Promise<EvidenceView> {
+  if (!input.evidenceId || !input.deliveryProjectId) throw new EvidenceVerifyError('Missing identifiers.', 'bad_input');
+  if (!input.reviewerIdentityId) throw new EvidenceVerifyError('A reviewer identity is required.', 'no_reviewer');
+  if (input.decision !== 'verified' && input.decision !== 'rejected') throw new EvidenceVerifyError('Decision must be verified or rejected.', 'bad_decision');
+  const row: any = await GovBuildStoryEvidence.findOne({ where: { id: input.evidenceId, delivery_project_id: input.deliveryProjectId } });
+  if (!row) throw new EvidenceVerifyError('Evidence not found.', 'not_found');
+  const plain = row.get({ plain: true }) as GovBuildStoryEvidenceAttributes;
+  if (plain.submitted_by_identity_id === input.reviewerIdentityId) throw new EvidenceVerifyError('A reviewer cannot verify evidence they submitted.', 'self_review');
+  if (plain.status !== 'submitted') throw new EvidenceVerifyError('This evidence has already been reviewed.', 'already_reviewed');
+  await row.update({ status: input.decision, reviewed_by_identity_id: input.reviewerIdentityId, reviewed_at: new Date() });
+  return toView(row.get({ plain: true }) as GovBuildStoryEvidenceAttributes);
+}
