@@ -418,6 +418,34 @@ describe('POST /compose, the first non-test caller the pipeline has ever had', (
     expect(r.body.advisories.map((x: any) => x.code)).toEqual(['W']);
   });
 
+  it('a body whose project carries NO id still composes, rather than 400ing', () => {
+    // THE MISSING OPERAND CONTROL. The mismatch guard is compound:
+    // `typeof bodyProjectId === 'string' && bodyProjectId !== p.data.projectId`. Deleting the
+    // typeof half left every test green, because no fixture had a project without an id — so
+    // half the guard was untested. A project with no id is not a MISMATCH, it is a body the
+    // validators will refuse on their own terms, and conflating the two would 400 it.
+    composeBlueprint.mockReturnValue(composed());
+    return request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+      .send(body({ project: {} }))
+      .then((r) => {
+        expect(r.status).toBe(200);
+        expect(composeBlueprint).toHaveBeenCalled();
+      });
+  });
+
+  it('500s when the composition throws, rather than reporting a clean compose', async () => {
+    // The catch path returned 200 under mutation with every test green. A 500 here is the
+    // honest answer: the blueprint was neither composed nor refused, and saying `composed:
+    // false` would be indistinguishable from a blueprint that genuinely has refusals.
+    composeBlueprint.mockImplementation(() => { throw new Error('validator exploded'); });
+    const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+      .send(body());
+    expect(r.status).toBe(500);
+    expect(r.body.composed).toBeUndefined();
+    // and the message does not leak the internal error text
+    expect(r.body.error).not.toMatch(/exploded/);
+  });
+
   it('200s when nothing refuses', async () => {
     composeBlueprint.mockReturnValue(composed());
     const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`).send(body());

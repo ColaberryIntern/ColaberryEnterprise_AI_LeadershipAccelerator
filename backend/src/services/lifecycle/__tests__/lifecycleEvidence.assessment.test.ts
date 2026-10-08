@@ -31,7 +31,7 @@ import {
   EVIDENCE_MEASUREMENTS,
   NOT_MEASURED,
   applyMeasurements,
-} from '../lifecycleStatus';
+} from '../lifecycleEvidence';
 import { completeEvidence as complete } from './evidenceFixture';
 
 const ROW = {
@@ -443,6 +443,44 @@ describe('a measurement that cannot measure leaves the field UNASSESSED', () => 
       // and it did not throw on the way, which a bare .filter would have
       expect(out.requirementsWithoutProvenance).toEqual([]);
     }
+  });
+
+  it('an ABSENT provenanceKind counts as unrecorded, not as recorded', () => {
+    // THE GATE BYPASS THIS CLOSES, found by mutation at the JSONB boundary. Treating only
+    // `null` as unrecorded meant a source with the key ABSENT was reported as having
+    // provenance: the gap list came back EMPTY and the field was claimed ASSESSED, so the
+    // provenance prerequisite PASSED on data recording no provenance at all.
+    const refs = {
+      sources: [
+        { id: 's-1', state: 'heard' },                      // provenanceKind ABSENT
+        { id: 's-2', state: 'heard', provenanceKind: null },
+        { id: 's-3', state: 'heard', provenanceKind: 'interview' },
+      ],
+    } as unknown as Parameters<typeof applyMeasurements>[2]['refs'];
+
+    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs });
+    // Both the absent and the explicit null are unrecorded; only s-3 has provenance.
+    expect(out.requirementsWithoutProvenance).toEqual(['s-1', 's-2']);
+  });
+
+  it('ONE unreadable element makes the whole list unmeasurable, rather than crashing', () => {
+    // `refs_json` is cast `parsed as ManifestRefs`, so nothing had checked its ELEMENTS:
+    // `sources: [null]` threw out of the reader, and a junk element was counted silently.
+    //
+    // The whole list is refused, not the readable subset: a gap list that quietly omitted the
+    // rows nobody could read would be SHORTER, and a shorter gap list looks like better news.
+    for (const bad of [[null], [7], [{ state: 'open' }], [{ id: 1 }], [{ id: 'ok' }, null]]) {
+      const refs = { sources: bad } as unknown as
+        Parameters<typeof applyMeasurements>[2]['refs'];
+      const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs });
+      expect(out.assessedFields.size).toBe(0);
+    }
+    // POSITIVE COUNTERPART: a readable list IS measured, so the guard is not refusing
+    // everything.
+    const good = { sources: [{ id: 'g-1', state: 'open', provenanceKind: null }] } as unknown as
+      Parameters<typeof applyMeasurements>[2]['refs'];
+    expect(applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: good })
+      .assessedFields.size).toBe(2);
   });
 
   it('requirementCount is deliberately NOT measured, and that is a decision not an omission', () => {

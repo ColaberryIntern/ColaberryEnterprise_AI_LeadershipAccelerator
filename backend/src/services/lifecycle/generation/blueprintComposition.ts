@@ -162,9 +162,22 @@ export function partitionIssues(
   return { refusals, advisories };
 }
 
-function surfaceChecks(input: BlueprintCompositionInput): StageResult[] {
+/**
+ * Run the four checks, and return the design selection ALONGSIDE them.
+ *
+ * ONE `selectDesign` call, not two. An earlier version called it here for the issues and
+ * again below for the selected design, which left a second expression that could be
+ * hardcoded to `null` with every test still green — a verifier did exactly that and it
+ * survived. Returning both halves of one call removes the operand rather than asserting
+ * around it: there is no longer a second place for the answer to come from.
+ */
+function surfaceChecks(input: BlueprintCompositionInput): {
+  results: StageResult[];
+  selected: SelectedDesign | null;
+} {
   const design = input.design;
-  return [
+  const chosen = design === null ? null : selectDesign(design);
+  const results: StageResult[] = [
     {
       stage: 'workspaces',
       issues: validateTaskSurfaces(
@@ -183,7 +196,7 @@ function surfaceChecks(input: BlueprintCompositionInput): StageResult[] {
     },
     {
       stage: 'design',
-      issues: design === null
+      issues: chosen === null
         // Not an empty list. A missing selection is a refusal, because every downstream
         // approval binds to a design and LC-10 cannot be satisfied without one.
         ? [{
@@ -191,9 +204,10 @@ function surfaceChecks(input: BlueprintCompositionInput): StageResult[] {
           message: 'No design alternative has been selected, so there is nothing to approve.',
           severity: 'error' as Severity,
         }]
-        : selectDesign(design).issues,
+        : chosen.issues,
     },
   ];
+  return { results, selected: chosen === null ? null : chosen.selected };
 }
 
 export function composeBlueprint(input: BlueprintCompositionInput): ComposedBlueprint {
@@ -203,11 +217,12 @@ export function composeBlueprint(input: BlueprintCompositionInput): ComposedBlue
   // GENERATION FIRST, AND ITS REFUSALS ARE NOT FATAL TO THE SWEEP. Running the surface checks
   // anyway is deliberate: a reviewer fixing a blueprint wants every blocker at once, not the
   // first stage's worth and then another round trip. The draft is still reported as refused.
-  const split = partitionIssues(surfaceChecks(input));
+  const checks = surfaceChecks(input);
+  const split = partitionIssues(checks.results);
   const refusals: ReadonlyArray<Refusal> = [...draft.refusals, ...split.refusals];
   const advisories: ReadonlyArray<Refusal> = split.advisories;
 
-  const selected = input.design === null ? null : selectDesign(input.design).selected;
+  const selected = checks.selected;
 
   log({
     level: refusals.length === 0 ? 'info' : 'warn',

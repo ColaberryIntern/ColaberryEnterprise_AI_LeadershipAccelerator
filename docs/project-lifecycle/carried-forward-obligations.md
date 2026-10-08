@@ -677,7 +677,32 @@ then fails on missing tables rather than on anything it was testing.
 did, and it ran 981 of 981 green. Two separate verifiers lost time to this; the second
 diagnosed it only after a 12-hour background job finished. Recorded so the third does not.
 
-### OPEN, raised by P5-T1.4: `EVIDENCE_MEASUREMENTS` cannot be populated from a `LifecycleRow`
+### CLOSED by P5-T1.4: `EVIDENCE_MEASUREMENTS` is populated
+
+**Closed by commit `4763e5e0`, and this heading said OPEN until a verifier pointed out that the
+task closing it had shipped without applying this register’s own `### CLOSED:` convention.** The
+entry below is the original text; what changed is recorded here.
+
+`LifecycleRow` was widened with `student_project_id` and `delivery_project_id` — it was a narrow
+projection over a Sequelize row that already carried them, so the blocker was three lines. The
+I/O happens once in `latestManifestRefs`; each measurement is a pure function of the result.
+
+Two fields are mapped and only two: `requirementsWithoutProvenance` and
+`unresolvedSourceBlocks`. `requirementCount` stays unmapped on purpose, with a test asserting
+the omission is a decision.
+
+**And the closure went further than the entry asked**, because a mutation found the gate still
+open at the JSONB boundary: an ABSENT `provenanceKind` was treated as recorded, so the gap list
+came back empty with the field claimed ASSESSED and the provenance prerequisite PASSED on data
+recording no provenance. `?? null` closes it, and one unreadable element now makes the whole
+list unmeasurable rather than crashing or measuring a shorter — falsely reassuring — subset.
+
+**`lifecycleStatus.ts` was also split**, since it hit 495 lines of 500 and exactly 12 exports of
+12. The evidence half is now `lifecycleEvidence.ts`: 261/6 and 253/7.
+
+#### The original entry follows.
+
+### (was OPEN) `EVIDENCE_MEASUREMENTS` cannot be populated from a `LifecycleRow`
 
 `Measurement` is typed `(row: LifecycleRow) => unknown`, and `LifecycleRow` is five columns:
 `id, tenant_id, stage, condition, condition_reason`. **None of the ~25 fields on**

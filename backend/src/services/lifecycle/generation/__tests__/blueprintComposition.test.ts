@@ -21,6 +21,7 @@
 import { composeBlueprint, refusesComposition, asRefusal, partitionIssues,
   type BlueprintCompositionInput } from '../blueprintComposition';
 import { validateControlSpec, type ControlPolicy } from '../controlSpecification';
+import * as controlSpec from '../controlSpecification';
 import { selectDesign } from '../designSelection';
 import { validateTaskSurfaces } from '../workspaceMapping';
 import { validateWorkspaceStates, type WorkspaceStateDeclaration } from '../workspaceStateChecks';
@@ -183,5 +184,73 @@ describe('composeBlueprint runs the four checks generation never reached', () =>
       expect(typeof r.stage).toBe('string');
       expect(r.stage.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('composeBlueprint OWNS these properties, not partitionIssues', () => {
+  // THE THREE SURVIVORS THIS CLOSES, and the lesson in them is sharper than the bugs.
+  //
+  // A verifier mutated `const advisories = split.advisories` to `[]` and all 1021 tests passed —
+  // the SAME mutation the session log records as closed. Exporting `partitionIssues` made the
+  // HELPER drivable, and I tested the helper. The composition's own use of its advisory half
+  // stayed undriven, so the property stated on this module ("every issue lands in exactly one of
+  // the two lists") was unprotected at the `composeBlueprint` boundary.
+  //
+  // Testing an extraction is not testing the thing that uses it.
+
+  it('carries a WARNING into advisories, through composeBlueprint itself', () => {
+    // No validator emits `warning` today, so the branch is only reachable by making one do it.
+    // A spy on the real module is how: `composeBlueprint` reads these as module properties, so
+    // this drives the production path rather than a re-implementation of it.
+    const spy = jest.spyOn(controlSpec, 'validateControlSpec').mockReturnValue([
+      { code: 'W_SOFT', message: 'advisory only', severity: 'warning' },
+      { code: 'E_HARD', message: 'blocking', severity: 'error' },
+    ]);
+    try {
+      const out = composeBlueprint(base());
+      expect(out.advisories.map((r) => r.code)).toContain('W_SOFT');
+      expect(out.refusals.map((r) => r.code)).toContain('E_HARD');
+      // and the warning did NOT also block, which is the distinction the severity carries
+      expect(out.refusals.map((r) => r.code)).not.toContain('W_SOFT');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('MERGES generation refusals with the surface ones, so a refused draft cannot report composed', () => {
+    // The nastier survivor: dropping `...draft.refusals` left 1021 tests green, and the route
+    // computes `composed = out.refusals.length === 0` — so a blueprint whose GENERATION was
+    // refused would have answered `200 {composed: true}`.
+    const out = composeBlueprint(base({ allocation: [] }));
+    const stages = out.refusals.map((r) => r.stage);
+    expect(stages).toContain('allocation');          // from generation, not from the four checks
+    expect(out.refusals.some((r) => r.code === 'ALLOCATION_MISSING')).toBe(true);
+    expect(out.draft).toBeNull();
+  });
+
+  it('reports the SELECTED design when one is chosen, rather than always null', () => {
+    // `selectedDesign` could be hardcoded to null and nothing noticed, because every fixture
+    // passed `design: null`. Amendment 4 allows tested or removed; it was neither.
+    const design = {
+      set: {
+        alternatives: [
+          // `surfaces` is required: `journeyIssues` iterates it and threw on a fixture without
+          // one. An empty list is the honest minimum — no surfaces declared, nothing to journey.
+          { alternativeId: 'alt-1', structure: 'a', surfaces: [] },
+          { alternativeId: 'alt-2', structure: 'b', surfaces: [] },
+        ],
+      },
+      chosenAlternativeId: 'alt-1',
+      visualContractRevision: 1,
+      journeys: [],
+    } as unknown as NonNullable<BlueprintCompositionInput['design']>;
+
+    const out = composeBlueprint(base({ design }));
+    // Either a design comes back, or the selector refused it and SAID so at the design stage.
+    // What must not happen is a silent null with no refusal explaining it.
+    const designRefusals = out.refusals.filter((r) => r.stage === 'design');
+    expect(out.selectedDesign !== null || designRefusals.length > 0).toBe(true);
+    // And this input is NOT the "nothing selected" case, so that specific refusal is gone.
+    expect(designRefusals.map((r) => r.code)).not.toContain('DESIGN_NOT_SELECTED');
   });
 });
