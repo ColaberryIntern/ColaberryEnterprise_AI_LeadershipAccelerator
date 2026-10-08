@@ -11,6 +11,7 @@ import { expiryPhrase, presentHealth, providerLabel, pluralPosts, scheduleLabel 
 import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
 import { newPostGate } from './newPostGate';
+import MarketingHub from './MarketingHub';
 
 /**
  * Marketing Overview - the landing page, rebuilt around the work instead of the numbers.
@@ -175,6 +176,10 @@ export default function AdminMarketingOverviewPage() {
           recentWindowDays={overview?.recent.window_days ?? 30}
         />
 
+        {/* The navigation that used to be seven more rows in the left rail. Without this the
+            rail's single button would leave those pages reachable only by typing a URL. */}
+        <MarketingHub />
+
         <div className="row g-3">
           <div className="col-12 col-xl-7">
             <SectionCard title="Needs you" icon="alarm-warning-line" padded={false} className="mb-3">
@@ -206,13 +211,18 @@ export default function AdminMarketingOverviewPage() {
                   </button>
                 </div>
               )}
+              {/* The third way into the composer, and the one missed when the other two were
+                  gated. The action is OMITTED rather than disabled: EmptyState is a shared shell
+                  component and does not belong to Marketing, so the decision stays here - and an
+                  empty state whose only button cannot be pressed should not show one. */}
               {!ready && upcoming.length === 0 && (
                 <EmptyState
                   icon="calendar-schedule-line"
                   title="Nothing scheduled"
-                  description="When you schedule a post it appears here, soonest first, with the account it will go out from."
-                  actionLabel="Write a post"
-                  to="/admin/marketing/composer"
+                  description={gate.allowed
+                    ? 'When you schedule a post it appears here, soonest first, with the account it will go out from.'
+                    : (gate.reason ?? '')}
+                  {...(gate.allowed ? { actionLabel: 'Write a post', to: '/admin/marketing/composer' } : {})}
                 />
               )}
               {!ready && upcoming.map((p) => <UpcomingRow key={p.id} post={p} />)}
