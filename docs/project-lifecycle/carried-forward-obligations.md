@@ -813,6 +813,26 @@ and a new required CI gate is a governance decision rather than a task detail. T
 is deliberately NOT committed, because a config that only covers the files one task touched
 would read as coverage it does not provide.
 
+**NOW MEASURED, 2026-10-08, and the number is the point.** A scoped typecheck over all 31
+lifecycle test files finds **9 errors in 4 files**:
+
+```
+projectLifecycleRoutes.test.ts:18    TS2556   (dates to P2-T6, commit 3cc30dbe)
+deliveryDesignLoop.test.ts:85,92
+manifestRefs.test.ts:105,106,116,117
+workspaceMapping.test.ts:743,799
+```
+
+P5-T1.4 introduced none of them, and closed the three files it touched. **But the diagnosis
+generalises further than that fix did**, which is worth saying plainly rather than letting a
+PASS imply the tree is clean: every one of these has been green in CI since the day it landed,
+because `tsconfig.json` excludes `**/*.test.ts` and `**/__tests__/**` and `ts-jest` runs with
+`isolatedModules: true`.
+
+**A related gate is also off**: `noUnusedLocals`. With it on, P5-T1.4’s own commit showed three
+dead symbols in `designSelection.test.ts` — including a `ref` it imported and never read. Fixed
+there, but nothing would have caught it.
+
 **The honest shape of the fix**: a `tsconfig.test.json` extending the base with the test paths
 included, run as its own CI step, landed with whatever error count the tree actually has rather
 than with a claim that it is clean. Until then, any task adding test code should run a scoped

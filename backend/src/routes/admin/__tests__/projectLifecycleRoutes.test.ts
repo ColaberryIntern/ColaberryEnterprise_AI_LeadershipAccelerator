@@ -60,6 +60,7 @@ import {
   ApprovalConflictError, ApprovalGateError, SelfApprovalError, ManifestNotFoundError,
 } from '../../../services/lifecycle/blueprintApproval';
 import router from '../projectLifecycleRoutes';
+import { composeBody } from '../../../schemas/projectLifecycleSchema';
 
 const PROJECT = '11111111-1111-4111-8111-111111111111';
 const MANIFEST = '22222222-2222-4222-8222-222222222222';
@@ -370,6 +371,31 @@ describe('POST /compose, the first non-test caller the pipeline has ever had', (
     selectedDesign: null,
     refusals,
     advisories,
+  });
+
+  it('the Zod body covers every field composeBlueprint requires', () => {
+    // WHY THIS EXISTS. The handler casts the parsed body with `as unknown as`, because the
+    // schema is deliberately shallow. That cast means a field added to
+    // `BlueprintCompositionInput` would NOT be a compile error at the route — it would arrive
+    // as `undefined` and the validator would refuse it as malformed input, reporting a domain
+    // refusal for what is really a wiring gap.
+    //
+    // THIS LIST IS HAND-MAINTAINED, and that is a real limitation rather than a hidden one:
+    // TypeScript types do not exist at runtime, so nothing can derive it. What keeps it honest
+    // is the positive control below — without that, a list that had silently emptied would
+    // still pass.
+    const required = [
+      'understanding', 'project', 'allocation', 'agents', 'effort', 'declaration',
+      'bindings', 'workspaceStates', 'policies', 'design',
+    ];
+    const shape = Object.keys(composeBody.shape);
+    for (const field of required) {
+      expect(shape).toContain(field);
+    }
+    // POSITIVE CONTROL: the assertion above holds vacuously for an empty list, and it can
+    // detect a field that is genuinely absent.
+    expect(required.length).toBe(10);
+    expect(shape).not.toContain('aFieldTheSchemaDoesNotHave');
   });
 
   it('409s with lifecycleDisabled when the flag is off, and never composes', async () => {

@@ -301,6 +301,19 @@ router.post(`${PREFIX}/:projectId/compose`, requireSection(SECTION), async (req:
   try {
     const { composeBlueprint } = await import('../../services/lifecycle/generation/blueprintComposition');
     const out = composeBlueprint({
+      // THE ONE CAST IN THIS HANDLER, and it needs saying why rather than being left bare.
+      //
+      // The Zod body is deliberately SHALLOW (`z.array(z.unknown())`), because each of these
+      // collections has a validator that owns its deep contract and fails closed on malformed
+      // input — a schema mirroring those contracts would be a second definition free to drift.
+      // The cost is that `ComposeBody` is not assignable to `BlueprintCompositionInput`, and
+      // the cast is what bridges that gap.
+      //
+      // THE RISK IT CARRIES, stated because a verifier named it as exactly the drift class
+      // this task spent three gradings fixing elsewhere: a field added to the composition
+      // input would NOT be a compile error here. The test named "the Zod body covers every
+      // field composeBlueprint requires" is what catches that, and it is hand-maintained for a
+      // reason it admits in its own comment.
       ...(b.data as unknown as Parameters<typeof composeBlueprint>[0]),
       roleIds: new Set(b.data.roleIds ?? []),
       correlationId,

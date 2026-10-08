@@ -29,14 +29,13 @@ import { generateDesignAlternatives, type AlternativeSet } from '../designAltern
 import { MIN_VARIANTS } from '../../../delivery/deliveryDesignLoop';
 import { prerequisiteGaps, type LifecycleEvidence, type EvidenceField } from '../../lifecyclePrerequisites';
 import { manualOnlyProject } from './fixtures/manualOnly';
-import type { TaskSurfaceBinding, WorkspaceRef } from '../workspaceBindingTypes';
+import type { TaskSurfaceBinding } from '../workspaceBindingTypes';
 // ONE DEFINITION of a workspace ref, a workspace binding and a declared journey. These were
 // duplicated into `fixtures/acceptedDesign.ts`, and the copy drifted: two required
 // `WorkspaceRef` fields went missing and no check could see it. Imported now, so there is
 // nothing to drift from.
-import { ref, ws, declared } from './fixtures/acceptedDesign';
+import { ws, declared } from './fixtures/acceptedDesign';
 
-const ROLE = 'role-counsel';
 
 
 const headless = (taskId: string): TaskSurfaceBinding => ({ taskId, kind: 'headless', reason: 'scheduled_ingestion' });
