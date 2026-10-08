@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StatusBadge } from '../../../../components/admin/shell';
 import type { ExternalPublication, PublishingJob } from '../../../../services/contentComposerApi';
 import { formatCentral } from '../centralTime';
+import { postPermalink } from './postPermalink';
 
 /**
  * What happened after the operator clicked Schedule / Publish now: the queue, per network.
@@ -110,7 +111,14 @@ export default function ComposerPublishing({ jobs, publications, busy, onRetry, 
                     <>
                       {pub.metadata.mode === 'dry_run' && <StatusBadge label="Dry run" tone="neutral" />}
                       {pub.current_status === 'handoff_pending' && <StatusBadge label="Awaiting handoff" tone="warning" />}
-                      {pub.current_status === 'live' && (pub.permalink ? <a href={pub.permalink} target="_blank" rel="noreferrer">{pub.external_id}</a> : <code>{pub.external_id}</code>)}
+                      {/* Resolved through postPermalink: Meta returns a RELATIVE path for a reel,
+                          which as a bare href pointed at this admin's own hostname and 404'd. */}
+                      {pub.current_status === 'live' && (() => {
+                        const href = postPermalink(pub.permalink, j.provider);
+                        return href
+                          ? <a href={href} target="_blank" rel="noreferrer" data-testid="receipt-link">{pub.external_id}</a>
+                          : <code data-testid="receipt-id">{pub.external_id}</code>;
+                      })()}
                     </>
                   ) : <span className="text-muted">-</span>}
                 </td>
