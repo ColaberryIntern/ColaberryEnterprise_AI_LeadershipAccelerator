@@ -31,6 +31,7 @@ import { fetchGovOpportunityCandidatesV2 } from '../../services/factory/opportun
 import { FLAGS } from '../../config/featureFlags';
 import { ensureGovTwoTrackProject } from '../../services/factory/govDeliveryProject';
 import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
+import { generateRiskNarrative, generateProposalSummary } from '../../services/factory/govBidNarrative';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -370,6 +371,69 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/amendments
   } catch (err: any) {
     if (err instanceof AmendmentError) { res.status(400).json({ error: err.message, reason: err.reason }); return; }
     logFail('gov_amendment_record_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not record the inbox entry.' });
+  }
+});
+
+// ── AI advisory (sits strictly DOWNSTREAM of the deterministic engine — it explains, never scores) ──
+// Both return advisory text only; they change no gate and persist nothing beyond an in-memory cache.
+const riskNarrativeBody = z.object({
+  band: z.enum(['bid', 'bid_with_conditions', 'no_bid']),
+  pwin: z.number().nullable(),
+  preliminary: z.boolean(),
+  expectedValue: z.number().nullable(),
+  daysLeft: z.number().nullable(),
+  knockouts: z.array(z.object({ category: z.string().max(60), text: z.string().max(2000), status: z.enum(['pass', 'conditional', 'hard_fail']) })).max(60),
+  factors: z.array(z.object({ label: z.string().max(120), score: z.number().nullable(), weight: z.number() })).max(12),
+  buyer: z.string().max(200).nullable().optional(),
+  title: z.string().max(300).nullable().optional(),
+});
+
+/** POST …/risk-narrative — a plain-English read of a bid decision the client's deterministic engine produced. */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/risk-narrative', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const body = riskNarrativeBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: 'Invalid bid-assessment facts.' }); return; }
+  const scope = await scopeOrFail(res, 'gov_risk_narrative_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const d = body.data;
+    const result = await generateRiskNarrative({
+      band: d.band, preliminary: d.preliminary,
+      pwin: d.pwin ?? null, expectedValue: d.expectedValue ?? null, daysLeft: d.daysLeft ?? null,
+      knockouts: d.knockouts,
+      factors: d.factors.map((f) => ({ label: f.label, score: f.score ?? null, weight: f.weight })),
+      buyer: d.buyer ?? null, title: d.title ?? null,
+    });
+    if (result.error) { res.status(503).json({ error: result.error }); return; }
+    res.json(result);
+  } catch (err: any) {
+    logFail('gov_risk_narrative_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the risk narrative.' });
+  }
+});
+
+const proposalSummaryBody = z.object({
+  requirements: z.array(z.object({ id: z.string().max(60), text: z.string().max(4000) })).max(200),
+  title: z.string().max(300).nullable().optional(),
+  buyer: z.string().max(200).nullable().optional(),
+});
+
+/** POST …/proposal-summary — "what they want / what we'd build" from the established requirement statements. */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/proposal-summary', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const body = proposalSummaryBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: 'Invalid requirements payload.' }); return; }
+  const scope = await scopeOrFail(res, 'gov_proposal_summary_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const result = await generateProposalSummary(body.data);
+    if (result.error) { res.status(result.error.includes('No established') ? 400 : 503).json({ error: result.error }); return; }
+    res.json(result);
+  } catch (err: any) {
+    logFail('gov_proposal_summary_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the proposal summary.' });
   }
 });
 
