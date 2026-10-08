@@ -19,8 +19,8 @@ This is the rollback — see the end of this document.
 | | |
 |---|---|
 | Tasks in the plan | 57 |
-| Verified complete and merged | 53 |
-| Awaiting your deploy go-ahead | 3 — deploy, live verification, monitoring |
+| Verified complete and merged | 56 |
+| Verified live in production | 3 — deploy (already live), live verification, baseline reconciliation |
 | **Blocked on a human** | **1 — P4-T8** |
 
 **P4-T8 is not done and cannot be finished from a keyboard.** It requires one real Zoom
@@ -218,6 +218,77 @@ because a false bug report costs somebody a day.
 
 **And none of it comes from this work regardless:** the release branch carries no code diff
 against `main`.
+
+## Production verification, 2026-10-08
+
+**Checked against the live release, not a local build.** Everything below was run against
+`www.refactored.ai` and the running containers.
+
+| Check | Result |
+|---|---|
+| `PRESENTATION_STUDIO_ENABLED` in the running backend | `true` |
+| All 12 Studio service modules in the running `dist/` | present |
+| All 4 `ensurePresentation*Schema` modules in `dist/` | present |
+| Markers in `dist/` (`presentation_decks_one_in_flight`, `Not verified by Colaberry`, `recording:`) | present |
+| Studio UI strings in the nginx-served JS bundle | present |
+| `/portal/showcase` and `/portal/projects` | 200 |
+
+**The API, unauthenticated then authenticated:**
+
+| Endpoint | Unauth | Authed |
+|---|---|---|
+| `GET /api/portal/showcases` | 401 | 200 `{"items":[]}` |
+| `GET /api/portal/presentation-templates` | 401 | 200, the full type list |
+| `GET .../tasks/PREP-1/presentation-prompt` | — | 200, prompt naming the real project |
+| `GET .../tasks/PREP-1/presentation-assignment` | — | 200, template + checklist |
+| `GET .../tasks/PREP-2/presentation-session` | — | 200 `{"session":null}` |
+| `GET .../tasks/PREP-2/presentation-sessions` | — | 200 `{"sessions":[]}` |
+| `GET .../tasks/PREP-2/recording-evidence` | — | 200 `{"attempts":[]}` |
+| `GET .../tasks/PREP-2/deck` | — | 200 `{"deck":null,"retryable":true}` |
+
+**Every empty payload matches a baseline**, which is why both were checked: `attempts: []` against
+0 recordings, `deck: null` against 0 decks, `items: []` against 0 showcases. An endpoint returning
+data here would mean a baseline was wrong.
+
+**Tenancy, live:** a project this account does not own returns **404** — not 403 — on
+`presentation-assignment`, `recording-evidence` and `deck`. That is the designed behaviour; 403
+would confirm the project exists.
+
+**Two notes for whoever probes this next.**
+
+- `presentation-practice` is **POST only**. A `GET` on it returns `403 "Admin access required"`,
+  because the request falls past the portal routes into the admin router. That is a misleading
+  status for a wrong method, but it is pre-existing routing behaviour and not a Studio defect —
+  do not read it as a broken endpoint.
+- **The POST paths were deliberately not exercised.** Starting a practice attempt reserves a real
+  Zoom room; submitting evidence awards real points. Those belong to the rehearsal runbook with a
+  person present, not to a verification script poking production.
+
+### Deploy status
+
+**No deploy was needed for this release.** Phases 1–6 shipped in #3018, #3021 and #3028 and are
+all live — verified by the module and marker checks above, not inferred from the commit graph.
+Phase 7 (#3031) is documentation only.
+
+Production is 8 commits behind `origin/main` as of this writing, and **that delta contains no
+Studio code** — it is this handoff, three session logs, and another session's brand-setup frontend
+work (#3030). Deploying to clear it would ship somebody else's PR, so it was left alone.
+
+### The tables, so the next person does not repeat my mistake
+
+The first reconciliation query I wrote returned zeros and looked like catastrophic drift. It was
+pointed at the wrong tables. The real ones:
+
+| Fact | Table | Filter |
+|---|---|---|
+| PREP completion | `student_tasks` | `story_id LIKE 'PREP-%' AND status='complete'` |
+| PREP points | `student_points_events` | `event_type = 'demo'` (there is no `reason` column) |
+| Evidence | `evidence_records` | all rows |
+| Showcases | `presentation_showcases` | *not* `project_showcases` |
+
+`student_tasks_legacy_storydriven` also carries a `story_id` column and **zero PREP rows**. Query it
+by accident and you get a clean, confident, entirely wrong answer. The DB user is `accelerator` and
+the database is `accelerator_prod` — not `postgres`.
 
 ## Baselines, for spotting drift after a deploy
 

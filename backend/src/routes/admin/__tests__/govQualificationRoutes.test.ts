@@ -39,6 +39,20 @@ jest.mock('../../../services/factory/govBuildAssignment', () => {
 });
 const resolveGovProjectActor = jest.fn();
 jest.mock('../../../middlewares/govProjectAccess', () => ({ resolveGovProjectActor: (...a: any[]) => resolveGovProjectActor(...a), requireGovProjectAccess: () => (_r: any, _s: any, n: any) => n() }));
+// P4 proposal-production services — mocked (their own unit tests prove the lifecycle + invalidation rails); keep the real error classes.
+const saveProposalResponse = jest.fn();
+const reviewProposalResponse = jest.fn();
+const addProposalFigure = jest.fn();
+const removeProposalFigure = jest.fn();
+jest.mock('../../../services/factory/govProposalResponse', () => {
+  const actual = jest.requireActual('../../../services/factory/govProposalResponse');
+  return { ...actual, saveProposalResponse: (...a: any[]) => saveProposalResponse(...a), reviewProposalResponse: (...a: any[]) => reviewProposalResponse(...a), addProposalFigure: (...a: any[]) => addProposalFigure(...a), removeProposalFigure: (...a: any[]) => removeProposalFigure(...a) };
+});
+const recordProposalAmendment = jest.fn();
+jest.mock('../../../services/factory/govProposalAmendment', () => {
+  const actual = jest.requireActual('../../../services/factory/govProposalAmendment');
+  return { ...actual, recordProposalAmendment: (...a: any[]) => recordProposalAmendment(...a) };
+});
 const authorizeBuild = jest.fn();
 jest.mock('../../../services/factory/buildAuthorization', () => {
   const actual = jest.requireActual('../../../services/factory/buildAuthorization');
@@ -72,6 +86,7 @@ import {
 import { DocumentNotListedError } from '../../../services/factory/govQualification';
 import { BuildNotAuthorizedError } from '../../../services/factory/buildAuthorization';
 import { AssignmentError } from '../../../services/factory/govBuildAssignment';
+import { ResponseError } from '../../../services/factory/govProposalResponse';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
 import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL } from '../../../services/factory/opportunities/govOpportunityFixtures';
 import { FLAGS } from '../../../config/featureFlags';
@@ -91,7 +106,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post|put|patch|delete)\(/.test(l));
-    expect(routeLines.length).toBe(13); // +2: POST + DELETE build-stories/:storyId/assign (the P3-T2 assignment write)
+    expect(routeLines.length).toBe(18); // +2 P3 assign (POST+DELETE); +5 P4 (responses save/review/figures POST, figures DELETE, amendments POST)
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -699,5 +714,50 @@ describe('POST/DELETE build-stories/:storyId/assign (P3-T2 assignment)', () => {
     expect(res.status).toBe(200);
     expect(unassignBuildStory).toHaveBeenCalledWith('dp-1', STORY);
     expect(res.body).toMatchObject({ ok: true, removed: 1 });
+  });
+});
+
+describe('P4 proposal-production routes', () => {
+  const GWS = 'gws:4d14fa10-5752-4ad3-bbea-061453ac6341';
+  const REQ = 'R1';
+  beforeEach(() => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    resolveGovProjectActor.mockResolvedValue({ platformIdentityId: 'op-id', email: 'reviewer@test' });
+  });
+
+  it('POST responses/:req saves the authored response and records the operator as author', async () => {
+    saveProposalResponse.mockResolvedValue({ requirementId: REQ, status: 'draft', content: 'We comply.', figures: [], authoredByIdentityId: 'op-id', reviewedByIdentityId: null, updatedAt: null });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}`).send({ content: 'We comply.' });
+    expect(res.status).toBe(200);
+    expect(saveProposalResponse).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', requirementId: REQ, content: 'We comply.', authoredByIdentityId: 'op-id' }));
+  });
+
+  it('POST responses/:req/review maps a lifecycle violation (draft→approved) to 409 with the reason', async () => {
+    reviewProposalResponse.mockRejectedValue(new ResponseError('A response must be reviewed before it can be approved.', 'not_reviewed'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}/review`).send({ decision: 'approved' });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_reviewed');
+  });
+
+  it('POST responses/:req/figures maps an unbound figure to 422', async () => {
+    addProposalFigure.mockRejectedValue(new ResponseError('A figure must be bound to a commit.', 'figure_not_commit_bound'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}/figures`).send({ ref: 'docs/x.png' });
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('figure_not_commit_bound');
+  });
+
+  it('404s a response write before the opportunity has a delivery project', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue(null);
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}`).send({ content: 'x' });
+    expect(res.status).toBe(404);
+    expect(saveProposalResponse).not.toHaveBeenCalled();
+  });
+
+  it('POST amendments records an inbox entry (the service runs the invalidation)', async () => {
+    recordProposalAmendment.mockResolvedValue({ id: 'am-1', amendmentKey: 'ADD-2', kind: 'amendment', summary: 's', affects: ['R1'], provenance: null, observedAt: null, invalidatedCount: 1, createdAt: null });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/amendments`).send({ amendmentKey: 'ADD-2', summary: 's', affects: ['R1'] });
+    expect(res.status).toBe(200);
+    expect(recordProposalAmendment).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', amendmentKey: 'ADD-2', affects: ['R1'] }));
+    expect(res.body.invalidatedCount).toBe(1);
   });
 });

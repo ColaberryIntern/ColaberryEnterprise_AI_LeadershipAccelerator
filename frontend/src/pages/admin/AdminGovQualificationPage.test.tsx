@@ -722,4 +722,61 @@ describe('AdminGovQualificationPage — journey', () => {
     await act(async () => { assignBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
     expect(factoryApi.assignGovBuildStory).toHaveBeenCalledWith(CANON, 'STORY-B1', 'bld-1');
   });
+
+  // ── P4: proposal response authoring + the amendment inbox ──
+  const withProject = (over: Partial<GovQualificationWorkspace> = {}): GovQualificationWorkspace => cleanWs({
+    build: { buildStoryCount: 0, releases: [], stories: [], deliveryProjectId: 'dp-1', assignableBuilders: [] },
+    ...over,
+  });
+
+  it('Proposal tab authoring: a draft response shows the editor + Save + Mark reviewed; Save calls the API with the content', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'Offeror shall register in SAM.', sourceRef: 'D1', status: 'draft', content: 'We are SAM-registered.' }],
+    }));
+    (factoryApi.saveGovProposalResponse as jest.Mock).mockResolvedValue({ requirementId: 'R1', statement: '', sourceRef: null, status: 'draft', content: 'We are SAM-registered.' });
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    const ta = container.querySelector('textarea[aria-label="Response to R1"]') as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    expect(ta.value).toBe('We are SAM-registered.');
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Mark reviewed')).toBe(true); // the legal next step for a draft
+    await clickButton('Save draft');
+    expect(factoryApi.saveGovProposalResponse).toHaveBeenCalledWith(CANON, 'R1', 'We are SAM-registered.');
+  });
+
+  it('Proposal tab authoring: a reviewed response offers Approve, and clicking it advances via the API', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'reviewed', content: 'done' }],
+    }));
+    (factoryApi.reviewGovProposalResponse as jest.Mock).mockResolvedValue({ requirementId: 'R1', statement: '', sourceRef: null, status: 'approved', content: 'done' });
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    // Exact match: "Approve bid pursuit" (Overview tab, CSS-hidden but in the DOM) also contains "Approve".
+    const approveBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Approve') as HTMLButtonElement;
+    expect(approveBtn).toBeTruthy();
+    await act(async () => { approveBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(factoryApi.reviewGovProposalResponse).toHaveBeenCalledWith(CANON, 'R1', 'approved');
+  });
+
+  it('Dates tab inbox: lists a recorded amendment with its reopened-count + provenance, and records a new entry', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'done' }],
+      amendments: [{ id: 'am-1', amendmentKey: 'Addendum 2', kind: 'amendment', summary: 'Scope expanded to include hosting.', affects: ['R1'], provenance: 'portal/add-2', observedAt: null, invalidatedCount: 2, createdAt: null }],
+    }));
+    (factoryApi.recordGovProposalAmendment as jest.Mock).mockResolvedValue({ id: 'am-2', amendmentKey: 'Q-1', kind: 'message', summary: 's', affects: [], provenance: null, observedAt: null, invalidatedCount: 0, createdAt: null });
+    await renderAt(`?canonical=${CANON}&tab=dates`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Scope expanded to include hosting.');
+    expect(text).toContain('reopened 2 responses');   // the invalidation effect is surfaced
+    expect(text).toContain('portal/add-2');            // provenance shown
+    // Record a new entry.
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    const keyInput = container.querySelector('input[aria-label="Entry key"]') as HTMLInputElement;
+    const taSummary = container.querySelector('textarea[aria-label="Entry summary"]') as HTMLTextAreaElement;
+    const setTa = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => { setVal.call(keyInput, 'Addendum 3'); keyInput.dispatchEvent(new Event('input', { bubbles: true })); setTa.call(taSummary, 'Deadline moved.'); taSummary.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Record entry');
+    expect(factoryApi.recordGovProposalAmendment).toHaveBeenCalledWith(CANON, expect.objectContaining({ amendmentKey: 'Addendum 3', summary: 'Deadline moved.' }));
+  });
 });
