@@ -294,3 +294,29 @@ export async function latestDeck(assignmentId: string): Promise<{ deck: DeckRow 
   // permanently bar a student whose model call timed out this afternoon.
   return { deck, retryable: deck.state === 'failed' };
 }
+
+/**
+ * The latest deck for a task, with ownership proved the way every other read on this
+ * surface proves it. A project that is not yours is indistinguishable from one that
+ * does not exist.
+ *
+ * This is the entry point a route uses; `latestDeck` is the inner read and assumes the
+ * caller already holds the project.
+ */
+export async function latestDeckForOwner(
+  enrollmentId: string,
+  projectId: string,
+  storyId: string,
+): Promise<{ ok: true; deck: DeckRow | null; retryable: boolean } | { ok: false; reason: 'not_found' }> {
+  const { getOwnedProjectTree } = await import('../projects/projectReadService');
+  if (!(await getOwnedProjectTree(enrollmentId, projectId))) return { ok: false, reason: 'not_found' };
+
+  const { default: PresentationAssignment } = await import('../../models/PresentationAssignment');
+  const assignment = await PresentationAssignment.findOne({ where: { project_id: projectId, story_id: storyId } });
+  // No assignment yet is "nothing to show", not an error: the student has simply not
+  // started. Returning 404 would read as a broken page.
+  if (!assignment) return { ok: true, deck: null, retryable: true };
+
+  const r = await latestDeck(String(assignment.id));
+  return { ok: true, ...r };
+}

@@ -2,6 +2,7 @@ import React from 'react';
 import DemoEvidencePanel from '../DemoEvidencePanel';
 import PromptPanel from './PromptPanel';
 import PreparePanel from './PreparePanel';
+import DeckPanel from './DeckPanel';
 import PracticePanel from './PracticePanel';
 import LearnStage from './LearnStage';
 import { STAGE_META, type PresentationStage } from './presentationStages';
@@ -85,6 +86,13 @@ export default function PresentationStageBody(props: PresentationStageBodyProps)
           to rebuild their slides. */}
       {stage === 'build' && (
         <PromptPanel projectId={projectId} storyId={taskId} demo={demo} />
+      )}
+
+      {/* The generated deck, below the prompt that produced it — and the figures the
+          grounding check could not find in anything the student wrote. A flag nobody
+          is shown is a flag that may as well not have been raised. */}
+      {stage === 'build' && (
+        <DeckPanel projectId={projectId} storyId={taskId} demo={demo} />
       )}
 
       {/* NO `!onEvidenceStage` GUARD HERE, unlike the placeholders below. That guard

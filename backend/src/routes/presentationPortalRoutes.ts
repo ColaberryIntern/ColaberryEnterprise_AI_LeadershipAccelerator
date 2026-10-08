@@ -23,6 +23,7 @@
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/presentation-sessions
  *   POST /api/portal/projects/:projectId/tasks/:storyId/presentation-practice
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/recording-evidence
+ *   GET  /api/portal/projects/:projectId/tasks/:storyId/deck
  *   POST /api/portal/projects/:projectId/tasks/:storyId/recording-recovery
  *   POST /api/portal/projects/:projectId/tasks/:storyId/final-take
  */
@@ -281,6 +282,22 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/final-take', require
     const r = await selectFinalTakeForOwner(eid(req), String(req.params.projectId), String(req.params.storyId), body.attempt_id);
     if (!r.ok) return res.status(404).json({ error: 'Not found' });
     res.json({ attempt_id: r.attemptId, previous_final_attempt_id: r.previousFinalAttemptId, takes_kept: r.takesKept });
+  } catch (e) { fail(res, e, next); }
+});
+
+// The generated deck for this task, with the figures the grounding check could not
+// find in anything the student wrote. Read-only: generating is a separate POST.
+//
+// A deck that does not exist yet is a 200 with `deck: null`, not a 404 - the student
+// has simply not generated one, and an error page would read as something broken.
+router.get('/api/portal/projects/:projectId/tasks/:storyId/deck', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const { latestDeckForOwner } = await import('../services/presentation/presentationDeckService');
+    const r = await latestDeckForOwner(eid(req), String(req.params.projectId), String(req.params.storyId));
+    if (!r.ok) return res.status(404).json({ error: 'Project not found' });
+    res.json({ deck: r.deck, retryable: r.retryable });
   } catch (e) { fail(res, e, next); }
 });
 
