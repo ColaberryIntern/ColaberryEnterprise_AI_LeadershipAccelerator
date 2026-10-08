@@ -30,6 +30,7 @@ import {
   manualOnlyUnderstanding, manualOnlyProject, manualOnlyAllocation,
   manualOnlyAgents, manualOnlyDeclaration, manualOnlyEffort, manualOnlyAcceptance,
 } from './fixtures/manualOnly';
+import { acceptedDesign, ACCEPTED_DESIGN_REF } from './fixtures/acceptedDesign';
 
 function base(over: Partial<BlueprintCompositionInput> = {}): BlueprintCompositionInput {
   return {
@@ -228,29 +229,27 @@ describe('composeBlueprint OWNS these properties, not partitionIssues', () => {
     expect(out.draft).toBeNull();
   });
 
-  it('reports the SELECTED design when one is chosen, rather than always null', () => {
-    // `selectedDesign` could be hardcoded to null and nothing noticed, because every fixture
-    // passed `design: null`. Amendment 4 allows tested or removed; it was neither.
-    const design = {
-      set: {
-        alternatives: [
-          // `surfaces` is required: `journeyIssues` iterates it and threw on a fixture without
-          // one. An empty list is the honest minimum — no surfaces declared, nothing to journey.
-          { alternativeId: 'alt-1', structure: 'a', surfaces: [] },
-          { alternativeId: 'alt-2', structure: 'b', surfaces: [] },
-        ],
-      },
-      chosenAlternativeId: 'alt-1',
-      visualContractRevision: 1,
-      journeys: [],
-    } as unknown as NonNullable<BlueprintCompositionInput['design']>;
+  it('reports the SELECTED design, asserted as the concrete ref', () => {
+    // THE SURVIVOR THIS CLOSES, and why it survived is the lesson. Three independent
+    // mutations could force `selectedDesign` to null with all 1028 tests green, because every
+    // fixture passed a design `selectDesign` REFUSES — and the selector returns
+    // `selected: null` whenever `issues.length > 0`, so the field was null in the UNMUTATED
+    // code too. My previous assertion was
+    //
+    //   expect(out.selectedDesign !== null || designRefusals.length > 0).toBe(true)
+    //
+    // which is TRUE FOR EVERY POSSIBLE INPUT given that contract. I had even written in the
+    // session log that a disjunction was the wrong shape, and then shipped one.
+    //
+    // So: a fixture the selector ACCEPTS, and the concrete ref as the assertion. Nothing
+    // weaker can tell a working wiring from a hardcoded null.
+    const out = composeBlueprint(base({ design: acceptedDesign() }));
 
-    const out = composeBlueprint(base({ design }));
-    // Either a design comes back, or the selector refused it and SAID so at the design stage.
-    // What must not happen is a silent null with no refusal explaining it.
-    const designRefusals = out.refusals.filter((r) => r.stage === 'design');
-    expect(out.selectedDesign !== null || designRefusals.length > 0).toBe(true);
-    // And this input is NOT the "nothing selected" case, so that specific refusal is gone.
-    expect(designRefusals.map((r) => r.code)).not.toContain('DESIGN_NOT_SELECTED');
+    expect(out.refusals.filter((r) => r.stage === 'design')).toEqual([]);
+    expect(out.selectedDesign).not.toBeNull();
+    expect(out.selectedDesign?.selectedDesignRef).toBe(ACCEPTED_DESIGN_REF);
+    // Both halves of the ref matter: an approval binds to the alternative AND the visual
+    // contract revision, so a ref carrying only one could not identify what was approved.
+    expect(ACCEPTED_DESIGN_REF).toMatch(/@vc1$/);
   });
 });

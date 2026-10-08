@@ -454,6 +454,22 @@ describe('POST /compose, the first non-test caller the pipeline has ever had', (
     expect(r.body.refusals).toEqual([]);
   });
 
+  it('carries the SELECTED DESIGN through to the response body', () => {
+    // The route had its own copy of this field and nulling it survived all 40 route tests,
+    // because nothing asserted it. The reviewer needs the ref: it is what an approval binds
+    // to, so a response that drops it leaves the UI unable to say WHICH design was approved.
+    composeBlueprint.mockReturnValue({
+      ...composed(),
+      selectedDesign: { selectedDesignRef: 'alt-x@vc3' },
+    });
+    return request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+      .send(body())
+      .then((r) => {
+        expect(r.status).toBe(200);
+        expect(r.body.selectedDesign).toEqual({ selectedDesignRef: 'alt-x@vc3' });
+      });
+  });
+
   it('converts roleIds to a SET, because the validator calls .has on it', async () => {
     // Passing the array straight through would reach `validateControlSpec` as an Array, whose
     // `.has` is undefined — a 500 at the point a policy names a role, i.e. only on the inputs

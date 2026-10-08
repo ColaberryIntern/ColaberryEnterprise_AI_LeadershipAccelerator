@@ -325,7 +325,11 @@ router.post(`${PREFIX}/:projectId/compose`, requireSection(SECTION), async (req:
     });
   } catch (err: any) {
     const errorClass = err?.name ?? 'UnclassifiedError';
-    if (errorClass === 'TenantAccessError') { res.status(err.status ?? 403).json({ error: err.message }); return; }
+    // NO TenantAccessError BRANCH HERE, unlike the other handlers. `composeBlueprint` is pure
+    // and touches no tenant-scoped row, so it cannot raise one — a mutation deleting the
+    // branch survived every test, which is Amendment 4 category 2: an operand no input can
+    // reach. Copied from the neighbours out of symmetry rather than need, and removed rather
+    // than left as a declared expectation nothing can check.
     log('project_lifecycle_compose', correlationId, 'failure', {
       project_id: p.data.projectId, error_class: errorClass,
       ...(await redactPayload({ message: String(err?.message ?? err) })),

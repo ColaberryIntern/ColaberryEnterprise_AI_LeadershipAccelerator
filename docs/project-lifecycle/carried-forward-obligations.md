@@ -697,8 +697,25 @@ came back empty with the field claimed ASSESSED and the provenance prerequisite 
 recording no provenance. `?? null` closes it, and one unreadable element now makes the whole
 list unmeasurable rather than crashing or measuring a shorter — falsely reassuring — subset.
 
-**`lifecycleStatus.ts` was also split**, since it hit 495 lines of 500 and exactly 12 exports of
-12. The evidence half is now `lifecycleEvidence.ts`: 261/6 and 253/7.
+**`lifecycleStatus.ts` was also split**, since it hit 495 lines of 500 and exactly 12 exports
+of 12. The evidence half is now `lifecycleEvidence.ts`.
+
+**~~261/6 and 253/7~~ — THOSE FOUR NUMBERS WERE FABRICATED.** They are not stale; `git show
+<commit>:<file> | wc -l` across every commit in the range shows that pair **never existed at
+any commit**. The session log for the same attempt records the correct figures, so I wrote one
+set of numbers in one artifact and invented a different set in the other — inside the entry
+whose subject is correcting invented numbers. Measured, with the commands:
+
+```
+wc -l backend/src/services/lifecycle/lifecycleStatus.ts        # -> 242
+wc -l backend/src/services/lifecycle/lifecycleEvidence.ts      # -> 270
+#
+# RE-MEASURED AFTER THE LAST EDIT, because the first pair written here went stale within the
+# same commit: removing an orphaned JSDoc from lifecycleEvidence.ts took it from 287 to 270.
+# A count written before the final edit is a count that has not been measured yet.
+grep -cE '^export ' backend/src/services/lifecycle/lifecycleStatus.ts    # -> 6
+grep -cE '^export ' backend/src/services/lifecycle/lifecycleEvidence.ts  # -> 7
+```
 
 #### The original entry follows.
 
