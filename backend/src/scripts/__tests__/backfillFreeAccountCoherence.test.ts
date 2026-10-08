@@ -154,6 +154,24 @@ describe('T207 AC8 — runInverse, the path an operator actually runs', () => {
     expect(String(query.mock.calls.filter((c) => /^\s*UPDATE/i.test(String(c[0])))[0][0]))
       .toContain('UPDATE enrollments SET tier = :to WHERE id = :id AND tier = :from');
   });
+
+  /**
+   * Asserts the SEAM, not the validator.
+   *
+   * A verifier found that reverting the single line `parseLedger(readFileSync(...))`
+   * back to `JSON.parse(...) as LedgerEntry[]` — unwiring the security fix and
+   * reopening the SQL-identifier injection — left the whole suite green, because
+   * every other test in this describe feeds `runInverse` a VALID ledger.
+   * `parseLedger` being proven load-bearing in isolation says nothing about
+   * whether this function calls it.
+   */
+  it('refuses a hostile ledger before any statement reaches the database', async () => {
+    fs.writeFileSync(ledgerPath, JSON.stringify([
+      { id: 'x', column: "tier = 'member', payment_status", from: 'a', to: 'b' },
+    ]));
+    await expect(runInverse(ledgerPath, { confirm: true })).rejects.toThrow(/column must be/);
+    expect(updates()).toEqual([]);
+  });
 });
 
 describe('T207 — the ledger is untrusted input on a path that writes to production', () => {

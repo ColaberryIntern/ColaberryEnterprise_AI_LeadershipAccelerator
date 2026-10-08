@@ -37,6 +37,14 @@
  * The ledger is also printed to stdout on every committing run, because a deploy
  * empties `/tmp` in this stack and a rollback file that vanished is not a
  * rollback plan.
+ *
+ * LOGGED DEVIATION — no explicit statement timeout on the DB calls, where
+ * CLAUDE.md's Failure-First table asks for one at every external boundary. This
+ * is a hand-run one-off invoked through `docker exec` with an operator watching
+ * stdout: there is no retry loop, no queue, and no user request blocked behind
+ * it, so a hang is observable and interruptible, and a bespoke timeout would be
+ * a new pattern in a disposable script. Recorded here rather than only in the
+ * session log, because CLAUDE.md asks for deviations in the file's own header.
  */
 import * as fs from 'fs';
 import { QueryTypes } from 'sequelize';
