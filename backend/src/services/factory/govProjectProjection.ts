@@ -31,6 +31,9 @@ export interface StudentGovProjectView {
   requirementCounts: { total: number; proposal: number; build: number };
   /** The Build-track plan for this project — releases → stories → the prompt the student works from. */
   build: StudentGovBuildPlan;
+  /** Whether THIS viewer may verify evidence (holds evidence.verify) — lights up reviewer controls. Never a
+   *  student (they lack evidence.verify); it is the viewer's own capability, not a leak of anyone else's. */
+  viewerCanVerify: boolean;
 }
 
 /**
@@ -38,7 +41,7 @@ export interface StudentGovProjectView {
  * omits every admin/internal field — the track OWNER identity and the raw `solution_student_project_id` (exposed
  * only as a boolean `hasBuild`), tenant/org/brand ids, `created_by_identity_id`, content hashes. Total.
  */
-export function toStudentGovProjectView(project: any, tracks: any[], requirements: any[]): StudentGovProjectView {
+export function toStudentGovProjectView(project: any, tracks: any[], requirements: any[], viewerCanVerify = false): StudentGovProjectView {
   const trackRows: StudentGovTrackView[] = (Array.isArray(tracks) ? tracks : []).map((t) => ({
     trackType: String(t?.track_type ?? ''),
     status: String(t?.status ?? ''),
@@ -71,6 +74,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
       build: reqRows.filter((r) => r.tracks.includes('solution_build')).length,
     },
     build,
+    viewerCanVerify,
   };
 }
 
@@ -78,7 +82,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
  * Load + project. Serves ONLY a non-archived `government_public_sector` project (else null -> 404). Access must
  * already be authorized by the caller's guard; this never performs an access check of its own.
  */
-export async function getStudentGovProjectView(deliveryProjectId: string): Promise<StudentGovProjectView | null> {
+export async function getStudentGovProjectView(deliveryProjectId: string, viewerCanVerify = false): Promise<StudentGovProjectView | null> {
   const { default: DeliveryProject } = await import('../../models/DeliveryProject');
   const { default: ContractTrack } = await import('../../models/ContractTrack');
   const { default: ContractRequirement } = await import('../../models/ContractRequirement');
@@ -88,7 +92,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string): Promi
 
   const tracks: any[] = await ContractTrack.findAll({ where: { delivery_project_id: deliveryProjectId } });
   const requirements: any[] = await ContractRequirement.findAll({ where: { delivery_project_id: deliveryProjectId } });
-  const view = toStudentGovProjectView(project, tracks, requirements);
+  const view = toStudentGovProjectView(project, tracks, requirements, viewerCanVerify);
   // Attach the student's submitted evidence to each build story (best-effort; never blocks the view).
   try {
     const { listBuildStoryEvidence } = await import('./govBuildEvidence');

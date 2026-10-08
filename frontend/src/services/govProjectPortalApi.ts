@@ -32,6 +32,8 @@ export interface StudentGovProjectView {
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
   build: StudentGovBuildPlan;
+  /** Whether the current viewer may verify evidence (a reviewer, not a student) — lights up verify/reject controls. */
+  viewerCanVerify: boolean;
 }
 
 export async function getStudentGovProject(projectId: string): Promise<StudentGovProjectView> {
@@ -48,6 +50,17 @@ export async function submitBuildStoryEvidence(
   const { data } = await portalApi.post<{ evidence: GovBuildEvidenceView }>(
     `/api/portal/gov-projects/${encodeURIComponent(projectId)}/build-stories/${encodeURIComponent(storyId)}/evidence`,
     input,
+  );
+  return data.evidence;
+}
+
+/** A reviewer (evidence.verify) decides a submitted hand-in. Students get 403 server-side; the UI hides it from them. */
+export async function verifyBuildStoryEvidence(
+  projectId: string, evidenceId: string, decision: 'verified' | 'rejected',
+): Promise<GovBuildEvidenceView> {
+  const { data } = await portalApi.post<{ evidence: GovBuildEvidenceView }>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/build-evidence/${encodeURIComponent(evidenceId)}/verify`,
+    { decision },
   );
   return data.evidence;
 }

@@ -63,6 +63,11 @@ describe('toStudentGovProjectView (pure) — student-safe', () => {
     expect(view.build.stories[0].prompt).toContain('Provide a search database'); // the prompt cites the requirement verbatim
     expect(view.build.releases[0].storyIds).toEqual(['STORY-REQ-1']);
   });
+
+  it('viewerCanVerify defaults false and threads through when the viewer holds evidence.verify', () => {
+    expect(view.viewerCanVerify).toBe(false); // default (the `view` fixture passes no flag)
+    expect(toStudentGovProjectView(projectRow, trackRows, reqRows, true).viewerCanVerify).toBe(true);
+  });
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {

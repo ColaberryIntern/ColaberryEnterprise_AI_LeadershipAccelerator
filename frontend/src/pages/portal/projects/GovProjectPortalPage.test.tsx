@@ -25,6 +25,7 @@ const VIEW = {
       evidence: [],
     }],
   },
+  viewerCanVerify: false,
 };
 
 let container: HTMLDivElement; let root: Root;
@@ -78,6 +79,28 @@ describe('GovProjectPortalPage (student restricted view)', () => {
     const submitBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Submit evidence')) as HTMLButtonElement;
     await act(async () => { submitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
     expect(api.submitBuildStoryEvidence).toHaveBeenCalledWith('dp-A', 'STORY-REQ-1', expect.objectContaining({ canonicalReqId: 'REQ-1', description: 'Built the search database; screenshot attached.' }));
+  });
+
+  it('P3-T3 verify UI: a reviewer (viewerCanVerify) sees Verify/Reject on a submitted hand-in and a student does NOT', async () => {
+    const withEvidence = (canVerify: boolean) => ({
+      ...VIEW, viewerCanVerify: canVerify,
+      build: { ...VIEW.build, stories: [{ ...VIEW.build.stories[0], evidence: [{ id: 'ev-1', storyId: 'STORY-REQ-1', canonicalReqId: 'REQ-1', description: 'built it', artifactRef: null, status: 'submitted', submittedAt: null }] }] },
+    });
+    // student: no verify control, and the hand-in form IS shown
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue(withEvidence(false));
+    await render();
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Verify')).toBe(false);
+    expect(container.textContent ?? '').toContain('a reviewer verifies it'); // the student sees the hand-in form
+    act(() => root.unmount()); container.remove();
+    // reviewer: Verify/Reject controls appear, the hand-in form does NOT, and clicking Verify calls the API
+    (api.getStudentGovProject as jest.Mock).mockResolvedValue(withEvidence(true));
+    (api.verifyBuildStoryEvidence as jest.Mock).mockResolvedValue({ id: 'ev-1', storyId: 'STORY-REQ-1', canonicalReqId: 'REQ-1', description: 'built it', artifactRef: null, status: 'verified', submittedAt: null });
+    await render();
+    expect(container.textContent ?? '').not.toContain('a reviewer verifies it'); // the reviewer does not get the hand-in form
+    const verifyBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Verify') as HTMLButtonElement;
+    expect(verifyBtn).toBeTruthy();
+    await act(async () => { verifyBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(api.verifyBuildStoryEvidence).toHaveBeenCalledWith('dp-A', 'ev-1', 'verified');
   });
 
   it('shows a "not found" page on a 404 (unassigned project) — never leaks that it exists', async () => {
