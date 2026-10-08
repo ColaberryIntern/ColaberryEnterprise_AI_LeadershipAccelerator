@@ -65,6 +65,8 @@ export interface ComposerSetupProps {
   landingPages?: readonly LandingPageOption[];
   /** Send the operator off to build one. Absent when there is nowhere to send them yet. */
   onCreateLandingPage?: () => void;
+  /** The inline landing-page builder, rendered in place of navigating away. */
+  builderSlot?: React.ReactNode;
   /**
    * The upload control, rendered INSIDE the content-type column.
    *
@@ -80,7 +82,7 @@ const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thr
 
 export default function ComposerSetup({
   values, brands, campaigns, locked, busy, onChange, onSubmit, onAssignSlug, onDraftMessage, draftNotes,
-  providers = [], mediaSlot = null, landingPages = [], onCreateLandingPage,
+  providers = [], mediaSlot = null, landingPages = [], onCreateLandingPage, builderSlot = null,
 }: ComposerSetupProps) {
   const [topic, setTopic] = React.useState('');
   /** 'upload' or 'link', for a video. Local: choosing it is not yet a change to the post. */
@@ -237,11 +239,18 @@ export default function ComposerSetup({
               <div className="form-text small text-warning-emphasis" data-testid="external-url-note">{externalUrlNote('url')}</div>
             </>
           )}
-          {onCreateLandingPage && (
+          {/*
+            The builder opens HERE rather than navigating. This button used to call
+            `navigate('/admin/marketing/landing-pages')`, which abandoned the composer and took
+            anything unsaved with it. `builderSlot` is the panel; the button only offers to open
+            it, and disappears while it is open so there is one way back out (its own Close).
+          */}
+          {onCreateLandingPage && !builderSlot && (
             <button type="button" className="btn btn-link btn-sm px-0 mt-1" disabled={busy} onClick={onCreateLandingPage} data-testid="build-landing-page">
-              Build a landing page for this brand
+              + Build a new landing page here
             </button>
           )}
+          {builderSlot}
         </div>
         )}
         <div className="col-12">

@@ -21,6 +21,7 @@ import { mediaGateNote, setupShape } from './setupShape';
 import { canGenerateLinks, pruneDestination } from './landingPageChoices';
 import ComposerStepRail from './ComposerStepRail';
 import ComposerSummaryRail from './ComposerSummaryRail';
+import InlineLandingPageBuilder from './InlineLandingPageBuilder';
 import {
   blockedReason, firstOpenStep, isStepKey, nextOpenStep, previousStep, stepDefinition, stepStates,
   type StepFacts, type StepKey,
@@ -108,6 +109,8 @@ export default function AdminContentComposerPage() {
   const [publications, setPublications] = useState<ExternalPublication[]>([]);
   const [scheduledFor, setScheduledFor] = useState<string>('');
   const [busy, setBusy] = useState(false);
+  /** The inline landing-page builder is open. Local: opening it changes nothing on the post. */
+  const [buildingPage, setBuildingPage] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
 
   /**
@@ -213,6 +216,15 @@ export default function AdminContentComposerPage() {
    * failure rather than left showing another brand's list.
    */
   const [landingPages, setLandingPages] = useState<composer.LandingPageSummary[]>([]);
+  /**
+   * Bumped when the inline builder publishes one, to re-read the list.
+   *
+   * The new page is RE-FETCHED rather than spliced into state: the builder speaks the
+   * landing-page API's `LandingPage`, this picker holds the composer API's
+   * `LandingPageSummary`, and pushing one shape into the other would be a cast that compiles and
+   * then renders wrong. One extra request is the cheaper correctness.
+   */
+  const [landingPagesEpoch, setLandingPagesEpoch] = useState(0);
   useEffect(() => {
     if (!setup.brand_id) { setLandingPages([]); return; }
     let cancelled = false;
@@ -220,7 +232,7 @@ export default function AdminContentComposerPage() {
       .then((rows) => { if (!cancelled) setLandingPages(rows); })
       .catch(() => { if (!cancelled) setLandingPages([]); });
     return () => { cancelled = true; };
-  }, [setup.brand_id]);
+  }, [setup.brand_id, landingPagesEpoch]);
 
   /**
    * A selection that is no longer valid must not survive a brand change, or the save fails with
@@ -500,7 +512,24 @@ export default function AdminContentComposerPage() {
             onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug}
             onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers}
           landingPages={landingPages}
-          onCreateLandingPage={() => navigate('/admin/marketing/landing-pages')}
+          onCreateLandingPage={() => setBuildingPage(true)}
+            builderSlot={buildingPage && setup.brand_id ? (
+              <InlineLandingPageBuilder
+                brandId={setup.brand_id}
+                initialName={setup.title || ''}
+                initialBrief={setup.canonical_body || ''}
+                busy={busy}
+                onClose={() => setBuildingPage(false)}
+                onPublished={(page) => {
+                  // Chosen for this post straight away - building it and then having to find it
+                  // in the picker is the step that made this worth doing inline at all.
+                  setSetup((s) => ({ ...s, landing_page_id: page.id, destination_url: '' }));
+                  setLandingPagesEpoch((n) => n + 1);
+                  setBuildingPage(false);
+                  say('success', `"${page.name}" is live and selected for this post.`);
+                }}
+              />
+            ) : null}
             mediaSlot={shape.mediaRole !== 'none' ? (
               // Inside the content-type column, directly under the type that asked for it.
               // It sat after the whole form until 2026-10-01: "why isn't the video upload closer
