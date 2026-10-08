@@ -34,7 +34,9 @@ describe('GET /api/portal/gov-projects/:projectId', () => {
     const res = await request(app).get('/api/portal/gov-projects/dp-A');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ project: SAFE_VIEW });
-    expect(getStudentGovProjectView).toHaveBeenCalledWith('dp-A');
+    // The route threads the viewer's own verify capability (P3-T3). An associate_builder ctx has no evidence.verify
+    // (and no platformIdentityId/deliveryProjectId on this mocked ctx), so the flag is false.
+    expect(getStudentGovProjectView).toHaveBeenCalledWith('dp-A', false);
   });
 
   it('a NON-MEMBER is 404 — and the projection is NEVER consulted (guard denies first)', async () => {
