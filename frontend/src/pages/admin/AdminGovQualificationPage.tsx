@@ -6,9 +6,11 @@ import {
   authorizeGovBuild, getGovOpportunityCandidates, reviewGovQualificationDocuments, matchServicesToOpportunity,
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   assignGovBuildStory, unassignGovBuildStory,
+  saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, recordGovProposalAmendment,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
   type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
+  type GovResponseFigure, type GovProposalAmendment,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
@@ -334,12 +336,92 @@ function GovTabPanel({ active, children }: { active: boolean; children: React.Re
   return <div role="tabpanel" style={active ? undefined : { display: 'none' }}>{children}</div>;
 }
 
+/** The lifecycle tone for a response slot's status. */
+const RESPONSE_TONE: Record<string, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
+  unanswered: 'neutral', draft: 'warning', reviewed: 'info', approved: 'success', revision_required: 'danger',
+};
+
+/** Handlers the Proposal tab wires so a slot can be authored + reviewed; absent on a read-only checklist. */
+interface ResponseAuthoring {
+  canAuthor: boolean;
+  busy: boolean;
+  onSave: (requirementId: string, content: string) => void;
+  onReview: (requirementId: string, decision: 'reviewed' | 'approved' | 'revision_required') => void;
+  onAddFigure: (requirementId: string, figure: GovResponseFigure) => void;
+  onRemoveFigure: (requirementId: string, ref: string) => void;
+}
+
+/**
+ * ResponseSlotRow — one response: its requirement citation, status, and (when authoring) an editor + the
+ * lifecycle controls + commit-bound figures. The lifecycle ORDER is server-enforced; the UI only offers the legal
+ * next step for the current status (and the server is the real gate, 409/422 on an illegal move).
+ */
+function ResponseSlotRow({ slot, authoring }: { slot: GovResponseSlot; authoring?: ResponseAuthoring }): React.ReactElement {
+  const [content, setContent] = useState(slot.content ?? '');
+  const [commit, setCommit] = useState('');
+  const [figRef, setFigRef] = useState('');
+  const [caption, setCaption] = useState('');
+  const busy = authoring?.busy ?? false;
+  const figures = slot.figures ?? [];
+  return (
+    <li className="py-2 border-bottom">
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        <span className="fw-semibold small">{slot.requirementId}</span>
+        <StatusBadge label={slot.status} tone={RESPONSE_TONE[slot.status] ?? 'neutral'} />
+        {slot.sourceRef && <span className="small text-secondary" title="Cited source reference">· cites {slot.sourceRef}</span>}
+      </div>
+      <div className="small mb-1">{slot.statement}</div>
+
+      {authoring?.canAuthor ? (
+        <>
+          <textarea className="form-control form-control-sm mb-1" rows={3} value={content} placeholder="Draft the response to this requirement…"
+            onChange={(e) => setContent(e.target.value)} aria-label={`Response to ${slot.requirementId}`} />
+          <div className="d-flex flex-wrap gap-2 align-items-center mb-1">
+            <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy} onClick={() => authoring.onSave(slot.requirementId, content)}>Save draft</button>
+            {slot.status === 'draft' && <button type="button" className="btn btn-outline-info btn-sm" disabled={busy} onClick={() => authoring.onReview(slot.requirementId, 'reviewed')}>Mark reviewed</button>}
+            {slot.status === 'reviewed' && <button type="button" className="btn btn-success btn-sm" disabled={busy} onClick={() => authoring.onReview(slot.requirementId, 'approved')}>Approve</button>}
+            {(slot.status === 'reviewed' || slot.status === 'approved' || slot.status === 'draft') && (
+              <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy} onClick={() => authoring.onReview(slot.requirementId, 'revision_required')}>Request revision</button>
+            )}
+          </div>
+          {figures.length > 0 && (
+            <ul className="list-unstyled small mb-1">
+              {figures.map((f) => (
+                <li key={f.ref} className="d-flex flex-wrap align-items-center gap-2">
+                  <i className="ri-image-line text-secondary" aria-hidden="true" />
+                  <span className="text-truncate" style={{ maxWidth: 260 }}>{f.caption || f.ref}</span>
+                  <span className="badge bg-light text-dark border" title="commit-bound">@{f.commit.slice(0, 7)}</span>
+                  <button type="button" className="btn btn-link btn-sm text-danger p-0" disabled={busy} onClick={() => authoring.onRemoveFigure(slot.requirementId, f.ref)}>remove</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="d-flex flex-wrap gap-1 align-items-center">
+            <input className="form-control form-control-sm" style={{ maxWidth: 120 }} value={commit} placeholder="commit sha" onChange={(e) => setCommit(e.target.value)} aria-label={`Figure commit for ${slot.requirementId}`} />
+            <input className="form-control form-control-sm" style={{ maxWidth: 180 }} value={figRef} placeholder="repo path / screenshot" onChange={(e) => setFigRef(e.target.value)} aria-label={`Figure ref for ${slot.requirementId}`} />
+            <input className="form-control form-control-sm" style={{ maxWidth: 160 }} value={caption} placeholder="caption" onChange={(e) => setCaption(e.target.value)} />
+            <button type="button" className="btn btn-outline-secondary btn-sm" disabled={busy || !commit.trim() || !figRef.trim()}
+              onClick={() => { authoring.onAddFigure(slot.requirementId, { commit: commit.trim(), ref: figRef.trim(), caption: caption.trim() }); setCommit(''); setFigRef(''); setCaption(''); }}>
+              Add figure
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {slot.content && <div className="small bg-body-secondary rounded p-2" style={{ whiteSpace: 'pre-wrap' }}>{slot.content}</div>}
+          {figures.length > 0 && <div className="small text-secondary mt-1">{figures.length} figure{figures.length === 1 ? '' : 's'} attached.</div>}
+        </>
+      )}
+    </li>
+  );
+}
+
 /**
  * ResponseSlotsChecklist — the proposal response checklist: one slot per established requirement the bid must
- * answer, each citing the requirement it addresses. Read-only `unanswered` today (authoring is a later phase);
- * this makes the "what must we respond to, and have we?" explicit, with citations. Honest empty-state.
+ * answer, each citing the requirement it addresses. With `authoring`, each slot can be drafted, reviewed, approved,
+ * and given commit-bound figures (P4); without it, the checklist is read-only. Honest empty-state.
  */
-function ResponseSlotsChecklist({ slots }: { slots: GovResponseSlot[] }): React.ReactElement {
+function ResponseSlotsChecklist({ slots, authoring }: { slots: GovResponseSlot[]; authoring?: ResponseAuthoring }): React.ReactElement {
   if (!slots || slots.length === 0) {
     return (
       <div className="small text-secondary">
@@ -352,23 +434,81 @@ function ResponseSlotsChecklist({ slots }: { slots: GovResponseSlot[] }): React.
     <>
       <div className="small text-secondary mb-2">
         {slots.length} response slot{slots.length === 1 ? '' : 's'} — one per established requirement the proposal must answer.
-        Authoring arrives in a later phase; this is the checklist with citations.
+        {authoring?.canAuthor ? ' Draft each, then take it through review → approval; a material amendment reopens an affected answer.' : ' Authoring opens once the pursuit is approved into a project.'}
       </div>
       <ul className="list-unstyled mb-0">
-        {slots.map((s) => (
-          <li key={s.requirementId} className="d-flex align-items-start gap-2 py-2 border-bottom">
-            <i className="ri-draft-line text-secondary mt-1" aria-hidden="true" />
-            <div className="flex-grow-1">
-              <div className="d-flex flex-wrap align-items-center gap-2">
-                <span className="fw-semibold small">{s.requirementId}</span>
-                <StatusBadge label={s.status} tone="neutral" />
-                {s.sourceRef && <span className="small text-secondary" title="Cited source reference">· cites {s.sourceRef}</span>}
-              </div>
-              <div className="small">{s.statement}</div>
-            </div>
-          </li>
-        ))}
+        {slots.map((s) => <ResponseSlotRow key={s.requirementId} slot={s} authoring={authoring} />)}
       </ul>
+    </>
+  );
+}
+
+/**
+ * AmendmentInbox — the dates/messages/amendment inbox (P4). Lists recorded entries with their provenance, and (when
+ * a project exists) lets an operator record a new amendment/message. An `amendment` whose affected requirements are
+ * checked invalidates those responses' readiness server-side; a `message` records context only.
+ */
+function AmendmentInbox(
+  { amendments, requirementIds, canRecord, busy, onRecord }:
+  { amendments: GovProposalAmendment[]; requirementIds: string[]; canRecord: boolean; busy: boolean; onRecord: (body: { amendmentKey: string; kind: 'amendment' | 'message'; summary: string; affects: string[]; provenance: string | null }) => void },
+): React.ReactElement {
+  const [kind, setKind] = useState<'amendment' | 'message'>('amendment');
+  const [amendmentKey, setAmendmentKey] = useState('');
+  const [summary, setSummary] = useState('');
+  const [provenance, setProvenance] = useState('');
+  const [affects, setAffects] = useState<string[]>([]);
+  const toggle = (id: string) => setAffects((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
+  return (
+    <>
+      {amendments.length === 0
+        ? <div className="small text-secondary mb-2"><i className="ri-inbox-line me-1" aria-hidden="true" />No amendments or messages recorded yet.</div>
+        : (
+          <ul className="list-unstyled mb-3">
+            {amendments.map((a) => (
+              <li key={a.id} className="py-2 border-bottom">
+                <div className="d-flex flex-wrap align-items-center gap-2">
+                  <StatusBadge label={a.kind} tone={a.kind === 'amendment' ? 'warning' : 'info'} />
+                  <span className="fw-semibold small">{a.amendmentKey}</span>
+                  {a.kind === 'amendment' && a.invalidatedCount > 0 && <span className="badge bg-danger-subtle text-danger-emphasis">reopened {a.invalidatedCount} response{a.invalidatedCount === 1 ? '' : 's'}</span>}
+                </div>
+                <div className="small">{a.summary}</div>
+                {a.affects.length > 0 && <div className="small text-secondary">affects: {a.affects.join(', ')}</div>}
+                {a.provenance && <div className="small text-secondary">source: {a.provenance}</div>}
+              </li>
+            ))}
+          </ul>
+        )}
+      {canRecord ? (
+        <div className="border rounded p-2">
+          <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
+            <select className="form-select form-select-sm" style={{ maxWidth: 140 }} value={kind} onChange={(e) => setKind(e.target.value as 'amendment' | 'message')} aria-label="Entry kind">
+              <option value="amendment">Amendment</option>
+              <option value="message">Message / Q&amp;A</option>
+            </select>
+            <input className="form-control form-control-sm" style={{ maxWidth: 200 }} value={amendmentKey} placeholder="key (e.g. Addendum 2)" onChange={(e) => setAmendmentKey(e.target.value)} aria-label="Entry key" />
+            <input className="form-control form-control-sm" style={{ maxWidth: 240 }} value={provenance} placeholder="source (portal URL / ref)" onChange={(e) => setProvenance(e.target.value)} aria-label="Entry provenance" />
+          </div>
+          <textarea className="form-control form-control-sm mb-2" rows={2} value={summary} placeholder="What changed / what was asked?" onChange={(e) => setSummary(e.target.value)} aria-label="Entry summary" />
+          {kind === 'amendment' && requirementIds.length > 0 && (
+            <div className="small mb-2">
+              <div className="text-secondary mb-1">Affects (checking a requirement reopens its reviewed/approved response):</div>
+              <div className="d-flex flex-wrap gap-2">
+                {requirementIds.map((id) => (
+                  <label key={id} className="d-inline-flex align-items-center gap-1 small">
+                    <input type="checkbox" checked={affects.includes(id)} onChange={() => toggle(id)} aria-label={`Affects ${id}`} />{id}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          <button type="button" className="btn btn-outline-primary btn-sm" disabled={busy || !amendmentKey.trim() || !summary.trim()}
+            onClick={() => { onRecord({ amendmentKey: amendmentKey.trim(), kind, summary: summary.trim(), affects: kind === 'amendment' ? affects : [], provenance: provenance.trim() || null }); setAmendmentKey(''); setSummary(''); setProvenance(''); setAffects([]); }}>
+            Record entry
+          </button>
+        </div>
+      ) : (
+        <div className="small text-secondary"><i className="ri-information-line me-1" aria-hidden="true" />Recording opens once the pursuit is approved into a project.</div>
+      )}
     </>
   );
 }
@@ -1056,12 +1196,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
           {(
-            <SectionCard title="Agency messages &amp; Q&amp;A" icon="chat-3-line" collapsible defaultOpen={false}
-              subtitle="Solicitation questions, amendments, and portal messages.">
-              <div className="small text-secondary">
-                <i className="ri-time-line me-1" aria-hidden="true" />
-                Message capture is not wired yet — track Q&amp;A and amendments on the portal. This arrives in a later phase; nothing here is a gate.
-              </div>
+            <SectionCard title="Agency messages &amp; Q&amp;A / amendments" icon="chat-3-line"
+              subtitle="Record amendments and portal messages with their source. A recorded amendment reopens the responses for the requirements it affects — readiness is never silently kept across a change.">
+              <AmendmentInbox
+                amendments={ws.amendments ?? []}
+                requirementIds={(ws.responseSlots ?? []).map((s) => s.requirementId)}
+                canRecord={!!ws.build?.deliveryProjectId}
+                busy={busy}
+                onRecord={(body) => run(() => recordGovProposalAmendment(canonical, body), 'Inbox entry recorded.')}
+              />
             </SectionCard>
           )}
 
@@ -1071,8 +1214,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
           {(
             <SectionCard title="Response checklist" icon="draft-line"
-              subtitle="One slot per established requirement the proposal must answer, each citing its source. Read-only for now — response authoring arrives in a later phase.">
-              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} />
+              subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
+              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} authoring={{
+                canAuthor: !!ws.build?.deliveryProjectId,
+                busy,
+                onSave: (rid, content) => run(() => saveGovProposalResponse(canonical, rid, content), 'Response saved.'),
+                onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
+                onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
+                onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
+              }} />
             </SectionCard>
           )}
 

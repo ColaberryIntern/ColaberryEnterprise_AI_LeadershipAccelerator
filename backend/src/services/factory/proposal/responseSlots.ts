@@ -11,15 +11,47 @@
  *
  * PURE + TOTAL: no I/O, never throws; a non-array / garbage input yields [].
  */
+/**
+ * A slot is `unanswered` until a response is authored; then it carries the response's review lifecycle. The agent
+ * never fabricates a reviewed/approved state — `reviewed`/`approved` are set only by explicit human review, and a
+ * material amendment flips an affected answer to `revision_required`.
+ */
+export type ProposalResponseStatus = 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required';
+
+/** A figure attached to a response, bound to the git commit it was captured at (the provenance). */
+export interface ResponseFigure {
+  commit: string;
+  ref: string;
+  caption: string;
+}
+
 export interface ResponseSlot {
-  /** The established requirement this slot answers — the join key to the requirement and (later) a stored response. */
+  /** The established requirement this slot answers — the join key to the requirement and a stored response. */
   requirementId: string;
   /** The requirement text, for display. */
   statement: string;
   /** The source document reference the requirement was established from (its citation anchor); null if none. */
   sourceRef: string | null;
-  /** First-pass: authoring is not built yet, so every slot is honestly unanswered — never a fabricated "done". */
-  status: 'unanswered';
+  /** `unanswered` when no response is authored; otherwise the authored response's lifecycle status. */
+  status: ProposalResponseStatus;
+  /** The authored response content (only when a response exists). */
+  content?: string;
+  /** Commit-bound figures on the response. */
+  figures?: ResponseFigure[];
+  authoredByIdentityId?: string | null;
+  reviewedByIdentityId?: string | null;
+  updatedAt?: string | null;
+}
+
+/** The minimal structural shape of a persisted response — kept local so this pure module never imports the DB layer. */
+export interface ResponseOverlay {
+  requirementId: string;
+  status: Exclude<ProposalResponseStatus, 'unanswered'>;
+  content: string;
+  figures: ResponseFigure[];
+  authoredByIdentityId: string | null;
+  reviewedByIdentityId: string | null;
+  updatedAt: string | null;
 }
 
 /** Derive one cited response slot per established requirement, in order, de-duplicated by requirement id. */
@@ -43,4 +75,28 @@ export function deriveResponseSlots(established: any[]): ResponseSlot[] {
     });
   }
   return slots;
+}
+
+/**
+ * Overlay persisted responses onto the derived slots — PURE. A slot with a matching response carries that
+ * response's lifecycle status + content + figures; a slot with none stays `unanswered` (the honesty rail: no
+ * response ⇒ unanswered, never a fabricated draft/approved). Order + identity are the derived slots'; a response
+ * for a requirement no longer in the slot set is simply dropped (the requirement left the established set).
+ */
+export function applyResponsesToSlots(slots: ResponseSlot[], responses: ResponseOverlay[]): ResponseSlot[] {
+  const byReq = new Map<string, ResponseOverlay>();
+  for (const r of Array.isArray(responses) ? responses : []) if (r && r.requirementId) byReq.set(r.requirementId, r);
+  return (Array.isArray(slots) ? slots : []).map((s) => {
+    const r = byReq.get(s.requirementId);
+    if (!r) return { ...s, status: 'unanswered' as const, content: '', figures: [], authoredByIdentityId: null, reviewedByIdentityId: null, updatedAt: null };
+    return {
+      ...s,
+      status: r.status,
+      content: r.content ?? '',
+      figures: Array.isArray(r.figures) ? r.figures : [],
+      authoredByIdentityId: r.authoredByIdentityId ?? null,
+      reviewedByIdentityId: r.reviewedByIdentityId ?? null,
+      updatedAt: r.updatedAt ?? null,
+    };
+  });
 }

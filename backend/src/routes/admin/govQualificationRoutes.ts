@@ -17,6 +17,8 @@ import {
   DocumentNotListedError,
 } from '../../services/factory/govQualification';
 import { assignBuildStory, unassignBuildStory, AssignmentError } from '../../services/factory/govBuildAssignment';
+import { saveProposalResponse, reviewProposalResponse, addProposalFigure, removeProposalFigure, ResponseError } from '../../services/factory/govProposalResponse';
+import { recordProposalAmendment, AmendmentError } from '../../services/factory/govProposalAmendment';
 import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
 import { authorizeBuild, BuildNotAuthorizedError } from '../../services/factory/buildAuthorization';
 import { linkGovOpportunity, AliasProjectNotFoundError, AliasProjectNotGovernmentError, AliasConflictError } from '../../services/factory/opportunities/govOpportunityAlias';
@@ -225,6 +227,146 @@ router.delete('/api/admin/factory/qualification/:canonicalOpportunityId/build-st
   } catch (err: any) {
     logFail('gov_build_unassign_failed', err, { canonicalOpportunityId, storyId });
     res.status(500).json({ error: 'Could not remove the assignment.' });
+  }
+});
+
+// ── P4: proposal production — author responses (draft→reviewed→approved), commit-bound figures, amendment inbox ──
+const requirementIdParam = z.string().min(1).max(120);
+const RESPONSE_ERR_STATUS: Record<string, number> = {
+  bad_input: 400, bad_decision: 400, figure_no_ref: 400, not_found: 404,
+  not_draft: 409, not_reviewed: 409, empty_content: 422, figure_not_commit_bound: 422,
+};
+
+/** Resolve the gws/canonical key to its delivery project, or respond 404 and return null (not approved yet). */
+async function resolveProjectOr404(req: Request, res: Response, canonicalOpportunityId: string, tenantId: string): Promise<string | null> {
+  const be = biddingEntityField.safeParse((req.body?.biddingEntity as string) ?? (req.query.biddingEntity as string) ?? '');
+  const id = await resolveDecoupledDeliveryProjectId(tenantId, canonicalOpportunityId, be.success && be.data ? be.data : undefined);
+  if (!id) { res.status(404).json({ error: 'This opportunity has not been approved into a delivery project yet.' }); return null; }
+  return id;
+}
+
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId
+ * Author/edit the proposal response for one requirement. Any edit sets the status to `draft` (a changed answer is
+ * not reviewed/approved). The requirement is the response-slot anchor; one response per requirement (upsert).
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const pr = requirementIdParam.safeParse(req.params.requirementId);
+  if (!pk.success || !pr.success) { res.status(400).json({ error: 'Invalid opportunity key or requirement id.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_response_save_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const actor = await resolveGovProjectActor(req).catch(() => null);
+    const view = await saveProposalResponse({ deliveryProjectId, requirementId: pr.data, content: String(req.body?.content ?? ''), authoredByIdentityId: actor ? actor.platformIdentityId : null });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_response_save_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not save the response.' });
+  }
+});
+
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/review
+ * Advance the lifecycle: body.decision ∈ reviewed | approved | revision_required. The order is enforced server-side
+ * (no draft→approved jump; an empty answer cannot be reviewed) — this is a human review act, never the agent's.
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/review', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const pr = requirementIdParam.safeParse(req.params.requirementId);
+  if (!pk.success || !pr.success) { res.status(400).json({ error: 'Invalid opportunity key or requirement id.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_response_review_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const actor = await resolveGovProjectActor(req).catch(() => null);
+    const view = await reviewProposalResponse({ deliveryProjectId, requirementId: pr.data, decision: req.body?.decision, reviewerIdentityId: actor ? actor.platformIdentityId : null });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_response_review_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not record the review decision.' });
+  }
+});
+
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/figures
+ * Attach a COMMIT-BOUND figure (body: commit, ref, caption). A figure with no commit is refused (422) — a proof
+ * figure with no commit it was captured at is not evidence. Adding a figure resets the response to draft.
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/figures', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const pr = requirementIdParam.safeParse(req.params.requirementId);
+  if (!pk.success || !pr.success) { res.status(400).json({ error: 'Invalid opportunity key or requirement id.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_response_figure_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const view = await addProposalFigure({ deliveryProjectId, requirementId: pr.data, figure: { commit: String(req.body?.commit ?? ''), ref: String(req.body?.ref ?? ''), caption: String(req.body?.caption ?? '') } });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_response_figure_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not attach the figure.' });
+  }
+});
+
+/**
+ * DELETE /api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/figures?ref=…
+ * Remove a figure by its ref. Resets the response to draft. Idempotent on a missing ref.
+ */
+router.delete('/api/admin/factory/qualification/:canonicalOpportunityId/responses/:requirementId/figures', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  const pr = requirementIdParam.safeParse(req.params.requirementId);
+  const ref = String((req.query.ref as string) ?? (req.body?.ref as string) ?? '').trim();
+  if (!pk.success || !pr.success) { res.status(400).json({ error: 'Invalid opportunity key or requirement id.' }); return; }
+  if (!ref) { res.status(400).json({ error: 'A figure ref is required.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_response_figure_remove_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const view = await removeProposalFigure(deliveryProjectId, pr.data, ref);
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof ResponseError) { res.status(RESPONSE_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_response_figure_remove_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not remove the figure.' });
+  }
+});
+
+/**
+ * POST /api/admin/factory/qualification/:canonicalOpportunityId/amendments
+ * Record an amendment/message in the inbox (body: amendmentKey, kind, summary, affects[], provenance, observedAt).
+ * An `amendment` whose `affects` lists requirement ids invalidates their reviewed/approved responses back to
+ * revision_required — the material-change rail. A `message` records context and invalidates nothing.
+ */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/amendments', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_amendment_record_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const actor = await resolveGovProjectActor(req).catch(() => null);
+    const b = req.body ?? {};
+    const view = await recordProposalAmendment({
+      deliveryProjectId, amendmentKey: String(b.amendmentKey ?? ''), kind: b.kind === 'message' ? 'message' : 'amendment',
+      summary: String(b.summary ?? ''), affects: Array.isArray(b.affects) ? b.affects : [],
+      provenance: b.provenance != null ? String(b.provenance) : null, observedAt: b.observedAt != null ? String(b.observedAt) : null,
+      recordedByIdentityId: actor ? actor.platformIdentityId : null,
+    });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof AmendmentError) { res.status(400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_amendment_record_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not record the inbox entry.' });
   }
 });
 
