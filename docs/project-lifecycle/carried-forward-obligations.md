@@ -657,6 +657,26 @@ incident whose row should cite the incident and the fix, not a summary written m
 someone reading the plan. **Owner: whoever next touches those phases, or Phase 8 when it
 assembles the table.**
 
+### KNOWN, not a defect: the lifecycle suites cannot run on a TRULY empty database
+
+A fresh, empty Postgres makes `designPersistence.test.ts` fail, and the failure LOOKS like a
+lifecycle regression. It is not. That suite needs the real multi-tenant base schema —
+`tenants(id, name)` — and **nothing in the lifecycle tree creates it**:
+
+```
+[DB] project lifecycle schema stmt skipped: relation "tenants" does not exist
+[DB] project lifecycle schema stmt skipped: relation "project_lifecycle_states" does not exist
+[DB] project lifecycle schema stmt skipped: relation "operating_blueprint_manifests" does not exist
+```
+
+`ensureProjectLifecycleSchema` is warn-only by design, so every statement skips and the suite
+then fails on missing tables rather than on anything it was testing.
+
+**What to do instead**: clone the scratch database rather than creating an empty one —
+`CREATE DATABASE <name> TEMPLATE lifecycle_scratch` — which is what the attempt-5 verification
+did, and it ran 981 of 981 green. Two separate verifiers lost time to this; the second
+diagnosed it only after a 12-hour background job finished. Recorded so the third does not.
+
 ### OPEN, raised by P5-T1.4: `EVIDENCE_MEASUREMENTS` cannot be populated from a `LifecycleRow`
 
 `Measurement` is typed `(row: LifecycleRow) => unknown`, and `LifecycleRow` is five columns:
