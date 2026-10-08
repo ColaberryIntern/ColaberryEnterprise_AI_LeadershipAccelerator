@@ -28,6 +28,11 @@ jest.mock('../../controllers/broadcastController', () => ({
     res.json({ reached: 'command', isStaff: req.participant?.isStaff ?? null }),
   postPlaybackGrant: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
     res.json({ reached: 'playback', isStaff: req.participant?.isStaff ?? null }),
+  // Added when the discovery route landed. Omitting it is not a soft failure: Express throws
+  // "Route.get() requires a callback function but got [object Undefined]" at module load, and
+  // every test in this file fails at once. Nineteen of them did.
+  getActiveBroadcasts: (req: { participant?: { isStaff?: boolean } }, res: { json: (b: unknown) => void }) =>
+    res.json({ reached: 'discovery', isStaff: req.participant?.isStaff ?? null }),
 }));
 
 // participantAuth calls logAuthFailure on every rejected token, which reaches
@@ -69,6 +74,7 @@ process.env.JWT_SECRET = SECRET;
 const OCC = '11111111-2222-4333-8444-555555555555';
 const COMMAND = `/api/portal/broadcasts/${OCC}/command`;
 const PLAYBACK = `/api/portal/broadcasts/${OCC}/playback`;
+const DISCOVERY = '/api/portal/broadcasts/active';
 
 function token(extra: Record<string, unknown> = {}): string {
   return jwt.sign(
@@ -136,10 +142,13 @@ describe('the flag gate runs before auth', () => {
     expect(res.body).toEqual({ error: 'Authentication required' });
   });
 
-  it('gates BOTH routes, not just the first one declared', async () => {
+  it('gates EVERY route, not just the first one declared', async () => {
     const app = buildApp({ flag: undefined });
     expect((await request(app).post(COMMAND).send({})).status).toBe(404);
     expect((await request(app).post(PLAYBACK).send({})).status).toBe(404);
+    // Added with the discovery route. A new route that forgets the gate is exactly the
+    // omission this test exists to catch, so it has to enumerate all of them.
+    expect((await request(app).get(DISCOVERY)).status).toBe(404);
   });
 });
 
@@ -279,5 +288,57 @@ describe('rate limits', () => {
       .post(PLAYBACK).set('Authorization', auth()).send({ asset: 'a.m3u8' });
     expect(res.headers['ratelimit-limit'] ?? res.headers['ratelimit']).toBeDefined();
     expect(res.headers['x-ratelimit-limit']).toBeUndefined();
+  });
+});
+
+
+describe('the discovery route carries the same chain as the rest', () => {
+  it('404s an anonymous request when the feature is off, like its siblings', async () => {
+    const res = await request(buildApp({ flag: undefined })).get(DISCOVERY);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Not found' });
+  });
+
+  it('401s an anonymous request once the feature is on', async () => {
+    const res = await request(buildApp({ flag: 'true' })).get(DISCOVERY);
+    expect(res.status).toBe(401);
+  });
+
+  it('reaches the handler with staff context resolved', async () => {
+    const res = await request(buildApp({ flag: 'true' }))
+      .get(DISCOVERY).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ reached: 'discovery', isStaff: true });
+  });
+
+  it('401s when mounted BELOW adminRoutes', async () => {
+    const res = await request(buildApp({ flag: 'true', belowAdmin: true }))
+      .get(DISCOVERY).set('Authorization', `Bearer ${token()}`);
+    expect(res.status).toBe(401);
+  });
+
+  it('SHARES the playback limiter, because a ticker polls like a renewing player', async () => {
+    // A deliberate choice rather than an accident of copy-paste: discovery traffic has the
+    // shape of playback traffic, not of a producer action. Pinned so the next person sees it
+    // was decided.
+    const app = buildApp({ flag: 'true' });
+    const auth = `Bearer ${token()}`;
+    await Promise.all(
+      Array.from({ length: 60 }, () => request(app).post(PLAYBACK).set('Authorization', auth).send({ asset: 'a.m3u8' })),
+    );
+
+    const over = await request(app).get(DISCOVERY).set('Authorization', auth);
+    expect(over.status).toBe(429);
+    expect(over.body).toEqual({ error: 'RateLimited', reason: 'too_many_playback_requests' });
+  });
+
+  it('does not consume the COMMAND budget', async () => {
+    const app = buildApp({ flag: 'true' });
+    const auth = `Bearer ${token()}`;
+    await Promise.all(
+      Array.from({ length: 30 }, () => request(app).get(DISCOVERY).set('Authorization', auth)),
+    );
+    const command = await request(app).post(COMMAND).set('Authorization', auth).send({ command: 'end', expected_version: 1 });
+    expect(command.status).toBe(200);
   });
 });

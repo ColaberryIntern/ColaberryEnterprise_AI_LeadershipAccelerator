@@ -76,6 +76,17 @@ router.post(
   c.postProducerCommand,
 );
 
+/**
+ * Discovery read. Same per-route guard chain, flag gate first. It carries the PLAYBACK
+ * limiter rather than the command one, because a ticker polls on roughly the cadence a
+ * player renews a credential, and nothing about it resembles a producer action.
+ */
+router.get(
+  `${P}/active`,
+  flagGate, playbackLimiter, requireParticipant, attachCommunityStaffContext,
+  c.getActiveBroadcasts,
+);
+
 router.post(
   `${P}/:id/playback`,
   flagGate, playbackLimiter, requireParticipant, attachCommunityStaffContext,

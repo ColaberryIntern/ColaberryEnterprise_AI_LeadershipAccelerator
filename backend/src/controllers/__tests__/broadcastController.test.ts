@@ -9,13 +9,28 @@
  */
 jest.mock('../../models/BroadcastOccurrence', () => ({ __esModule: true, default: { findByPk: jest.fn() } }));
 jest.mock('../../services/broadcast/broadcastCommandService', () => ({ runProducerCommand: jest.fn() }));
+// Mocked rather than exercised: each has its own suite, and broadcastAccessDeps reaches
+// the models barrel at import time, which is what turned the entitlement suite from
+// seconds into minutes before it was stubbed there too.
+jest.mock('../../services/broadcast/broadcastRoomEligibility', () => ({ resolveRoomEligibility: jest.fn() }));
+jest.mock('../../services/broadcast/broadcastAccessDeps', () => ({ loadViewerAccessFacts: jest.fn() }));
+jest.mock('../../services/broadcast/broadcastActiveQuery', () => ({
+  ACTIVE_DISCOVERY_STATES: ['live', 'reconnecting'],
+  findActiveOccurrences: jest.fn(),
+}));
 
-import { postProducerCommand, postPlaybackGrant } from '../broadcastController';
+import { postProducerCommand, postPlaybackGrant, getActiveBroadcasts } from '../broadcastController';
 import BroadcastOccurrence from '../../models/BroadcastOccurrence';
 import { runProducerCommand } from '../../services/broadcast/broadcastCommandService';
+import { resolveRoomEligibility } from '../../services/broadcast/broadcastRoomEligibility';
+import { loadViewerAccessFacts } from '../../services/broadcast/broadcastAccessDeps';
+import { findActiveOccurrences } from '../../services/broadcast/broadcastActiveQuery';
 
 const findByPk = (BroadcastOccurrence as any).findByPk as jest.Mock;
 const runCommand = runProducerCommand as jest.Mock;
+const roomEligible = resolveRoomEligibility as jest.Mock;
+const viewerFacts = loadViewerAccessFacts as jest.Mock;
+const activeOccurrences = findActiveOccurrences as jest.Mock;
 
 const OCC = '11111111-2222-4333-8444-555555555555';
 
@@ -36,6 +51,10 @@ const req = (over: any = {}): any => ({
 beforeEach(() => {
   jest.clearAllMocks();
   process.env.JWT_SECRET = 'test-secret';
+  // Defaults: not room-eligible, and no paid entitlement. Each test opts into more.
+  roomEligible.mockResolvedValue(false);
+  viewerFacts.mockResolvedValue({ enrollment: null, cohort: null, roleInfo: null });
+  activeOccurrences.mockResolvedValue([]);
 });
 
 describe('postProducerCommand', () => {
@@ -197,5 +216,150 @@ describe('5xx logging does not leak a connection string to stdout', () => {
     const line = JSON.parse(errLines[0]);
     expect(line).toMatchObject({ level: 'error', outcome: 'failure', event: 'broadcast_command_failed' });
     expect(line.context).toEqual({ error_name: 'SequelizeConnectionError' });
+  });
+});
+
+
+describe('the entitlement inputs are resolved, not stubbed', () => {
+  // Until 2026-10-07 this controller passed `roomEligible: false` and `null, null, null`.
+  // Both stubs denied rather than leaked, so the surface looked fine while the feature was
+  // broken for exactly the people it was built for. One test per stub.
+  const occ = (over: any = {}) => ({
+    id: OCC, access_mode: 'private', editorial_state: 'live',
+    preview_seconds: 900, content_started_at: new Date(Date.now() - 60_000),
+    room_id: 'room-1', ...over,
+  });
+
+  it('asks the room gate about the occurrence ROOM, with the viewer cohort from the JWT', async () => {
+    findByPk.mockResolvedValue(occ());
+    roomEligible.mockResolvedValue(true);
+    const res = mockRes();
+
+    await postPlaybackGrant(req({
+      participant: { sub: 'enr-1', isStaff: false, cohort_id: 'coh-7' },
+      body: { asset: 'master.m3u8' },
+    }), res);
+
+    expect(roomEligible).toHaveBeenCalledWith('room-1', {
+      enrollmentId: 'enr-1', cohortId: 'coh-7', isAdmin: false,
+    });
+  });
+
+  it('GRANTS a private broadcast to an eligible room member — the bug this fixes', async () => {
+    findByPk.mockResolvedValue(occ());
+    roomEligible.mockResolvedValue(true);
+    const res = mockRes();
+
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.grant).toBe('full');
+    expect(body.url).toMatch(/^\/bm\/broadcast\//);
+    expect(res.status).not.toHaveBeenCalledWith(403);
+  });
+
+  it('still denies a private broadcast to someone outside the room', async () => {
+    findByPk.mockResolvedValue(occ());
+    roomEligible.mockResolvedValue(false);
+    const res = mockRes();
+
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'not_room_eligible' });
+  });
+
+  it('passes the loaded paid-access facts through, so a paying viewer is not treated as unpaid', async () => {
+    findByPk.mockResolvedValue(occ({ access_mode: 'paid' }));
+    // hasFullCurriculumAccess is the real implementation here; these are the shapes it reads.
+    viewerFacts.mockResolvedValue({
+      enrollment: { id: 'enr-1', payment_status: 'paid', cohort_id: 'coh-7', access_starts_at: new Date(0) },
+      cohort: { id: 'coh-7', cohort_type: 'standard' },
+      roleInfo: { isStaff: false, hasActiveComp: false },
+    });
+    const res = mockRes();
+
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+
+    expect(viewerFacts).toHaveBeenCalledWith('enr-1');
+    const body = res.json.mock.calls[0][0];
+    expect(body.grant).toBe('full');
+    expect(body.grant).not.toBe('preview');
+  });
+
+  it('a paid broadcast still denies a viewer with no entitlement, and offers the upgrade', async () => {
+    findByPk.mockResolvedValue(occ({ access_mode: 'paid' }));
+    const res = mockRes();
+
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'requires_payment', offer_upgrade: true });
+  });
+});
+
+describe('getActiveBroadcasts', () => {
+  const PRIVATE_TITLE = 'Cohort 12 private review';
+
+  const live = (over: any = {}) => ({
+    id: OCC, title: PRIVATE_TITLE, room_id: 'room-1', access_mode: 'private',
+    editorial_state: 'live', scheduled_start_at: new Date('2026-10-07T18:00:00Z'),
+    content_started_at: new Date('2026-10-07T18:02:00Z'), preview_seconds: 900, ...over,
+  });
+
+  it('NEVER sends a private title to an ineligible viewer', async () => {
+    activeOccurrences.mockResolvedValue([live()]);
+    roomEligible.mockResolvedValue(false);
+    const res = mockRes();
+
+    await getActiveBroadcasts(req(), res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.broadcasts).toEqual([]);
+    // The criterion, asserted on the wire rather than on a rendered DOM.
+    expect(JSON.stringify(body)).not.toContain(PRIVATE_TITLE);
+  });
+
+  it('sends it to an eligible room member', async () => {
+    activeOccurrences.mockResolvedValue([live()]);
+    roomEligible.mockResolvedValue(true);
+    const res = mockRes();
+
+    await getActiveBroadcasts(req(), res);
+
+    const body = res.json.mock.calls[0][0];
+    expect(body.broadcasts).toHaveLength(1);
+    expect(body.broadcasts[0]).toMatchObject({ title: PRIVATE_TITLE, can_watch: true });
+  });
+
+  it('loads the viewer facts ONCE however many broadcasts are airing', async () => {
+    activeOccurrences.mockResolvedValue([live(), live({ id: 'occ-2', room_id: 'room-2' }), live({ id: 'occ-3', room_id: 'room-3' })]);
+    roomEligible.mockResolvedValue(true);
+    const res = mockRes();
+
+    await getActiveBroadcasts(req(), res);
+
+    expect(viewerFacts).toHaveBeenCalledTimes(1);
+    // Room eligibility is per room, so that one is expected to be asked once per occurrence.
+    expect(roomEligible).toHaveBeenCalledTimes(3);
+  });
+
+  it('answers 503 when it cannot work out what is airing — NOT an empty list', async () => {
+    activeOccurrences.mockRejectedValue(new Error('connect ECONNREFUSED postgres://u:pw@db/x'));
+    const res = mockRes();
+
+    await getActiveBroadcasts(req(), res);
+
+    // "nothing is airing" and "we could not tell" are different facts.
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json.mock.calls[0][0]).toEqual({ error: 'DiscoveryUnavailable' });
+    expect(JSON.stringify(res.json.mock.calls[0][0])).not.toContain('postgres://');
+  });
+
+  it('reports which states it considered, so the client is not guessing', async () => {
+    activeOccurrences.mockResolvedValue([]);
+    const res = mockRes();
+    await getActiveBroadcasts(req(), res);
+    expect(res.json.mock.calls[0][0].states).toEqual(['live', 'reconnecting']);
   });
 });

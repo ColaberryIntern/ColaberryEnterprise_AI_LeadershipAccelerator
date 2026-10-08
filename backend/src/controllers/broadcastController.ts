@@ -3,6 +3,10 @@ import { ZodError } from 'zod';
 import { producerCommandSchema, occurrenceIdParamSchema, playbackGrantSchema } from '../schemas/broadcastSchema';
 import { runProducerCommand } from '../services/broadcast/broadcastCommandService';
 import { decideBroadcastAccess } from '../services/broadcast/broadcastEntitlement';
+import { resolveRoomEligibility } from '../services/broadcast/broadcastRoomEligibility';
+import { loadViewerAccessFacts } from '../services/broadcast/broadcastAccessDeps';
+import { projectDiscovery, DiscoveryEntry } from '../services/broadcast/broadcastDiscovery';
+import { ACTIVE_DISCOVERY_STATES, findActiveOccurrences } from '../services/broadcast/broadcastActiveQuery';
 import { signPlayback } from '../services/broadcast/broadcastPlaybackGrant';
 import BroadcastOccurrence from '../models/BroadcastOccurrence';
 
@@ -105,9 +109,22 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Entitlement inputs are all server-resolved. roomEligible is wired in P2-07 when the
-    // occurrence-to-room projection lands; until then a private occurrence denies, which is
-    // the safe direction for an unfinished dependency.
+    // Entitlement inputs are all server-resolved, and as of this commit all of them are
+    // actually resolved. Before it, `roomEligible` was the literal `false` and the three
+    // paid-access facts were `null` — so every private occurrence denied its own cohort, and
+    // `hasFullCurriculumAccess` was asked "is this person entitled?" with no enrollment and
+    // answered no for everybody. Both errors denied rather than leaked, which is exactly why
+    // nothing looked broken from outside.
+    const viewer = {
+      enrollmentId: req.participant!.sub,
+      isAdmin: isStaff(req),
+      roomEligible: await resolveRoomEligibility(occurrence.room_id, {
+        enrollmentId: req.participant!.sub,
+        cohortId: req.participant!.cohort_id ?? null,
+        isAdmin: isStaff(req),
+      }),
+    };
+    const facts = await loadViewerAccessFacts(req.participant!.sub);
     const decision = decideBroadcastAccess(
       {
         access_mode: occurrence.access_mode,
@@ -115,8 +132,8 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
         preview_seconds: occurrence.preview_seconds,
         content_started_at: occurrence.content_started_at,
       },
-      { enrollmentId: req.participant!.sub, isAdmin: isStaff(req), roomEligible: false },
-      null, null, null,
+      viewer,
+      facts.enrollment, facts.cohort, facts.roleInfo,
       Date.now(),
     );
 
@@ -158,5 +175,66 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
     });
   } catch (err) {
     respondError(res, err, 'broadcast_playback_grant_failed');
+  }
+}
+
+/**
+ * GET /api/portal/broadcasts/active — what this viewer may know is airing.
+ *
+ * TWO DELIBERATE SHAPES.
+ *
+ * The viewer's paid-access facts are loaded ONCE and then applied to every occurrence through
+ * the pure decision function. Calling `resolveBroadcastAccess` per row would re-read the
+ * enrollment, the cohort and the comp list for every broadcast on screen.
+ *
+ * A resolution failure answers 503, NOT an empty list. "Nothing is airing" and "we could not
+ * work out what is airing" are different facts, and reporting the second as the first is the
+ * same mistake as a dashboard reporting a fabricated zero during its own outage. The client
+ * shows no badge either way; only one of the two is honest about why.
+ */
+export async function getActiveBroadcasts(req: Request, res: Response): Promise<void> {
+  const enrollmentId = req.participant!.sub;
+  try {
+    const occurrences = await findActiveOccurrences();
+    const facts = await loadViewerAccessFacts(enrollmentId);
+    const ctx = {
+      enrollmentId,
+      cohortId: req.participant!.cohort_id ?? null,
+      isAdmin: isStaff(req),
+    };
+    const nowMs = Date.now();
+
+    const entries: DiscoveryEntry[] = [];
+    for (const occurrence of occurrences) {
+      // Sequential on purpose: a partial UNIQUE index permits one airing per room, so this is
+      // a handful of rows and a burst of parallel membership reads buys only contention.
+      // eslint-disable-next-line no-await-in-loop
+      const roomEligible = await resolveRoomEligibility(occurrence.room_id, ctx);
+      entries.push({
+        occurrence,
+        roomEligible,
+        decision: decideBroadcastAccess(
+          {
+            access_mode: occurrence.access_mode,
+            editorial_state: occurrence.editorial_state,
+            preview_seconds: occurrence.preview_seconds,
+            content_started_at: occurrence.content_started_at,
+          },
+          { enrollmentId, isAdmin: ctx.isAdmin, roomEligible },
+          facts.enrollment, facts.cohort, facts.roleInfo,
+          nowMs,
+        ),
+      });
+    }
+
+    res.json({ states: ACTIVE_DISCOVERY_STATES, broadcasts: projectDiscovery(entries) });
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'broadcast',
+      event: 'broadcast_discovery_failed', outcome: 'failure',
+      error_class: (err as Error)?.name ?? 'UnexpectedError',
+      context: { error_name: (err as Error)?.name ?? 'unknown' },
+    }));
+    res.status(503).json({ error: 'DiscoveryUnavailable' });
   }
 }
