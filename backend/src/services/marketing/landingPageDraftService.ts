@@ -40,7 +40,20 @@ import {
  * loudly rather than persisting something unrenderable.
  */
 
-const MODEL = 'gpt-4o-mini';
+/**
+ * The page's CONTENT model. Raised from gpt-4o-mini on 2026-10-08 at Ali's request, after
+ * reading a generated page: "the landing page quality is just not as good as I want ... switch
+ * to a different ChatGPT model that is better with design just for this change and no where
+ * else". Scoped deliberately to this one service - every other caller in the repo keeps the
+ * model it had.
+ *
+ * WHAT THIS CAN AND CANNOT FIX. The model writes CONTENT ONLY: a JSON document validated by
+ * landingPageContentSchema. Every pixel - the bands, the type scale, the colours, the layout -
+ * comes from landingPageRenderer.ts, which is deterministic TypeScript. So a stronger model
+ * buys better words, sharper section choices and better use of the shapes the schema offers,
+ * and CANNOT change how the page looks. Visual quality is a renderer change, not this line.
+ */
+const MODEL = 'gpt-4o';
 const TIMEOUT_MS = 60_000;
 
 export interface LandingPageDraftRequest {

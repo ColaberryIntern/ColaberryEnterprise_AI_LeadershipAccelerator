@@ -3,6 +3,7 @@ import { PageHeader, SectionCard } from '../../../components/admin/shell';
 import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
 import * as lp from '../../../services/landingPageApi';
+import { previewFileName, OPEN_REVOKE_MS, DOWNLOAD_REVOKE_MS } from './landingPagePreviewFile';
 import {
   briefIsUsable, draftWarnings, pageActions, publicUrl, slugProblem, statusLabel, suggestSlug,
 } from './landingPageState';
@@ -40,6 +41,7 @@ export default function AdminLandingPagesPage() {
   // Build form
   const [name, setName] = useState('');
   const [source, setSource] = useState('');
+  const [naming, setNaming] = useState(false);
 
   // Selected-page working state
   const [slugDraft, setSlugDraft] = useState('');
@@ -49,6 +51,52 @@ export default function AdminLandingPagesPage() {
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const say = (tone: 'success' | 'danger' | 'info', text: string) => setNotice({ tone, text });
+
+  /**
+   * Name the page from the brief that is already typed.
+   *
+   * It OVERWRITES whatever is in the field, which is the point - it is asked for explicitly by
+   * pressing the button, and a suggestion that refused to replace a name would do nothing on the
+   * second press. The field stays editable, so the answer is a starting point rather than a
+   * verdict.
+   */
+  /**
+   * Show the page at the size it will actually be read at.
+   *
+   * Served from a blob rather than by opening the preview URL: that endpoint needs a Bearer
+   * header an axios interceptor attaches, and a new tab would carry none and 401.
+   */
+  const openFullScreen = () => {
+    if (previewHtml === null) return;
+    const url = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
+    window.open(url, '_blank', 'noopener');
+    // Not revoked immediately: the tab has not finished loading from it yet.
+    window.setTimeout(() => URL.revokeObjectURL(url), OPEN_REVOKE_MS);
+  };
+
+  const downloadPreview = () => {
+    if (previewHtml === null) return;
+    const url = URL.createObjectURL(new Blob([previewHtml], { type: 'text/html' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = previewFileName(selected?.name ?? name, selected?.slug ?? null);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_REVOKE_MS);
+  };
+
+  const suggestName = async () => {
+    setNaming(true);
+    try {
+      const suggested = await lp.suggestLandingPageName(source);
+      setName(suggested);
+    } catch (err) {
+      say('danger', lp.errorMessage(err, 'A name could not be suggested. Type one in instead.'));
+    } finally {
+      setNaming(false);
+    }
+  };
   const fail = (err: unknown, fallback: string) => say('danger', lp.errorMessage(err, fallback));
 
   const selected = useMemo(() => pages.find((p) => p.id === selectedId) ?? null, [pages, selectedId]);
@@ -201,8 +249,21 @@ export default function AdminLandingPagesPage() {
             <div className="row g-3">
               <div className="col-md-5">
                 <label className="form-label small mb-1" htmlFor="lp-name">Name</label>
-                <input id="lp-name" className="form-control form-control-sm" value={name} maxLength={100} disabled={busy}
-                  onChange={(e) => setName(e.target.value)} data-testid="lp-name" />
+                <div className="d-flex gap-2">
+                  <input id="lp-name" className="form-control form-control-sm" value={name} maxLength={100} disabled={busy || naming}
+                    onChange={(e) => setName(e.target.value)} data-testid="lp-name" />
+                  {/* Disabled until the brief is long enough to name anything from - the service
+                      refuses a short one, and a button that always 400s is worse than a quiet one. */}
+                  <button
+                    type="button" className="btn btn-sm btn-outline-primary text-nowrap"
+                    disabled={busy || naming || source.trim().length < 20}
+                    onClick={suggestName}
+                    data-testid="lp-suggest-name"
+                    title="Read the brief below and suggest a name"
+                  >
+                    {naming ? 'Naming…' : 'Suggest'}
+                  </button>
+                </div>
                 <div className="form-text small">
                   Internal. The URL comes from the slug, which you can change before publishing.
                   {suggestSlug(name) && <> Suggested: <code>/lp/{brand?.slug ?? 'brand'}/{suggestSlug(name)}</code></>}
@@ -292,6 +353,17 @@ export default function AdminLandingPagesPage() {
                   <div className="col-12 col-xl-7">
                     {previewError && <div className="alert alert-danger py-2 small" data-testid="lp-preview-error">{previewError}</div>}
                     {!previewError && previewHtml === null && <p className="text-muted small mb-2">Rendering...</p>}
+                    {previewHtml !== null && (
+                      <div className="d-flex flex-wrap gap-2 mb-2" data-testid="lp-preview-actions">
+                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={openFullScreen} data-testid="lp-full-screen">
+                          Open full screen
+                        </button>
+                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={downloadPreview} data-testid="lp-download">
+                          Download
+                        </button>
+                        <span className="form-text small align-self-center mb-0">A real page is hard to judge in a column this wide.</span>
+                      </div>
+                    )}
                     {previewHtml !== null && (
                       // sandbox="" - no scripts, no forms, no navigation. The preview carries no
                       // tracker by design, so nothing it needs is being withheld.
