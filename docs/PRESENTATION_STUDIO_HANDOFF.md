@@ -19,8 +19,8 @@ This is the rollback — see the end of this document.
 | | |
 |---|---|
 | Tasks in the plan | 57 |
-| Verified complete | 48 |
-| Built, awaiting your review | 8 (Phase 7) |
+| Verified complete and merged | 53 |
+| Awaiting your deploy go-ahead | 3 — deploy, live verification, monitoring |
 | **Blocked on a human** | **1 — P4-T8** |
 
 **P4-T8 is not done and cannot be finished from a keyboard.** It requires one real Zoom
