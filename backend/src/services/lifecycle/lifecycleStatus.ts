@@ -75,7 +75,14 @@ export interface LifecycleStatus {
  * than the caller silently returning null. Nothing is returned to the caller before the guard
  * has run.
  */
-async function loadAndAuthorize(
+/**
+ * Load a lifecycle row and record an audited access decision for it.
+ *
+ * EXPORTED so sibling services reuse this guard instead of running a second one. A second
+ * implementation is how one path ends up recording the attempt and another does not, and the
+ * audit trail is the whole point of the guard.
+ */
+export async function loadAndAuthorize(
   projectId: string,
   kind: ProjectKind,
   admin: AdminIdentity | undefined,

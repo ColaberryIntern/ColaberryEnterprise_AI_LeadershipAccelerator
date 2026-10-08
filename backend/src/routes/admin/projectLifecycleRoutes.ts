@@ -5,6 +5,10 @@ import { FLAGS } from '../../config/featureFlags';
 import {
   lifecycleIdParam, lifecycleStatusQuery, transitionBody, approveBody, composeBody, zodIssues,
 } from '../../schemas/projectLifecycleSchema';
+import { compareQuery, changeRequestBody } from '../../schemas/projectLifecycleReviewSchema';
+import {
+  SECTION, PREFIX, log, redactPayload, correlationOf, adminOf, disabled,
+} from '../projectLifecycleRouteSupport';
 
 /**
  * Admin — unified project lifecycle status, transitions and blueprint approval.
@@ -38,56 +42,6 @@ import {
  */
 const router = Router();
 
-const SECTION = 'program';
-const PREFIX = '/api/admin/project-lifecycle';
-
-/** One structured line per request outcome. JSON to stdout, per the Observability Framework. */
-function log(event: string, correlationId: string, outcome: 'success' | 'failure' | 'partial', context: Record<string, unknown>): void {
-  console.log(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level: outcome === 'failure' ? 'error' : 'info',
-    service: 'backend',
-    event,
-    correlation_id: correlationId,
-    outcome,
-    ...(context.error_class ? { error_class: context.error_class } : {}),
-    context,
-  }));
-}
-
-/**
- * Redact a PAYLOAD, never a whole log line.
- *
- * `redactForLogs` applied to an entire line mangles UUIDs — it rewrites anything that looks like
- * an identifier — so correlation ids and project ids become unusable for tracing exactly when a
- * trace is needed. Applied to the free-text fields only, it masks what it should.
- */
-async function redactPayload(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const { redactForLogs } = await import('../../utils/piiRedaction');
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(payload)) {
-    out[k] = typeof v === 'string' ? redactForLogs(v) : v;
-  }
-  return out;
-}
-
-function correlationOf(req: Request): string {
-  return String(req.header('X-Correlation-ID') ?? (req as any).correlationId ?? `plc-${Date.now()}`);
-}
-
-/** The authenticated admin. Never read from a request body — that is a spoofable approver. */
-function adminOf(req: Request): { id?: string; email?: string; role?: string } | undefined {
-  return (req as any).admin;
-}
-
-/** The explicit disabled answer. Shared so no route can accidentally return a soft success. */
-function disabled(res: Response): void {
-  res.status(409).json({
-    lifecycleDisabled: true,
-    error: 'Project lifecycle enforcement is not enabled in this environment.',
-    remedy: 'Set ENABLE_PROJECT_LIFECYCLE=true to enable it.',
-  });
-}
 
 /**
  * GET /api/admin/project-lifecycle/:projectId?kind=student|delivery
@@ -348,6 +302,131 @@ router.post(`${PREFIX}/:projectId/compose`, requireSection(SECTION), async (req:
       ...(await redactPayload({ message: String(err?.message ?? err) })),
     });
     res.status(500).json({ error: 'Could not compose the blueprint.' });
+  }
+});
+
+/**
+ * GET /api/admin/project-lifecycle/:projectId/revisions/compare?kind=&from=&to=
+ *
+ * What changed between two revisions of the operating blueprint. With no `from`/`to` it compares
+ * the newest two, which is the question a reviewer is actually asking.
+ *
+ * THE FOUR OUTCOMES ARE DISTINCT RESPONSES, not one 200 with an empty diff. "Nothing changed",
+ * "there is only one revision", "this project has no blueprint" and "the revision you named does
+ * not exist" lead to four different actions, and a reviewer shown an all-clear screen for the
+ * middle two would approve something nobody compared.
+ */
+router.get(`${PREFIX}/:projectId/revisions/compare`, requireSection(SECTION), async (req: Request, res: Response) => {
+  const correlationId = correlationOf(req);
+  if (!FLAGS.lifecycleEnforcement) { disabled(res); return; }
+
+  const p = lifecycleIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid project id.', issues: zodIssues(p.error) }); return; }
+  const q = compareQuery.safeParse(req.query ?? {});
+  if (!q.success) { res.status(400).json({ error: 'Invalid query.', issues: zodIssues(q.error) }); return; }
+
+  try {
+    const { compareBlueprintRevisions } = await import('../../services/lifecycle/blueprintChangeRequest');
+    const out = await compareBlueprintRevisions({
+      projectId: p.data.projectId,
+      kind: q.data.kind,
+      fromRevision: q.data.from,
+      toRevision: q.data.to,
+      admin: adminOf(req),
+    });
+
+    if (out.state === 'no_manifest') {
+      log('project_lifecycle_compare', correlationId, 'partial', { project_id: p.data.projectId, state: out.state });
+      res.status(404).json({ state: out.state, error: 'This project has no operating blueprint to compare.' });
+      return;
+    }
+    if (out.state === 'revision_not_found') {
+      log('project_lifecycle_compare', correlationId, 'partial', {
+        project_id: p.data.projectId, state: out.state, requested: out.requested.length,
+      });
+      res.status(404).json({
+        state: out.state,
+        error: 'One of the requested revisions does not exist for this project.',
+        // The available list is what makes this actionable rather than a flat "no".
+        requested: out.requested,
+        available: out.available,
+      });
+      return;
+    }
+    if (out.state === 'single_revision') {
+      log('project_lifecycle_compare', correlationId, 'success', { project_id: p.data.projectId, state: out.state });
+      res.json({ state: out.state, only: out.only });
+      return;
+    }
+
+    log('project_lifecycle_compare', correlationId, 'success', {
+      project_id: p.data.projectId, state: out.state,
+      from: out.from.revision, to: out.to.revision,
+      changed: out.diff.changed, unreadable: out.diff.unreadable.length,
+    });
+    res.json(out);
+  } catch (err: any) {
+    const errorClass = err?.name ?? 'UnclassifiedError';
+    if (errorClass === 'TenantAccessError') { res.status(err.status ?? 403).json({ error: err.message }); return; }
+    log('project_lifecycle_compare', correlationId, 'failure', {
+      project_id: p.data.projectId, error_class: errorClass,
+      ...(await redactPayload({ message: String(err?.message ?? err) })),
+    });
+    res.status(500).json({ error: 'Could not compare the revisions.' });
+  }
+});
+
+/**
+ * POST /api/admin/project-lifecycle/:projectId/request-changes
+ *
+ * Send a revision back to its author with what must change. Persists as the lifecycle's own
+ * `awaiting_input` condition rather than in a new table — `blueprintChangeRequest.ts` carries why,
+ * and why that makes a resubmit idempotent by construction.
+ *
+ * AN IDENTICAL RESUBMIT ANSWERS 200 WITH `applied: false`, not 409. It is not an error: the end
+ * state the caller asked for is the end state that exists. The flag is there so a UI can say
+ * "already requested" rather than claiming it just sent a second one.
+ */
+router.post(`${PREFIX}/:projectId/request-changes`, requireSection(SECTION), async (req: Request, res: Response) => {
+  const correlationId = correlationOf(req);
+  if (!FLAGS.lifecycleEnforcement) { disabled(res); return; }
+
+  const p = lifecycleIdParam.safeParse(req.params);
+  if (!p.success) { res.status(400).json({ error: 'Invalid project id.', issues: zodIssues(p.error) }); return; }
+  const b = changeRequestBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'Invalid body.', issues: zodIssues(b.error) }); return; }
+
+  try {
+    const { requestBlueprintChanges } = await import('../../services/lifecycle/blueprintChangeRequest');
+    const out = await requestBlueprintChanges({
+      projectId: p.data.projectId,
+      kind: b.data.kind,
+      revision: b.data.revision,
+      text: b.data.text,
+      admin: adminOf(req),
+    });
+
+    log('project_lifecycle_request_changes', correlationId, 'success', {
+      project_id: p.data.projectId, revision: out.revision, applied: out.applied,
+    });
+    res.json({ applied: out.applied, revision: out.revision, condition: 'awaiting_input' });
+  } catch (err: any) {
+    const errorClass = err?.name ?? 'UnclassifiedError';
+    if (errorClass === 'TenantAccessError') { res.status(err.status ?? 403).json({ error: err.message }); return; }
+    if (errorClass === 'ChangeRequestRefused') {
+      // A refusal carries its own status and a machine-readable reason, so a UI can tell
+      // "you lack the authority" from "that revision does not exist" without parsing prose.
+      log('project_lifecycle_request_changes', correlationId, 'partial', {
+        project_id: p.data.projectId, refusal: err.refusal,
+      });
+      res.status(err.status ?? 409).json({ error: err.message, refusal: err.refusal });
+      return;
+    }
+    log('project_lifecycle_request_changes', correlationId, 'failure', {
+      project_id: p.data.projectId, error_class: errorClass,
+      ...(await redactPayload({ message: String(err?.message ?? err) })),
+    });
+    res.status(500).json({ error: 'Could not record the change request.' });
   }
 });
 

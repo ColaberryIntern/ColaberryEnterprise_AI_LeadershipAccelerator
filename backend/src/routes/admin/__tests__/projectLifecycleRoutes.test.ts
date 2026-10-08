@@ -44,6 +44,17 @@ jest.mock('../../../services/lifecycle/generation/blueprintComposition', () => (
   composeBlueprint: (...a: any[]) => composeBlueprint(...a),
 }));
 
+// The review module. Complete FOR THE ROUTE: these are the only two symbols it imports. The
+// service's own behaviour (idempotency, the derived permission, the revision guard) is tested in
+// `blueprintChangeRequest.test.ts`; what is tested here is the route's contract around it, which
+// is almost entirely STATUS CODES - the one place a 404-for-422 mistake hides.
+const compareBlueprintRevisions = jest.fn();
+const requestBlueprintChanges = jest.fn();
+jest.mock('../../../services/lifecycle/blueprintChangeRequest', () => ({
+  compareBlueprintRevisions: (...a: any[]) => compareBlueprintRevisions(...a),
+  requestBlueprintChanges: (...a: any[]) => requestBlueprintChanges(...a),
+}));
+
 // Partial mocks that KEEP the real helpers, because the route calls refusalStatus and
 // approvalErrorStatus for real and a factory that enumerates exports would delete them.
 jest.mock('../../../services/lifecycle/lifecycleTransition', () => ({
@@ -514,5 +525,196 @@ describe('POST /compose, the first non-test caller the pipeline has ever had', (
     await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
       .set('X-Correlation-ID', 'corr-abc').send(body());
     expect(composeBlueprint.mock.calls[0][0].correlationId).toBe('corr-abc');
+  });
+});
+
+describe('GET /revisions/compare', () => {
+  const url = (qs: string) => `/api/admin/project-lifecycle/${PROJECT}/revisions/compare?${qs}`;
+
+  const comparedPayload = {
+    state: 'compared',
+    from: { id: 'm-1', revision: 1, status: 'superseded', contentSha256: 'a' },
+    to: { id: 'm-2', revision: 2, status: 'approved', contentSha256: 'b' },
+    diff: {
+      collections: [{ collection: 'sources', identity: 'pinned', added: [], removed: [], revised: ['req-1'] }],
+      changed: true,
+      unreadable: [],
+    },
+  };
+
+  it('200s a comparison and passes the diff through intact', async () => {
+    compareBlueprintRevisions.mockResolvedValue(comparedPayload);
+    const res = await request(app()).get(url('kind=student'));
+    expect(res.status).toBe(200);
+    // The IDS survive the route, not just a changed flag.
+    expect(res.body.diff.collections[0].revised).toEqual(['req-1']);
+    expect(compareBlueprintRevisions).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: PROJECT, kind: 'student', fromRevision: undefined, toRevision: undefined,
+    }));
+  });
+
+  it('forwards explicit revision bounds as NUMBERS, not strings', async () => {
+    // They arrive as query strings. Passed through unconverted they would be compared against
+    // numeric revisions and match nothing, and the route would 404 a revision that exists.
+    compareBlueprintRevisions.mockResolvedValue(comparedPayload);
+    await request(app()).get(url('kind=delivery&from=1&to=3'));
+    const arg = compareBlueprintRevisions.mock.calls[0][0];
+    expect([arg.fromRevision, arg.toRevision]).toEqual([1, 3]);
+    expect(typeof arg.fromRevision).toBe('number');
+  });
+
+  it('200s a single-revision answer rather than inventing an empty diff', async () => {
+    compareBlueprintRevisions.mockResolvedValue({
+      state: 'single_revision', only: { id: 'm-1', revision: 1, status: 'approved', contentSha256: 'a' },
+    });
+    const res = await request(app()).get(url('kind=student'));
+    expect(res.status).toBe(200);
+    expect(res.body.state).toBe('single_revision');
+  });
+
+  it('404s a project with no blueprint', async () => {
+    compareBlueprintRevisions.mockResolvedValue({ state: 'no_manifest' });
+    const res = await request(app()).get(url('kind=student'));
+    expect(res.status).toBe(404);
+    expect(res.body.state).toBe('no_manifest');
+  });
+
+  it('404s an unknown revision AND reports the ones that exist', async () => {
+    compareBlueprintRevisions.mockResolvedValue({
+      state: 'revision_not_found', requested: [9], available: [2, 1],
+    });
+    const res = await request(app()).get(url('kind=student&from=9&to=1'));
+    expect(res.status).toBe(404);
+    expect(res.body.available).toEqual([2, 1]);
+  });
+
+  it('400s a non-UUID project id before any service runs', async () => {
+    const res = await request(app()).get('/api/admin/project-lifecycle/not-a-uuid/revisions/compare?kind=student');
+    expect(res.status).toBe(400);
+    expect(compareBlueprintRevisions).not.toHaveBeenCalled();
+  });
+
+  it('400s a missing kind rather than guessing one', async () => {
+    const res = await request(app()).get(url(''));
+    expect(res.status).toBe(400);
+    expect(res.body.issues.map((i: any) => i.path)).toContain('kind');
+    expect(compareBlueprintRevisions).not.toHaveBeenCalled();
+  });
+
+  it('400s revision 0, which is not a revision', async () => {
+    const res = await request(app()).get(url('kind=student&from=0&to=1'));
+    expect(res.status).toBe(400);
+    expect(compareBlueprintRevisions).not.toHaveBeenCalled();
+  });
+
+  it('409s with lifecycleDisabled when the flag is off', async () => {
+    FLAGS.lifecycleEnforcement = false;
+    const res = await request(app()).get(url('kind=student'));
+    expect(res.status).toBe(409);
+    expect(res.body.lifecycleDisabled).toBe(true);
+    expect(compareBlueprintRevisions).not.toHaveBeenCalled();
+  });
+
+  it('lets a tenancy denial keep its OWN status', async () => {
+    compareBlueprintRevisions.mockRejectedValue(
+      Object.assign(new Error('not your tenant'), { name: 'TenantAccessError', status: 403 }),
+    );
+    const res = await request(app()).get(url('kind=student'));
+    expect(res.status).toBe(403);
+  });
+
+  it('500s an unexpected failure without leaking the message', async () => {
+    compareBlueprintRevisions.mockRejectedValue(new Error('connection string postgres://u:p@h/db'));
+    const res = await request(app()).get(url('kind=student'));
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('postgres://');
+  });
+});
+
+describe('POST /request-changes', () => {
+  const url = `/api/admin/project-lifecycle/${PROJECT}/request-changes`;
+  const body = { kind: 'student', revision: 2, text: 'tighten the acceptance criteria' };
+
+  // Mirrors ChangeRequestRefused's three fields. The real class's shape is pinned by
+  // blueprintChangeRequest.test.ts, which asserts name/status/refusal on a real rejection.
+  const refused = (status: number, refusal: string, message = 'refused') =>
+    Object.assign(new Error(message), { name: 'ChangeRequestRefused', status, refusal });
+
+  it('200s a recorded request', async () => {
+    requestBlueprintChanges.mockResolvedValue({
+      applied: true, revision: 2, text: body.text, conditionReason: 'CHANGES_REQUESTED r2: x',
+    });
+    const res = await request(app()).post(url).send(body);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ applied: true, revision: 2, condition: 'awaiting_input' });
+  });
+
+  it('200s an IDENTICAL RESUBMIT with applied:false - not a 409', async () => {
+    // The end state the caller asked for is the end state that exists. A 409 would make a UI
+    // tell the reviewer their request failed, and they would send it again.
+    requestBlueprintChanges.mockResolvedValue({
+      applied: false, revision: 2, text: body.text, conditionReason: 'x',
+    });
+    const res = await request(app()).post(url).send(body);
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(false);
+  });
+
+  it('does not echo the submitted text back in the response', async () => {
+    // The response carries the decision, not the payload. Echoing it would copy free text a
+    // reviewer typed into anything that records responses.
+    requestBlueprintChanges.mockResolvedValue({
+      applied: true, revision: 2, text: body.text, conditionReason: 'CHANGES_REQUESTED r2: ' + body.text,
+    });
+    const res = await request(app()).post(url).send(body);
+    expect(JSON.stringify(res.body)).not.toContain('acceptance criteria');
+  });
+
+  it('400s empty text, which is not a change request', async () => {
+    const res = await request(app()).post(url).send({ ...body, text: '   ' });
+    expect(res.status).toBe(400);
+    expect(res.body.issues.map((i: any) => i.path)).toContain('text');
+    expect(requestBlueprintChanges).not.toHaveBeenCalled();
+  });
+
+  it('400s a missing revision rather than defaulting to the newest', async () => {
+    const res = await request(app()).post(url).send({ kind: 'student', text: 'fix it' });
+    expect(res.status).toBe(400);
+    expect(requestBlueprintChanges).not.toHaveBeenCalled();
+  });
+
+  it('400s a body with no kind', async () => {
+    const res = await request(app()).post(url).send({ revision: 2, text: 'fix it' });
+    expect(res.status).toBe(400);
+    expect(requestBlueprintChanges).not.toHaveBeenCalled();
+  });
+
+  it('403s an insufficient permission, carrying the machine-readable refusal', async () => {
+    requestBlueprintChanges.mockRejectedValue(refused(403, 'insufficient_permission'));
+    const res = await request(app()).post(url).send(body);
+    expect(res.status).toBe(403);
+    expect(res.body.refusal).toBe('insufficient_permission');
+  });
+
+  it('404s a revision that does not exist', async () => {
+    requestBlueprintChanges.mockRejectedValue(refused(404, 'revision_not_found'));
+    const res = await request(app()).post(url).send(body);
+    expect(res.status).toBe(404);
+    expect(res.body.refusal).toBe('revision_not_found');
+  });
+
+  it('409s with lifecycleDisabled when the flag is off', async () => {
+    FLAGS.lifecycleEnforcement = false;
+    const res = await request(app()).post(url).send(body);
+    expect(res.status).toBe(409);
+    expect(res.body.lifecycleDisabled).toBe(true);
+    expect(requestBlueprintChanges).not.toHaveBeenCalled();
+  });
+
+  it('500s an unexpected failure without leaking the message', async () => {
+    requestBlueprintChanges.mockRejectedValue(new Error('connection string postgres://u:p@h/db'));
+    const res = await request(app()).post(url).send(body);
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('postgres://');
   });
 });

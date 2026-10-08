@@ -49,7 +49,15 @@ export type LifecycleResult =
   | { state: 'disabled'; detail: LifecycleDisabled }
   | { state: 'error'; message: string };
 
-const BASE = '/api/admin/project-lifecycle';
+/**
+ * The one definition of this path prefix, exported because the review client shares it.
+ *
+ * The `/api` is not decorative: without it the dev server answers `index.html` with a
+ * 200, which a mocked suite cannot tell from a real response. One constant means one
+ * place that can be wrong.
+ */
+export const LIFECYCLE_API_BASE = '/api/admin/project-lifecycle';
+const BASE = LIFECYCLE_API_BASE;
 
 /**
  * Read a project's lifecycle status.
