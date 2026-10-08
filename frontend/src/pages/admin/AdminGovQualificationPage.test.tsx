@@ -360,19 +360,18 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(openBtn.disabled).toBe(false);                                      // enabled even though sourceAvailable:false
   });
 
-  it('Phase 3 journey strip: renders the pipeline and marks the current stage (Requirements, on an empty record)', async () => {
+  it('Step bar: renders the seven numbered pursuit steps and marks the current one (replaces the journey strip)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 1, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
     }));
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
-    const text = container.textContent ?? '';
-    expect(text).toContain('Where this is in the journey');
-    expect(text).toContain('Discovered');
-    expect(text).toContain('Requirements established');
-    expect(text).toContain('Build authorized');
-    const current = container.querySelector('[aria-current="step"]');
-    expect(current?.textContent ?? '').toContain('Requirements established'); // first not-done stage is current
+    const steps = Array.from(container.querySelectorAll('[role="tab"]')).map((b) => (b.textContent ?? '').trim());
+    for (const s of ['Solicitation', 'Requirements', 'Go / No-go', 'Proposal', 'Build', 'Submit', 'Outcome']) {
+      expect(steps.some((l) => l.includes(s))).toBe(true);
+    }
+    const current = container.querySelector('[role="tab"][aria-current="step"]');
+    expect(current?.textContent ?? '').toContain('Solicitation'); // default step (no ?tab=) is Solicitation
   });
 
   it('Phase 3 relationship panel: lists prior pursuits for the same agency with their decision', async () => {
@@ -588,33 +587,49 @@ describe('AdminGovQualificationPage — journey', () => {
   const navTabs = () => Array.from(container.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
   const tabByLabel = (label: string) => navTabs().find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
 
-  it('7-tab shell: renders all seven workspace tabs with Overview active by default', async () => {
+  it('Step bar: renders all seven pursuit steps with Solicitation active by default', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     await renderAt(`?canonical=${CANON}`);
     await flush();
     const labels = navTabs().map((b) => (b.textContent ?? '').trim());
-    for (const t of ['Overview', 'Proposal', 'Build', 'Documents', 'Dates & Messages', 'Complete Your Submission', 'Outcome & Case Study']) {
+    for (const t of ['Solicitation', 'Requirements', 'Go / No-go', 'Proposal', 'Build', 'Submit', 'Outcome']) {
       expect(labels.some((l) => l.includes(t))).toBe(true);
     }
-    expect(tabByLabel('Overview').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('true');
     expect(tabByLabel('Proposal').getAttribute('aria-selected')).toBe('false');
   });
 
-  it('7-tab shell: the active tab is restored from the URL (?tab=) so a reload keeps your place', async () => {
+  it('Step bar: the active step is restored from the URL (?tab=) so a reload keeps your place', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     await renderAt(`?canonical=${CANON}&tab=build`);
     await flush();
     expect(tabByLabel('Build').getAttribute('aria-selected')).toBe('true');
-    expect(tabByLabel('Overview').getAttribute('aria-selected')).toBe('false');
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('false');
   });
 
-  it('7-tab shell: clicking a tab activates it', async () => {
+  it('Step bar: clicking a step activates it', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     await renderAt(`?canonical=${CANON}`);
     await flush();
-    await act(async () => { tabByLabel('Documents').dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
-    expect(tabByLabel('Documents').getAttribute('aria-selected')).toBe('true');
-    expect(tabByLabel('Overview').getAttribute('aria-selected')).toBe('false');
+    await act(async () => { tabByLabel('Requirements').dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(tabByLabel('Requirements').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('Step bar: a legacy ?tab= link (documents) still resolves — lands on the Solicitation step', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}&tab=documents`);
+    await flush();
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('Right rail: the persistent rail (messages + team) renders regardless of the active step', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}&tab=outcome`); // a non-Solicitation step
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Messages & amendments'); // the rail's amendment inbox section
+    expect(text).toContain('Builders become assignable'); // the rail's Team section empty-state
   });
 
   it('Proposal tab: renders the response checklist from responseSlots, each citing its requirement source', async () => {
@@ -751,7 +766,7 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.reviewGovProposalResponse as jest.Mock).mockResolvedValue({ requirementId: 'R1', statement: '', sourceRef: null, status: 'approved', content: 'done' });
     await renderAt(`?canonical=${CANON}&tab=proposal`);
     await flush();
-    // Exact match: "Approve bid pursuit" (Overview tab, CSS-hidden but in the DOM) also contains "Approve".
+    // Exact match: "Approve bid pursuit" (in the always-on qualification drawer, in the DOM) also contains "Approve".
     const approveBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Approve') as HTMLButtonElement;
     expect(approveBtn).toBeTruthy();
     await act(async () => { approveBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
