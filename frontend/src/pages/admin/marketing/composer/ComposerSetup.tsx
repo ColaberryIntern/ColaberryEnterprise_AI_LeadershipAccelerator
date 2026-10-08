@@ -9,6 +9,7 @@ import {
   applyDestination, destinationMode, externalUrlNote, pickerNote, selectablePages,
   type LandingPageOption,
 } from './landingPageChoices';
+import { forBrand } from '../marketingCampaigns';
 
 /**
  * Steps 1, 3 and 4: the choices that fix WHAT is being said and FOR WHOM.
@@ -92,7 +93,8 @@ export default function ComposerSetup({
 
   const set = <K extends keyof SetupValues>(k: K, v: SetupValues[K]) => onChange({ ...values, [k]: v });
   const note = pickerNote(landingPages, values.brand_id);
-  const visibleCampaigns = campaigns.filter((c) => !values.brand_id || !c.brand_id || c.brand_id === values.brand_id);
+  // Same rule as brand setup's Campaigns tab, so the count there matches what this offers.
+  const visibleCampaigns = forBrand(campaigns, values.brand_id || null);
   const chosen = campaigns.find((c) => c.id === values.campaign_id);
   // What THIS content type needs. Drives the labels and which fields render at all.
   const shape = setupShape(values.content_type);
