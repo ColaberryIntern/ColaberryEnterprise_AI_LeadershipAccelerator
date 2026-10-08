@@ -166,6 +166,79 @@ describe('selecting a record of EACH kind returns that kind’s real outcome', (
     expect(out.unlinked!.kind).toBe('no_edge_recorded');
   });
 
+  it('does NOT fabricate a section from a mapping with no sectionRef', () => {
+    // `String(undefined)` is the string 'undefined', so this used to report a proposal section
+    // literally called "undefined". One malformed mapping was enough; nothing had to agree with
+    // it. A fabricated edge is worse than a missing one because a reviewer acts on it.
+    const refs = base();
+    refs.sources = [pinned('REQ-1')];
+    refs.trackMappings.proposalSections = [
+      { canonicalReqId: 'REQ-1' },
+      { canonicalReqId: 'REQ-1', sectionRef: 'L.3.1' },
+    ];
+    const out = connectedRecords(refs, 'REQ-1', isKnownDeliveryRole);
+    const g = out.groups.find((x) => x.via === 'track_proposal_section')!;
+    // The good one survives; the malformed one is dropped rather than renamed.
+    expect(g.ids).toEqual(['L.3.1']);
+    expect(JSON.stringify(out)).not.toContain('undefined');
+  });
+
+  it('does NOT fabricate a story edge when BOTH sides are malformed', () => {
+    // The two-sided case: a mapping with no storyId and a downstream ref with no id both
+    // stringified to 'undefined' and therefore matched each other.
+    const refs = base();
+    refs.sources = [pinned('REQ-1')];
+    refs.downstream = [{ revision: 1, source: 't' }];
+    refs.trackMappings.solutionStories = [{ canonicalReqId: 'REQ-1' }];
+    const out = connectedRecords(refs, 'REQ-1', isKnownDeliveryRole);
+    expect(out.groups).toEqual([]);
+    expect(out.unlinked!.kind).toBe('no_edge_recorded');
+  });
+
+  it('drops an EMPTY-STRING target, which is as fabricated as an undefined one', () => {
+    // Mutation M15 survived without this: allowing '' let a mapping with `sectionRef: ''` report
+    // a proposal section whose id is the empty string. A reviewer would see a connection to a
+    // record with no name - a fabricated edge wearing different clothes.
+    const refs = base();
+    refs.sources = [pinned('REQ-1')];
+    refs.trackMappings.proposalSections = [
+      { canonicalReqId: 'REQ-1', sectionRef: '' },
+      { canonicalReqId: 'REQ-1', sectionRef: 'L.3.1' },
+    ];
+    const g = connectedRecords(refs, 'REQ-1', isKnownDeliveryRole)
+      .groups.find((x) => x.via === 'track_proposal_section')!;
+    expect(g.ids).toEqual(['L.3.1']);
+  });
+
+  it('drops an empty-string story id on BOTH sides of the join', () => {
+    const refs = base();
+    refs.sources = [pinned('REQ-1')];
+    refs.downstream = [{ id: '', revision: 1, source: 't' }];
+    refs.trackMappings.solutionStories = [{ canonicalReqId: 'REQ-1', storyId: '' }];
+    const out = connectedRecords(refs, 'REQ-1', isKnownDeliveryRole);
+    expect(out.groups).toEqual([]);
+    expect(out.unlinked!.kind).toBe('no_edge_recorded');
+  });
+
+  it('drops a non-string id rather than coercing it into one', () => {
+    // A number or object id would stringify to something that can collide with a real id.
+    const refs = base();
+    refs.sources = [pinned('REQ-1')];
+    refs.downstream = [{ id: 42, revision: 1, source: 't' }];
+    refs.trackMappings.solutionStories = [{ canonicalReqId: 'REQ-1', storyId: 42 }];
+    expect(connectedRecords(refs, 'REQ-1', isKnownDeliveryRole).groups).toEqual([]);
+  });
+
+  it('still joins a legitimate story edge, so the guards are not blanket refusals', () => {
+    const refs = base();
+    refs.sources = [pinned('REQ-1')];
+    refs.downstream = [pinned('STORY-7')];
+    refs.trackMappings.solutionStories = [{ canonicalReqId: 'REQ-1', storyId: 'STORY-7' }];
+    const g = connectedRecords(refs, 'REQ-1', isKnownDeliveryRole)
+      .groups.find((x) => x.via === 'track_solution_story')!;
+    expect(g.ids).toEqual(['STORY-7']);
+  });
+
   it('an assignment reveals the role in its composite id', () => {
     const refs = base();
     refs.assignments = [pinned(`${ROLE}:Approve the release`)];

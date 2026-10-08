@@ -170,8 +170,22 @@ export function roleOfAssignmentId(
   return isKnownRole(candidate) ? candidate : null;
 }
 
+/**
+ * An id, or null when the value is not one.
+ *
+ * `String()` was here instead, and it fabricated edges: `String(undefined)` is the string
+ * 'undefined', so a mapping missing its target and a ref missing its id both became the same
+ * non-empty string and MATCHED. The traversal then reported a connection between two records
+ * that do not exist. Every id crossing this boundary goes through here, because `refs_json` is
+ * declared `unknown` and nothing upstream guarantees a string.
+ */
+const asId = (v: unknown): string | null =>
+  (typeof v === 'string' && v.length > 0 ? v : null);
+
 const idsOf = (rows: unknown[]): string[] =>
-  rows.filter(isPlainObject).map((r) => String(r.id));
+  rows.filter(isPlainObject)
+    .map((r) => asId(r.id))
+    .filter((id): id is string => id !== null);
 
 /**
  * The records connected to one entity.
@@ -202,7 +216,11 @@ export function connectedRecords(
     const sections = readPath(refs, 'trackMappings.proposalSections')
       .filter(isPlainObject)
       .filter((m) => m.canonicalReqId === entityId)
-      .map((m) => String(m.sectionRef));
+      // A mapping with no `sectionRef` is dropped, not reported as a section called 'undefined'.
+      // This join has nothing to check its targets against, so the guard is the only thing
+      // between a malformed mapping and a fabricated edge on a reviewer's screen.
+      .map((m) => asId(m.sectionRef))
+      .filter((ref): ref is string => ref !== null);
     if (sections.length > 0) {
       groups.push({ target: 'proposal_sections', via: 'track_proposal_section', ids: sections });
     }
@@ -213,7 +231,8 @@ export function connectedRecords(
     const mapped = readPath(refs, 'trackMappings.solutionStories')
       .filter(isPlainObject)
       .filter((m) => m.canonicalReqId === entityId)
-      .map((m) => String(m.storyId));
+      .map((m) => asId(m.storyId))
+      .filter((id): id is string => id !== null);
     const present = new Set(idsOf(readPath(refs, 'downstream')));
     const stories = mapped.filter((id) => present.has(id));
     if (stories.length > 0) {
