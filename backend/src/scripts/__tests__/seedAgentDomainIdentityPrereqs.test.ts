@@ -1,4 +1,3 @@
-/* eslint-disable */
 // Tests for T02's production data prerequisites (run 20261007-school-agent-factory).
 //
 // WHY THIS FILE EXISTS, AND WHY IT IS NOT OPTIONAL
@@ -17,6 +16,7 @@
 // Every assertion here carries a positive or negative control, because an assertion that cannot
 // fail is not a check.
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const prereqs = require('../seedAgentDomainIdentityPrereqs');
 
 const {
@@ -29,8 +29,22 @@ const {
   uuid5,
 } = prereqs;
 
-/** The two statements the script actually executes, as one corpus. */
-const EXECUTED_SQL: string[] = [SQL_ORG_MEMBER, SQL_BLUEPRINT];
+/**
+ * The two statements the script WRITES with. Deliberately not called "the statements it executes":
+ * `main()` issues FOUR queries in apply mode -- a before-SELECT, these two INSERTs, and an
+ * after-SELECT -- and that after-SELECT *does* read `admin_users`, on purpose, to prove no row was
+ * created there. A verifier caught the earlier wording claiming otherwise, which was the same genus
+ * of defect as the five self-descriptions this file was written to correct.
+ */
+const WRITING_SQL: string[] = [SQL_ORG_MEMBER, SQL_BLUEPRINT];
+
+function readModuleSource(): string {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const fs = require('fs');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const path = require('path');
+  return fs.readFileSync(path.join(__dirname, '..', 'seedAgentDomainIdentityPrereqs.js'), 'utf8');
+}
 
 /** Pull every `INSERT INTO <schema.>table` target out of a SQL string. */
 function insertTargets(sql: string): string[] {
@@ -43,7 +57,7 @@ function insertTargets(sql: string): string[] {
 
 describe('T02 write-set is enumerated, and matches what the SQL actually touches', () => {
   it('every INSERT target is in DECLARED_WRITE_SET, and every declared table is inserted into', () => {
-    const targets = new Set(EXECUTED_SQL.flatMap(insertTargets));
+    const targets = new Set(WRITING_SQL.flatMap(insertTargets));
     const declared = new Set<string>(DECLARED_WRITE_SET);
 
     // Both directions. A one-way check would pass a script that declared a table it never wrote,
@@ -66,14 +80,14 @@ describe('T02 write-set is enumerated, and matches what the SQL actually touches
 });
 
 describe('T02 grants nothing', () => {
-  it('no executed statement touches admin_users', () => {
-    for (const sql of EXECUTED_SQL) {
+  it('neither WRITING statement touches admin_users (the read-only after-SELECT deliberately does)', () => {
+    for (const sql of WRITING_SQL) {
       expect(/admin_users/i.test(sql)).toBe(false);
     }
   });
 
-  it('no executed statement carries a mutating verb other than INSERT', () => {
-    for (const sql of EXECUTED_SQL) {
+  it('neither writing statement carries a mutating verb other than INSERT', () => {
+    for (const sql of WRITING_SQL) {
       expect(/\bUPDATE\b/i.test(sql)).toBe(false);
       expect(/\bDELETE\b/i.test(sql)).toBe(false);
       expect(/\bALTER\b/i.test(sql)).toBe(false);
@@ -95,11 +109,40 @@ describe('T02 grants nothing', () => {
     expect(SQL_ORG_MEMBER).not.toContain("'manager'");
   });
 
-  it('no statement writes an enrollment, a project, or an agent', () => {
-    for (const sql of EXECUTED_SQL) {
+  it('neither writing statement writes an enrollment, a project, or an agent', () => {
+    for (const sql of WRITING_SQL) {
       expect(/\bactive_project_id\b/i.test(sql)).toBe(false);
       expect(/INSERT\s+INTO\s+(?:public\.)?(enrollments|projects|ai_agents)\b/i.test(sql)).toBe(false);
     }
+  });
+});
+
+describe('no write can escape the enumeration by being inlined in main()', () => {
+  // The write-set tests above read the two EXPORTED constants. A future
+  // `client.query('INSERT INTO admin_users ...')` written inline inside main() would not appear in
+  // either constant and would pass them. So assert against the module's own source text too.
+  const source = readModuleSource();
+
+  it('every INSERT INTO in the module appears inside one of the two exported constants', () => {
+    const inSource = [...source.matchAll(/INSERT\s+INTO\s+(?:public\.)?([a-z_][a-z0-9_]*)/gi)]
+      .map((m) => m[1].toLowerCase());
+    expect(inSource.length).toBeGreaterThan(0); // the sweep can find something
+    for (const table of inSource) expect(DECLARED_WRITE_SET).toContain(table);
+  });
+
+  it('the module issues no UPDATE or DELETE through the driver', () => {
+    // DELETE appears only inside the printed rollback instruction strings, never in a query call.
+    const queryCalls = [...source.matchAll(/client\.query\(\s*([A-Z_`][^,)]*)/g)].map((m) => m[1]);
+    expect(queryCalls.length).toBeGreaterThanOrEqual(4); // before, 2 inserts, after
+    expect(/client\.query\(\s*`?\s*(UPDATE|DELETE)\b/i.test(source)).toBe(false);
+  });
+
+  it('POSITIVE CONTROL: the source sweep would catch an inlined admin_users insert', () => {
+    const planted = "await client.query('INSERT INTO public.admin_users (id) VALUES ($1)', [x]);";
+    const found = [...planted.matchAll(/INSERT\s+INTO\s+(?:public\.)?([a-z_][a-z0-9_]*)/gi)]
+      .map((m) => m[1].toLowerCase());
+    expect(found).toContain('admin_users');
+    expect(DECLARED_WRITE_SET).not.toContain('admin_users');
   });
 });
 
@@ -140,7 +183,7 @@ describe('T02 ids are derived, so a re-run cannot duplicate a row', () => {
 
 describe('T02 statements are replay-safe', () => {
   it('both inserts carry ON CONFLICT ... DO NOTHING', () => {
-    for (const sql of EXECUTED_SQL) {
+    for (const sql of WRITING_SQL) {
       expect(/ON\s+CONFLICT[^;]*DO\s+NOTHING/i.test(sql)).toBe(true);
     }
   });
@@ -164,7 +207,7 @@ describe('T02 statements are replay-safe', () => {
 describe('T02 module is importable without side effects', () => {
   it('requiring the module neither connects to a database nor runs main', () => {
     // The require at the top of this file already proves it: a `main()` at import time would have
-    // thrown on a missing DATABASE_URL before any test ran. 81-plus siblings use the same guard.
+    // thrown on a missing DATABASE_URL before any test ran. 99 sibling scripts use the same guard (measured; an earlier note said 81, which conflated it with the ensure*Schema count).
     expect(typeof prereqs.main).toBe('function');
     expect(Object.isFrozen(DECLARED_WRITE_SET)).toBe(true);
   });

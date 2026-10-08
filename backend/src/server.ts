@@ -157,6 +157,7 @@ import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValu
 import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
 import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
+import { ensureAgentDomainProjectSchema } from './db/ensureAgentDomainProjectSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3014,6 +3015,9 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
+  // Agent Factory - which AI employee domain a project belongs to, plus build authorizations for
+  // one. Two tables, zero ALTERs, additive and idempotent; its assert is deliberately not optional.
+  await ensureAgentDomainProjectSchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {
