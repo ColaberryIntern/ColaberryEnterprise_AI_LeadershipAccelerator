@@ -16,6 +16,7 @@
  * load and breaks every route test that stubs `config/database`.
  */
 import type { LifecycleStage, LifecycleCondition } from './lifecycleStages';
+import { LIFECYCLE_STAGES } from './lifecycleStages';
 import type { PrerequisiteGap, LifecycleEvidence, EvidenceField } from './lifecyclePrerequisites';
 import type { TransitionDecision } from './lifecycleTransition';
 import type { ManifestRefs } from './adapters/manifestRefs';
@@ -46,6 +47,14 @@ export interface LifecycleStatus {
   condition: LifecycleCondition | null;
   conditionReason: string | null;
   completedStages: ReadonlyArray<LifecycleStage>;
+  /**
+   * The whole ladder, in order, so a UI can render it without keeping its own copy.
+   *
+   * Served rather than duplicated on purpose: a stage list hand-written in the frontend is a
+   * second definition of the vocabulary, and this phase has corrected that class of error
+   * three times already.
+   */
+  stages: ReadonlyArray<LifecycleStage>;
   /** The next stage, or null at steady state. */
   nextStage: LifecycleStage | null;
   /** What is missing before the next stage. Empty when it is ready. */
@@ -133,6 +142,7 @@ export async function readLifecycleStatus(input: {
     condition: stages.isLifecycleCondition(row.condition) ? row.condition : null,
     conditionReason: row.condition_reason,
     completedStages: stages.completedStages(stage),
+    stages: LIFECYCLE_STAGES,
     nextStage,
     blockers,
     nextActorRole: nextStage ? STAGE_PERMISSION[nextStage] : null,
