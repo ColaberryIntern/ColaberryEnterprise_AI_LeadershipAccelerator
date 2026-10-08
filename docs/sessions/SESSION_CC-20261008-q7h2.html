@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261008-q7h2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Thursday, October 8, 2026 at 6:13 PM</div>
+    <div><span class="sid">CC-20261008-q7h2</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Week 11 session 23 rebuilt as a combined Architecture + Build class</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Session 22 (Week 11 Architecture Day, 2026-10-05) was not taught, so session 23 `88aa0efd-973c-4c1c-88c5-000cd3f9957d` now carries both halves as a full `kit_config_json` replacement composed by the new `backend/src/scripts/session-decks/session23-week11-combined.js`. Ten architecture slides are lifted from `week11.monday` and re-segmented to `build-map`, which renders between the readiness check and `guided-build`, so the theory block lands before any keyboard comes out with no reordering tricks. The authored CP0–CP3 ladder (eight prompts) collapses to **three** — inventory + seven-layer table, both diagrams with B1–B4 labelled, then five ADRs + INPACT scorecard + gate + commit — each carrying a ⏱ estimate and a &quot;paste, then ADVANCE&quot; script so the room is taught over while the prompt runs, and each fenced to create files only inside `architecture/`. The failure segment is one slide and no prompt. `checkpointsEnabled: false`, because the build-map and CP0..CP3 slides generate from `week11.ts`&#39;s own `buildMap`/`checkpoints` and would have advertised four checkpoints across eight prompts in front of the room (the Week 4 2026-08-20 trap). `theaterEnabled: false` to buy back three minutes. Two story beats, two polls, eleven authored `slideNotes`. `session23-rename.js` retitles the session to &quot;Week 11 · Architecture + Build Day — …&quot; (the Week 7 / session 15 shape: contains `build day`, does not contain `architecture day`, so `detectDayKind` still renders the Build Day deck) and rewrites the student-facing description, which previously opened &quot;Build Day (Build It Thursday)&quot;. `week11.ts`&#39;s `beforeAfter.label` goes from &quot;Monday → Thursday&quot; to &quot;Before → After&quot; for the next cohort.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node session23-week11-combined.js --check` composes 14 teach slides (build-map 10, guided-build 3, failure 1), exactly 3 paste prompts, and lints clean. The lint is not decorative — it caught a real violation on its first run (a lifted Monday script said &quot;that single sentence is the Thursday trivia answer&quot;) and both mutation tests fail it as designed: a `Thursday` injected into a non-allowlisted `slideNotes` entry and a `Monday` injected into a teach title are each named with their location, which also proves the single `beforeafter:cta--1` carve-out is narrow. On prod the apply reports `SAVED teach=14 paste prompts: 3 checkpoints: false slideNotes: 11`, and `node /app/dumpDeck.js 88aa0efd-…` renders **27 slides in the intended order with 0 boilerplate tips and 11 of 11 slideNotes keys matched a rendered slide**. The retitle script re-reads both fields after the UPDATE and exits non-zero unless they match.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DB writes only, no deploy. Rollback is `/root/kit-before-session23-20261008.json` on the prod host, or `kit_config_json = NULL`. ONE thing Ali has to work around live: the before/after slide&#39;s heading renders from `week11.ts`&#39;s `beforeAfter.label` and is NOT reachable from KitConfig, so tonight it still reads &quot;Monday → Thursday&quot; on screen — the presenter note on that slide says to ignore the heading and say &quot;an hour ago → now&quot;, and the label fix in this commit only takes effect for the next cohort, after a deploy. Same non-overridable-slide pattern as the Week 9 and Week 10 readiness lines. The session stays scheduled 18:30–20:30 while the content is built for ~45 minutes, so the pace rail reads far ahead all night; the schedule was deliberately not changed 25 minutes before class.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261008-q7h2.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
