@@ -424,6 +424,29 @@ export interface GovQualificationWorkspace {
   build?: GovBuildPlan;
   /** The dates/messages/amendment inbox (P4). An amendment's `affects` invalidates affected responses. */
   amendments?: GovProposalAmendment[];
+  /** The submission + outcome state (P5). */
+  submission?: GovSubmission | null;
+  /** Whether the proposal is ready to export/submit (all responses approved + covered + nothing blocking). */
+  submissionReadiness?: GovSubmissionReadiness;
+}
+
+/** Whether the proposal can be exported/submitted, with the blocking reasons when not. */
+export interface GovSubmissionReadiness { ready: boolean; blocking: string[] }
+
+/** The submission + outcome state for a gov project (P5). Candidates are PRIVATE and never published. */
+export interface GovSubmission {
+  status: 'preparing' | 'needs_review' | 'ready' | 'exported' | 'externally_submitted' | 'acknowledged';
+  outcome: 'pending' | 'won' | 'lost' | 'withdrawn' | 'no_bid' | 'unknown';
+  exportManifest: { exportedAt: string; projectName: string; responseCount: number; items: any[] } | null;
+  exportedAt: string | null;
+  externalRef: string | null;
+  externallySubmittedAt: string | null;
+  acknowledgedRef: string | null;
+  acknowledgedAt: string | null;
+  outcomeNote: string | null;
+  outcomeRecordedAt: string | null;
+  caseStudyCandidate: any | null;
+  serviceCapabilityCandidate: any | null;
 }
 
 /** A figure attached to a proposal response, bound to the git commit it was captured at (provenance). */
@@ -589,6 +612,46 @@ export async function recordGovProposalAmendment(canonicalOpportunityId: string,
   amendmentKey: string; kind?: 'amendment' | 'message'; summary: string; affects?: string[]; provenance?: string | null; observedAt?: string | null;
 }): Promise<GovProposalAmendment> {
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/amendments'), body);
+  return data;
+}
+
+/** Assemble + mark the submission package exported. Server refuses (409 not_ready + blocking) unless every response is approved. */
+export async function exportGovSubmission(canonicalOpportunityId: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/export'), {});
+  return data;
+}
+
+/** Download the real submission package (zip) — fetched with auth, then handed to the browser as a file. */
+export async function downloadGovSubmissionPackage(canonicalOpportunityId: string): Promise<void> {
+  const { data } = await api.get(qUrl(canonicalOpportunityId, '/submission/package'), { responseType: 'blob' });
+  const url = URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'proposal-package.zip';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Record the MANUAL external-submission receipt (exported ≠ submitted; server 409 if not exported). */
+export async function recordGovSubmissionReceipt(canonicalOpportunityId: string, externalRef: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/receipt'), { externalRef });
+  return data;
+}
+
+/** Record the agency's acknowledgement (server 409 unless externally_submitted first). */
+export async function acknowledgeGovSubmission(canonicalOpportunityId: string, acknowledgedRef: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/acknowledge'), { acknowledgedRef });
+  return data;
+}
+
+/** Reopen the submission to `preparing` (e.g. after a material amendment reopened a response). */
+export async function reopenGovSubmission(canonicalOpportunityId: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/reopen'), {});
+  return data;
+}
+
+/** Record the win/loss outcome. won/lost also generate PRIVATE case-study + service-capability candidates (server-side). */
+export async function recordGovOutcome(canonicalOpportunityId: string, outcome: GovSubmission['outcome'], note?: string | null): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/outcome'), { outcome, note: note ?? null });
   return data;
 }
 

@@ -84,6 +84,7 @@ import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvide
 import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
 import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseSchema';
 import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmentSchema';
+import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -2809,6 +2810,11 @@ async function start(): Promise<void> {
   // to approved or records an amendment on its own — these are operator actions.
   await ensureGovProposalResponseSchema();
   await ensureGovProposalAmendmentSchema();
+  // Gov submission + outcome (gov_submission): the per-project submission lifecycle (preparing→…→exported→
+  // externally_submitted→acknowledged; exported ≠ submitted), the export manifest, the MANUAL external receipt, the
+  // win/loss outcome, and the PRIVATE case-study + service-capability candidates. One additive NEW table (UNIQUE per
+  // project); it never writes to the published case_studies / live service_offerings systems. See ensureGovSubmissionSchema.
+  await ensureGovSubmissionSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).

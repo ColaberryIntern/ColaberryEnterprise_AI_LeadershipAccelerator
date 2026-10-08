@@ -7,10 +7,11 @@ import {
   extractGovQualificationRequirements, getGovOpportunityDetail, attestSolicitationZip,
   assignGovBuildStory, unassignGovBuildStory,
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, recordGovProposalAmendment,
+  exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
   type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
-  type GovResponseFigure, type GovProposalAmendment,
+  type GovResponseFigure, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
 } from '../../services/factoryApi';
 import { band, subtle, fmtValue, daysLeft, closeLabel } from './govOppFormat';
 import { derivePotentialDisqualifiers } from './govGaps';
@@ -508,6 +509,151 @@ function AmendmentInbox(
         </div>
       ) : (
         <div className="small text-secondary"><i className="ri-information-line me-1" aria-hidden="true" />Recording opens once the pursuit is approved into a project.</div>
+      )}
+    </>
+  );
+}
+
+const SUBMISSION_STATUS_TONE: Record<string, 'neutral' | 'warning' | 'info' | 'success'> = {
+  preparing: 'neutral', needs_review: 'warning', ready: 'info', exported: 'info', externally_submitted: 'success', acknowledged: 'success',
+};
+const READINESS_REASON: Record<string, string> = {
+  no_project: 'Approve the pursuit into a delivery project first.',
+  no_response_slots: 'No response slots yet — establish requirements and author responses.',
+  coverage_insufficient: 'The solicitation ZIP coverage is not sufficient yet.',
+  requirements_blocking: 'Some requirements still block the bid (see the Proposal tab).',
+};
+const readinessReasonLabel = (r: string): string => (r.startsWith('responses_not_approved') ? `Some responses are not yet approved (${r.split(':')[1] || ''}).` : (READINESS_REASON[r] ?? r));
+
+interface SubmissionActions {
+  canAct: boolean; busy: boolean;
+  onExport: () => void; onDownload: () => void;
+  onReceipt: (externalRef: string) => void; onAcknowledge: (ackRef: string) => void; onReopen: () => void;
+}
+
+/**
+ * SubmissionPanel — the Complete-Your-Submission surface (P5). Readiness is the gate: Export is offered only when
+ * every response is approved + covered. EXPORTED ≠ SUBMITTED: the download + the receipt/acknowledgement are
+ * distinct, manual steps; nothing here submits to any external portal. Mirrors the server, never replaces it.
+ */
+function SubmissionPanel({ submission, readiness, actions }: { submission: GovSubmission | null | undefined; readiness: GovSubmissionReadiness | undefined; actions: SubmissionActions }): React.ReactElement {
+  const [externalRef, setExternalRef] = useState('');
+  const [ackRef, setAckRef] = useState('');
+  const status = submission?.status ?? 'preparing';
+  const ready = !!readiness?.ready;
+  const exportedOrLater = status === 'exported' || status === 'externally_submitted' || status === 'acknowledged';
+  return (
+    <>
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <span className="small text-secondary">Submission status:</span>
+        <StatusBadge label={status.replace(/_/g, ' ')} tone={SUBMISSION_STATUS_TONE[status] ?? 'neutral'} />
+      </div>
+      <div className={`alert ${ready ? 'alert-success' : 'alert-warning'} py-2 small`} role="status">
+        {ready ? 'Ready: every response is approved and the package can be exported.' : (
+          <>Not ready to export:
+            <ul className="mb-0">{(readiness?.blocking ?? ['Not evaluated']).map((b) => <li key={b}>{readinessReasonLabel(b)}</li>)}</ul>
+          </>
+        )}
+      </div>
+      {actions.canAct ? (
+        <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
+          <button type="button" className="btn btn-primary btn-sm" disabled={actions.busy || !ready} title={ready ? undefined : 'Approve every response first'} onClick={actions.onExport}>
+            <i className="ri-archive-line me-1" aria-hidden="true" />Export package
+          </button>
+          {exportedOrLater && (
+            <button type="button" className="btn btn-outline-primary btn-sm" disabled={actions.busy} onClick={actions.onDownload}>
+              <i className="ri-download-2-line me-1" aria-hidden="true" />Download package (.zip)
+            </button>
+          )}
+          {exportedOrLater && (
+            <button type="button" className="btn btn-outline-secondary btn-sm" disabled={actions.busy} onClick={actions.onReopen}>Reopen</button>
+          )}
+        </div>
+      ) : (
+        <div className="small text-secondary mb-2"><i className="ri-information-line me-1" aria-hidden="true" />Submission opens once the pursuit is approved into a project.</div>
+      )}
+
+      {actions.canAct && exportedOrLater && status !== 'externally_submitted' && status !== 'acknowledged' && (
+        <div className="border rounded p-2 mb-2">
+          <label className="form-label small mb-1">Record external submission <span className="text-secondary">(after you submit on the buyer portal — this app never submits for you)</span></label>
+          <div className="d-flex flex-wrap gap-2 align-items-center">
+            <input className="form-control form-control-sm" style={{ maxWidth: 260 }} value={externalRef} placeholder="confirmation number / portal ref" onChange={(e) => setExternalRef(e.target.value)} aria-label="External submission ref" />
+            <button type="button" className="btn btn-success btn-sm" disabled={actions.busy || !externalRef.trim()} onClick={() => actions.onReceipt(externalRef.trim())}>Record submission</button>
+          </div>
+        </div>
+      )}
+      {submission?.externalRef && (
+        <div className="small mb-2"><i className="ri-check-line text-success me-1" aria-hidden="true" />Externally submitted: <strong>{submission.externalRef}</strong>{submission.externallySubmittedAt ? ` (${submission.externallySubmittedAt.slice(0, 10)})` : ''}</div>
+      )}
+      {actions.canAct && status === 'externally_submitted' && (
+        <div className="border rounded p-2 mb-2">
+          <label className="form-label small mb-1">Record agency acknowledgement</label>
+          <div className="d-flex flex-wrap gap-2 align-items-center">
+            <input className="form-control form-control-sm" style={{ maxWidth: 260 }} value={ackRef} placeholder="acknowledgement ref (optional)" onChange={(e) => setAckRef(e.target.value)} aria-label="Acknowledgement ref" />
+            <button type="button" className="btn btn-outline-success btn-sm" disabled={actions.busy} onClick={() => actions.onAcknowledge(ackRef.trim())}>Record acknowledgement</button>
+          </div>
+        </div>
+      )}
+      {submission?.acknowledgedRef !== undefined && submission?.status === 'acknowledged' && (
+        <div className="small mb-2"><i className="ri-mail-check-line text-success me-1" aria-hidden="true" />Acknowledged{submission.acknowledgedRef ? `: ${submission.acknowledgedRef}` : ''}.</div>
+      )}
+    </>
+  );
+}
+
+const OUTCOME_TONE: Record<string, 'neutral' | 'success' | 'danger' | 'warning'> = {
+  pending: 'neutral', won: 'success', lost: 'danger', withdrawn: 'warning', no_bid: 'warning', unknown: 'neutral',
+};
+
+/**
+ * OutcomePanel — capture the win/loss outcome (P5). Recording `won` or `lost` generates PRIVATE reusable candidates
+ * (a case-study candidate + a service-capability candidate) shown here; they are drafts, never published — a person
+ * promotes them later. Recording an outcome never changes a past approval or fabricates a result.
+ */
+function OutcomePanel({ submission, canAct, busy, onRecord }: { submission: GovSubmission | null | undefined; canAct: boolean; busy: boolean; onRecord: (outcome: GovSubmission['outcome'], note: string) => void }): React.ReactElement {
+  const [outcome, setOutcome] = useState<GovSubmission['outcome']>('won');
+  const [note, setNote] = useState('');
+  const cs = submission?.caseStudyCandidate;
+  const sc = submission?.serviceCapabilityCandidate;
+  return (
+    <>
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <span className="small text-secondary">Outcome:</span>
+        <StatusBadge label={(submission?.outcome ?? 'pending').replace(/_/g, ' ')} tone={OUTCOME_TONE[submission?.outcome ?? 'pending'] ?? 'neutral'} />
+      </div>
+      {canAct ? (
+        <div className="border rounded p-2 mb-3">
+          <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
+            <select className="form-select form-select-sm" style={{ maxWidth: 160 }} value={outcome} onChange={(e) => setOutcome(e.target.value as GovSubmission['outcome'])} aria-label="Outcome">
+              {['won', 'lost', 'withdrawn', 'no_bid', 'unknown'].map((o) => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+            </select>
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => onRecord(outcome, note.trim())}>Record outcome</button>
+          </div>
+          <textarea className="form-control form-control-sm" rows={2} value={note} placeholder="Debrief note (optional)" onChange={(e) => setNote(e.target.value)} aria-label="Outcome note" />
+          <div className="small text-secondary mt-1">won / lost also generate a private case-study + service-capability candidate for later review.</div>
+        </div>
+      ) : (
+        <div className="small text-secondary mb-2"><i className="ri-information-line me-1" aria-hidden="true" />Outcome capture opens once the pursuit is approved into a project.</div>
+      )}
+      {cs && (
+        <div className="card mb-2"><div className="card-body py-2">
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <h3 className="h6 mb-0">Case-study candidate</h3>
+            <span className="badge bg-secondary-subtle text-secondary-emphasis">private — not published</span>
+          </div>
+          <div className="fw-semibold small">{cs.title}</div>
+          <div className="small text-secondary">{cs.summary}</div>
+        </div></div>
+      )}
+      {sc && (
+        <div className="card"><div className="card-body py-2">
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <h3 className="h6 mb-0">Service-capability candidate</h3>
+            <span className="badge bg-info-subtle text-info-emphasis">suggested</span>
+          </div>
+          <div className="fw-semibold small">{sc.name}</div>
+          <div className="small text-secondary">{sc.rationale}</div>
+        </div></div>
       )}
     </>
   );
@@ -1464,17 +1610,22 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* ── Complete Your Submission (forward: readiness mirror + the response checklist) ─ */}
           {(
             <SectionCard title="Complete your submission" icon="send-plane-line"
-              subtitle="Assemble and finalize the bid response. The downloadable submission package + receipt capture arrive in a later phase; this shows readiness and the response checklist.">
-              <div className={`alert ${ws.canApprove ? 'alert-success' : 'alert-warning'} py-2 small`} role="status">
-                <i className={`ri-${ws.canApprove ? 'shield-check-line' : 'shield-cross-line'} me-1`} aria-hidden="true" />
-                {ws.canApprove
-                  ? 'Readiness: the pursuit is approvable (source current, requirements established + covered).'
-                  : `Not ready yet: ${ws.coverage && !ws.coverage.sufficient ? ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ') : 'resolve the flagged requirements on the Proposal tab'}.`}
-              </div>
-              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} />
-              <div className="small text-secondary mt-3 pt-2 border-top">
-                <i className="ri-time-line me-1" aria-hidden="true" />
-                Package assembly, finalization checks, the downloadable manifest, and submission-receipt capture are a later phase. Nothing here submits to any external portal.
+              subtitle="Assemble, finalize, and export the bid package — then record the external submission yourself. Nothing here submits to any buyer portal.">
+              <SubmissionPanel
+                submission={ws.submission}
+                readiness={ws.submissionReadiness}
+                actions={{
+                  canAct: !!ws.build?.deliveryProjectId,
+                  busy,
+                  onExport: () => run(() => exportGovSubmission(canonical), 'Package exported.'),
+                  onDownload: () => { void downloadGovSubmissionPackage(canonical).catch((err) => setActionError(errToAction(err))); },
+                  onReceipt: (ref) => run(() => recordGovSubmissionReceipt(canonical, ref), 'External submission recorded.'),
+                  onAcknowledge: (ref) => run(() => acknowledgeGovSubmission(canonical, ref), 'Acknowledgement recorded.'),
+                  onReopen: () => run(() => reopenGovSubmission(canonical), 'Submission reopened.'),
+                }}
+              />
+              <div className="mt-3 pt-2 border-top">
+                <ResponseSlotsChecklist slots={ws.responseSlots ?? []} />
               </div>
             </SectionCard>
           )}
@@ -1485,11 +1636,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* ── Outcome & Case Study (forward) ─ */}
           {(
             <SectionCard title="Outcome &amp; case study" icon="trophy-line"
-              subtitle="Capture the win/loss outcome and turn it into a service-capability case study.">
-              <div className="small text-secondary">
-                <i className="ri-time-line me-1" aria-hidden="true" />
-                Outcome capture (won / lost, debrief notes) and the generated case study arrive in a later phase. Recording an outcome will never change a past approval or fabricate a result.
-              </div>
+              subtitle="Capture the win/loss outcome. won or lost generates a PRIVATE case-study + service-capability candidate for later review — never published, never fabricated.">
+              <OutcomePanel
+                submission={ws.submission}
+                canAct={!!ws.build?.deliveryProjectId}
+                busy={busy}
+                onRecord={(outcome, note) => run(() => recordGovOutcome(canonical, outcome, note || null), 'Outcome recorded.')}
+              />
             </SectionCard>
           )}
           </GovTabPanel>{/* end Outcome & Case Study */}
