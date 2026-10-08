@@ -1509,7 +1509,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 </div>
                 <div className="small text-secondary mt-2">
                   <i className="ri-group-line me-1" aria-hidden="true" />
-                  <strong>Separation of duties:</strong> the admin who established the requirements cannot approve the pursuit — a <em>different</em> admin must. Approving as the reviewer is refused server-side (a 403), by design.
+                  <strong>Separation of duties:</strong> the admin who established the requirements cannot approve the pursuit — a <em>different</em> admin must. A <strong>master admin</strong> may approve their own (the exception is audit-logged); for everyone else it is refused server-side (a 403), by design.
                 </div>
               </>
             )}

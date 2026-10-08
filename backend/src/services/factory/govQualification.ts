@@ -513,6 +513,18 @@ export interface ApproveQualificationInput {
   canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
   decision: 'approved_bid_pursuit' | 'rfi_response'; approverIdentityId: string;
   rationale?: string | null; evidence?: any; effortCap?: string | null; reassessmentConditions?: string | null;
+  /** When true, the MASTER ADMIN (super_admin) is exempt from separation of duties and may approve their own
+   *  pursuit. Set ONLY by the route from the authenticated role; every use of it is audit-logged. */
+  masterAdminOverride?: boolean;
+}
+
+/** Audit: the master admin exercised the separation-of-duties override to approve their own pursuit. */
+function logMasterAdminSelfApproval(key: string, approverIdentityId: string): void {
+  console.warn(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+    event: 'gov_qualification_self_approval_master_admin_override', outcome: 'success',
+    context: { key, approverIdentityId },
+  }));
 }
 
 /**
@@ -540,7 +552,8 @@ export async function approveGovQualification(input: ApproveQualificationInput):
   // Separation of duties: the reviewer who built the record may not approve their own pursuit. The section gate
   // is role-level only, so this identity check is the second, in-service guard (un-bypassable by the route).
   if (input.approverIdentityId && current.reviewer_identity_id && input.approverIdentityId === current.reviewer_identity_id) {
-    throw new SelfApprovalError();
+    if (!input.masterAdminOverride) throw new SelfApprovalError();
+    logMasterAdminSelfApproval(input.canonicalOpportunityId, input.approverIdentityId);
   }
 
   const resolved = await resolveGovOpportunityDetail(input.canonicalOpportunityId);
@@ -581,6 +594,8 @@ export interface ApproveDecoupledQualificationInput {
   gwsKey: string; biddingEntity: string; expectedVersion: number;
   decision: 'approved_bid_pursuit' | 'rfi_response'; approverIdentityId: string;
   rationale?: string | null; reviewedZipSha256?: string | null;
+  /** Master-admin (super_admin) separation-of-duties exemption; set only by the route, audit-logged. */
+  masterAdminOverride?: boolean;
 }
 
 /**
@@ -604,7 +619,8 @@ export async function approveDecoupledQualification(input: ApproveDecoupledQuali
   if (!current) throw new QualificationNotFoundError();
   if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
   if (input.approverIdentityId && current.reviewer_identity_id && input.approverIdentityId === current.reviewer_identity_id) {
-    throw new SelfApprovalError();
+    if (!input.masterAdminOverride) throw new SelfApprovalError();
+    logMasterAdminSelfApproval(input.gwsKey, input.approverIdentityId);
   }
   const established = (current.requirements_json && current.requirements_json.established) || [];
   const reviewedDocuments = (current.requirements_json && current.requirements_json.reviewedDocuments) || [];
