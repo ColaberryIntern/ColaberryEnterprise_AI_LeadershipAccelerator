@@ -11,6 +11,7 @@ import type { GovQualificationWorkspace } from '../../services/factoryApi';
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({ ...jest.requireActual('react-router-dom'), useNavigate: () => mockNavigate }));
 jest.mock('../../services/factoryApi');
+jest.mock('../../components/visuals/MermaidDiagram', () => ({ __esModule: true, default: () => null }));
 
 const CANON = 'op:gov:0000000000000000000000000000aaaa';
 
@@ -441,7 +442,7 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Show fewer');
   });
 
-  it('Bid decision panel: renders a scored recommendation + band once requirements are established (decoupled)', async () => {
+  it('Bid decision dashboard: screens eligibility knockouts + renders the PWin band once requirements are established (decoupled)', async () => {
     const evalRow = { id: 'E1', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' };
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'E1', text: 'Offeror must be registered in SAM.gov.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
@@ -452,8 +453,11 @@ describe('AdminGovQualificationPage — journey', () => {
     await flush();
     const text = container.textContent ?? '';
     expect(text).toContain('Bid decision — should we pursue this?');
-    expect(text).toMatch(/Strong fit|Worth pursuing|Caution|Lean no-bid/);  // a band rendered
-    expect(text).toContain('/100');                                          // the score
+    expect(text).toContain('Eligibility screen');                            // Stage A knockout/eligibility screen renders
+    expect(text).toContain('SAM.gov registration');                          // the SAM requirement is screened as a knockout (feeds the decision)
+    expect(text).toContain('CONDITIONAL');                                   // an unmet knockout surfaces as a conditional gap in the decision
+    expect(text).toMatch(/Bid with conditions|No-bid|Bid/);                  // a go/no-go band rendered
+    expect(text).toContain('Win-probability factors');                       // Stage B weighted scorecard renders
   });
 
   // ── Discovery details card + Source link + Gaps panel (decoupled only) ──
