@@ -44,6 +44,11 @@ export interface DeckPanelProps {
 
 const DeckPanel: React.FC<DeckPanelProps> = ({ projectId, storyId, demo, targetSeconds = null }) => {
   const [state, setState] = useState<Load>({ phase: 'loading' });
+  // Kept apart from `state` on purpose: a failed GENERATE must not wipe the deck the
+  // learner already has on screen, and "could not load" and "could not generate" are
+  // different sentences.
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setState({ phase: 'loading' });
@@ -57,6 +62,26 @@ const DeckPanel: React.FC<DeckPanelProps> = ({ projectId, storyId, demo, targetS
       setState({ phase: 'error' });
     }
   }, [projectId, storyId]);
+
+  const generate = useCallback(async () => {
+    setGenerating(true);
+    setGenError(null);
+    try {
+      await portalApi.post(
+        `/api/portal/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(storyId)}/deck`,
+      );
+      await load();
+    } catch (e: any) {
+      // The server's sentence, when it sent one. It knows whether this was "nothing to
+      // build from yet" or "already generating"; a generic retry message would throw
+      // that away and send the learner back to click the same button.
+      setGenError(e?.response?.data?.error || 'We could not generate your deck just now.');
+      // Still reload: a 409 means one IS being generated, and the panel should show it.
+      await load();
+    } finally {
+      setGenerating(false);
+    }
+  }, [projectId, storyId, load]);
 
   useEffect(() => { if (!demo) void load(); }, [load, demo]);
 
@@ -88,9 +113,27 @@ const DeckPanel: React.FC<DeckPanelProps> = ({ projectId, storyId, demo, targetS
 
   if (!deck) {
     return (
-      <p role="status" className="ps-note ps-note--soft" data-testid="ps-deck-none">
-        No deck generated yet. Build your prompt above, then generate one.
-      </p>
+      <div className="ps-card" data-testid="ps-deck-none">
+        <p role="status" className="ps-note ps-note--soft" style={{ margin: 0 }}>
+          No deck generated yet. It is built from your own project — the prompt above is
+          the same text we send.
+        </p>
+        {genError && (
+          <p role="alert" className="ps-note" data-testid="ps-deck-gen-error" style={{ margin: '8px 0 0', color: 'var(--cherry-deep, #C20E1E)' }}>
+            {genError}
+          </p>
+        )}
+        <button
+          type="button"
+          className="ps-btn ps-btn--primary"
+          style={{ marginTop: 10 }}
+          data-testid="ps-deck-generate"
+          disabled={generating}
+          onClick={() => void generate()}
+        >
+          {generating ? 'Generating…' : 'Generate my deck'}
+        </button>
+      </div>
     );
   }
 
@@ -108,6 +151,21 @@ const DeckPanel: React.FC<DeckPanelProps> = ({ projectId, storyId, demo, targetS
           {deck.errorClass ? ` (${deck.errorClass})` : ''}
         </p>
         <p className="ps-note ps-note--soft" style={{ margin: '6px 0 0' }}>You can try again — nothing you wrote was lost.</p>
+        {genError && (
+          <p role="alert" className="ps-note" data-testid="ps-deck-gen-error" style={{ margin: '8px 0 0' }}>{genError}</p>
+        )}
+        {/* The sentence above says "you can try again". Without this, it is a line of
+            text that the page does not honour. */}
+        <button
+          type="button"
+          className="ps-btn"
+          style={{ marginTop: 10 }}
+          data-testid="ps-deck-generate"
+          disabled={generating}
+          onClick={() => void generate()}
+        >
+          {generating ? 'Generating…' : 'Try generating again'}
+        </button>
       </div>
     );
   }

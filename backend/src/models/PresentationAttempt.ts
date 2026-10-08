@@ -1,4 +1,5 @@
 import { DataTypes, Model } from 'sequelize';
+import { AUDIENCE_MAX } from '../schemas/presentationFieldLimits';
 import { sequelize } from '../config/database';
 
 /**
@@ -77,7 +78,7 @@ PresentationAttempt.init(
     booking_id: { type: DataTypes.UUID, allowNull: true },
     room_id: { type: DataTypes.UUID, allowNull: true },
     occurrence_uuid: { type: DataTypes.STRING(120), allowNull: true },
-    audience: { type: DataTypes.STRING(60), allowNull: true },
+    audience: { type: DataTypes.STRING(AUDIENCE_MAX), allowNull: true },
     // A SNAPSHOT: what this student confirmed for THIS attempt, frozen, so a later
     // checklist edit cannot rewrite what they agreed to.
     checklist_snapshot_json: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },

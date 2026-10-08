@@ -122,7 +122,19 @@ describe('ensurePresentationStudioSchema — statement contract', () => {
       const s = flat(stmt);
       if (/^CREATE TABLE/i.test(s)) expect(s).toMatch(/^CREATE TABLE IF NOT EXISTS/i);
       if (/^CREATE (UNIQUE )?INDEX/i.test(s)) expect(s).toMatch(/^CREATE (UNIQUE )?INDEX IF NOT EXISTS/i);
-      if (/^ALTER TABLE/i.test(s)) expect(s).toMatch(/ADD COLUMN IF NOT EXISTS/i);
+      // Two idempotent forms of ALTER TABLE are allowed, and only two.
+      //
+      // `ADD COLUMN IF NOT EXISTS` is the common one. `ALTER COLUMN ... TYPE` is the
+      // other, and it exists because the first is a NO-OP against a column that is
+      // already there - so widening one cannot be done by editing its ADD COLUMN line.
+      // Re-running a widen to the same type succeeds, which is what makes it safe here.
+      //
+      // Deliberately NOT relaxed to "any ALTER TABLE": a bare ADD CONSTRAINT or a
+      // SET NOT NULL throws on the second boot, and this test is the only thing that
+      // notices.
+      if (/^ALTER TABLE/i.test(s)) {
+        expect(s).toMatch(/ADD COLUMN IF NOT EXISTS|ALTER COLUMN\s+\w+\s+TYPE\s/i);
+      }
     }
   });
 
