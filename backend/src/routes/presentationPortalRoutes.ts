@@ -24,6 +24,7 @@
  *   POST /api/portal/projects/:projectId/tasks/:storyId/presentation-practice
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/recording-evidence
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/deck
+ *   GET  /api/portal/showcases
  *   POST /api/portal/projects/:projectId/tasks/:storyId/recording-recovery
  *   POST /api/portal/projects/:projectId/tasks/:storyId/final-take
  */
@@ -298,6 +299,22 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartici
     const r = await latestDeckForOwner(eid(req), String(req.params.projectId), String(req.params.storyId));
     if (!r.ok) return res.status(404).json({ error: 'Project not found' });
     res.json({ deck: r.deck, retryable: r.retryable });
+  } catch (e) { fail(res, e, next); }
+});
+
+// The gallery: showcases this learner is allowed to see.
+//
+// THE FILTER IS HERE, SERVER-SIDE, not in the page. A gallery that returned
+// everything and let the browser hide the private rows would be one view-source away
+// from leaking them, and this endpoint IS the search index the page queries. Audience
+// is decided by `canView`, the same predicate every other surface uses.
+router.get('/api/portal/showcases', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const { listVisibleShowcases } = await import('../services/presentation/showcaseGallery');
+    const items = await listVisibleShowcases({ enrollmentId: eid(req) });
+    res.json({ items });
   } catch (e) { fail(res, e, next); }
 });
 

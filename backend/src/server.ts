@@ -57,6 +57,7 @@ import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
 import { ensurePresenterSlotSchema } from './db/ensurePresenterSlotSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
 import { ensurePresentationDeckSchema } from './db/ensurePresentationDeckSchema';
+import { ensurePresentationOpsSchema } from './db/ensurePresentationOpsSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
@@ -2497,6 +2498,7 @@ async function start(): Promise<void> {
   // change no behaviour while it is off.
   await ensurePresentationStudioSchema();
   await ensurePresentationDeckSchema();
+  await ensurePresentationOpsSchema();
   // Demo-day running order. Its own module rather than columns on the Studio
   // schema: a slot belongs to the SESSION, and the uniqueness that matters (one
   // presenter per position) cannot be expressed on the attempt.
