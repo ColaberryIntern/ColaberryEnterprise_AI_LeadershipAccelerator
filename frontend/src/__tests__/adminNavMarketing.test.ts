@@ -4,6 +4,7 @@ import {
   NAV_GROUPS,
   UNLISTED_PATH_SECTIONS,
 } from '../components/Layout/adminNav';
+import { MARKETING_DESTINATIONS } from '../pages/admin/marketing/MarketingHub';
 
 /**
  * Marketing Operations navigation — every route resolves, and no dead links are advertised.
@@ -114,45 +115,57 @@ describe('the sidebar advertises only what exists', () => {
   });
 
   it('lists every marketing page that has actually been built', () => {
-    // The obligation the `notBuiltYet` list above could not express: a page that EXISTS must be
-    // findable. Each of these was routed and orphaned - no sidebar entry, no link from the
-    // Marketing page - until the Marketing nav group landed.
+    // The obligation this suite was written for: a page that EXISTS must be findable. Each of
+    // these was routed and orphaned until the Marketing nav group landed.
+    //
+    // THE OBLIGATION MOVED, IT DID NOT GO AWAY. On 2026-10-08 the rail collapsed to one button
+    // at Ali's request - "Delete the link on the left side navigation so we can just have one
+    // button for Marketing" - so the doors now live on the Overview. Asserting against the
+    // sidebar here would have failed; DELETING the assertion would have re-opened exactly the
+    // orphaned-page hole this test exists to close. So it asserts the hub instead.
     const built = [
-      '/admin/marketing',
       '/admin/marketing/composer',
       '/admin/marketing/content',
       '/admin/marketing/calendar',
+      '/admin/marketing/landing-pages',
       '/admin/marketing/publishing',
       '/admin/marketing/brands',
       '/admin/marketing/performance',
     ];
-    const advertised = marketingLinks.map((l) => l.path);
-    built.forEach((p) => expect(advertised).toContain(p));
+    const reachable = MARKETING_DESTINATIONS.map((d) => d.to);
+    built.forEach((p) => expect(reachable).toContain(p));
   });
 
-  it('names each link for what the operator is doing, not for the component behind it', () => {
+  it('keeps the sidebar down to the one Marketing button', () => {
+    // The change itself. More than one link here means the rail is creeping back.
+    expect(marketingLinks.map((l) => l.path)).toEqual(['/admin/marketing']);
+  });
+
+  it('names each door for what the operator is doing, not for the component behind it', () => {
     // From Ali's prototype, 2026-10-07. "Composer" and "Content" were the system's words for
     // itself; somebody arriving to write a post looks for "New post". Pinned because a label is
     // exactly the kind of thing a later edit reverts to the internal name without noticing.
-    const marketing = NAV_GROUPS.find((g) => g.label === 'Marketing')!;
-    const byPath = Object.fromEntries(marketing.links.map((l) => [l.path, l.label]));
+    //
+    // Asserted on the HUB since 2026-10-08: the rail carries one button now, so these labels
+    // live on the Overview. The guarantee is unchanged - only where it is kept.
+    const byPath = Object.fromEntries(MARKETING_DESTINATIONS.map((d) => [d.to, d.label]));
     expect(byPath['/admin/marketing/composer']).toBe('New post');
     expect(byPath['/admin/marketing/content']).toBe('All posts');
     expect(byPath['/admin/marketing/publishing']).toBe('Publishing queue');
     expect(byPath['/admin/marketing/brands']).toBe('Brands & channels');
     // The internal names must not come back as labels.
-    expect(marketing.links.map((l) => l.label)).not.toContain('Composer');
-    expect(marketing.links.map((l) => l.label)).not.toContain('Content');
+    const labels = MARKETING_DESTINATIONS.map((d) => d.label);
+    expect(labels).not.toContain('Composer');
+    expect(labels).not.toContain('Content');
   });
 
-  it('orders the links the way the work happens', () => {
+  it('orders the doors the way the work happens', () => {
     // Write it, see them all, see when, build where it points, watch it go out, read the
     // result, set it up. Landing pages sits before the queue because you choose a destination
-    // before anything is sent.
-    const marketing = NAV_GROUPS.find((g) => g.label === 'Marketing')!;
-    expect(marketing.links.map((l) => l.label)).toEqual([
-      'Overview', 'New post', 'All posts', 'Calendar',
-      'Landing pages', 'Publishing queue', 'Performance', 'Brands & channels',
+    // before anything is sent. Moved from the rail to the hub with the rest of the navigation.
+    expect(MARKETING_DESTINATIONS.map((d) => d.label)).toEqual([
+      'New post', 'All posts', 'Calendar', 'Landing pages',
+      'Publishing queue', 'Performance', 'Brands & channels',
     ]);
   });
 
