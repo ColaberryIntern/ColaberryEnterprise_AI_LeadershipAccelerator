@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import ComposerSetup, { type SetupValues } from '../composer/ComposerSetup';
+import ComposerSetup, { type ComposerSetupProps, type SetupValues } from '../composer/ComposerSetup';
 
 /**
  * One brand on this page, and a way to make a campaign.
@@ -22,17 +22,19 @@ let root: Root;
 let onChange: jest.Mock;
 let onCreateCampaign: jest.Mock;
 
+// Only the two fields this component reads. Cast rather than filled out: a full `Brand` carries
+// a dozen fields none of which this test is about.
 const BRANDS = [
   { id: 'b-1', name: 'Colaberry Training' },
   { id: 'b-2', name: 'Colaberry Enterprise' },
-] as never;
+] as unknown as ComposerSetupProps['brands'];
 
 const VALUES: SetupValues = {
   brand_id: 'b-1', campaign_id: '', title: '', landing_page_id: null, destination_url: '',
   canonical_body: '', content_type: 'text', is_paid: false, has_offer: false, poll: null,
 };
 
-async function mount(over: Record<string, unknown> = {}) {
+async function mount(over: Partial<ComposerSetupProps> = {}) {
   await act(async () => {
     root.render(
       <ComposerSetup
@@ -43,7 +45,7 @@ async function mount(over: Record<string, unknown> = {}) {
         busy={false}
         onChange={onChange}
         onSubmit={() => undefined}
-        {...over as never}
+        {...over}
       />,
     );
   });
