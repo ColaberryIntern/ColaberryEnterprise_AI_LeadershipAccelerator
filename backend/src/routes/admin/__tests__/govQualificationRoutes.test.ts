@@ -53,6 +53,14 @@ jest.mock('../../../services/factory/govProposalAmendment', () => {
   const actual = jest.requireActual('../../../services/factory/govProposalAmendment');
   return { ...actual, recordProposalAmendment: (...a: any[]) => recordProposalAmendment(...a) };
 });
+// P5 submission services — mocked (unit tests prove the rails); keep SubmissionError + the pure package helpers real.
+const exportSubmission = jest.fn();
+const recordSubmissionReceipt = jest.fn();
+const recordOutcome = jest.fn();
+jest.mock('../../../services/factory/govSubmission', () => {
+  const actual = jest.requireActual('../../../services/factory/govSubmission');
+  return { ...actual, exportSubmission: (...a: any[]) => exportSubmission(...a), recordSubmissionReceipt: (...a: any[]) => recordSubmissionReceipt(...a), recordOutcome: (...a: any[]) => recordOutcome(...a) };
+});
 const authorizeBuild = jest.fn();
 jest.mock('../../../services/factory/buildAuthorization', () => {
   const actual = jest.requireActual('../../../services/factory/buildAuthorization');
@@ -87,6 +95,7 @@ import { DocumentNotListedError } from '../../../services/factory/govQualificati
 import { BuildNotAuthorizedError } from '../../../services/factory/buildAuthorization';
 import { AssignmentError } from '../../../services/factory/govBuildAssignment';
 import { ResponseError } from '../../../services/factory/govProposalResponse';
+import { SubmissionError } from '../../../services/factory/govSubmission';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
 import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL } from '../../../services/factory/opportunities/govOpportunityFixtures';
 import { FLAGS } from '../../../config/featureFlags';
@@ -106,7 +115,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post|put|patch|delete)\(/.test(l));
-    expect(routeLines.length).toBe(18); // +2 P3 assign (POST+DELETE); +5 P4 (responses save/review/figures POST, figures DELETE, amendments POST)
+    expect(routeLines.length).toBe(24); // +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -759,5 +768,60 @@ describe('P4 proposal-production routes', () => {
     expect(res.status).toBe(200);
     expect(recordProposalAmendment).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', amendmentKey: 'ADD-2', affects: ['R1'] }));
     expect(res.body.invalidatedCount).toBe(1);
+  });
+});
+
+describe('P5 submission + outcome routes', () => {
+  const GWS = 'gws:4d14fa10-5752-4ad3-bbea-061453ac6341';
+  const ws = (over: any = {}) => ({
+    responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'c', figures: [] }],
+    coverage: { sufficient: true, reasons: [] }, evaluation: { canApproveBid: true }, provenance: { title: 'TxDOT' }, ...over,
+  });
+  beforeEach(() => { resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1'); getDecoupledWorkspace.mockResolvedValue(ws()); });
+
+  it('export: 409 not_ready + blocking when a response is not approved', async () => {
+    exportSubmission.mockRejectedValue(new SubmissionError('not ready', 'not_ready', ['responses_not_approved:R1']));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/submission/export`).send({});
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_ready');
+    expect(res.body.blocking).toContain('responses_not_approved:R1');
+  });
+
+  it('export: 200 passes the workspace readiness signals to the service', async () => {
+    exportSubmission.mockResolvedValue({ status: 'exported', outcome: 'pending', exportManifest: { responseCount: 1 } });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/submission/export`).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('exported');
+    expect(exportSubmission).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', projectName: 'TxDOT', coverageSufficient: true, canApproveBid: true }));
+  });
+
+  it('package: downloads a REAL zip (application/zip attachment, non-empty) when the current responses are ready', async () => {
+    const res = await request(app).get(`/api/admin/factory/qualification/${GWS}/submission/package`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/zip');
+    expect(res.headers['content-disposition']).toContain('attachment');
+    expect(Number(res.headers['content-length'])).toBeGreaterThan(0);
+  });
+
+  it('package: 409 not_ready when a material amendment reopened a response (current responses not all approved)', async () => {
+    getDecoupledWorkspace.mockResolvedValue(ws({ responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'revision_required', content: 'c', figures: [] }] }));
+    const res = await request(app).get(`/api/admin/factory/qualification/${GWS}/submission/package`);
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_ready');
+  });
+
+  it('receipt: 409 not_exported maps through (exported ≠ submitted)', async () => {
+    recordSubmissionReceipt.mockRejectedValue(new SubmissionError('export first', 'not_exported'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/submission/receipt`).send({ externalRef: 'CONF-9' });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_exported');
+  });
+
+  it('outcome: 200 records won (the service generates the private candidates)', async () => {
+    recordOutcome.mockResolvedValue({ status: 'preparing', outcome: 'won', caseStudyCandidate: { published: false } });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/outcome`).send({ outcome: 'won' });
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe('won');
+    expect(recordOutcome).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', projectName: 'TxDOT', outcome: 'won' }));
   });
 });

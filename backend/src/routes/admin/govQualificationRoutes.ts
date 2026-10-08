@@ -19,6 +19,9 @@ import {
 import { assignBuildStory, unassignBuildStory, AssignmentError } from '../../services/factory/govBuildAssignment';
 import { saveProposalResponse, reviewProposalResponse, addProposalFigure, removeProposalFigure, ResponseError } from '../../services/factory/govProposalResponse';
 import { recordProposalAmendment, AmendmentError } from '../../services/factory/govProposalAmendment';
+import { exportSubmission, recordSubmissionReceipt, acknowledgeSubmission, reopenSubmission, recordOutcome, getSubmission, SubmissionError } from '../../services/factory/govSubmission';
+import { buildSubmissionManifest, buildPackageFiles, evaluateSubmissionReadiness } from '../../services/factory/proposal/submissionPackage';
+import { createZip } from '../../services/sbp/zipArchive';
 import { resolveGovProjectActor } from '../../middlewares/govProjectAccess';
 import { authorizeBuild, BuildNotAuthorizedError } from '../../services/factory/buildAuthorization';
 import { linkGovOpportunity, AliasProjectNotFoundError, AliasProjectNotGovernmentError, AliasConflictError } from '../../services/factory/opportunities/govOpportunityAlias';
@@ -367,6 +370,147 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/amendments
   } catch (err: any) {
     if (err instanceof AmendmentError) { res.status(400).json({ error: err.message, reason: err.reason }); return; }
     logFail('gov_amendment_record_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not record the inbox entry.' });
+  }
+});
+
+// ── P5: submission package + outcome — readiness-gated export, downloadable package, manual receipt, win/loss ──
+const SUBMISSION_ERR_STATUS: Record<string, number> = {
+  bad_input: 400, no_ref: 400, bad_outcome: 400, not_ready: 409, not_exported: 409, not_submitted: 409,
+};
+function sendSubmissionError(res: Response, err: SubmissionError): void {
+  res.status(SUBMISSION_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason, blocking: err.blocking });
+}
+
+/** Resolve the project + the workspace essentials (overlaid slots, coverage, canApproveBid, project name) an export/
+ *  outcome/download needs. Responds 404 and returns null if the opportunity has no delivery project yet. */
+async function submissionContext(req: Request, res: Response, canonicalOpportunityId: string, tenantId: string):
+  Promise<{ deliveryProjectId: string; slots: any[]; coverageSufficient: boolean; canApproveBid: boolean; projectName: string } | null> {
+  const be = biddingEntityField.safeParse((req.body?.biddingEntity as string) ?? (req.query.biddingEntity as string) ?? '');
+  const beVal = be.success && be.data ? be.data : undefined;
+  const deliveryProjectId = await resolveDecoupledDeliveryProjectId(tenantId, canonicalOpportunityId, beVal);
+  if (!deliveryProjectId) { res.status(404).json({ error: 'This opportunity has not been approved into a delivery project yet.' }); return null; }
+  const ws: any = await getDecoupledWorkspace(tenantId, canonicalOpportunityId, beVal);
+  return {
+    deliveryProjectId,
+    slots: Array.isArray(ws?.responseSlots) ? ws.responseSlots : [],
+    coverageSufficient: !!(ws?.coverage && ws.coverage.sufficient),
+    canApproveBid: !!(ws?.evaluation && ws.evaluation.canApproveBid),
+    projectName: (ws?.provenance && ws.provenance.title) || 'Government proposal',
+  };
+}
+
+/** POST …/submission/export — assemble + mark the package exported. Readiness-gated (409 not_ready + blocking). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/submission/export', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_submission_export_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const ctx = await submissionContext(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!ctx) return;
+    const view = await exportSubmission({ deliveryProjectId: ctx.deliveryProjectId, projectName: ctx.projectName, slots: ctx.slots, coverageSufficient: ctx.coverageSufficient, canApproveBid: ctx.canApproveBid });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof SubmissionError) { sendSubmissionError(res, err); return; }
+    logFail('gov_submission_export_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not export the submission package.' });
+  }
+});
+
+/** GET …/submission/package — download the REAL package (zip: manifest + per-response files). Re-validates
+ *  readiness on the CURRENT responses, so a material amendment that reopened an answer blocks the download (409). */
+router.get('/api/admin/factory/qualification/:canonicalOpportunityId/submission/package', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_submission_package_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const ctx = await submissionContext(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!ctx) return;
+    const readiness = evaluateSubmissionReadiness(ctx.slots, ctx.coverageSufficient, ctx.canApproveBid);
+    if (!readiness.ready) { res.status(409).json({ error: 'The proposal is not ready to download.', reason: 'not_ready', blocking: readiness.blocking }); return; }
+    const manifest = buildSubmissionManifest(ctx.projectName, ctx.slots, new Date().toISOString());
+    const bytes = createZip(buildPackageFiles(manifest, ctx.slots));
+    const safeName = `proposal-${ctx.deliveryProjectId}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    res.setHeader('Content-Length', String(bytes.length));
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).send(bytes);
+  } catch (err: any) {
+    logFail('gov_submission_package_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not build the submission package.' });
+  }
+});
+
+/** POST …/submission/receipt — record the MANUAL external-submission receipt (exported ≠ submitted; 409 if not exported). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/submission/receipt', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_submission_receipt_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const view = await recordSubmissionReceipt(deliveryProjectId, String(req.body?.externalRef ?? ''));
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof SubmissionError) { sendSubmissionError(res, err); return; }
+    logFail('gov_submission_receipt_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not record the receipt.' });
+  }
+});
+
+/** POST …/submission/acknowledge — record the agency's acknowledgement (409 unless externally_submitted first). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/submission/acknowledge', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_submission_ack_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    const view = await acknowledgeSubmission(deliveryProjectId, String(req.body?.acknowledgedRef ?? ''));
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof SubmissionError) { sendSubmissionError(res, err); return; }
+    logFail('gov_submission_ack_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not record the acknowledgement.' });
+  }
+});
+
+/** POST …/submission/reopen — reopen to `preparing` (e.g. after a material amendment or to re-export). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/submission/reopen', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_submission_reopen_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const deliveryProjectId = await resolveProjectOr404(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!deliveryProjectId) return;
+    res.json(await reopenSubmission(deliveryProjectId));
+  } catch (err: any) {
+    if (err instanceof SubmissionError) { sendSubmissionError(res, err); return; }
+    logFail('gov_submission_reopen_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not reopen the submission.' });
+  }
+});
+
+/** POST …/outcome — record the win/loss outcome (won/lost also generates PRIVATE case-study + capability candidates). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/outcome', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const scope = await scopeOrFail(res, 'gov_outcome_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const ctx = await submissionContext(req, res, canonicalOpportunityId, scope.tenantId);
+    if (!ctx) return;
+    const view = await recordOutcome({ deliveryProjectId: ctx.deliveryProjectId, projectName: ctx.projectName, outcome: req.body?.outcome, note: req.body?.note != null ? String(req.body.note) : null, slots: ctx.slots });
+    res.json(view);
+  } catch (err: any) {
+    if (err instanceof SubmissionError) { sendSubmissionError(res, err); return; }
+    logFail('gov_outcome_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not record the outcome.' });
   }
 });
 

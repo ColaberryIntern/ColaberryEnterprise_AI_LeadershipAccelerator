@@ -779,4 +779,71 @@ describe('AdminGovQualificationPage — journey', () => {
     await clickButton('Record entry');
     expect(factoryApi.recordGovProposalAmendment).toHaveBeenCalledWith(CANON, expect.objectContaining({ amendmentKey: 'Addendum 3', summary: 'Deadline moved.' }));
   });
+
+  // ── P5: submission package + outcome ──
+  const sub = (over: any = {}): any => ({
+    status: 'preparing', outcome: 'pending', exportManifest: null, exportedAt: null, externalRef: null,
+    externallySubmittedAt: null, acknowledgedRef: null, acknowledgedAt: null, outcomeNote: null,
+    outcomeRecordedAt: null, caseStudyCandidate: null, serviceCapabilityCandidate: null, ...over,
+  });
+
+  it('Submission tab: when ready, Export is enabled and clicking it calls the API', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'c' }],
+      submission: sub(), submissionReadiness: { ready: true, blocking: [] },
+    }));
+    (factoryApi.exportGovSubmission as jest.Mock).mockResolvedValue(sub({ status: 'exported' }));
+    await renderAt(`?canonical=${CANON}&tab=submission`);
+    await flush();
+    const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Export package')) as HTMLButtonElement;
+    expect(exportBtn).toBeTruthy();
+    expect(exportBtn.disabled).toBe(false);
+    await act(async () => { exportBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(factoryApi.exportGovSubmission).toHaveBeenCalledWith(CANON);
+  });
+
+  it('Submission tab: when NOT ready, Export is disabled and the blocking reasons are shown', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'draft', content: 'c' }],
+      submission: sub(), submissionReadiness: { ready: false, blocking: ['responses_not_approved:R1', 'coverage_insufficient'] },
+    }));
+    await renderAt(`?canonical=${CANON}&tab=submission`);
+    await flush();
+    const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Export package')) as HTMLButtonElement;
+    expect(exportBtn.disabled).toBe(true);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Some responses are not yet approved');
+    expect(text).toContain('coverage is not sufficient');
+  });
+
+  it('Submission tab: once exported, a receipt can be recorded (exported ≠ submitted)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'c' }],
+      submission: sub({ status: 'exported', exportedAt: '2026-10-08T00:00:00Z' }), submissionReadiness: { ready: true, blocking: [] },
+    }));
+    (factoryApi.recordGovSubmissionReceipt as jest.Mock).mockResolvedValue(sub({ status: 'externally_submitted', externalRef: 'CONF-9' }));
+    await renderAt(`?canonical=${CANON}&tab=submission`);
+    await flush();
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Download package'))).toBe(true);
+    const refInput = container.querySelector('input[aria-label="External submission ref"]') as HTMLInputElement;
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => { setVal.call(refInput, 'CONF-9'); refInput.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Record submission');
+    expect(factoryApi.recordGovSubmissionReceipt).toHaveBeenCalledWith(CANON, 'CONF-9');
+  });
+
+  it('Outcome tab: records won and shows the PRIVATE case-study + service-capability candidates', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      submission: sub({ outcome: 'won', caseStudyCandidate: { title: 'TxDOT — won', summary: 'A private draft.', status: 'candidate', published: false }, serviceCapabilityCandidate: { name: 'Capability from: TxDOT', rationale: 'Suggested from a won pursuit.', state: 'suggested' } }),
+    }));
+    (factoryApi.recordGovOutcome as jest.Mock).mockResolvedValue(sub({ outcome: 'won' }));
+    await renderAt(`?canonical=${CANON}&tab=outcome`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Case-study candidate');
+    expect(text).toContain('private — not published');       // the agent never publishes
+    expect(text).toContain('Service-capability candidate');
+    await clickButton('Record outcome');
+    expect(factoryApi.recordGovOutcome).toHaveBeenCalledWith(CANON, 'won', null);
+  });
 });
