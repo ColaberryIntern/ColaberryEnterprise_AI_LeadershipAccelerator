@@ -12,6 +12,7 @@ import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage'));
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
+const ShowcaseGalleryPage = lazy(() => import('../pages/portal/showcase/ShowcaseGalleryPage'));
 import PageGate from '../components/paywall/PageGate';
 const RuntimeWorkspace = lazy(() => import('../pages/portal/runtime/RuntimeWorkspace'));
 const ProjectWorkspacePage = lazy(() => import('../pages/portal/projects/ProjectWorkspacePage'));
@@ -61,6 +62,7 @@ const portalRoutes = (
       {/* Design E student surfaces — each renders its own PortalShell chrome,
           so they sit OUTSIDE PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
+      <Route path="/portal/showcase" element={<ShowcaseGalleryPage />} />
       {/* Employee → management portal: mints a scoped admin token, redirects to /admin. */}
       <Route path="/portal/mgmt-enter" element={<PortalMgmtEnterPage />} />
       <Route path="/portal/settings" element={<SettingsPage />} />
