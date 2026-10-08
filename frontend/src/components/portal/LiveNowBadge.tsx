@@ -1,6 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBroadcastPlayer } from '../../contexts/BroadcastPlayerContext';
 import { useBroadcastDiscovery, DiscoveryBroadcast, DiscoveryDeps } from '../../hooks/useBroadcastDiscovery';
+import {
+  readCued, markCued, uncued, readSoundOptIn, writeSoundOptIn, playChime, ChimeOutcome,
+} from './broadcastLaunchCue';
+import { usePlayerPresentation } from './usePlayerPresentation';
 import './liveNowBadge.css';
 
 /**
@@ -66,6 +70,20 @@ export default function LiveNowBadge({
   const { open, session } = useBroadcastPlayer();
   const { broadcasts, unavailable } = useBroadcastDiscovery(enabled, discoveryDeps ?? {});
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
+  const [cued, setCued] = useState<string[]>(readCued);
+  const [soundOn, setSoundOn] = useState<boolean>(readSoundOptIn);
+  const [soundState, setSoundState] = useState<ChimeOutcome | null>(null);
+  /**
+   * Ids announced during THIS mount. There is deliberately no timer clearing them: the
+   * flourish is a one-shot CSS animation, which plays once when the class is applied and
+   * does nothing while it lingers. And since the cue is once-per-occurrence-ever, the class
+   * never needs re-applying — so a timer would only add an arbitrary duration and something
+   * else to get wrong. An earlier version had one, and it made the behaviour depend on wall
+   * clock in a way no test could pin.
+   */
+  const [announced, setAnnounced] = useState<string[]>([]);
+  const frameRef = useRef<HTMLElement | null>(null);
+  const { prefersReducedMotion } = usePlayerPresentation(frameRef);
 
   const dismiss = useCallback((id: string) => {
     setDismissed((prev) => {
@@ -80,6 +98,38 @@ export default function LiveNowBadge({
     [broadcasts, dismissed],
   );
 
+  const visibleIds = useMemo(() => visible.map((b) => b.id).join(','), [visible]);
+
+  /**
+   * The cue fires ONCE per occurrence, ever. The seen-set is persisted, so a route change —
+   * which re-runs effects but not storage — cannot re-interrupt, and neither can a reload.
+   */
+  useEffect(() => {
+    const fresh = uncued(visibleIds ? visibleIds.split(',') : [], cued);
+    if (fresh.length === 0) return;
+
+    setAnnounced((prev) => [...prev, ...fresh]);
+    const next = [...cued, ...fresh];
+    markCued(next);
+    setCued(next);
+
+    if (soundOn) {
+      void playChime().then(setSoundState);
+    }
+  }, [visibleIds, cued, soundOn]);
+
+  const toggleSound = useCallback(() => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      writeSoundOptIn(next);
+      // Turning it ON is itself the gesture a browser requires, so this is the one moment a
+      // chime is permitted to be tried without a broadcast having just appeared.
+      if (next) void playChime().then(setSoundState);
+      else setSoundState(null);
+      return next;
+    });
+  }, []);
+
   // Nothing airing and nothing to say. Note the ORDER: an unavailable collection still
   // renders, because "we cannot tell" is a thing worth saying.
   if (visible.length === 0 && !unavailable) return null;
@@ -87,7 +137,7 @@ export default function LiveNowBadge({
   if (session) return null;
 
   return (
-    <aside className="lnb" data-testid="live-now-badge" aria-label="Live now">
+    <aside ref={frameRef} className="lnb" data-testid="live-now-badge" aria-label="Live now">
       {unavailable && (
         <p className="lnb-stale" role="status" data-testid="lnb-unavailable">
           Live status is unavailable right now.
@@ -98,9 +148,42 @@ export default function LiveNowBadge({
         <p className="lnb-count" data-testid="lnb-count">{visible.length} airing now</p>
       )}
 
+      <div className="lnb-sound">
+        <button
+          type="button"
+          className="lnb-soundbtn"
+          data-testid="lnb-sound"
+          aria-pressed={soundOn}
+          onClick={toggleSound}
+        >
+          {soundOn ? 'Sound on' : 'Sound off'}
+        </button>
+        {/*
+          A refusal is SAID, not swallowed. "unsupported" and "refused" are different facts —
+          no Web Audio at all, versus a policy or a webview declining — and neither may be
+          reported as if the chime played.
+        */}
+        {soundOn && soundState === 'refused' && (
+          <span className="lnb-note" role="status" data-testid="lnb-sound-refused">
+            Your browser blocked the sound. The badge will still appear.
+          </span>
+        )}
+        {soundOn && soundState === 'unsupported' && (
+          <span className="lnb-note" role="status" data-testid="lnb-sound-unsupported">
+            This device cannot play the alert sound. The badge will still appear.
+          </span>
+        )}
+      </div>
+
       <ul className="lnb-list">
         {visible.map((b) => (
-          <li key={b.id} className="lnb-item" data-testid={`lnb-item-${b.id}`}>
+          <li
+            key={b.id}
+            className={`lnb-item${
+              announced.includes(b.id) && !prefersReducedMotion ? ' is-new' : ''
+            }`}
+            data-testid={`lnb-item-${b.id}`}
+          >
             <span className={`lnb-dot lnb-dot-${b.editorial_state}`} aria-hidden="true" />
             <span className="lnb-mode">{label(b)}</span>
             <span className="lnb-title" title={b.title}>{b.title}</span>

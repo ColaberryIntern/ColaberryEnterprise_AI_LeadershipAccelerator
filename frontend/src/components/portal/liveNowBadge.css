@@ -131,3 +131,55 @@
     bottom: calc(324px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/*
+ * The launch flourish. Brief, once per occurrence, and guarded in BOTH places: the component
+ * does not apply `.is-new` when reduced motion is asked for, and the media query below means
+ * a browser that reports the preference only to CSS is still respected.
+ */
+@keyframes lnb-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.lnb-item.is-new {
+  animation: lnb-arrive 320ms ease-out;
+}
+
+.lnb-sound {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lnb-soundbtn {
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.lnb-soundbtn[aria-pressed='true'] {
+  background: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+}
+
+.lnb-soundbtn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lnb-item.is-new {
+    animation: none;
+  }
+}
