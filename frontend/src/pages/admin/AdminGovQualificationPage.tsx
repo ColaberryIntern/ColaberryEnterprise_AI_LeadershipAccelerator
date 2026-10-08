@@ -1618,7 +1618,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                   canAct: !!ws.build?.deliveryProjectId,
                   busy,
                   onExport: () => run(() => exportGovSubmission(canonical), 'Package exported.'),
-                  onDownload: () => { void downloadGovSubmissionPackage(canonical).catch(() => setActionError('Could not download the package.')); },
+                  onDownload: () => { void downloadGovSubmissionPackage(canonical).catch((err) => setActionError(errToAction(err))); },
                   onReceipt: (ref) => run(() => recordGovSubmissionReceipt(canonical, ref), 'External submission recorded.'),
                   onAcknowledge: (ref) => run(() => acknowledgeGovSubmission(canonical, ref), 'Acknowledgement recorded.'),
                   onReopen: () => run(() => reopenGovSubmission(canonical), 'Submission reopened.'),
