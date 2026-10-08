@@ -200,22 +200,24 @@ Run on the release head. Stated as measured, including what is wrong and not min
 |---|---|
 | backend `tsc --noEmit` | **0** |
 | frontend `tsc --noEmit` | **0** |
-| backend suite | **29,530 passing**, 24 failing across 15 suites |
-| frontend suite | 5 suites failing; **4 pass in isolation** (parallel-load flakes) |
+| backend suite, locally | **29,530 passing**, 24 failing across 15 suites |
+| frontend suite, locally | 5 suites failing in the full run |
+| **backend suite, on CI** | **green** |
+| **frontend suite, on CI** | **green** (full suite; CI excludes only the helper dir) |
 | Presentation Studio suites | **1332 passing, 0 failing** |
 
-**None of the failures come from this work.** The release branch carries no code diff
-against `main` — it is documentation only — so every failure above is already on main.
+**Every local failure above is environmental, and CI is what proves it** rather than an
+assumption about which failures "look flaky". Both full suites ran green on this exact
+tree on Ubuntu. The local set is the long-standing Windows collection: CRLF byte-compares
+that pass on an LF checkout, plus suites that only fail under parallel load.
 
-**One of them is real and someone should own it.**
-`frontend/src/pages/admin/AdminGovQualificationPage.test.tsx` fails **in isolation**, so it
-is not a load flake: 3 tests, all in the gov qualification journey —
-*"lists candidates carrying canonical ids"*, *"surfaces the canonical-mapping GAP"*, and
-*"shows no requirements established yet"*. That is the Gov Contracts area, unrelated to the
-Studio, and it is red on main right now.
+That includes `AdminGovQualificationPage.test.tsx`, which failed in a crowded local run
+and which I first read as a genuine break. Re-run on a quiet machine it is **45 passed, 45
+total**, and CI runs it green. It is a load flake, not a defect — worth saying plainly,
+because a false bug report costs somebody a day.
 
-The backend's 24 are the long-standing set: Windows CRLF byte-compares that pass on CI's
-LF checkout, and suites that only fail under parallel load.
+**And none of it comes from this work regardless:** the release branch carries no code diff
+against `main`.
 
 ## Baselines, for spotting drift after a deploy
 
