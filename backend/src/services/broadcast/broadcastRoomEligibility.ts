@@ -12,7 +12,8 @@ import { canReadContent, RoomAccessContext } from '../communityRooms/roomEntitle
  * EVERY viewer, including the cohort it was created for. A paywall that denies the people who
  * paid is as broken as one that admits the people who did not.
  *
- * IT DELEGATES RATHER THAN DECIDES. `roomEntitlementService.isEligible` is the canonical gate
+ * IT DELEGATES RATHER THAN DECIDES. It calls `roomEntitlementService.canReadContent`, which
+ * is a one-line wrapper over `isEligible` — the canonical gate
  * for the community-rooms domain — pure, exhaustively unit-tested, and already handling
  * public / cohort / invite_only / private plus the admin short-circuit. A second copy of that
  * rule living here is a copy that drifts, and the direction it drifts is "broadcast says yes

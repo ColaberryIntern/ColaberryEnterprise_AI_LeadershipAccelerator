@@ -52,4 +52,16 @@ describe('an operator typo cannot become an incident', () => {
     expect(DEFAULT_POLL_MS).toBeGreaterThanOrEqual(MIN_POLL_MS);
     expect(DEFAULT_POLL_MS).toBeLessThanOrEqual(MAX_POLL_MS);
   });
+
+  it('pins the three NUMBERS, not just their relationship', () => {
+    // Every other assertion here compares against the constants, so changing a constant made
+    // them all still pass — the 15s/300s window was unpinned, which an independent check
+    // flagged. The client half is pinned to literals too
+    // (`liveNowBadge.test.tsx` expects exactly 15_000), and these must agree: the client
+    // clamps what the server sends, so two different windows would silently mean the tighter
+    // one always wins and the setting would stop behaving as documented.
+    expect(MIN_POLL_MS).toBe(15_000);
+    expect(MAX_POLL_MS).toBe(300_000);
+    expect(DEFAULT_POLL_MS).toBe(45_000);
+  });
 });

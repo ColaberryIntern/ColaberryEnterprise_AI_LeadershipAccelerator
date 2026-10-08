@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBroadcastPlayer } from '../../contexts/BroadcastPlayerContext';
+import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { useBroadcastDiscovery, DiscoveryBroadcast, DiscoveryDeps } from '../../hooks/useBroadcastDiscovery';
 import {
   readCued, markCued, uncued, readSoundOptIn, writeSoundOptIn, playChime, ChimeOutcome,
@@ -25,6 +26,15 @@ import './liveNowBadge.css';
  * rather than rendering "nothing is live", and it keeps showing the last known list rather
  * than blanking. An outage reading as a quiet evening is the fabricated-zero mistake in a
  * different costume.
+ *
+ * AND NOTHING IS FABRICATED WHEN THE FEATURE IS SIMPLY OFF. This component is mounted in the
+ * layout route that also wraps `/portal/login`, `/portal/signup` and `/portal/verify`, so it
+ * renders for signed-OUT visitors too. It therefore polls only for an authenticated
+ * participant, and treats 404 (feature off) and 401 (not signed in) as "render nothing, stop
+ * asking" rather than as an outage. Without that, the flag being dark — the documented
+ * default — put a permanent "Live status is unavailable" panel on the login page, and with
+ * the flag on, a signed-out visitor's 401 drove `portalApi`'s interceptor to redirect
+ * `/portal/login` to itself in a loop.
  */
 
 const DISMISSED_KEY = 'colaberry.broadcast.dismissed';
@@ -68,7 +78,13 @@ export default function LiveNowBadge({
   discoveryDeps, enabled = true,
 }: LiveNowBadgeProps): React.ReactElement | null {
   const { open, session } = useBroadcastPlayer();
-  const { broadcasts, unavailable } = useBroadcastDiscovery(enabled, discoveryDeps ?? {});
+  const { isAuthenticated } = useParticipantAuth();
+  // `isAuthenticated` is only `!!token` and does not inspect expiry, so a stale token still
+  // reaches the endpoint — which is why the 401 branch in the hook is terminal as well.
+  const { broadcasts, unavailable, disabled } = useBroadcastDiscovery(
+    enabled && isAuthenticated,
+    discoveryDeps ?? {},
+  );
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const [cued, setCued] = useState<string[]>(readCued);
   const [soundOn, setSoundOn] = useState<boolean>(readSoundOptIn);
@@ -130,6 +146,8 @@ export default function LiveNowBadge({
     });
   }, []);
 
+  // Off, or signed out: nothing to show and nothing to say about it.
+  if (disabled) return null;
   // Nothing airing and nothing to say. Note the ORDER: an unavailable collection still
   // renders, because "we cannot tell" is a thing worth saying.
   if (visible.length === 0 && !unavailable) return null;

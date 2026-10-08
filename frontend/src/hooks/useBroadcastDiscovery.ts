@@ -22,6 +22,23 @@ import portalApi from '../utils/portalApi';
  *    current.
  *  - A failing endpoint backs off, capped, and never spins. A 503 from discovery means the
  *    server could not work out what is airing; hammering it is the wrong response.
+ *
+ * NOT EVERY FAILURE IS AN OUTAGE, and the first version of this hook treated them alike.
+ * That was caught by an independent check, and it was the worst defect of Phase 3:
+ *
+ *   404 — the feature is off. `broadcastRoutes` gates on BROADCAST_ENABLED before auth and
+ *         answers a clean 404, which is the documented default. Reported as "unavailable",
+ *         that rendered a permanent fake outage panel on every portal page the moment the
+ *         frontend deployed. A disabled feature must render NOTHING and stop polling.
+ *   401 — not signed in. `portalApi`'s interceptor reacts to a 401 by clearing the token and
+ *         setting `window.location.href = loginHrefPreserving(pathname)`, and on
+ *         `/portal/login` that function returns `/portal/login` — the page redirects to
+ *         itself, forever. `portalLoginHref.ts`'s own header records two production
+ *         incidents of this class (2026-08-03, 7 students; 2026-08-24, 18 students). So a
+ *         401 is terminal here too, and the badge is additionally gated on an authenticated
+ *         participant so the request is never made.
+ *   503, 5xx, network — reachable but unresolved. THIS is the honest-outage case the
+ *         "unavailable" panel exists for, and the only one that keeps polling.
  */
 
 export interface DiscoveryBroadcast {
@@ -62,9 +79,21 @@ export function backoffMs(consecutiveFailures: number, base: number): number {
   return Math.min(BACKOFF_CAP_MS, base * factor);
 }
 
+/** 404 or 401: there is nothing to show and nothing to retry. */
+export function isTerminalDiscoveryError(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  return status === 404 || status === 401;
+}
+
 export interface DiscoveryState {
   /** Empty while loading, and empty when genuinely nothing is airing — see `unavailable`. */
   broadcasts: DiscoveryBroadcast[];
+  /**
+   * The feature is off, or this viewer is not signed in. Render nothing at all: a disabled
+   * feature is not an outage, and saying otherwise is a fabricated failure in the same family
+   * as a fabricated zero.
+   */
+  disabled: boolean;
   /**
    * True when the server could not work out what is airing. Distinct from an empty list on
    * purpose: "nothing is live" and "we cannot tell" must not render identically, or an outage
@@ -89,6 +118,28 @@ async function defaultFetch(): Promise<DiscoveryResponse> {
   return res.data as DiscoveryResponse;
 }
 
+/**
+ * THE DEFAULTS LIVE AT MODULE SCOPE, AND THAT IS LOAD-BEARING.
+ *
+ * They used to be inline arrows — `deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms))` — which
+ * minted a NEW function on every render. `tick` is a useCallback depending on them, so `tick`
+ * changed identity every render; the effect depends on `tick`, so it re-ran every render; and
+ * re-running it calls `tick()`, which sets state, which renders again. An infinite loop, in
+ * the DEFAULT path only.
+ *
+ * Every test that injected deps missed it, because an injected `setTimer` parks the callback
+ * in an array and never fires it, so nothing re-rendered. It surfaced the moment a test
+ * mounted the REAL route tree — which is exactly what the positive control in
+ * `liveNowBadge.gating.test.tsx` was added to force.
+ */
+function defaultSetTimer(fn: () => void, ms: number): unknown {
+  return setTimeout(fn, ms);
+}
+
+function defaultClearTimer(handle: unknown): void {
+  clearTimeout(handle as ReturnType<typeof setTimeout>);
+}
+
 function defaultIsVisible(): boolean {
   if (typeof document === 'undefined') return true;
   return document.visibilityState !== 'hidden';
@@ -101,14 +152,20 @@ function defaultSubscribeVisibility(fn: () => void): () => void {
 }
 
 export function useBroadcastDiscovery(enabled: boolean, deps: DiscoveryDeps = {}): DiscoveryState {
-  const fetchDiscovery = deps.fetchDiscovery ?? defaultFetch;
-  const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
-  const clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
-  const isVisible = deps.isVisible ?? defaultIsVisible;
-  const subscribeVisibility = deps.subscribeVisibility ?? defaultSubscribeVisibility;
+  // Captured once. Dependencies are injected by tests at mount and never change at runtime,
+  // and holding them in a ref is what keeps the callbacks below stable: a caller that builds
+  // its deps object inline — as the real tree does by passing nothing at all — would
+  // otherwise hand this hook a fresh identity on every render.
+  const injected = useRef(deps);
+  const fetchDiscovery = injected.current.fetchDiscovery ?? defaultFetch;
+  const setTimer = injected.current.setTimer ?? defaultSetTimer;
+  const clearTimer = injected.current.clearTimer ?? defaultClearTimer;
+  const isVisible = injected.current.isVisible ?? defaultIsVisible;
+  const subscribeVisibility = injected.current.subscribeVisibility ?? defaultSubscribeVisibility;
 
   const [broadcasts, setBroadcasts] = useState<DiscoveryBroadcast[]>([]);
   const [unavailable, setUnavailable] = useState(false);
+  const [disabled, setDisabled] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const timer = useRef<unknown>(null);
@@ -136,8 +193,21 @@ export function useBroadcastDiscovery(enabled: boolean, deps: DiscoveryDeps = {}
       cadence.current = clampPollMs(data?.poll_after_ms);
       setBroadcasts(Array.isArray(data?.broadcasts) ? data.broadcasts : []);
       setUnavailable(false);
-    } catch {
+      setDisabled(false);
+    } catch (err) {
       if (stopped.current || mine !== generation.current) return;
+
+      if (isTerminalDiscoveryError(err)) {
+        // Off, or not signed in. Show nothing, and stop: there is no state that retrying can
+        // discover, and on a 401 each retry triggers the interceptor's redirect.
+        stopped.current = true;
+        clear();
+        setDisabled(true);
+        setUnavailable(false);
+        setBroadcasts([]);
+        return;
+      }
+
       failures.current += 1;
       // The list is NOT cleared. A viewer mid-poll keeps seeing what was airing a minute ago,
       // flagged as stale by `unavailable`, rather than watching the badge vanish because one
@@ -180,5 +250,5 @@ export function useBroadcastDiscovery(enabled: boolean, deps: DiscoveryDeps = {}
     };
   }, [enabled, tick, subscribeVisibility, isVisible, clear]);
 
-  return { broadcasts, unavailable, loading, refresh };
+  return { broadcasts, unavailable, disabled, loading, refresh };
 }

@@ -15,6 +15,15 @@ import type { ResolveDeps } from './broadcastEntitlement';
  * student was treated as unpaid: `paid` occurrences returned `requires_payment`, and `preview`
  * occurrences handed a full-access viewer the 15-minute window.
  *
+ * TWO CONSUMERS, FOR TWO DIFFERENT SHAPES. `broadcastAccessDeps` is handed to
+ * `resolveBroadcastAccess` by the single-occurrence playback grant, where fail-closed matters
+ * most. `loadViewerAccessFacts` is used by the discovery endpoint, which judges many
+ * occurrences against one viewer and must not re-read the enrollment per row.
+ *
+ * (An earlier version of this header claimed the wrapper was already wired. It was not —
+ * the controller called the pure function with these loaders' output — and an independent
+ * check caught the comment describing work that had not been done.)
+ *
  * Both of that commit's stubs failed in the DENY direction, so nothing leaked — but a paywall
  * that refuses the people who paid is as broken as one that admits the people who did not, and
  * it is the kind of broken that looks like the feature simply not working.

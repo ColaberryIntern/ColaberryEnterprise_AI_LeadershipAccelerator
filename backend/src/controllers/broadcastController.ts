@@ -2,9 +2,9 @@ import { Request, Response } from 'express';
 import { ZodError } from 'zod';
 import { producerCommandSchema, occurrenceIdParamSchema, playbackGrantSchema } from '../schemas/broadcastSchema';
 import { runProducerCommand } from '../services/broadcast/broadcastCommandService';
-import { decideBroadcastAccess } from '../services/broadcast/broadcastEntitlement';
+import { decideBroadcastAccess, resolveBroadcastAccess } from '../services/broadcast/broadcastEntitlement';
 import { resolveRoomEligibility } from '../services/broadcast/broadcastRoomEligibility';
-import { loadViewerAccessFacts } from '../services/broadcast/broadcastAccessDeps';
+import { loadViewerAccessFacts, broadcastAccessDeps } from '../services/broadcast/broadcastAccessDeps';
 import { projectDiscovery, DiscoveryEntry } from '../services/broadcast/broadcastDiscovery';
 import { ACTIVE_DISCOVERY_STATES, findActiveOccurrences } from '../services/broadcast/broadcastActiveQuery';
 import { resolvePollAfterMs } from '../services/broadcast/broadcastPollPolicy';
@@ -125,8 +125,17 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
         isAdmin: isStaff(req),
       }),
     };
-    const facts = await loadViewerAccessFacts(req.participant!.sub);
-    const decision = decideBroadcastAccess(
+    // THE FAIL-CLOSED WRAPPER, not the pure function. P2-04 shipped `resolveBroadcastAccess`
+    // and nothing ever called it; an independent check pointed out that my own comments
+    // described wiring that did not exist. It loads the facts itself and, crucially, turns a
+    // loader rejection into a DENIAL rather than letting it propagate — which is the property
+    // the pure function cannot have.
+    //
+    // The discovery endpoint below deliberately does NOT use it: that path judges N
+    // occurrences against one viewer, so it loads the facts once and calls the pure function
+    // per row. Using the wrapper there would re-read the enrollment, the cohort and the comp
+    // list for every broadcast on screen.
+    const decision = await resolveBroadcastAccess(
       {
         access_mode: occurrence.access_mode,
         editorial_state: occurrence.editorial_state,
@@ -134,7 +143,7 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
         content_started_at: occurrence.content_started_at,
       },
       viewer,
-      facts.enrollment, facts.cohort, facts.roleInfo,
+      broadcastAccessDeps,
       Date.now(),
     );
 

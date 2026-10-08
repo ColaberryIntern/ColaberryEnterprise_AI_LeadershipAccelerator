@@ -172,10 +172,25 @@ describe('the sweep is really running', () => {
   }, 30_000);
 });
 
+/**
+ * WHAT THE THEME AXIS DOES AND DOES NOT PROVE — said plainly, because an independent check
+ * pointed out that the name overclaims.
+ *
+ * The only theme-SENSITIVE wcag2a/wcag2aa rule is `color-contrast`, and jsdom cannot evaluate
+ * it (see the last block in this file). So the dark run exercises the same DOM as the light
+ * run and five of its assertions are duplicates. It is kept because it would catch a
+ * theme-CONDITIONAL difference — a component that renders different markup, names or roles
+ * under `[data-theme="dark"]` — which is a real class of bug and free to guard.
+ *
+ * The actual dark-mode coverage for this player is the stylesheet-token assertion in
+ * `liveMiniPlayer.presentation.test.tsx` ("uses only tokens that the dark theme actually
+ * redefines"), which is what caught the white-card-on-a-dark-page defect. Contrast itself
+ * needs a browser-based run.
+ */
 describe.each([
   ['light', null],
   ['dark', 'dark'],
-])('zero wcag2a/wcag2aa violations in the %s theme', (_label, theme) => {
+])('zero wcag2a/wcag2aa STRUCTURAL violations with data-theme=%s', (_label, theme) => {
   beforeEach(() => {
     if (theme) document.documentElement.setAttribute('data-theme', theme);
   });

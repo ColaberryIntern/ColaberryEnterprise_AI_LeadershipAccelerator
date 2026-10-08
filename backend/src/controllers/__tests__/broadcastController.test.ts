@@ -13,7 +13,18 @@ jest.mock('../../services/broadcast/broadcastCommandService', () => ({ runProduc
 // the models barrel at import time, which is what turned the entitlement suite from
 // seconds into minutes before it was stubbed there too.
 jest.mock('../../services/broadcast/broadcastRoomEligibility', () => ({ resolveRoomEligibility: jest.fn() }));
-jest.mock('../../services/broadcast/broadcastAccessDeps', () => ({ loadViewerAccessFacts: jest.fn() }));
+// The deps OBJECT is mocked, not `resolveBroadcastAccess`. The playback path now goes
+// through that wrapper, and its fail-closed catch is the property most worth exercising
+// here — so the wrapper stays real and only its loaders are injected.
+jest.mock('../../services/broadcast/broadcastAccessDeps', () => ({
+  loadViewerAccessFacts: jest.fn(),
+  broadcastAccessDeps: {
+    loadEnrollment: jest.fn(),
+    loadCohort: jest.fn(),
+    loadRoleInfo: jest.fn(),
+    cohortIdOf: (e: { cohort_id?: string | null } | null) => e?.cohort_id ?? null,
+  },
+}));
 jest.mock('../../services/broadcast/broadcastActiveQuery', () => ({
   ACTIVE_DISCOVERY_STATES: ['live', 'reconnecting'],
   findActiveOccurrences: jest.fn(),
@@ -23,13 +34,16 @@ import { postProducerCommand, postPlaybackGrant, getActiveBroadcasts } from '../
 import BroadcastOccurrence from '../../models/BroadcastOccurrence';
 import { runProducerCommand } from '../../services/broadcast/broadcastCommandService';
 import { resolveRoomEligibility } from '../../services/broadcast/broadcastRoomEligibility';
-import { loadViewerAccessFacts } from '../../services/broadcast/broadcastAccessDeps';
+import { loadViewerAccessFacts, broadcastAccessDeps } from '../../services/broadcast/broadcastAccessDeps';
 import { findActiveOccurrences } from '../../services/broadcast/broadcastActiveQuery';
 
 const findByPk = (BroadcastOccurrence as any).findByPk as jest.Mock;
 const runCommand = runProducerCommand as jest.Mock;
 const roomEligible = resolveRoomEligibility as jest.Mock;
 const viewerFacts = loadViewerAccessFacts as jest.Mock;
+const loadEnrollment = broadcastAccessDeps.loadEnrollment as jest.Mock;
+const loadCohort = broadcastAccessDeps.loadCohort as jest.Mock;
+const loadRoleInfo = broadcastAccessDeps.loadRoleInfo as jest.Mock;
 const activeOccurrences = findActiveOccurrences as jest.Mock;
 
 const OCC = '11111111-2222-4333-8444-555555555555';
@@ -54,6 +68,9 @@ beforeEach(() => {
   // Defaults: not room-eligible, and no paid entitlement. Each test opts into more.
   roomEligible.mockResolvedValue(false);
   viewerFacts.mockResolvedValue({ enrollment: null, cohort: null, roleInfo: null });
+  loadEnrollment.mockResolvedValue(null);
+  loadCohort.mockResolvedValue(null);
+  loadRoleInfo.mockResolvedValue({ isStaff: false, hasActiveComp: false });
   activeOccurrences.mockResolvedValue([]);
 });
 
@@ -271,20 +288,36 @@ describe('the entitlement inputs are resolved, not stubbed', () => {
 
   it('passes the loaded paid-access facts through, so a paying viewer is not treated as unpaid', async () => {
     findByPk.mockResolvedValue(occ({ access_mode: 'paid' }));
-    // hasFullCurriculumAccess is the real implementation here; these are the shapes it reads.
-    viewerFacts.mockResolvedValue({
-      enrollment: { id: 'enr-1', payment_status: 'paid', cohort_id: 'coh-7', access_starts_at: new Date(0) },
-      cohort: { id: 'coh-7', cohort_type: 'standard' },
-      roleInfo: { isStaff: false, hasActiveComp: false },
+    // hasFullCurriculumAccess is the real implementation here, reached through the real
+    // resolveBroadcastAccess; these are the shapes it reads.
+    loadEnrollment.mockResolvedValue({
+      id: 'enr-1', payment_status: 'paid', cohort_id: 'coh-7', access_starts_at: new Date(0),
     });
+    loadCohort.mockResolvedValue({ id: 'coh-7', cohort_type: 'standard' });
     const res = mockRes();
 
     await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
 
-    expect(viewerFacts).toHaveBeenCalledWith('enr-1');
+    expect(loadEnrollment).toHaveBeenCalledWith('enr-1');
+    // The cohort is read off the enrollment, not off the request.
+    expect(loadCohort).toHaveBeenCalledWith('coh-7');
     const body = res.json.mock.calls[0][0];
     expect(body.grant).toBe('full');
     expect(body.grant).not.toBe('preview');
+  });
+
+  it('DENIES when the entitlement loaders reject — the fail-closed wrapper, exercised for real', async () => {
+    findByPk.mockResolvedValue(occ({ access_mode: 'paid' }));
+    loadEnrollment.mockRejectedValue(new Error('connect ECONNREFUSED db.internal:5432'));
+    const res = mockRes();
+
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+
+    // A paywall that opens under load is not a paywall. This is the property the PURE
+    // function cannot have, and the reason the playback path goes through the wrapper.
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'error' });
+    expect(JSON.stringify(res.json.mock.calls[0][0])).not.toContain('db.internal');
   });
 
   it('a paid broadcast still denies a viewer with no entitlement, and offers the upgrade', async () => {
