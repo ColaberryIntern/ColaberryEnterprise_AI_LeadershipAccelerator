@@ -84,4 +84,40 @@ router.post(
   },
 );
 
+/**
+ * POST /api/portal/gov-projects/:projectId/build-evidence/:evidenceId/verify — a REVIEWER decides a submitted
+ * hand-in (verified | rejected). Guarded by requireGovProjectAccess('evidence.verify'): a student's
+ * associate_builder role does NOT hold evidence.verify (403), so only a reviewer reaches this; the service adds
+ * separation-of-duties (a reviewer cannot decide evidence they submitted) and refuses re-deciding. The reviewer
+ * identity is the guard-resolved one, never client-supplied.
+ */
+router.post(
+  '/api/portal/gov-projects/:projectId/build-evidence/:evidenceId/verify',
+  requireParticipant,
+  requireGovProjectAccess('evidence.verify'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    const evidenceId = req.params.evidenceId;
+    if (typeof projectId !== 'string' || !projectId || typeof evidenceId !== 'string' || !evidenceId) {
+      res.status(400).json({ error: 'Project and evidence ids are required' });
+      return;
+    }
+    const reviewerIdentityId = req.deliveryContext?.platformIdentityId ?? null;
+    if (!reviewerIdentityId) { res.status(401).json({ error: 'No resolvable identity' }); return; }
+    const decision = String((req.body ?? {}).decision ?? '');
+    const { verifyBuildStoryEvidence, EvidenceVerifyError } = await import('../services/factory/govBuildEvidence');
+    try {
+      const evidence = await verifyBuildStoryEvidence({ evidenceId, deliveryProjectId: projectId, reviewerIdentityId, decision: decision as any });
+      res.json({ evidence });
+    } catch (err: any) {
+      if (err instanceof EvidenceVerifyError) {
+        const code = err.reason === 'not_found' ? 404 : err.reason === 'self_review' ? 403 : err.reason === 'already_reviewed' ? 409 : 400;
+        res.status(code).json({ error: err.message, reason: err.reason });
+        return;
+      }
+      res.status(500).json({ error: 'Could not verify the evidence.' });
+    }
+  },
+);
+
 export default router;
