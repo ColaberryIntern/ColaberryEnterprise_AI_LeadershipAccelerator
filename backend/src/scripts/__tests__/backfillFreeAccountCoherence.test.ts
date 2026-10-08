@@ -12,6 +12,9 @@
  * module-level `process.argv.includes(...)`, which made the committing path
  * unreachable from a test and left AC1 resting on prose.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { QueryTypes } from 'sequelize';
 
 const query = jest.fn();
@@ -20,7 +23,7 @@ const close = jest.fn();
 jest.mock('../../config/database', () => ({ sequelize: { query, close } }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires -- after jest.mock
-const { runForward } = require('../backfillFreeAccountCoherence');
+const { runForward, runInverse, parseLedger } = require('../backfillFreeAccountCoherence');
 
 const COUNTS = { shape_a: '2', shape_b: '1', coherent_free: '0', total: '3' };
 
@@ -94,5 +97,106 @@ describe('T207 — the committing path, so the dry-run proof has a counterpart',
       .map((c) => (c[1] as { replacements: { id: string } }).replacements.id);
     expect(replacements).toEqual(['shape-a']);
     expect(replacements).not.toContain('org-row');
+  });
+});
+
+/**
+ * AC8 — the ROLLBACK PATH, which attempt 1 left entirely untested.
+ *
+ * Attempt 1 tested `planInverse`, the pure inversion, and mistook that for
+ * testing the inverse. An independent verifier replaced the whole body of
+ * `runInverse` with `return []` and all 33 tests still passed: the function an
+ * operator actually invokes under pressure — carrying its OWN separate copy of
+ * the dry-run gate, and the only other code path that issues
+ * `UPDATE enrollments` — could be deleted without a single test noticing. That
+ * is the "would pass with the production code deleted" failure mode applied to
+ * a whole function, and it is why these tests exist.
+ */
+describe('T207 AC8 — runInverse, the path an operator actually runs', () => {
+  const FORWARD = [
+    { id: 'row-a', column: 'tier', from: 'member', to: 'guest' },
+    { id: 'row-b', column: 'enrollment_type', from: 'standard', to: 'explorer' },
+  ];
+  let ledgerPath: string;
+
+  beforeEach(() => {
+    ledgerPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 't207-')), 'ledger.json');
+    fs.writeFileSync(ledgerPath, JSON.stringify(FORWARD));
+  });
+
+  it('issues no UPDATE when confirm is false', async () => {
+    // runInverse has its own dry-run gate, separate from runForward's. Disabling
+    // only this one is the mutation that survived attempt 1.
+    await runInverse(ledgerPath, { confirm: false });
+    expect(updates()).toEqual([]);
+  });
+
+  it('still reads when declining to revert, so the empty list is not an empty run', async () => {
+    await runInverse(ledgerPath, { confirm: false });
+    expect(query.mock.calls.some((c) => String(c[0]).includes('FILTER (WHERE'))).toBe(true);
+  });
+
+  it('reverts every entry with from and to swapped when confirmed', async () => {
+    await runInverse(ledgerPath, { confirm: true });
+    const sent = query.mock.calls.filter((c) => /^\s*UPDATE/i.test(String(c[0])));
+    expect(sent).toHaveLength(2);
+    expect(sent.map((c) => (c[1] as { replacements: Record<string, string> }).replacements))
+      .toEqual([
+        // from/to inverted against FORWARD: the ledger is the only thing that
+        // knows which rows the sweep touched.
+        { id: 'row-a', from: 'guest', to: 'member' },
+        { id: 'row-b', from: 'explorer', to: 'standard' },
+      ]);
+  });
+
+  it('pins each revert to the value the forward run wrote', async () => {
+    await runInverse(ledgerPath, { confirm: true });
+    expect(String(query.mock.calls.filter((c) => /^\s*UPDATE/i.test(String(c[0])))[0][0]))
+      .toContain('UPDATE enrollments SET tier = :to WHERE id = :id AND tier = :from');
+  });
+});
+
+describe('T207 — the ledger is untrusted input on a path that writes to production', () => {
+  /**
+   * `entry.column` is interpolated into the identifier position of
+   * `UPDATE enrollments SET ${entry.column} = ...`, which bound parameters
+   * cannot cover. The file sits in /tmp on a production box and may be
+   * hand-edited between the forward run and the rollback.
+   */
+  it('rejects a column outside the two it is allowed to write', () => {
+    const hostile = JSON.stringify([
+      { id: 'x', column: 'payment_status', from: 'pending', to: 'paid' },
+    ]);
+    expect(() => parseLedger(hostile)).toThrow(/column must be 'tier' or 'enrollment_type'/);
+  });
+
+  it('rejects a column carrying SQL rather than a column name', () => {
+    const hostile = JSON.stringify([
+      { id: 'x', column: "tier = 'member', payment_status", from: 'a', to: 'b' },
+    ]);
+    expect(() => parseLedger(hostile)).toThrow(/column must be/);
+  });
+
+  it('names the offending index rather than skipping the entry', () => {
+    // A rollback that silently dropped a bad entry would under-revert and still
+    // report success.
+    const mixed = JSON.stringify([
+      { id: 'ok', column: 'tier', from: 'member', to: 'guest' },
+      { id: 'bad', column: 'tier', from: 'member', to: 7 },
+    ]);
+    expect(() => parseLedger(mixed)).toThrow(/ledger\[1\]/);
+  });
+
+  it('rejects a non-array and a missing id', () => {
+    expect(() => parseLedger('{"id":"x"}')).toThrow(/must be a JSON array/);
+    expect(() => parseLedger(JSON.stringify([{ column: 'tier', from: 'a', to: 'b' }])))
+      .toThrow(/id must be a non-empty string/);
+  });
+
+  it('accepts exactly what the forward run emits', () => {
+    // The control: without this, every assertion above would also pass if
+    // parseLedger rejected everything.
+    const good = [{ id: 'row-a', column: 'tier' as const, from: 'member', to: 'guest' }];
+    expect(parseLedger(JSON.stringify(good))).toEqual(good);
   });
 });

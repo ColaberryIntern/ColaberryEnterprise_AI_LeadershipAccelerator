@@ -17,6 +17,7 @@ import * as path from 'path';
 import {
   AGENT_IDENTITY_EMAILS,
   BackfillRow,
+  PROSPECT_LEAD_SOURCES,
   applyLedger,
   decideRow,
   exclusionsFor,
@@ -284,6 +285,57 @@ describe('T207 AC5 — a second run is a no-op', () => {
     const second = planBackfill(applyLedger(rows, first.ledger));
     expect(second.ledger).toHaveLength(0);
     expect(second.buckets.already_coherent).toBe(2);
+  });
+});
+
+describe('T207 — the disclosure offered INSTEAD of writing explorer_entered_at', () => {
+  /**
+   * This count is the whole substitute for not writing the column, and a
+   * verifier found it untested: hardcoding it to 0 left the suite green, so a
+   * silently-zero disclosure would have told an operator nothing while looking
+   * exactly like "no affected rows".
+   */
+  it('counts programme writes that leave explorer_entered_at NULL', () => {
+    const plan = planBackfill([
+      row({ id: 'null-ts', explorer_entered_at: null }),
+      row({ id: 'has-ts', explorer_entered_at: new Date('2026-07-19T00:00:00Z') }),
+      // A tier backfill is not a programme write and must not be counted.
+      row({ id: 'tier-only', enrollment_type: 'explorer', tier: 'member', explorer_entered_at: null }),
+    ]);
+    expect(plan.ledger).toHaveLength(3);
+    expect(plan.programmeWritesWithoutEntryTimestamp).toBe(1);
+  });
+
+  it('is zero when every programme write already carries a timestamp', () => {
+    const plan = planBackfill([row({ explorer_entered_at: new Date() })]);
+    expect(plan.ledger).toHaveLength(1);
+    expect(plan.programmeWritesWithoutEntryTimestamp).toBe(0);
+  });
+});
+
+describe('T207 — PROSPECT_LEAD_SOURCES cannot drift from the service it mirrors', () => {
+  /**
+   * The constant duplicates `prospectAccount.PROSPECT_ACCOUNT_SOURCES`. A
+   * comment saying it "mirrors" that list is not a mechanism: a second prospect
+   * source added there would silently un-protect that population here. Derived
+   * from source rather than pinned by hand, for the same reason the agent-email
+   * tripwire is.
+   */
+  it('contains every source prospectAccount.ts mints an account for', () => {
+    const src = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', 'services/leads/prospectAccount.ts'),
+      'utf8',
+    );
+    const decl = /PROSPECT_ACCOUNT_SOURCES[^=]*=\s*\[([^\]]*)\]/.exec(src);
+    expect(decl).not.toBeNull();
+    const declared = Array.from(decl![1].matchAll(/'([^']+)'/g)).map((m) => m[1]);
+    expect(declared.length).toBeGreaterThan(0);
+    for (const source of declared) {
+      expect(PROSPECT_LEAD_SOURCES).toContain(source);
+      // And it must actually exclude a row carrying that source.
+      expect(exclusionsFor(row({ lead_source: source, lead_form_type: null })))
+        .toContain('prospect_account');
+    }
   });
 });
 

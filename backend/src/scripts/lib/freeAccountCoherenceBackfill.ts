@@ -37,8 +37,12 @@
  * for human decision rather than guessing in either direction.
  */
 
-/** The marker `freeSignupService.captureGuestAsLead` falls back to on both fields. */
-export const FREE_SIGNUP_MARKER = 'free_signup';
+/**
+ * The marker `freeSignupService.captureGuestAsLead` falls back to on both fields.
+ * Internal: nothing outside this module reads it, and CLAUDE.md caps the public
+ * export surface at 12 symbols — this module was at 14.
+ */
+const FREE_SIGNUP_MARKER = 'free_signup';
 
 /**
  * The seeded staff/agent accounts, pinned so an agent identity is an explicit
@@ -107,7 +111,8 @@ export interface BackfillRow {
   explorer_entered_at?: Date | string | null;
 }
 
-export type BackfillBucket =
+/** Internal for the same export-ceiling reason as `FREE_SIGNUP_MARKER`. */
+type BackfillBucket =
   | 'tier_backfill'
   | 'programme_backfill'
   | 'paid_and_guest'
@@ -139,7 +144,14 @@ export interface BackfillPlan {
   /**
    * Rows Direction B would move into the Explorer programme while leaving
    * `explorer_entered_at` NULL. Written as exactly two columns per the plan, so
-   * this is DISCLOSED rather than silently patched; T209 owns the timestamp.
+   * this is DISCLOSED rather than silently patched.
+   *
+   * NO TASK CURRENTLY OWNS BACKFILLING THIS COLUMN. An earlier version of this
+   * comment said T209 did; that was wrong — `plan.md:471` makes T209 the
+   * Explorer lifecycle STAGE, and `explorer_entered_at` appears nowhere in the
+   * plan at all. T205 added the column (`plan.md:333`). The honest state is
+   * that this count is an open item for whoever picks it up, which is why the
+   * CLI prints it on every run instead of filing it behind a task number.
    */
   programmeWritesWithoutEntryTimestamp: number;
 }

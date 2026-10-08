@@ -110,6 +110,43 @@ function printCounts(label: string, c: ShapeCounts): void {
   );
 }
 
+const LEDGER_COLUMNS: ReadonlySet<string> = new Set(['tier', 'enrollment_type']);
+
+/**
+ * Validate a ledger read off disk BEFORE any part of it reaches SQL.
+ *
+ * `entry.column` lands in the identifier position of
+ * `UPDATE enrollments SET ${entry.column} = :to`, which `replacements` cannot
+ * parameterise — only values can be bound, never identifiers. The file is
+ * operator-supplied, lives in `/tmp` on a production box, and may have been
+ * hand-edited between the forward run and the rollback, so it is untrusted
+ * input on a path that writes to production. CLAUDE.md's Security layer is
+ * explicit that untrusted input is never interpolated into SQL.
+ *
+ * Rejects rather than coerces, and names the offending index, because a
+ * rollback that silently skipped a malformed entry would under-revert and
+ * report success.
+ */
+export function parseLedger(raw: string): LedgerEntry[] {
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('ledger must be a JSON array');
+  return parsed.map((candidate, i) => {
+    const e = candidate as Partial<LedgerEntry>;
+    if (typeof e?.id !== 'string' || !e.id) {
+      throw new Error(`ledger[${i}]: id must be a non-empty string`);
+    }
+    if (typeof e.column !== 'string' || !LEDGER_COLUMNS.has(e.column)) {
+      throw new Error(
+        `ledger[${i}]: column must be 'tier' or 'enrollment_type', got ${JSON.stringify(e.column)}`,
+      );
+    }
+    if (typeof e.from !== 'string' || typeof e.to !== 'string') {
+      throw new Error(`ledger[${i}]: from and to must both be strings`);
+    }
+    return { id: e.id, column: e.column as LedgerEntry['column'], from: e.from, to: e.to };
+  });
+}
+
 async function commitLedger(ledger: LedgerEntry[]): Promise<number> {
   let applied = 0;
   for (const entry of ledger) {
@@ -126,7 +163,7 @@ async function commitLedger(ledger: LedgerEntry[]): Promise<number> {
 }
 
 export async function runInverse(path: string, opts: RunOptions): Promise<LedgerEntry[]> {
-  const forward = JSON.parse(fs.readFileSync(path, 'utf8')) as LedgerEntry[];
+  const forward = parseLedger(fs.readFileSync(path, 'utf8'));
   const inverse = planInverse(forward);
   console.log(`\n== INVERSE of ${forward.length} forward write(s) ==`);
   for (const e of inverse) {
@@ -178,7 +215,7 @@ export async function runForward(opts: RunOptions): Promise<LedgerEntry[]> {
     console.log(
       `\nDISCLOSURE: ${plan.programmeWritesWithoutEntryTimestamp} row(s) would join the Explorer`
       + ' programme with explorer_entered_at still NULL. This script writes exactly two columns'
-      + ' by design; T209 owns the entry timestamp.',
+      + ' by design, and NO TASK CURRENTLY OWNS backfilling that column.',
     );
   }
 
