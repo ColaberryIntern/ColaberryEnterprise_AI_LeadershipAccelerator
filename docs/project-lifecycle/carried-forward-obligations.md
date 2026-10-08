@@ -657,6 +657,38 @@ incident whose row should cite the incident and the fix, not a summary written m
 someone reading the plan. **Owner: whoever next touches those phases, or Phase 8 when it
 assembles the table.**
 
+### OPEN, and the biggest gap in Phase 5: LC-10 and LC-11 are NOT delivered
+
+**Withdrawn 2026-10-08.** Ali accepted the block on `P5-T1.3` after five gradings (8/12,
+9/12, 7/12, 7/12, 8/12, with a criterion-6 zero in four). `P5-T5` depended on it and `P5-T6`
+depended on `P5-T5`, so both are dropped and both acceptance IDs leave the phase.
+
+**What is missing, in product terms rather than task numbers:**
+
+- **LC-10** — nothing binds an approval to an authorized human, a tenant, an exact manifest
+  revision AND its content hash. The DDL and the CAS exist; the surface that uses them does
+  not. So **a blueprint cannot be approved through the product**.
+- **LC-11** — no impact preview, and no selective reapproval. A material change cannot
+  invalidate only the affected approvals, and stale downstream work is not blocked.
+
+**WHY THIS IS NOT A FRESH-START SITUATION, which is the part worth knowing.** The code T1.3
+produced is green, committed and typechecked: `manifestWriter.ts` with a refs-hash idempotency
+key, two partial unique indexes behind it, additive DDL with a paired schema assert, and a
+verify script that NAMES a missing column rather than only counting. **Production can create
+an `operating_blueprint_manifests` row for the first time**, which closed the third of the
+three dependencies Phase 4’s handoff named.
+
+What failed five gradings was the EVIDENCE, not the behaviour — across eleven gradings in that
+session not one failure was a broken behaviour the tests had passed over. So a later phase
+picking up T5 inherits a working writer and an intact specification (left in place in
+`plan-phase5.md`, marked DROPPED rather than deleted), and owes the verification T1.3 could
+not produce.
+
+**The honest risk in picking it up**: the same producer discipline that failed five times on
+T1.3 is what T5’s approval path would need, and approval is the single most security-sensitive
+surface in the lifecycle — it is where a forged or stale approval would land. Whoever takes it
+should expect the verification to cost more than the code.
+
 ### KNOWN, not a defect: the lifecycle suites cannot run on a TRULY empty database
 
 A fresh, empty Postgres makes `designPersistence.test.ts` fail, and the failure LOOKS like a
