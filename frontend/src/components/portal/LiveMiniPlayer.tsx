@@ -146,13 +146,18 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
   if (!session) return null;
 
   const status = statusLine(snapshot);
-  // No phase check here, deliberately. The adapter clears `autoplayBlocked` in `deny()` and
-  // `giveUp()` — both of which also clear `media.src`, so a gesture would have nothing to
-  // start — and two adapter tests enforce that ("drops the flag when a later renewal is
-  // DENIED" and "...when the recovery budget is spent"). An extra guard here was unreachable
-  // given that invariant: removing it changed no test, which is the definition of code that
-  // cannot be verified. Reading the flag directly means the component's own tests now fail if
-  // the adapter ever stops upholding it.
+  // No phase check here. The adapter owns the invariant that `autoplayBlocked` is false in
+  // every state where a gesture could not help: `deny()`, `giveUp()`, `onEnded()` and the
+  // `play` listener all clear it, and each of those is enforced by a named adapter test.
+  //
+  // AN EARLIER VERSION OF THIS COMMENT WAS WRONG and is corrected rather than deleted. It
+  // claimed a `phase !== 'ended'` guard here was "unreachable", on the evidence that removing
+  // it broke no test. That evidence supports two readings — unreachable, or reachable and
+  // untested — and the second was the true one: nothing cleared the flag on `ended`, and
+  // nothing cleared it when the viewer pressed the element's OWN play button, which is the
+  // gesture they actually make because `controls` is on the <video>. The fix belongs in the
+  // adapter, which is where the flag lives; the guard would only have hidden it on one of the
+  // two paths.
   const needsGesture = snapshot.autoplayBlocked;
   const preview = previewLabel(snapshot.previewSecondsRemaining);
   const stopped = snapshot.phase === 'denied' || snapshot.phase === 'failed';

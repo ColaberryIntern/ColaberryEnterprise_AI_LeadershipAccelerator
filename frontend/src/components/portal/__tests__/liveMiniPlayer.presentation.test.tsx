@@ -485,6 +485,37 @@ describe('denied autoplay offers a labelled control, not a dead player', () => {
     expect(find('lmp-resume')).not.toBeNull();
   });
 
+  it('withdraws the control when the viewer uses the VIDEO\'s own play button', async () => {
+    // The element renders native `controls`, so this is the gesture a viewer actually makes.
+    // It never reaches `resume()`. Before the adapter listened for `play`, the custom button
+    // and the "blocked playback" message stayed up for the entire replay.
+    refusePlay();
+    await mount();
+    const video = container.querySelector('video')!;
+    expect(video.getAttribute('controls')).not.toBeNull();
+    expect(find('lmp-resume')).not.toBeNull();
+
+    await act(async () => { video.dispatchEvent(new Event('play')); });
+
+    expect(find('lmp-resume')).toBeNull();
+    expect(find('lmp-status')?.textContent ?? '').not.toMatch(/blocked playback/i);
+  });
+
+  it('lets `Finished.` through when the replay ends after a refusal', async () => {
+    // A stale flag outranks `statusLine` in the live region, so a finished replay would still
+    // be telling the viewer to press Play.
+    refusePlay();
+    await mount();
+    expect(find('lmp-status')?.textContent).toMatch(/press Play/i);
+
+    await act(async () => {
+      container.querySelector('video')!.dispatchEvent(new Event('ended'));
+    });
+
+    expect(find('lmp-resume')).toBeNull();
+    expect(find('lmp-status')?.textContent).toMatch(/Finished/i);
+  });
+
   it('withdraws the control when the broadcast is denied AFTER the refusal', async () => {
     // The case the previous test could not reach, and a surviving mutation proved it: there,
     // the denial arrives before any play() call, so the flag is never raised and the button

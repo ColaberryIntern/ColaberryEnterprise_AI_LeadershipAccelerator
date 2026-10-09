@@ -719,6 +719,64 @@ describe('denied autoplay is reported, not swallowed', () => {
     expect(h.adapter.snapshot().phase).toBe('playing');
   });
 
+  it('clears the flag when the viewer presses the ELEMENT\'s own play control', async () => {
+    // The gap an independent check found, and the one that mattered most: the <video> carries
+    // native `controls`, so the obvious gesture never passes through `resume()`. Without a
+    // `play` listener the flag stayed true for the whole replay — a "Play" button and a
+    // "your browser blocked playback" message on top of a video that was playing fine.
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+
+    // Exactly what the browser emits when the native control is pressed. No call to
+    // resume(), no call to play() from our code.
+    const callsBefore = h.media.play.mock.calls.length;
+    h.emitMedia('play');
+
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(false);
+    expect(h.media.play).toHaveBeenCalledTimes(callsBefore);
+  });
+
+  it('clears the flag on `ended`, so it cannot suppress the real status line', async () => {
+    // `statusLine` answers 'Finished.' for phase 'ended'. A stale flag outranks it in the
+    // live region, so a finished replay would still be reading "press Play to start".
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+
+    h.emitMedia('ended');
+
+    expect(h.adapter.snapshot()).toMatchObject({ phase: 'ended', autoplayBlocked: false });
+  });
+
+  it('DETACHES every listener on stop(), counted rather than inferred', async () => {
+    // My first version of this test dispatched `play` after stop() and asserted no new
+    // snapshot. It could not fail: stop() has already set the flag false and `onPlay` returns
+    // early on `stopped`, so nothing is published whether the listener was removed or not.
+    // A surviving mutation said so. The listener SET is the observable thing, and the <video>
+    // deliberately outlives every state change, so a listener left attached accumulates once
+    // per open/close cycle for as long as the page lives.
+    const h = harness();
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+    expect(h.listeners.play?.length ?? 0).toBe(1);
+    expect(h.listeners.error?.length ?? 0).toBe(1);
+    expect(h.listeners.ended?.length ?? 0).toBe(1);
+
+    h.adapter.stop();
+
+    expect(h.listeners.play?.length ?? 0).toBe(0);
+    expect(h.listeners.error?.length ?? 0).toBe(0);
+    expect(h.listeners.ended?.length ?? 0).toBe(0);
+  });
+
   it('drops the flag when a later renewal is DENIED, so it cannot outlive the media', async () => {
     // The sequence a surviving mutation (M13) exposed: autoplay is refused, the viewer has
     // not pressed Play yet, and meanwhile the replay is unpublished. The renewal comes back

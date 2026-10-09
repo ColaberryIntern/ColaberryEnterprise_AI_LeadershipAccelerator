@@ -347,10 +347,36 @@ export function createPlaybackAdapter(
     recover(expired ? 'credential_expired' : 'media_error');
   }
 
+  /**
+   * Playback started — and the gesture that started it probably never came through here.
+   *
+   * THE ELEMENT CARRIES NATIVE `controls`. So the obvious thing a viewer does when they see a
+   * paused video is press the element's own play button, which bypasses `resume()` entirely.
+   * Without this listener `autoplayBlocked` stayed true for the rest of the replay: the
+   * labelled "Play" control and the "your browser blocked playback" live-region message sat on
+   * screen for ninety minutes of a video that was playing fine, and then survived into
+   * `phase: 'ended'`, where they suppressed the real status line ("Finished.").
+   *
+   * FOUND BY AN INDEPENDENT CHECK, and the deeper mistake is worth recording: an earlier pass
+   * deleted the component's `phase !== 'ended'` guard because removing it broke no test, and
+   * read that as "the state is unreachable". The other reading — "the state is reachable and
+   * untested" — was the correct one. `play` is the right event rather than `playing`: it
+   * fires when playback is no longer being refused, which is exactly what the flag tracks,
+   * and it does not wait for buffering.
+   */
+  function onPlay(): void {
+    if (stopped) return;
+    if (state.autoplayBlocked) emit({ autoplayBlocked: false });
+  }
+
   function onEnded(): void {
     if (stopped) return;
     cancelTimer();
-    emit({ phase: 'ended', reason: null, credentialExpiresAt: null });
+    // Cleared here too, so the flag cannot outlive the playback it describes even if the
+    // `play` event was never seen (a `src` that ends without ever starting, say).
+    emit({
+      phase: 'ended', reason: null, credentialExpiresAt: null, autoplayBlocked: false,
+    });
   }
 
   return {
@@ -359,6 +385,7 @@ export function createPlaybackAdapter(
       stopped = false;
       media.addEventListener('error', onMediaError);
       media.addEventListener('ended', onEnded);
+      media.addEventListener('play', onPlay);
       // Guarded, not unconditional: an unconditional emit here publishes an extra `idle`
       // snapshot on every start, which is noise for every subscriber.
       if (state.autoplayBlocked) emit({ autoplayBlocked: false });
@@ -370,6 +397,7 @@ export function createPlaybackAdapter(
       cancelTimer();
       media.removeEventListener('error', onMediaError);
       media.removeEventListener('ended', onEnded);
+      media.removeEventListener('play', onPlay);
       // Clear the source so no in-flight range request carries a live credential onward.
       media.src = '';
       emit({
