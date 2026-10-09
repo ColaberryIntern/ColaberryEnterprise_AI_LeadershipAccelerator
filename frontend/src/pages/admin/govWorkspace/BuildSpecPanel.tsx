@@ -16,6 +16,31 @@ import { getGovBuildSpec, type GovBuildSpec } from '../../../services/factoryApi
  */
 const CLAMP_PX = 340;
 
+/**
+ * SpecBody — render the AI build spec as scannable sections. The model writes capability blocks as
+ * "Heading: prose…" separated by blank lines; we bold each heading and mark it with an icon, so the spec
+ * reads as a list of capabilities rather than a wall of text.
+ */
+function SpecBody({ text }: { text: string }): React.ReactElement {
+  const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  return (
+    <div className="small">
+      {blocks.map((b, i) => {
+        const m = b.match(/^([A-Z][A-Za-z0-9 &/,'()-]{1,48}?):\s+([\s\S]+)$/);
+        if (m) {
+          return (
+            <div key={i} className="mb-2">
+              <div className="fw-semibold"><i className="ri-focus-3-line me-1 text-primary" aria-hidden="true" />{m[1]}</div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{m[2]}</div>
+            </div>
+          );
+        }
+        return <p key={i} className="mb-2" style={{ whiteSpace: 'pre-wrap' }}>{b}</p>;
+      })}
+    </div>
+  );
+}
+
 export function BuildSpecPanel({ canonical, requirements, title, buyer, daysLeft }: {
   canonical: string;
   requirements: { id: string; text: string }[];
@@ -64,7 +89,7 @@ export function BuildSpecPanel({ canonical, requirements, title, buyer, daysLeft
                 <div className="col-12">
                   <div className="border rounded p-3 h-100">
                     <div className="fw-semibold small mb-1"><i className="ri-tools-line me-1" aria-hidden="true" />Build spec — capabilities &amp; functionality</div>
-                    <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{spec.spec}</div>
+                    <SpecBody text={spec.spec} />
                   </div>
                 </div>
               )}
