@@ -143,7 +143,7 @@ describe('AdminGovQualificationPage — journey', () => {
     await renderAt(`?canonical=${CANON}`);
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(container.textContent ?? '').toContain('No applicable requirements have been established');
+    expect(container.textContent ?? '').toContain('Confirm the detected requirements to establish them');
   });
 
   it('changed source → review-changes prompt and Approve disabled', async () => {
@@ -419,7 +419,7 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Requirements by due stage');           // renders from evaluation on the decoupled path
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(text).toContain('solicitation ZIP has not been attested yet'); // honest coverage reason, not an OP-source block
+    expect(text).toContain('Attest the solicitation ZIP as the evidence of record'); // honest coverage reason, not an OP-source block
   });
 
   it('Requirements by due stage caps a long list to a few and expands on "Show all"', async () => {
@@ -565,6 +565,23 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(factoryApi.attestSolicitationZip).toHaveBeenCalled();                // AND attested the same ZIP
     expect((factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0][1].mode).toBe('add');
     expect(container.textContent ?? '').toContain('SAM registration required.'); // candidates shown
+  });
+
+  it('decoupled + no record yet: one "Extract & attest" AUTO-OPENS the qualification, then attests (no separate Open step)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({ qualification: null, zipAttestation: null }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
+    (factoryApi.createGovQualification as jest.Mock).mockResolvedValue({ qualification: { id: 'q1', version: 1 } });
+    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const inp = container.querySelector('input[type=file]') as HTMLInputElement;
+    Object.defineProperty(inp, 'files', { value: [new File(['zip'], 'sol.zip', { type: 'application/zip' })], configurable: true });
+    await act(async () => { inp.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Extract & attest');
+    await flush();
+    expect(factoryApi.createGovQualification).toHaveBeenCalled();                                     // auto-opened the qualification
+    expect(factoryApi.attestSolicitationZip).toHaveBeenCalled();                                      // then attested the ZIP
+    expect((factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0][1].expectedVersion).toBe(1); // bound to the just-created version
   });
 
   it('decoupled: when the server says canApprove (requirements + attested ZIP), Approve is ENABLED and calls approveGovQualification', async () => {

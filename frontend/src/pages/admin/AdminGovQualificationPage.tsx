@@ -19,6 +19,8 @@ import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './gov
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
+import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
+import { scheduleReleases } from './govWorkspace/buildSchedule';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -56,11 +58,11 @@ const BLOCK_REASON: Record<string, string> = {
   submission_prerequisite_no_evidence: 'Binding submission requirement with no evidence on file',
 };
 const COVERAGE_REASON: Record<string, string> = {
-  no_requirements_established: 'No applicable requirements have been established yet (an empty list is not "no requirements")',
-  no_zip_attested: 'The solicitation ZIP has not been attested yet — attest it below before a pursuit can be approved',
-  no_authoritative_source: 'The authoritative solicitation was not established/reviewed',
-  authoritative_package_unreviewed: 'An amendment or the base solicitation has not been reviewed',
-  document_coverage_unknown: 'Document coverage is unknown or inaccessible',
+  no_requirements_established: 'Confirm the detected requirements to establish them — on Solicitation, click "Establish selected" (nothing is established until you confirm)',
+  no_zip_attested: 'Attest the solicitation ZIP as the evidence of record — upload it on the Solicitation step (one upload opens the qualification and attests it)',
+  no_authoritative_source: 'Establish / review the authoritative solicitation',
+  authoritative_package_unreviewed: 'Review the base solicitation or its amendment',
+  document_coverage_unknown: 'Document coverage is unknown or inaccessible — re-check the uploaded package',
 };
 
 // The seven numbered pursuit STEPS (and the legacy ?tab= → step mapping) live in
@@ -869,6 +871,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<ExtractedRequirementCandidate[] | null>(null);
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
+  const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
@@ -924,10 +927,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
   // Every write runs one at a time (in-flight guard → no duplicate qualification/decision from repeated clicks),
   // reloads the server truth, and maps its error to a recoverable state.
-  const run = useCallback(async (fn: () => Promise<any>, okNote: string) => {
+  // onSuccess (optional) fires ONLY after the write resolved and the server truth reloaded — never on a
+  // thrown/blocked write (a 403 lands in catch), so a navigation passed here cannot fire on a failed approve.
+  const run = useCallback(async (fn: () => Promise<any>, okNote: string, onSuccess?: () => void) => {
     if (inFlight.current) return;         // synchronous: blocks a same-tick double-click before any await
     inFlight.current = true; setBusy(true); setActionError(null); setNotice(null);
-    try { await fn(); setNotice(okNote); await load(); }
+    try { await fn(); setNotice(okNote); await load(); onSuccess?.(); }
     catch (err: any) { setActionError(errToAction(err)); }
     finally { inFlight.current = false; setBusy(false); }
   }, [load]);
@@ -1000,18 +1005,27 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     }, `Established ${mapped.length} requirement(s) from the solicitation.`);
   };
 
-  // ONE upload does both: extract the requirement candidates (read-only) AND attest the SAME ZIP as the evidence of
-  // record (a server hash). Attestation runs only on the decoupled path once the qualification is open and it is not
-  // already attested; it is skipped silently otherwise (e.g. before Open qualification), and extraction still stands.
+  // ONE upload does it ALL on the decoupled path: extract the requirement candidates (read-only) AND attest the SAME
+  // ZIP as the evidence of record (a server hash) — AUTO-OPENING the qualification first if it isn't open yet. No
+  // separate "Open qualification" click is needed: upload opens it and attests in one step. If the qualification is
+  // already open, it just attests (unless already attested). Extraction always stands.
   const uploadSolicitationZip = useCallback(async () => {
     const extracted = await extract();
-    if (extracted && isDecoupled && record && version && extractFile && !(ws && ws.zipAttestation && ws.zipAttestation.sha256)) {
+    if (!extracted || !isDecoupled || !extractFile) return;
+    if (!record) {
+      await run(async () => {
+        const created = await createGovQualification(canonical, { biddingEntity, from: fromParam || undefined, agency: agencyParam || undefined });
+        await attestSolicitationZip(canonical, { biddingEntity, expectedVersion: created.qualification.version, mode: 'add', file: extractFile });
+      }, 'Qualification opened, and the ZIP extracted and attested as the evidence of record. Confirm the detected requirements below.');
+      return;
+    }
+    if (version && !(ws && ws.zipAttestation && ws.zipAttestation.sha256)) {
       await run(
         () => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'add', file: extractFile }),
         'Solicitation ZIP extracted and attested as the evidence of record.',
       );
     }
-  }, [extract, isDecoupled, record, version, extractFile, ws, run, canonical, biddingEntity]);
+  }, [extract, isDecoupled, record, version, extractFile, ws, run, canonical, biddingEntity, fromParam, agencyParam]);
 
   return (
     <div className="admin-page">
@@ -1213,7 +1227,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <>
                   <div className="small text-secondary mb-2">{candidates.length} candidate requirement(s) detected <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span></div>
                   <ul className="list-unstyled mb-3">
-                    {candidates.map((c, idx) => {
+                    {(showAllCandidates ? candidates : candidates.slice(0, 10)).map((c, idx) => {
                       const row = candRows[c.id] ?? { checked: true, applicability: 'always', dueStage: 'submission' };
                       return (
                         <li key={c.id + idx} className="py-2 border-bottom">
@@ -1243,6 +1257,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                       );
                     })}
                   </ul>
+                  {candidates.length > 10 && (
+                    <button type="button" className="btn btn-link btn-sm px-0 mb-2 d-block" onClick={() => setShowAllCandidates((v) => !v)} aria-expanded={showAllCandidates}>
+                      {showAllCandidates ? 'Show fewer' : `Show all ${candidates.length} (${candidates.length - 10} more) — all are selected by default`}
+                    </button>
+                  )}
                   {record ? (
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy || selectedCandidateCount === 0} onClick={establishSelected}>
                       <i className="ri-check-double-line me-1" aria-hidden="true" />Establish selected ({selectedCandidateCount})
@@ -1366,7 +1385,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <RequirementStageList key={stage} stage={stage} rows={ws.evaluation!.byDueStage[stage]} />
               ))}
               {ws.coverage && !ws.coverage.sufficient && (
-                <div className="small text-warning-emphasis mt-2"><i className="ri-information-line me-1" aria-hidden="true" />Coverage not yet sufficient for approval: {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
+                <div className="small text-warning-emphasis mt-2"><i className="ri-guide-line me-1" aria-hidden="true" /><strong>Before this pursuit can be approved, do this next:</strong> {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
               )}
               {(ws.evaluation.openSubmissionRequirements?.length ?? 0) > 0 && (
                 <div className="small text-secondary mt-2"><i className="ri-information-line me-1" aria-hidden="true" />{ws.evaluation.openSubmissionRequirements!.length} submission requirement{ws.evaluation.openSubmissionRequirements!.length === 1 ? '' : 's'} still need evidence. These do <strong>not</strong> block approving the <strong>pursuit</strong> (research) — they must be evidenced before a bid is <strong>submitted</strong>.</div>
@@ -1447,7 +1466,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* ── Qualification drawer: provenance / assessment / approvals. Always reachable from any tab, but
                 de-emphasized (collapsible) so it does not dominate the workspace; open by default only until a
                 record exists so "Open qualification" is one glance away on arrival. ─ */}
-          <SectionCard title="Qualification drawer — open, decide & approve" icon="quill-pen-line" collapsible defaultOpen={!record}>
+          <SectionCard key={record?.decision ?? 'none'} title="Qualification drawer — open, decide & approve" icon="quill-pen-line" collapsible defaultOpen={!record || record.decision !== 'approved_bid_pursuit'}>
             <div className="mb-3 d-flex flex-wrap align-items-end gap-2">
               <label className="form-label small mb-0">Bidding entity
                 <input className="form-control form-control-sm" value={biddingEntity} onChange={(e) => setBiddingEntity(e.target.value)} />
@@ -1502,7 +1521,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <div className="d-flex flex-wrap align-items-center gap-3">
                   <button type="button" className="btn btn-success" disabled={busy || !ws.canApprove}
                     title={ws.canApprove ? undefined : 'Approval is blocked until the source is current and every requirement is established, evidenced, and cleared.'}
-                    onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.')}>
+                    onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.', () => setStep('build'))}>
                     <i className="ri-shield-check-line me-1" aria-hidden="true" />Approve bid pursuit
                   </button>
                   {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.') : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
@@ -1516,7 +1535,43 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </SectionCard>
 
           <GovTabPanel active={activeStep === 'build'}>
-          {/* ── Build tab: the solution-build track (forward) + the separate build authorization ─ */}
+          {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}
+          {(
+            <SectionCard title="Build spec & buyer-system research (AI)" icon="sparkling-2-line"
+              subtitle="After approval: a lengthy spec of the capabilities we'd build, plus advisory research into the buyer's likely systems so a vague 'connect to their system' becomes a concrete integration target. Advisory only — it authors no story and changes no gate.">
+              <BuildSpecPanel canonical={canonical}
+                requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
+                title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
+                daysLeft={daysLeft(oppDetail?.opportunity?.closeDate ?? null)} />
+            </SectionCard>
+          )}
+          {(() => {
+            const releases = ws.build?.releases ?? [];
+            if (releases.length === 0) return null;
+            const deadlineSrc = oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null;
+            const schedule = scheduleReleases(releases.map((r) => ({ key: r.key, name: r.name })), { deadline: deadlineSrc, now: new Date() });
+            return (
+              <SectionCard title="Release schedule — deadline-aware" icon="calendar-schedule-line"
+                subtitle="Each release back-scheduled from the submission deadline (with a short buffer) so the plan finishes on time. Advisory planning overlay — it changes no story and no gate.">
+                {schedule.unscheduled
+                  ? <div className="small text-secondary mb-2"><i className="ri-information-line me-1" aria-hidden="true" />No submission deadline captured yet — windows are laid out forward from today at a default cadence (unscheduled).</div>
+                  : <div className={`small mb-2 ${schedule.feasible ? 'text-success' : 'text-danger'}`}>
+                      <i className={`me-1 ${schedule.feasible ? 'ri-check-line' : 'ri-error-warning-line'}`} aria-hidden="true" />
+                      {schedule.feasible
+                        ? <>Scheduled to finish on/before the deadline ({schedule.deadline}), with a submission buffer.</>
+                        : <>The deadline ({schedule.deadline}) leaves no room to back-schedule — the last window is pinned to the latest feasible point. Compress scope or escalate the date.</>}
+                    </div>}
+                <ul className="list-unstyled mb-0 small">
+                  {schedule.releases.map((r) => (
+                    <li key={r.key} className="d-flex flex-wrap justify-content-between border-bottom py-1 gap-2">
+                      <span className="fw-semibold">{r.name}</span>
+                      <span className="text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>{r.startDate} → {r.endDate}</span>
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+            );
+          })()}
           {(
             <SectionCard title="Solution build track — releases, stories & prompts" icon="tools-line"
               subtitle="The won proposal's technical requirements, projected into buildable stories (each citing its requirement) with a student Claude Code prompt. A pursuit approval is NOT a build authorization, and the autonomous builder stays parked — nothing here runs a build.">

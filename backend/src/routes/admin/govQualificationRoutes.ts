@@ -32,6 +32,7 @@ import { FLAGS } from '../../config/featureFlags';
 import { ensureGovTwoTrackProject } from '../../services/factory/govDeliveryProject';
 import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
 import { generateRiskNarrative, generateProposalSummary } from '../../services/factory/govBidNarrative';
+import { generateBuildSpec } from '../../services/factory/govBuildSpec';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -442,6 +443,37 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/proposal-s
     res.json(result);
   } catch (err: any) {
     logFail('gov_proposal_summary_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the proposal summary.' });
+  }
+});
+
+const buildSpecBody = z.object({
+  requirements: z.array(z.object({ id: z.string().max(60), text: z.string().max(4000) })).max(200),
+  title: z.string().max(300).nullable().optional(),
+  buyer: z.string().max(200).nullable().optional(),
+  daysLeft: z.number().int().nullable().optional(),
+});
+
+/** POST …/build-spec — a lengthy, advisory build spec + buyer-system research from the established requirements.
+ *  Advisory only (gates nothing); fails soft (no key / upstream → the service returns an `error` we map to 503). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/build-spec', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const body = buildSpecBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: 'Invalid requirements payload.' }); return; }
+  const scope = await scopeOrFail(res, 'gov_build_spec_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const result = await generateBuildSpec({
+      requirements: body.data.requirements,
+      title: body.data.title ?? null,
+      buyer: body.data.buyer ?? null,
+      daysLeft: body.data.daysLeft ?? null,
+    });
+    if (result.error) { res.status(result.error.includes('No established') ? 400 : 503).json({ error: result.error }); return; }
+    res.json(result);
+  } catch (err: any) {
+    logFail('gov_build_spec_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the build spec.' });
   }
 });
 

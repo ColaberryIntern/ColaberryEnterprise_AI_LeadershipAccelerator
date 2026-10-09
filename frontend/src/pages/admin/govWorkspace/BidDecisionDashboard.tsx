@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { SectionCard, StatCard } from '../../../components/admin/shell';
 import MermaidDiagram from '../../../components/visuals/MermaidDiagram';
 import { fmtValue } from '../govOppFormat';
@@ -54,18 +54,25 @@ export function BidDecisionDashboard({ signals, canonical }: { signals: BidSigna
   const a = useMemo(() => assessBid(input), [input]);
   const tone = BAND_TONE[a.band] ?? 'secondary';
 
+  const narrativeKey = `govRiskNarrative:${canonical}`;
   const [narrative, setNarrative] = useState<GovRiskNarrative | null>(null);
   const [narrativeBusy, setNarrativeBusy] = useState(false);
   const [narrativeErr, setNarrativeErr] = useState<string | null>(null);
+  // Keep the previously-generated read (per-viewer convenience) so a revisit does not force a re-run.
+  useEffect(() => {
+    try { const raw = localStorage.getItem(narrativeKey); if (raw) setNarrative(JSON.parse(raw) as GovRiskNarrative); } catch { /* storage may be unavailable */ }
+  }, [narrativeKey]);
   const explain = async (): Promise<void> => {
     setNarrativeBusy(true); setNarrativeErr(null);
     try {
-      setNarrative(await getGovRiskNarrative(canonical, {
+      const n = await getGovRiskNarrative(canonical, {
         band: a.band, pwin: a.pwin, preliminary: a.preliminary, expectedValue: a.expectedValue, daysLeft: a.daysLeft,
         knockouts: a.knockouts.map((k) => ({ category: k.categoryLabel, text: k.text, status: k.status })),
         factors: a.factors.map((f) => ({ label: f.label, score: f.score, weight: f.weight })),
         buyer: signals.buyer ?? null, title: signals.title ?? null,
-      }));
+      });
+      setNarrative(n);
+      try { localStorage.setItem(narrativeKey, JSON.stringify(n)); } catch { /* ignore */ }
     } catch {
       setNarrativeErr('Could not generate the AI read right now.');
     } finally {

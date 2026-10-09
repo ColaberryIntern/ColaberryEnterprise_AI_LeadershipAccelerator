@@ -680,6 +680,17 @@ export async function getGovProposalSummary(
   return data;
 }
 
+/** AI build spec + advisory buyer-system research (post-approval Build step). Advisory only — gates nothing;
+ *  `research` is LLM-knowledge-based and labelled "likely / verify" (the backend has no live web search). */
+export interface GovBuildSpec { spec: string; research: string; generatedAt: string; cached: boolean; }
+export async function getGovBuildSpec(
+  canonicalOpportunityId: string,
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; daysLeft?: number | null },
+): Promise<GovBuildSpec> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/build-spec'), body);
+  return data;
+}
+
 /** Record a NON-approval decision and/or the reviewer-established cited requirements. */
 export async function recordGovQualificationDecision(canonicalOpportunityId: string, body: {
   biddingEntity: string; expectedVersion: number; decision: 'pending_review' | 'needs_evidence' | 'no_bid';

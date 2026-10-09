@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getGovProposalSummary, type GovProposalSummary } from '../../../services/factoryApi';
 
 /**
@@ -12,13 +12,21 @@ export function ProposalSummaryPanel({ canonical, requirements, title, buyer }: 
   title?: string | null;
   buyer?: string | null;
 }): React.ReactElement {
+  const storeKey = `govProposalSummary:${canonical}`;
   const [summary, setSummary] = useState<GovProposalSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Keep the previously-generated summary (per-viewer convenience) so a revisit does not force a re-run.
+  useEffect(() => {
+    try { const raw = localStorage.getItem(storeKey); if (raw) setSummary(JSON.parse(raw) as GovProposalSummary); } catch { /* storage may be unavailable */ }
+  }, [storeKey]);
   const run = async (): Promise<void> => {
     setBusy(true); setErr(null);
-    try { setSummary(await getGovProposalSummary(canonical, { requirements, title: title ?? null, buyer: buyer ?? null })); }
-    catch { setErr('Could not generate the summary right now.'); }
+    try {
+      const s = await getGovProposalSummary(canonical, { requirements, title: title ?? null, buyer: buyer ?? null });
+      setSummary(s);
+      try { localStorage.setItem(storeKey, JSON.stringify(s)); } catch { /* ignore */ }
+    } catch { setErr('Could not generate the summary right now.'); }
     finally { setBusy(false); }
   };
   return (
