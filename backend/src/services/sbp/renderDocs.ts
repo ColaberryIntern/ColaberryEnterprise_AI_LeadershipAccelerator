@@ -290,4 +290,3 @@ export function manifestPaths(files: RenderedFile[]): string[] {
   const parsed = JSON.parse(manifest.content) as { files: Array<{ path: string }> };
   return parsed.files.map((f) => f.path);
 }
-
