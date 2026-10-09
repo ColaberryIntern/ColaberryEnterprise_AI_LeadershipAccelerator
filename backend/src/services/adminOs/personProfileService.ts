@@ -15,6 +15,7 @@ import {
   loadAcquisition, loadAppointments, loadAutomation,
 } from './panels/acquisitionPanels';
 import { JourneySummary, buildJourney } from './panels/journeyPanel';
+import { ExplorerScorePanel, loadExplorerScore } from './panels/explorerPanel';
 import { ClassActivityPanel, CurriculumPanel, loadClassActivity, loadCurriculum } from './panels/classPanels';
 import { WorkPanel, loadWork } from './panels/workPanels';
 import { AccountPanel, BillingDetailPanel, loadAccount, loadBillingDetail } from './panels/accountPanels';
@@ -61,6 +62,7 @@ export type {
   AcquisitionPanel, AppointmentRow, AutomationRow,
 } from './panels/acquisitionPanels';
 export type { JourneySummary } from './panels/journeyPanel';
+export type { ExplorerScorePanel } from './panels/explorerPanel';
 export type { ClassActivityPanel, CurriculumPanel } from './panels/classPanels';
 export type { WorkPanel, ProjectRow, CaseStudyRow, CapstoneRow, CertPrepPanel } from './panels/workPanels';
 export type { AccountPanel, BillingDetailPanel, SubscriptionRow } from './panels/accountPanels';
@@ -152,6 +154,11 @@ export interface PersonProfile {
    * answered has already been answered by the enrolment.
    */
   intentSuppressedReason?: string;
+  /**
+   * T211: Engagement / Intent / Fit as the growth engine sees them. Null when
+   * no snapshot exists — which is most non-Explorers — rather than 0/0/0.
+   */
+  explorerScore?: ExplorerScorePanel | null;
   trust?: TrustPanel;
   journey?: JourneySummary;
   timeline?: TimelineEvent[];
@@ -193,6 +200,13 @@ function may(panel: string, sections: readonly string[]): boolean {
 }
 
 /** Whether a caller with these sections may read a named panel. The one rule, exported for per-panel endpoints. */
+/**
+ * T211: this is the CANONICAL person assembler. The other two read-side views
+ * declare 'answers' and say which different question they answer; a tripwire
+ * asserts exactly one module claims this.
+ */
+export const PERSON_VIEW_ROLE = 'canonical' as const;
+
 export function mayReadPanel(panel: string, sections: readonly string[]): boolean {
   return may(panel, sections);
 }
@@ -465,6 +479,13 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   profile.timelineDomains = domains;
   profile.timeline = await getPersonTimeline({ leadIds, enrollmentIds, domains, limit: 150 });
   profile.journey = await buildJourney(leadIds, enrollmentIds, query.sections, profile.timeline);
+
+  // T211: Explorer E/I/F, gated on the same sections as acquisition because it
+  // is a conversion signal. Null for anyone the scorer has not assessed, which
+  // is the honest answer and not 0/0/0.
+  if (may('acquisition', query.sections)) {
+    profile.explorerScore = await loadExplorerScore(enrollmentIds);
+  }
 
   profile.trust = buildTrust(profile, leadIds, enrollmentIds);
 

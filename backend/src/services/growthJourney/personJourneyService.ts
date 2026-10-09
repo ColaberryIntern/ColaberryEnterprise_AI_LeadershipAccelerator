@@ -99,6 +99,13 @@ function pick<K extends readonly string[]>(row: Record<string, unknown>, keys: K
 }
 
 /** A row against the clause the queries carry - equality or membership per key - so the in-memory filter IS the query's scope. */
+/**
+ * T211: NOT a competing person profile. This answers what the growth journey
+ * has DECIDED for a lead — classifications, decisions and handoffs keyed on
+ * lead_id. `adminOs/personProfileService` is the canonical assembler.
+ */
+export const PERSON_VIEW_ROLE = 'answers' as const;
+
 export function matchesScope(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
   return Object.entries(where).every(([k, v]) => (Array.isArray(v) ? v.includes(row[k]) : row[k] === v));
 }

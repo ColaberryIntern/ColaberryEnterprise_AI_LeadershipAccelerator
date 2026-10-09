@@ -49,6 +49,14 @@ export interface AcquisitionPanel {
   evaluating90Days: boolean | null;
   createdAt: string | null;
   leadId: number | null;
+  /**
+   * T211: the GHL contact id, when there is one. NO person view read this
+   * column before — so an operator could not tell whether a person existed in
+   * the CRM at all. Null means no linkage recorded, which is a real and common
+   * state (a withheld sync leaves it null on purpose) and must read as absent
+   * rather than as a failure.
+   */
+  ghlContactId: string | null;
   /** The denominator the Lead page shows beside the score. */
   leadScoreMax: number;
 }
@@ -109,6 +117,7 @@ export async function loadAcquisition(email: string): Promise<AcquisitionPanel |
             consent_contact AS "consentContact",
             evaluating_90_days AS "evaluating90Days",
             created_at AS "createdAt",
+            ghl_contact_id AS "ghlContactId",
             min(created_at) OVER () AS "firstSeen"
      FROM leads WHERE lower(btrim(email)) = :email
      ORDER BY created_at ASC LIMIT 1`,
