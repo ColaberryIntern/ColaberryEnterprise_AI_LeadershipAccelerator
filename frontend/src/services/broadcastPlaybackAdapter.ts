@@ -61,8 +61,20 @@ export interface PlaybackSnapshot {
    * The browser refused to start playback without a user gesture.
    *
    * NOT an error phase: the element is loaded, seeked and ready — it is simply paused, and
-   * only a real click can un-pause it. The UI must render a labelled control and call
-   * `resume()` from that click's handler. Nothing else clears this.
+   * only a real gesture can un-pause it. The UI should render a labelled control and call
+   * `resume()` from that click's handler.
+   *
+   * CORRECTED. This comment used to end "Nothing else clears this", which was false when
+   * written and is the misconception that produced a real defect: a reader of this contract
+   * concludes no other clearing path is needed, and the first version of the feature indeed
+   * had none — so a viewer who pressed the element's OWN play button (the element renders
+   * native `controls`, so that is the gesture they actually make) kept a "Play" button and a
+   * "playback was blocked" message on screen for the rest of the replay.
+   *
+   * The adapter clears this flag at SIX places, and the UI must not assume otherwise:
+   * the `play` listener (playback started by any means, including native controls),
+   * `onEnded`, `deny`, `giveUp`, `stop`, and a successful `startPlayback`.
+   * `blockPlayback` is the only thing that raises it.
    */
   autoplayBlocked: boolean;
 }
@@ -180,6 +192,15 @@ export function createPlaybackAdapter(
   };
   let timer: unknown = null;
   let stopped = false;
+  /**
+   * The pending `loadedmetadata` restore, held so `stop()` can detach it.
+   *
+   * Without this it survived teardown and then called `media.play()` on a `src` that `stop()`
+   * had just cleared. Harmless to the snapshot — `blockPlayback` guards on `stopped` — but it
+   * is a listener left on an element that deliberately outlives every state change, and it
+   * made the detachment test's title ("DETACHES every listener") broader than its body.
+   */
+  let pendingRestore: (() => void) | null = null;
   /** Guards against a late response from a superseded request landing on current state. */
   let generation = 0;
 
@@ -190,6 +211,13 @@ export function createPlaybackAdapter(
 
   function cancelTimer(): void {
     if (timer !== null) { clearTimer(timer); timer = null; }
+  }
+
+  function cancelPendingRestore(): void {
+    if (pendingRestore) {
+      media.removeEventListener('loadedmetadata', pendingRestore);
+      pendingRestore = null;
+    }
   }
 
   function schedule(fn: () => void, ms: number): void {
@@ -317,9 +345,14 @@ export function createPlaybackAdapter(
     if (resumeAt > 0) {
       const restore = (): void => {
         media.removeEventListener('loadedmetadata', restore);
+        pendingRestore = null;
         media.currentTime = resumeAt;
         if (wasPlaying) startPlayback('renewal');
       };
+      // Any earlier pending restore is dropped first: two of them would mean the older
+      // `resumeAt` wins the second time `loadedmetadata` fires, seeking the viewer backwards.
+      cancelPendingRestore();
+      pendingRestore = restore;
       media.addEventListener('loadedmetadata', restore);
     } else if (wasPlaying) {
       startPlayback('load');
@@ -398,6 +431,7 @@ export function createPlaybackAdapter(
       media.removeEventListener('error', onMediaError);
       media.removeEventListener('ended', onEnded);
       media.removeEventListener('play', onPlay);
+      cancelPendingRestore();
       // Clear the source so no in-flight range request carries a live credential onward.
       media.src = '';
       emit({
