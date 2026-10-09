@@ -1595,7 +1595,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <i className="ri-shield-keyhole-line me-1" aria-hidden="true" />Authorize build
               </button>
             </div>
-            <p className="small text-secondary mt-2 mb-0">The approver is your identity (a reviewer cannot approve their own pursuit; both are enforced server-side).</p>
+            <p className="small text-secondary mt-2 mb-0">The acting program admin authorizes the build (a super admin may authorize their own). Recording this only logs who authorized it — it starts no build; the autonomous builder stays parked.</p>
           </SectionCard>
           )}
 
