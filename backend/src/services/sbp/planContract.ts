@@ -73,6 +73,80 @@ export interface PlanRelease {
   week_end: number;
 }
 
+/**
+ * Where a story sits in the governed lifecycle — the references `request.md:245` requires every
+ * story to carry, for the ones it does not already have.
+ *
+ * ## NOT MODEL-EMITTED, and that is the whole design
+ *
+ * This interface is deliberately absent from `BUILD_PLAN_JSON_SCHEMA`, following `BuildPlan.agents`
+ * below, which is "populated by scopeAgents, never by the model". Two reasons, and the first is the
+ * serious one:
+ *
+ * 1. **Every field here identifies a record the model cannot know.** A blueprint revision and its
+ *    content hash, a workspace id, a business-task id, an approved design decision — these are
+ *    facts about rows that exist. A language model asked to emit a `content_sha256` would produce a
+ *    plausible hex string, which is fabrication of exactly the kind this programme keeps catching.
+ *    The server resolves them or they are absent.
+ * 2. The schema is OpenAI strict structured output, where every key in `properties` must also
+ *    appear in `required`. Adding six reference fields there would force the model to emit all of
+ *    them on every story of every plan, including plans generated before any blueprint exists.
+ *
+ * ## Absent means "not established", never "none"
+ *
+ * Legacy plans have no `references` at all, and plans generated before their project has an
+ * approved blueprint will not either. Nothing may read absence as a negative finding — the same
+ * rule `RenderContext.repoWriteAccess` already states for the same reason.
+ */
+export interface StoryReferences {
+  /**
+   * Business-task ids this story implements, from the approved process contract.
+   *
+   * Empty is meaningful and is not the same as absent: empty says the link was looked for and none
+   * was found, which is worth seeing on a story that claims to implement a business process.
+   */
+  business_task_ids: string[];
+  /**
+   * Where the work shows up for a human, or that it deliberately does not.
+   *
+   * This is the DECLARED SIGNAL that `lifecyclePrerequisites`' `release_review` rule reads. It
+   * exists as a structured field precisely so that rule never has to infer one: a peer session
+   * measured a keyword regex over story text missing `Approval`, `Notification`, `Generation`,
+   * `Deliver` and `Upload` while flagging correct plans, and `planGate.ts`'s own
+   * `r0_no_trust_spine` is the standing in-repo example of why that approach stays advisory.
+   */
+  workspace: {
+    /** `headless` is a real answer — background work that no page shows. */
+    kind: 'workspace' | 'headless';
+    /** The workspace id, or the job/queue name when `headless`. */
+    ref: string;
+    /** The action within that workspace, when the story is one action rather than the whole page. */
+    action?: string | null;
+  };
+  /**
+   * The approved blueprint this story was decomposed FROM, pinned by revision and content hash.
+   *
+   * Both, not either: the revision says which one, the hash says that it has not changed
+   * underneath. `blueprintApproval.manifestContentHash` is the producer.
+   */
+  blueprint: { revision: number; content_sha256: string };
+  /** Approved design decisions and policies this story must honour, by id. */
+  design_refs: string[];
+  /**
+   * The CODING agent that builds this story.
+   *
+   * SEPARATE FROM `owner_agent` ON PURPOSE. `owner_agent` names a `PlanAgent` — "one unit of
+   * autonomous work in the system the student is building", a runtime employee of the built
+   * system. The thing that writes the code is a different actor, and `request.md:245` forbids
+   * overloading one field with both. The manifest keyspace already separates these as
+   * `agents.runtime` and `agents.builder`; this follows that convention rather than inventing a
+   * second one for the same distinction.
+   */
+  builder_agent?: string | null;
+  /** What has to be true, and observable, before this story counts as delivered. */
+  acceptance_evidence: string[];
+}
+
 export interface PlanStory {
   /** STORY-001, … sequential. */
   id: string;
@@ -93,6 +167,12 @@ export interface PlanStory {
   failure_paths: string[];
   /** story_ids that must be complete first (release gating). */
   blocked_by?: string[];
+  /**
+   * Lifecycle references, when they have been resolved. ABSENT on every plan generated before
+   * 2026-10-09, and absent on any plan whose project has no approved blueprint — see
+   * `StoryReferences` for why absence is never read as a negative.
+   */
+  references?: StoryReferences;
 }
 
 /**
