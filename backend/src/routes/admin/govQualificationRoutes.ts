@@ -34,6 +34,7 @@ import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
 import { generateRiskNarrative, generateProposalSummary } from '../../services/factory/govBidNarrative';
 import { generateBuildSpec } from '../../services/factory/govBuildSpec';
 import { generateGovBuildPlanAI } from '../../services/factory/govBuildPlanAI';
+import { materializeGovBuildProject, GovMaterializeError, type GovMaterializeReason } from '../../services/factory/govProjectMaterialization';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -508,6 +509,50 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/build-plan
     res.json(result);
   } catch (err: any) {
     logFail('gov_build_plan_ai_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the build plan.' });
+  }
+});
+
+const materializeBuildBody = z.object({
+  deliveryProjectId: z.string().uuid(),
+  assigneeIdentityId: z.string().uuid(),
+  requirements: z.array(z.object({ id: z.string().max(60), text: z.string().max(4000) })).max(200),
+  title: z.string().max(300).nullable().optional(),
+  buyer: z.string().max(200).nullable().optional(),
+  buildSpec: z.string().max(200_000).nullable().optional(),
+  deadline: z.string().max(40).nullable().optional(),
+  projectName: z.string().max(200).nullable().optional(),
+});
+const GOV_MATERIALIZE_STATUS: Record<GovMaterializeReason, number> = {
+  bad_input: 400, no_enrollment: 422, no_program: 422, plan_blocked: 409, decompose_error: 503,
+};
+
+/** POST …/materialize-build-project — turn the authorized build into a REAL monitored student project owned by
+ *  the assigned intern's enrollment (idempotent; reuses the pursuit's linked project if one exists). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/materialize-build-project', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const body = materializeBuildBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: 'A delivery project, an assigned builder, and requirements are required.' }); return; }
+  const scope = await scopeOrFail(res, 'gov_materialize_build_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const result = await materializeGovBuildProject({
+      deliveryProjectId: body.data.deliveryProjectId,
+      canonicalOpportunityId,
+      assigneeIdentityId: body.data.assigneeIdentityId,
+      requirements: body.data.requirements,
+      title: body.data.title ?? null,
+      buyer: body.data.buyer ?? null,
+      buildSpec: body.data.buildSpec ?? null,
+      deadline: body.data.deadline ?? null,
+      projectName: body.data.projectName ?? null,
+      actorIdentityId: actorIdentity(req),
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    if (err instanceof GovMaterializeError) { res.status(GOV_MATERIALIZE_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_materialize_build_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not create the monitored project.' });
   }
 });
 

@@ -156,18 +156,22 @@ export function assembleGovDatedPlan(plan: BuildPlan, deadline: Date | null, now
   };
 }
 
-export async function generateGovBuildPlanAI(req: GovBuildPlanAIRequest): Promise<GovBuildPlanAIResult> {
-  const nowIso = () => new Date().toISOString();
+export interface GovRawPlanRequest { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; buildSpec?: string | null; }
+export interface GovRawPlanResult { plan: BuildPlan | null; cached: boolean; error?: string; }
+
+/**
+ * The raw SBP `BuildPlan` for a gov pursuit, cached on (brief, document) so the Build-step Gantt (P2.2) and
+ * the project materialization (P2.3) consume the SAME decomposition — materialize exactly what was reviewed.
+ * The decomposition does NOT depend on the deadline/now, so those are not part of the cache key. Fail-soft.
+ */
+export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<GovRawPlanResult> {
   if (!process.env.OPENAI_API_KEY) {
-    return { plan: null, verdict: '', cached: false, generatedAt: nowIso(), error: 'AI build plan is unavailable (no API key configured).' };
+    return { plan: null, cached: false, error: 'AI build plan is unavailable (no API key configured).' };
   }
   const reqs = (Array.isArray(req.requirements) ? req.requirements : []).slice(0, 200);
   if (reqs.length === 0) {
-    return { plan: null, verdict: '', cached: false, generatedAt: nowIso(), error: 'No established requirements to plan a build from yet.' };
+    return { plan: null, cached: false, error: 'No established requirements to plan a build from yet.' };
   }
-  const now = toDate(req.now) ?? new Date();
-  const deadline = toDate(req.deadline ?? null);
-
   const brief = [
     req.title ? `Opportunity: ${req.title}${req.buyer ? ` (buyer: ${req.buyer})` : ''}` : '',
     'Established requirements (ground truth — build to exactly these):',
@@ -175,24 +179,34 @@ export async function generateGovBuildPlanAI(req: GovBuildPlanAIRequest): Promis
   ].filter(Boolean).join('\n');
   const document = (req.buildSpec ?? '').slice(0, 200_000);
 
-  const key = 'buildplan:' + hash({ brief, document, d: deadline ? iso(startOfUtcDay(deadline)) : null, n: iso(startOfUtcDay(now)) });
-  const hit = cacheGet<GovBuildPlanAIResult>(key);
-  if (hit) return { ...hit, cached: true };
+  const key = 'rawplan:' + hash({ brief, document });
+  const hit = cacheGet<BuildPlan>(key);
+  if (hit) return { plan: hit, cached: true };
 
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_build_plan_ai' }, { timeout: 240_000, maxRetries: 1 }).chat.completions;
     const { plan } = await decomposeBuild({ brief, document, correlationId: 'gov_build_plan_ai', client });
-    const assembled = assembleGovDatedPlan(plan, deadline, now);
-    const result: GovBuildPlanAIResult = { plan: assembled.plan, verdict: assembled.verdict, cached: false, generatedAt: nowIso() };
-    cacheSet(key, result);
-    return result;
+    cacheSet(key, plan);
+    return { plan, cached: false };
   } catch (err) {
     logFail('gov_build_plan_ai', err);
     const msg = err instanceof DecomposeError && err.error_class === 'ConfigError'
       ? 'AI build plan is unavailable (no API key configured).'
       : 'The AI build plan could not be generated right now.';
-    return { plan: null, verdict: '', cached: false, generatedAt: nowIso(), error: msg };
+    return { plan: null, cached: false, error: msg };
   }
+}
+
+export async function generateGovBuildPlanAI(req: GovBuildPlanAIRequest): Promise<GovBuildPlanAIResult> {
+  const nowIso = () => new Date().toISOString();
+  const raw = await decomposeGovBuildPlanRaw({ requirements: req.requirements, title: req.title, buyer: req.buyer, buildSpec: req.buildSpec });
+  if (raw.error || !raw.plan) {
+    return { plan: null, verdict: '', cached: raw.cached, generatedAt: nowIso(), error: raw.error ?? 'The AI build plan could not be generated right now.' };
+  }
+  const now = toDate(req.now) ?? new Date();
+  const deadline = toDate(req.deadline ?? null);
+  const assembled = assembleGovDatedPlan(raw.plan, deadline, now);
+  return { plan: assembled.plan, verdict: assembled.verdict, cached: raw.cached, generatedAt: nowIso() };
 }
 
 /** Test seam: clear the in-memory advisory cache. */

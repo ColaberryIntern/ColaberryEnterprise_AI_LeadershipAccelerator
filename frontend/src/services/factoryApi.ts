@@ -715,6 +715,20 @@ export async function getGovBuildPlanAI(
   return data;
 }
 
+/** Materialize the authorized build into a REAL monitored student project owned by the assigned intern's
+ *  enrollment (idempotent; reuses the pursuit's linked project if one exists). A write — surfaces typed errors. */
+export interface GovMaterializeResult {
+  projectId: string; created: boolean; enrollmentId: string;
+  lists: number; tasks: number; releaseCount: number; storyCount: number;
+}
+export async function materializeGovBuildProject(
+  canonicalOpportunityId: string,
+  body: { deliveryProjectId: string; assigneeIdentityId: string; requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; buildSpec?: string | null; deadline?: string | null; projectName?: string | null },
+): Promise<GovMaterializeResult> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/materialize-build-project'), body);
+  return data;
+}
+
 /** Record a NON-approval decision and/or the reviewer-established cited requirements. */
 export async function recordGovQualificationDecision(canonicalOpportunityId: string, body: {
   biddingEntity: string; expectedVersion: number; decision: 'pending_review' | 'needs_evidence' | 'no_bid';
