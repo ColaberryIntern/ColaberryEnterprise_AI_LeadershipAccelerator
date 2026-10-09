@@ -48,6 +48,18 @@ import { sequelize } from '../../config/database';
  *    ledger event is cosmetic. Do not "harden" this by adding a try/catch — that would restore
  *    the silent-unregistered-project failure this whole file is built to prevent.
  *
+ *    **AND THAT GUARANTEE IS CONDITIONAL ON THE CALLER OPENING A TRANSACTION.** An earlier draft
+ *    of this comment stated it unconditionally, which is false and is measured false in
+ *    `__tests__/lifecycleRegistration.integration.test.ts`. Without a caller transaction the
+ *    project INSERT has already committed by the time `afterCreate` runs, so a throwing hook
+ *    surfaces an error while the row survives, unregistered. That is not hypothetical: the three
+ *    seed scripts (`seedDevClientReviewer`, `seedFactoryDemoContract`, `seedOrdinaryProjectDemo`)
+ *    create bare — none of them contains the word "transaction". So the guarantee is:
+ *      - for the two LIVE request paths, which are transactional: no unregistered project;
+ *      - for operator-run seeds: an unregistered project is DETECTABLE, not impossible.
+ *    `unregisteredDeliveryProjectsSince()` below is what makes the second half true, which is why
+ *    it is part of this contract rather than a convenience.
+ *
  * ## Why ON CONFLICT DO NOTHING is required, not stylistic
  *
  * `manifestWriter.ts` records the reason: "a unique violation inside a transaction poisons it,
@@ -63,6 +75,15 @@ import { sequelize } from '../../config/database';
  * partial unique index on `delivery_project_id` (`db/ensureProjectLifecycleSchema.ts:97`), shipped
  * and verified in production at 10/10 indexes. The conflict target below names that index's
  * predicate so inference resolves to it.
+ *
+ * **THAT INDEX IS LOAD-BEARING FOR REGISTRATION WORKING, not only for it being idempotent.** This
+ * was measured rather than intended: a positive control dropped the index expecting duplicate rows
+ * to become possible, and instead the INSERT raises, because `ON CONFLICT` has no index left to
+ * infer from. The consequence is the good one — if a migration ever lands this table without that
+ * index, registration fails loudly instead of quietly writing two lifecycles per project. It also
+ * means the post-deploy schema verification is not a formality: `ensureProjectLifecycleSchema`
+ * logs a warning and carries on rather than throwing, so "the index is missing and nothing said
+ * so" is a reachable deploy state, and this hook is what would then break.
  *
  * ## Failure-First Design
  *
