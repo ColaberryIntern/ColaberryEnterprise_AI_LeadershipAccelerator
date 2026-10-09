@@ -684,7 +684,59 @@ describe('handleZoomWebhook', () => {
       mimeType: 'video/mp4',
       sizeBytes: 900,
       recordingType: null, // fixture carries no recording_type, so size decides and nothing is recorded
+      // These fixture files carry no `id` either, so null is correct here — but the
+      // field must be PRESENT, because correlation distinguishes "no id supplied"
+      // from "field never mapped" and only the first is a real Zoom condition.
+      providerFileId: null,
     });
+  });
+
+  /**
+   * THE REGRESSION THIS SUITE DID NOT CATCH.
+   *
+   * Until 2026-10-09 the handler built its match object without `providerFileId`,
+   * so every webhook-delivered recording reached correlation with a null file id
+   * and parked in review owned by nobody — while the cron sweep, which did carry
+   * it, would have attributed the same recording correctly. The webhook always
+   * wins that race, so in practice nothing was ever attributed.
+   *
+   * The fixtures above all omit `id`, which is why the gap survived: null was the
+   * right answer for them whether the field was mapped or not. This one supplies
+   * ids, as Zoom actually does — all six files in the production rehearsal had one.
+   */
+  it('carries the per-file id of the file it CHOSE, so correlation can identify it', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    const session = { id: 'session-1', title: 'Week 7 · Build Day', zoom_meeting_id: '123' };
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(session);
+    (ingestRecordingForSession as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r1' });
+
+    const event = {
+      event: 'recording.completed',
+      download_token: 'short-lived-token',
+      payload: {
+        object: {
+          id: 123, // the MEETING id — must NOT end up in providerFileId
+          topic: 'Week 7 Build Day',
+          recording_files: [
+            { id: 'file-webcam', file_type: 'MP4', file_size: 99_000_000, recording_type: 'active_speaker', download_url: 'https://zoom.us/rec/webcam' },
+            { id: 'file-screen', file_type: 'MP4', file_size: 14_000_000, recording_type: 'shared_screen_with_speaker_view', download_url: 'https://zoom.us/rec/screen' },
+          ],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    const match = (ingestRecordingForSession as jest.Mock).mock.calls[0][1];
+    // The id of the file the SELECTOR picked, not the larger one and not the meeting.
+    expect(match.providerFileId).toBe('file-screen');
+    expect(match.downloadUrl).toBe('https://zoom.us/rec/screen');
+    // A meeting id here would be a plausible-looking wrong value that never reaches
+    // the review queue, and would give every part of one meeting the same "file" id.
+    expect(match.providerFileId).not.toBe('123');
+    expect(match.providerFileId).not.toBe(123);
   });
 
   it('prefers the shared-screen composition over a larger webcam-only file, and records which one it chose', async () => {
