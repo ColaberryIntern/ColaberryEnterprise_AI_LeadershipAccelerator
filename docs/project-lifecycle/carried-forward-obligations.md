@@ -1104,3 +1104,28 @@ in this programme (after the three unwired generation validators and the `Execut
 which is a pattern worth naming rather than filing three times: **this codebase reliably builds
 the machine before the adapter.** The question to ask at the start of a phase is not "is it
 correct" but "is anything calling it".
+
+### The authenticated 409 refusal has never been observed over HTTP, and Phase 8 will remove the chance
+
+Raised by the Phase 5 production verifier. Every lifecycle route runs `requireSection('program')`
+BEFORE its feature-flag check, so an unauthenticated request stops at 401 and never reaches the
+handler. The refusal contract — `409 { lifecycleDisabled: true, error, remedy }` — is therefore
+evidenced from the shipped artefact's behaviour inside the live container, and NOT from an HTTP
+round trip.
+
+Closing it is one `curl` with a program-section admin JWT. The verifier declined to mint one on a
+live host, which was right.
+
+**Do it before Phase 8 flips the flag.** Once `ENABLE_PROJECT_LIFECYCLE=true`, the refusal cannot
+be observed at all — the window for this measurement closes permanently at activation.
+**Owner: whoever holds a program-section admin token.**
+
+### Production images carry no revision label, so SHA-to-image needs reasoning
+
+The running images have no `org.opencontainers.image.revision`, so a verifier cannot read which
+commit produced them. Phase 5's verification established it by CONTENT instead — two dist files
+that were first added by the deployed commit, making their presence a fingerprint — which worked
+but took several steps and an argument.
+
+Adding the label to the image build makes that one command. **Owner: whoever maintains the image
+build.** Small change, and it removes reasoning from a path that should be a measurement.
