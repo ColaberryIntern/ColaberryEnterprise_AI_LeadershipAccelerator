@@ -64,6 +64,57 @@ export const approveBody = z.object({
   selectedDesignRef: z.string().trim().max(500).optional(),
 });
 
+/**
+ * A blueprint composition request: a model turn submitted for validation.
+ *
+ * DELIBERATELY SHALLOW, and that is the design decision rather than laziness. Each of these ten
+ * collections already has a validator that owns its deep contract — `validateProcess`,
+ * `validateAllocation`, `validateAgentScoping`, `validateTaskSurfaces`,
+ * `validateWorkspaceStates`, `validateControlSpec`, `selectDesign` — and every one of them fails
+ * CLOSED on a malformed argument rather than reporting compliance, which is measured by tests
+ * that feed them exactly that. A Zod schema mirroring those contracts in detail would be a
+ * SECOND definition of each, free to drift from the first, and the drift would show up as a
+ * route that 400s on a payload the validators would have accepted — or worse, accepts one they
+ * would have refused.
+ *
+ * So this layer guarantees exactly one thing: that each field is the KIND of container its
+ * validator expects, so the handler cannot hand `undefined` to a function whose argument check
+ * then reports "not an array" as a domain refusal. Everything deeper is the validators' answer,
+ * and their refusals are what the response carries.
+ *
+ * No `.strict()`, for the reason in this file's header.
+ */
+const anyList = z.array(z.unknown());
+const anyObject = z.record(z.string(), z.unknown());
+
+export const composeBody = z.object({
+  kind: projectKind,
+  understanding: anyList,
+  project: anyObject,
+  allocation: anyList,
+  agents: anyList,
+  effort: anyList,
+  declaration: z.object({
+    declaration: z.unknown(),
+    /**
+     * Where the declaration came from. Not optional and not defaulted: `approved_blueprint` and
+     * `model_turn` carry different authority, and defaulting either way would launder one into
+     * the other.
+     */
+    origin: z.enum(['approved_blueprint', 'model_turn']),
+  }),
+  targetAcceptance: anyObject.nullish(),
+  bindings: anyList,
+  headlessAcceptance: anyObject.nullish(),
+  workspaceStates: anyList,
+  policies: anyList,
+  /** Roles a policy may name. Absent means none are known, which refuses — it does not pass. */
+  roleIds: z.array(z.string()).optional(),
+  /** `null` is a legitimate value meaning "no design chosen yet", and it refuses at that stage. */
+  design: anyObject.nullable(),
+});
+
+export type ComposeBody = z.infer<typeof composeBody>;
 export type LifecycleIdParam = z.infer<typeof lifecycleIdParam>;
 export type LifecycleStatusQuery = z.infer<typeof lifecycleStatusQuery>;
 export type TransitionBody = z.infer<typeof transitionBody>;

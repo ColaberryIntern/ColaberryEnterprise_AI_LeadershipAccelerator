@@ -45,69 +45,28 @@
  *    (it would have short-circuited on a null and passed silently on every existing row — a
  *    ceremonial check, which is worse than none).
  *
- * Every CREATE is `IF NOT EXISTS`; no existing table is altered; the loop is warn-only and a
+ * Every CREATE is `IF NOT EXISTS`. ONE statement alters an existing table — the
+ * `refs_sha256` ADD COLUMN on `operating_blueprint_manifests`, added by P5-T1.3 and
+ * permitted because an `ADD COLUMN IF NOT EXISTS` carrying no constraint cannot fail on a
+ * populated table. An earlier version of this line said no existing table is altered,
+ * which was false from the moment that statement landed. The loop is warn-only and a
  * post-condition assert names anything that failed to appear — the same shape as
  * ensureContractTrackSchema. The warn-only loop is why the assert is not optional: without it a
  * failed migration is silent, and the code that depends on these tables would 500 in production
  * instead of saying so at boot.
  */
 import { sequelize } from '../config/database';
-
-export const REQUIRED_TABLES: ReadonlyArray<string> = [
-  'project_lifecycle_states',
-  'operating_blueprint_manifests',
-  'blueprint_approvals',
-  'lifecycle_stage_failures',
-  'blueprint_role_map',
-];
+// The ensure path finishes by ASSERTING, which is the only reason a failed statement does
+// not pass silently. Split out in P5-T1.3; this import is what keeps that call reachable.
+import { assertProjectLifecycleSchema } from './projectLifecycleSchemaContract';
 
 /**
- * Indexes that are not optimisations — they are the correctness guarantees.
- *
- * CHECKING TABLES IS NOT ENOUGH, and this list exists because of a measured result. The LC-13
- * concurrency suite proved against a real Postgres that with `uq_blueprint_approval_revision`
- * DROPPED, two concurrent approvals of the same revision write TWO rows; with it present, one.
- * The application-level CAS is a read-then-compare and does not close the race on its own.
- *
- * So a schema assert that confirms the tables exist while an index is missing would report a
- * healthy schema over a reopened production incident. Every name here is load-bearing:
- *
- *   uq_lifecycle_student_project / _delivery_project
- *       One lifecycle per project. Without these, registration is not idempotent and a duplicate
- *       request creates a second lifecycle for the same project.
- *   uq_blueprint_manifest_revision_student / _delivery
- *       One manifest per (tenant, project, revision) — the backstop behind the approval CAS.
- *   uq_blueprint_approval_revision
- *       One approval per manifest revision. This is the one the concurrency proof drops.
- *   uq_role_map_manifest_function
- *       One role-map row per (manifest, previous_function). Without it the same displaced
- *       function can appear twice under different new roles and the old->new mapping stops
- *       being a mapping. Two answers to "what happened to this job" is worse than none,
- *       because a reviewer reads whichever row the query happened to return first.
- */
-export const REQUIRED_INDEXES: ReadonlyArray<string> = [
-  'uq_lifecycle_student_project',
-  'uq_lifecycle_delivery_project',
-  'uq_blueprint_manifest_revision_student',
-  'uq_blueprint_manifest_revision_delivery',
-  'uq_blueprint_approval_revision',
-  'uq_role_map_manifest_function',
-];
-
-/**
- * CHECK constraints that make "the two identity tables are not merged" a database invariant
- * rather than a convention someone can forget.
- */
-export const REQUIRED_CONSTRAINTS: ReadonlyArray<string> = [
-  'ck_lifecycle_exactly_one_project',
-  'ck_manifest_exactly_one_project',
-  'ck_role_map_retained_is_array',
-];
-
-/**
- * Every DDL statement, hoisted so a test can assert the whole set is additive — only
- * CREATE ... IF NOT EXISTS, never an ALTER or DROP of an existing table — and that FKs point
- * only at tables that already exist (tenants, projects, delivery_projects).
+ * Every DDL statement, hoisted so a test can assert the whole set is additive: CREATE ...
+ * IF NOT EXISTS, plus EXACTLY ONE permitted `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`,
+ * never a DROP — and that FKs point only at tables that already exist (tenants, projects,
+ * delivery_projects). A test pins the ALTER count at one, so a second cannot arrive
+ * unnoticed now that the rule permits the shape; see
+ * `__tests__/ensureProjectLifecycleSchema.additive.test.ts`.
  */
 export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
   // The lifecycle position of one project. Exactly one of the two project FKs is set; the CHECK
@@ -168,6 +127,50 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
        OR (student_project_id IS NULL AND delivery_project_id IS NOT NULL)
      )
    )`,
+  // THE IDEMPOTENCY KEY’S STORAGE, added by P5-T1.3.
+  //
+  // Separate from `content_sha256` on purpose. That column is LC-10’s "exact version/hash"
+  // binding — `manifestContentHash` covers tenant + project + REVISION + refs, and
+  // `approveBlueprint` writes it into `blueprint_approvals.content_sha256`. Parking a
+  // revision-INDEPENDENT hash there would silently weaken that binding, because such a hash
+  // cannot bind an approval to an exact version. Two hashes answer two questions: one binds
+  // the approval, one identifies the write.
+  //
+  // ALTER rather than a column in the CREATE above, because `CREATE TABLE IF NOT EXISTS`
+  // cannot add a column to a table that already exists — production has this table from
+  // Phase 2, so a column declared only in the CREATE would never arrive. `ADD COLUMN IF NOT
+  // EXISTS` is the repo-wide convention for this — it is how most files under `src/db/` add
+  // a column, which `grep -rl "ADD COLUMN IF NOT EXISTS" src/db/` counts — and is both
+  // additive and idempotent.
+  //
+  // NO FIGURE IS QUOTED HERE, and two earlier versions quoted three between them: 52, then
+  // 53/91. The last went stale on its OWN COMMIT, because that commit added a test file to
+  // the set the number counted. A count that cannot survive the change introducing it does
+  // not belong in a comment; the command does.
+  `ALTER TABLE operating_blueprint_manifests
+     ADD COLUMN IF NOT EXISTS refs_sha256 VARCHAR(64)`,
+
+  // WHY UNIQUE, AND WHY IT BLOCKS A REVERT ON PURPOSE. This is what makes a concurrent
+  // replay impossible rather than merely unlikely: the writer is read-then-insert in
+  // application code, so without the index two simultaneous writes of identical refs both
+  // see "no existing row" and both insert. It also refuses a later revision whose refs are
+  // byte-identical to an earlier one — correct, because identical refs mean there is nothing
+  // new to record. What it COSTS is revert-and-supersede: a project reverting to an earlier
+  // blueprint gets the old row back, at a revision below head, which the approval CAS then
+  // refuses. It fails loudly rather than corrupting. An earlier version of this comment said
+  // a revert and a replay are "indistinguishable by construction" — they are not, a later
+  // revision exists — and that sentence outlived its retraction in `manifestWriter.ts`.
+  //
+  // Two partial indexes because exactly one project FK is ever set, matching the revision
+  // backstop below. NULL refs_sha256 is excluded so the Phase 2 rows, written before this
+  // column existed, do not all collide on NULL.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_student
+     ON operating_blueprint_manifests (tenant_id, student_project_id, refs_sha256)
+     WHERE student_project_id IS NOT NULL AND refs_sha256 IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_delivery
+     ON operating_blueprint_manifests (tenant_id, delivery_project_id, refs_sha256)
+     WHERE delivery_project_id IS NOT NULL AND refs_sha256 IS NOT NULL`,
+
   // THE BACKSTOP. The approval CAS is a read-then-compare in application code; this index is
   // what actually makes a concurrent double-approval impossible, by rejecting the second insert
   // at the same revision. Two partial indexes because exactly one project FK is ever set.
@@ -250,6 +253,79 @@ export const PROJECT_LIFECYCLE_STATEMENTS: ReadonlyArray<string> = [
   // first. Scoped by tenant for the same reason every other index here is.
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_role_map_manifest_function
      ON blueprint_role_map (tenant_id, manifest_id, previous_function)`,
+
+  // ─── P4-T6. One governed design decision, bound to the blueprint revision it was taken
+  // against. `DesignDecisionLike` in `deliveryDesignLoop` was written for exactly this shape
+  // and had nowhere to live; `blueprint_role_map` is already in the carried-forward register
+  // as open because a table with no model has no reader, so these two ship with models.
+  //
+  // `manifest_content_hash` is RECORDED, not acted on. The hash is computed today at
+  // `blueprintApproval.ts:104-116`, but nothing in production writes `manifest.refs_json` and
+  // no material-vs-cosmetic classifier exists anywhere in `backend/src` — so the rule "a
+  // design change invalidates the right approvals" cannot be implemented here and is deferred
+  // with its three parts named in the register. Storing the hash is what makes the later
+  // classifier possible without a backfill; claiming the invalidation works would be the
+  // third assertion of a dependency that does not exist.
+  `CREATE TABLE IF NOT EXISTS blueprint_design_decisions (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     manifest_id UUID NOT NULL REFERENCES operating_blueprint_manifests(id) ON DELETE CASCADE,
+     manifest_content_hash TEXT NOT NULL,
+     tier TEXT NOT NULL,
+     title TEXT,
+     status TEXT NOT NULL,
+     variant_count INTEGER NOT NULL DEFAULT 0,
+     approved_variant_id TEXT,
+     selected_design_ref TEXT,
+     rationale TEXT,
+     approved_by_identity_id TEXT,
+     supersedes_decision_id UUID REFERENCES blueprint_design_decisions(id) ON DELETE SET NULL,
+     dna_facets JSONB NOT NULL DEFAULT '[]'::jsonb,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     CONSTRAINT ck_design_decision_dna_is_array CHECK (
+       jsonb_typeof(dna_facets) = 'array'
+     )
+   )`,
+  // PARTIAL on purpose — see REQUIRED_INDEXES. Supersession means many rows per tier over
+  // time; only one of them may be the approved one.
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_design_decision_approved_tier
+     ON blueprint_design_decisions (tenant_id, manifest_id, tier)
+     WHERE status = 'approved'`,
+
+  // NOTE on `ck_visual_contract_variance_fraction` below: there is no
+  // `acceptable_variance IS NULL OR` disjunct, and the absence is deliberate. A Postgres CHECK
+  // whose expression evaluates to NULL is SATISFIED, so a NULL variance passes without being
+  // named. A verifier removed that disjunct and the suite stayed at 12/12 — an operand that
+  // could not change an answer, which Amendment 4 of this run classifies as category 2:
+  // remove it rather than write a test that cannot fail. Nullable remains deliberate (a
+  // contract can exist before its threshold is agreed) and `validateVisualContract` is what
+  // refuses to let a null one gate anything.
+  // The Visual Contract a decision was approved against. 4.5 requires the approval record to
+  // reference the selected variant AND the contract revision, which is why `revision` is a
+  // column here and why it is half of the unique index: a reference that can resolve to two
+  // rows is not a reference.
+  `CREATE TABLE IF NOT EXISTS blueprint_visual_contracts (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+     decision_id UUID NOT NULL REFERENCES blueprint_design_decisions(id) ON DELETE CASCADE,
+     revision INTEGER NOT NULL,
+     required_regions JSONB NOT NULL DEFAULT '[]'::jsonb,
+     required_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+     hierarchy TEXT,
+     responsive_rules JSONB,
+     accessibility_rules JSONB,
+     reference_snapshot_ref TEXT,
+     acceptable_variance NUMERIC,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+     CONSTRAINT ck_visual_contract_regions_is_array CHECK (
+       jsonb_typeof(required_regions) = 'array' AND jsonb_typeof(required_actions) = 'array'
+     ),
+     CONSTRAINT ck_visual_contract_variance_fraction CHECK (
+       acceptable_variance >= 0 AND acceptable_variance <= 1
+     )
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uq_visual_contract_decision_revision
+     ON blueprint_visual_contracts (tenant_id, decision_id, revision)`,
 ];
 
 export async function ensureProjectLifecycleSchema(): Promise<void> {
@@ -261,66 +337,4 @@ export async function ensureProjectLifecycleSchema(): Promise<void> {
     }
   }
   await assertProjectLifecycleSchema();
-}
-
-/**
- * Post-condition. The loop above is warn-only, so without this a failed migration is invisible
- * until a lifecycle read 500s in production. Say it loudly at boot instead.
- */
-export async function assertProjectLifecycleSchema(): Promise<boolean> {
-  const problems: string[] = [];
-  try {
-    // Aggregate existence per table in SQL and read ONE row back. This app's sequelize returns a
-    // single-column SELECT as RAW ARRAYS, not `{ table_name }` objects, so a membership filter
-    // reports every table missing while they demonstrably exist — the bug documented at
-    // ensureContractTrackSchema.ts:158-165, which logged a bogus invariant violation every boot.
-    // A one-row `bool_or` result is keyed by the aliases and sidesteps it. REQUIRED_TABLES are
-    // fixed constants, so the interpolation is not injectable.
-    const selects = REQUIRED_TABLES.map((t, i) => `bool_or(table_name = '${t}') AS t${i}`).join(', ');
-    const [rows] = await sequelize.query(
-      `SELECT ${selects} FROM information_schema.tables WHERE table_schema = 'public'`,
-    );
-    const row = (((rows as any[]) || [])[0] || {}) as Record<string, boolean>;
-    REQUIRED_TABLES.forEach((t, i) => { if (!row[`t${i}`]) problems.push(`table ${t} missing`); });
-
-    // THE INDEXES, for the reason spelled out on REQUIRED_INDEXES: a table-only assert would
-    // report a healthy schema while the backstop behind the approval CAS was gone. Same
-    // bool_or-aliased single-row form, for the same raw-array quirk.
-    const idxSelects = REQUIRED_INDEXES.map((n, i) => `bool_or(indexname = '${n}') AS i${i}`).join(', ');
-    const [idxRows] = await sequelize.query(
-      `SELECT ${idxSelects} FROM pg_indexes WHERE schemaname = 'public'`,
-    );
-    const idxRow = (((idxRows as any[]) || [])[0] || {}) as Record<string, boolean>;
-    REQUIRED_INDEXES.forEach((n, i) => {
-      if (!idxRow[`i${i}`]) problems.push(`index ${n} missing (a correctness guarantee, not an optimisation)`);
-    });
-
-    // The CHECK constraints keeping the two identity tables unmerged.
-    const ckSelects = REQUIRED_CONSTRAINTS.map((n, i) => `bool_or(constraint_name = '${n}') AS c${i}`).join(', ');
-    const [ckRows] = await sequelize.query(
-      `SELECT ${ckSelects} FROM information_schema.table_constraints WHERE table_schema = 'public'`,
-    );
-    const ckRow = (((ckRows as any[]) || [])[0] || {}) as Record<string, boolean>;
-    REQUIRED_CONSTRAINTS.forEach((n, i) => {
-      if (!ckRow[`c${i}`]) problems.push(`check constraint ${n} missing`);
-    });
-  } catch (err: any) {
-    problems.push(`schema introspection failed: ${err?.message}`);
-  }
-
-  if (problems.length === 0) {
-    console.log('[DB] project lifecycle schema ensured');
-    return true;
-  }
-  console.error(JSON.stringify({
-    timestamp: new Date().toISOString(), level: 'error', service: 'backend',
-    event: 'project_lifecycle_schema_invariant_violated', outcome: 'failure',
-    error_class: 'SchemaInvariantViolation',
-    context: {
-      problems,
-      impact: 'Project lifecycle registration and blueprint approval will fail; new projects would not be governed.',
-      remedy: 'Run the CREATE TABLE statements in ensureProjectLifecycleSchema.',
-    },
-  }));
-  return false;
 }

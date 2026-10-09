@@ -11,8 +11,8 @@ import {
   verifyProjectLifecycleSchema,
 } from '../verifyProjectLifecycleSchema';
 import {
-  REQUIRED_TABLES, REQUIRED_INDEXES, REQUIRED_CONSTRAINTS,
-} from '../../db/ensureProjectLifecycleSchema';
+  REQUIRED_TABLES, REQUIRED_INDEXES, REQUIRED_CONSTRAINTS, REQUIRED_COLUMNS,
+} from '../../db/projectLifecycleSchemaContract';
 
 /**
  * A fake connection that answers the aggregate presence query.
@@ -27,6 +27,14 @@ function fakeQuery(absent: ReadonlyArray<string> = []) {
     const pairs = [...sql.matchAll(/bool_or\((?:\w+) = '([^']+)'\) AS (n\d+)/g)];
     const row: Record<string, boolean> = {};
     for (const [, name, alias] of pairs) row[alias] = !absent.includes(name);
+    // The COLUMN query asks a two-predicate question, so it needs its own pattern. Keyed on
+    // `table.column` to match REQUIRED_COLUMNS. Without this the double answers nothing for
+    // that query and every column reports missing — which is a double that lies, not a
+    // finding.
+    const colRe = /bool_or\(table_name = '([^']+)' AND column_name = '([^']+)'\) AS (n\d+)/g;
+    for (const [, t, c, alias] of sql.matchAll(colRe)) {
+      row[alias] = !absent.includes(`${t}.${c}`);
+    }
     return [[row], {}];
   };
 }
@@ -59,6 +67,30 @@ describe('a missing TABLE fails and is named', () => {
     const r = await verifyProjectLifecycleSchema(fakeQuery([table]));
     expect(r.ok).toBe(false);
     expect(r.tablesMissing).toEqual([table]);
+  });
+});
+
+describe('a missing COLUMN fails — the case a table-AND-index check would pass', () => {
+  it.each(REQUIRED_COLUMNS)(
+    'detects %s missing, with every table and index still present',
+    async (column) => {
+      const r = await verifyProjectLifecycleSchema(fakeQuery([column]));
+      expect(r.ok).toBe(false);
+      expect(r.columnsMissing).toEqual([column]);
+      // THE STATE THIS CATEGORY EXISTS FOR. `refs_sha256` arrives by ALTER, and
+      // `ensureProjectLifecycleSchema` logs a warning and carries on when a statement fails.
+      // So the table is present, both indexes are present, and the manifest writer fails at
+      // runtime. The three older categories cannot see it.
+      expect(r.tablesMissing).toEqual([]);
+      expect(r.indexesMissing).toEqual([]);
+    },
+  );
+
+  it('PASSING COUNTERPART: nothing absent means no column is reported missing', async () => {
+    // Without this, the above would hold against a check that reports every column missing.
+    const r = await verifyProjectLifecycleSchema(fakeQuery());
+    expect(r.columnsMissing).toEqual([]);
+    expect(r.columnsPresent).toEqual([...REQUIRED_COLUMNS]);
   });
 });
 
@@ -127,10 +159,11 @@ describe('POSITIVE CONTROL: the double itself is answering the real query', () =
     const seen: string[] = [];
     const spy = async (sql: string) => { seen.push(sql); return fakeQuery()(sql); };
     await verifyProjectLifecycleSchema(spy);
-    expect(seen).toHaveLength(3); // tables, indexes, constraints
+    expect(seen).toHaveLength(4); // tables, indexes, constraints, columns
     expect(seen[0]).toContain('information_schema.tables');
     expect(seen[1]).toContain('pg_indexes');
     expect(seen[2]).toContain('information_schema.table_constraints');
+    expect(seen[3]).toContain('information_schema.columns');
     // And every required name appears in the SQL actually issued.
     for (const t of REQUIRED_TABLES) expect(seen[0]).toContain(t);
     for (const n of REQUIRED_INDEXES) expect(seen[1]).toContain(n);

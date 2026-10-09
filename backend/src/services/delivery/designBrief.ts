@@ -66,6 +66,46 @@ export interface DesignBrief {
   /** What was never discussed, so a concept does not invent it. */
   not_discussed: string[];
   concepts: Array<{ key: ConceptKey; title: string; recommended: boolean; intent: string }>;
+
+  // ─── P4-T3. All OPTIONAL, so every existing construction site keeps compiling and the
+  // one production caller passes no new input. §4.5 wants the design brief to carry the
+  // process, allocation and control facts rather than let a generator infer them.
+
+  /** One entry per business task: the workspace+action it reaches, or its headless reason. */
+  task_surfaces?: Array<{ taskId: string; surface: string }>;
+  /** Who does what, summarised from the allocation rows. Never derived here. */
+  allocation_summary?: Array<{ taskId: string; executionClass: string;
+    accountableRoleId: string | null }>;
+  /**
+   * Controls a human can actually operate.
+   *
+   * ABSENT when `controlSurfaceExists()` is false, rather than present-and-empty. Those are
+   * different claims: "no control is enforced yet" belongs in `open_facts`, while
+   * `controls: []` reads as "no controls are needed". The distinction is the whole argument
+   * of P4-T2, so the brief must not flatten it.
+   */
+  controls?: Array<{ policyKey: string; enforcedBy: string; callSite: string }>;
+  /** RECORDED, never targeted. `reference-fixtures.md`: there is no required page count. */
+  workspace_count?: number;
+  /**
+   * Facts the upstream material does not establish. Extends the `not_discussed` discipline:
+   * a missing fact stays OPEN rather than being filled with a plausible substitute.
+   */
+  open_facts?: string[];
+}
+
+/** What P4-T3 needs from the lifecycle generation stages. Every field optional and absent
+ *  means "not established", which becomes an open fact rather than a default. */
+export interface DesignFacts {
+  taskSurfaces?: ReadonlyArray<{ taskId: string; surface: string }>;
+  allocation?: ReadonlyArray<{ taskId: string; executionClass: string;
+    accountableRoleId: string | null }>;
+  /** Only the showable ones. A caller passes `renderControlAvailability().showable`. */
+  showableControls?: ReadonlyArray<{ policyKey: string; enforcedBy: string;
+    callSite: string }>;
+  /** The result of `controlSurfaceExists()`. Passed, not inferred from the array length. */
+  controlSurfaceExists?: boolean;
+  workspaceCount?: number;
 }
 
 /**
@@ -157,7 +197,19 @@ export function distinctiveTerms(u: ProjectUnderstanding): string[] {
   return found;
 }
 
-export function buildDesignBrief(u: ProjectUnderstanding, blueprint: BuildBlueprint): DesignBrief {
+/**
+ * Build the design brief.
+ *
+ * `facts` is OPTIONAL and defaults to nothing, so the existing production caller
+ * (`appPrototypeService`) is unchanged and the prospect-facing path is unaffected. When
+ * facts ARE supplied, every one that is absent becomes an entry in `open_facts` rather than
+ * a default - the same discipline `not_discussed` already applies to the understanding.
+ */
+export function buildDesignBrief(
+  u: ProjectUnderstanding,
+  blueprint: BuildBlueprint,
+  facts?: DesignFacts,
+): DesignBrief {
   const values = (dimension: Parameters<typeof itemsFor>[1]) => itemsFor(u, dimension).map((i) => i.value);
 
   return {
@@ -169,7 +221,58 @@ export function buildDesignBrief(u: ProjectUnderstanding, blueprint: BuildBluepr
     surfaces: u.proposed_surfaces,
     not_discussed: blueprint.readiness.not_discussed,
     concepts: CONCEPT_VARIANTS.map((c) => ({ ...c })),
+    ...designFacts(facts),
   };
+}
+
+/**
+ * Project the supplied facts onto the brief, and OPEN whatever is missing.
+ *
+ * The rule that matters: a fact nobody established is named in `open_facts`, never
+ * substituted. An absent allocation must not become an empty allocation, because an empty
+ * one reads as "nobody does this work" rather than "we have not decided".
+ */
+function designFacts(f?: DesignFacts): Partial<DesignBrief> {
+  // NO facts argument at all is not an incomplete claim - it is the prospect-facing caller,
+  // which knows nothing of the lifecycle. Opening four facts there would put lifecycle noise
+  // into a sales artifact. A caller that supplies SOME facts is making a claim, and whatever
+  // is missing from it gets opened.
+  if (f === undefined) return {};
+
+  const open: string[] = [];
+  const out: Partial<DesignBrief> = {};
+
+  if (f.taskSurfaces && f.taskSurfaces.length > 0) {
+    out.task_surfaces = f.taskSurfaces.map((t) => ({ ...t }));
+  } else {
+    open.push('No task-to-surface mapping was established, so no screen in this brief is traceable to the work it serves.');
+  }
+
+  if (f.allocation && f.allocation.length > 0) {
+    out.allocation_summary = f.allocation.map((a) => ({ ...a }));
+  } else {
+    open.push('No AI/software/human allocation was established, so who performs each task is undecided.');
+  }
+
+  // THE P4-T2 CONSUMER. `controlSurfaceExists` is passed, never inferred from the array:
+  // a spec of entirely unavailable controls yields an empty showable list AND a false
+  // predicate, and only the predicate distinguishes that from "no controls needed".
+  if (f.controlSurfaceExists === true && f.showableControls && f.showableControls.length > 0) {
+    out.controls = f.showableControls.map((c) => ({ ...c }));
+  } else if (f.controlSurfaceExists === false) {
+    open.push('No control is enforced anywhere in this design: every control in the specification is unavailable, so there is nothing a human can actually operate yet.');
+  } else {
+    open.push('No control specification was established, so what a human can adjust is unknown.');
+  }
+
+  if (typeof f.workspaceCount === 'number') {
+    out.workspace_count = f.workspaceCount;
+  } else {
+    open.push('The workspace count was not recorded. It is a disclosure, not a target.');
+  }
+
+  if (open.length > 0) out.open_facts = open;
+  return out;
 }
 
 /**

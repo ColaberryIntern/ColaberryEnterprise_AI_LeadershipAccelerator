@@ -8,7 +8,7 @@
  * unhelpful answer this module exists to avoid.
  */
 import { LIFECYCLE_STAGES, ADVANCE, type LifecycleStage } from '../lifecycleStages';
-import { type LifecycleEvidence } from '../lifecyclePrerequisites';
+import { type LifecycleEvidence, type EvidenceField } from '../lifecyclePrerequisites';
 import {
   evaluateTransition,
   refusalStatus,
@@ -16,8 +16,18 @@ import {
   type RefusalReason,
 } from '../lifecycleTransition';
 
+/**
+ * `assessedFields` is DERIVED from the object’s own keys, never hand-listed: a hand-listed set
+ * goes stale the moment a field is added to `LifecycleEvidence`, and it fails in the worst
+ * direction — the new field reads as NOT ASSESSED, so a test meaning to exercise measured
+ * behaviour starts passing for the wrong reason.
+ */
+function allAssessed<T extends object>(measured: T): Set<EvidenceField> {
+  return new Set(Object.keys(measured).filter((k) => k !== 'tenantId')) as Set<EvidenceField>;
+}
+
 function clean(): LifecycleEvidence {
-  return {
+  const measured = {
     tenantId: 'tenant-1',
     requirementCount: 12,
     requirementsWithoutProvenance: [],
@@ -50,6 +60,7 @@ function clean(): LifecycleEvidence {
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
   };
+  return { ...measured, assessedFields: allAssessed(measured) };
 }
 
 /** An actor holding every permission, so permission is never the incidental cause of a refusal. */

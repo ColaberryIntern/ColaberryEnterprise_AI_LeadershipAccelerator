@@ -127,6 +127,7 @@ import studentStoryRoutes from './admin/studentStoryRoutes';
 import internshipAdminRoutes from './admin/internshipRoutes';
 import factoryAdminRoutes from './admin/factoryRoutes';
 import projectLifecycleRoutes from './admin/projectLifecycleRoutes';
+import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 // Which case study evidences which service. Its own router rather than more handlers in factoryRoutes, which is
 // already past the 500-line ceiling; the route prefixes still live under /api/admin/factory/.
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
@@ -336,6 +337,7 @@ router.use(studentStoryRoutes);
 router.use(internshipAdminRoutes);
 router.use(factoryAdminRoutes);
 router.use(projectLifecycleRoutes);
+router.use(projectLifecycleReviewRoutes);
 router.use(caseStudyServiceLinkRoutes);
 // Gov qualification workspace (Phase 2). Paths are nested under /api/admin/factory/qualification, so
 // mgmtSectionGate's existing '/api/admin/factory' → 'program' PREFIX row already covers them.

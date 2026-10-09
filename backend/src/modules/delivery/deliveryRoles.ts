@@ -211,6 +211,31 @@ const ROLE_GRANTS: Record<string, DeliveryPermission[]> = {
 };
 
 /** Permissions granted by a delivery role. Unknown roles grant nothing — fail closed. */
+/**
+ * Which roles hold a given permission — the INVERSE of `ROLE_GRANTS`.
+ *
+ * WHY IT LIVES HERE and not beside the thing that needs it. `ROLE_GRANTS` is module-private,
+ * so an inverse built anywhere else would need either the table exported (a second way to read
+ * grants, free to disagree with `deliveryRoleGrants`) or a hand-written map (a second
+ * definition, free to drift). Inside this module the table is in scope and the inverse is
+ * DERIVED from it, so the two cannot disagree.
+ *
+ * WHAT IT IS FOR. `STAGE_PERMISSION` (`lifecycleTransition.ts:87`) maps a lifecycle stage to
+ * the one permission a transition needs. Answering "who has to act next?" means going the
+ * other way, and nothing did: this is genuinely new behaviour, not a rename of something that
+ * existed. An earlier plan cycle claimed it was "not a new mapping" and that was wrong.
+ *
+ * Returns roles in `ALL_DELIVERY_ROLES` order, so the answer is stable rather than dependent
+ * on object key order — a UI showing "next actor" should not reorder between deploys.
+ */
+export function rolesWithDeliveryPermission(
+  permission: DeliveryPermission,
+): readonly DeliveryRole[] {
+  return ALL_DELIVERY_ROLES.filter(
+    (role) => (ROLE_GRANTS[role] ?? []).includes(permission),
+  );
+}
+
 export function deliveryRoleGrants(role: string): readonly DeliveryPermission[] {
   return ROLE_GRANTS[role] ?? [];
 }

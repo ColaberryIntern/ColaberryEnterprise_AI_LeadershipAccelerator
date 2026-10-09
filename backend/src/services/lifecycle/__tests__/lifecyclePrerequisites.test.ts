@@ -15,11 +15,19 @@ import {
   satisfied,
   stagesWithPrerequisites,
   type LifecycleEvidence,
+  type EvidenceField,
 } from '../lifecyclePrerequisites';
 
-/** An evidence snapshot with nothing wrong with it. */
+/**
+ * An evidence snapshot with nothing wrong with it, and EVERYTHING ASSESSED.
+ *
+ * `assessedFields` is DERIVED from the object's own keys rather than hand-listed. A hand-listed
+ * set would go stale the moment a field is added to `LifecycleEvidence`, and the failure would
+ * be silent in the worst direction: the new field would read as not-assessed, so every test
+ * here that means to exercise MEASURED behaviour would start passing for the wrong reason.
+ */
 function clean(): LifecycleEvidence {
-  return {
+  const measured = {
     tenantId: 'tenant-1',
     requirementCount: 12,
     requirementsWithoutProvenance: [],
@@ -52,6 +60,10 @@ function clean(): LifecycleEvidence {
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
   };
+  const assessedFields = new Set(
+    Object.keys(measured).filter((k) => k !== 'tenantId'),
+  ) as Set<EvidenceField>;
+  return { ...measured, assessedFields };
 }
 
 describe('coverage: every stage has a predicate', () => {

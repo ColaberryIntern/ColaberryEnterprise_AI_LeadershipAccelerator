@@ -1,9 +1,10 @@
 /**
- * The project-lifecycle schema must be purely ADDITIVE, and its two load-bearing invariants —
+ * The project-lifecycle schema CONTRACT: its two load-bearing invariants —
  * the exactly-one-project CHECK and the UNIQUE revision backstop — must actually be in the DDL.
  *
- * Asserted against the real statement list so a future edit that sneaks in an ALTER of an
- * existing table, or quietly drops the unique index the approval CAS depends on, fails here.
+ * THE ADDITIVE-ONLY SWEEP NOW LIVES IN `ensureProjectLifecycleSchema.additive.test.ts`, split
+ * off when this file reached 528 lines, over CLAUDE.md 500-line hard ceiling. What stays here
+ * is the DDL contract, asserted against a mocked `sequelize.query`.
  *
  * Every assertion below is paired with a POSITIVE CONTROL that feeds it a deliberately-bad
  * input and proves the assertion rejects it. A schema check that cannot fail is not a check,
@@ -19,64 +20,26 @@ jest.mock('../../config/database', () => ({
 }));
 
 import { sequelize } from '../../config/database';
+import { PROJECT_LIFECYCLE_STATEMENTS } from '../ensureProjectLifecycleSchema';
 import {
-  PROJECT_LIFECYCLE_STATEMENTS,
   REQUIRED_TABLES,
+  REQUIRED_COLUMNS,
   assertProjectLifecycleSchema,
-} from '../ensureProjectLifecycleSchema';
+} from '../projectLifecycleSchemaContract';
 
 const queryMock = sequelize.query as unknown as jest.Mock;
 
-// Tables that already exist at base and may therefore be referenced but never altered.
-const PRE_EXISTING = ['tenants', 'projects', 'delivery_projects'];
-
-/** The additive predicate, extracted so the positive control can exercise the same code path. */
-function isAdditive(sql: string): boolean {
-  const s = sql.trim().toUpperCase();
-  const startsRight =
-    s.startsWith('CREATE TABLE IF NOT EXISTS') ||
-    s.startsWith('CREATE INDEX IF NOT EXISTS') ||
-    s.startsWith('CREATE UNIQUE INDEX IF NOT EXISTS');
-  return startsRight && !/\bALTER\s+TABLE\b/.test(s) && !/\bDROP\b/.test(s) && !/\bTRUNCATE\b/.test(s);
+/**
+ * Does any CHECK clause in this DDL mention the given column?
+ *
+ * Covers the inline column form AND the table-level `CONSTRAINT name CHECK (...)` form. The
+ * first version of the absence assertion only matched the inline one, which a verifier
+ * demonstrated by adding a table-level constraint that all 30 tests then accepted.
+ */
+function mentionedInAnyCheck(sql: string, column: string): boolean {
+  const clauses = [...sql.matchAll(/CHECK\s*\(([\s\S]*?)\)\s*(?:,|\)|$)/gi)].map((m) => m[1]);
+  return clauses.some((c) => new RegExp(`\\b${column}\\b`, 'i').test(c));
 }
-
-describe('ensureProjectLifecycleSchema is additive-only', () => {
-  it('finds a non-trivial statement list, so the sweep cannot pass by scanning nothing', () => {
-    expect(PROJECT_LIFECYCLE_STATEMENTS.length).toBeGreaterThanOrEqual(10);
-    expect(REQUIRED_TABLES.length).toBeGreaterThanOrEqual(5);
-  });
-
-  it('every statement is CREATE ... IF NOT EXISTS (no ALTER, no DROP, no TRUNCATE)', () => {
-    for (const sql of PROJECT_LIFECYCLE_STATEMENTS) {
-      expect(isAdditive(sql)).toBe(true);
-    }
-  });
-
-  it('positive control: the additive predicate rejects a destructive statement', () => {
-    expect(isAdditive('ALTER TABLE projects ADD COLUMN stage TEXT')).toBe(false);
-    expect(isAdditive('DROP TABLE project_lifecycle_states')).toBe(false);
-    expect(isAdditive('CREATE TABLE project_lifecycle_states (id UUID)')).toBe(false); // missing IF NOT EXISTS
-    expect(isAdditive('TRUNCATE project_lifecycle_states')).toBe(false);
-  });
-
-  it('every CREATE TABLE targets one of the new REQUIRED_TABLES, never an existing table', () => {
-    const created = PROJECT_LIFECYCLE_STATEMENTS
-      .map((s) => s.match(/CREATE TABLE IF NOT EXISTS\s+(\w+)/i)?.[1])
-      .filter(Boolean) as string[];
-    expect(created.sort()).toEqual([...REQUIRED_TABLES].sort());
-    for (const t of created) expect(PRE_EXISTING).not.toContain(t);
-  });
-
-  it('foreign keys reference only pre-existing tables or this schema\'s own new tables', () => {
-    const refs = PROJECT_LIFECYCLE_STATEMENTS
-      .join('\n')
-      .match(/REFERENCES\s+(\w+)\s*\(/gi)
-      ?.map((r) => r.replace(/REFERENCES\s+/i, '').replace(/\s*\(/, '').trim()) ?? [];
-    expect(refs.length).toBeGreaterThan(0);
-    const allowed = [...PRE_EXISTING, ...REQUIRED_TABLES];
-    for (const t of refs) expect(allowed).toContain(t);
-  });
-});
 
 describe('the two identity tables stay separate, as a database invariant', () => {
   const joined = PROJECT_LIFECYCLE_STATEMENTS.join('\n');
@@ -119,6 +82,25 @@ describe('the invariants the approval ladder depends on', () => {
     expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_revision_delivery/i);
     expect(joined).toMatch(/\(tenant_id,\s*student_project_id,\s*revision\)/i);
     expect(joined).toMatch(/\(tenant_id,\s*delivery_project_id,\s*revision\)/i);
+  });
+
+  it('declares the UNIQUE refs backstop for BOTH project kinds', () => {
+    // The idempotency key behind `writeBlueprintManifest`. Pinned HERE, without a database,
+    // because CI has no `DATABASE_URL`: deleting both of these from the statement list
+    // survived the entire no-DB set at 66/66, so CI would not have noticed their removal.
+    // The sibling revision backstop above was already pinned this way; these were not.
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_student/i);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_blueprint_manifest_refs_delivery/i);
+    expect(joined).toMatch(/\(tenant_id,\s*student_project_id,\s*refs_sha256\)/i);
+    expect(joined).toMatch(/\(tenant_id,\s*delivery_project_id,\s*refs_sha256\)/i);
+    // PARTIAL on both counts. Without `refs_sha256 IS NOT NULL` every pre-existing row,
+    // written before the column existed, would collide on NULL.
+    expect(joined).toMatch(/WHERE student_project_id IS NOT NULL AND refs_sha256 IS NOT NULL/i);
+    expect(joined).toMatch(/WHERE delivery_project_id IS NOT NULL AND refs_sha256 IS NOT NULL/i);
+  });
+
+  it('declares the refs_sha256 column itself, by ALTER so an existing table gets it', () => {
+    expect(joined).toMatch(/ALTER TABLE operating_blueprint_manifests\s+ADD COLUMN IF NOT EXISTS refs_sha256/i);
   });
 
   it('declares proposed_by on the manifest, so separation of duty is not vacuous', () => {
@@ -187,6 +169,81 @@ describe('the invariants the approval ladder depends on', () => {
     expect(others).not.toMatch(/ck_role_map_retained_is_array/i);
     expect(others).not.toMatch(/retained_responsibilities/i);
   });
+  it('binds a design decision to a manifest AND records the hash it was taken against', () => {
+    // The hash is RECORDED, not acted on: nothing in production writes `manifest.refs_json`
+    // and no material-vs-cosmetic classifier exists, so approval invalidation is deferred with
+    // its three parts named in the register. Storing the hash now is what makes the later
+    // classifier possible without a backfill.
+    expect(joined).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_design_decisions/i);
+    expect(joined).toMatch(/manifest_id\s+UUID\s+NOT NULL\s+REFERENCES\s+operating_blueprint_manifests\(id\)/i);
+    expect(joined).toMatch(/manifest_content_hash\s+TEXT\s+NOT NULL/i);
+  });
+
+  it('keeps supersession possible: a self-FK, and the approved index is PARTIAL', () => {
+    // `deliveryDesignLoop` is built on "supersession, never silent overwrite", so many rows
+    // per tier over time is CORRECT. A full unique index on (tenant, manifest, tier) would
+    // forbid that; no index at all would let two rows both claim to be what was agreed. The
+    // WHERE clause is the whole distinction, which is why it is asserted separately.
+    expect(joined).toMatch(/supersedes_decision_id\s+UUID\s+REFERENCES\s+blueprint_design_decisions\(id\)/i);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_design_decision_approved_tier/i);
+    expect(joined).toMatch(/WHERE status = 'approved'/i);
+  });
+
+  it('makes a visual-contract revision resolve to exactly one row', () => {
+    // 4.5 requires the approval record to reference the selected variant AND the contract
+    // revision. A reference that can resolve to two rows is not a reference: Gate 9 would
+    // compare an implementation against whichever row came back first.
+    expect(joined).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_visual_contracts/i);
+    expect(joined).toMatch(/revision\s+INTEGER\s+NOT NULL/i);
+    expect(joined).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_visual_contract_decision_revision/i);
+    expect(joined).toMatch(/ON blueprint_visual_contracts \(tenant_id, decision_id, revision\)/i);
+  });
+
+  it('bounds acceptable_variance to a fraction, because an unbounded one gates nothing', () => {
+    // Outside 0..1 the visual diff passes every screen or fails every screen depending on
+    // which default someone picked — the same refusal `validateVisualContract` makes in
+    // memory. Defence in depth for a value whose corruption is silent.
+    expect(joined).toMatch(/CONSTRAINT ck_visual_contract_variance_fraction CHECK/i);
+    expect(joined).toMatch(/acceptable_variance >= 0 AND acceptable_variance <= 1/i);
+    expect(joined).toMatch(/CONSTRAINT ck_visual_contract_regions_is_array CHECK/i);
+  });
+
+  it('does NOT constrain tier or status in DDL, so the vocabulary has one definition', () => {
+    // An absence asserted on purpose. `DesignTier` and `DesignDecisionStatus` are closed
+    // unions in `deliveryDesignLoop`; an IN (...) list here would be a SECOND definition that
+    // a future change to the union would silently disagree with. Same for an upper bound on
+    // variant_count, where MAX_VARIANTS already lives in exactly one place.
+    const decisions = PROJECT_LIFECYCLE_STATEMENTS
+      .filter((sql) => /blueprint_design_decisions/i.test(sql))
+      .join(' ');
+    // Reads every CHECK clause, inline or table-level. The first version only matched the
+    // INLINE column form, so a verifier added a table-level
+    // `CONSTRAINT ck_… CHECK (tier IN (…))` and all 30 tests passed — the assertion did not
+    // cover the form someone would most naturally write.
+    expect(mentionedInAnyCheck(decisions, 'tier')).toBe(false);
+    expect(mentionedInAnyCheck(decisions, 'status')).toBe(false);
+    expect(decisions).not.toMatch(/variant_count[^,]*<=/i);
+    // and the control that this filter found the statements at all
+    expect(decisions).toMatch(/CREATE TABLE IF NOT EXISTS blueprint_design_decisions/i);
+  });
+
+  it('POSITIVE CONTROL: the absence helper catches BOTH forms of a vocabulary CHECK', () => {
+    // Without this the assertion above could pass by being unable to see anything.
+    expect(mentionedInAnyCheck("tier TEXT NOT NULL CHECK (tier IN ('a'))", 'tier')).toBe(true);
+    expect(mentionedInAnyCheck("CONSTRAINT ck_x CHECK (tier IN ('a','b'))", 'tier')).toBe(true);
+    expect(mentionedInAnyCheck("CONSTRAINT ck_y CHECK (jsonb_typeof(dna_facets) = 'array')", 'tier')).toBe(false);
+  });
+
+  it('POSITIVE CONTROL: the design assertions are not satisfied by any other table', () => {
+    const others = PROJECT_LIFECYCLE_STATEMENTS
+      .filter((sql) => !/blueprint_design_decisions|blueprint_visual_contracts/i.test(sql))
+      .join(' ');
+    expect(others).not.toMatch(/manifest_content_hash/i);
+    expect(others).not.toMatch(/uq_design_decision_approved_tier/i);
+    expect(others).not.toMatch(/uq_visual_contract_decision_revision/i);
+    expect(others).not.toMatch(/ck_visual_contract_variance_fraction/i);
+  });
+
   it('gives exhausted retries somewhere to land', () => {
     const dl = PROJECT_LIFECYCLE_STATEMENTS.find((s) => /CREATE TABLE IF NOT EXISTS lifecycle_stage_failures/i.test(s))!;
     expect(dl).toMatch(/attempts\s+INTEGER\s+NOT NULL/i);
@@ -208,6 +265,12 @@ describe('assertProjectLifecycleSchema checks tables, indexes AND constraints', 
     for (const [, name, alias] of sql.matchAll(/bool_or\((?:\w+) = '([^']+)'\) AS (\w+)/g)) {
       row[alias] = !absent.includes(name);
     }
+    // The column query asks a TWO-predicate question, so it needs its own pattern. Keyed on
+    // `table.column` to match REQUIRED_COLUMNS.
+    const colRe = /bool_or\(table_name = '([^']+)' AND column_name = '([^']+)'\) AS (\w+)/g;
+    for (const [, t, c, alias] of sql.matchAll(colRe)) {
+      row[alias] = !absent.includes(`${t}.${c}`);
+    }
     return row;
   }
   function answerAll(absent: ReadonlyArray<string> = []) {
@@ -221,11 +284,12 @@ describe('assertProjectLifecycleSchema checks tables, indexes AND constraints', 
   });
   afterEach(() => { jest.restoreAllMocks(); });
 
-  it('returns true when every table, index and constraint reports present', async () => {
+  it('returns true when every table, index, column and constraint reports present', async () => {
     answerAll();
     await expect(assertProjectLifecycleSchema()).resolves.toBe(true);
-    // Three queries, not one: tables, indexes, constraints.
-    expect(queryMock).toHaveBeenCalledTimes(3);
+    // FOUR queries, not one: tables, indexes, columns, constraints. Pinned deliberately — a
+    // category added without its query would make the assert quietly narrower than its name.
+    expect(queryMock).toHaveBeenCalledTimes(4);
   });
 
   it('POSITIVE CONTROL: returns false and names the table when one is absent', async () => {
@@ -260,13 +324,28 @@ describe('assertProjectLifecycleSchema checks tables, indexes AND constraints', 
     await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
   });
 
-  it('asks for one bool_or alias per required name, across all three queries', async () => {
+  it('POSITIVE CONTROL: returns false and names the COLUMN when its ALTER did not run', async () => {
+    // The category this control exists for is the one a table-and-index assert cannot see:
+    // `refs_sha256` is added by an ALTER, and `ensureProjectLifecycleSchema` logs a warning
+    // and carries on if that statement fails. The table is present, both indexes are present,
+    // and the writer fails at runtime. Without this control the column list would be a check
+    // that cannot fail.
+    answerAll([REQUIRED_COLUMNS[0]]);
+    const errSpy = jest.spyOn(console, 'error');
+    await expect(assertProjectLifecycleSchema()).resolves.toBe(false);
+    const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).toContain(REQUIRED_COLUMNS[0]);
+    expect(logged).toContain('project_lifecycle_schema_invariant_violated');
+  });
+
+  it('asks for one bool_or alias per required name, across all four queries', async () => {
     answerAll();
     await assertProjectLifecycleSchema();
     const sqls = queryMock.mock.calls.map((c) => String(c[0]));
     REQUIRED_TABLES.forEach((t, i) => expect(sqls[0]).toContain(`bool_or(table_name = '${t}') AS t${i}`));
     expect(sqls[0]).toContain("table_schema = 'public'");
     expect(sqls[1]).toContain('pg_indexes');
-    expect(sqls[2]).toContain('table_constraints');
+    expect(sqls[2]).toContain('information_schema.columns');
+    expect(sqls[3]).toContain('table_constraints');
   });
 });
