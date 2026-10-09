@@ -1078,3 +1078,29 @@ CORRECT outcome — a persona is a coarse view and spans roles of different auth
 as an authorisation decision would grant on the strongest member. Authorisation goes through
 `permittedActionsForRole` (the caller's own role) and the server's own `deliveryPermissionsFor`
 check. The function exists so the published persona matrix is executable rather than prose.
+
+### NOTHING IN PRODUCTION CAN RECORD A STAGE FAILURE: the dead-letter sink has no adapter
+
+Found while rewriting P5-T8's Journey 4 to drive real code instead of round-tripping its own
+writes.
+
+`lifecycleExecution.ts` defines `ExecutionStore` with `get`/`put`/`deadLetter`, and `executeStage`
+takes one by injection. **Grep the repository and `ExecutionStore` appears only in that module and
+its tests — there is no production implementation.** Meanwhile `DeadLetter`'s fields
+(`lifecycleStateId`, `tenantId`, `attemptedStage`, `attempts`, `errorClass`, `errorMessage`,
+`correlationId`) match `lifecycle_stage_failures`' columns ONE FOR ONE, and the only other
+references to that table are its Sequelize model and the schema contract.
+
+So the table was designed as this sink, the machine was written to feed it, and the adapter
+between them was never built. Until it is:
+
+- nothing in production can record a stage failure,
+- `executeStage`'s retry bound, classification and dead-lettering run nowhere real, and
+- the only thing exercising that path end to end is the store P5-T8's Journey 4 implements in
+  the test.
+
+**Owner: whoever wires stage execution — P6 or later.** This is the third producer-with-no-consumer
+in this programme (after the three unwired generation validators and the `ExecutionStore` here),
+which is a pattern worth naming rather than filing three times: **this codebase reliably builds
+the machine before the adapter.** The question to ask at the start of a phase is not "is it
+correct" but "is anything calling it".
