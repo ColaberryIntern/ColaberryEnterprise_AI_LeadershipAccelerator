@@ -205,6 +205,53 @@ describe('the route is REACHABLE, which is a different claim from the file exist
     expect(q('lifecycle-page')).toBeNull();
   });
 
+  it('DEFAULTS an absent or malformed `kind` to student, which the walkthrough now says', async () => {
+    // Measured, not reasoned. A first draft of the walkthrough claimed `kind` "is required and is
+    // not guessed" — true of the server's Zod schema, false of this page. The sentence had been
+    // transposed from one to the other and a verifier caught it. This is the measurement.
+    //
+    // The consequence for a reviewer: opening a DELIVERY project without `?kind=delivery` asks
+    // about a student project of that id, which does not exist, and the answer is "no lifecycle
+    // is registered" — a correct response to the wrong question.
+    // ONE entry per mount, not two: the page fetches the status AND the revision compare, and
+    // both carry `kind`. Counting every call recorded ten for five mounts and made the assertion
+    // say nothing about how many URLs were actually tried.
+    const seen: string[] = [];
+    api.get.mockImplementation((url: string, config: any) => {
+      if (!String(url).includes('/revisions/compare')) seen.push(config?.params?.kind);
+      return Promise.resolve({ data: status() });
+    });
+
+    // A FRESH MOUNT PER CASE. `MemoryRouter` reads `initialEntries` once, when it mounts, so
+    // re-rendering the same root with a different URL keeps the first one — the first version of
+    // this test did that and recorded two calls for five cases.
+    const mountAt = async (query: string) => {
+      const c = document.createElement('div');
+      document.body.appendChild(c);
+      const r = createRoot(c);
+      await act(async () => {
+        r.render(
+          <MemoryRouter initialEntries={[`/admin/project-lifecycle/p-1${query}`]}>
+            <Routes>{lifecycleRoutes}</Routes>
+          </MemoryRouter>,
+        );
+      });
+      act(() => { r.unmount(); });
+      c.remove();
+    };
+
+    for (const query of ['', '?kind=', '?kind=DELIVERY', '?kind=nonsense', '?kind=student']) {
+      await mountAt(query);
+    }
+    // Every one of them became `student`, including the wrong-case spelling of the real value.
+    expect(seen).toEqual(['student', 'student', 'student', 'student', 'student']);
+
+    // And the one spelling that IS honoured, so this is a default rather than a stuck value.
+    await mountAt('?kind=delivery');
+    expect(seen[seen.length - 1]).toBe('delivery');
+    expect(seen).toHaveLength(6);
+  });
+
   it('the exported path is the one adminRoutes mounts', () => {
     expect(LIFECYCLE_PATH).toBe('/admin/project-lifecycle/:projectId');
   });

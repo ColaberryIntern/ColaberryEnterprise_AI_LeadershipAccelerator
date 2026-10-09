@@ -13,21 +13,32 @@ three gradings on pasted commands that had never been executed.
 Everything is labelled **local**, **PR**, **deployed** or **activated**. Those are four different
 states and collapsing them is the failure this format exists to prevent.
 
-- **LOCAL + PR.** All of Phase 5's code and tests exist on the branch and pass locally. Nothing is
-  deployed. Nothing is activated.
-- **NOT DEPLOYED, and blocked on a human.** `main` requires 1 approving review and five checks
-  (`Backend typecheck`, `Backend unit tests`, `Secret scan + route-auth lint`, `Frontend build`,
-  `Frontend typecheck`), and only `main` deploys to production. The merge is the owner's click.
-  P5-T9 (deploy) and P5-T10 (production verification) cannot start before it.
-- **NOT ACTIVATED, by design.** `ENABLE_PROJECT_LIFECYCLE` stays unset. Every route answers
-  `409 { lifecycleDisabled: true }` with the remedy in the body. Activation is Phase 8 and the
-  execution contract lists flipping this flag as a hard stop — no task in Phase 5 turns it on.
+- **DEPLOYED** — amended 2026-10-09. Merged as PR #3048 and deployed via `scripts/deploy-prod.sh`
+  at release `a11961e3c7142eb2e8ad66757571fbcbba3b04f4`. Both containers were genuinely recreated
+  (created and started 01:27Z, 0 restarts), not pulled over. Pre-deploy SHA
+  `19ac5db489c2cd9a9eb94326a96eb6379927c650` is the rollback target — and the rollback command
+  needs `SKIP_PULL=1 ALLOW_DETACHED_HEAD=1`, because the script refuses a `HEAD` that is not
+  `origin/main`, which is exactly the state a rollback creates. See `deployment-log.md`.
+- **PRODUCTION-VERIFIED.** `loop-production-verifier` ran ten checks against the live system and
+  returned PASS. The schema check reproduced independently and unpiped: `7/7` tables, `10/10`
+  indexes, `6/6` constraints, exit 0. The frontend bundle served over HTTPS through the real
+  hostname contains `lifecycle-page`, `compare-panel` and `linked-panel`, so the surface shipped
+  rather than merely merged.
+- **STILL NOT ACTIVATED, and that is the whole posture.** `ENABLE_PROJECT_LIFECYCLE` is unset,
+  confirmed four ways: `printenv` exits 1 (unset, not empty-but-set), absent from PID 1's own
+  environment, absent from every stack config file, and the running image evaluates
+  `flag_lifecycleEnforcement: false`. In the SHIPPED JavaScript the flag check is the first
+  statement in all seven handler bodies, before any service import, so no 200, empty-success or
+  500 path is reachable. Activation is Phase 8 and the contract treats it as a hard stop.
 - **Two acceptance IDs, and only two.** Phase 5 **strengthens LC-08** and evidences **LC-14 in
   part**. It does not claim LC-10, LC-11, LC-12 or LC-15. The first two were dropped mid-phase
   and that is recorded below rather than left for this document to discover.
 - **The feature is additive.** No role was renamed, no permission row edited, no existing route
-  changed in behaviour. Rollback is redeploying the pre-deploy SHA with the same script; with the
-  flag off, rollback cannot re-open an ungoverned path because no path is governed yet.
+  changed in behaviour — and the production verifier spot-checked the public site, the login pages,
+  the asset manifest and `/health/full` (12 checks, 0 non-ok) to confirm it. With the flag off,
+  rollback cannot re-open an ungoverned path because no path is governed yet. **The rollback
+  procedure is in `deployment-log.md`, not here, because the obvious form of it is refused by the
+  deploy script.**
 - **One task is blocked, not failed.** P5-T1.3's code ships; its evidence did not reach the bar
   after five gradings and the owner accepted the block. What that costs is listed below.
 
@@ -75,13 +86,14 @@ over.
 
 | # | Deferred | Owner | Why it could not be shown in Phase 5 |
 |---|---|---|---|
-| 1 | The live end-to-end review journey | P5-T10, after merge | The journeys run against a throwaway Postgres. CLAUDE.md forbids integration tests touching production, and the flag is off there, so a production run would assert nothing while still writing to the production database to find that out. |
-| 2 | The live stale-revision approval refusal | P5-T10, after merge | The CAS refusal is proven locally against a real Postgres (`blueprintApproval.concurrency.integration.test.ts`), but "it refuses in production" is a different claim and nothing is deployed. |
-| 3 | The live `error_class` log evidence | P5-T10, after merge | The structured log lines are asserted locally by the route suite. Reading them out of the production container needs the code to be there. |
+| 1 | The live end-to-end review journey | **Phase 8, after activation** | P5-T10 has now run and passed, so this is no longer waiting on a deploy — it is blocked by the FLAG. With `ENABLE_PROJECT_LIFECYCLE` unset every route refuses, so there is no journey to run in production. The plan defers it to Phase 8 for exactly this reason. |
+| 2 | The live stale-revision approval refusal | **Phase 8, after activation** | Proven locally against a real Postgres (`blueprintApproval.concurrency.integration.test.ts`). The code is now deployed, but the approval route refuses at the flag check before reaching the CAS, so the refusal cannot be provoked until activation. |
+| 3 | The live `error_class` log evidence | **Phase 8, after activation** | The code is deployed, and the verifier confirmed `grep -c project_lifecycle` over 960 post-deploy log lines returns **0** — correct, because no route can be reached. An `error_class` from this path cannot appear until the flag is on. |
 | 4 | **LC-14's worker-bypass clause** | **P6-T1** | **There is no worker path in this repo to bypass.** `approveLifecycleBlueprint` has exactly one caller, the HTTP route, and it already runs the audited write guard. A test asserting that a nonexistent job cannot reach approval is a test that cannot fail. An absence tripwire stands in its place and is proven to trip. |
-| 5 | Screenshots of the review surface | P5-T9/T10, after deploy | `playwright` is declared in the root `package.json` but is not resolvable in this worktree — `require('playwright')` throws, which is also the true cause of the four baseline `TS2307` errors in the backend typecheck. Installing it would mutate another session's live worktree through the `node_modules` junction. |
-| 6 | A **visual** narrow-width check | P5-T9/T10, after deploy | jsdom performs no layout, so every element reports a zero bounding box. The narrow-width evidence here is structural — no fixed pixel widths, every flex row wraps — and three real overflow defects were found and fixed that way. Nobody has looked at it on a phone. |
+| 5 | Screenshots of the review surface | **Whoever runs the production capture pipeline** | NOW POSSIBLE: the surface is deployed, and `scripts/captureProductionScreenshots.js` already works against production. It was not possible during Phase 5 because `playwright` is declared in the root `package.json` but unresolvable in that worktree, and installing it would have mutated another session's live worktree through the `node_modules` junction. Note the only page reachable today is the switched-off notice. |
+| 6 | A **visual** narrow-width check | **Phase 8, with the capture pipeline** | jsdom performs no layout, so every element reports a zero bounding box and the Phase 5 evidence is structural — no fixed pixel widths, every flex row wraps, and three real overflow defects were found and fixed that way. A real narrow-width look needs the flag on, because the only page available now is the refusal notice. Nobody has looked at it on a phone. |
 | 7 | LC-10 and LC-11 | A later phase, on top of T1.3's shipped code | See above. |
+| 8 | **The authenticated 409 over HTTP** | **Whoever holds a program-section admin token** | `requireSection('program')` runs BEFORE the flag check, so an unauthenticated probe stops at 401 and never reaches the handler — the verifier proved that 401 is byte-identical to a nonexistent route's. The refusal is evidenced from the shipped artefact's behaviour in the live container instead. One `curl` with a token closes it. **DO IT BEFORE PHASE 8:** once the flag is on, the refusal cannot be observed at all. |
 
 ---
 
@@ -143,10 +155,20 @@ bounces the backend. Never two concurrent deploys.
 
 ---
 
-## What the owner has to do
+## What the owner has to do — updated 2026-10-09
 
-1. Review and approve the PR (1 approving review is required; the five checks run themselves).
-2. Merge it — `gh pr merge` is refused in this environment even when approved, so the merge is a
-   click in the browser.
-3. After the merge, P5-T9 and P5-T10 can run: deploy, the two preconditions above, then production
-   verification. The flag stays off throughout.
+PR #3048 is merged and Phase 5 is deployed and verified. Two things remain:
+
+1. **Merge PR #3049.** It is the P5-T8 remediation — tests and documentation only, no production
+   source — which landed on the branch after #3048 had already merged and so never reached `main`.
+   It changes nothing about what is running.
+2. **Nothing else, until Phase 8.** The feature is inert by design. The one check available today
+   is in `owner-testing-guide.md`: open the workspace URL and confirm you get the yellow
+   "not enabled" box rather than an empty page.
+
+### The one measurement that closes at activation
+
+The `409` refusal has never been observed over an authenticated HTTP round trip, because
+`requireSection('program')` runs before the flag check and an unauthenticated probe stops at 401.
+It needs one `curl` with a program-section admin token. **Do it before Phase 8 flips the flag** —
+once the feature is on, the refusal cannot be observed at all and that window closes permanently.

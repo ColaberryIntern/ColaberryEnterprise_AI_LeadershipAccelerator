@@ -25,9 +25,18 @@ feature look identical, and telling them apart matters.
 /admin/project-lifecycle/<the project's id>?kind=delivery
 ```
 
-Use `kind=delivery` for a client engagement and `kind=student` for a student build. The `kind` is
-required and is not guessed — asking for the wrong one tells you so instead of quietly showing
-you a different project's details.
+Use `kind=delivery` for a client engagement and `kind=student` for a student build.
+
+**Get this wrong and the page will not tell you.** `kind` is only honoured when it is exactly
+`delivery`; anything else — a typo, or leaving it off entirely — is treated as `student`. So
+opening a client engagement without `?kind=delivery` asks the server about a student project of
+that id, which does not exist, and you get *"No lifecycle is registered for that project."* The
+project is fine; the URL was wrong. **This is a rough edge, not a designed behaviour**, and it is
+recorded as such rather than described as a safeguard.
+
+(An earlier draft of this document claimed the opposite — that `kind` "is required and is not
+guessed". That was wrong: the sentence had been transposed from the server's request schema,
+which does require it, onto the page, which does not. A verifier caught it by reading the code.)
 
 ## What you see, top to bottom
 

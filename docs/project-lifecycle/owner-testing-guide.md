@@ -1,8 +1,45 @@
 # Owner testing guide — Unified AI Project Lifecycle
 
-**Status:** specification (P1-T7). The six tests below are defined now so Phases 4-6 build the surfaces they need. **The navigation paths, screenshots and results are filled in at Phase 8, against production.** Nothing in this document is a claim that the feature works yet.
+**Status:** specification (P1-T7), **amended 2026-10-09 by Phase 5**. The tests below are defined now so Phases 4-6 build the surfaces they need. **The navigation paths, screenshots and results are filled in at Phase 8, against production.** Nothing in this document is a claim that the feature works yet.
+
+**Phase 5 changed exactly one thing about this document's status: the review surface now EXISTS in production and is switched OFF.** None of the tests below can be run yet. The one check you can do today is in the next section, and it is a check that the feature is correctly inert.
 
 **Who this is for:** the person who owns a project and has to decide whether to approve it. Not the engineer who built this. You should not need to read code, open a log, or ask anyone what a field means.
+
+---
+
+## Where Phase 5 left this — deployed, and deliberately switched off
+
+Phase 5 shipped the review surface to production on 2026-10-09 at release `a11961e3c714`. The
+workspace lives at:
+
+```
+/admin/project-lifecycle/<the project's id>?kind=delivery
+```
+
+**It is switched off, on purpose.** The environment setting `ENABLE_PROJECT_LIFECYCLE` is not set,
+so every part of it refuses rather than half-working. Switching it on is Phase 8's decision, not a
+step in this guide, and the project's own contract treats flipping it as a change that needs
+explicit authorisation.
+
+### The one test you can run today
+
+Open the URL above for any project. **You should see a yellow box** reading *"Project lifecycle
+enforcement is not enabled in this environment"*, followed by *"Set
+ENABLE_PROJECT_LIFECYCLE=true to enable it."*
+
+That is the correct and complete result. What makes it worth checking is the alternative: if you
+see an **empty page**, or a page that looks like a project with nothing in it, that is a defect
+worth reporting — a blank screen and a switched-off feature are indistinguishable to a reader, and
+a great deal of care went into making sure you never have to guess which one you are looking at.
+
+### What cannot be tested yet, and why — so you are not left wondering
+
+| | |
+|---|---|
+| Tests 1–8 below | All need the feature switched on. Phase 8. |
+| Screenshots | None were captured. The capture tool was not installable in the working copy where Phase 5 was built without damaging a parallel piece of work. The existing production screenshot process can do it now that the surface is deployed. |
+| How it looks on a phone | Checked structurally — nothing fixes a pixel width and every row of controls is allowed to wrap, and three rows that would have overflowed were found that way and fixed. But **nobody has looked at it on a phone.** Those are different claims. |
 
 ---
 

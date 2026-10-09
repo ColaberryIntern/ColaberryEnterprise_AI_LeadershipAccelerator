@@ -1078,3 +1078,54 @@ CORRECT outcome — a persona is a coarse view and spans roles of different auth
 as an authorisation decision would grant on the strongest member. Authorisation goes through
 `permittedActionsForRole` (the caller's own role) and the server's own `deliveryPermissionsFor`
 check. The function exists so the published persona matrix is executable rather than prose.
+
+### NOTHING IN PRODUCTION CAN RECORD A STAGE FAILURE: the dead-letter sink has no adapter
+
+Found while rewriting P5-T8's Journey 4 to drive real code instead of round-tripping its own
+writes.
+
+`lifecycleExecution.ts` defines `ExecutionStore` with `get`/`put`/`deadLetter`, and `executeStage`
+takes one by injection. **Grep the repository and `ExecutionStore` appears only in that module and
+its tests — there is no production implementation.** Meanwhile `DeadLetter`'s fields
+(`lifecycleStateId`, `tenantId`, `attemptedStage`, `attempts`, `errorClass`, `errorMessage`,
+`correlationId`) match `lifecycle_stage_failures`' columns ONE FOR ONE, and the only other
+references to that table are its Sequelize model and the schema contract.
+
+So the table was designed as this sink, the machine was written to feed it, and the adapter
+between them was never built. Until it is:
+
+- nothing in production can record a stage failure,
+- `executeStage`'s retry bound, classification and dead-lettering run nowhere real, and
+- the only thing exercising that path end to end is the store P5-T8's Journey 4 implements in
+  the test.
+
+**Owner: whoever wires stage execution — P6 or later.** This is the third producer-with-no-consumer
+in this programme (after the three unwired generation validators and the `ExecutionStore` here),
+which is a pattern worth naming rather than filing three times: **this codebase reliably builds
+the machine before the adapter.** The question to ask at the start of a phase is not "is it
+correct" but "is anything calling it".
+
+### The authenticated 409 refusal has never been observed over HTTP, and Phase 8 will remove the chance
+
+Raised by the Phase 5 production verifier. Every lifecycle route runs `requireSection('program')`
+BEFORE its feature-flag check, so an unauthenticated request stops at 401 and never reaches the
+handler. The refusal contract — `409 { lifecycleDisabled: true, error, remedy }` — is therefore
+evidenced from the shipped artefact's behaviour inside the live container, and NOT from an HTTP
+round trip.
+
+Closing it is one `curl` with a program-section admin JWT. The verifier declined to mint one on a
+live host, which was right.
+
+**Do it before Phase 8 flips the flag.** Once `ENABLE_PROJECT_LIFECYCLE=true`, the refusal cannot
+be observed at all — the window for this measurement closes permanently at activation.
+**Owner: whoever holds a program-section admin token.**
+
+### Production images carry no revision label, so SHA-to-image needs reasoning
+
+The running images have no `org.opencontainers.image.revision`, so a verifier cannot read which
+commit produced them. Phase 5's verification established it by CONTENT instead — two dist files
+that were first added by the deployed commit, making their presence a fingerprint — which worked
+but took several steps and an argument.
+
+Adding the label to the image build makes that one command. **Owner: whoever maintains the image
+build.** Small change, and it removes reasoning from a path that should be a measurement.
