@@ -30,6 +30,7 @@ import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
+import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
@@ -52,6 +53,13 @@ import { ensureExplorerCampaignKeyIndex } from './db/ensureExplorerCampaignKeyIn
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
+import { ensureZoomRequestLedgerSchema } from './db/ensureZoomRequestLedgerSchema';
+import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema';
+import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
+import { ensurePresenterSlotSchema } from './db/ensurePresenterSlotSchema';
+import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
+import { ensurePresentationDeckSchema } from './db/ensurePresentationDeckSchema';
+import { ensurePresentationOpsSchema } from './db/ensurePresentationOpsSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
@@ -70,7 +78,17 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
+import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
+import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
+import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
+import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvidenceSchema';
+import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
+import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseSchema';
+import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmentSchema';
+import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
+import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
+import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
@@ -80,6 +98,7 @@ import { ensureOauthTokenVaultSchema } from './db/ensureOauthTokenVaultSchema';
 import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAgentAttachmentSchema } from './db/ensureAgentAttachmentSchema';
 import { ensureReeseWelcomeSchema } from './db/ensureReeseWelcomeSchema';
+import { ensureReeseTicketFollowUpSchema } from './db/ensureReeseTicketFollowUpSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureAiAgentReportsToSchema } from './db/ensureAiAgentReportsToSchema';
@@ -120,6 +139,7 @@ import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotific
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureAgentWorkLifecycleFieldsSchema } from './db/ensureAgentWorkLifecycleFieldsSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
+import { ensureApprovalRequestsEventIdFix } from './db/ensureApprovalRequestsEventIdFix';
 import { ensureOrgAccountSchema } from './db/ensureOrgAccountSchema';
 import { ensureMultiTenantSchema } from './db/ensureMultiTenantSchema';
 import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
@@ -134,6 +154,8 @@ import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
+import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
@@ -232,6 +254,11 @@ app.use(openclawShortLinkRoutes);
 // Signed media fetch (/m/...) - public, a provider fetches it at publish time with no session.
 // Same rule as /r/ and /i/: above adminRoutes or the guard 401s it. Pinned by its own test.
 app.use(mediaFetchRoutes);
+// Hosted landing pages (GET /p/:brand/:slug) - public server-rendered HTML, the destination of
+// social posts. Same rule as /r/ /i/ /m/ above: a visitor clicking a link in a post has no
+// session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
+// publicLandingPageRoutes.test.ts, which builds both orders and asserts 200 above / 404 below.
+app.use(publicLandingPageRoutes);
 // LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
 app.use(linkedInCallbackRoutes);
 // Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).
@@ -2473,6 +2500,26 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Live Sessions build-out: 5 live-session tables (idempotent DDL, sync is disabled).
   await ensureLiveSessionSchema();
+  // Zoom meeting idempotency ledger. Must exist before any booking provisions a
+  // meeting, so it is ensured on boot like the rest, not behind a feature flag.
+  await ensureZoomRequestLedgerSchema();
+  // The register of Zoom hosts meetings may be created as. Must exist BEFORE the
+  // slot schema, whose per-host exclusion constraint is what turns extra hosts
+  // into extra capacity.
+  await ensureZoomHostSchema();
+  // Practice-slot reservations + the overlap exclusion constraint.
+  await ensurePresentationSlotSchema();
+  // Project Presentation Studio: 5 tables + 4 additive columns on `projects`
+  // (idempotent DDL). Runs unconditionally, not behind PRESENTATION_STUDIO_ENABLED:
+  // the tables must exist before the flag can be turned on, and empty unread tables
+  // change no behaviour while it is off.
+  await ensurePresentationStudioSchema();
+  await ensurePresentationDeckSchema();
+  await ensurePresentationOpsSchema();
+  // Demo-day running order. Its own module rather than columns on the Studio
+  // schema: a slot belongs to the SESSION, and the uniqueness that matters (one
+  // presenter per position) cannot be expressed on the attempt.
+  await ensurePresenterSlotSchema();
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
   // /inbox-zero commitment ledger (what Ali owes). Depends on inbox_cases above.
@@ -2533,6 +2580,10 @@ async function start(): Promise<void> {
   // Nothing that reads this table gates a real action yet — see
   // agentActionAuthorizationBridge.ts's header.
   await ensureApprovalRequestsSchema();
+  // Approval-correlation fix (2026-10-02): drops approval_requests.event_id's FK,
+  // which was unsatisfiable by construction (see ensureApprovalRequestsEventIdFix.ts's
+  // own header) and was causing every approval_requests write to silently fail.
+  await ensureApprovalRequestsEventIdFix();
   // Business accounts: organizations.status / status_changed_at / status_changed_by /
   // lead_id, plus the org_cohorts join table (idempotent DDL, additive only).
   // Before this, `organizations` had no lifecycle column, so an account could not be
@@ -2635,6 +2686,11 @@ async function start(): Promise<void> {
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
+  await ensureLandingPageSchema();
+  // AFTER landing_pages exists: this adds content_items.landing_page_id and its foreign key, so
+  // the composer can persist the page an operator picked. The column is also in the content_items
+  // CREATE body for fresh databases; this is what migrates the ones that already exist.
+  await ensureContentItemDestinationSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).
@@ -2732,11 +2788,58 @@ async function start(): Promise<void> {
   // the requirement link tables, and the versioned contract_process_documents). Additive NEW
   // tables that FK to delivery_projects (and projects) — no existing table is altered.
   await ensureContractTrackSchema();
+  // Unified project lifecycle: project_lifecycle_states, operating_blueprint_manifests,
+  // blueprint_approvals, lifecycle_stage_failures. Additive NEW tables only. Placed AFTER the
+  // contract tables because a manifest may FK to delivery_projects, and after the project
+  // approval schema because both describe the owner-side approval surface. NOTE: this DDL
+  // reaches production on the next backend deploy by ANY session, regardless of the
+  // ENABLE_PROJECT_LIFECYCLE flag — the code ships dark, the schema does not. The paired assert
+  // is what makes a failed migration visible, since the statement loop is warn-only.
+  await ensureProjectLifecycleSchema();
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
   // (and the qualification table itself) — no existing table is altered; placed after the contract
   // tables since build_authorizations references delivery_projects.
   await ensureGovQualificationSchema();
+  // AI Project Factory: the team-scoped gov-opportunity dismissal record (gov_opportunity_dismissals). A single
+  // additive NEW table so a reviewer can hide a discovered v1 candidate from the whole team's feed (reversible).
+  // No existing table is altered; it FKs to nothing (keyed by tenant_id + OP's opportunity uuid).
+  await ensureGovOpportunityDismissalSchema();
+  // Gov source bundles (gov_source_bundles): the private solicitation-ZIP evidence of record retained by the gov
+  // qualification workspace. A single additive NEW table (no existing table altered); keyed by tenant_id +
+  // qualification key + sha256, with the bytes on the uploads volume. See ensureGovSourceBundleSchema.
+  await ensureGovSourceBundleSchema();
+  // Gov build-story evidence (gov_build_story_evidence): the student's completion hand-in for a Build story,
+  // recorded `submitted` (never self-verified). A single additive NEW table; see ensureGovBuildStoryEvidenceSchema.
+  await ensureGovBuildStoryEvidenceSchema();
+  // Gov build-story assignment (gov_build_story_assignment): the operator's assignment of a Build story to a student
+  // builder. A single additive NEW table (UNIQUE per project+story, so re-assigning upserts); it overlays the derived
+  // plan to `assigned` and NEVER confers a built/verified state. See ensureGovBuildStoryAssignmentSchema.
+  await ensureGovBuildStoryAssignmentSchema();
+  // Gov proposal production (P4): gov_proposal_response (the authored answer per established requirement, with its
+  // draft->reviewed->approved lifecycle + commit-bound figures) and gov_proposal_amendment (the dates/messages/
+  // amendment inbox, whose `affects` flips affected reviewed/approved responses back to revision_required). Two
+  // additive NEW tables (UNIQUE per project+key); no existing table is altered. The agent never advances a response
+  // to approved or records an amendment on its own — these are operator actions.
+  await ensureGovProposalResponseSchema();
+  await ensureGovProposalAmendmentSchema();
+  // Gov submission + outcome (gov_submission): the per-project submission lifecycle (preparing→…→exported→
+  // externally_submitted→acknowledged; exported ≠ submitted), the export manifest, the MANUAL external receipt, the
+  // win/loss outcome, and the PRIVATE case-study + service-capability candidates. One additive NEW table (UNIQUE per
+  // project); it never writes to the published case_studies / live service_offerings systems. See ensureGovSubmissionSchema.
+  await ensureGovSubmissionSchema();
+  // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
+  // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
+  // nothing (tenant-scoped by tenant_id).
+  await ensureServiceOfferingSchema();
+  // Which case studies evidence which services (case_study_service_links). A single additive NEW join table, so a
+  // bid can answer "what proves you can do this" with a record rather than prose. Unlike its siblings it DOES carry
+  // foreign keys, both ON DELETE CASCADE: deleting a case study on 2026-10-02 rolled back on an undeclared FK, and
+  // cascade means a future deletion can neither orphan a link nor be blocked by one. A link is born `suggested`
+  // and only a person moves it to `confirmed`, because these feed past-performance claims.
+  // MUST run after ensureCaseStudySchema and ensureServiceOfferingSchema: its REFERENCES name both parents, and a
+  // foreign key to a table that does not exist yet is a boot error, not a no-op.
+  await ensureCaseStudyServiceLinkSchema();
   // AI Project Factory: the executor/accountable/skills/judgment/confidence/source-evidence
   // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
   // pattern). Existing rows are untouched and unset until the factory populates them.
@@ -2769,6 +2872,9 @@ async function start(): Promise<void> {
   // Reese's first-login welcome ledger — also the "has this student logged in
   // before" marker, since enrollments carry no last_login_at.
   await ensureReeseWelcomeSchema();
+  // Reese's follow-up tracking for quiet student_support tickets (idempotent DDL,
+  // additive only — see reeseTicketFollowUpService.ts).
+  await ensureReeseTicketFollowUpSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).

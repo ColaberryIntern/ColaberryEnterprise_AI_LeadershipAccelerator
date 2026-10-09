@@ -9,6 +9,7 @@ import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
 import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken, pickBestMp4 } from '../services/zoomService';
+import { judgeDeliveryFreshness } from '../services/zoom/zoomWebhookReplay';
 import {
   ingestRecordingForSession,
   ingestRecordingForBooking,
@@ -235,6 +236,26 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     return;
   }
 
+  // A VALID SIGNATURE IS NOT A FRESH REQUEST. Zoom signs `v0:{timestamp}:{body}`
+  // and that signature never expires, so a captured delivery — from a proxy log, a
+  // mirrored request, an error report with headers attached — can be replayed
+  // verbatim forever and was accepted every time. The timestamp is inside the HMAC
+  // input, so it cannot be altered without breaking the signature, which is
+  // precisely what makes it worth checking.
+  const freshness = judgeDeliveryFreshness(timestamp);
+  if (!freshness.fresh) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'zoom_webhook_stale_delivery', outcome: 'failure',
+      error_class: 'ReplayWindowExceeded',
+      context: { reason: freshness.reason, age_ms: freshness.ageMs, zoom_event: event?.event ?? null },
+    }));
+    // 401, not 400: this is an authentication-shaped refusal. Zoom treats 4xx as
+    // "do not retry", which is correct — a delivery this old will not get younger.
+    res.status(401).json({ error: 'Webhook timestamp outside the accepted window' });
+    return;
+  }
+
   if (event.event !== 'recording.completed') {
     res.status(200).json({ received: true });
     return;
@@ -301,7 +322,11 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
         console.error(`[Webhook] Zoom recording ingest failed for session ${session.id}:`, err.message);
       });
     } else if (booking) {
-      ingestRecordingForBooking(booking, preResolvedMatch).catch((err: any) => {
+      // Pass the occurrence uuid the payload already carries. Without it the
+      // booking path cannot dedupe per occurrence and falls back to a
+      // booking-wide check that hides every later part.
+      const bookingInstanceUuid = String(event.payload?.object?.uuid || '');
+      ingestRecordingForBooking(booking, preResolvedMatch, bookingInstanceUuid).catch((err: any) => {
         console.error(`[Webhook] Zoom recording ingest failed for booking ${booking.id}:`, err.message);
       });
     } else if (room) {

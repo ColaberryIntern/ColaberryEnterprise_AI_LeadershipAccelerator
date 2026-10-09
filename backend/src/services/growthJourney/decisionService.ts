@@ -3,6 +3,7 @@ import type { GrowthJourneyDecisionAttributes } from '../../models/GrowthJourney
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../config/growthJourneyFlags';
 import type { ExplorerGrowthFlags } from '../../config/explorerGrowthFlags';
 import { classifyError } from '../../utils/errorClassifier';
+import { holdoutPolicyFor } from './experiments/holdoutPolicy';
 import { redactForLogs } from '../../utils/piiRedaction';
 import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { computeIdempotencyKey } from '../inboxCase/textNormalization';
@@ -130,6 +131,29 @@ export function productionDeps(): DecideDeps {
       };
     },
     resolveContent: (candidate, ctx) => resolveJourneyContent(candidate, ctx),
+    // T608. Wired, and inert: there is no `holdout_experiment` policy row in any database, so this
+    // answers null for every brand and the decision is the one Phase 3 shipped. Wired rather than
+    // left unwired on purpose - an arm-assignment mechanism nothing calls is a producer with no
+    // consumer, and the first time anybody wanted it they would have to trust untested wiring.
+    // A row appearing is an operator's deliberate act, and `status: 'paused'` on it stops
+    // assignment again without a deploy.
+    //
+    // ONE READ PER DECISION, and the first version of this claimed otherwise.
+    //
+    // It wrapped this in a per-brand `Map` and the comment said "one read per brand per run", so
+    // "a policy edited half way through a run cannot move subjects between arms mid-run". Both were
+    // false as wired: `productionDeps()` is called per SUBJECT, inside `decideForSubjectAndRecord`
+    // below, so the Map never held more than one entry and was discarded every time. The T608
+    // verifier caught it. The Map is gone rather than the call being hoisted, because the property
+    // it claimed is not one this feature needs: the arm is a pure function of
+    // `(experiment_key, subject_ref)`, so a policy edited mid-run can pause the experiment or change
+    // the share but cannot reshuffle anybody already assigned.
+    //
+    // What remains is one indexed `findOne` per decision against a table holding 24 rows, for a
+    // feature that answers `null` for every brand today. If that ever matters, the fix is to build
+    // the deps once in the batch runner and pass them down - not to re-add a cache that cannot see
+    // more than one subject.
+    holdoutPolicyFor: (brandId: string) => holdoutPolicyFor(brandId),
   };
 }
 
@@ -221,6 +245,11 @@ export function decisionRow(
     ai_involved: decision.ai_involved,
     model_version: decision.model_version ?? MODEL_VERSION,
     ruleset_version: decision.ruleset_version,
+    // T608. `?? null` rather than omitted: an absent key would leave the column at whatever the
+    // model's default is, and the lift read counts rows by arm - a row that should have no arm
+    // must say so explicitly.
+    experiment_key: decision.experiment_key ?? null,
+    holdout_group: decision.holdout_group ?? null,
     executed: false,
     execution_receipt: null,
     decided_by: `governor:${decision.ruleset_version}`,

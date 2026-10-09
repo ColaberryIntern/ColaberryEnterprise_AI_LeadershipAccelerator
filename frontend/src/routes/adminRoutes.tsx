@@ -23,6 +23,8 @@ const AdminCertPrepPage = lazy(() => import('../pages/admin/certprep/AdminCertPr
 const AdminEventLedgerPage = lazy(() => import('../pages/admin/AdminEventLedgerPage'));
 const AdminCampaignsPage = lazy(() => import('../pages/admin/AdminCampaignsPage'));
 const ExplorerGrowthPage = lazy(() => import('../pages/admin/ExplorerGrowthPage'));
+const GrowthJourneyPage = lazy(() => import('../pages/admin/GrowthJourneyPage'));
+const GrowthJourneyHandoffPage = lazy(() => import('../pages/admin/HandoffDetailPage'));
 const AdminCampaignDetailPage = lazy(() => import('../pages/admin/AdminCampaignDetailPage'));
 const AdminApolloPage = lazy(() => import('../pages/admin/AdminApolloPage'));
 const CampaignBuilderPage = lazy(() => import('../pages/admin/CampaignBuilderPage'));
@@ -40,6 +42,7 @@ const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStor
 const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
 const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrationPage'));
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
+const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
 const IntelligenceOSPage = lazy(() => import('../pages/admin/intelligence/IntelligenceOSPage'));
@@ -55,6 +58,7 @@ const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/A
 const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
 const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
 const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
+const AdminLandingPagesPage = lazy(() => import('../pages/admin/marketing/AdminLandingPagesPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -66,6 +70,7 @@ const AdminInternshipPage = lazy(() => import('../pages/admin/AdminInternshipPag
 const AdminFactoryCommandCenterPage = lazy(() => import('../pages/admin/AdminFactoryCommandCenterPage'));
 const AdminGovOpportunitiesPage = lazy(() => import('../pages/admin/AdminGovOpportunitiesPage'));
 const AdminGovQualificationPage = lazy(() => import('../pages/admin/AdminGovQualificationPage'));
+const AdminGovServicesPage = lazy(() => import('../pages/admin/AdminGovServicesPage'));
 const AdminCaseStudyDetailPage = lazy(() => import('../pages/admin/AdminCaseStudyDetailPage'));
 const InboxCOSPage = lazy(() => import('../pages/admin/inbox/InboxCOSPage'));
 const ContentQueuePage = lazy(() => import('../pages/admin/ContentQueuePage'));
@@ -82,6 +87,7 @@ const CEOCommandCenter = lazy(() => import('../pages/admin/CEOCommandCenter'));
 const AdminFunnelPage = lazy(() => import('../pages/admin/AdminFunnelPage'));
 const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
+import lifecycleRoutes from './lifecycleRoutes';
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
 // Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
 // no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
@@ -183,6 +189,8 @@ const adminRoutes = (
         <Route path="/admin/opportunities" element={<AdminOpportunitiesPage />} />
         <Route path="/admin/campaigns" element={<AdminCampaignsPage />} />
         <Route path="/admin/explorer-growth" element={<ExplorerGrowthPage />} />
+        <Route path="/admin/growth-journey/handoffs/:id" element={<GrowthJourneyHandoffPage />} />
+        <Route path="/admin/growth-journey" element={<GrowthJourneyPage />} />
         <Route path="/admin/campaigns/build-cold" element={<CampaignBuilderPage />} />
         <Route path="/admin/campaigns/:id" element={<AdminCampaignDetailPage />} />
         <Route path="/admin/apollo" element={<AdminApolloPage />} />
@@ -206,6 +214,9 @@ const adminRoutes = (
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        {/* Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide
+            read-only effective-access resolver + tool catalog. */}
+        <Route path="/admin/tools" element={<AdminToolsPage />} />
         {/* Real-enforcement scoping, Phase 1 (2026-09-20) — the first real UI
             for the already-real approval-requests backend routes. */}
         <Route path="/admin/approval-requests" element={<ApprovalRequestsPage />} />
@@ -242,6 +253,11 @@ const adminRoutes = (
           {/* The two queues the needs-attention signals link to (T015). Same section by prefix. */}
           <Route path="/admin/marketing/content" element={<AdminContentQueuePage />} />
           <Route path="/admin/marketing/publishing" element={<AdminPublishingQueuePage />} />
+          {/* Landing page authoring: brief -> page -> preview -> publish at /p/:brand/:slug.
+              Inside the marketing shell so it reads the brand from the bar rather than asking
+              again, and inside /admin/marketing so it inherits section `campaigns` by prefix -
+              the API side maps /api/admin/landing-pages the same way. */}
+          <Route path="/admin/marketing/landing-pages" element={<AdminLandingPagesPage />} />
         </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
@@ -263,6 +279,7 @@ const adminRoutes = (
         <Route path="/admin/factory" element={<AdminFactoryCommandCenterPage />} />
         <Route path="/admin/gov-opportunities" element={<AdminGovOpportunitiesPage />} />
         <Route path="/admin/gov-qualification" element={<AdminGovQualificationPage />} />
+        <Route path="/admin/gov-services" element={<AdminGovServicesPage />} />
         <Route path="/admin/case-studies/:id" element={<AdminCaseStudyDetailPage />} />
         <Route path="/admin/inbox" element={<InboxCOSPage />} />
         <Route path="/admin/content-queue" element={<ContentQueuePage />} />
@@ -281,6 +298,9 @@ const adminRoutes = (
             Redirect the old URL to the CB System Command dashboard. */}
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
+        {/* Project lifecycle. Ships dark behind ENABLE_PROJECT_LIFECYCLE; the page renders the
+            disabled answer explicitly rather than an empty state. */}
+        {lifecycleRoutes}
       </Route>
     </Route>
   </>

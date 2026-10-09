@@ -314,6 +314,53 @@ const BRANCHES: Branch[] = [
             SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
           )`,
   },
+  // ── Added 2026-10-02 for the Intern Console's per-category activity colours ────────────
+  //
+  // Four sources the feed was missing. Each is a real thing a person did that had no line in their
+  // own timeline: they sat a certification, they got a build task verified from a commit, they
+  // commented, they reacted. Added here rather than in a console-only loader so the feed and the
+  // console's heatmap are drawn from ONE definition of what counts as activity — the thing this
+  // module's header already argues for.
+  {
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT cs.completed_at AS occurred_at, 'learning' AS domain, 'cert_sessions' AS source,
+                 'cert_' || COALESCE(cs.mode, 'sitting') AS type,
+                 COALESCE(cs.scaled_score::text, 'no score') ||
+                   CASE WHEN cs.total_count IS NOT NULL
+                        THEN ' on ' || cs.total_count::text || ' items' ELSE '' END AS summary
+          FROM cert_sessions cs
+          WHERE cs.enrollment_id IN (:enrollmentIds)
+            AND cs.completed_at IS NOT NULL AND cs.status = 'completed'`,
+  },
+  {
+    // Keyed through the project, because that is where the enrollment lives. The alias carrying
+    // `enrollment_id` is what the per-enrollment projection rewrites, so it must be `p`.
+    domain: 'learning', key: 'enrollment',
+    sql: `SELECT st.verified_at AS occurred_at, 'learning' AS domain, 'student_tasks' AS source,
+                 'task_verified' AS type,
+                 COALESCE(st.story_id || ' · ', '') || COALESCE(left(st.title, 110), '') AS summary
+          FROM student_tasks st
+          JOIN projects p ON p.id = st.project_id
+          WHERE p.enrollment_id IN (:enrollmentIds) AND st.verified_at IS NOT NULL`,
+  },
+  {
+    domain: 'community', key: 'enrollment',
+    sql: `SELECT cc.created_at AS occurred_at, 'community' AS domain, 'community_comments' AS source,
+                 'comment' AS type, left(cc.body, 140) AS summary
+          FROM community_comments cc
+          WHERE cc.member_id IN (
+            SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
+          )`,
+  },
+  {
+    domain: 'community', key: 'enrollment',
+    sql: `SELECT cl2.created_at AS occurred_at, 'community' AS domain, 'community_likes' AS source,
+                 'reaction' AS type, NULL AS summary
+          FROM community_likes cl2
+          WHERE cl2.member_id IN (
+            SELECT cm.id FROM community_members cm WHERE cm.enrollment_id IN (:enrollmentIds)
+          )`,
+  },
 ];
 
 const MAX_LIMIT = 500;
@@ -377,5 +424,123 @@ export async function getPersonTimeline(query: TimelineQuery): Promise<TimelineE
     type: r.type,
     summary: r.summary,
     occurrences: Number(r.occurrences ?? 1),
+  }));
+}
+
+/**
+ * ── THE SAME SOURCES, PROJECTED PER ENROLLMENT INSTEAD OF PER PERSON ────────
+ *
+ * `getPersonTimeline` answers "what has THIS person done", and it is built for that: the
+ * branches are UNIONed into one feed and the rows deliberately do not carry an enrollment id,
+ * because one person may hold several enrollments and the feed is theirs, not an enrollment's.
+ *
+ * The Intern Console asks a different question of the same tables — "when did EACH of these ten
+ * interns last do something, and what did their last 28 days look like" — and the feed cannot
+ * answer it: ten per-person calls means ten times twelve subqueries, and merging them loses
+ * which intern a row belonged to.
+ *
+ * The obvious fix is to add `enrollment_id` to every branch's SELECT. That is rejected: the
+ * branches are UNIONed as one column list, so adding a column means editing all twenty-two SQL
+ * strings — including the lead-keyed ones that have no enrollment at all — and changing the
+ * GROUP BY of a feed other admin screens already render.
+ *
+ * So this derives the per-enrollment projection FROM THE SAME `BRANCHES` ARRAY, by rewriting each
+ * enrollment-keyed branch's `IN (:enrollmentIds)` into `= enr.id` and joining it laterally against
+ * the enrollment list. One definition of what counts as activity, two projections of it:
+ *
+ *   - a FEED, ordered, for one person          → `getPersonTimeline`
+ *   - per-enrollment DAY COUNTS, for a roster  → `activityDaysByEnrollment`
+ *
+ * **The rewrite is asserted, not hoped for.** Every selected branch must match the filter
+ * pattern; one that does not throws by name rather than silently contributing every intern's rows
+ * to every intern. That is the failure this guard exists for — a branch whose filter is spelled
+ * differently would widen `= enr.id` back to "everyone" and the console would report one intern's
+ * work as all ten interns' work, with no error anywhere.
+ */
+
+/** The pattern every enrollment-keyed branch uses to scope itself. Asserted below. */
+const ENROLLMENT_FILTER = /\b([a-z_]+)\.enrollment_id IN \(:enrollmentIds\)/g;
+
+export class TimelineBranchShapeError extends Error {
+  constructor(public readonly source: string) {
+    super(`timeline branch does not scope itself with "<alias>.enrollment_id IN (:enrollmentIds)" `
+      + `and cannot be projected per enrollment: ${source}`);
+    this.name = 'TimelineBranchShapeError';
+  }
+}
+
+/**
+ * Rewrite one branch to scope itself to a single lateral enrollment.
+ *
+ * Exported for its own test: this is a string rewrite of SQL, which is exactly the kind of thing
+ * that works on the twelve branches that exist today and breaks silently on the thirteenth.
+ */
+export function scopeBranchToLateral(sql: string): string {
+  const rewritten = sql.replace(ENROLLMENT_FILTER, '$1.enrollment_id = enr.id');
+  if (rewritten === sql) throw new TimelineBranchShapeError(sql.slice(0, 120));
+  return rewritten;
+}
+
+/** One intern, one day: how much happened, and the latest thing that did. */
+export interface EnrollmentActivityDay {
+  enrollmentId: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  /** Events that day FROM THIS SOURCE. */
+  events: number;
+  /** The latest event that day from this source, ISO. */
+  lastAt: string;
+  /**
+   * Which table these events came from.
+   *
+   * Rows are per source rather than per day since 2026-10-02: the console colours a day by what the
+   * person was doing — training, project, certification, community — and that is a property of the
+   * source table. Collapsing to one row per day threw the category away before anyone could use it.
+   * A caller that wants the old shape sums the sources for a date.
+   */
+  lastSource: string;
+}
+
+/**
+ * Per-enrollment, per-day activity across the chosen domains. **One query, whatever the number
+ * of enrollments** — the whole reason this exists.
+ *
+ * Deliberately unbounded in time. The console's grid is 28 days, but "last active" is not: an
+ * intern quiet for 200 days must still report 200, so trimming the query to the grid's window
+ * would turn a long silence into "never" — the one distinction the console most needs to keep.
+ */
+export async function activityDaysByEnrollment(input: {
+  enrollmentIds: string[];
+  domains: EventDomain[];
+}): Promise<EnrollmentActivityDay[]> {
+  if (input.enrollmentIds.length === 0) return [];
+
+  const usable = BRANCHES.filter((b) => b.key === 'enrollment' && input.domains.includes(b.domain));
+  if (usable.length === 0) return [];
+
+  const rows = await sequelize.query<{
+    enrollment_id: string; day: string; events: number; last_at: string; last_source: string;
+  }>(
+    `SELECT enr.id::text AS enrollment_id,
+            to_char(date_trunc('day', t.occurred_at), 'YYYY-MM-DD') AS day,
+            COUNT(*)::int AS events,
+            max(t.occurred_at) AS last_at,
+            t.source AS last_source
+     FROM (SELECT unnest(ARRAY[:enrollmentIds]::uuid[]) AS id) enr
+     CROSS JOIN LATERAL (
+       ${usable.map((b) => scopeBranchToLateral(b.sql)).join('\n       UNION ALL\n       ')}
+     ) t
+     WHERE t.occurred_at IS NOT NULL
+     GROUP BY enr.id, date_trunc('day', t.occurred_at), t.source
+     ORDER BY enr.id, 2`,
+    { type: QueryTypes.SELECT, replacements: { enrollmentIds: input.enrollmentIds } },
+  );
+
+  return rows.map((r) => ({
+    enrollmentId: r.enrollment_id,
+    date: r.day,
+    events: Number(r.events ?? 0),
+    lastAt: typeof r.last_at === 'string' ? r.last_at : new Date(r.last_at).toISOString(),
+    lastSource: r.last_source,
   }));
 }

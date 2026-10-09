@@ -71,11 +71,25 @@ describe('ComposerMedia attach rule', () => {
     expect(attachButton().disabled).toBe(true);
   });
 
-  it('is fully disabled before the draft exists, and says why', () => {
+  it('WORKS before the draft exists, because attaching creates one', () => {
+    // This asserted the opposite until 2026-10-01: everything disabled until a draft existed,
+    // which read as a broken control - "None of these buttons work to upload the video."
+    // They were disabled, correctly and uselessly. The draft is a prerequisite of the API, not
+    // of the operator's intent, so the page satisfies it on attach instead of demanding it.
     render({ enabled: false });
-    expect(fileInput().disabled).toBe(true);
-    expect(altInput().disabled).toBe(true);
-    expect(container.textContent).toMatch(/Create the draft first/);
+    expect(fileInput().disabled).toBe(false);
+    expect(altInput().disabled).toBe(false);
+    expect(container.textContent).not.toMatch(/Create the draft first/);
+  });
+
+  it('and says what attaching will do, so the draft is not created by surprise', () => {
+    render({ enabled: false });
+    expect(container.textContent).toMatch(/Attaching creates the draft, naming it after the file/);
+  });
+
+  it('says nothing of the sort once the draft exists', () => {
+    render({ enabled: true });
+    expect(container.textContent).not.toMatch(/Attaching creates the draft/);
   });
 
   it('names the limits and accepted types up front', () => {

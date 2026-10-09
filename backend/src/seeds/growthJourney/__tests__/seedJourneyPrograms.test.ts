@@ -157,20 +157,19 @@ describe('the programme is the switch, and it is seeded OFF', () => {
 });
 
 describe('it never overwrites a human', () => {
-  it('writes no status on an existing program — and in fact does not update it at all', async () => {
+  it('writes no status on an existing program — only the terminology metadata', async () => {
     const row = programRow({ status: 'paused' });
     programFindOne.mockResolvedValue(row);
     await seedJourneyPrograms();
 
-    // The loop below iterates an EMPTY array today, because the seed never
-    // updates an existing programme at all. A review flagged that as
-    // structurally vacuous, and it was right: a mutation adding
-    // `update({ status: 'active' })` does fail this, but only because the loop
-    // then has something to iterate. The stronger statement is the one worth
-    // asserting, so both are here — the flat "never called", plus the loop that
-    // stays correct if a legitimate non-status update is ever added.
-    expect(row.update).not.toHaveBeenCalled();
+    // Until T604 this cell asserted the row was never updated AT ALL, and noted that the
+    // loop below therefore iterated an empty array - a review had flagged exactly that
+    // vacuity. T604's terminology seed gives it something to iterate: an existing programme
+    // IS updated now, once per programme, and every payload carries `metadata` alone. So the
+    // loop is the live assertion and the whole-payload check beside it is the stronger form.
+    expect(row.update).toHaveBeenCalled();
     for (const call of row.update.mock.calls) {
+      expect(Object.keys(call[0])).toEqual(['metadata']);
       expect(Object.keys(call[0])).not.toContain('status');
     }
   });

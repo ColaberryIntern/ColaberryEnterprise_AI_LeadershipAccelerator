@@ -12,6 +12,8 @@ import { getTestOverrides, getSetting } from './settingsService';
 import { assertConsentForSend } from './consentService';
 import { checkBrandPreference } from '../modules/communications/brandPreferenceGate';
 import { isSuppressedForChannel, type SuppressibleChannel } from './channelSuppression';
+// Phase 6 T602: the one global kill switch, its lenient reader (a read error is "off": the decision is unchanged).
+import { isKillSwitchActive } from './launchSafety';
 // Phase 5 T511: the journey's campaign registry - a module with no imports, an in-memory lookup.
 import { isRegisteredJourneyCampaignKey } from './growthJourney/execution/campaignKeys';
 
@@ -277,13 +279,23 @@ export async function resolveRecipient(req: SendRequest): Promise<SendDecision> 
 /**
  * Evaluate whether a send request should proceed.
  * Runs the full safety pipeline:
+ *   0. Global kill switch (T602), then the scheduler pause
  *   1. Global rate limit
  *   2. Campaign sendable check
  *   3. Lead sendable check (skip for simulations)
  *   4. Test mode / recipient resolution
  */
 export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
-  // 0. Global scheduler pause check
+  // 0. The global kill switch (Growth Journey Phase 6, T602). `activateKillSwitch` pauses ACTIVE campaigns and
+  // disables the outbound agents, but a send already scheduled, a campaign activated after, or a manual send
+  // reached this chokepoint without asking the switch - only the journey's hold (3.7) did. Now every send asks
+  // first. The LENIENT reader on purpose: a switch that cannot be read is "off" here and the decision is what it
+  // was before this step (a database blip must not stop ordinary mail); the journey's strict read stays in the hold.
+  if (await isKillSwitchActive()) {
+    return { allowed: false, redirect: null, testMode: false, blockedReason: 'kill_switch', deliveryMode: 'blocked' };
+  }
+
+  // 0.5. Global scheduler pause check
   try {
     const paused = await getSetting('scheduler_paused');
     if (paused === true || paused === 'true') {

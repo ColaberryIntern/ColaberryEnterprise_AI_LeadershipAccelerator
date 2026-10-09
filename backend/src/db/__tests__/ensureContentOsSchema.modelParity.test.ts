@@ -40,7 +40,9 @@ describe('ensureContentOsSchema — DDL and models agree', () => {
     // capability the spec requires.
     const counts = Object.fromEntries(created.map((c) => [c.table, c.columns.length]));
     expect(counts).toEqual({
-      content_items: 22,
+      // 24 since 2026-10-02: landing_page_id and destination_url, so the composer's chosen
+      // destination is stored rather than living only in React state.
+      content_items: 24,
       content_variants: 20,
       media_assets: 20,
       content_item_media: 5,
@@ -101,7 +103,7 @@ describe('ensureContentOsSchema — DDL and models agree', () => {
 
 describe('the invariants the content workflow depends on', () => {
   const REQUIRED: Array<[string, string[]]> = [
-    ['content_items', ['id', 'tenant_id', 'title', 'status', 'revision', 'human_approved', 'scheduled_for']],
+    ['content_items', ['id', 'tenant_id', 'title', 'status', 'revision', 'human_approved', 'scheduled_for', 'landing_page_id', 'destination_url']],
     ['content_variants', ['content_item_id', 'provider', 'is_manually_edited', 'validation_state', 'disclosure_text']],
     ['media_assets', ['storage_key', 'mime_type', 'alt_text', 'rights_expires_at', 'checksum_sha256']],
     ['content_approval_requests', ['content_item_id', 'status', 'revision_at_request', 'revision_at_decision']],

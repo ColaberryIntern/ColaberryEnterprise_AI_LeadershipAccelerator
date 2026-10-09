@@ -1,4 +1,5 @@
 import { sequelize } from '../config/database';
+import { ensureKillSwitchRow } from '../services/launchSafety';
 import { GROWTH_JOURNEY_PHASE4_STATEMENTS } from './growthJourneyPhase4Statements';
 import { GROWTH_JOURNEY_PHASE5_STATEMENTS } from './growthJourneyPhase5Statements';
 
@@ -303,11 +304,9 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
   // ALTER, because that ALTER is asserted to be the last statement in this
   // module (statements test) — and because every table below references
   // journey_programs, which is created at the top.
-  //
-  // `growth_journey_decisions` is APPEND-ONLY (no updated_at): a re-decision is
-  // a new row. `growth_journey_profiles` is the one MUTABLE table the run owns —
-  // it is a projection of the current state, not a ledger, and every state
-  // change it records also writes an append-only transitions row.
+  // `growth_journey_decisions` is APPEND-ONLY (no updated_at): a re-decision is a new row.
+  // `growth_journey_profiles` is the one MUTABLE table the run owns - a projection of current state,
+  // not a ledger, and every state change it records also writes an append-only transitions row.
   `CREATE TABLE IF NOT EXISTS growth_journey_decisions (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -341,6 +340,8 @@ export const GROWTH_JOURNEY_STATEMENTS: readonly string[] = [
      ai_involved BOOLEAN NOT NULL DEFAULT FALSE,
      model_version VARCHAR(64),
      ruleset_version VARCHAR(32) NOT NULL,
+     experiment_key VARCHAR(64),
+     holdout_group VARCHAR(24),
      executed BOOLEAN NOT NULL DEFAULT FALSE,
      execution_receipt JSONB,
      decided_by TEXT NOT NULL,
@@ -490,10 +491,9 @@ export async function ensureGrowthJourneySchema(): Promise<void> {
       // Warn and continue, matching the sibling ensure modules. A single failed
       // statement must not abort boot, and re-running is a no-op, so the next
       // boot repairs it.
-      console.warn(
-        '[ensureGrowthJourneySchema] statement failed:',
-        (err as { message?: string })?.message,
-      );
+      console.warn('[ensureGrowthJourneySchema] statement failed:', (err as { message?: string })?.message);
     }
   }
+  // Phase 6 T602: the kill switch exists as a row once the schema does (never overwrites a present one; warns, never throws).
+  await ensureKillSwitchRow();
 }

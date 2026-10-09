@@ -90,3 +90,54 @@ describe('categorizePagePath - the pre-existing map is untouched', () => {
     expect(categorizePagePath(path)).toBe(expected);
   });
 });
+
+/**
+ * Hosted landing pages, `/p/:brand/:slug`.
+ *
+ * WHY A CATEGORY AT ALL, given the lesson above. The `case_studies` story was a category with
+ * six consumers that nothing ever produced. The opposite mistake - producing a category nothing
+ * reads - would be just as useless, so the consumer was checked first: `visitorAnalyticsService`
+ * groups `page_events` by `page_category` generically (`group: ['page_category']`, with a
+ * `?? 'uncategorized'` fallback), so a new category becomes its own row in the breakdown without
+ * anything else being registered. Without this rule every campaign destination would land in
+ * `'other'`, which is the one bucket that answers no question - and a landing-page view is the
+ * most interesting event in a campaign funnel.
+ */
+describe('categorizePagePath - hosted landing pages', () => {
+  it('categorises a landing page under its brand', () => {
+    expect(categorizePagePath('/lp/colaberry-training/six-week-build')).toBe('landing_page');
+  });
+
+  it('survives the normalisation, including the UTM query a real click carries', () => {
+    expect(categorizePagePath('/lp/colaberry-training/six-week-build/')).toBe('landing_page');
+    expect(categorizePagePath('/lp/colaberry-training/six-week-build?utm_source=li')).toBe('landing_page');
+  });
+
+  it.each([
+    '/portfolio',
+    '/pricing',
+    '/program',
+    '/lpanel',
+  ])('%s is not a landing page - the trailing slash in the prefix is load-bearing', (path) => {
+    // A bare startsWith('/lp') would swallow every route beginning with those letters.
+    expect(categorizePagePath(path)).not.toBe('landing_page');
+  });
+
+  /**
+   * THE COLLISION THIS GUARDS. The rule shipped as `/p/` and `/p/` is the public career
+   * portfolio route - so every portfolio view was being counted as a landing page view. It
+   * wrote no bad rows (zero `landing_page` events in production on 2026-10-02) only because no
+   * portfolio view happened to be tracked first.
+   */
+  it.each([
+    '/p/jane-doe',
+    '/p/jane-doe/',
+    '/p/jane-doe?ref=li',
+  ])('%s is a CAREER PORTFOLIO, not a landing page', (path) => {
+    expect(categorizePagePath(path)).not.toBe('landing_page');
+  });
+
+  it('does not claim a bare /lp', () => {
+    expect(categorizePagePath('/lp')).not.toBe('landing_page');
+  });
+});

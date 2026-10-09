@@ -23,6 +23,15 @@ jest.mock('../reeseIdentitySeed', () => ({
 }));
 jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
 jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
+// Real-enforcement scoping, Phase 3 (R211) — the new gate on sendOnce()'s
+// real send. Defaults to allow in every existing test below (regression:
+// identical behavior to before this gate existed); denial gets its own
+// dedicated describe block. reeseAutonomousOutreachService.ts is mocked
+// wholesale too, purely for its RISK_TIER re-export — its own real
+// behavior is untouched and already covered by its own test file.
+jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
+jest.mock('../reeseAutonomousOutreachService', () => ({ RISK_TIER: 'R3' }));
+jest.mock('../reeseGovernedActionLog', () => ({ recordHeldAction: jest.fn(), recordSentAction: jest.fn() }));
 
 import ReeseWelcome from '../../../models/ReeseWelcome';
 import Enrollment from '../../../models/Enrollment';
@@ -30,6 +39,8 @@ import Cohort from '../../../models/Cohort';
 import { getReeseEnrollmentId, isReeseEnabled, getReeseAdminUserId } from '../reeseIdentitySeed';
 import { initiateDm } from '../reeseInitiateDmService';
 import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
+import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
+import { recordHeldAction, recordSentAction } from '../reeseGovernedActionLog';
 import {
   maybeSendWelcomes,
   isGreetable,
@@ -48,6 +59,9 @@ const mockIsReeseEnabled = isReeseEnabled as unknown as jest.Mock;
 const mockInitiate = initiateDm as unknown as jest.Mock;
 const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
 const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
+const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
+const mockRecordHeldAction = recordHeldAction as unknown as jest.Mock;
+const mockRecordSentAction = recordSentAction as unknown as jest.Mock;
 
 const PERSON = '11111111-1111-4111-8111-111111111111';
 const REESE = '99999999-9999-4999-8999-999999999999';
@@ -76,6 +90,9 @@ beforeEach(() => {
   mockInitiate.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
   mockGetReeseAdminUserId.mockResolvedValue('reese-admin-1');
   mockEmitReeseLedgerEvent.mockResolvedValue(undefined);
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: null, verdict: 'would_allow', reason: 'ok', allowed: true });
+  mockRecordHeldAction.mockResolvedValue('written');
+  mockRecordSentAction.mockResolvedValue('written');
 });
 
 afterEach(() => {
@@ -128,6 +145,12 @@ describe('an empty ledger does not mean everyone is new', () => {
         result: 'success', sourceRecordType: 'room_message', sourceRecordId: 'msg-1',
       }),
     );
+    // Approval-correlation fix (2026-10-02) — the ledger event's real eventId
+    // (not traceId) matches the authorization check's own eventId exactly.
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    const [ledgerArgs] = mockEmitReeseLedgerEvent.mock.calls[0];
+    expect(ledgerArgs.eventId).toBe(authArgs.eventId);
+    expect(ledgerArgs.traceId).not.toBe(authArgs.eventId);
   });
 
   it('fails CLOSED on an unknown enrollment age', async () => {
@@ -312,6 +335,89 @@ describe('each intro exactly once, ever', () => {
 
     expect(outcomes(await maybeSendWelcomes(PERSON))).toEqual({ account: 'already_sent', student: 'not_applicable' });
     expect(mockInitiate).not.toHaveBeenCalled();
+  });
+
+  it('Real-enforcement scoping (R211): a denied welcome is held — no initiateDm, claim marked "held" not "sent", never reported as a real send', async () => {
+    const claim = claimRow();
+    mockCreate.mockResolvedValue(claim);
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-1', verdict: 'would_block', reason: 'level_forbids:write', allowed: false });
+
+    const result = outcomes(await maybeSendWelcomes(PERSON));
+
+    expect(result.account).toBe('held_for_approval');
+    expect(mockInitiate).not.toHaveBeenCalled();
+    expect(claim.update).toHaveBeenCalledWith({ outcome: 'held', detail: 'level_forbids:write' });
+    expect(mockEmitReeseLedgerEvent).not.toHaveBeenCalled();
+  });
+
+  it('records the hold in the activity log too, not only on the reese_welcomes row', async () => {
+    mockCreate.mockResolvedValue(claimRow());
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-1', verdict: 'would_block', reason: 'level_forbids:write', allowed: false });
+
+    await maybeSendWelcomes(PERSON);
+
+    expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
+    expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_welcome_account',
+      riskTier: 'R3',
+      verdict: 'would_block',
+      reasonCode: 'level_forbids:write',
+      decisionId: 'ar-1',
+      unitKey: `enrollment:${PERSON}:account`,
+    }));
+    expect(mockRecordSentAction).not.toHaveBeenCalled();
+  });
+
+  it('records the hold under the SAME action name the authorization call used', async () => {
+    mockCreate.mockResolvedValue(claimRow());
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-1', verdict: 'would_block', reason: 'held', allowed: false });
+
+    await maybeSendWelcomes(PERSON);
+
+    // A divergence here would silently stop the activity row joining to its
+    // approval_requests row by action.
+    expect(mockRecordHeldAction.mock.calls[0][0].action)
+      .toBe(mockAuthorizeTicketDispatch.mock.calls[0][0].action);
+  });
+
+  it('a log layer that is down still leaves the welcome held, never sent', async () => {
+    const claim = claimRow();
+    mockCreate.mockResolvedValue(claim);
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'ar-1', verdict: 'would_block', reason: 'held', allowed: false });
+    mockRecordHeldAction.mockResolvedValue('log_unavailable');
+
+    const result = outcomes(await maybeSendWelcomes(PERSON));
+
+    expect(result.account).toBe('held_for_approval');
+    expect(mockInitiate).not.toHaveBeenCalled();
+  });
+
+  it('a real welcome is recorded as success, so the log does not read 100% held', async () => {
+    await maybeSendWelcomes(PERSON);
+
+    expect(mockRecordHeldAction).not.toHaveBeenCalled();
+    expect(mockRecordSentAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_welcome_account',
+      riskTier: 'R3',
+      reason: 'welcome_sent',
+    }));
+  });
+
+  it('the authorization check runs BEFORE the real send, with no ticket (a real welcome has none) and the real risk tier', async () => {
+    await maybeSendWelcomes(PERSON);
+
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticketId: null,
+        resourceType: 'reese_welcome',
+        resourceId: PERSON,
+        agentName: 'Reese',
+        action: 'reese_welcome_account',
+        riskTier: 'R3',
+      }),
+    );
+    expect(mockCreate.mock.invocationCallOrder[0]).toBeLessThan(mockAuthorizeTicketDispatch.mock.invocationCallOrder[0]);
+    expect(mockAuthorizeTicketDispatch.mock.invocationCallOrder[0]).toBeLessThan(mockInitiate.mock.invocationCallOrder[0]);
   });
 });
 

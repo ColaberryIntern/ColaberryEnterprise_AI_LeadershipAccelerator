@@ -354,16 +354,197 @@ export async function getStudentWeekBreakdown(
     enrollmentId,
     name: rows[0].name,
     scheduledWeek,
-    rows: weekRows.map((r) => {
-      const published = Number(r.published);
-      const completed = Number(r.completed);
-      return {
-        week: r.week === null ? null : Number(r.week),
-        publishedCardCount: published,
-        completed,
-        completedPct: pct(completed, published),
-        weekDone: published > 0 && completed / published >= WEEK_DONE_THRESHOLD,
-      };
-    }),
+    rows: weekRows.map(toWeekRow),
   };
+}
+
+/* ── Per-student, per-SECTION completion ──────────────────────────────────────
+ *
+ * `getStudentWeekBreakdown` above answers "how much of week 3 has this student done".
+ * This answers "…and which parts of it", which the cohort view has had all along
+ * (`CurriculumSection`) and the per-student view has not: the query above groups by
+ * `c.week` and never selects `c.bucket`.
+ *
+ * The Intern Console's training panel draws one segment per bucket per week, so a week
+ * is only legible if every bucket is present — including the ones with nothing in them.
+ * A bucket with no published cards is therefore returned with `published: 0` rather than
+ * being omitted: a missing column reads as "no data arrived", an explicit zero reads as
+ * "there is nothing here", and those are different facts.
+ */
+
+export interface StudentSection {
+  readonly bucket: string;
+  readonly published: number;
+  readonly completed: number;
+  readonly completedPct: number;
+}
+
+export interface StudentSectionRow {
+  readonly week: number | null;
+  readonly sections: StudentSection[];
+  readonly publishedCardCount: number;
+  readonly completed: number;
+  readonly completedPct: number;
+  readonly weekDone: boolean;
+}
+
+export async function getStudentSectionBreakdown(
+  cohortId: string, enrollmentId: string,
+): Promise<{ enrollmentId: string; name: string; scheduledWeek: number; rows: StudentSectionRow[] } | null> {
+  const [who] = await sequelize.query(
+    `SELECT id, COALESCE(NULLIF(TRIM(full_name), ''), email) AS name
+       FROM enrollments WHERE id = $1 AND cohort_id = $2`,
+    { bind: [enrollmentId, cohortId] },
+  ) as [Array<{ id: string; name: string }>, unknown];
+  if (!who.length) return null;
+
+  const [sessions] = await sequelize.query(
+    `SELECT title, status FROM live_sessions WHERE cohort_id = $1 AND status <> 'cancelled'`,
+    { bind: [cohortId] },
+  ) as [Array<{ title: string; status: string }>, unknown];
+  const scheduledWeek = sessions
+    .filter((s) => s.status === 'completed' || s.status === 'live')
+    .reduce((max, s) => Math.max(max, weekFromSessionTitle(s.title)), 0);
+
+  // One row per (week, bucket). Same published/completed definitions as the week query
+  // above — `status = 'active'` is published, `p.status = 'completed'` is done — so the
+  // two views can never disagree about the same cards.
+  const [cells] = await sequelize.query(
+    `SELECT c.week, c.bucket,
+            count(*) FILTER (WHERE c.status = 'active')::int AS published,
+            count(*) FILTER (WHERE p.id IS NOT NULL AND p.status = 'completed')::int AS completed
+       FROM timeline_cards c
+       LEFT JOIN timeline_card_progress p
+         ON p.card_id = c.id AND p.enrollment_id = $1
+      GROUP BY c.week, c.bucket
+      ORDER BY c.week NULLS LAST`, { bind: [enrollmentId] },
+  ) as [Array<{ week: number | null; bucket: string | null; published: number; completed: number }>, unknown];
+
+  const byWeek = new Map<string, Map<string, { published: number; completed: number }>>();
+  for (const cell of cells) {
+    const key = cell.week === null ? 'null' : String(cell.week);
+    let buckets = byWeek.get(key);
+    if (!buckets) { buckets = new Map(); byWeek.set(key, buckets); }
+    // A card with no bucket is still a card. It lands in a bucket named for what it is
+    // rather than being dropped, and `bucketRank` already sorts unknown names last.
+    buckets.set(cell.bucket ?? 'unsorted', {
+      published: Number(cell.published), completed: Number(cell.completed),
+    });
+  }
+
+  const rows: StudentSectionRow[] = [...byWeek.entries()].map(([key, buckets]) => {
+    // Every ordered bucket appears, present or not; anything unexpected is appended so a
+    // new bucket shows up as a column nobody ordered rather than vanishing.
+    const names = [
+      ...BUCKET_ORDER,
+      ...[...buckets.keys()].filter((b) => !(BUCKET_ORDER as readonly string[]).includes(b)),
+    ];
+    const sections: StudentSection[] = names
+      .sort((a, b) => bucketRank(a) - bucketRank(b))
+      .map((bucket) => {
+        const cell = buckets.get(bucket) ?? { published: 0, completed: 0 };
+        return {
+          bucket,
+          published: cell.published,
+          completed: cell.completed,
+          completedPct: pct(cell.completed, cell.published),
+        };
+      });
+
+    const published = sections.reduce((n, s) => n + s.published, 0);
+    const completed = sections.reduce((n, s) => n + s.completed, 0);
+    return {
+      week: key === 'null' ? null : Number(key),
+      sections,
+      publishedCardCount: published,
+      completed,
+      completedPct: pct(completed, published),
+      // The SAME rule as the week view, from the same constant. Restating 0.3 here would
+      // be two thresholds that agree until somebody changes one.
+      weekDone: published > 0 && completed / published >= WEEK_DONE_THRESHOLD,
+    };
+  }).sort((a, b) => {
+    if (a.week === null) return 1;
+    if (b.week === null) return -1;
+    return a.week - b.week;
+  });
+
+  return { enrollmentId, name: who[0].name, scheduledWeek, rows };
+}
+
+/* ── THE SAME WEEK ROW, FOR A WHOLE ROSTER ────────────────────────────────────
+ *
+ * `getStudentWeekBreakdown` answers this for one student in three queries. The Intern
+ * Console asks it for ten, and ten times three queries to draw one table is the thing the
+ * console's own acceptance criteria forbid.
+ *
+ * So the week row is folded by ONE function, `toWeekRow`, which the per-student path above
+ * now calls as well. The alternative — a second mapping that also divides completed by
+ * published and also compares against a threshold — is how a roster ends up disagreeing with
+ * the student's own page about whether week 3 is done, and `weekDone` is the field the
+ * weeks 1-3 project gate is judged on.
+ */
+
+/** Fold one `(week, published, completed)` triple into the public row. The only definition. */
+export function toWeekRow(r: { week: number | null; published: number; completed: number }): StudentWeekRow {
+  const published = Number(r.published);
+  const completed = Number(r.completed);
+  return {
+    week: r.week === null ? null : Number(r.week),
+    publishedCardCount: published,
+    completed,
+    completedPct: pct(completed, published),
+    // 0/0 is not done. A week with nothing published must never read as cleared.
+    weekDone: published > 0 && completed / published >= WEEK_DONE_THRESHOLD,
+  };
+}
+
+/**
+ * Week-level completion for many students at once. **One query, whatever the roster size.**
+ *
+ * The per-student query joins progress to cards with `p.enrollment_id = $1`; this cross-joins
+ * the enrollment list against the cards instead and groups by both, which is the same
+ * calculation with the student as a grouping key rather than a parameter. `published` is
+ * deliberately counted the same way — it is a property of the curriculum, identical for every
+ * student, and recounting it per student is what makes the two views agree.
+ */
+export async function getRosterWeekBreakdown(
+  enrollmentIds: readonly string[],
+): Promise<Map<string, StudentWeekRow[]>> {
+  const out = new Map<string, StudentWeekRow[]>();
+  if (enrollmentIds.length === 0) return out;
+
+  const [rows] = await sequelize.query(
+    `SELECT e.id::text AS enrollment_id, c.week,
+            count(*) FILTER (WHERE c.status = 'active')::int AS published,
+            count(*) FILTER (WHERE p.id IS NOT NULL AND p.status = 'completed')::int AS completed
+       FROM (SELECT unnest(ARRAY[:ids]::uuid[]) AS id) e
+       CROSS JOIN timeline_cards c
+       LEFT JOIN timeline_card_progress p
+         ON p.card_id = c.id AND p.enrollment_id = e.id
+      GROUP BY e.id, c.week
+      ORDER BY e.id, c.week NULLS LAST`,
+    { replacements: { ids: [...enrollmentIds] } },
+  ) as [Array<{ enrollment_id: string; week: number | null; published: number; completed: number }>, unknown];
+
+  for (const r of rows) {
+    const list = out.get(r.enrollment_id) ?? [];
+    list.push(toWeekRow(r));
+    out.set(r.enrollment_id, list);
+  }
+  // Every requested student gets an entry. An absent key would read as "no data arrived" at the
+  // call site and quietly shorten a roster; an empty list says "nothing completed".
+  for (const id of enrollmentIds) if (!out.has(id)) out.set(id, []);
+  return out;
+}
+
+/**
+ * Are weeks 1-3 cleared? The project gate's own question, asked of a week list.
+ *
+ * All three must be present AND done. A missing week 3 is not a pass: the gate exists because
+ * the first three weeks are the prerequisite for building, and "we have no row for week 3"
+ * is not evidence that it was completed.
+ */
+export function weeksOneToThreeClear(rows: readonly StudentWeekRow[]): boolean {
+  return [1, 2, 3].every((w) => rows.some((r) => r.week === w && r.weekDone));
 }

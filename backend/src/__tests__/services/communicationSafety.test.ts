@@ -244,7 +244,8 @@ describe('communicationSafetyService', () => {
 
   describe('evaluateSend — full pipeline', () => {
     test('should block when scheduler is paused', async () => {
-      mockGetSetting.mockResolvedValue('true');
+      // Keyed since T602: the kill switch is read first through the same settings service, so "every key is true" would be the switch.
+      mockGetSetting.mockImplementation(async (key: string) => (key === 'scheduler_paused' ? 'true' : null));
       const req: SendRequest = { leadId: 1, channel: 'email', campaignId: 'c1' };
       const decision = await evaluateSend(req);
       expect(decision.allowed).toBe(false);

@@ -2,11 +2,19 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { freeSignup } from '../../services/onboardingApi';
+import { identifyVisitor } from '../../utils/tracker';
 
-// Public "Sign up free" front door. Creates a free guest account (0 points),
-// logs the visitor straight in, and drops them on the Today shell — the top of
-// the onboarding funnel. Styled onto the Colaberry Design System to match
+// Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
+// the visitor straight in, and drops them on the Today shell — the top of the
+// onboarding funnel. Styled onto the Colaberry Design System to match
 // PortalLoginPage (self-contained scoped `cbfs-*` classes).
+//
+// COPY RULE: the word "free" never appears on this page. Ali, 2026-10-05, on the
+// landing page that fed it: "don't use free". TWC §807.172(d) governs how a career
+// school may advertise, so the approved wording is "$0 to start" / "No card needed".
+// The identifiers (`freeSignup`, the component name, the `cbfs-` class prefix) are
+// internal and deliberately left alone - renaming them would churn every consumer
+// without changing a word anybody reads.
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 function PortalFreeSignupPage() {
@@ -25,6 +33,29 @@ function PortalFreeSignupPage() {
     setLoading(true);
     try {
       const res = await freeSignup({ full_name: fullName.trim(), email: email.trim() });
+
+      /**
+       * Tie the anonymous visitor to the person who just signed up.
+       *
+       * This is the step that answers "who clicked". Until now it did not happen anywhere in
+       * this flow - not here, and not on the backend, which never reads a fingerprint during
+       * signup. EnrollPage, ContactPage, LeadCaptureForm and StrategyCallModal all call this;
+       * the page every landing-page CTA points at did not. So someone could arrive from a
+       * campaign, read the page, click the button and create an account, and their visit stayed
+       * an anonymous fingerprint for ever.
+       *
+       * Deliberately BEFORE `login`/`navigate` so the call is issued while this document is
+       * still alive, and deliberately not awaited - attribution must never be able to delay or
+       * fail someone's signup. `identifyVisitor` backfills their earlier anonymous sessions onto
+       * the lead, so the landing-page view that brought them here is attributed too.
+       */
+      try {
+        identifyVisitor(email.trim(), {
+          name: fullName.trim(),
+          metadata: { source_form: 'portal_free_signup' },
+        });
+      } catch { /* instrumentation must never break the signup */ }
+
       login(res.jwt);
       navigate('/portal/today', { replace: true });
     } catch (err: any) {
@@ -43,11 +74,11 @@ function PortalFreeSignupPage() {
         </div>
 
         <div className="cbfs-head">
-          <span className="cbfs-badge">Free preview</span>
-          <h1 className="cbfs-title">Start free</h1>
+          <span className="cbfs-badge">Preview access</span>
+          <h1 className="cbfs-title">Start for $0</h1>
           <p className="cbfs-text">
-            Create a free account to explore the AI Systems Architect Accelerator, RSVP to the next open house,
-            and see your project take shape. No payment required.
+            Create an account to explore the AI Systems Architect Accelerator, RSVP to the next open house,
+            and see your project take shape. No card needed.
           </p>
         </div>
 
@@ -66,7 +97,7 @@ function PortalFreeSignupPage() {
           />
           {error && <div className="cbfs-error" role="alert">{error}</div>}
           <button className="cbfs-btn" type="submit" disabled={loading}>
-            {loading ? 'Creating your account…' : 'Create my free account'}
+            {loading ? 'Creating your account…' : 'Create my account'}
           </button>
         </form>
 

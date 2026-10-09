@@ -52,6 +52,40 @@ describe('assembleFactoryProject produces a gate-valid FactoryProject (the golde
     expect(project.delivery_project_id).toBe(sample.delivery_project_id);
   });
 
+  it('carries the DECOMPOSITION\u2019s allocation and role_map through to the project', () => {
+    // The path, not just the schema. Before P3-T3 this read `input.allocation ?? []`, so a
+    // compliant model's rows were discarded and "allocation is emittable" was true of the schema
+    // object and false of the pipeline. Without this assertion the line could be reverted and
+    // every other test would stay green.
+    const d = sampleDecomposition();
+    d.allocation = sample.allocation;
+    d.role_map = sample.role_map;
+
+    const project = assembleFactoryProject(baseInput({ decomposition: d }));  // no input.allocation
+    expect(project.allocation).toEqual(sample.allocation);
+    expect(project.role_map).toEqual(sample.role_map);
+  });
+
+  it('lets EXPLICIT input win over the decomposition, so a caller that passes rows means it', () => {
+    const d = sampleDecomposition();
+    d.allocation = sample.allocation;
+
+    const project = assembleFactoryProject(baseInput({ decomposition: d, allocation: [] }));
+    expect(project.allocation).toEqual([]);
+  });
+
+  it('treats a null from the model as nothing to state, not as a crash', () => {
+    // Strict mode forces the key into every response, so `null` is the shape a model sends when
+    // it has nothing to declare. That must behave exactly like the pre-P3-T3 stored shape.
+    const d = sampleDecomposition();
+    d.allocation = null;
+    d.role_map = null;
+
+    const project = assembleFactoryProject(baseInput({ decomposition: d }));
+    expect(project.allocation).toEqual([]);
+    expect(project.role_map).toEqual([]);
+    expect(factoryErrors(project)).toEqual([]);
+  });
   it('defaults allocation and role_map to [] when the orchestrator omits them, still zero errors', () => {
     const project = assembleFactoryProject(baseInput()); // no allocation/role_map passed
     expect(project.allocation).toEqual([]);

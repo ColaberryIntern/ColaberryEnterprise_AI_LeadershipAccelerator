@@ -39,10 +39,18 @@ function contentHash(salt: string, obj: unknown): string {
 export interface RequirementEval { id: string; dueStage: string; applicability: string; blocking: boolean; reason: string | null; }
 export interface RequirementsEvaluation {
   evals: RequirementEval[];
+  /** The FULL submission bar: every blocking reason (judgment gaps AND un-evidenced submission prerequisites). */
   blocking: RequirementEval[];
+  /** Disqualifiers that block a PURSUIT decision: unknown applicability + un-evidenced "not applicable". */
+  pursuitBlocking: RequirementEval[];
+  /** Applicable submission requirements still needing evidence — block SUBMISSION, not the pursuit decision. */
+  openSubmissionRequirements: RequirementEval[];
   deliveryObligations: RequirementEval[];
   byDueStage: Record<string, RequirementEval[]>;
+  /** Submission-ready: nothing blocking at all (the bar the later bid-submission gate uses). */
   canApproveBid: boolean;
+  /** Pursuit/research-ready: no disqualifier (un-evidenced submission prerequisites are expected at this stage). */
+  canApprovePursuit: boolean;
 }
 
 /**
@@ -73,7 +81,16 @@ export function evaluateRequirements(reqs: any[] | null | undefined): Requiremen
   for (const e of evals) (byDueStage[e.dueStage] ?? byDueStage.unknown).push(e);
   const deliveryObligations = evals.filter((e) => (e.dueStage === 'delivery' || e.dueStage === 'award') && !e.blocking);
   const blocking = evals.filter((e) => e.blocking);
-  return { evals, blocking, deliveryObligations, byDueStage, canApproveBid: blocking.length === 0 };
+  // A PURSUIT (research) decision is blocked only by true disqualifiers — a requirement of unknown applicability or
+  // an un-evidenced "not applicable". An applicable submission requirement that merely lacks evidence yet is NOT a
+  // disqualifier: evidence is gathered during the pursuit/build, and the FULL bar (canApproveBid) gates submission.
+  const pursuitBlocking = blocking.filter((e) => e.reason !== 'submission_prerequisite_no_evidence');
+  const openSubmissionRequirements = blocking.filter((e) => e.reason === 'submission_prerequisite_no_evidence');
+  return {
+    evals, blocking, pursuitBlocking, openSubmissionRequirements, deliveryObligations, byDueStage,
+    canApproveBid: blocking.length === 0,
+    canApprovePursuit: pursuitBlocking.length === 0,
+  };
 }
 
 // ── Evidence-coverage evaluation (PURE) ──────────────────────────────────────
@@ -133,6 +150,26 @@ export function evaluateEvidenceCoverage(
   return { sufficient: reasons.length === 0, reasons };
 }
 
+/**
+ * DECOUPLED (discovery-ZIP) coverage: the uploaded solicitation ZIP is the evidence of record (there is NO OP
+ * snapshot). Sufficient to approve a pursuit only when the reviewer has established >=1 applicable requirement AND
+ * attested the ZIP (a recorded, non-empty server sha256). Missing evidence never silently passes: empty established
+ * → `no_requirements_established` (an empty list is not "no requirements"); no attested ZIP → `no_zip_attested`.
+ * Both reasons can accumulate. Pure, total, never throws.
+ */
+export function evaluateZipCoverage(
+  establishedRequirements: any[] | null | undefined,
+  reviewedDocuments: any[] | null | undefined,
+): EvidenceCoverage {
+  const reasons: string[] = [];
+  const established = Array.isArray(establishedRequirements) ? establishedRequirements : [];
+  if (established.length === 0) reasons.push('no_requirements_established');
+  const docs = Array.isArray(reviewedDocuments) ? reviewedDocuments : [];
+  const hasZip = docs.some((d) => d && d.method === 'solicitation_zip' && typeof d.sha256 === 'string' && d.sha256.length > 0);
+  if (!hasZip) reasons.push('no_zip_attested');
+  return { sufficient: reasons.length === 0, reasons };
+}
+
 // ── Persistence ──────────────────────────────────────────────────────────────
 async function loadCurrent(canonicalOpportunityId: string, biddingEntity: string): Promise<any | null> {
   const { default: GovQualification } = await import('../../models/GovQualification');
@@ -165,6 +202,198 @@ export async function createQualification(input: CreateQualificationInput): Prom
     content_sha256: contentHash(`${input.canonicalOpportunityId}:${input.biddingEntity}:1`, input.sourceSnapshot),
   });
   return row.get ? row.get() : row;
+}
+
+export interface CreateDecoupledQualificationInput {
+  tenantId: string; organizationId?: string | null; biddingEntity: string;
+  gwsKey: string; reviewerIdentityId: string;
+  provenance: { uuid: string; title: string | null; agency: string | null };
+}
+
+/**
+ * Create a pending_review qualification for a DECOUPLED (discovery-ZIP) workspace — NOT bound to an OP source
+ * snapshot. The uploaded ZIP is the evidence source; pursuit approval + evidence attestation are later, gated
+ * slices (canApprove stays false on this path). Idempotent per (gwsKey, bidding_entity).
+ */
+export async function createDecoupledQualification(input: CreateDecoupledQualificationInput): Promise<any> {
+  const existing = await loadCurrent(input.gwsKey, input.biddingEntity);
+  if (existing) return existing.get ? existing.get() : existing;
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const evaluation = evaluateRequirements([]);
+  const row: any = await GovQualification.create({
+    tenant_id: input.tenantId, organization_id: input.organizationId ?? null, bidding_entity: input.biddingEntity,
+    canonical_opportunity_id: input.gwsKey, delivery_project_id: null,
+    reviewer_identity_id: input.reviewerIdentityId, decision: 'pending_review',
+    requirements_json: { requirements: [], evaluation, workspace_kind: 'discovery_zip', provenance: input.provenance },
+    source_snapshot: null, source_snapshot_version: null, source_available: false,
+    status: 'active', version: 1,
+    content_sha256: contentHash(`${input.gwsKey}:${input.biddingEntity}:1`, input.provenance),
+  });
+  return row.get ? row.get() : row;
+}
+
+/**
+ * The read view for a DECOUPLED (discovery-ZIP) workspace: NO OP source re-fetch (source is null). The uploaded ZIP
+ * is the evidence source. Coverage + canApprove are computed from the established requirements AND whether the ZIP
+ * has been attested (evaluateZipCoverage) — so pursuit approval is offered ONLY when requirements are established,
+ * the ZIP is attested, and no requirement blocks. No OP snapshot is ever fabricated.
+ */
+export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, biddingEntity?: string): Promise<any> {
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const where: any = { canonical_opportunity_id: gwsKey, tenant_id: tenantId, status: 'active' };
+  if (biddingEntity) where.bidding_entity = biddingEntity;
+  const record: any = await GovQualification.findOne({ where, order: [['version', 'DESC']] });
+  const recordJson = record ? record.get() : null;
+  const established = (recordJson && recordJson.requirements_json && recordJson.requirements_json.established) || [];
+  const provenance = (recordJson && recordJson.requirements_json && recordJson.requirements_json.provenance) || null;
+  const reviewedDocuments = (recordJson && recordJson.requirements_json && recordJson.requirements_json.reviewedDocuments) || [];
+  const zipAttestation = (Array.isArray(reviewedDocuments) ? reviewedDocuments : []).find((d: any) => d && d.method === 'solicitation_zip') || null;
+  // Phase 2 dossier (contacts/meetings/key-dates/NAICS) parsed from the ZIP at attest; reference info, never a gate.
+  const dossier = (recordJson && recordJson.requirements_json && recordJson.requirements_json.dossier) || null;
+  const evaluation = evaluateRequirements(established);
+  const coverage = evaluateZipCoverage(established, reviewedDocuments);
+  // deliveryProjectId: set once the pursuit is approved into a project — the key to overlaying all persisted state
+  // (responses, assignments, evidence, the amendment inbox). Null before approval (the pure projections still render).
+  const deliveryProjectId: string | null = (recordJson && recordJson.delivery_project_id) || null;
+  // Phase 2 (P2-T3) + P4: the response checklist — one cited slot per established requirement the bid must answer,
+  // overlaid (once a project exists) with the authored response's lifecycle (draft/reviewed/approved/revision_required).
+  const { deriveResponseSlots, applyResponsesToSlots } = await import('./proposal/responseSlots');
+  let responseSlots: any[] = deriveResponseSlots(established);
+  // Phase 3 (P3-T1): the Build-track plan — releases → stories → prompts, a deterministic projection of the
+  // solution_build-classified requirements (admin requirements never become a feature). Each story is honestly
+  // `unassigned` + carries its student Claude Code prompt; assignment + (disabled) execution are later steps.
+  const { deriveGovBuildPlan, buildGovStoryPrompt, reconcileGovBuildPlan } = await import('./proposal/govBuildPlan');
+  const buildPlanBase = deriveGovBuildPlan(established);
+  const build: any = {
+    releases: buildPlanBase.releases,
+    stories: buildPlanBase.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) })),
+    orphanedStories: [],
+    buildStoryCount: buildPlanBase.buildStoryCount,
+    deliveryProjectId,
+    assignableBuilders: [],
+  };
+  // P4: the dates/messages/amendment inbox (empty before a project exists).
+  let amendments: any[] = [];
+  // P5: the submission state + readiness (empty/default before a project exists).
+  let submission: any = null;
+  let submissionReadiness: any = { ready: false, blocking: ['no_project'] };
+  // P3 + P4 + P5: once this opportunity has been approved into a delivery project, overlay the PERSISTED state —
+  // build assignment + reconcile (orphaned work surfaced, never dropped), the authored response lifecycle onto the
+  // slots, the amendment inbox, and the submission lifecycle + readiness. Best-effort: any failure leaves the pure
+  // projections intact (never breaks the view).
+  if (deliveryProjectId) {
+    try {
+      const { listBuildStoryAssignments, listAssignableBuilders } = await import('./govBuildAssignment');
+      const { listBuildStoryEvidence } = await import('./govBuildEvidence');
+      const { listProposalResponses } = await import('./govProposalResponse');
+      const { listProposalAmendments } = await import('./govProposalAmendment');
+      const { getSubmission } = await import('./govSubmission');
+      const { evaluateSubmissionReadiness } = await import('./proposal/submissionPackage');
+      const [assignments, assignableBuilders, evidence, responses, amendmentRows, submissionView] = await Promise.all([
+        listBuildStoryAssignments(deliveryProjectId),
+        listAssignableBuilders(deliveryProjectId),
+        listBuildStoryEvidence(deliveryProjectId),
+        listProposalResponses(deliveryProjectId),
+        listProposalAmendments(deliveryProjectId),
+        getSubmission(deliveryProjectId),
+      ]);
+      const recon = reconcileGovBuildPlan(buildPlanBase.stories, assignments, evidence);
+      build.stories = recon.stories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) }));
+      build.orphanedStories = recon.orphanedStories.map((s) => ({ ...s, prompt: buildGovStoryPrompt(s) }));
+      build.assignableBuilders = assignableBuilders;
+      responseSlots = applyResponsesToSlots(responseSlots, responses);
+      amendments = amendmentRows;
+      submission = submissionView;
+      submissionReadiness = evaluateSubmissionReadiness(responseSlots, coverage.sufficient, !!(evaluation && evaluation.canApproveBid));
+    } catch { /* leave the pure projections as-is — they are still correct without the overlay */ }
+  }
+  // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
+  let sync: any = null;
+  try { const { getGovSyncEntry } = await import('./govOpportunitySync'); sync = await getGovSyncEntry(gwsKey); } catch { sync = null; }
+  // Phase 3: advisory "have we pursued this agency before?" — read-only, best-effort, gates nothing.
+  let relationship: any = null;
+  try {
+    const { getAgencyRelationship } = await import('./govRelationship');
+    relationship = await getAgencyRelationship(tenantId, gwsKey, provenance ? provenance.agency : null);
+  } catch { relationship = null; }
+  return {
+    canonicalOpportunityId: gwsKey,
+    sourceLive: false,
+    sourceState: 'zip_workspace',
+    sourceStateLabel: 'ZIP workspace',
+    sourceAvailable: false,
+    sourceSnapshotVersion: null,
+    snapshotRecorded: false,
+    source: null,
+    evaluation,
+    coverage,
+    qualification: recordJson,
+    provenance,
+    zipAttestation,
+    dossier,
+    responseSlots,
+    build,
+    amendments,
+    submission,
+    submissionReadiness,
+    relationship,
+    changedSource: false,
+    lastSyncedAt: sync ? sync.syncedAt : null,
+    syncChange: sync && sync.change && sync.change.kind !== 'none' ? sync.change : null,
+    canApprove: evaluation.canApprovePursuit && coverage.sufficient,
+  };
+}
+
+/**
+ * Resolve a decoupled (gws) opportunity key to the delivery project it was approved into, or null if it has not
+ * been approved yet (no project, so nothing to assign against). Scoped by tenant — a foreign tenant resolves to
+ * null, never another tenant's project. This is the gws → delivery_project bridge the admin build-assignment write
+ * needs so a story can be assigned (and the assignee checked) against the real project.
+ */
+export async function resolveDecoupledDeliveryProjectId(tenantId: string, gwsKey: string, biddingEntity?: string): Promise<string | null> {
+  if (!tenantId || !gwsKey) return null;
+  const { default: GovQualification } = await import('../../models/GovQualification');
+  const where: any = { canonical_opportunity_id: gwsKey, tenant_id: tenantId, status: 'active' };
+  if (biddingEntity) where.bidding_entity = biddingEntity;
+  const record: any = await GovQualification.findOne({ where, order: [['version', 'DESC']] });
+  const id = record && record.get ? record.get().delivery_project_id : null;
+  return id || null;
+}
+
+export interface RecordZipAttestationInput {
+  gwsKey: string; biddingEntity: string; expectedVersion: number; reviewerIdentityId: string;
+  mode: 'add' | 'revoke'; filename?: string | null; sha256?: string | null; sizeBytes?: number | null;
+  /** Phase 2: the dossier parsed from the ZIP (contacts/meetings/key-dates/NAICS); persisted on 'add'. */
+  dossier?: any;
+}
+
+/**
+ * Attest (or revoke) the uploaded solicitation ZIP as the EVIDENCE OF RECORD for a DECOUPLED (gws) qualification.
+ * Unlike recordDocumentReview (which validates each coveredDocId against the OP snapshot), a decoupled record has NO
+ * OP snapshot — the uploaded ZIP IS the authoritative package — so there is no docId check: it records ONE synthetic
+ * `solicitation_zip` reviewedDocuments entry (the server-computed sha256 + filename; bytes are NEVER stored),
+ * idempotent (re-attest overwrites), with 'revoke' as the recovery path. Fork-on-edit preserves established/provenance.
+ */
+export async function recordZipAttestation(input: RecordZipAttestationInput): Promise<any> {
+  const current = await loadCurrent(input.gwsKey, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  const existing: any[] = (current.requirements_json && Array.isArray(current.requirements_json.reviewedDocuments))
+    ? current.requirements_json.reviewedDocuments : [];
+  const kept = existing.filter((e) => e && e.method !== 'solicitation_zip'); // single synthetic ZIP entry (idempotent)
+  const reviewedDocuments = input.mode === 'revoke' ? kept : [...kept, {
+    docId: 'solicitation_zip', role: 'solicitation_zip', method: 'solicitation_zip',
+    filename: input.filename ?? null, sha256: input.sha256 ?? null, sizeBytes: input.sizeBytes ?? null,
+    reviewedBy: input.reviewerIdentityId, reviewedAt: new Date().toISOString(),
+  }];
+  return forkNewVersion(current, {
+    reviewer_identity_id: input.reviewerIdentityId,
+    requirements_json: {
+      ...(current.requirements_json || {}), reviewedDocuments,
+      // persist the parsed dossier on attest; keep any prior dossier on revoke (reference info, not the gate)
+      ...(input.mode === 'add' && input.dossier ? { dossier: input.dossier } : {}),
+    },
+  });
 }
 
 async function forkNewVersion(current: any, patch: Record<string, any>): Promise<any> {
@@ -284,6 +513,18 @@ export interface ApproveQualificationInput {
   canonicalOpportunityId: string; biddingEntity: string; expectedVersion: number;
   decision: 'approved_bid_pursuit' | 'rfi_response'; approverIdentityId: string;
   rationale?: string | null; evidence?: any; effortCap?: string | null; reassessmentConditions?: string | null;
+  /** When true, the MASTER ADMIN (super_admin) is exempt from separation of duties and may approve their own
+   *  pursuit. Set ONLY by the route from the authenticated role; every use of it is audit-logged. */
+  masterAdminOverride?: boolean;
+}
+
+/** Audit: the master admin exercised the separation-of-duties override to approve their own pursuit. */
+function logMasterAdminSelfApproval(key: string, approverIdentityId: string): void {
+  console.warn(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+    event: 'gov_qualification_self_approval_master_admin_override', outcome: 'success',
+    context: { key, approverIdentityId },
+  }));
 }
 
 /**
@@ -311,7 +552,8 @@ export async function approveGovQualification(input: ApproveQualificationInput):
   // Separation of duties: the reviewer who built the record may not approve their own pursuit. The section gate
   // is role-level only, so this identity check is the second, in-service guard (un-bypassable by the route).
   if (input.approverIdentityId && current.reviewer_identity_id && input.approverIdentityId === current.reviewer_identity_id) {
-    throw new SelfApprovalError();
+    if (!input.masterAdminOverride) throw new SelfApprovalError();
+    logMasterAdminSelfApproval(input.canonicalOpportunityId, input.approverIdentityId);
   }
 
   const resolved = await resolveGovOpportunityDetail(input.canonicalOpportunityId);
@@ -332,7 +574,9 @@ export async function approveGovQualification(input: ApproveQualificationInput):
   const coverage = evaluateEvidenceCoverage(detail, established, reviewedDocIdsFrom(current));
   if (!coverage.sufficient) throw new EvidenceInsufficientError(coverage.reasons);
   const evaluation = evaluateRequirements(established);
-  if (!evaluation.canApproveBid) throw new QualificationBlockedError(evaluation.blocking.map((b) => `${b.id}:${b.reason}`));
+  // PURSUIT (research) bar: block only on true disqualifiers (unknown applicability / un-evidenced dismissal).
+  // Un-evidenced submission prerequisites are carried as open items, not blockers — the full bar gates submission.
+  if (!evaluation.canApprovePursuit) throw new QualificationBlockedError(evaluation.pursuitBlocking.map((b) => `${b.id}:${b.reason}`));
 
   return forkNewVersion(current, {
     decision: input.decision, reviewer_identity_id: current.reviewer_identity_id,
@@ -343,5 +587,57 @@ export async function approveGovQualification(input: ApproveQualificationInput):
     // Capture the approver in the immutable evidence, distinct from the reviewer, so the record shows WHO approved.
     evidence_json: { ...(input.evidence ?? current.evidence_json ?? {}), approvedBy: input.approverIdentityId },
     effort_cap: input.effortCap ?? current.effort_cap, reassessment_conditions: input.reassessmentConditions ?? current.reassessment_conditions,
+  });
+}
+
+export interface ApproveDecoupledQualificationInput {
+  gwsKey: string; biddingEntity: string; expectedVersion: number;
+  decision: 'approved_bid_pursuit' | 'rfi_response'; approverIdentityId: string;
+  rationale?: string | null; reviewedZipSha256?: string | null;
+  /** Master-admin (super_admin) separation-of-duties exemption; set only by the route, audit-logged. */
+  masterAdminOverride?: boolean;
+}
+
+/**
+ * Pursuit approval for a DECOUPLED (gws) ZIP workspace — the SAME ordered gate as approveGovQualification, but the
+ * EVIDENCE is the attested ZIP, not a re-fetched OP snapshot (a decoupled record has none). NEVER calls the OP
+ * resolver and NEVER fabricates a source snapshot. Ordered gate:
+ *   1. CAS on expectedVersion (a re-attest/re-establish forks a new version → stale → QualificationConflictError 409,
+ *      which drives the "Review changes" re-review — this is the primary changed-evidence guard);
+ *   2. separation of duties: the reviewer may not approve their own pursuit (SelfApprovalError 403);
+ *   3. optional attested-hash check: if the caller passed the ZIP hash it reviewed and it no longer matches →
+ *      ChangedSourceError 409 (belt-and-suspenders on top of the CAS);
+ *   4. ZIP coverage sufficient — established >=1 AND the ZIP attested — else EvidenceInsufficientError 422;
+ *   5. no blocking requirement (evaluateRequirements) else QualificationBlockedError 422;
+ *   6. fork an approved version bound to the attested ZIP sha256 + the established set + the approver identity;
+ *      source stays null (source_available:false) — honest, no OP snapshot invented.
+ * Authorizes RESEARCH only — a build still needs a SEPARATE (held) build authorization.
+ */
+export async function approveDecoupledQualification(input: ApproveDecoupledQualificationInput): Promise<any> {
+  if (!APPROVAL_DECISIONS.includes(input.decision)) throw new Error('approveDecoupledQualification only records approval decisions');
+  const current = await loadCurrent(input.gwsKey, input.biddingEntity);
+  if (!current) throw new QualificationNotFoundError();
+  if (current.version !== input.expectedVersion) throw new QualificationConflictError(current.version);
+  if (input.approverIdentityId && current.reviewer_identity_id && input.approverIdentityId === current.reviewer_identity_id) {
+    if (!input.masterAdminOverride) throw new SelfApprovalError();
+    logMasterAdminSelfApproval(input.gwsKey, input.approverIdentityId);
+  }
+  const established = (current.requirements_json && current.requirements_json.established) || [];
+  const reviewedDocuments = (current.requirements_json && current.requirements_json.reviewedDocuments) || [];
+  const zip = (Array.isArray(reviewedDocuments) ? reviewedDocuments : []).find((d: any) => d && d.method === 'solicitation_zip' && d.sha256) || null;
+  if (input.reviewedZipSha256 && zip && input.reviewedZipSha256 !== zip.sha256) {
+    throw new ChangedSourceError(null, 0); // the attested ZIP changed after review — renewed review required
+  }
+  const coverage = evaluateZipCoverage(established, reviewedDocuments);
+  if (!coverage.sufficient) throw new EvidenceInsufficientError(coverage.reasons);
+  const evaluation = evaluateRequirements(established);
+  // PURSUIT (research) bar: disqualifiers only. Un-evidenced submission prerequisites are open items, not blockers.
+  if (!evaluation.canApprovePursuit) throw new QualificationBlockedError(evaluation.pursuitBlocking.map((b) => `${b.id}:${b.reason}`));
+  return forkNewVersion(current, {
+    decision: input.decision, reviewer_identity_id: current.reviewer_identity_id,
+    source_snapshot: null, source_snapshot_version: null, source_available: false, // decoupled: no OP snapshot invented
+    requirements_json: { ...(current.requirements_json || {}), established, evaluation, coverage },
+    rationale: input.rationale ?? current.rationale,
+    evidence_json: { ...(current.evidence_json ?? {}), approvedBy: input.approverIdentityId, attestedZipSha256: zip ? zip.sha256 : null },
   });
 }

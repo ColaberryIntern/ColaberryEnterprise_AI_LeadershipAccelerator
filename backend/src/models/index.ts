@@ -359,6 +359,11 @@ import RoomMembership from './RoomMembership';
 import Friendship from './Friendship'; // portal Contacts rail friend graph
 import RoomBooking from './RoomBooking';
 import RoomBookingAttendee from './RoomBookingAttendee';
+import PresentationAssignment from './PresentationAssignment';
+import PresentationAttempt from './PresentationAttempt';
+import PresentationRecording from './PresentationRecording';
+import PresentationFeedback from './PresentationFeedback';
+import PresentationShowcase from './PresentationShowcase';
 import RoomMessage from './RoomMessage';
 import RoomResource from './RoomResource';
 import RoomOutboxEvent from './RoomOutboxEvent';
@@ -462,6 +467,10 @@ import ContractTrack from './ContractTrack';
 import ContractRequirement from './ContractRequirement';
 import ContractProcessDocument from './ContractProcessDocument';
 import ContractProcessReview from './ContractProcessReview';
+import ProjectLifecycleState from './ProjectLifecycleState';
+import OperatingBlueprintManifest from './OperatingBlueprintManifest';
+import BlueprintApproval from './BlueprintApproval';
+import LifecycleStageFailure from './LifecycleStageFailure';
 import CapstoneReviewApproval from './CapstoneReviewApproval';
 import CohortMembership from './CohortMembership';
 import InternshipApplication from './InternshipApplication';
@@ -493,6 +502,8 @@ import DeliveryAgentTrustRequirement from './DeliveryAgentTrustRequirement';
 import DeliveryEvidence from './DeliveryEvidence';
 import DeliveryClientAcceptance from './DeliveryClientAcceptance';
 import DeliveryChangeRequest from './DeliveryChangeRequest';
+import BlueprintDesignDecision from './BlueprintDesignDecision';
+import BlueprintVisualContract from './BlueprintVisualContract';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1554,6 +1565,11 @@ export {
   RoomMembership,
   RoomBooking,
   RoomBookingAttendee,
+  PresentationAssignment,
+  PresentationAttempt,
+  PresentationRecording,
+  PresentationFeedback,
+  PresentationShowcase,
   RoomMessage,
   RoomResource,
   RoomOutboxEvent,
@@ -1650,6 +1666,12 @@ export {
   ContractProcessDocument,
   ContractProcessReview,
 
+  // Unified project lifecycle (docs/project-lifecycle/architecture.md)
+  ProjectLifecycleState,
+  OperatingBlueprintManifest,
+  BlueprintApproval,
+  LifecycleStageFailure,
+
   // Living Career Portfolio (Gate 10 — versioned publication)
   CapstoneReviewApproval,
   // AI Internship — lifecycle, audit trail, and the secondary cohort
@@ -1679,6 +1701,8 @@ export {
   DeliveryEvidence,
   DeliveryClientAcceptance,
   DeliveryChangeRequest,
+  BlueprintDesignDecision,
+  BlueprintVisualContract,
   GraphNode,
   GraphEdge,
   GraphEvent,

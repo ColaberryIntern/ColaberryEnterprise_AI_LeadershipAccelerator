@@ -1,12 +1,16 @@
 jest.mock('../../ticketService', () => ({ addTicketComment: jest.fn() }));
 jest.mock('../daraHandoffService', () => ({ createDaraHandoff: jest.fn() }));
+jest.mock('../daraIdentitySeed', () => ({ DARA_AGENT_NAME: 'Dara', DARA_RISK_TIER: 'R3' }));
+jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 
 import { addTicketComment } from '../../ticketService';
 import { createDaraHandoff } from '../daraHandoffService';
+import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { DARA_TOOLS, isDaraTool, executeDaraTool } from '../daraTools';
 
 const mockAddComment = addTicketComment as unknown as jest.Mock;
 const mockCreateHandoff = createDaraHandoff as unknown as jest.Mock;
+const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 
 const TICKET_ID = 'ticket-1';
 const DARA_ADMIN_ID = 'dara-admin-1';
@@ -19,6 +23,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAddComment.mockResolvedValue({ id: 'activity-1' });
   mockCreateHandoff.mockResolvedValue({ id: 'handoff-1' });
+  mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: null, verdict: 'would_allow', reason: 'ok', allowed: true });
 });
 
 describe('DARA_TOOLS / isDaraTool', () => {
@@ -90,6 +95,27 @@ describe('executeDaraTool — escalate_to_human (Dara v2 Phase 4: real, standalo
 
     expect(result.error).toBe('Tool execution failed');
     expect(result.message).toContain('DB write failed');
+  });
+
+  describe('authorization gate (T12 completion)', () => {
+    it('held verdict: an honest non-escalation, never a fabricated handoff ticket', async () => {
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'decision-1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+
+      const result = JSON.parse(await executeDaraTool('escalate_to_human', { reason: 'x' }, baseContext));
+
+      expect(mockAuthorizeTicketDispatch).toHaveBeenCalledWith(expect.objectContaining({
+        ticketId: TICKET_ID, resourceType: 'dara_escalation', resourceId: STUDENT_ID,
+        agentName: 'Dara', action: 'dara_escalate_to_human', riskTier: 'R3',
+      }));
+      expect(mockCreateHandoff).not.toHaveBeenCalled();
+      expect(mockAddComment).not.toHaveBeenCalled();
+      expect(result.escalated).toBe(false);
+    });
+
+    it('allowed verdict (default, shadow mode): the real handoff still fires exactly as before', async () => {
+      await executeDaraTool('escalate_to_human', { reason: 'x' }, baseContext);
+      expect(mockCreateHandoff).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

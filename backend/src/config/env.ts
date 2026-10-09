@@ -186,6 +186,17 @@ export const env = {
   // Project backend v2 — persisted student-projects read API (P1). Default OFF;
   // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
   projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Project Presentation Studio — the six-stage workspace a student opens from a
+  // demo-prep card (Learn/Prepare/Build/Practice/Present/Reflect & Share).
+  // SEPARATE from projectApiEnabled deliberately, for the same reason
+  // sbpPipelineEnabled is: projectApiEnabled is already true in production and
+  // shared with projectsPortalRoutes, so reusing it would make the Studio live the
+  // moment it deploys with no way to turn it off without breaking the existing
+  // projects API. Default OFF, and flag-off is byte-identical to today — the PREP
+  // cards keep rendering DemoEvidencePanel exactly as they do now. The Studio's
+  // tables are created at boot regardless (empty, unread tables change nothing),
+  // because the schema must exist before the flag can be turned on.
+  presentationStudioEnabled: process.env.PRESENTATION_STUDIO_ENABLED === 'true',
   // Cert Prep (Claude Certified Architect readiness). Default OFF: deploying the
   // routes changes nothing until this is set, and the Week 7 fence inside the
   // service is a SEPARATE, always-on control — this flag decides whether the
@@ -427,6 +438,15 @@ export const env = {
   // Used to build absolute one-click unsubscribe links embedded in outbound campaign
   // email. Must be the public https host, not the internal container port.
   publicAppUrl: process.env.PUBLIC_APP_URL || 'https://enterprise.colaberry.ai',
+  // Where the master copy of every landing page is kept (Ali, 2026-10-01: "There should be a git
+  // repo stored somewhere for each one"). A DEDICATED repo, deliberately not this application's
+  // own checkout at /opt/colaberry-accelerator - that tree is `git pull`ed by every deploy, and a
+  // dirty tree makes a deploy silently ship stale code.
+  landingPageRepoPath: process.env.LANDING_PAGE_REPO_PATH || '/opt/colaberry-landing-pages',
+  // Optional. Unset, the archive is version history on one host: it survives a bad edit and a bad
+  // deploy, not a lost disk. Setting this is the one change that makes it durable, and it is the
+  // only thing standing between the current local repo and a GitHub one.
+  landingPageRepoRemote: process.env.LANDING_PAGE_REPO_REMOTE || '',
   // Where Synthflow posts a call's completion. Sent on EVERY call we place, because the
   // per-agent dashboard setting it used to depend on was found unset for two agents in a
   // row (the internship interviewer, then AI Flotation) - and a call whose completion never

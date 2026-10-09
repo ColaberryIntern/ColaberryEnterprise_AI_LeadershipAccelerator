@@ -163,6 +163,11 @@ export interface GovOpportunity {
   /** true => the verdict field was returned (even if null); false => absent. null verdict = unassessed. */
   vetVerdictPresent?: boolean;
   freshness?: { enrichedAt: string | null; attachmentsFetchedAt: string | null } | null;
+  /**
+   * OP's PRELIMINARY, UNVERIFIED project blurb (from overview/strategy), display-only in the Details popup. Shown
+   * labeled "preliminary, unverified — not confirmed requirements"; NEVER a requirement. null when none supplied.
+   */
+  preliminarySummary?: string | null;
 }
 export type SnapshotReason = 'not_configured' | 'source_failed';
 export interface GovOpportunityFeed {
@@ -172,12 +177,139 @@ export interface GovOpportunityFeed {
   snapshotDate: string | null;
   /** When snapshot: 'not_configured' (dark) vs 'source_failed' (configured feed that errored). */
   snapshotReason?: SnapshotReason | null;
+  /** How many the source reported in total (best-fit caps ~50); null when unknown. Used for "showing N of M". */
+  totalAvailable?: number | null;
+  /** How many returned rows were hidden by active team dismissals this request; 0 if none. */
+  dismissedCount?: number | null;
 }
 export interface StartOpportunityResult { deliveryProjectId: string; created: boolean; }
 
 /** The discovered government candidates (live from Opportunity Pulse, or the labeled snapshot). */
 export async function listGovOpportunities(): Promise<GovOpportunityFeed> {
   const { data } = await api.get<GovOpportunityFeed>('/api/admin/factory/opportunities');
+  return data;
+}
+
+/** One discovery opportunity's display details (the Details-popup data) for the decoupled Qualify workspace, so it
+ *  can show why-it-surfaced + the project overview + the Source link without going back. 404 (aged out of the feed,
+ *  or feed degraded dark) → { opportunity: null } so the caller renders an honest empty state instead of throwing. */
+export async function getGovOpportunityDetail(uuid: string): Promise<{ opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null; snapshotReason?: SnapshotReason | null }> {
+  try {
+    const { data } = await api.get(`/api/admin/factory/opportunities/${encodeURIComponent(uuid)}`);
+    return data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) return { opportunity: null, source: 'snapshot', snapshotDate: null };
+    throw err;
+  }
+}
+
+/** A persisted team dismissal row (one per tenant+opportunity). restoredAt null => active (hidden). */
+export interface GovOpportunityDismissal {
+  opportunity_key: string;
+  title?: string | null;
+  agency?: string | null;
+  reason?: string | null;
+  dismissed_by?: string | null;
+  dismissed_at?: string | null;
+  restored_at?: string | null;
+}
+
+/** Hide a discovered candidate from the WHOLE team's feed (reversible). Idempotent; keyed on OP's stable uuid. */
+export async function dismissGovOpportunity(
+  key: string,
+  body: { reason?: string; title?: string; agency?: string } = {},
+): Promise<{ dismissed: GovOpportunityDismissal }> {
+  const { data } = await api.post<{ dismissed: GovOpportunityDismissal }>(
+    `/api/admin/factory/opportunities/${encodeURIComponent(key)}/dismiss`, body,
+  );
+  return data;
+}
+
+/** Un-hide a previously dismissed candidate (recovery). Idempotent. */
+export async function restoreGovOpportunity(key: string): Promise<{ restored: GovOpportunityDismissal | null }> {
+  const { data } = await api.post<{ restored: GovOpportunityDismissal | null }>(
+    `/api/admin/factory/opportunities/${encodeURIComponent(key)}/restore`, {},
+  );
+  return data;
+}
+
+// ── Our Services catalog ─────────────────────────────────────────────────────
+/** A Colaberry service offering — the catalog an opportunity is later matched against. Retired, never deleted. */
+export interface ServiceOffering {
+  id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  keywords?: string[];
+  naicsCodes?: string[];
+  pscCodes?: string[];
+  pastPerformance?: string | null;
+  owner?: string | null;
+  status: 'active' | 'retired';
+  createdBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+/** The editable fields of a service offering (what the add/edit form submits). */
+export interface ServiceOfferingInput {
+  name: string;
+  description?: string;
+  category?: string;
+  keywords?: string[];
+  naicsCodes?: string[];
+  pscCodes?: string[];
+  pastPerformance?: string;
+  owner?: string;
+}
+
+/** List the team's service offerings (active by default, or every status). */
+export async function listServiceOfferings(status: 'active' | 'all' = 'active'): Promise<ServiceOffering[]> {
+  const { data } = await api.get<{ services: ServiceOffering[] }>(`/api/admin/factory/services?status=${status}`);
+  return data.services;
+}
+
+/** Add a service offering. */
+export async function createServiceOffering(body: ServiceOfferingInput): Promise<ServiceOffering> {
+  const { data } = await api.post<{ service: ServiceOffering }>('/api/admin/factory/services', body);
+  return data.service;
+}
+
+/** Edit a service offering. */
+export async function updateServiceOffering(id: string, patch: Partial<ServiceOfferingInput>): Promise<ServiceOffering> {
+  const { data } = await api.patch<{ service: ServiceOffering }>(`/api/admin/factory/services/${encodeURIComponent(id)}`, patch);
+  return data.service;
+}
+
+/** Soft-retire a service offering (status flip; reversible by editing it back to active is not exposed — retire is one-way in the UI). */
+export async function retireServiceOffering(id: string): Promise<ServiceOffering> {
+  const { data } = await api.post<{ service: ServiceOffering }>(`/api/admin/factory/services/${encodeURIComponent(id)}/retire`, {});
+  return data.service;
+}
+
+// ── Opportunity → services matcher (advisory, deterministic) ─────────────────
+export type MatchStrength = 'strong' | 'moderate' | 'weak';
+/** A suggested service for an opportunity. ADVISORY ("suggested — confirm"), never a verified fit; the reason names the overlap. */
+export interface ServiceMatch {
+  id: string;
+  name: string;
+  category: string | null;
+  score: number;
+  strength: MatchStrength;
+  reason: string;
+  matchedKeywords: string[];
+  categoryMatched: boolean;
+  matchedNaics: string[];
+}
+export interface MatchSignals {
+  category?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  requirements?: string[];
+  naics?: string[];
+}
+/** Suggested services for an opportunity, ranked. Advisory only — writes nothing, gates nothing. */
+export async function matchServicesToOpportunity(signals: MatchSignals): Promise<{ matches: ServiceMatch[]; catalogSize: number }> {
+  const { data } = await api.post<{ matches: ServiceMatch[]; catalogSize: number }>('/api/admin/factory/opportunities/match', signals);
   return data;
 }
 
@@ -218,9 +350,16 @@ export interface QualRequirementEval { id: string; dueStage: string; applicabili
 export interface QualRequirementsEvaluation {
   evals: QualRequirementEval[];
   blocking: QualRequirementEval[];
+  /** Disqualifiers that block a PURSUIT decision (unknown applicability / un-evidenced dismissal). */
+  pursuitBlocking?: QualRequirementEval[];
+  /** Applicable submission requirements still needing evidence — block SUBMISSION, not the pursuit. */
+  openSubmissionRequirements?: QualRequirementEval[];
   deliveryObligations: QualRequirementEval[];
   byDueStage: Record<string, QualRequirementEval[]>;
+  /** Submission-ready bar (every requirement evidenced). */
   canApproveBid: boolean;
+  /** Pursuit/research bar — no disqualifier (un-evidenced submission prerequisites are expected here). */
+  canApprovePursuit?: boolean;
 }
 /** The server-authoritative source detail (a gov-opportunity.v1 subset). Advisory-only fields (legacy fit,
  *  legacyVerdict) are shown labeled as advisory — the qualification depends on evidence, not on OP's verdict. */
@@ -245,7 +384,7 @@ export interface QualificationRecord {
   requirements_json?: { established?: EstablishedRequirement[]; reviewedDocuments?: ReviewedDocument[] } | null;
 }
 /** The resolved, honest source state (mirrors the server gate). */
-export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed';
+export type QualSourceState = 'available' | 'degraded' | 'snapshot_unrecorded' | 'unavailable' | 'auth_failed' | 'malformed' | 'zip_workspace';
 export interface GovQualificationWorkspace {
   canonicalOpportunityId: string;
   /** false today: OP's live v2 detail endpoint is not wired, so the source is a labeled fixture. */
@@ -260,8 +399,144 @@ export interface GovQualificationWorkspace {
   coverage: QualEvidenceCoverage | null;
   qualification: QualificationRecord | null;
   changedSource: boolean;
+  /** Daily-tracking (decoupled): ISO timestamp of the last sync run that saw this opportunity, or null. */
+  lastSyncedAt?: string | null;
+  /** Daily-tracking (decoupled): the last flagged change (deadline moved / dropped from feed), or null. */
+  syncChange?: { kind: string; detail: string } | null;
   /** Server's verdict on whether an approval is currently permitted (source approvable + current + covered + unblocked). */
   canApprove: boolean;
+  /** Decoupled (discovery-ZIP) workspace only: the clicked discovery row's title/agency (display). Null on the canonical path. */
+  provenance?: { title: string | null; agency: string | null } | null;
+  /** Decoupled workspace only: the attested solicitation ZIP (evidence of record), or null if not yet attested. */
+  zipAttestation?: { sha256: string | null; filename: string | null; reviewedBy: string | null; reviewedAt: string | null } | null;
+  /** Decoupled workspace only: opportunity dossier parsed from the ZIP at attest (contacts/meetings/key-dates/NAICS).
+   *  "Detected — verify", never authoritative; reference info that gates nothing. Null until a ZIP is attested. */
+  dossier?: GovDossier | null;
+  /** Advisory "have we pursued this agency before?" — prior active qualifications for the same agency. Suggestion,
+   *  never authoritative (agency names are free text); gates nothing. Null when the lookup is unavailable. */
+  relationship?: GovRelationship | null;
+  /** The proposal response checklist — one cited slot per established requirement the bid must answer. Each slot
+   *  is read-only `unanswered` today (authoring is a later phase); the citation anchor is the requirement's own
+   *  evidence doc reference. Mirrors the backend `deriveResponseSlots`. */
+  responseSlots?: GovResponseSlot[];
+  /** The Build-track plan (releases → stories → prompts) for the solution_build requirements. Mirrors the
+   *  backend `deriveGovBuildPlan`; absent on older records / when no build requirements exist. */
+  build?: GovBuildPlan;
+  /** The dates/messages/amendment inbox (P4). An amendment's `affects` invalidates affected responses. */
+  amendments?: GovProposalAmendment[];
+  /** The submission + outcome state (P5). */
+  submission?: GovSubmission | null;
+  /** Whether the proposal is ready to export/submit (all responses approved + covered + nothing blocking). */
+  submissionReadiness?: GovSubmissionReadiness;
+}
+
+/** Whether the proposal can be exported/submitted, with the blocking reasons when not. */
+export interface GovSubmissionReadiness { ready: boolean; blocking: string[] }
+
+/** The submission + outcome state for a gov project (P5). Candidates are PRIVATE and never published. */
+export interface GovSubmission {
+  status: 'preparing' | 'needs_review' | 'ready' | 'exported' | 'externally_submitted' | 'acknowledged';
+  outcome: 'pending' | 'won' | 'lost' | 'withdrawn' | 'no_bid' | 'unknown';
+  exportManifest: { exportedAt: string; projectName: string; responseCount: number; items: any[] } | null;
+  exportedAt: string | null;
+  externalRef: string | null;
+  externallySubmittedAt: string | null;
+  acknowledgedRef: string | null;
+  acknowledgedAt: string | null;
+  outcomeNote: string | null;
+  outcomeRecordedAt: string | null;
+  caseStudyCandidate: any | null;
+  serviceCapabilityCandidate: any | null;
+}
+
+/** A figure attached to a proposal response, bound to the git commit it was captured at (provenance). */
+export interface GovResponseFigure { commit: string; ref: string; caption: string }
+
+/** One line of the proposal response checklist — cites the requirement it answers; carries the authored response. */
+export interface GovResponseSlot {
+  requirementId: string;
+  statement: string;
+  sourceRef: string | null;
+  /** `unanswered` until authored; then the response's lifecycle. A material amendment flips it to revision_required. */
+  status: 'unanswered' | 'draft' | 'reviewed' | 'approved' | 'revision_required';
+  content?: string;
+  figures?: GovResponseFigure[];
+  authoredByIdentityId?: string | null;
+  reviewedByIdentityId?: string | null;
+  updatedAt?: string | null;
+}
+
+/** One entry in the dates/messages/amendment inbox. `amendment` with `affects` invalidates; `message` is context. */
+export interface GovProposalAmendment {
+  id: string;
+  amendmentKey: string;
+  kind: 'amendment' | 'message';
+  summary: string;
+  affects: string[];
+  provenance: string | null;
+  observedAt: string | null;
+  invalidatedCount: number;
+  createdAt: string | null;
+}
+
+/** One Build-track story — a solution_build requirement turned into buildable work, citing the requirement. */
+export interface GovBuildStory {
+  id: string;
+  requirementId: string;
+  title: string;
+  statement: string;
+  release: string;
+  acceptance: string[];
+  /** Derived `unassigned`; a persisted assignment overlay (admin) moves it to `assigned`. Never a fabricated built state. */
+  status: 'unassigned' | 'assigned';
+  /** The assignee's identity id — present only on the ADMIN workspace (the student view never carries it). */
+  assigneeIdentityId?: string | null;
+  assignedAt?: string | null;
+  /** True when the story's requirement left the established set but it still carries assignment/evidence — preserved. */
+  orphaned?: boolean;
+  /** The student's Claude Code prompt for this story (deterministic, cites the requirement). */
+  prompt?: string;
+}
+export interface GovBuildRelease { key: string; name: string; storyIds: string[] }
+/** A delivery-project member a story can be assigned to (holds story.execute). Admin picker source. */
+export interface GovAssignableBuilder { identityId: string; email: string | null; roles: string[] }
+/** The Build-track plan: releases → stories → prompts, a deterministic projection of solution_build requirements. */
+export interface GovBuildPlan {
+  releases: GovBuildRelease[];
+  stories: GovBuildStory[];
+  buildStoryCount: number;
+  /** Stories whose requirement left the established set but which carry persisted work — surfaced, never dropped. */
+  orphanedStories?: GovBuildStory[];
+  /** The delivery project this plan was approved into, or null before approval (assignment needs it). */
+  deliveryProjectId?: string | null;
+  /** The builders a story can be assigned to (admin workspace only; empty before approval). */
+  assignableBuilders?: GovAssignableBuilder[];
+}
+
+/** A procurement code detected in the ZIP, tagged with its code SYSTEM (never assume NAICS). */
+export interface GovDossierCode { system: 'naics' | 'nigp'; code: string; sourceDocument: string }
+
+/** A detected meeting / key-date line. `time`/`timezone` are only present when literally stated — a non-null
+ *  `time` with a null `timezone` means the deadline's zone was NOT stated and must be verified (a missed-by-zone
+ *  deadline loses the bid). Never inferred. */
+export interface GovDossierLine { text: string; date: string | null; time?: string | null; timezone?: string | null; sourceDocument: string }
+
+/** An opportunity dossier detected from the solicitation ZIP — deterministic, source-cited, "detected — verify". */
+export interface GovDossier {
+  contacts: { kind: 'email' | 'phone'; value: string; sourceDocument: string }[];
+  /** Legacy bare NAICS strings, retained for compat; `codes` is the forward, system-tagged model. */
+  naics: string[];
+  /** Every detected procurement code, each tagged with its system (naics | nigp). May be absent on older records. */
+  codes?: GovDossierCode[];
+  meetings: GovDossierLine[];
+  keyDates: GovDossierLine[];
+}
+
+/** Prior pursuits of the same agency — advisory "possible prior work — verify". */
+export interface GovRelationship {
+  agency: string | null;
+  priorCount: number;
+  pursuits: { canonicalOpportunityId: string; title: string | null; agency: string | null; decision: string; date: string | null }[];
 }
 
 /** A reviewer-established, cited applicable requirement (same shape the server coverage/blocking gate evaluates). */
@@ -285,9 +560,134 @@ export async function getGovQualificationWorkspace(canonicalOpportunityId: strin
 const qUrl = (canonicalOpportunityId: string, suffix = ''): string =>
   `/api/admin/factory/qualification/${encodeURIComponent(canonicalOpportunityId)}${suffix}`;
 
-/** Open (create) a pending_review qualification, bound server-side to the re-fetched source snapshot. Idempotent. */
-export async function createGovQualification(canonicalOpportunityId: string, body: { biddingEntity: string; deliveryProjectId?: string }): Promise<{ qualification: QualificationRecord }> {
+/** Open (create) a pending_review qualification. Canonical path: bound to the re-fetched source snapshot. Decoupled
+ *  (gws) path: bound to no snapshot; `from`/`agency` carry the clicked discovery row's provenance. Idempotent. */
+export async function createGovQualification(canonicalOpportunityId: string, body: { biddingEntity: string; deliveryProjectId?: string; from?: string; agency?: string }): Promise<{ qualification: QualificationRecord }> {
   const { data } = await api.post(qUrl(canonicalOpportunityId), body);
+  return data;
+}
+
+/** Assign a Build story to a project builder (P3-T2). The server requires the assignee to hold story.execute on
+ *  the resolved delivery project (422 otherwise), and 404s if the opportunity has no project yet. Idempotent. */
+export async function assignGovBuildStory(canonicalOpportunityId: string, storyId: string, assigneeIdentityId: string): Promise<GovBuildStory & { assigneeIdentityId: string }> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, `/build-stories/${encodeURIComponent(storyId)}/assign`), { assigneeIdentityId });
+  return data;
+}
+
+/** Remove a Build story's assignment (back to unassigned). Idempotent. */
+export async function unassignGovBuildStory(canonicalOpportunityId: string, storyId: string): Promise<{ ok: true; removed: number }> {
+  const { data } = await api.delete(qUrl(canonicalOpportunityId, `/build-stories/${encodeURIComponent(storyId)}/assign`));
+  return data;
+}
+
+const rUrl = (canonicalOpportunityId: string, requirementId: string, suffix = ''): string =>
+  qUrl(canonicalOpportunityId, `/responses/${encodeURIComponent(requirementId)}${suffix}`);
+
+/** Author/edit the proposal response for one requirement. Any edit resets its status to `draft` (server-side). */
+export async function saveGovProposalResponse(canonicalOpportunityId: string, requirementId: string, content: string): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId), { content });
+  return data;
+}
+
+/** Advance the response lifecycle. The server enforces the order (no draft→approved jump); 409 on an illegal step. */
+export async function reviewGovProposalResponse(canonicalOpportunityId: string, requirementId: string, decision: 'reviewed' | 'approved' | 'revision_required'): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId, '/review'), { decision });
+  return data;
+}
+
+/** Attach a commit-bound figure to a response. The server refuses a figure with no commit (422). */
+export async function addGovProposalFigure(canonicalOpportunityId: string, requirementId: string, figure: GovResponseFigure): Promise<GovResponseSlot> {
+  const { data } = await api.post(rUrl(canonicalOpportunityId, requirementId, '/figures'), figure);
+  return data;
+}
+
+/** Remove a figure by its ref. */
+export async function removeGovProposalFigure(canonicalOpportunityId: string, requirementId: string, ref: string): Promise<GovResponseSlot> {
+  const { data } = await api.delete(rUrl(canonicalOpportunityId, requirementId, `/figures?ref=${encodeURIComponent(ref)}`));
+  return data;
+}
+
+/** Record an amendment/message in the inbox. An amendment's `affects` invalidates affected responses (server-side). */
+export async function recordGovProposalAmendment(canonicalOpportunityId: string, body: {
+  amendmentKey: string; kind?: 'amendment' | 'message'; summary: string; affects?: string[]; provenance?: string | null; observedAt?: string | null;
+}): Promise<GovProposalAmendment> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/amendments'), body);
+  return data;
+}
+
+/** Assemble + mark the submission package exported. Server refuses (409 not_ready + blocking) unless every response is approved. */
+export async function exportGovSubmission(canonicalOpportunityId: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/export'), {});
+  return data;
+}
+
+/** Download the real submission package (zip) — fetched with auth, then handed to the browser as a file. */
+export async function downloadGovSubmissionPackage(canonicalOpportunityId: string): Promise<void> {
+  const { data } = await api.get(qUrl(canonicalOpportunityId, '/submission/package'), { responseType: 'blob' });
+  const url = URL.createObjectURL(data as Blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'proposal-package.zip';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Record the MANUAL external-submission receipt (exported ≠ submitted; server 409 if not exported). */
+export async function recordGovSubmissionReceipt(canonicalOpportunityId: string, externalRef: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/receipt'), { externalRef });
+  return data;
+}
+
+/** Record the agency's acknowledgement (server 409 unless externally_submitted first). */
+export async function acknowledgeGovSubmission(canonicalOpportunityId: string, acknowledgedRef: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/acknowledge'), { acknowledgedRef });
+  return data;
+}
+
+/** Reopen the submission to `preparing` (e.g. after a material amendment reopened a response). */
+export async function reopenGovSubmission(canonicalOpportunityId: string): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/submission/reopen'), {});
+  return data;
+}
+
+/** Record the win/loss outcome. won/lost also generate PRIVATE case-study + service-capability candidates (server-side). */
+export async function recordGovOutcome(canonicalOpportunityId: string, outcome: GovSubmission['outcome'], note?: string | null): Promise<GovSubmission> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/outcome'), { outcome, note: note ?? null });
+  return data;
+}
+
+/** AI advisory (strictly downstream of the deterministic bid engine — it explains, never scores). */
+export interface GovRiskNarrative { narrative: string; generatedAt: string; cached: boolean; }
+export interface GovRiskNarrativeFacts {
+  band: 'bid' | 'bid_with_conditions' | 'no_bid';
+  pwin: number | null; preliminary: boolean; expectedValue: number | null; daysLeft: number | null;
+  knockouts: { category: string; text: string; status: 'pass' | 'conditional' | 'hard_fail' }[];
+  factors: { label: string; score: number | null; weight: number }[];
+  buyer?: string | null; title?: string | null;
+}
+/** Generate a plain-English read of a bid decision the deterministic engine already produced. */
+export async function getGovRiskNarrative(canonicalOpportunityId: string, facts: GovRiskNarrativeFacts): Promise<GovRiskNarrative> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/risk-narrative'), facts);
+  return data;
+}
+
+export interface GovProposalSummary { whatTheyWant: string; whatWedBuild: string; generatedAt: string; cached: boolean; }
+/** Generate a "what they want / what we'd build" summary from the established requirement statements. */
+export async function getGovProposalSummary(
+  canonicalOpportunityId: string,
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null },
+): Promise<GovProposalSummary> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/proposal-summary'), body);
+  return data;
+}
+
+/** AI build spec + advisory buyer-system research (post-approval Build step). Advisory only — gates nothing;
+ *  `research` is LLM-knowledge-based and labelled "likely / verify" (the backend has no live web search). */
+export interface GovBuildSpec { spec: string; research: string; generatedAt: string; cached: boolean; }
+export async function getGovBuildSpec(
+  canonicalOpportunityId: string,
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; daysLeft?: number | null },
+): Promise<GovBuildSpec> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/build-spec'), body);
   return data;
 }
 
@@ -329,6 +729,36 @@ export async function reviewGovQualificationDocuments(canonicalOpportunityId: st
   form.append('coveredDocIds', JSON.stringify(args.coveredDocIds));
   if (args.file) form.append('document', args.file);
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/review-documents'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+
+/** DECOUPLED (gws) workspace: attest ('add') or revoke the uploaded solicitation ZIP as the evidence of record. The
+ *  server computes the sha256 (bytes never stored). This is what lets pursuit approval clear on the ZIP path. */
+export async function attestSolicitationZip(canonicalOpportunityId: string, args: {
+  biddingEntity: string; expectedVersion: number; mode: 'add' | 'revoke'; file?: File | null;
+}): Promise<{ qualification: QualificationRecord }> {
+  const form = new FormData();
+  form.append('biddingEntity', args.biddingEntity);
+  form.append('expectedVersion', String(args.expectedVersion));
+  form.append('mode', args.mode);
+  if (args.file) form.append('document', args.file);
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/attest-zip'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+
+/** One requirement the deterministic extractor found in the uploaded solicitation ZIP. A CANDIDATE only — it becomes
+ *  an established (gate-bearing) requirement solely when the reviewer confirms it via the establish/decision path. */
+export interface ExtractedRequirementCandidate {
+  id: string; text: string; extractedText?: string | null;
+  sourceDocument?: string | null; section?: string | null; kind?: string | null; priority?: string | null;
+}
+
+/** READ-ONLY: upload the solicitation ZIP and get back the extractor's candidate requirements for the reviewer to
+ *  confirm. Persists nothing server-side — establishment stays the deliberate, confirmed write. */
+export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; fileCount: number }> {
+  const form = new FormData();
+  form.append('document', file);
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/extract-requirements'), form, { headers: { 'Content-Type': 'multipart/form-data' } });
   return data;
 }
 

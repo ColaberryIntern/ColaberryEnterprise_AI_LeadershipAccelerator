@@ -7,7 +7,21 @@
  * and "X completed a to-do" status pings do not. This pins the boundary that
  * regressed on 2026-06-24 (week 1/2/3 todo mentions auto-archived to AUTOMATION).
  */
-jest.mock('../../../models/InboxVip', () => ({ findOne: jest.fn() }));
+// The VIP check builds its WHERE through InboxVip.sequelize.where/fn/col. A mock
+// without `sequelize` makes that throw, the rule's own catch swallows it, and
+// execution falls through to the next rule — so every VIP assertion silently
+// tested the ABSENCE of the VIP path rather than its presence. Found 2026-10-04
+// when a test asserting "a VIP sender overrides the event-reminder rule" failed
+// against correct code. The stub below is the smallest thing that lets the real
+// branch run; findOne is still what decides the outcome.
+jest.mock('../../../models/InboxVip', () => ({
+  findOne: jest.fn(),
+  sequelize: {
+    where: (...args: any[]) => ({ __where: args }),
+    fn: (...args: any[]) => ({ __fn: args }),
+    col: (...args: any[]) => ({ __col: args }),
+  },
+}));
 jest.mock('../../../models/InboxRule', () => ({ findAll: jest.fn() }));
 jest.mock('../senderHistory', () => ({ countPriorEmailsFromSender: jest.fn() }));
 
@@ -501,5 +515,184 @@ describe('evaluateHardRules - priority keyword separators', () => {
   it('still requires a word boundary, so a substring does not fire', async () => {
     const result = await evaluateHardRules(keywordEmail('The transplantation study is attached.'));
     expect(result.state).not.toBe('INBOX');
+  });
+});
+
+/**
+ * Operational health alerts (operational_alert_00).
+ *
+ * The regression this pins: on 2026-10-01 a Cora delivery-health alert was
+ * archived by the LLM classifier at confidence 15, reasoning "This is a test
+ * email with no action needed". The control built to catch a silent failure
+ * failed silently. These alerts now match on the X-Cora-Alert header, ahead of
+ * every other rule.
+ */
+describe('evaluateHardRules — operational health alerts (operational_alert_00)', () => {
+  const alertEmail = (overrides: Record<string, any> = {}) => ({
+    id: 'email-alert',
+    from_address: 'kes@colaberry.com',
+    from_name: 'Kes Delele',
+    to_addresses: ['kesetebirhan@gmail.com'],
+    cc_addresses: ['ali@colaberry.com'],
+    subject: '[CRITICAL] Cora: SMS has gone quiet',
+    body_text: 'SMS delivery health: ACTIVE. Why: no delivery in 2.6 days.',
+    headers: { 'X-Cora-Alert': 'health', 'X-Cora-Alert-Channel': 'sms', 'X-Cora-Alert-State': 'active' },
+    ...overrides,
+  });
+
+  it('keeps a delivery-health alert in the inbox', async () => {
+    const result = await evaluateHardRules(alertEmail());
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00', classified_by: 'hard_rule' });
+  });
+
+  it('keeps a system alert, which carries the same header with a different value', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      subject: '[CRITICAL] Cora Alert: queue lag',
+      headers: { 'X-Cora-Alert': 'system', 'X-Cora-Alert-Type': 'queue_lag', 'X-Cora-Alert-Severity': 'critical' },
+    }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('matches the header whatever its casing, since providers rewrite it', async () => {
+    const result = await evaluateHardRules(alertEmail({ headers: { 'x-cora-alert': 'health' } }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('survives the List-Unsubscribe header that archives everything else', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      headers: { 'X-Cora-Alert': 'health', 'List-Unsubscribe': '<https://example.com/u>' },
+    }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('keeps the RESOLVED alert too, so the all-clear is not the one that goes missing', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      subject: '[RESOLVED] Cora: SMS is delivering again',
+      headers: { 'X-Cora-Alert': 'health', 'X-Cora-Alert-State': 'resolved' },
+    }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('keeps the drill, which is shaped exactly like a real alert', async () => {
+    const result = await evaluateHardRules(alertEmail({ headers: { 'X-Cora-Alert': 'health', 'X-Cora-Alert-Drill': 'true' } }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'operational_alert_00' });
+  });
+
+  it('does NOT fire on ordinary mail from the same person, which is why the rule is not on the sender', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      subject: 'Re: AI-Inbox-Manager is now deployed and live on Hetzner',
+      body_text: 'Ali, update on student notifications.',
+      headers: {},
+    }));
+    expect(result.rule_id).not.toBe('operational_alert_00');
+  });
+
+  it('does NOT fire on a lead notice, which carries no alert header', async () => {
+    const result = await evaluateHardRules(alertEmail({
+      to_addresses: ['rose@colaberry.com'],
+      cc_addresses: [],
+      subject: 'New lead assigned',
+      headers: { 'List-Unsubscribe': '<https://example.com/u>' },
+    }));
+    expect(result.rule_id).not.toBe('operational_alert_00');
+  });
+});
+
+/**
+ * Financial / insurance application mail (financial_application_0i).
+ *
+ * Protective Life's "Action Required! Complete your life insurance application"
+ * was archived twice — 2026-10-02 and 2026-10-03 — both times by the LLM calling
+ * it "a marketing communication". It carried policy number LU6202903 and said
+ * underwriting could not begin until the application was signed.
+ */
+describe('evaluateHardRules — financial application mail (financial_application_0i)', () => {
+  const protectiveEmail = (overrides: Record<string, any> = {}) => ({
+    id: 'email-ins',
+    from_address: 'telelife@protective.com',
+    from_name: null,
+    to_addresses: ['ali_muwwakkil@hotmail.com'],
+    cc_addresses: [],
+    subject: 'Action Required! Complete your life insurance application with Protective Life!',
+    body_text: 'POLICY NUMBER: LU6202903\n\nThis is a reminder to visit our Velocity Customer Portal to complete your online application. Underwriting cannot begin until all the following are complete.',
+    headers: {},
+    ...overrides,
+  });
+
+  it('keeps the exact email that was archived twice', async () => {
+    const result = await evaluateHardRules(protectiveEmail());
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'financial_application_0i', classified_by: 'hard_rule' });
+  });
+
+  it('keeps it even behind a List-Unsubscribe header', async () => {
+    const result = await evaluateHardRules(protectiveEmail({ headers: { 'List-Unsubscribe': '<https://protective.com/u>' } }));
+    expect(result).toMatchObject({ matched: true, state: 'INBOX', rule_id: 'financial_application_0i' });
+  });
+
+  it('needs BOTH halves: an action subject with no open file does not match', async () => {
+    const result = await evaluateHardRules(protectiveEmail({
+      subject: 'Action Required! Claim your free quote today',
+      body_text: 'Rates have never been lower. Click here to see how much you could save on term life.',
+    }));
+    expect(result.rule_id).not.toBe('financial_application_0i');
+  });
+
+  it('needs BOTH halves: a reference number in pure marketing does not match', async () => {
+    const result = await evaluateHardRules(protectiveEmail({
+      subject: 'Our best rates of the year are here',
+      body_text: 'Offer code: PROMO-88421. See our latest term life pricing.',
+    }));
+    expect(result.rule_id).not.toBe('financial_application_0i');
+  });
+});
+
+/**
+ * Recurring event reminders (event_reminder_34).
+ *
+ * The DA Bootcamp weekly help session sends three notices per event. The LLM
+ * gave identical mail a different verdict almost every week because the score
+ * sits on the 25-point AUTOMATION boundary, so roughly one in three reached the
+ * inbox at random. Ali deleted them at least three times.
+ */
+describe('evaluateHardRules — recurring event reminders (event_reminder_34)', () => {
+  const reminder = (subject: string, overrides: Record<string, any> = {}) => ({
+    id: 'email-rem',
+    from_address: 'discussions@school.colaberry.com',
+    from_name: 'Colaberry School',
+    to_addresses: ['ali@colaberry.com'],
+    cc_addresses: [],
+    subject,
+    body_text: 'Your session is coming up.',
+    headers: {},
+    ...overrides,
+  });
+
+  it.each([
+    'DA Bootcamp Thursday Weekly Help Session  (1 wk out)',
+    'DA Bootcamp Thursday Weekly Help Session  (1 day out)',
+    'DA Bootcamp Thursday Weekly Help Session  (1 hr out)',
+    'Interview Prep Session  (1 wk out)',
+    'IPBC Saturday  (30 mins out)',
+  ])('archives the countdown notice: %s', async (subject) => {
+    const result = await evaluateHardRules(reminder(subject));
+    expect(result).toMatchObject({ matched: true, state: 'AUTOMATION', rule_id: 'event_reminder_34' });
+  });
+
+  it('does NOT archive a session email without a countdown suffix', async () => {
+    const result = await evaluateHardRules(reminder('DA Bootcamp Thursday Weekly Help Session is cancelled'));
+    expect(result.rule_id).not.toBe('event_reminder_34');
+  });
+
+  it('lets a VIP sender override it, which is why this rule sits after the VIP check', async () => {
+    findOneVip.mockResolvedValue({ email_address: 'addie.m.mack@gmail.com', name: 'Adalene Mack Muwwakkil' });
+    const result = await evaluateHardRules(reminder('Soccer practice  (1 hr out)', { from_address: 'addie.m.mack@gmail.com' }));
+    expect(result.state).toBe('INBOX');
+    expect(result.rule_id).not.toBe('event_reminder_34');
+  });
+
+  it('lets the family keyword list override it, for the same reason', async () => {
+    const result = await evaluateHardRules(reminder('Field trip permission reminder  (1 day out)'));
+    expect(result.state).toBe('INBOX');
+    expect(result.rule_id).not.toBe('event_reminder_34');
   });
 });

@@ -1,4 +1,6 @@
 import { arbitrate } from '../../explorerGrowth/governor/arbiter';
+import { HUMAN_IN_THE_LOOP_ACTIONS } from './actionVocabulary';
+import { assignJourneyArm } from '../experiments/assignJourneyArm';
 import { hardStopReason } from '../../explorerGrowth/governor/candidates/hardStop';
 import { evaluateContact } from '../../explorerGrowth/governor/contactPolicy';
 import { evaluateFreshness } from '../../explorerGrowth/governor/freshness';
@@ -46,12 +48,11 @@ import type {
 const WAIT = 'WAIT';
 
 /**
- * sec 8's Layer 3 and Layer 4 - the two actions that commit a PERSON - in the
- * existing vocabulary. No `layer` field is invented for this: `ExplorerActionType`
- * already names both, and a parallel numbering would be a second taxonomy to
- * keep in step with the first.
+ * sec 8's Layer 3 and Layer 4 - the two actions that commit a PERSON. Moved to
+ * `actionVocabulary.ts` in T608, because the holdout eligibility check needs the
+ * same set and a second copy would be a second thing to keep in step.
  */
-const HUMAN_IN_THE_LOOP: ReadonlySet<string> = new Set(['CREATE_HUMAN_TASK', 'SEND_ALI_OUTREACH']);
+const HUMAN_IN_THE_LOOP = HUMAN_IN_THE_LOOP_ACTIONS;
 
 /**
  * Why a human action cannot fire right now: which of its two inputs is
@@ -98,6 +99,61 @@ function refusal(
 
 function suppression(c: JourneyCandidate, reason: string): JourneySuppression {
   return { action_type: c.action_type, campaign_key: c.campaign_key, reason };
+}
+
+/**
+ * T608's holdout, applied to a decision that has ALREADY survived every other
+ * gate - and that ordering is the whole point.
+ *
+ * The plan placed this between arbitration and the contact policy. It cannot go
+ * there. Explorer's experiment service states the property (sec 25.3): "both arms
+ * get a decision row (control's action becomes WAIT), so the two arms are
+ * measured on IDENTICAL eligibility. That structurally prevents the standard
+ * trap of comparing 'people we messaged' against 'everyone else', where the
+ * comparison measures who qualified rather than what the message did."
+ *
+ * Assign the arm BEFORE the contact policy and that property is gone: a control
+ * subject would be stamped and held back without ever being tested for
+ * contactability, while their treatment twin gets refused `contact_policy:...`.
+ * The control arm would then quietly contain people who could never have been
+ * contacted at all, and the lift would be measuring who was reachable. Running
+ * last - after contact policy AND after the content gate - means both arms
+ * contain only subjects who would genuinely have been sent something.
+ *
+ * It also keeps the record honest in the other direction: a person whose
+ * contact policy refuses them is recorded as `contact_policy:...`, never as
+ * "held back for an experiment".
+ *
+ * `null` from `assignJourneyArm` means this candidate may not be experimented on
+ * (see that module's allowlist), and leaves the decision untouched.
+ */
+async function withHoldout(
+  decision: JourneyDecision,
+  winner: JourneyCandidate,
+  ctx: JourneySubjectContext,
+  deps: DecideDeps,
+): Promise<JourneyDecision> {
+  if (!deps.holdoutPolicyFor) return decision;
+  const policy = await deps.holdoutPolicyFor(ctx.brand_id);
+  if (!policy) return decision;
+  const arm = assignJourneyArm({
+    experimentKey: policy.experiment_key,
+    subjectRef: ctx.subject_ref,
+    controlShare: policy.control_share,
+    candidate: winner,
+    candidateTypes: policy.candidate_types,
+  });
+  if (!arm) return decision;
+  const stamped = { ...decision, experiment_key: policy.experiment_key, holdout_group: arm };
+  if (arm === 'treatment') return stamped;
+  return {
+    ...stamped,
+    selected_action: WAIT,
+    selected_channel: null,
+    selected_content: null,
+    suppressed: [...decision.suppressed, suppression(winner, `holdout:${policy.experiment_key}`)],
+    reason: `chosen_then_blocked:${winner.action_type}:holdout:${policy.experiment_key}`,
+  };
 }
 
 /** What the strategy would escalate to, named and never applied (T310). */
@@ -299,9 +355,9 @@ export async function decideForSubject(
     }
     return {
       status: 'decided',
-      decision: { ...base, selected_content: { assets: resolved.assets } },
+      decision: await withHoldout({ ...base, selected_content: { assets: resolved.assets } }, winner, ctx, deps),
     };
   }
 
-  return { status: 'decided', decision: base };
+  return { status: 'decided', decision: await withHoldout(base, winner, ctx, deps) };
 }

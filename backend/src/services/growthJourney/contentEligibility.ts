@@ -217,8 +217,25 @@ export async function assertContentAllowed(input: ContentAllowedInput): Promise<
         tenant_id: input.tenantId,
         asset_id: input.asset.id,
       },
+      // The eight columns the verdict below actually reads, and no more (T612). Without
+      // an `attributes` list Sequelize selects every column, JSON payloads included, to
+      // be discarded by the cast. `version` is ordered on but never read, and Postgres
+      // does not require it in the projection.
+      attributes: [
+        'id',
+        'approval_status',
+        'offer_family',
+        'eligible_programs',
+        'lifecycle_states',
+        'access_tier',
+        'effective_from',
+        'expires_at',
+      ],
       order: [['version', 'DESC']],
-      limit: 10,
+      // ONE row, not ten. `rules[0]` was the only consumer, so the other nine were
+      // fetched and decoded on every check - and `journeyContent` calls this once per
+      // asset in the registry, so the waste scaled with the set it was filtering.
+      limit: 1,
     });
   } catch (err: unknown) {
     // Fail closed. An unreadable declaration is not an approval.

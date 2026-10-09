@@ -53,6 +53,10 @@ export interface ContentItem {
   canonical_body: string | null;
   content_type: ContentType;
   status: ContentItemStatus;
+  /** A landing page this platform built, if one was chosen. */
+  landing_page_id: string | null;
+  /** A destination that is not ours to build. Mutually exclusive with the above, in the UI. */
+  destination_url: string | null;
   scheduled_for: string | null;
   revision: number;
   human_approved: boolean;
@@ -151,7 +155,35 @@ export interface CreateDraftInput {
   is_paid?: boolean;
   has_offer?: boolean;
   kinds?: string[];
+  /** Where the post sends people. A chosen page, or a URL - not both; the server prefers the page. */
+  landing_page_id?: string | null;
+  destination_url?: string | null;
   poll?: Poll | null;
+}
+
+export interface LandingPageSummary {
+  id: string;
+  name: string;
+  kind: string;
+  status: string;
+  slug: string | null;
+  path: string | null;
+  brand_id: string | null;
+  site_slug: string | null;
+  published_at: string | null;
+  updated_at: string;
+}
+
+/**
+ * The landing pages a post may point at.
+ *
+ * Scoped to one brand by the server, which is Ali's rule - a page "only shows for each brand".
+ * The filtering by kind and status happens client-side in `landingPageChoices` so the picker can
+ * also NAME the pages it is not offering and why, which an already-filtered list could not.
+ */
+export async function listLandingPages(brandId: string): Promise<LandingPageSummary[]> {
+  const res = await api.get('/api/admin/landing-pages', { params: { brand_id: brandId } });
+  return res.data.pages ?? [];
 }
 
 export async function listProviders(): Promise<ProviderSummary[]> {
@@ -174,7 +206,7 @@ export async function getItem(id: string): Promise<{ item: ContentItem; variants
   return { item: res.data.item, variants: res.data.variants ?? [] };
 }
 
-export async function updateItem(id: string, patch: { title?: string; canonical_body?: string; content_type?: ContentType; scheduled_for?: string | null; poll?: Poll | null }): Promise<ContentItem> {
+export async function updateItem(id: string, patch: { title?: string; canonical_body?: string; content_type?: ContentType; scheduled_for?: string | null; landing_page_id?: string | null; destination_url?: string | null; poll?: Poll | null }): Promise<ContentItem> {
   const res = await api.patch(`/api/admin/content/${id}`, patch);
   return res.data.item;
 }
@@ -199,8 +231,14 @@ export async function validateItem(id: string): Promise<ItemValidation> {
   return res.data;
 }
 
-export async function generateLinks(id: string, destinationUrl: string): Promise<ItemLink[]> {
-  const res = await api.post(`/api/admin/content/${id}/links`, { destination_url: destinationUrl });
+export async function generateLinks(id: string, destinationUrl?: string): Promise<ItemLink[]> {
+  // `destination_url` is omitted when the post already carries its destination, which is the
+  // normal case now: the server reads the chosen landing page off the item. Passing one still
+  // overrides, so nothing that relied on the old signature changed behaviour.
+  const res = await api.post(
+    `/api/admin/content/${id}/links`,
+    destinationUrl ? { destination_url: destinationUrl } : {},
+  );
   return res.data.links ?? [];
 }
 
@@ -214,6 +252,44 @@ export async function runAction(id: string, action: ComposerAction, scheduledFor
   return res.data;
 }
 
+/**
+ * Create a marketing campaign a post can actually be attributed to, and give it its slug.
+ *
+ * WHY BOTH IN ONE CALL. A campaign with no `utm_campaign_slug` cannot carry a tracked link, and
+ * the composer already warns about exactly that. Creating one and leaving it unslugged would
+ * manufacture the very gap the picker complains about, so the slug is minted in the same step
+ * and the campaign arrives usable.
+ *
+ * `type: 'marketing'` is the point of this function. Until 2026-10-08 the create route admitted
+ * only email lifecycle types, so every campaign it could make was one the composer filtered out.
+ *
+ * A FAILED SLUG IS NOT A FAILED CAMPAIGN. The campaign exists by then, and throwing here would
+ * leave a real row behind while telling the operator nothing was created - so the campaign comes
+ * back with a null slug and the picker's existing 'no UTM slug' warning does its job.
+ */
+export async function createMarketingCampaign(
+  input: { name: string; brand_id: string | null },
+): Promise<{ id: string; name: string; brand_id: string | null; utm_campaign_slug: string | null }> {
+  const created = await api.post('/api/admin/campaigns', {
+    name: input.name,
+    type: 'marketing',
+    brand_id: input.brand_id,
+  });
+  const campaign = created.data?.campaign ?? created.data;
+  const id = String(campaign.id);
+
+  let slug: string | null = (campaign.utm_campaign_slug as string | null) ?? null;
+  if (!slug) {
+    try {
+      const r = await assignCampaignSlug(id, { brand_id: input.brand_id });
+      slug = r.utm_campaign_slug;
+    } catch {
+      slug = null;
+    }
+  }
+
+  return { id, name: String(campaign.name ?? input.name), brand_id: (campaign.brand_id as string | null) ?? input.brand_id, utm_campaign_slug: slug };
+}
 export async function assignCampaignSlug(
   campaignId: string,
   inputs: { offer?: string | null; audience?: string | null; brand_id?: string | null } = {},

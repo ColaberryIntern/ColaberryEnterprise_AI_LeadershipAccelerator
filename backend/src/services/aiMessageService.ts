@@ -186,7 +186,7 @@ function buildUserPrompt(params: GenerateMessageParams): string {
     parts.push(`- Landing page: ${compositeContext.allowedUrls.landingPage}`);
     parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
     if (compositeContext.allowedUrls.advisoryTool) {
-      parts.push(`- AI Workforce Designer: ${compositeContext.allowedUrls.advisoryTool} (free 5-minute AI org design tool - use as low-friction alternative when booking feels too aggressive)`);
+      parts.push(`- AI Workforce Designer: ${compositeContext.allowedUrls.advisoryTool} (5-minute AI org design tool, no card needed - use as low-friction alternative when booking feels too aggressive)`);
     }
     parts.push('');
 

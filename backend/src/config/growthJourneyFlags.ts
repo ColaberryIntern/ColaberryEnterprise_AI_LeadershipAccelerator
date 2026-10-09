@@ -142,3 +142,40 @@ export function enabledGrowthJourneyCapabilities(flags: GrowthJourneyFlags): Gro
     isGrowthJourneyCapabilityEnabled(c, flags),
   );
 }
+
+/** The switchboard as an admin surface reads it: what each switch IS SET TO, master included. */
+export interface GrowthJourneyFlagSummary {
+  readonly master: boolean;
+  readonly signal_ingest: boolean;
+  readonly classification: boolean;
+  readonly decisions: boolean;
+  readonly handoffs: boolean;
+  readonly execution: boolean;
+}
+
+/**
+ * The six switches, for a screen that has to SHOW them (Phase 6, T604).
+ *
+ * It lives here, not in the controller that renders it, because this module is
+ * the one place allowed to name a sub-flag: the dark-launch guard in
+ * `__tests__/growthJourneyFlags.test.ts` fails any other file that reads
+ * `.journeyDecisions` and its siblings, and the status registry needs all six.
+ * The guard caught exactly that during T604 - which is the guard working.
+ *
+ * NOT a permission answer. `master: true, decisions: false` says what the
+ * operator set, and a screen may print that; whether a capability may RUN is
+ * still `isGrowthJourneyCapabilityEnabled`, which ANDs the master in. Two
+ * questions, two functions - and the snake_case keys here are the response
+ * shape, deliberately unlike the camelCase flag names, so the two are hard to
+ * confuse at a call site.
+ */
+export function growthJourneyFlagSummary(flags: GrowthJourneyFlags): GrowthJourneyFlagSummary {
+  return Object.freeze({
+    master: flags.growthJourneyEnabled,
+    signal_ingest: flags.journeySignalIngest,
+    classification: flags.journeyClassification,
+    decisions: flags.journeyDecisions,
+    handoffs: flags.journeyHandoffs,
+    execution: flags.journeyExecution,
+  });
+}

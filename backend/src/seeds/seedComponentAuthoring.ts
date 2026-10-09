@@ -16,6 +16,10 @@
 import CurriculumTypeDefinition, { CurriculumTypeDefinitionAttributes } from '../models/CurriculumTypeDefinition';
 import { INTEL_FORMATS } from './intelCardFormats';
 import { CLAUDE_STUDIO_STYLE, CLAUDE_STUDIO_STRUCTURE } from './claudeStudioFormat';
+// Presentation family (presentation / demo / ai_video_feedback). Kept in a peer module
+// for the same reason INTEL_FORMATS is: this file is already far past CLAUDE.md's
+// 500-line ceiling, so new authoring is added by reference, not by inlining it here.
+import { PRESENTATION_FORMATS } from './presentationCardFormats';
 
 type AuthoredFields = Partial<CurriculumTypeDefinitionAttributes>;
 
@@ -1049,6 +1053,14 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     approved: true,
     status: 'published',
   },
+
+  // Presentation family. These three slugs existed in typeRegistry.ts but had NO
+  // authoring block — they appeared only in THUMBNAIL_SLUGS, so they got a banner and
+  // nothing else, and `approved` stayed false. Because approvedPalette() filters to
+  // approved types, `presentation` and `demo` could not be scheduled by the Composer at
+  // all. Spread last so these entries win over the ...AI_THUMBNAILS defaults above;
+  // each restates its own thumbnail_url, as the spread-override rule requires.
+  ...PRESENTATION_FORMATS,
 };
 
 export async function seedComponentAuthoring(): Promise<{ updated: string[]; missing: string[] }> {

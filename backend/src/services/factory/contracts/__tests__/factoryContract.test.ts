@@ -17,6 +17,8 @@ import {
   FACTORY_PROCESS_JSON_SCHEMA,
   FACTORY_TRANSITION_JSON_SCHEMA,
   FACTORY_ROLE_JSON_SCHEMA,
+  FACTORY_ALLOCATION_JSON_SCHEMA,
+  FACTORY_ROLE_MAP_JSON_SCHEMA,
   FACTORY_DECOMPOSITION_JSON_SCHEMA,
 } from '../factoryContractSchema';
 import { buildSampleContractProject } from '../../sample/sampleContractProject';
@@ -99,21 +101,86 @@ describe('factory contract ↔ JSON-schema mirror stay in lockstep', () => {
   });
 });
 
-describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the five record schemas', () => {
-  it('requires exactly the five decomposition arrays, each keyed to its record schema', () => {
+describe('FACTORY_DECOMPOSITION_JSON_SCHEMA composes the seven record schemas', () => {
+  it('requires exactly the seven decomposition arrays, each keyed to its record schema', () => {
+    // SEVEN now, matching `properties` exactly. Strict structured outputs require that parity
+    // at every object level, and the parity test below enforces it structurally; this keeps
+    // the exact names pinned too, so adding a key silently is still impossible.
     expect([...FACTORY_DECOMPOSITION_JSON_SCHEMA.required].sort())
-      .toEqual(['assignments', 'processes', 'roles', 'tasks', 'transitions']);
+      .toEqual(['allocation', 'assignments', 'processes', 'role_map', 'roles', 'tasks', 'transitions']);
     const props = FACTORY_DECOMPOSITION_JSON_SCHEMA.properties;
-    expect(Object.keys(props).sort()).toEqual(['assignments', 'processes', 'roles', 'tasks', 'transitions']);
+    // CORRECTED: an earlier version of this comment said allocation and role_map were
+    // deliberately absent from `required`. That was wrong and broke strict-mode parity. They
+    // are in `required` and NULLABLE instead. Pinned as an exact set, never a subset check.
+    expect(Object.keys(props).sort()).toEqual(['allocation', 'assignments', 'processes', 'role_map', 'roles', 'tasks', 'transitions']);
     // every property is an array whose items reference the matching frozen/added record schema
     expect(props.processes.items).toBe(FACTORY_PROCESS_JSON_SCHEMA);
     expect(props.tasks.items).toBe(FACTORY_TASK_JSON_SCHEMA);
     expect(props.assignments.items).toBe(FACTORY_ASSIGNMENT_JSON_SCHEMA);
     expect(props.transitions.items).toBe(FACTORY_TRANSITION_JSON_SCHEMA);
     expect(props.roles.items).toBe(FACTORY_ROLE_JSON_SCHEMA);
+    expect(props.allocation.items).toBe(FACTORY_ALLOCATION_JSON_SCHEMA);
+    expect(props.role_map.items).toBe(FACTORY_ROLE_MAP_JSON_SCHEMA);
     expect((FACTORY_DECOMPOSITION_JSON_SCHEMA as any).additionalProperties).toBe(false);
   });
 });
+
+
+  /**
+   * Walk every object node and assert required/properties parity.
+   *
+   * THIS IS THE TEST THAT WAS MISSING. OpenAI strict structured outputs require every key in
+   * `properties` to appear in `required`, at every level, and this schema is submitted with
+   * `strict: true` from factoryDecompose.ts and factoryRepair.ts. P3-T3 broke that parity at the
+   * root and NO test noticed, because both of those suites mock the client - so the schema would
+   * have become unsubmittable and nothing would have generated at all once the flag flipped.
+   *
+   * Structural rather than a name list: it covers keys nobody has added yet.
+   */
+  function parityViolations(root: unknown): string[] {
+    const out: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (!node || typeof node !== 'object') return;
+      const n = node as Record<string, unknown>;
+      if (n.type === 'object' && n.properties) {
+        const props = Object.keys(n.properties as object).sort();
+        const req = [...((n.required as string[]) ?? [])].sort();
+        if (JSON.stringify(props) !== JSON.stringify(req)) {
+          out.push(`${path || '$'}: properties=[${props}] required=[${req}]`);
+        }
+      }
+      for (const [k, v] of Object.entries(n)) {
+        if (v && typeof v === 'object') walk(v, `${path}.${k}`);
+      }
+    };
+    walk(root, '');
+    return out;
+  }
+
+  it('satisfies strict-mode required/properties parity at EVERY object level', () => {
+    expect(parityViolations(FACTORY_DECOMPOSITION_JSON_SCHEMA)).toEqual([]);
+  });
+
+  it('POSITIVE CONTROL: the parity walk reports a violation when one key is dropped', () => {
+    // Without this, an always-empty result would read as success forever.
+    const broken = {
+      ...FACTORY_DECOMPOSITION_JSON_SCHEMA,
+      required: FACTORY_DECOMPOSITION_JSON_SCHEMA.required
+        .filter((r) => r !== 'allocation'),
+    };
+    const found = parityViolations(broken);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('allocation');
+  });
+
+  it('allocation and role_map are NULLABLE, so required parity costs the model nothing', () => {
+    // Strict mode forces them into `required`; `null` is how a model says "nothing to state"
+    // without inventing rows. Absence is MEANT to be caught by allocation_unknown downstream,
+    // which is not live yet - see the note in factoryContractSchema.ts. T6 wires it.
+    const props = FACTORY_DECOMPOSITION_JSON_SCHEMA.properties;
+    expect(props.allocation.type).toEqual(['array', 'null']);
+    expect(props.role_map.type).toEqual(['array', 'null']);
+  });
 
 describe('the schemas describe the REAL data a gate-valid project carries (known-good sample)', () => {
   // additionalProperties:false + every field required means a record's key set must EQUAL the

@@ -35,6 +35,19 @@ import { getAgentExplainability, AgentExplainability } from '../../services/agen
 // show even if it were structured as a quadrant grid. Zero change to any
 // fetch/cache/approve/reject logic below — only what renders once data
 // arrives.
+//
+// Decision Journal enrichment (2026-10-03) — a third card, "Approval
+// Requests," surfaces this agent's own approval_requests rows (the real
+// human-review lifecycle for its authorization-gated sends — status, who
+// decided, when, how), now that the FK bug blocking that table is fixed and
+// the real approve/reject/replay pipeline is live. Deliberately NAMED
+// differently from "Pending Approvals" above — that section is the separate
+// ProposedAgentAction/manager-inbox queue; this one is Reese's own
+// ticket-dispatch authorization history. Read-only: a still-pending row links
+// out to the real /admin/approval-requests page to act on it rather than
+// duplicating that page's approve/reject logic here. `approvalRequests` is
+// optional on AgentExplainability (so existing consumers/fixtures of that
+// type stay valid) — every read below treats a missing value as empty.
 
 interface Props {
   agentId: string;
@@ -52,6 +65,15 @@ function shadowEnforceLine(authorization: { verdict: string; reason: string; mod
     ? (authorization.verdict === 'block' ? 'blocked' : authorization.verdict === 'approval' ? 'queued for approval' : 'allowed')
     : 'continued regardless of the verdict';
   return `Policy result: ${authorization.verdict}. Enforcement: ${enforcement}. Actual result: ${actualResult}.`;
+}
+
+// Decision Journal enrichment (2026-10-03) — approval_requests' own real status
+// vocabulary, mapped to this page's existing pill tones (adv2PillClass).
+function approvalRequestStatusTone(status: string): 'warning' | 'success' | 'danger' | 'neutral' {
+  if (status === 'pending') return 'warning';
+  if (status === 'approved') return 'success';
+  if (status === 'rejected') return 'danger';
+  return 'neutral'; // expired, shadow_logged
 }
 
 export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoading, inboxError, onInboxChanged }: Props) {
@@ -273,6 +295,43 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
                   <span className="adv2-pill adv2-neutral" style={{ marginRight: 8 }}>Proposal outcome</span>
                   <span className={adv2PillClass(action.status === 'approved' || action.status === 'applied' ? 'success' : action.status === 'rejected' ? 'danger' : 'warning')}>{action.status}</span>
                   <span style={{ marginLeft: 8 }}>{action.actionType} — "{action.reason}" (confidence {action.confidence})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="adv2-card">
+        <h2>
+          Approval Requests
+          <span className="adv2-hint">Reese's own ticket-dispatch authorization history — what happened when one of her sends was held for human review. Separate from "Pending Approvals" above (that's the general proposal inbox).</span>
+        </h2>
+        {journalLoading && <p className="adv2-body adv2-muted">Loading approval requests…</p>}
+        {journalError && <p className="adv2-body" style={{ color: 'var(--adv2-warn)' }}>Could not load approval requests: {journalError}</p>}
+        {!journalLoading && !journalError && (!explainability || (explainability.approvalRequests ?? []).length === 0) && (
+          <p className="adv2-body adv2-muted">No approval requests recorded for this agent yet.</p>
+        )}
+        {!journalLoading && !journalError && explainability && (explainability.approvalRequests ?? []).length > 0 && (
+          <div>
+            {(explainability.approvalRequests ?? []).map((ar, i) => (
+              <div key={`a${i}`} className="adv2-body" style={{ display: 'flex', gap: 12, borderTop: i === 0 ? undefined : '1px solid var(--adv2-rule)' }}>
+                <span className="adv2-mono adv2-muted" style={{ flex: 'none', minWidth: 88, fontSize: 12.5 }}>{timeAgo(ar.createdAt)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <span className={adv2PillClass(approvalRequestStatusTone(ar.status))} style={{ marginRight: 8 }}>{ar.status}</span>
+                  <strong>{ar.action}</strong>
+                  <span className="adv2-muted" style={{ marginLeft: 8 }}>
+                    {ar.verdict} · risk {ar.riskTier}{ar.autonomyLevel ? ` · ${ar.autonomyLevel}` : ''}{ar.reasonCode ? ` · ${ar.reasonCode}` : ''}
+                  </span>
+                  <div className="adv2-muted" style={{ marginTop: 4 }}>
+                    {ar.decidedBy ? (
+                      <>Decided by {ar.decidedBy} via {ar.decisionChannel ?? 'unknown channel'} {timeAgo(ar.decidedAt!)}{ar.replayedAt ? ' · replayed' : ''}</>
+                    ) : ar.expiresAt ? (
+                      <>Awaiting review — expires {timeAgo(ar.expiresAt)}. <a href="/admin/approval-requests">Review in Approval Requests</a></>
+                    ) : (
+                      <>No review recorded.</>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

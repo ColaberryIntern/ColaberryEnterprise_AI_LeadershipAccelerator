@@ -26,6 +26,11 @@ import { getRecentInitiatives, getInitiativeStats, type InitiativeSummary } from
 import { runEvolutionCycle, type EvolutionFinding } from './coryEvolution';
 import StrategicInitiative from '../../models/StrategicInitiative';
 import { Op } from 'sequelize';
+import {
+  judgeDepartmentHealth,
+  readReportedAgentCount,
+  type DepartmentHealth,
+} from '../briefings/departmentHealthVerdict';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,8 +40,20 @@ export interface CoryBrainStatus {
   strategic_cycle_last_run: string | null;
   departments: {
     name: string;
-    health: string;
-    agent_count: number;
+    /**
+     * Three-state verdict, not a bare `string`. `string` is how 'healthy' as
+     * the else-branch of "no anomalies were recorded" survived review here and
+     * in the executive briefing: with the union written down, a consumer that
+     * only styles 'healthy' and 'degraded' is a visible omission rather than a
+     * silent fall-through. See briefings/departmentHealthVerdict.
+     */
+    health: DepartmentHealth;
+    /**
+     * null when the report carries no readable headcount. It used to be
+     * `(r.metrics as any)?.total || 0`, so an unreadable metrics blob printed a
+     * confident "0 agents" - a claim the row does not support.
+     */
+    agent_count: number | null;
     last_report_at: string | null;
   }[];
   insights_24h: number;
@@ -82,7 +99,14 @@ export async function runCoryStrategicCycle(): Promise<StrategicReport> {
  * Collect the latest department reports (one per department).
  */
 export async function collectDepartmentReports(): Promise<DepartmentReport[]> {
-  // Get the most recent report per department using a subquery
+  // LIMIT: 8 super agents x 48 cycles/day = ~384 rows per 24h, so the previous
+  // limit of 50 was the newest ~3 hours of the window, not the window. A
+  // department that stopped writing - the Finance/Partnership failure mode -
+  // aged out after three hours and disappeared from the COO dashboard entirely,
+  // which reads as "no such department" rather than "this department has gone
+  // quiet". Silence is the direction this whole fix exists to close off, so the
+  // limit now covers the full 24h window with headroom, and a four-cycle-old
+  // report is judged 'unknown' by judgeDepartmentHealth instead of vanishing.
   const latestReports = await DepartmentReport.findAll({
     where: {
       created_at: {
@@ -90,15 +114,19 @@ export async function collectDepartmentReports(): Promise<DepartmentReport[]> {
       },
     },
     order: [['created_at', 'DESC']],
-    limit: 50,
+    limit: 500,
   });
 
-  // Deduplicate — keep only the latest per department
+  // Deduplicate — keep only the latest per department. Rows arrive created_at
+  // DESC, which is what makes the kept row the most recent one. The key is
+  // trimmed and lower-cased so two spellings of one department cannot each
+  // claim a slot and show up twice on the dashboard.
   const seen = new Set<string>();
   const deduped: DepartmentReport[] = [];
   for (const r of latestReports) {
-    if (!seen.has(r.department)) {
-      seen.add(r.department);
+    const key = typeof r.department === 'string' ? r.department.trim().toLowerCase() : '';
+    if (!seen.has(key)) {
+      seen.add(key);
       deduped.push(r);
     }
   }
@@ -176,6 +204,21 @@ export async function generateStrategicActions(): Promise<AgentTask[]> {
   const reports = await collectDepartmentReports();
   for (const report of reports) {
     if (report.anomalies && Array.isArray(report.anomalies) && report.anomalies.length > 0) {
+      // IDEMPOTENCY. This branch had no dedup check, unlike the risk branch
+      // above: every strategic cycle minted another repair task for the same
+      // report row. It mattered less while collectDepartmentReports only
+      // reached back ~3 hours; now that it covers the full 24h window, a
+      // department that goes quiet while erroring would be re-ticketed every
+      // cycle for a day. Keyed on report_id, which is what the task context
+      // already carries.
+      const alreadyRaised = await AgentTask.findOne({
+        where: {
+          context: { [Op.contains]: { report_id: report.id } } as any,
+          status: { [Op.notIn]: ['completed', 'cancelled', 'failed'] },
+        },
+      });
+      if (alreadyRaised) continue;
+
       const task = await createTask({
         task_type: 'repair',
         description: `Resolve ${report.anomalies.length} anomalies in ${report.department}`,
@@ -237,6 +280,24 @@ export async function proposeNewAgent(params: {
 // ---------------------------------------------------------------------------
 
 /**
+ * `created_at` is declared as a Date, but a raw query or a JSON round-trip can
+ * hand back a string, and `r.created_at?.toISOString()` on a string throws a
+ * TypeError. That throw happens inside getCOODashboardData, so one malformed
+ * timestamp 500s the entire COO dashboard - a far bigger blast radius than the
+ * missing field it would report.
+ */
+function toIsoOrNull(value: unknown): string | null {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value.toISOString() : null;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+  }
+  return null;
+}
+
+/**
  * Get full COO dashboard data for the frontend.
  */
 export async function getCOODashboardData(): Promise<COODashboardData> {
@@ -275,12 +336,27 @@ export async function getCOODashboardData(): Promise<COODashboardData> {
     else if (agent.status === 'paused' || !agent.enabled) fleet.paused++;
   }
 
-  // Build department summaries
+  // Build department summaries.
+  //
+  // THE VERDICT IS NOT COMPUTED HERE ANY MORE. It used to be:
+  //
+  //   health: r.anomalies && (r.anomalies as any[]).length > 0 ? 'degraded' : 'healthy'
+  //
+  // which made 'healthy' the else-branch of "no anomalies were recorded" and
+  // put the line "Content Engine - healthy - 0 agents" on the COO dashboard:
+  // the number that proves the supervisor saw nothing, printed next to the word
+  // healthy. ContentEngineSuperAgent wrote 9,366 such reports; Finance and
+  // Partnerships reported healthy every 30 minutes from 2026-08-24, the day
+  // their single subordinate stopped.
+  //
+  // judgeDepartmentHealth owns the rules now, and it is the same judgement the
+  // executive briefing uses, so this dashboard and that briefing cannot drift
+  // apart again.
   const departments = departmentReports.map(r => ({
     name: r.department,
-    health: r.anomalies && (r.anomalies as any[]).length > 0 ? 'degraded' : 'healthy',
-    agent_count: (r.metrics as any)?.total || 0,
-    last_report_at: r.created_at?.toISOString() || null,
+    health: judgeDepartmentHealth(r),
+    agent_count: readReportedAgentCount(r.metrics),
+    last_report_at: toIsoOrNull(r.created_at),
   }));
 
   const status: CoryBrainStatus = {

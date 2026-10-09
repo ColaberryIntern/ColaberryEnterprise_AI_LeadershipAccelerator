@@ -156,7 +156,7 @@ BANNED PHRASES (these get the comment moderated as spam, ALWAYS):
   AUTHORITY_BROADCAST: `PLATFORM RULES -AUTHORITY CONTENT:
 - Create authoritative, original content. You are the thought leader.
 - Include a tracked link, conversion-aware messaging is appropriate here.
-- Frame the link as a working tool the reader can try on their own business (e.g. "We built a free advisor that walks through this on your own data...", "Here is a working demo you can try..."). NEVER pitch a cohort, training program, or class.
+- Frame the link as a working tool the reader can try on their own business (e.g. "We built an advisor that walks through this on your own data...", "Here is a working demo you can try..."). NEVER pitch a cohort, training program, or class.
 - Be professional, data-driven, and opinionated. Take clear positions.
 - The thesis: companies do not get AI leverage from picking better tools, they get it by redesigning the operation around AI as the operating layer. Carry that thesis into every authority post.
 - Link to resources that genuinely help the reader experience the thesis on their own business, not articles or marketing collateral.`,

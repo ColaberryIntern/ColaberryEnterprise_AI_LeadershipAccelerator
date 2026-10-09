@@ -73,6 +73,16 @@ export async function ensureAgentTicketForRoom(
  * straight through to the real, already-supported `WorkLedgerEvent.work_unit_id`
  * field. Additive: every existing caller (Dara's own `daraTicketLinkService.ts`,
  * and Reese's own calls that don't pass one yet) is completely unaffected.
+ *
+ * Approval-correlation fix (2026-10-02) — optional `eventId`/`authorizationDecisionId`,
+ * for a caller whose own authorizeTicketDispatch() call already generated an eventId
+ * for this same action: threading it through here lets the real ledger row this
+ * function writes be the row that id was always meant to correlate to, instead of a
+ * disconnected, freshly-generated traceId. Additive: every existing caller that
+ * doesn't pass these (the student's-own-inbound-message logging call on both Reese's
+ * and Dara's reply paths, and any other caller of this generic function) is
+ * completely unaffected — emitEvent() already falls back to its own DB-generated
+ * event_id when none is supplied.
  */
 export async function logAgentExchangeActivity(
   ticketId: string,
@@ -83,12 +93,16 @@ export async function logAgentExchangeActivity(
   intentPrefix: string,
   domain: string,
   workUnitId?: string | null,
+  eventId?: string,
+  authorizationDecisionId?: string | null,
 ): Promise<void> {
   try {
     await addTicketComment(ticketId, snippet(content), actorType, actorId);
     await emitEvent({
       ticketId,
       workUnitId: workUnitId ?? undefined,
+      eventId,
+      authorizationDecisionId: authorizationDecisionId ?? undefined,
       traceId: crypto.randomUUID(),
       actorType,
       actorId,

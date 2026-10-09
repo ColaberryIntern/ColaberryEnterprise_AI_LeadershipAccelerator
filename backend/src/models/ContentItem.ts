@@ -40,6 +40,10 @@ export interface ContentItemAttributes {
   owner_admin_id?: string | null;
   created_by?: string | null;
   template_id?: string | null;
+  /** A page this platform built and can track end to end. Preferred over a raw URL. */
+  landing_page_id?: string | null;
+  /** A destination that is not ours to build - an external registration page, a partner site. */
+  destination_url?: string | null;
   scheduled_for?: Date | null;
   published_at?: Date | null;
   revision?: number;
@@ -66,6 +70,8 @@ class ContentItem extends Model<ContentItemAttributes> implements ContentItemAtt
   declare owner_admin_id: string | null;
   declare created_by: string | null;
   declare template_id: string | null;
+  declare landing_page_id: string | null;
+  declare destination_url: string | null;
   declare scheduled_for: Date | null;
   declare published_at: Date | null;
   declare revision: number;
@@ -92,6 +98,11 @@ ContentItem.init(
     owner_admin_id: { type: DataTypes.UUID, allowNull: true },
     created_by: { type: DataTypes.UUID, allowNull: true },
     template_id: { type: DataTypes.UUID, allowNull: true },
+    // Where the post sends people. Own columns rather than `metadata`, because a destination is
+    // the point of a campaign post and a JSONB blob loses a durable fact the next time an
+    // unrelated writer replaces the object.
+    landing_page_id: { type: DataTypes.UUID, allowNull: true },
+    destination_url: { type: DataTypes.STRING(2048), allowNull: true },
     scheduled_for: { type: DataTypes.DATE, allowNull: true },
     published_at: { type: DataTypes.DATE, allowNull: true },
     revision: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },

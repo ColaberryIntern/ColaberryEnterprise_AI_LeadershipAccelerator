@@ -1,7 +1,7 @@
 /**
  * The chain from the portal's route table to the journey-nudge card (Growth
  * Journey OS Phase 5, T521 fix cycle 1). T514 mounted JourneyNudgeCard in
- * PortalDashboardPage.tsx; nothing routes to that page, the bundler dropped
+ * PortalDashboardPage.tsx; nothing routed to that page, the bundler dropped
  * it, and the live nginx bundle carried no card - found on production, not by
  * a test, because every test of the card rendered the card. This suite is the
  * check that was missing: the card's importers are exactly the wrapper, the
@@ -17,7 +17,8 @@ const SRC = path.join(__dirname, '..', '..');
 const ROUTES = fs.readFileSync(path.join(SRC, 'routes', 'portalRoutes.tsx'), 'utf8');
 const SHELL = fs.readFileSync(path.join(SRC, 'pages', 'portal', 'today', 'TodayShell.tsx'), 'utf8');
 const WRAPPER = fs.readFileSync(path.join(SRC, 'pages', 'portal', 'today', 'TodayJourneyNudges.tsx'), 'utf8');
-const DEAD_PAGE = fs.readFileSync(path.join(SRC, 'pages', 'portal', 'PortalDashboardPage.tsx'), 'utf8');
+/** The page that carried the mount nothing could see. T603 deleted it; this suite pins that it stays deleted. */
+const DEAD_PAGE = path.join(SRC, 'pages', 'portal', 'PortalDashboardPage.tsx');
 
 /** Every .ts/.tsx file under src whose source contains `needle`, as paths relative to src, tests excluded. */
 function filesContaining(needle: string): string[] {
@@ -65,7 +66,10 @@ describe('the route to the card', () => {
     expect(filesContaining("from './TodayJourneyNudges'")).toEqual(['pages/portal/today/TodayShell.tsx']);
   });
 
-  it('the page nothing routes to is back to what it was: no nudge, no journey read', () => {
-    for (const mark of ['JourneyNudge', 'journey-nudges', 'dismissNudge']) expect(DEAD_PAGE).not.toContain(mark);
+  it('the page nothing routed to is gone (T603), so the mount cannot drift back into it', () => {
+    expect(fs.existsSync(DEAD_PAGE)).toBe(false);
+    // `portalPages.routed.test.ts` is the general form of this: every file under pages/portal must be reachable
+    // from the route table, so a new page with a mount on it fails there rather than shipping invisible.
+    expect(fs.existsSync(path.join(SRC, 'routes', '__tests__', 'portalPages.routed.test.ts'))).toBe(true);
   });
 });

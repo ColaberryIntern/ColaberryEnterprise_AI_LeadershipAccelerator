@@ -178,6 +178,7 @@ describe('findRecordingForSession', () => {
       mimeType: 'video/mp4',
       sizeBytes: 900,
       recordingType: null, // fixture files carry no recording_type, so none is recorded
+      providerFileId: null, // nor an id: this fixture predates the field being declared
     });
   });
 
@@ -281,6 +282,8 @@ describe('findRecordingByMeetingId (the generic entry point behind findRecording
       name: 'Study Group.mp4', // Zoom's own topic wins over the fallback when present
       mimeType: 'video/mp4',
       sizeBytes: 300,
+      providerFileId: null, // fixture predates the field being declared
+
       recordingType: null,
     });
   });
@@ -295,6 +298,30 @@ describe('findRecordingByMeetingId (the generic entry point behind findRecording
 
     const match = await findRecordingByMeetingId('456', '2026-08-04', 'Study Group (fallback)');
     expect(match?.name).toBe('Study Group (fallback).mp4');
+  });
+});
+
+describe('the per-file id, which is half of a recording part natural key', () => {
+  it('carries the file id onto the match when Zoom supplies one', async () => {
+    // `presentation_recordings` is keyed on (occurrence_uuid, provider_file_id) so
+    // a duplicate or out-of-order delivery lands on the same row. That key had no
+    // producer at all until this field was declared.
+    const { findRecordingByMeetingId } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        meetings: [{
+          id: 789, topic: 'Demo Day', recording_files: [
+            { id: 'file-small', file_type: 'MP4', file_size: 100, download_url: 'https://zoom.us/rec/s' },
+            { id: 'file-big', file_type: 'MP4', file_size: 900, download_url: 'https://zoom.us/rec/b' },
+          ],
+        }],
+      })) as any;
+
+    const match = await findRecordingByMeetingId('789', '2026-11-20');
+
+    // The id of the file actually CHOSEN, not of the first one listed.
+    expect(match?.providerFileId).toBe('file-big');
   });
 });
 

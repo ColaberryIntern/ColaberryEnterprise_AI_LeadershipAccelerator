@@ -17,7 +17,7 @@ import Enrollment from '../../../models/Enrollment';
 import CommunityMember from '../../../models/CommunityMember';
 import AiAgent from '../../../models/AiAgent';
 import Cohort from '../../../models/Cohort';
-import { seedDaraIdentity, DARA_EMAIL, DARA_AGENT_NAME, DARA_REPORTS_TO_ORG_MEMBER_ID } from '../daraIdentitySeed';
+import { seedDaraIdentity, isDaraEnabled, DARA_EMAIL, DARA_AGENT_NAME, DARA_REPORTS_TO_ORG_MEMBER_ID } from '../daraIdentitySeed';
 
 const mockAiAgentFindOne = AiAgent.findOne as unknown as jest.Mock;
 const mockAiAgentFindByPk = AiAgent.findByPk as unknown as jest.Mock;
@@ -161,5 +161,26 @@ describe('seedDaraIdentity — direct human report (AI Leadership case, not AI S
     expect(fakeAgent.update).not.toHaveBeenCalled();
     expect((fakeAgent as any).reports_to_type).toBe('human');
     expect((fakeAgent as any).reports_to_id).toBe('already-set-target-id');
+  });
+});
+
+describe('isDaraEnabled (T12 completion — mirrors isReeseEnabled exactly)', () => {
+  it('returns true when the AiAgent row has enabled: true', async () => {
+    mockAiAgentFindOne.mockResolvedValue({ enabled: true });
+
+    await expect(isDaraEnabled()).resolves.toBe(true);
+    expect(mockAiAgentFindOne).toHaveBeenCalledWith({ where: { agent_name: DARA_AGENT_NAME }, attributes: ['enabled'] });
+  });
+
+  it('returns false when an admin has disabled Dara in Admin > Agents', async () => {
+    mockAiAgentFindOne.mockResolvedValue({ enabled: false });
+
+    await expect(isDaraEnabled()).resolves.toBe(false);
+  });
+
+  it('fails open to true when no row exists yet (identity not seeded — every other guard already no-ops first)', async () => {
+    mockAiAgentFindOne.mockResolvedValue(null);
+
+    await expect(isDaraEnabled()).resolves.toBe(true);
   });
 });

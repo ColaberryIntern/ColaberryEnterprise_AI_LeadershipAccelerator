@@ -56,6 +56,11 @@ export async function logReeseExchangeActivity(
   messageId: string,
   content: string,
   workUnitId?: string | null,
+  eventId?: string,
+  authorizationDecisionId?: string | null,
 ): Promise<void> {
-  return logAgentExchangeActivity(ticketId, actorType, actorId, messageId, content, 'reese', 'student_support', workUnitId);
+  return logAgentExchangeActivity(
+    ticketId, actorType, actorId, messageId, content, 'reese', 'student_support',
+    workUnitId, eventId, authorizationDecisionId,
+  );
 }

@@ -51,7 +51,9 @@ Four resolved owners, Aleem, Swati, Taiwo and Kes, have **no `admin_users` login
 2. **Roselyn = `roselen@colaberry.com`**, org_members `b4dddf0b…`. Resolved.
 3. **Dhee:** one additive `org_members` row approved, to be created when the Internship employee's Phase 1 begins.
 4. **Reese reports to Ali for now**, to be reassigned to Kes later. Implemented in the Reese hardening run (code in `reeseIdentitySeed.ts` plus the production row), not by a bare DB edit, so the seed and the row agree.
-5. **Executive owner:** still open; not needed until that employee's Phase 1.
+5. **Executive owner: Ali Muwwakkil** (`ali@colaberry.com`, org_members `f179c222-284e-4180-a335-cca9e4918b2e`).
+   Decided 2026-10-07 (session CC-20261006-a4k7). He is the only `org_members` row with role `manager`
+   on team Exec, so no new record is needed. This was the last of the five identity questions.
 
 ## Open questions for Ali (asked once, here; answered above)
 

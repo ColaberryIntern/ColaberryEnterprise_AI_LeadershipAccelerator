@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth Journey OS — how it works</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --leaf:#77BB4A; --leaf-dark:#2f855a; --leaf-bg:#f0fff4;
+    --amber:#B7791F; --amber-bg:#FFFBEB; --slate:#4a5568;
+    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --alt:#f7fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--alt);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.6}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 1.25rem}
+  header{background:linear-gradient(135deg,#1a1f2b 0%,#2d3748 100%);color:#fff;padding:2.75rem 0 2rem}
+  header h1{margin:.5rem 0;font-size:2.1rem;line-height:1.15}
+  header p{margin:0;color:#cbd5e0;max-width:66ch;font-size:1.05rem}
+  .badge{display:inline-block;background:var(--cherry);color:#fff;font-size:.72rem;font-weight:700;
+    letter-spacing:.07em;text-transform:uppercase;padding:.28rem .65rem;border-radius:3px}
+  section{margin:3rem 0}
+  h2{font-size:1.45rem;color:var(--cherry);margin:0 0 .3rem}
+  .lede{color:var(--muted);margin:0 0 1.5rem;max-width:74ch}
+  .fig{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1.25rem;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);overflow-x:auto}
+  .fig svg{display:block;margin:0 auto;max-width:100%;height:auto}
+  .cap{font-size:.8125rem;color:var(--muted);margin:.85rem 0 0;text-align:center}
+  .box{border-left:4px solid var(--cherry);background:var(--cherry-bg);padding:1rem 1.25rem;
+    border-radius:0 5px 5px 0;margin:1.25rem 0}
+  .box.good{border-left-color:var(--leaf);background:var(--leaf-bg)}
+  .box.warn{border-left-color:var(--amber);background:var(--amber-bg)}
+  .box p:first-child{margin-top:0}.box p:last-child{margin-bottom:0}
+  code{background:var(--alt);padding:.12rem .35rem;border-radius:3px;
+    font-family:ui-monospace,Menlo,monospace;font-size:.875em}
+  .legend{display:flex;flex-wrap:wrap;gap:1.25rem;justify-content:center;margin-top:1rem;
+    font-size:.8125rem;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:.4rem}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+  footer{padding:2.5rem 0 3.5rem;color:var(--muted);font-size:.875rem;background:#fff;
+    border-top:1px solid var(--border);margin-top:3rem}
+  text{font-family:'Segoe UI',system-ui,sans-serif}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <span class="badge">Every gate below is shut right now</span>
+  <h1>How the Growth Journey OS works</h1>
+  <p>One person arrives. The system reads them, decides what should happen next, and
+     records that decision. Only the last gate can cause anyone to be contacted — and it
+     is closed.</p>
+</div></header>
+
+<div class="wrap">
+
+<!-- ───────────────────────── 1. THE SPINE ───────────────────────── -->
+<section>
+  <h2>1 · The whole system, left to right</h2>
+  <p class="lede">A person enters on the left. Each box is a thing that happens; each
+     padlock is a switch that has to be open for the next box to run. Today every padlock
+     is shut, so nothing moves past the first one.</p>
+
+  <div class="fig">
+  <svg viewBox="0 0 1060 430" role="img" aria-label="The journey flow from arrival to outcome, with five gates">
+    <defs>
+      <marker id="ar" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+        <polygon points="0 0, 9 3.5, 0 7" fill="#a0aec0"/>
+      </marker>
+      <marker id="arR" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+        <polygon points="0 0, 9 3.5, 0 7" fill="#FB2832"/>
+      </marker>
+    </defs>
+
+    <!-- lane labels -->
+    <text x="12" y="30" font-size="11" font-weight="700" fill="#718096" letter-spacing=".08em">RECORDS ONLY — CONTACTS NOBODY</text>
+    <line x1="0" y1="40" x2="1060" y2="40" stroke="#e2e8f0"/>
+
+    <!-- arrival -->
+    <rect x="14" y="70" width="128" height="76" rx="7" fill="#edf2f7" stroke="#cbd5e0"/>
+    <text x="78" y="98" font-size="13" font-weight="700" text-anchor="middle" fill="#2d3748">A person</text>
+    <text x="78" y="116" font-size="11" text-anchor="middle" fill="#718096">form · reply</text>
+    <text x="78" y="131" font-size="11" text-anchor="middle" fill="#718096">page visit</text>
+
+    <!-- gate 1 -->
+    <g>
+      <line x1="142" y1="108" x2="186" y2="108" stroke="#a0aec0" stroke-width="1.6" marker-end="url(#ar)"/>
+      <rect x="150" y="150" width="30" height="24" rx="4" fill="#FED7D7" stroke="#FB2832"/>
+      <text x="165" y="167" font-size="13" text-anchor="middle">🔒</text>
+      <text x="165" y="190" font-size="9.5" text-anchor="middle" fill="#9B2C2C" font-weight="700">signal</text>
+      <text x="165" y="201" font-size="9.5" text-anchor="middle" fill="#9B2C2C" font-weight="700">ingest</text>
+    </g>
+
+    <!-- signal -->
+    <rect x="190" y="70" width="128" height="76" rx="7" fill="#fff" stroke="#cbd5e0"/>
+    <text x="254" y="98" font-size="13" font-weight="700" text-anchor="middle" fill="#2d3748">Signal</text>
+    <text x="254" y="116" font-size="11" text-anchor="middle" fill="#718096">what they did,</text>
+    <text x="254" y="131" font-size="11" text-anchor="middle" fill="#718096">recorded</text>
+
+    <!-- gate 2 -->
+    <g>
+      <line x1="318" y1="108" x2="362" y2="108" stroke="#a0aec0" stroke-width="1.6" marker-end="url(#ar)"/>
+      <rect x="326" y="150" width="30" height="24" rx="4" fill="#FED7D7" stroke="#FB2832"/>
+      <text x="341" y="167" font-size="13" text-anchor="middle">🔒</text>
+      <text x="341" y="190" font-size="9.5" text-anchor="middle" fill="#9B2C2C" font-weight="700">classi-</text>
+      <text x="341" y="201" font-size="9.5" text-anchor="middle" fill="#9B2C2C" font-weight="700">fication</text>
+    </g>
+
+    <!-- classified -->
+    <rect x="366" y="62" width="150" height="92" rx="7" fill="#fff" stroke="#cbd5e0"/>
+    <text x="441" y="86" font-size="13" font-weight="700" text-anchor="middle" fill="#2d3748">Classified</text>
+    <text x="441" y="105" font-size="10.5" text-anchor="middle" fill="#718096">which brand</text>
+    <text x="441" y="120" font-size="10.5" text-anchor="middle" fill="#718096">which programme</text>
+    <text x="441" y="135" font-size="10.5" text-anchor="middle" fill="#718096">which path · confidence</text>
+
+    <!-- gate 3 -->
+    <g>
+      <line x1="516" y1="108" x2="560" y2="108" stroke="#a0aec0" stroke-width="1.6" marker-end="url(#ar)"/>
+      <rect x="524" y="150" width="30" height="24" rx="4" fill="#FED7D7" stroke="#FB2832"/>
+      <text x="539" y="167" font-size="13" text-anchor="middle">🔒</text>
+      <text x="539" y="190" font-size="9.5" text-anchor="middle" fill="#9B2C2C" font-weight="700">decisions</text>
+    </g>
+
+    <!-- decided -->
+    <rect x="564" y="62" width="150" height="92" rx="7" fill="#EBF8FF" stroke="#63b3ed"/>
+    <text x="639" y="86" font-size="13" font-weight="700" text-anchor="middle" fill="#2c5282">Decided</text>
+    <text x="639" y="105" font-size="10.5" text-anchor="middle" fill="#4a5568">what should happen</text>
+    <text x="639" y="120" font-size="10.5" text-anchor="middle" fill="#4a5568">next — <tspan font-weight="700">and why</tspan></text>
+    <text x="639" y="137" font-size="10" text-anchor="middle" fill="#718096" font-style="italic">acts on nothing</text>
+
+    <!-- split -->
+    <line x1="714" y1="92" x2="762" y2="92" stroke="#a0aec0" stroke-width="1.6"/>
+    <line x1="762" y1="92" x2="762" y2="124" stroke="#a0aec0" stroke-width="1.6"/>
+    <line x1="762" y1="92" x2="762" y2="62" stroke="#a0aec0" stroke-width="1.6"/>
+    <line x1="762" y1="62" x2="800" y2="62" stroke="#a0aec0" stroke-width="1.6" marker-end="url(#ar)"/>
+    <line x1="762" y1="124" x2="800" y2="124" stroke="#FB2832" stroke-width="1.8" marker-end="url(#arR)"/>
+
+    <!-- handoff branch -->
+    <rect x="806" y="34" width="150" height="58" rx="7" fill="#f0fff4" stroke="#77BB4A"/>
+    <text x="881" y="56" font-size="12.5" font-weight="700" text-anchor="middle" fill="#22543d">A human takes it</text>
+    <text x="881" y="74" font-size="10" text-anchor="middle" fill="#2f855a">a row in a queue —</text>
+    <text x="881" y="86" font-size="10" text-anchor="middle" fill="#2f855a">notifies nobody</text>
+    <rect x="966" y="48" width="26" height="22" rx="4" fill="#FED7D7" stroke="#FB2832"/>
+    <text x="979" y="64" font-size="11" text-anchor="middle">🔒</text>
+    <text x="979" y="84" font-size="8.5" text-anchor="middle" fill="#9B2C2C" font-weight="700">handoffs</text>
+
+    <!-- execution branch -->
+    <rect x="806" y="98" width="150" height="58" rx="7" fill="#FFF5F5" stroke="#FB2832" stroke-width="1.6"/>
+    <text x="881" y="120" font-size="12.5" font-weight="700" text-anchor="middle" fill="#9B2C2C">A message goes out</text>
+    <text x="881" y="139" font-size="10" text-anchor="middle" fill="#c53030">the only path that</text>
+    <text x="881" y="150" font-size="10" text-anchor="middle" fill="#c53030">reaches a person</text>
+    <rect x="966" y="112" width="26" height="22" rx="4" fill="#FED7D7" stroke="#FB2832"/>
+    <text x="979" y="128" font-size="11" text-anchor="middle">🔒</text>
+    <text x="979" y="148" font-size="8.5" text-anchor="middle" fill="#9B2C2C" font-weight="700">execution</text>
+
+    <!-- the one that matters -->
+    <text x="1004" y="128" font-size="16">⚠</text>
+
+    <!-- lane 2 -->
+    <line x1="0" y1="232" x2="1060" y2="232" stroke="#e2e8f0"/>
+    <text x="12" y="252" font-size="11" font-weight="700" fill="#718096" letter-spacing=".08em">WHAT COMES BACK</text>
+
+    <rect x="806" y="270" width="150" height="54" rx="7" fill="#fff" stroke="#cbd5e0"/>
+    <text x="881" y="292" font-size="12.5" font-weight="700" text-anchor="middle" fill="#2d3748">Outcome</text>
+    <text x="881" y="310" font-size="10" text-anchor="middle" fill="#718096">enrolled · replied · nothing</text>
+
+    <path d="M 881 160 L 881 270" stroke="#a0aec0" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+    <path d="M 806 297 L 500 297 L 500 160" stroke="#a0aec0" stroke-width="1.4" stroke-dasharray="4 3" fill="none" marker-end="url(#ar)"/>
+    <text x="640" y="290" font-size="10.5" text-anchor="middle" fill="#718096">feeds the next decision — the loop closes</text>
+
+    <!-- today box -->
+    <rect x="14" y="350" width="1032" height="62" rx="7" fill="#FFFBEB" stroke="#B7791F"/>
+    <text x="34" y="375" font-size="12.5" font-weight="700" fill="#744210">Today, every padlock is shut.</text>
+    <text x="34" y="396" font-size="11.5" fill="#744210">A person can arrive and nothing happens — not even a signal row. That is why every screen is empty, and it is the intended state.</text>
+  </svg>
+  <div class="legend">
+    <span><i class="sw" style="background:#edf2f7;border:1px solid #cbd5e0"></i> a person</span>
+    <span><i class="sw" style="background:#EBF8FF;border:1px solid #63b3ed"></i> thinking, records only</span>
+    <span><i class="sw" style="background:#f0fff4;border:1px solid #77BB4A"></i> a human's queue</span>
+    <span><i class="sw" style="background:#FFF5F5;border:1px solid #FB2832"></i> can contact someone</span>
+    <span>🔒 a switch that is off</span>
+  </div>
+  <p class="cap">Five switches sit in series. The one on the far right is the only one that can reach a person.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 2. THE GATES ───────────────────────── -->
+<section>
+  <h2>2 · What has to be true before anyone is contacted</h2>
+  <p class="lede">Nine checks in order, every time, for every person. The first one that
+     says no stops it — and names itself in the record, so you can always find out which.</p>
+
+  <div class="fig">
+  <svg viewBox="0 0 1000 530" role="img" aria-label="Nine sequential gates that must all pass before a message is sent">
+    <text x="500" y="24" font-size="12.5" font-weight="700" text-anchor="middle" fill="#718096">ONE MESSAGE · NINE CHECKS · FIRST "NO" WINS</text>
+
+    <!-- helper: rows -->
+    <g font-size="12">
+      <!-- 1 -->
+      <rect x="150" y="42" width="700" height="38" rx="5" fill="#FFF5F5" stroke="#FB2832"/>
+      <text x="170" y="66" font-weight="700" fill="#9B2C2C">1 · Is the master switch on?</text>
+      <text x="836" y="66" text-anchor="end" fill="#9B2C2C" font-weight="700">NO → stops here today</text>
+      <!-- 2 -->
+      <rect x="150" y="90" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="114" fill="#4a5568">2 · Is deciding allowed? Is acting allowed?</text>
+      <text x="836" y="114" text-anchor="end" fill="#a0aec0">off → it only watches</text>
+      <!-- 3 -->
+      <rect x="150" y="138" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="162" fill="#4a5568">3 · Is this channel allowed at all?</text>
+      <text x="836" y="162" text-anchor="end" fill="#a0aec0">SMS and voice: never</text>
+      <!-- 4 -->
+      <rect x="150" y="186" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="210" fill="#4a5568">4 · Is the global stop switch off?</text>
+      <text x="836" y="210" text-anchor="end" fill="#a0aec0">one row, system-wide</text>
+      <!-- 5 -->
+      <rect x="150" y="234" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="258" fill="#4a5568">5 · Has anyone paused this brand, programme, channel or person?</text>
+      <text x="836" y="258" text-anchor="end" fill="#a0aec0">reaches work in flight</text>
+      <!-- 6 -->
+      <rect x="150" y="282" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="306" fill="#4a5568">6 · Has this scope been deliberately rolled out?</text>
+      <text x="836" y="306" text-anchor="end" fill="#a0aec0">no → watch only</text>
+      <!-- 7 -->
+      <rect x="150" y="330" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="354" fill="#4a5568">7 · Is this person inside the named cohort, under the daily cap?</text>
+      <text x="836" y="354" text-anchor="end" fill="#a0aec0">max 50 people · 25/day</text>
+      <!-- 8 -->
+      <rect x="150" y="378" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="402" fill="#4a5568">8 · Is there approved content for this brand and offer?</text>
+      <text x="836" y="402" text-anchor="end" fill="#a0aec0">a deny always wins</text>
+      <!-- 9 -->
+      <rect x="150" y="426" width="700" height="38" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <text x="170" y="450" fill="#4a5568">9 · Consent verified? No human already in the conversation?</text>
+      <text x="836" y="450" text-anchor="end" fill="#a0aec0">a person beats the robot</text>
+    </g>
+
+    <!-- the send -->
+    <rect x="330" y="482" width="340" height="36" rx="18" fill="#2f855a"/>
+    <text x="500" y="505" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">…then, and only then, a message goes out</text>
+
+    <!-- down arrows -->
+    <g stroke="#cbd5e0" stroke-width="1.4">
+      <line x1="500" y1="80" x2="500" y2="90"/><line x1="500" y1="128" x2="500" y2="138"/>
+      <line x1="500" y1="176" x2="500" y2="186"/><line x1="500" y1="224" x2="500" y2="234"/>
+      <line x1="500" y1="272" x2="500" y2="282"/><line x1="500" y1="320" x2="500" y2="330"/>
+      <line x1="500" y1="368" x2="500" y2="378"/><line x1="500" y1="416" x2="500" y2="426"/>
+      <line x1="500" y1="464" x2="500" y2="482"/>
+    </g>
+
+    <!-- today marker -->
+    <rect x="10" y="42" width="128" height="38" rx="5" fill="#FED7D7" stroke="#FB2832"/>
+    <text x="74" y="60" font-size="10.5" font-weight="700" text-anchor="middle" fill="#9B2C2C">YOU ARE HERE</text>
+    <text x="74" y="73" font-size="9.5" text-anchor="middle" fill="#9B2C2C">nothing gets past 1</text>
+  </svg>
+  <p class="cap">Every refusal is recorded by name. "It did nothing" is never the answer you get — you get <em>which</em> check said no.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 3. THE MODES ───────────────────────── -->
+<section>
+  <h2>3 · The five settings, least to most active</h2>
+  <p class="lede">Each brand × programme × channel sits at one of these. There are twelve
+     such combinations and all twelve are at the far left.</p>
+
+  <div class="fig">
+  <svg viewBox="0 0 1000 220" role="img" aria-label="Five modes from off to limited, with today's position marked at off">
+    <!-- track -->
+    <rect x="60" y="92" width="880" height="10" rx="5" fill="#e2e8f0"/>
+    <rect x="60" y="92" width="0" height="10" rx="5" fill="#77BB4A"/>
+
+    <g text-anchor="middle">
+      <!-- off -->
+      <circle cx="90" cy="97" r="15" fill="#FB2832" stroke="#fff" stroke-width="3"/>
+      <text x="90" y="102" font-size="13" fill="#fff" font-weight="700">1</text>
+      <text x="90" y="140" font-size="13" font-weight="700" fill="#9B2C2C">off</text>
+      <text x="90" y="158" font-size="10.5" fill="#718096">does nothing</text>
+      <text x="90" y="172" font-size="10.5" fill="#718096">at all</text>
+      <rect x="36" y="46" width="108" height="26" rx="13" fill="#FED7D7" stroke="#FB2832"/>
+      <text x="90" y="64" font-size="10.5" font-weight="700" fill="#9B2C2C">ALL 12 ARE HERE</text>
+
+      <!-- observe -->
+      <circle cx="302" cy="97" r="13" fill="#cbd5e0" stroke="#fff" stroke-width="3"/>
+      <text x="302" y="102" font-size="12" fill="#4a5568" font-weight="700">2</text>
+      <text x="302" y="140" font-size="13" font-weight="700" fill="#4a5568">observe</text>
+      <text x="302" y="158" font-size="10.5" fill="#718096">watches and</text>
+      <text x="302" y="172" font-size="10.5" fill="#718096">records only</text>
+
+      <!-- shadow -->
+      <circle cx="514" cy="97" r="13" fill="#cbd5e0" stroke="#fff" stroke-width="3"/>
+      <text x="514" y="102" font-size="12" fill="#4a5568" font-weight="700">3</text>
+      <text x="514" y="140" font-size="13" font-weight="700" fill="#4a5568">shadow</text>
+      <text x="514" y="158" font-size="10.5" fill="#718096">decides, writes it</text>
+      <text x="514" y="172" font-size="10.5" fill="#718096">down, acts on none</text>
+
+      <!-- review -->
+      <circle cx="726" cy="97" r="13" fill="#B7791F" stroke="#fff" stroke-width="3"/>
+      <text x="726" y="102" font-size="12" fill="#fff" font-weight="700">4</text>
+      <text x="726" y="140" font-size="13" font-weight="700" fill="#744210">review</text>
+      <text x="726" y="158" font-size="10.5" fill="#718096">prepares it and</text>
+      <text x="726" y="172" font-size="10.5" fill="#718096">waits for a human</text>
+
+      <!-- limited -->
+      <circle cx="910" cy="97" r="15" fill="#c53030" stroke="#fff" stroke-width="3"/>
+      <text x="910" y="102" font-size="13" fill="#fff" font-weight="700">5</text>
+      <text x="910" y="140" font-size="13" font-weight="700" fill="#9B2C2C">limited</text>
+      <text x="910" y="158" font-size="10.5" fill="#c53030">sends, to a named</text>
+      <text x="910" y="172" font-size="10.5" fill="#c53030">list, capped</text>
+    </g>
+
+    <text x="500" y="202" font-size="11" text-anchor="middle" fill="#718096">
+      Settings 1–4 contact nobody.  Setting 5 is the only one that does, and only to people you list by hand.
+    </text>
+  </svg>
+  <p class="cap">Ali's own outreach is pinned at <strong>review</strong> permanently — it can be stopped from the screen and cannot be started from it.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 4. LIVE GRID ───────────────────────── -->
+<section>
+  <h2>4 · The twelve switches, as they are right now</h2>
+  <p class="lede">Four brands, three channels each. Read live from production on
+     4 October 2026 — this is not an illustration.</p>
+
+  <div class="fig">
+  <svg viewBox="0 0 1000 300" role="img" aria-label="A grid of four brands by three channels, every cell off">
+    <g font-size="12">
+      <text x="300" y="36" font-size="11" font-weight="700" text-anchor="middle" fill="#718096" letter-spacing=".06em">EMAIL</text>
+      <text x="520" y="36" font-size="11" font-weight="700" text-anchor="middle" fill="#718096" letter-spacing=".06em">IN-APP</text>
+      <text x="760" y="36" font-size="11" font-weight="700" text-anchor="middle" fill="#718096" letter-spacing=".06em">ALI OUTREACH</text>
+    </g>
+
+    <!-- rows -->
+    <g font-size="12">
+      <!-- CPN -->
+      <text x="20" y="74" font-weight="700" fill="#2d3748">CPN</text>
+      <text x="20" y="90" font-size="10" fill="#718096">learner · draft</text>
+      <rect x="200" y="54" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="300" y="81" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="420" y="54" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="520" y="81" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="640" y="54" width="240" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="760" y="81" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+
+      <!-- Training -->
+      <text x="20" y="134" font-weight="700" fill="#2d3748">Colaberry Training</text>
+      <text x="20" y="150" font-size="10" fill="#718096">learner · draft</text>
+      <rect x="200" y="114" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="300" y="141" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="420" y="114" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="520" y="141" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="640" y="114" width="240" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="760" y="141" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+
+      <!-- Business -->
+      <text x="20" y="194" font-weight="700" fill="#2d3748">Colaberry Business</text>
+      <text x="20" y="210" font-size="10" fill="#718096">business · draft</text>
+      <rect x="200" y="174" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="300" y="201" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="420" y="174" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="520" y="201" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="640" y="174" width="240" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="760" y="201" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+
+      <!-- AI Flotation -->
+      <text x="20" y="254" font-weight="700" fill="#2d3748">AI Flotation</text>
+      <text x="20" y="270" font-size="10" fill="#718096">consulting · draft</text>
+      <rect x="200" y="234" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="300" y="261" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="420" y="234" width="200" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="520" y="261" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+      <rect x="640" y="234" width="240" height="44" rx="5" fill="#FFF5F5" stroke="#FB2832"/><text x="760" y="261" font-size="12" text-anchor="middle" fill="#9B2C2C" font-weight="700">off</text>
+    </g>
+
+    <text x="900" y="81" font-size="10" fill="#718096">⟵ every cell reports</text>
+    <text x="900" y="95" font-size="10" fill="#718096">the same reason:</text>
+    <text x="900" y="112" font-size="10" font-weight="700" fill="#9B2C2C">master switch off</text>
+  </svg>
+  <p class="cap">This grid comes from the same code the sender asks. It is what the next run would do, not a guess.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 5. READINESS ───────────────────────── -->
+<section>
+  <h2>5 · What is actually standing in the way</h2>
+  <p class="lede">The system scores its own readiness at 13%. The useful part is which
+     items are blocked — because they are not all switches.</p>
+
+  <div class="fig">
+  <svg viewBox="0 0 1000 300" role="img" aria-label="Readiness: 2 of 16 conditions met, grouped by what blocks them">
+    <!-- donut -->
+    <g transform="translate(130,140)">
+      <circle r="78" fill="none" stroke="#e2e8f0" stroke-width="26"/>
+      <circle r="78" fill="none" stroke="#77BB4A" stroke-width="26"
+              stroke-dasharray="61 429" stroke-dashoffset="122" transform="rotate(-90)"/>
+      <text y="-4" font-size="30" font-weight="700" text-anchor="middle" fill="#2d3748">13%</text>
+      <text y="18" font-size="11" text-anchor="middle" fill="#718096">2 of 16 met</text>
+      <text y="34" font-size="10" text-anchor="middle" fill="#a0aec0">1 unknowable</text>
+    </g>
+
+    <!-- bars -->
+    <g font-size="12">
+      <text x="270" y="42" font-size="11" font-weight="700" fill="#718096" letter-spacing=".06em">WHAT THE 14 BLOCKED ITEMS NEED</text>
+
+      <rect x="270" y="58" width="300" height="30" rx="4" fill="#B7791F"/>
+      <text x="284" y="78" fill="#fff" font-weight="700">6 · configuration you must decide</text>
+      <text x="586" y="78" fill="#744210" font-size="11">content rules, queue owners, campaigns</text>
+
+      <rect x="270" y="98" width="200" height="30" rx="4" fill="#63b3ed"/>
+      <text x="284" y="118" fill="#fff" font-weight="700">5 · switches</text>
+      <text x="486" y="118" fill="#2c5282" font-size="11">one env var each, reversible</text>
+
+      <rect x="270" y="138" width="120" height="30" rx="4" fill="#9f7aea"/>
+      <text x="284" y="158" fill="#fff" font-weight="700">2 · jobs</text>
+      <text x="406" y="158" fill="#553c9a" font-size="11">a toggle in Admin → Agents</text>
+
+      <rect x="270" y="178" width="70" height="30" rx="4" fill="#4a5568"/>
+      <text x="284" y="198" fill="#fff" font-weight="700">1 · you</text>
+      <text x="356" y="198" fill="#2d3748" font-size="11">grant yourself brand access (hard to undo)</text>
+    </g>
+
+    <rect x="270" y="228" width="700" height="56" rx="6" fill="#FFFBEB" stroke="#B7791F"/>
+    <text x="288" y="250" font-size="12.5" font-weight="700" fill="#744210">The switches are the easy part.</text>
+    <text x="288" y="270" font-size="11.5" fill="#744210">Six of the fourteen need a decision from you about content and queue ownership — not a flag.</text>
+  </svg>
+  <p class="cap">Two conditions already pass: the emergency stop row exists, and the database indexes are present and valid.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 6. BRAND BOUNDARY ───────────────────────── -->
+<section>
+  <h2>6 · The rule that must never break</h2>
+  <p class="lede">Each brand sells different things. The system refuses to offer one
+     brand's product inside another brand's journey, and a refusal always beats a
+     permission.</p>
+
+  <div class="fig">
+  <svg viewBox="0 0 1000 260" role="img" aria-label="Which brand may offer which product, with business training denied to AI Flotation">
+    <g font-size="11" font-weight="700" fill="#718096" text-anchor="middle">
+      <text x="430" y="30">LEARNER TRAINING</text>
+      <text x="610" y="30">BUSINESS TRAINING</text>
+      <text x="790" y="30">CONSULTING · AUTOMATION · APPS</text>
+    </g>
+    <g font-size="12">
+      <text x="20" y="72" font-weight="700" fill="#2d3748">CPN</text>
+      <rect x="350" y="52" width="160" height="34" rx="4" fill="#f0fff4" stroke="#77BB4A"/><text x="430" y="74" text-anchor="middle" fill="#22543d" font-weight="700">yes</text>
+      <rect x="530" y="52" width="160" height="34" rx="4" fill="#f7fafc" stroke="#e2e8f0"/><text x="610" y="74" text-anchor="middle" fill="#a0aec0">—</text>
+      <rect x="710" y="52" width="260" height="34" rx="4" fill="#f7fafc" stroke="#e2e8f0"/><text x="840" y="74" text-anchor="middle" fill="#a0aec0">—</text>
+
+      <text x="20" y="122" font-weight="700" fill="#2d3748">Colaberry Training</text>
+      <rect x="350" y="102" width="160" height="34" rx="4" fill="#f0fff4" stroke="#77BB4A"/><text x="430" y="124" text-anchor="middle" fill="#22543d" font-weight="700">yes</text>
+      <rect x="530" y="102" width="160" height="34" rx="4" fill="#f7fafc" stroke="#e2e8f0"/><text x="610" y="124" text-anchor="middle" fill="#a0aec0">—</text>
+      <rect x="710" y="102" width="260" height="34" rx="4" fill="#f7fafc" stroke="#e2e8f0"/><text x="840" y="124" text-anchor="middle" fill="#a0aec0">—</text>
+
+      <text x="20" y="172" font-weight="700" fill="#2d3748">Colaberry Business</text>
+      <rect x="350" y="152" width="160" height="34" rx="4" fill="#f7fafc" stroke="#e2e8f0"/><text x="430" y="174" text-anchor="middle" fill="#a0aec0">—</text>
+      <rect x="530" y="152" width="160" height="34" rx="4" fill="#f0fff4" stroke="#77BB4A"/><text x="610" y="174" text-anchor="middle" fill="#22543d" font-weight="700">yes</text>
+      <rect x="710" y="152" width="260" height="34" rx="4" fill="#f0fff4" stroke="#77BB4A"/><text x="840" y="174" text-anchor="middle" fill="#22543d" font-weight="700">yes</text>
+
+      <text x="20" y="222" font-weight="700" fill="#2d3748">AI Flotation</text>
+      <rect x="350" y="202" width="160" height="34" rx="4" fill="#f7fafc" stroke="#e2e8f0"/><text x="430" y="224" text-anchor="middle" fill="#a0aec0">—</text>
+      <rect x="530" y="202" width="160" height="34" rx="4" fill="#FED7D7" stroke="#FB2832" stroke-width="1.6"/>
+      <text x="610" y="220" text-anchor="middle" fill="#9B2C2C" font-weight="700" font-size="11">NEVER</text>
+      <text x="610" y="232" text-anchor="middle" fill="#9B2C2C" font-size="9">refer to Business</text>
+      <rect x="710" y="202" width="260" height="34" rx="4" fill="#f0fff4" stroke="#77BB4A"/><text x="840" y="224" text-anchor="middle" fill="#22543d" font-weight="700">yes</text>
+    </g>
+  </svg>
+  <p class="cap">If an AI Flotation lead asks about business training, the system refuses the offer and <em>refers them to Colaberry Business</em> rather than selling what that brand does not have.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 7. CHOOSING ───────────────────────── -->
+<section id="choose">
+  <h2>7 · How it chooses what to send</h2>
+  <p class="lede">Two separate choices, and they are easy to confuse. First <em>which
+     action</em>, decided by a sort. Then <em>which message</em>, decided by what is
+     approved for that brand.</p>
+
+  <div class="fig">
+  <svg viewBox="0 0 1040 620" role="img" aria-label="How a message is chosen: five generators propose, a four-key sort picks one winner, then the campaign and content gate decide the message">
+
+    <!-- STAGE 1 -->
+    <rect x="8" y="8" width="1024" height="330" rx="8" fill="#F7FAFC" stroke="#cbd5e0" stroke-dasharray="5 4"/>
+    <text x="28" y="34" font-size="12" font-weight="700" fill="#718096" letter-spacing=".07em">STAGE 1 · WHICH ACTION</text>
+
+    <!-- generators -->
+    <text x="28" y="62" font-size="11.5" fill="#4a5568">Five generators each propose what they would do for this person:</text>
+    <g font-size="11">
+      <rect x="28" y="74" width="168" height="34" rx="5" fill="#fff" stroke="#cbd5e0"/><text x="112" y="96" text-anchor="middle" fill="#2d3748">high intent</text>
+      <rect x="208" y="74" width="168" height="34" rx="5" fill="#fff" stroke="#cbd5e0"/><text x="292" y="96" text-anchor="middle" fill="#2d3748">activation rescue</text>
+      <rect x="388" y="74" width="168" height="34" rx="5" fill="#fff" stroke="#cbd5e0"/><text x="472" y="96" text-anchor="middle" fill="#2d3748">friction recovery</text>
+      <rect x="568" y="74" width="168" height="34" rx="5" fill="#fff" stroke="#cbd5e0"/><text x="652" y="96" text-anchor="middle" fill="#2d3748">nurture</text>
+      <rect x="748" y="74" width="168" height="34" rx="5" fill="#FED7D7" stroke="#FB2832"/><text x="832" y="96" text-anchor="middle" fill="#9B2C2C" font-weight="700">hard stop</text>
+    </g>
+    <text x="930" y="96" font-size="10" fill="#9B2C2C">⟵ can veto</text>
+
+    <!-- each carries -->
+    <text x="28" y="134" font-size="11.5" fill="#4a5568">Each proposal arrives carrying two numbers:</text>
+    <rect x="300" y="120" width="190" height="26" rx="4" fill="#EBF8FF" stroke="#63b3ed"/>
+    <text x="395" y="138" font-size="11" text-anchor="middle" fill="#2c5282" font-weight="700">priority_tier (2–10)</text>
+    <rect x="502" y="120" width="190" height="26" rx="4" fill="#EBF8FF" stroke="#63b3ed"/>
+    <text x="597" y="138" font-size="11" text-anchor="middle" fill="#2c5282" font-weight="700">intra_tier_score</text>
+
+    <!-- the sort -->
+    <text x="28" y="178" font-size="11.5" fill="#4a5568">They are sorted by four keys. <tspan font-weight="700">The first one wins.</tspan></text>
+    <g font-size="11.5">
+      <rect x="28" y="190" width="888" height="30" rx="5" fill="#fff" stroke="#77BB4A" stroke-width="1.6"/>
+      <circle cx="46" cy="205" r="9" fill="#77BB4A"/><text x="46" y="209" font-size="10" text-anchor="middle" fill="#fff" font-weight="700">1</text>
+      <text x="66" y="209" fill="#2d3748"><tspan font-weight="700">priority_tier</tspan> ascending — a lower tier number always beats a higher one</text>
+
+      <rect x="28" y="226" width="888" height="30" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <circle cx="46" cy="241" r="9" fill="#a0aec0"/><text x="46" y="245" font-size="10" text-anchor="middle" fill="#fff" font-weight="700">2</text>
+      <text x="66" y="245" fill="#2d3748"><tspan font-weight="700">intra_tier_score</tspan> descending — only used to break a tie inside one tier</text>
+
+      <rect x="28" y="262" width="888" height="30" rx="5" fill="#fff" stroke="#cbd5e0"/>
+      <circle cx="46" cy="277" r="9" fill="#a0aec0"/><text x="46" y="281" font-size="10" text-anchor="middle" fill="#fff" font-weight="700">3</text>
+      <text x="66" y="281" fill="#2d3748"><tspan font-weight="700">days_in_current_state</tspan> descending — the person waiting longest</text>
+
+      <rect x="28" y="298" width="888" height="30" rx="5" fill="#FFFBEB" stroke="#B7791F"/>
+      <circle cx="46" cy="313" r="9" fill="#B7791F"/><text x="46" y="317" font-size="10" text-anchor="middle" fill="#fff" font-weight="700">4</text>
+      <text x="66" y="317" fill="#744210"><tspan font-weight="700">enrollment_id</tspan> ascending — exists ONLY so the order can never be arbitrary</text>
+    </g>
+
+    <!-- STAGE 2 -->
+    <rect x="8" y="352" width="1024" height="186" rx="8" fill="#F7FAFC" stroke="#cbd5e0" stroke-dasharray="5 4"/>
+    <text x="28" y="378" font-size="12" font-weight="700" fill="#718096" letter-spacing=".07em">STAGE 2 · WHICH MESSAGE</text>
+
+    <rect x="28" y="392" width="200" height="56" rx="6" fill="#f0fff4" stroke="#77BB4A" stroke-width="1.6"/>
+    <text x="128" y="414" font-size="12" font-weight="700" text-anchor="middle" fill="#22543d">The winning action</text>
+    <text x="128" y="432" font-size="10.5" text-anchor="middle" fill="#2f855a">carries a campaign_key</text>
+
+    <path d="M 228 420 L 268 420" stroke="#a0aec0" stroke-width="1.6" marker-end="url(#ar)"/>
+
+    <rect x="272" y="384" width="230" height="72" rx="6" fill="#fff" stroke="#cbd5e0"/>
+    <text x="387" y="404" font-size="11.5" font-weight="700" text-anchor="middle" fill="#2d3748">The campaign must be…</text>
+    <text x="387" y="422" font-size="10" text-anchor="middle" fill="#718096">registered · brand-scoped</text>
+    <text x="387" y="436" font-size="10" text-anchor="middle" fill="#718096">approved · active</text>
+    <text x="387" y="450" font-size="10" text-anchor="middle" fill="#718096">with an active sequence</text>
+
+    <path d="M 502 420 L 542 420" stroke="#a0aec0" stroke-width="1.6" marker-end="url(#ar)"/>
+
+    <rect x="546" y="384" width="230" height="72" rx="6" fill="#fff" stroke="#cbd5e0"/>
+    <text x="661" y="404" font-size="11.5" font-weight="700" text-anchor="middle" fill="#2d3748">The content gate picks</text>
+    <text x="661" y="422" font-size="10" text-anchor="middle" fill="#718096">from APPROVED assets for</text>
+    <text x="661" y="436" font-size="10" text-anchor="middle" fill="#718096">this brand · offer · programme · path</text>
+    <text x="661" y="450" font-size="10" text-anchor="middle" fill="#9B2C2C" font-weight="700">a deny always beats an allow</text>
+
+    <path d="M 776 420 L 816 420" stroke="#FB2832" stroke-width="1.8" marker-end="url(#arR)"/>
+    <rect x="820" y="392" width="196" height="56" rx="6" fill="#FFF5F5" stroke="#FB2832" stroke-width="1.6"/>
+    <text x="918" y="414" font-size="12" font-weight="700" text-anchor="middle" fill="#9B2C2C">That is the message</text>
+    <text x="918" y="432" font-size="10" text-anchor="middle" fill="#c53030">and the gates of §2 still apply</text>
+
+    <text x="28" y="482" font-size="11" fill="#4a5568">After all of that it can <tspan font-weight="700">still</tspan> be withheld: a holdout experiment may hold this person back to measure whether the</text>
+    <text x="28" y="498" font-size="11" fill="#4a5568">messaging works at all, and that is recorded as <tspan font-family="ui-monospace,Menlo,monospace" font-size="10.5">chosen_then_blocked</tspan> — chosen, then deliberately not sent.</text>
+    <text x="28" y="522" font-size="11" fill="#4a5568">If nothing is proposed at all, the answer is recorded as <tspan font-weight="700">WAIT</tspan>. Silence is never the output.</text>
+
+    <!-- bottom rules -->
+    <rect x="8" y="552" width="504" height="60" rx="7" fill="#EBF8FF" stroke="#63b3ed"/>
+    <text x="26" y="574" font-size="11.5" font-weight="700" fill="#2c5282">AI may reorder WITHIN a tier. Never across tiers.</text>
+    <text x="26" y="592" font-size="10.5" fill="#2c5282">It is never authoritative for a cohort date, a price, a deadline,</text>
+    <text x="26" y="605" font-size="10.5" fill="#2c5282">a seat count or consent.</text>
+
+    <rect x="528" y="552" width="504" height="60" rx="7" fill="#f0fff4" stroke="#77BB4A"/>
+    <text x="546" y="574" font-size="11.5" font-weight="700" fill="#22543d">Every loser is kept, with its reason.</text>
+    <text x="546" y="592" font-size="10.5" fill="#2f855a">"outranked within tier 3 (score 40 &lt; 55)" · "lower priority than</text>
+    <text x="546" y="605" font-size="10.5" fill="#2f855a">tier 2 (SEND_EMAIL)". So "why not X?" is answerable from one row.</text>
+  </svg>
+  <p class="cap">The fourth sort key looks like pedantry and is not: without it two equal candidates would order arbitrarily, the same input would stop giving the same output, and the idempotency everything else depends on would break silently.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 8. SCREENS ───────────────────────── -->
+<section>
+  <h2>8 · And here is what the screens look like</h2>
+  <p class="lede">Real components with realistic data, so the shapes above have faces.
+     Production is empty, so these states cannot be photographed live.</p>
+
+  <div class="fig" style="padding:0;overflow:hidden">
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-performance.png"
+         alt="The performance tab showing a real zero beside an absence" style="width:100%;display:block">
+  </div>
+  <div class="box">
+    <p><strong>The one thing worth staring at.</strong> Near the top: <code>acceptance
+    rate 0.0% — 0 of 12</code>, and directly beneath it <code>expiry rate —</code> with
+    "no handoff was created in this window". <strong>0% means every handoff was refused:
+    a crisis. The dash means none existed: a quiet week.</strong> A screen that printed 0%
+    for both would tell you the opposite of the truth.</p>
+  </div>
+
+  <div class="fig" style="padding:0;overflow:hidden;margin-top:1.5rem">
+    <img src="screenshots/2026-10-04-growth-journey-phase6-deploy/harness-handoffs.png"
+         alt="The handoff queue with a blocked assignment" style="width:100%;display:block">
+  </div>
+  <div class="box">
+    <p><strong>The queue your staff would live in.</strong> The first row has no ticket and
+    says why — the queue is at capacity. The second row's reason reads "redacted", because
+    it held an email address and was masked before it reached the screen.</p>
+  </div>
+
+  <p style="margin-top:1.5rem"><a href="GROWTH_JOURNEY_PHASE6_REVIEW.html"><strong>All
+  eleven screens, with what to look at on each →</strong></a></p>
+</section>
+
+</div>
+
+<footer><div class="wrap">
+  <p><strong>Everything on this page is measured, not illustrated.</strong> The twelve
+  switches, the 13% and the brand rules were read from production on 4 October 2026. The
+  screens are real components rendered with realistic data.</p>
+  <p>How to operate it: <code>docs/GROWTH_JOURNEY_HOW_TO_USE.html</code> · All eleven
+  screens: <code>docs/GROWTH_JOURNEY_PHASE6_REVIEW.html</code> · For your staff:
+  <code>docs/GROWTH_JOURNEY_TRAINING_GUIDE.md</code></p>
+</div></footer>
+
+</body>
+</html>

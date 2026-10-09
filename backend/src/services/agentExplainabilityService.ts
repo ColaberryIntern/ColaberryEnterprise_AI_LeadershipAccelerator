@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import AiAgent from '../models/AiAgent';
 import AiEvent from '../models/AiEvent';
 import ProposedAgentAction from '../models/ProposedAgentAction';
+import ApprovalRequest from '../models/ApprovalRequest';
 
 // AI Workforce Management, Checkpoint F — "Ask Agent About This"
 // explainability. Per DOMAIN_REUSE_MAP.md's own verdict: "BUILD NEW,
@@ -45,14 +46,53 @@ export interface ExplainabilityProposedAction {
   reviewedAt: Date | null;
 }
 
+// Real-enforcement correlation, Decision Journal enrichment (2026-10-03) — the real
+// human-review lifecycle for this agent's own authorization-gated sends, now that the
+// approval_requests FK-ordering bug is fixed (2026-10-02) and the approve/reject/
+// replay pipeline is live. Deliberately excludes prepared_action/ticket_id/
+// work_unit_id/run_id/event_id — internal-id-shaped or PII-adjacent fields, matching
+// this file's own existing metadata-scoping discipline for authorization events.
+export interface ExplainabilityApprovalRequest {
+  action: string;
+  verdict: 'would_allow' | 'would_require_approval' | 'would_block';
+  riskTier: string;
+  autonomyLevel: string | null;
+  status: 'shadow_logged' | 'pending' | 'approved' | 'rejected' | 'expired';
+  reasonCode: string | null;
+  decidedBy: string | null;
+  decidedAt: Date | null;
+  decisionChannel: string | null;
+  replayedAt: Date | null;
+  expiresAt: Date | null;
+  createdAt: Date;
+}
+
 export interface AgentExplainabilityResult {
   agentId: string;
   agentName: string;
   events: ExplainabilityEvent[];
   proposedActions: ExplainabilityProposedAction[];
+  approvalRequests: ExplainabilityApprovalRequest[];
 }
 
 const RECENT_LIMIT = 25;
+
+function toExplainabilityApprovalRequest(row: ApprovalRequest): ExplainabilityApprovalRequest {
+  return {
+    action: row.action,
+    verdict: row.verdict,
+    riskTier: row.risk_tier,
+    autonomyLevel: row.autonomy_level,
+    status: row.status,
+    reasonCode: row.reason_code,
+    decidedBy: row.decided_by,
+    decidedAt: row.decided_at,
+    decisionChannel: row.decision_channel,
+    replayedAt: row.replayed_at,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  };
+}
 
 function toExplainabilityEvent(row: AiEvent): ExplainabilityEvent {
   const authorization =
@@ -96,7 +136,7 @@ export async function getAgentExplainability(agentId: string): Promise<AgentExpl
   // same reason) — matched here for the same honesty: an agent whose
   // authorization events were recorded under its name shouldn't silently
   // show zero.
-  const [eventRows, proposedActionRows] = await Promise.all([
+  const [eventRows, proposedActionRows, approvalRequestRows] = await Promise.all([
     AiEvent.findAll({
       where: { agent_id: { [Op.in]: [agent.id, agent.agent_name] } },
       order: [['created_at', 'DESC']],
@@ -104,6 +144,13 @@ export async function getAgentExplainability(agentId: string): Promise<AgentExpl
     }),
     ProposedAgentAction.findAll({
       where: { agent_id: agent.id },
+      order: [['created_at', 'DESC']],
+      limit: RECENT_LIMIT,
+    }),
+    // approval_requests has no agent_id column — agent_name is the only real
+    // match key (ApprovalRequest.ts), already indexed for this exact lookup.
+    ApprovalRequest.findAll({
+      where: { agent_name: agent.agent_name },
       order: [['created_at', 'DESC']],
       limit: RECENT_LIMIT,
     }),
@@ -121,5 +168,6 @@ export async function getAgentExplainability(agentId: string): Promise<AgentExpl
       createdAt: row.created_at,
       reviewedAt: row.reviewed_at,
     })),
+    approvalRequests: approvalRequestRows.map(toExplainabilityApprovalRequest),
   };
 }

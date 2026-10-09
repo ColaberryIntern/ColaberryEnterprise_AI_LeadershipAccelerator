@@ -28,6 +28,16 @@ const contextFromAdminRequest = jest.fn();
 jest.mock('../../../modules/tenancy/adminScopeBridge', () => ({ contextFromAdminRequest: (...a: unknown[]) => contextFromAdminRequest(...a) }));
 jest.mock('../../../modules/tenancy/tenantAccessAudit', () => ({ recordAccessDecision: jest.fn().mockResolvedValue(undefined) }));
 
+// T611: the chain SERVICE is stubbed here. Its own suite owns the scope proof - that a
+// lead outside the caller's brands returns `not_found` - because that decision is made
+// against `lead_tenant_contexts`, which this harness does not populate. What THIS suite
+// owns is the matrix: that the handler maps `not_found` to the same body as an unknown
+// lead, and that the route sits behind the same guard and flag as its sibling.
+const buildPersonChain = jest.fn();
+jest.mock('../../../services/growthJourney/personChainService', () => ({
+  buildPersonChain: (...a: unknown[]) => buildPersonChain(...a),
+}));
+
 /* ── the in-memory world ────────────────────────────────────────────────────── */
 
 type Row = Record<string, unknown>;
@@ -238,5 +248,81 @@ describe('confidentiality', () => {
     expect(res.text).not.toContain('@');
     const h = res.body.handoffs.find((r: Row) => r.id === 'h-ent');
     expect(h.disposition_reason).toBe('budget confirmed, follow up with [redacted]');
+  });
+});
+
+describe('T611: the drillthrough chain sits behind the same guard, and its 404 is the same 404', () => {
+  const CHAIN_OK = {
+    lead_id: 4711,
+    hops: [
+      { name: 'campaign', status: 'linked', ref: 'camp-1', via: 'lead_tenant_contexts.first_campaign_id' },
+      { name: 'enrolment', status: 'unavailable', reason: 'no_key' },
+    ],
+    as_of: '2026-09-30T12:00:00.000Z',
+  };
+
+  it('401 without a token', async () => {
+    const res = await request(app()).get(`${BASE}/people/4711/chain`);
+    expect(res.status).toBe(401);
+    expect(buildPersonChain).not.toHaveBeenCalled();
+  });
+
+  it('404 with the master flag off - the route does not exist', async () => {
+    growthJourney.growthJourneyEnabled = false;
+    const res = await get(`${BASE}/people/4711/chain`);
+    expect(res.status).toBe(404);
+    expect(buildPersonChain).not.toHaveBeenCalled();
+    growthJourney.growthJourneyEnabled = true;
+  });
+
+  it('400 for a lead id that is not a positive integer', async () => {
+    const res = await get(`${BASE}/people/not-a-number/chain`);
+    expect(res.status).toBe(400);
+    expect(buildPersonChain).not.toHaveBeenCalled();
+  });
+
+  it('200 for a tenant admin, and the hops are served as the service produced them', async () => {
+    buildPersonChain.mockResolvedValue({ status: 'found', chain: CHAIN_OK });
+    const res = await get(`${BASE}/people/4711/chain`);
+    expect(res.status).toBe(200);
+    expect(res.body.hops.map((h: { name: string }) => h.name)).toEqual(['campaign', 'enrolment']);
+    expect(res.body.as_of).toBe('2026-09-30T12:00:00.000Z');
+  });
+
+  it("a person the caller may not see answers the SAME 404 body as an unknown lead", async () => {
+    // The indistinguishability the plan asks for. The service decides `not_found` for
+    // both cases (its own suite proves that); this asserts the handler does not then
+    // leak the difference through a different body or status.
+    buildPersonChain.mockResolvedValue({ status: 'not_found' });
+    const foreign = await get(`${BASE}/people/4711/chain`);
+    const unknown = await get(`${BASE}/people/999/chain`);
+    expect(foreign.status).toBe(404);
+    expect(unknown.status).toBe(404);
+    expect(foreign.body).toEqual(unknown.body);
+    expect(foreign.body).toEqual({ error: 'Not found' });
+  });
+
+  it('no `@` survives the route, in EVERY field a hop can carry - ref, via and ticket_ref', async () => {
+    // The service is not the scrub boundary - it copies ids through verbatim and its
+    // own suite pins that - so this is the only place an address is actually removed.
+    // Every carrier is seeded, not just `ref`: `ticket_ref` is a second id on the
+    // handoff hop, and a field the scrub did not reach would be a silent leak.
+    buildPersonChain.mockResolvedValue({
+      status: 'found',
+      chain: {
+        ...CHAIN_OK,
+        hops: [
+          { name: 'enrolment', status: 'linked', ref: 'person@example.com', via: 'enrollment_email' },
+          { name: 'handoff', status: 'linked', ref: 'h@example.com', via: 'handoffs.ticket_id', ticket_ref: 'tk@example.com' },
+        ],
+      },
+    });
+    const res = await get(`${BASE}/people/4711/chain`);
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain('@');
+    // and the shape survives the scrub - a redaction that dropped the field would
+    // also pass the assertion above
+    expect(res.body.hops[1].ticket_ref).toBe('[redacted]');
+    expect(res.body.hops.map((h: { name: string }) => h.name)).toEqual(['enrolment', 'handoff']);
   });
 });

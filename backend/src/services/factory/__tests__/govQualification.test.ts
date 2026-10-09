@@ -11,10 +11,13 @@ jest.mock('../../../models/GovQualification', () => ({
   __esModule: true,
   default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
 }));
+// getDecoupledWorkspace reads the daily-sync state + the agency relationship; keep both DB-free in these unit tests.
+jest.mock('../govOpportunitySync', () => ({ getGovSyncEntry: jest.fn().mockResolvedValue(null) }));
+jest.mock('../govRelationship', () => ({ getAgencyRelationship: jest.fn().mockResolvedValue({ agency: null, priorCount: 0, pursuits: [] }) }));
 
 import {
   evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,
-  recordDocumentReview,
+  recordDocumentReview, evaluateZipCoverage, recordZipAttestation, getDecoupledWorkspace, approveDecoupledQualification,
   QualificationConflictError, QualificationBlockedError, ChangedSourceError, SourceUnavailableError,
   QualificationNotFoundError, SelfApprovalError, SourceNotApprovableError, EvidenceInsufficientError,
   DocumentNotListedError,
@@ -75,6 +78,23 @@ describe('evaluateRequirements (PURE) — missing evidence never silently passes
   it('the CLEAN fixture is approvable; the BLOCKING fixture is not', () => {
     expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[CLEAN_CANONICAL].requirements).canApproveBid).toBe(true);
     expect(evaluateRequirements(GOV_OPPORTUNITY_FIXTURES[BLOCKING_CANONICAL].requirements).canApproveBid).toBe(false);
+  });
+
+  it('PURSUIT SPLIT: an un-evidenced binding submission requirement fails the FULL bar but PASSES the pursuit bar (open item)', () => {
+    const e = evaluateRequirements([req({ evidenceRef: null })]); // applicable binding submission, no evidence
+    expect(e.canApproveBid).toBe(false);                 // full submission-ready bar still fails
+    expect(e.canApprovePursuit).toBe(true);              // pursuit/research bar passes
+    expect(e.pursuitBlocking).toHaveLength(0);
+    expect(e.openSubmissionRequirements).toHaveLength(1);
+    expect(e.openSubmissionRequirements[0].reason).toBe('submission_prerequisite_no_evidence');
+  });
+
+  it('PURSUIT SPLIT: a true disqualifier (unknown applicability) blocks BOTH bars', () => {
+    const e = evaluateRequirements([req({ applicability: 'unknown' })]);
+    expect(e.canApproveBid).toBe(false);
+    expect(e.canApprovePursuit).toBe(false);
+    expect(e.pursuitBlocking).toHaveLength(1);
+    expect(e.openSubmissionRequirements).toHaveLength(0);
   });
 });
 
@@ -243,6 +263,16 @@ describe('approveGovQualification (server-side, source-snapshot bound)', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('MASTER-ADMIN override: approver == reviewer is exempt from separation of duties, audit-logged', async () => {
+    findOne.mockResolvedValue(base({ reviewer_identity_id: 'rev-1' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let caught: any = null;
+    await approveGovQualification(approveInput({ approverIdentityId: 'rev-1', masterAdminOverride: true })).catch((e) => { caught = e; });
+    expect(caught).not.toBeInstanceOf(SelfApprovalError);                                      // the gate is bypassed for the master admin
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('self_approval_master_admin_override')); // and it is audit-logged
+    warn.mockRestore();
+  });
+
   it('records the approver in the immutable evidence, distinct from the reviewer', async () => {
     findOne.mockResolvedValue(base());
     create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
@@ -381,5 +411,219 @@ describe('approveGovQualification — Bonfire-gated end-to-end (manual review un
     findOne.mockResolvedValue(base({ requirements_json: { established: [], reviewedDocuments: [{ docId: 'DS1' }, { docId: 'DA1' }] } }));
     await expect(approveGovQualification(input())).rejects.toBeInstanceOf(EvidenceInsufficientError);
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+// ── Step 4: decoupled ZIP evidence (attestation + coverage) ──
+describe('evaluateZipCoverage (PURE) — decoupled ZIP evidence never silently passes', () => {
+  const zip = { method: 'solicitation_zip', sha256: 'a'.repeat(64) };
+  it('established + attested ZIP -> sufficient', () => {
+    expect(evaluateZipCoverage([{ id: 'R1' }], [zip])).toEqual({ sufficient: true, reasons: [] });
+  });
+  it('empty established -> no_requirements_established (never sufficient)', () => {
+    const r = evaluateZipCoverage([], [zip]);
+    expect(r.sufficient).toBe(false);
+    expect(r.reasons).toContain('no_requirements_established');
+  });
+  it('established but no attested ZIP -> no_zip_attested', () => {
+    const r = evaluateZipCoverage([{ id: 'R1' }], []);
+    expect(r.sufficient).toBe(false);
+    expect(r.reasons).toContain('no_zip_attested');
+  });
+  it('empty + none -> BOTH reasons accumulate', () => {
+    expect(evaluateZipCoverage([], []).reasons.sort()).toEqual(['no_requirements_established', 'no_zip_attested']);
+  });
+  it('a ZIP entry with an empty/missing sha256 does NOT count', () => {
+    expect(evaluateZipCoverage([{ id: 'R1' }], [{ method: 'solicitation_zip', sha256: '' }]).reasons).toContain('no_zip_attested');
+  });
+  it('total/garbage-safe on null inputs', () => {
+    expect(() => evaluateZipCoverage(null as any, null as any)).not.toThrow();
+    expect(evaluateZipCoverage(null as any, null as any).sufficient).toBe(false);
+  });
+});
+
+describe('recordZipAttestation — no OP-docId check; forks preserving established/provenance', () => {
+  const GWS = 'gws:11111111-1111-4111-a111-111111111111';
+  const current = (over: any = {}) => ({
+    version: 1, status: 'active', tenant_id: 't', bidding_entity: 'colaberry', canonical_opportunity_id: GWS,
+    source_snapshot: null, requirements_json: { established: [{ id: 'R1', text: 'x' }], provenance: { uuid: 'u', title: 'T', agency: 'A' }, workspace_kind: 'discovery_zip' },
+    save: jest.fn().mockResolvedValue(undefined), ...over,
+  });
+
+  it('add stores the synthetic solicitation_zip entry + forks preserving established/provenance (no DocumentNotListedError on a null snapshot)', async () => {
+    findOne.mockResolvedValue(current());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const out = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', filename: 'sol.zip', sha256: 'b'.repeat(64), sizeBytes: 123 });
+    const rd = out.requirements_json.reviewedDocuments;
+    expect(rd).toHaveLength(1);
+    expect(rd[0]).toMatchObject({ method: 'solicitation_zip', sha256: 'b'.repeat(64), filename: 'sol.zip', reviewedBy: 'rev' });
+    expect(out.requirements_json.established).toHaveLength(1);
+    expect(out.requirements_json.provenance.title).toBe('T');
+  });
+
+  it('Phase 2: add PERSISTS the parsed dossier on requirements_json; revoke does not add one', async () => {
+    const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: ['541512'], meetings: [], keyDates: [] };
+    findOne.mockResolvedValue(current());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const added = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', sha256: 'b'.repeat(64), dossier });
+    expect(added.requirements_json.dossier).toEqual(dossier);
+    expect(added.requirements_json.established).toHaveLength(1); // established still preserved
+    findOne.mockResolvedValue(current({ requirements_json: { established: [{ id: 'R1' }], reviewedDocuments: [{ method: 'solicitation_zip', sha256: 'd'.repeat(64) }] } }));
+    const revoked = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'revoke', dossier });
+    expect(revoked.requirements_json.dossier).toBeUndefined(); // revoke never writes a dossier
+  });
+
+  it('stale expectedVersion -> QualificationConflictError (no write)', async () => {
+    findOne.mockResolvedValue(current({ version: 3 }));
+    await expect(recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', sha256: 'c'.repeat(64) })).rejects.toBeInstanceOf(QualificationConflictError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('revoke drops the ZIP attestation', async () => {
+    findOne.mockResolvedValue(current({ requirements_json: { established: [{ id: 'R1' }], reviewedDocuments: [{ method: 'solicitation_zip', sha256: 'd'.repeat(64) }] } }));
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const out = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'revoke' });
+    expect(out.requirements_json.reviewedDocuments).toHaveLength(0);
+  });
+
+  it('missing record -> QualificationNotFoundError', async () => {
+    findOne.mockResolvedValue(null);
+    await expect(recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', sha256: 'e'.repeat(64) })).rejects.toBeInstanceOf(QualificationNotFoundError);
+  });
+});
+
+describe('getDecoupledWorkspace — canApprove from ZIP coverage + requirement blocking', () => {
+  const GWS = 'gws:11111111-1111-4111-a111-111111111111';
+  const rec = (rj: any) => ({ get: () => ({ id: 'q1', version: 1, canonical_opportunity_id: GWS, requirements_json: rj }) });
+  const estOk = [{ id: 'R1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }];
+  const zip = { method: 'solicitation_zip', sha256: 'f'.repeat(64) };
+
+  it('established + attested ZIP (no blocking) -> canApprove true, coverage sufficient', async () => {
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.coverage.sufficient).toBe(true);
+    expect(ws.canApprove).toBe(true);
+    expect(ws.zipAttestation.sha256).toBe('f'.repeat(64));
+  });
+
+  it('established but NO attested ZIP -> canApprove false (no_zip_attested)', async () => {
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.canApprove).toBe(false);
+    expect(ws.coverage.reasons).toContain('no_zip_attested');
+  });
+
+  it('unknown applicability + attested ZIP -> canApprove false (a requirement blocks even with coverage)', async () => {
+    findOne.mockResolvedValue(rec({ established: [{ id: 'R1', text: 'x', applicability: 'unknown', dueStage: 'submission', bindingStatus: 'b' }], reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.canApprove).toBe(false);
+    expect(ws.evaluation.canApproveBid).toBe(false);
+  });
+
+  it('empty established -> canApprove false (no_requirements_established)', async () => {
+    findOne.mockResolvedValue(rec({ established: [], reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.canApprove).toBe(false);
+    expect(ws.coverage.reasons).toContain('no_requirements_established');
+  });
+
+  it('Phase 2 (P2-T3): surfaces a response slot per established requirement, each citing its source ref, all unanswered', async () => {
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.responseSlots).toEqual([{ requirementId: 'R1', statement: 'x', sourceRef: 'D1', status: 'unanswered' }]);
+  });
+
+  it('Phase 3 (P3-T1): surfaces the Build plan — a story per solution_build requirement (with its prompt), admin reqs excluded', async () => {
+    findOne.mockResolvedValue(rec({ established: [
+      { id: 'B1', text: 'The vendor shall provide a claims search database system.' }, // build signal -> story
+      { id: 'A1', text: 'Submit a completed Execution of Offer form.' },               // admin -> no story
+    ], reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.build.buildStoryCount).toBe(1);
+    expect(ws.build.stories.map((s: any) => s.requirementId)).toEqual(['B1']); // admin A1 excluded
+    expect(ws.build.stories[0].id).toBe('STORY-B1');
+    expect(ws.build.stories[0].status).toBe('unassigned');
+    expect(ws.build.stories[0].prompt).toContain('claims search database system'); // the prompt cites the requirement verbatim
+    expect(ws.build.releases[0].storyIds).toEqual(['STORY-B1']);
+  });
+
+  it('Phase 2: surfaces the stored dossier (null when none stored)', async () => {
+    const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: [], meetings: [], keyDates: [] };
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip], dossier }));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toEqual(dossier);
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toBeNull();
+  });
+
+  it('Phase 3: surfaces the agency relationship, and is null when the lookup throws (best-effort)', async () => {
+    const { getAgencyRelationship } = require('../govRelationship');
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    getAgencyRelationship.mockResolvedValueOnce({ agency: 'Harris County', priorCount: 1, pursuits: [{ canonicalOpportunityId: 'gws:other', title: 'Prior RFP', agency: 'Harris County', decision: 'no_bid', date: null }] });
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toMatchObject({ agency: 'Harris County', priorCount: 1 });
+    getAgencyRelationship.mockRejectedValueOnce(new Error('db down'));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toBeNull();
+  });
+});
+
+describe('approveDecoupledQualification — ZIP-evidence gate; never calls OP; canonical path untouched', () => {
+  const GWS = 'gws:11111111-1111-4111-a111-111111111111';
+  const estOk = [{ id: 'R1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }];
+  const zip = { method: 'solicitation_zip', sha256: 'f'.repeat(64) };
+  const current = (rj: any, over: any = {}) => ({ version: 1, status: 'active', tenant_id: 't', bidding_entity: 'colaberry', canonical_opportunity_id: GWS, reviewer_identity_id: 'rev-1', requirements_json: rj, evidence_json: null, source_snapshot: null, save: jest.fn().mockResolvedValue(undefined), ...over });
+  const input = (over: any = {}) => ({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, decision: 'approved_bid_pursuit' as const, approverIdentityId: 'approver-2', ...over });
+
+  it('empty established -> EvidenceInsufficientError 422 (no write)', async () => {
+    findOne.mockResolvedValue(current({ established: [], reviewedDocuments: [zip] }));
+    await expect(approveDecoupledQualification(input())).rejects.toBeInstanceOf(EvidenceInsufficientError);
+    expect(create).not.toHaveBeenCalled();
+  });
+  it('no attested ZIP -> EvidenceInsufficientError (no_zip_attested)', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [] }));
+    await expect(approveDecoupledQualification(input())).rejects.toBeInstanceOf(EvidenceInsufficientError);
+  });
+  it('unknown applicability (coverage ok) -> QualificationBlockedError', async () => {
+    findOne.mockResolvedValue(current({ established: [{ id: 'R1', text: 'x', applicability: 'unknown', dueStage: 'submission', bindingStatus: 'b' }], reviewedDocuments: [zip] }));
+    await expect(approveDecoupledQualification(input())).rejects.toBeInstanceOf(QualificationBlockedError);
+  });
+  it('self-approval (approver == reviewer) -> SelfApprovalError', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { reviewer_identity_id: 'same' }));
+    await expect(approveDecoupledQualification(input({ approverIdentityId: 'same' }))).rejects.toBeInstanceOf(SelfApprovalError);
+  });
+  it('MASTER-ADMIN override: approver == reviewer bypasses separation of duties, audit-logged', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { reviewer_identity_id: 'same' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let caught: any = null;
+    await approveDecoupledQualification(input({ approverIdentityId: 'same', masterAdminOverride: true })).catch((e) => { caught = e; });
+    expect(caught).not.toBeInstanceOf(SelfApprovalError);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('self_approval_master_admin_override'));
+    warn.mockRestore();
+  });
+  it('stale expectedVersion -> QualificationConflictError', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { version: 3 }));
+    await expect(approveDecoupledQualification(input())).rejects.toBeInstanceOf(QualificationConflictError);
+  });
+  it('reviewedZipSha256 mismatch -> ChangedSourceError', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }));
+    await expect(approveDecoupledQualification(input({ reviewedZipSha256: '0'.repeat(64) }))).rejects.toBeInstanceOf(ChangedSourceError);
+  });
+  it('happy path forks approved_bid_pursuit bound to the sha256 + approvedBy, source stays null — and NEVER touches OP (succeeds with a gws key + no OP fixture)', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }));
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const out = await approveDecoupledQualification(input());
+    expect(out.decision).toBe('approved_bid_pursuit');
+    expect(out.source_available).toBe(false);
+    expect(out.source_snapshot).toBeNull();
+    expect(out.evidence_json.approvedBy).toBe('approver-2');
+    expect(out.evidence_json.attestedZipSha256).toBe('f'.repeat(64));
+  });
+  it('PURSUIT SPLIT: un-evidenced binding submission requirements (the IVR case) no longer block a pursuit once the ZIP is attested', async () => {
+    const unevidenced = [{ id: 'R1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }]; // no evidenceRef
+    findOne.mockResolvedValue(current({ established: unevidenced, reviewedDocuments: [zip] }));
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const out = await approveDecoupledQualification(input());
+    expect(out.decision).toBe('approved_bid_pursuit');                           // approved under the pursuit bar
+    expect(out.requirements_json.evaluation.canApprovePursuit).toBe(true);
+    expect(out.requirements_json.evaluation.canApproveBid).toBe(false);          // full bar still fails (gates submission)
+    expect(out.requirements_json.evaluation.openSubmissionRequirements).toHaveLength(1); // carried as an open item
   });
 });

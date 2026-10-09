@@ -54,7 +54,7 @@ import { redecideOnReply } from '../execution/replyRedecide';
 import type { JourneyCandidate, JourneyChannel } from '../governor/types';
 import { brandRow, classified, counts } from './fixtures/phase3Fixtures';
 import { b2bSubject, type HandoffFixture } from './fixtures/phase4Fixtures';
-import { activeCampaign, applyStop, arrangeWorld5, AS_OF_4, clock, explorerFlags5, flags5, HOUR, m5, receiptsOf, refusalsOf, rolloutRow, STOPS, T, T5, T5x, transitionsOf, transportCalls, type StopKind } from './fixtures/phase5Harness';
+import { activeCampaign, applyStop, arrangeWorld5, AS_OF_4, clock, explorerFlags5, flags5, HOUR, m5, receiptsOf, refusalsOf, rolloutRow, sendStopReason, STOPS, T, T5, T5x, transitionsOf, transportCalls, type StopKind } from './fixtures/phase5Harness';
 import { approve, decideLive, decideWithCandidates, enrol, plan, reconcile, run, sendStep } from './fixtures/phase5Drivers';
 
 /**
@@ -155,7 +155,7 @@ describe('K - the kill switch and the four pauses, at every stage, for email: 20
         expect(T5x.scheduled.rows.map((r) => r.status)).toEqual(['pending']);
         applyStop(stop, BRAND, 'email', subjectRef);
         const held = await sendStep();
-        expect(held).toEqual({ sent: [], blocked: [{ id: String(T5x.scheduled.rows[0].id), reason: `journey_hold:${stop}` }] });
+        expect(held).toEqual({ sent: [], blocked: [{ id: String(T5x.scheduled.rows[0].id), reason: sendStopReason(stop) }] });
         await reconcile();
       }
     }
@@ -164,9 +164,9 @@ describe('K - the kill switch and the four pauses, at every stage, for email: 20
     expect(m5.enrol).toHaveBeenCalledTimes(stage === 'send' ? 1 : 0);
     const receipt = receiptsOf(lead)[0];
     if (stage === 'send') {
-      expect(receipt).toMatchObject({ status: 'blocked', status_reason: `blocked:journey_hold:${stop}` });
-      expect(transitionsOf(receiptId).at(-1)).toEqual(['enrolled', 'blocked', `blocked:journey_hold:${stop}`]);
-      expect(T.outcomes.rows.map((o) => [o.outcome_type, (o.metadata as { blocked_reason: string }).blocked_reason])).toEqual([['contact_blocked', `journey_hold:${stop}`]]);
+      expect(receipt).toMatchObject({ status: 'blocked', status_reason: `blocked:${sendStopReason(stop)}` });
+      expect(transitionsOf(receiptId).at(-1)).toEqual(['enrolled', 'blocked', `blocked:${sendStopReason(stop)}`]);
+      expect(T.outcomes.rows.map((o) => [o.outcome_type, (o.metadata as { blocked_reason: string }).blocked_reason])).toEqual([['contact_blocked', sendStopReason(stop)]]);
     } else {
       // Returned to approved, the attempt restored: a hold is not an attempt; the reason is on the row and in the ledger.
       expect(receipt).toMatchObject({ status: 'approved', status_reason: `blocked:${stop}`, attempts: 0 });
@@ -196,15 +196,15 @@ describe('K - the five stops at send time, for Ali outreach', () => {
     return { receiptId, lead: leadOf(f) };
   }
 
-  it.each(STOPS)('%s applied after enrolment: the send is held with journey_hold, 0 transport calls, the reason on the receipt and in the ledger', async (stop) => {
+  it.each(STOPS)('%s applied after enrolment: the send is stopped at the chokepoint (the kill switch by name, a pause by the hold), 0 transport calls, the reason on the receipt and in the ledger', async (stop) => {
     const { receiptId, lead } = await enrolledAliReceipt();
     applyStop(stop, BRAND, 'ali_outreach', `lead:${lead}`);
     const held = await sendStep();
-    expect(held).toEqual({ sent: [], blocked: [{ id: String(T5x.scheduled.rows[0].id), reason: `journey_hold:${stop}` }] });
+    expect(held).toEqual({ sent: [], blocked: [{ id: String(T5x.scheduled.rows[0].id), reason: sendStopReason(stop) }] });
     await reconcile();
     expect(transportCalls()).toBe(0);
-    expect(receiptsOf(lead)[0]).toMatchObject({ status: 'blocked', status_reason: `blocked:journey_hold:${stop}`, channel: 'ali_outreach' });
-    expect(transitionsOf(receiptId).at(-1)).toEqual(['enrolled', 'blocked', `blocked:journey_hold:${stop}`]);
+    expect(receiptsOf(lead)[0]).toMatchObject({ status: 'blocked', status_reason: `blocked:${sendStopReason(stop)}`, channel: 'ali_outreach' });
+    expect(transitionsOf(receiptId).at(-1)).toEqual(['enrolled', 'blocked', `blocked:${sendStopReason(stop)}`]);
   });
 
   it('control: with no stop the same Ali send goes through the hold to the transport, once', async () => {

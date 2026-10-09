@@ -84,10 +84,14 @@ describe('coming back from LinkedIn', () => {
     renderAt(`${BACKEND_RETURN_PATH}?linkedin=connected&brand=${BRAND}&account=acct-1`);
     await flush();
     expect(container.querySelector('[data-testid="not-found"]')).toBeNull();
-    // The page's identity, not a card title: the card was renamed to "Channels" on 2026-09-29
-    // when brand setup became tabbed, and this assertion should survive the next rename too.
-    expect(container.textContent).toMatch(/Brand setup/);
+    // The page's identity by a marker that does not move when copy does.
+    //
+    // This previously matched the title text /Brand setup/ and broke on 2026-10-07 when the page
+    // was renamed to "Setup: <brand>" - despite a comment promising it would "survive the next
+    // rename too". A title is copy; copy changes. The testid and the brand's own name are what
+    // actually identify this page, so those are what it asserts now.
     expect(container.querySelector('[data-testid="brand-setup-tabs"]')).not.toBeNull();
+    expect(container.textContent).toContain('Colaberry');
   });
 
   it('?linkedin=connected shows the success notice', async () => {

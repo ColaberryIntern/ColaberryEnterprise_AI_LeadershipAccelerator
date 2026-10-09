@@ -4,13 +4,16 @@ import JourneyNudgeCard, { type JourneyNudge } from '../../../components/portal/
 
 /**
  * The learner's journey nudges on the portal home (Growth Journey OS, Phase 5
- * T521 fix cycle 1). T514 mounted JourneyNudgeCard in PortalDashboardPage.tsx,
- * a page nothing routes to (`/portal/dashboard` redirects to `/portal/today`),
- * so the bundler dropped the page and no learner could ever have seen a nudge -
- * found on the live bundle by the production check, not by any test. This is
- * the card's one consumer now, at the top of the Today sidebar;
+ * T521 fix cycle 1). T514 mounted JourneyNudgeCard in the old portal dashboard
+ * page, which nothing routed to (`/portal/dashboard` redirects to
+ * `/portal/today`), so the bundler dropped the page and no learner could ever
+ * have seen a nudge - found on the live bundle by the production check, not by
+ * any test. Phase 6 T603 deleted that page. This is the card's one consumer
+ * now, at the top of the Today sidebar;
  * routes/__tests__/portalRoutes.journeyNudges.test.ts pins the chain from the
- * route to the card so the mount cannot drift back into a dead page.
+ * route to the card, and routes/__tests__/portalPages.routed.test.ts pins that
+ * every file under pages/portal is reachable from the route table at all - so
+ * the mount cannot drift back into a page nobody can see.
  *
  * It reads `GET /api/portal/journey-nudges` on its own, outside the shell's
  * loadAll(): a failing read never blocks or breaks the page - the sidebar has

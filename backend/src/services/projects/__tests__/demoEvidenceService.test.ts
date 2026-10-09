@@ -31,6 +31,13 @@ jest.mock('../../../models/StudentTask', () => ({
 jest.mock('../../projectService', () => ({ createProjectForEnrollment: jest.fn(), getProjectByEnrollment: jest.fn() }));
 jest.mock('../projectReadService', () => ({ getOwnedProjectTree: jest.fn() }));
 jest.mock('../../pointsService', () => ({ award: (...a: any[]) => mockAward(...a) }));
+// Only the database-backed proof is stubbed; the pure ref helpers stay real, so a
+// test cannot pass against a ref format the service does not actually write.
+const mockResolveRecording = jest.fn();
+jest.mock('../recordingEvidenceService', () => ({
+  ...jest.requireActual('../recordingEvidenceService'),
+  resolveRecordingEvidence: (...a: any[]) => mockResolveRecording(...a),
+}));
 jest.mock('../../progression/pointsConfigService', () => ({ getTypeXp: (...a: any[]) => mockGetTypeXp(...a) }));
 
 import { submitDemoEvidence, markDemoDayPresented, validateDemoEvidence, isHttpUrl, isPrivateLink } from '../demoEvidenceService';
@@ -53,10 +60,12 @@ beforeEach(() => {
 afterEach(() => { (console.log as jest.Mock).mockRestore?.(); });
 
 describe('validateDemoEvidence', () => {
-  it('a recording task takes only a link', () => {
+  it('a recording task takes a recording or a link, never prose about one', () => {
     expect(validateDemoEvidence('PREP-2', { kind: 'link', value: 'https://youtu.be/abc' })).toEqual({ ok: true });
+    expect(validateDemoEvidence('PREP-2', { kind: 'recording', value: '11111111-2222-4333-8444-555555555555' })).toEqual({ ok: true });
     expect(validateDemoEvidence('PREP-5', { kind: 'text', value: 'x'.repeat(200) }).ok).toBe(false);
     expect(validateDemoEvidence('PREP-2', { kind: 'link', value: 'youtu.be/abc' }).ok).toBe(false); // not a full URL
+    expect(validateDemoEvidence('PREP-2', { kind: 'recording', value: 'the one from tuesday' }).ok).toBe(false);
   });
 
   it('a narrative, slides or notes task takes a link OR enough text', () => {
@@ -160,7 +169,8 @@ describe('submitDemoEvidence', () => {
   it('answers 422 with the reason when the evidence does not satisfy the task, and writes nothing', async () => {
     mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-5' }));
     await expect(submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-X', { kind: 'text', value: 'x'.repeat(100) }))
-      .rejects.toMatchObject({ status: 422, error_class: 'InvalidEvidence', message: 'This task needs a link to your recording.' });
+      // The copy names BOTH ways in, now that a recording we already hold is one of them.
+      .rejects.toMatchObject({ status: 422, error_class: 'InvalidEvidence', message: 'This task needs a recording — pick one from the Studio, or paste a link to it.' });
     expect(mockTaskUpdate).not.toHaveBeenCalled();
     expect(mockAward).not.toHaveBeenCalled();
   });
@@ -220,5 +230,106 @@ describe('markDemoDayPresented', () => {
     const r = await markDemoDayPresented('ali@colaberry.com', 'task-1');
     expect(r).toMatchObject({ already_verified: true, points_awarded: 0 });
     expect(mockAward).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A recording the platform already holds, handed in directly.
+ *
+ * PREP-2 and PREP-5 used to accept a link and nothing else, so a student who had
+ * just rehearsed INSIDE this platform had to download the video, upload it to
+ * YouTube, make it publicly viewable, and paste that link back. The workaround
+ * produced a worse artifact than the one we already had: public, duplicated, and
+ * outside our retention. These tests pin that it is no longer required, and that
+ * removing it did not open a second way to get paid.
+ */
+describe('an internal recording is first-class evidence', () => {
+  const ATTEMPT = '11111111-2222-4333-8444-555555555555';
+  const resolved = {
+    ok: true as const,
+    attempt: { attemptId: ATTEMPT, attemptNo: 2, mode: 'practice_solo', isFinalTake: false, startedAt: null, endedAt: null, parts: 2, durationSeconds: 600 },
+    ref: `recording:${ATTEMPT}`,
+    detail: { kind: 'recording', source: 'internal', attempt_id: ATTEMPT, parts: 2 },
+  };
+
+  it('completes a LINK-ONLY task without any public link', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    mockResolveRecording.mockResolvedValue(resolved);
+
+    const r = await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
+
+    expect(r).toMatchObject({ status: 'complete', points_awarded: 40, already_verified: false });
+    const [attrs] = mockTaskUpdate.mock.calls[0];
+    expect(attrs.verified_ref).toBe(`recording:${ATTEMPT}`);
+    expect(attrs.verified_by).toBe('demo_recording');
+    expect(attrs.verification_json).toMatchObject({ kind: 'recording', source: 'internal' });
+    // The whole point: nothing published anywhere.
+    expect(JSON.stringify(attrs)).not.toMatch(/https?:\/\//);
+  });
+
+  it('proves the attempt against THIS task rather than trusting the id', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    mockResolveRecording.mockResolvedValue(resolved);
+    await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
+    expect(mockResolveRecording).toHaveBeenCalledWith(PROJECT, 'PREP-2', ATTEMPT);
+  });
+
+  it('refuses an attempt that is not on this task, and completes nothing', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    mockResolveRecording.mockResolvedValue({ ok: false, reason: 'not_found' });
+    await expect(submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT }))
+      .rejects.toMatchObject({ status: 422, error_class: 'InvalidEvidence' });
+    expect(mockTaskUpdate).not.toHaveBeenCalled();
+    expect(mockAward).not.toHaveBeenCalled();
+  });
+
+  // "Not arrived yet" is a WAIT. Telling a student their id was wrong sends them
+  // to fix something that was already right.
+  it('tells a student to wait when the recording has not arrived, not that they got it wrong', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    mockResolveRecording.mockResolvedValue({ ok: false, reason: 'not_ready' });
+    await expect(submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT }))
+      .rejects.toMatchObject({ status: 409, error_class: 'RecordingNotReady' });
+    expect(mockTaskUpdate).not.toHaveBeenCalled();
+  });
+
+  // The faucet this guards: two evidence SURFACES, one task, one payment.
+  it('pays once when a student hands in a link and then points at a recording', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    const first = await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'link', value: 'https://youtu.be/abc' });
+    expect(first).toMatchObject({ points_awarded: 40 });
+
+    // Now verified, exactly as the row would read on the second request.
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2', verified_at: new Date(), verified_ref: 'https://youtu.be/abc' }));
+    mockResolveRecording.mockResolvedValue(resolved);
+    const second = await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
+
+    expect(second).toMatchObject({ already_verified: true, points_awarded: 0 });
+    expect(mockAward).toHaveBeenCalledTimes(1);
+    expect(mockResolveRecording).not.toHaveBeenCalled();
+  });
+
+  it('keys the award on the task, never on the evidence', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    mockResolveRecording.mockResolvedValue(resolved);
+    await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
+    expect(mockAward).toHaveBeenCalledWith(ENROLLMENT, expect.objectContaining({ eventKey: 'project:task-1', eventType: 'demo' }));
+  });
+
+  it('still refuses Demo Day, which only staff may mark', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-6' }));
+    await expect(submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-6', { kind: 'recording', value: ATTEMPT }))
+      .rejects.toMatchObject({ status: 409, error_class: 'StaffVerifiedTask' });
+    expect(mockResolveRecording).not.toHaveBeenCalled();
+  });
+
+  // Historical evidence must keep working and keep reading back as what it is.
+  it('leaves an external link path untouched', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-5' }));
+    const r = await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-5', { kind: 'link', value: 'https://drive.google.com/file/d/1/view' });
+    expect(r).toMatchObject({ status: 'complete' });
+    const [attrs] = mockTaskUpdate.mock.calls[0];
+    expect(attrs.verified_ref).toBe('https://drive.google.com/file/d/1/view');
+    expect(attrs.verified_by).toBe('demo_evidence');
   });
 });

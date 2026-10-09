@@ -49,6 +49,11 @@ export async function logDaraExchangeActivity(
   actorId: string,
   messageId: string,
   content: string,
+  eventId?: string,
+  authorizationDecisionId?: string | null,
 ): Promise<void> {
-  return logAgentExchangeActivity(ticketId, actorType, actorId, messageId, content, 'dara', 'curriculum_support');
+  return logAgentExchangeActivity(
+    ticketId, actorType, actorId, messageId, content, 'dara', 'curriculum_support',
+    undefined, eventId, authorizationDecisionId,
+  );
 }

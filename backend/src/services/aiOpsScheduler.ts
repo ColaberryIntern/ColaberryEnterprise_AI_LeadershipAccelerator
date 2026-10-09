@@ -79,6 +79,7 @@ import {
   runAgentBehaviorMonitor,
   runAdmissionsKnowledgeSync,
   runOfferRouting,
+  runCampaignPerformance,
   // Super agents
   runCampaignOpsSuperAgent,
   runLeadIntelligenceSuperAgent,
@@ -176,6 +177,16 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'ConversationOptimizationAgent', hardcodedSchedule: '0 4 * * *', runner: runConversationOptimization, label: 'Conversation optimization' },
   { agentName: 'CampaignQAAgent', hardcodedSchedule: '0 */6 * * *', runner: runCampaignQA, label: 'Campaign QA agent' },
   { agentName: 'CampaignSelfHealingAgent', hardcodedSchedule: '15,45 * * * *', runner: runSelfHealing, label: 'Campaign self-healing' },
+
+  // Marketing department — funnel performance analysis (agent_group 'marketing').
+  // Read-only: it SELECTs and returns a per-tenant report, writing no campaign,
+  // lead or email row. Its runner is aiOrchestrator's runAgent() wrapper, which
+  // already writes run_count/error_count and the activity-log row, so this entry
+  // must NOT be added to UNINSTRUMENTED_AGENTS above — that set means the runner
+  // ALSO gets instrumentCronJob(), and two writers on one AiAgent row
+  // double-count every run. Offset to :25 rather than joining the four other
+  // jobs already on '0 */6 * * *'.
+  { agentName: 'DeptCampaignPerformanceAgent', hardcodedSchedule: '25 */6 * * *', runner: runCampaignPerformance, label: 'Marketing campaign performance analysis' },
 
   // Platform agents
   { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth, label: 'Orchestration health' },
@@ -405,6 +416,18 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
       await generateWeeklyStrategicBriefing();
     },
     label: 'Executive weekly briefing',
+  },
+  {
+    // Gov pursuit daily tracking — re-check the v1 discovery feed for pursued opportunities and flag deadline
+    // changes / drops from the feed. Ships DARK: the runner no-ops unless ENABLE_GOV_DAILY_SYNC=true (a distinct
+    // flag from govIngestion, which is already on), so registering this changes nothing until it is switched on.
+    agentName: 'GovOpportunityDailySync',
+    hardcodedSchedule: '0 7 * * *',
+    dynamicImport: async () => {
+      const { syncPursuedGovOpportunities } = await import('./factory/govOpportunitySync');
+      await syncPursuedGovOpportunities();
+    },
+    label: 'Gov opportunity daily sync',
   },
   // REMOVED 2026-06-05 (CC-20260603-v7da, Ali approved): this morning
   // digest fires at 45 6 * * * — the same minute as DailyExecutiveBriefing

@@ -3,11 +3,13 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
+import ReeseTicketFollowUp from '../../models/ReeseTicketFollowUp';
 import { getReeseEnrollmentId, getReeseAdminUserId, getReeseAgentId, isReeseEnabled } from './reeseIdentitySeed';
 import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
 import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
+import { recordHeldAction } from './reeseGovernedActionLog';
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
 import type { AttachmentRef } from '../agents/tools/types';
@@ -130,6 +132,24 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       try {
         const ticket = await ensureReeseTicketForRoom(roomId, senderEnrollmentId, triggeringMessage.content);
         ticketId = ticket.id;
+
+        // Reese ticket follow-up (2026-10-02) — the moment the student
+        // replies, any silence streak reeseTicketFollowUpService.ts was
+        // tracking genuinely broke; a later quiet period is a fresh one, not
+        // a continuation toward the same 3-attempt cap. Best-effort, never
+        // blocking the real reply — a reset failure just means the counter
+        // stays stale until the next sweep re-evaluates eligibility fresh.
+        try {
+          await ReeseTicketFollowUp.update(
+            { attempt_count: 0, status: 'active' } as any,
+            { where: { ticket_id: ticketId } },
+          );
+        } catch (e: any) {
+          console.warn(JSON.stringify({
+            level: 'warn', service: 'reese', event: 'ticket_followup_reset_failed',
+            ticket_id: ticketId, error_class: e?.name || 'Error', message: String(e?.message || e),
+          }));
+        }
 
         const studentName = await resolveStudentDisplayName(senderEnrollmentId);
         const workUnit = await createWorkUnit(ticketId, {
@@ -257,15 +277,23 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
     // — would be a real, new regression: a student's reply going unanswered
     // over an unrelated ticket-linking hiccup, worse than the gap it would
     // "fix".
+    // Approval-correlation fix (2026-10-02) — lifted out of the authorization
+    // call below (which only runs inside `if (ticketId)`) so the SAME id can
+    // also be threaded into the ledger write for Reese's own reply further
+    // down, in a separate `if (ticketId)` block after the real send.
+    const replyEventId = crypto.randomUUID();
+    let replyAuthorizationDecisionId: string | null | undefined;
+
     if (ticketId) {
       const authResult = await authorizeTicketDispatch({
-        eventId: crypto.randomUUID(),
+        eventId: replyEventId,
         ticketId,
         agentName: 'Reese',
         action: 'reese_dm_reply',
         riskTier: REPLY_RISK_TIER,
         preparedAction: { roomId, content: reply },
       });
+      replyAuthorizationDecisionId = authResult.decisionId;
 
       // allowed is the real, mode-aware signal (unconditionally true in shadow
       // mode — see agentActionAuthorizationBridge.ts's own header). A held
@@ -278,6 +306,23 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
           event: 'reply_held_for_approval', outcome: 'partial',
           context: { room_id: roomId, ticket_id: ticketId, reason: authResult.reason },
         }));
+        // Make the hold visible in the one table Reese's own scorecard reads.
+        // Pure bookkeeping, after the branch has already decided not to send —
+        // see reeseGovernedActionLog.ts's header. Fail-open by contract.
+        await recordHeldAction({
+          action: 'reese_dm_reply',
+          riskTier: REPLY_RISK_TIER,
+          verdict: authResult.verdict,
+          reasonCode: authResult.reason,
+          // The unit is the student message that triggered this reply: each
+          // held turn in a conversation is its own decision, so a second
+          // message held later is correctly a second row — only a re-run
+          // against the SAME triggering message dedupes.
+          unitKey: `room_message:${triggeringMessage?.id ?? `room:${roomId}`}`,
+          eventId: replyEventId,
+          decisionId: authResult.decisionId,
+          details: { room_id: roomId, ticket_id: ticketId },
+        });
         // Workspace mission, Phase 2 slice 1 — 'blocked' is the real, correct
         // existing status value for exactly this case.
         if (workUnitId) await updateWorkUnitStatus(workUnitId, 'blocked');
@@ -332,7 +377,14 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
       // different identity row used only for presence/DM membership.
       const reeseAdminUserId = await getReeseAdminUserId();
       if (reeseAdminUserId) {
-        await logReeseExchangeActivity(ticketId, 'ai_staff', reeseAdminUserId, replyMessage.id, reply, workUnitId);
+        // Approval-correlation fix (2026-10-02) — thread the same
+        // eventId/decisionId the authorization check above generated, so the
+        // real ledger row this call writes is the one that id was always
+        // meant to correlate to.
+        await logReeseExchangeActivity(
+          ticketId, 'ai_staff', reeseAdminUserId, replyMessage.id, reply, workUnitId,
+          replyEventId, replyAuthorizationDecisionId,
+        );
       }
     }
 

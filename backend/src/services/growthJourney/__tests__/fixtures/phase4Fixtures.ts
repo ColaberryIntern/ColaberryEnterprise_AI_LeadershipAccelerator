@@ -141,13 +141,15 @@ export function twoTriggerSubject(): HandoffFixture {
 
 /* ── §16 A–L at handoff level ────────────────────────────────────────────────── */
 
+// The letters are the brief's: A is the CPN learner, B the Colaberry Training explorer (T601 corrected the labels; the fixtures
+// themselves - and their order, which the suites index - are unchanged).
 export function learnerScenarios(): HandoffFixture[] {
   return [
-    learnerSubject('colaberry-training', 'A-enrollment-ready-in-conversation', 'A', READY_IN_CONVERSATION, { expect: { state: 'ENROLLMENT_READY', queue: 'admissions' } }),
-    learnerSubject('colaberry-training', 'A-activating', 'A', { primary_state: 'ACTIVATING', overlays: [] }, { expect: { state: 'ACTIVATING', queue: null } }),
+    learnerSubject('colaberry-training', 'B-enrollment-ready-in-conversation', 'B', READY_IN_CONVERSATION, { expect: { state: 'ENROLLMENT_READY', queue: 'admissions' } }),
+    learnerSubject('colaberry-training', 'B-activating', 'B', { primary_state: 'ACTIVATING', overlays: [] }, { expect: { state: 'ACTIVATING', queue: null } }),
     // Email is ineligible without a stop: the brand paused the channel. A recovery message into a void is not recovery.
-    learnerSubject('cpn', 'B-friction-email-paused', 'B', { primary_state: 'ACTIVE_LEARNER', overlays: ['FRICTION'], scores: { e: 20, i: 5, f: 30 } }, { contact: 'email_paused', expect: { state: 'ACTIVE_LEARNER', queue: 'support' } }),
-    learnerSubject('cpn', 'B-activating', 'B', { primary_state: 'ACTIVATING', overlays: [] }, { expect: { state: 'ACTIVATING', queue: null } }),
+    learnerSubject('cpn', 'A-friction-email-paused', 'A', { primary_state: 'ACTIVE_LEARNER', overlays: ['FRICTION'], scores: { e: 20, i: 5, f: 30 } }, { contact: 'email_paused', expect: { state: 'ACTIVE_LEARNER', queue: 'support' } }),
+    learnerSubject('cpn', 'A-activating', 'A', { primary_state: 'ACTIVATING', overlays: [] }, { expect: { state: 'ACTIVATING', queue: null } }),
   ];
 }
 

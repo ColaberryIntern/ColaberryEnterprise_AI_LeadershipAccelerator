@@ -3,14 +3,16 @@ import { Op } from 'sequelize';
 import { env } from '../../../config/env';
 import type { ExplorerGrowthFlags } from '../../../config/explorerGrowthFlags';
 import { isGrowthJourneyCapabilityEnabled, type GrowthJourneyFlags } from '../../../config/growthJourneyFlags';
-import { EventLedger, GrowthJourneyExecution, JourneyProgram } from '../../../models';
+import { GrowthJourneyExecution, JourneyProgram } from '../../../models';
 import { classifyError } from '../../../utils/errorClassifier';
 import { redactForLogs } from '../../../utils/piiRedaction';
 import { executionChannelOf, LIVE_MODES } from '../decision/executionModeStamp';
 import type { JourneyProgramKind } from '../governor/types';
+import { readJourneyEvents } from '../ledgerRead';
 import { ALI_DAILY_CAP } from '../../explorerGrowth/explorerAliOutreachService';
 import { aliSendsToday } from './aliOutreachContext';
 import { readLiveDecisionViews } from './decisionReads';
+import { emitRunEvent } from './executorRunEvent';
 import { executeApproved, type ExecuteApprovedResult } from './enrollmentAdapter';
 import { MAX_DECISION_AGE_HOURS, type ExecutionDecisionView } from './planChecks';
 import { planExecution } from './planExecution';
@@ -128,19 +130,19 @@ async function activePrograms(): Promise<ProgramRow[]> {
   return rows.map((p) => ({ id: String(p.get('id')), brand_id: String(p.get('brand_id')), kind: p.get('kind') as JourneyProgramKind }));
 }
 
-/** The decision ids the planner refused inside the window, among `ids`; on a read error, none (fail open, logged). */
+/**
+ * The decision ids the planner refused inside the window, among `ids`; on a read failure, none (fail open, logged).
+ * T602: through the ledger's bounded read - its own transaction, a statement timeout, a row cap - so a wide window
+ * can cost at most one bounded query; the read's own failure answer (a timeout, an error class) is this warning.
+ */
 async function rememberedRefusals(ids: string[], since: Date, correlation_id: string): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  try {
-    const rows = await EventLedger.findAll({
-      where: { event_type: 'growth_journey.execution.refused', entity_type: 'growth_journey_decision', entity_id: { [Op.in]: ids }, created_at: { [Op.gte]: since } },
-      attributes: ['entity_id'],
-    });
-    return new Set(rows.map((r) => String(r.get('entity_id'))));
-  } catch (err: unknown) {
-    log('warn', 'growth_journey.executor.refusal_memory_unavailable', { correlation_id, outcome: 'partial', error_class: classifyError(err) }, { candidates: ids.length });
+  const read = await readJourneyEvents({ entityType: 'growth_journey_decision', entityIds: ids, eventType: 'growth_journey.execution.refused', since });
+  if ('error_class' in read) {
+    log('warn', 'growth_journey.executor.refusal_memory_unavailable', { correlation_id, outcome: 'partial', error_class: read.error_class }, { candidates: ids.length, timed_out: read.timed_out });
     return new Set();
   }
+  return new Set(read.rows.map((r) => r.entity_id));
 }
 
 type Candidate = { decision: ExecutionDecisionView; program: ProgramRow };
@@ -276,5 +278,6 @@ export async function runExecutor(args: RunExecutorArgs = {}): Promise<ExecutorS
   log(s.stage_errors.length ? 'warn' : 'info', 'growth_journey.executor.run', { correlation_id, duration_ms: Date.now() - started, outcome: s.stage_errors.length ? 'partial' : 'success' }, {
     plan: s.plan, execute: s.execute, reconcile: s.reconcile, stage_errors: s.stage_errors,
   });
+  await emitRunEvent(s, correlation_id, Date.now() - started);
   return s;
 }

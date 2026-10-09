@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { TenantAccessError } from '../modules/tenancy/tenantAuthorization';
 import { personParamsSchema, personQuerySchema } from '../schemas/growthJourneySchema';
+import { buildPersonChain, type PersonChain } from '../services/growthJourney/personChainService';
 import { loadPersonJourney, type PersonJourney } from '../services/growthJourney/personJourneyService';
 import { accessDenied, badRequest, logReadFailure, scopedContext } from './growthJourneyController';
 
@@ -56,5 +57,44 @@ export async function getPersonJourneyHandler(req: Request, res: Response): Prom
     if (err instanceof TenantAccessError) return accessDenied(req, res, err, 'person_read_refused');
     const errorClass = logReadFailure(req, err, 'person_read_failed');
     res.status(500).json({ error: 'Person read failed', error_class: errorClass });
+  }
+}
+
+/**
+ * `GET /people/:leadId/chain` - can this person be followed end to end, and where does it break?
+ *
+ * Same status matrix and the same 404 body as the journey read above, deliberately:
+ * a lead outside the caller's scope must be indistinguishable from one that does not
+ * exist, and two routes that disagreed about which 404 to send would themselves be the
+ * oracle. It takes no `limit` - the chain is nine fixed hops, not a collection.
+ *
+ * `scrubAddresses` runs on the way out even though every `ref` is an id by contract.
+ * One hop is JOINED on an address - lead -> enrolment - so this is the surface where a
+ * leak would appear if that contract were ever broken upstream.
+ */
+export async function getPersonChainHandler(req: Request, res: Response): Promise<void> {
+  const params = personParamsSchema.safeParse(req.params);
+  if (!params.success) return badRequest(res, params.error);
+  const query = personQuerySchema.safeParse(req.query);
+  if (!query.success) return badRequest(res, query.error);
+
+  try {
+    const ctx = await scopedContext(req, res, query.data);
+    if (!ctx) return;
+    // The query schema is shared with the journey route, so `limit` still parses here
+    // and is simply not passed on: there is no collection for it to bound. Note the
+    // shared schema still rejects `?limit=999` with a 400 on this route, where the
+    // parameter means nothing - a wart inherited from sharing the schema, not a
+    // deliberate contract, and not worth a second schema to fix.
+    const result = await buildPersonChain({ leadId: params.data.leadId, ctx });
+    if (result.status === 'not_found') {
+      res.status(404).json(NOT_FOUND);
+      return;
+    }
+    res.json(scrubAddresses<PersonChain>(result.chain));
+  } catch (err) {
+    if (err instanceof TenantAccessError) return accessDenied(req, res, err, 'person_chain_read_refused');
+    const errorClass = logReadFailure(req, err, 'person_chain_read_failed');
+    res.status(500).json({ error: 'Person chain read failed', error_class: errorClass });
   }
 }

@@ -113,11 +113,21 @@ both slow and a chance to ship someone else's half-finished tree.
 timing, not failure.
 
 ```sh
-docker exec accelerator-backend node -e "fetch('http://localhost:3001/api/health').then(r=>console.log('health',r.status)).catch(e=>console.log('not up yet'))"
+docker exec accelerator-backend node -e "fetch('http://localhost:3001/health').then(r=>console.log('health',r.status)).catch(e=>console.log('not up yet'))"
 ```
 
 Repeat until it prints `health 200`. Port 3001 is not published on the host, and
 the image has no `wget` — use this form.
+
+**The path is `/health`, not `/api/health`.** This line said `/api/health` until
+2026-10-03, and that probe can never print `health 200`: `/api/health` sits behind
+the admin guard and answers **401** on a perfectly healthy backend. As a liveness
+check it still proved the port was bound — a response at all means the process is
+listening — but anyone following the instruction literally would have waited out
+the full window and concluded the rotation had failed. `/health` is the
+unauthenticated liveness route (`backend/src/routes/healthRoutes.ts`), and it
+returns 503 with `database unreachable` if Postgres is not answering, which is the
+signal this step actually wants. See `directives/growth-journey-operations.md` §6.4.
 
 ## Verification
 

@@ -321,6 +321,15 @@ export interface JourneyDecision {
   ai_involved: boolean;
   model_version: string | null;
   ruleset_version: string;
+  /**
+   * T608's holdout, and both are NULL on every decision until an operator writes
+   * a policy row. `holdout_group` is `'treatment' | 'control'` when an experiment
+   * applied to this decision; `experiment_key` names which one. A decision with
+   * no experiment carries null for both rather than a placeholder arm, because a
+   * placeholder would be counted by the lift read.
+   */
+  experiment_key?: string | null;
+  holdout_group?: string | null;
 }
 
 export type DecideOutcome =
@@ -346,4 +355,18 @@ export interface DecideDeps {
     candidate: JourneyCandidate,
     ctx: JourneySubjectContext,
   ) => Promise<{ assets: Record<string, unknown>[]; gaps: string[] }>;
+  /**
+   * T608. OPTIONAL, and that is the design: a caller that does not wire it runs
+   * exactly the decision path that shipped in Phase 3, so "no policy => no read,
+   * no change" holds structurally rather than by a test. Every existing caller
+   * passes nothing.
+   */
+  holdoutPolicyFor?: (brandId: string) => Promise<HoldoutPolicyInput | null>;
+}
+
+/** What the governor needs of a holdout policy; the service supplies more. */
+export interface HoldoutPolicyInput {
+  experiment_key: string;
+  control_share: number;
+  candidate_types?: readonly string[];
 }

@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth Journey OS — the campaigns</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --leaf:#77BB4A; --leaf-bg:#f0fff4; --amber:#B7791F; --amber-bg:#FFFBEB;
+    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --alt:#f7fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--alt);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.65}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 1.25rem}
+  header{background:linear-gradient(135deg,#1a1f2b 0%,#2d3748 100%);color:#fff;padding:2.75rem 0 2rem}
+  header h1{margin:.5rem 0;font-size:2rem;line-height:1.15}
+  header p{margin:0;color:#cbd5e0;max-width:66ch;font-size:1.05rem}
+  .badge{display:inline-block;background:var(--cherry);color:#fff;font-size:.72rem;font-weight:700;
+    letter-spacing:.07em;text-transform:uppercase;padding:.28rem .65rem;border-radius:3px}
+
+  h2.sec{font-size:1.35rem;color:var(--cherry);margin:2.75rem 0 .3rem}
+  .lede{color:var(--muted);margin:0 0 1.25rem;max-width:74ch}
+
+  .camp{background:#fff;border:1px solid var(--border);border-radius:8px;margin:0 0 1rem;
+    overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .camp .hd{display:flex;align-items:baseline;gap:.75rem;padding:.85rem 1.15rem;
+    border-bottom:1px solid var(--border);background:var(--alt);flex-wrap:wrap}
+  .camp .tier{flex:0 0 auto;min-width:2.2rem;height:2.2rem;border-radius:5px;background:#4a5568;
+    color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem}
+  .camp .tier.t2{background:#c53030}.camp .tier.t5{background:#B7791F}
+  .camp .tier.t6{background:#B7791F}.camp .tier.t7{background:#718096}
+  .camp .tier.t8{background:#a0aec0}.camp .tier.t9{background:#cbd5e0;color:#2d3748}
+  .camp .tier.t10{background:#e2e8f0;color:#4a5568}
+  .camp .tier.rev{background:#2b6cb0}
+  .camp .key{font-family:ui-monospace,Menlo,monospace;font-size:.9rem;font-weight:700;color:var(--cherry-deep)}
+  .camp .who{font-size:.78rem;color:var(--muted);margin-left:auto}
+  .camp .bd{padding:.95rem 1.15rem}
+  .camp .bd p{margin:0 0 .5rem}
+  .camp .bd p:last-child{margin-bottom:0}
+  .camp dl{display:grid;grid-template-columns:auto 1fr;gap:.35rem .9rem;margin:.6rem 0 0;font-size:.875rem}
+  .camp dt{font-weight:600;color:var(--muted);white-space:nowrap}
+  .camp dd{margin:0}
+
+  table{width:100%;border-collapse:collapse;font-size:.875rem;background:#fff;
+    border:1px solid var(--border);border-radius:6px;overflow:hidden;margin:1rem 0}
+  th,td{text-align:left;padding:.55rem .75rem;border-bottom:1px solid var(--border);vertical-align:top}
+  th{background:var(--alt);font-weight:600;font-size:.75rem;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--muted)}
+  tr:last-child td{border-bottom:0}
+
+  .box{border-left:4px solid var(--cherry);background:var(--cherry-bg);padding:.95rem 1.2rem;
+    border-radius:0 5px 5px 0;margin:1.25rem 0}
+  .box.good{border-left-color:var(--leaf);background:var(--leaf-bg)}
+  .box.warn{border-left-color:var(--amber);background:var(--amber-bg)}
+  .box p:first-child{margin-top:0}.box p:last-child{margin-bottom:0}
+  code{background:var(--alt);padding:.12rem .35rem;border-radius:3px;
+    font-family:ui-monospace,Menlo,monospace;font-size:.875em}
+  footer{padding:2.5rem 0 3.5rem;color:var(--muted);font-size:.875rem;background:#fff;
+    border-top:1px solid var(--border);margin-top:3rem}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <span class="badge">Eleven campaigns · none has ever run</span>
+  <h1>The campaigns, and when each one is used</h1>
+  <p>You never pick a campaign by hand. The system picks one per person per run, by
+     sorting the proposals. This is what each one is for and what has to be true about a
+     person before it can win.</p>
+</div></header>
+
+<div class="wrap">
+
+  <div class="box warn">
+    <p><strong>A correction to what I told you yesterday.</strong> I said there were
+    sixteen campaigns and that the worked example's winner was
+    <code>explorer_high_intent_fast_track</code> at tier 3. Both were wrong. There are
+    <strong>eleven</strong> registered campaigns; that key exists only in a test fixture,
+    not in the system; and the real high-intent campaign is
+    <code>explorer_enrollment_ready</code> at <strong>tier 5</strong>. My check had
+    counted a test file as proof. The worked example is corrected.</p>
+  </div>
+
+  <h2 class="sec">How to read the tier</h2>
+  <p class="lede">Lower number wins. The tier is the campaign's claim on a person's
+     attention, and only one campaign can win per person per run.</p>
+  <table>
+    <tr><th>Tier</th><th>Meaning</th></tr>
+    <tr><td><strong>1–2</strong></td><td>Something is wrong. Stop selling and fix it.</td></tr>
+    <tr><td><strong>5–6</strong></td><td>They are showing real buying signals, or they have stalled and are losable.</td></tr>
+    <tr><td><strong>7–8</strong></td><td>Normal progress. Teach them the next thing.</td></tr>
+    <tr><td><strong>9–10</strong></td><td>Keep in touch. Lowest claim; loses to everything.</td></tr>
+  </table>
+
+  <!-- ─────────── LEARNER ─────────── -->
+  <h2 class="sec">The learner campaigns — CPN and Colaberry Training</h2>
+  <p class="lede">Eight campaigns, proposed by four generators. Registered to
+     <code>colaberry / colaberry-training</code>, purpose "Explorer learner nurture".</p>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t2">2</span><span class="key">explorer_friction_recovery</span>
+      <span class="who">proposed by: friction recovery</span></div>
+    <div class="bd">
+      <p><strong>Something is blocking them and they are stuck on it.</strong> This is the
+      highest-priority campaign in the learner set, because a person fighting a broken
+      thing should never receive a sales email about the next cohort.</p>
+      <dl>
+        <dt>Wins when</dt><dd>friction is detected on the account</dd>
+        <dt>Use it for</dt><dd>unblocking — a login problem, a payment failure, a lesson that will not load</dd>
+        <dt>Note</dt><dd>if the friction needs a person rather than an email, the same generator proposes a <strong>human task</strong> at the same tier instead</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t5">5</span><span class="key">explorer_enrollment_ready</span>
+      <span class="who">proposed by: high intent</span></div>
+    <div class="bd">
+      <p><strong>They are showing real buying signals and nothing is in their way.</strong>
+      The closest thing in the set to a sales message, and it is deliberately fenced by
+      four conditions that must <em>all</em> hold.</p>
+      <dl>
+        <dt>Wins when</dt><dd>the <code>HIGH_INTENT</code> overlay is present <em>and</em> their intent score clears the threshold <em>and</em> their friction score is under 25 <em>and</em> email is eligible for them</dd>
+        <dt>Score</dt><dd>their intent score, capped at 100 — so the keenest person wins a tie</dd>
+        <dt>Use it for</dt><dd>someone asking about dates, prices or how to start</dd>
+        <dt>Note</dt><dd>the friction test is the interesting one: high intent <em>and</em> a problem means the problem wins at tier 2</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t6">6</span><span class="key">explorer_activation_never_started</span>
+      <span class="who">proposed by: activation rescue</span></div>
+    <div class="bd">
+      <p><strong>They signed up and never began.</strong> A different problem from stalling
+      part-way, and it gets its own campaign rather than a shared one, because the message
+      is genuinely different.</p>
+      <dl>
+        <dt>Wins when</dt><dd>state is <code>NEW_EXPLORER</code> or <code>ACTIVATING</code>, and they have <em>never</em> engaged</dd>
+        <dt>Use it for</dt><dd>a first-step nudge — "here is lesson one"</dd>
+        <dt>Channel</dt><dd>email if eligible, otherwise an in-app nudge</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t6">6</span><span class="key">explorer_activation_restart</span>
+      <span class="who">proposed by: activation rescue</span></div>
+    <div class="bd">
+      <p><strong>They started and stopped.</strong> Same tier as never-started, same
+      generator, different campaign — because "come back to lesson 3" and "start lesson 1"
+      are not the same email.</p>
+      <dl>
+        <dt>Wins when</dt><dd>state is <code>NEW_EXPLORER</code> or <code>ACTIVATING</code> and they <em>have</em> engaged before</dd>
+        <dt>Use it for</dt><dd>re-entry — picking up where they left off</dd>
+        <dt>Note</dt><dd>these two share a tier, so the <em>score</em> decides between them, and the generator scores them differently on purpose</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t7">7</span><span class="key">explorer_next_lesson</span>
+      <span class="who">proposed by: nurture</span></div>
+    <div class="bd">
+      <p><strong>They are learning and moving.</strong> The ordinary healthy case: keep
+      them going.</p>
+      <dl>
+        <dt>Wins when</dt><dd>they are in a learning state and email is eligible</dd>
+        <dt>Use it for</dt><dd>the next lesson recommendation</dd>
+        <dt>Note</dt><dd>loses to anything urgent, which is the point — a stalled learner should not get a cheerful "next lesson" email</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t8">8</span><span class="key">explorer_community_digest</span>
+      <span class="who">proposed by: nurture</span></div>
+    <div class="bd">
+      <p><strong>They have joined the community.</strong> A narrower digest for people who
+      have actually connected, rather than the general one.</p>
+      <dl>
+        <dt>Wins when</dt><dd>state is exactly <code>CONNECTED_TO_COMMUNITY</code> and email is eligible</dd>
+        <dt>Use it for</dt><dd>what is happening among their peers</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t9">9</span><span class="key">explorer_weekly_digest</span>
+      <span class="who">proposed by: nurture</span></div>
+    <div class="bd">
+      <p><strong>The fallback.</strong> If nothing more specific applies and they are
+      contactable, they get the weekly digest. Second-lowest claim in the whole set.</p>
+      <dl>
+        <dt>Wins when</dt><dd>nothing above applies and email is eligible</dd>
+        <dt>Use it for</dt><dd>staying present without a reason to push</dd>
+        <dt>Note</dt><dd>this is the one that loses most often, and that is correct — it is the default, not a strategy</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t10">10</span><span class="key">explorer_referral_invite</span>
+      <span class="who">proposed by: nurture</span></div>
+    <div class="bd">
+      <p><strong>Ask them to bring someone.</strong> Lowest claim of all eleven, because
+      asking a favour should never pre-empt helping them.</p>
+      <dl>
+        <dt>Wins when</dt><dd>the <code>REFERRAL_READY</code> overlay is present and email is eligible</dd>
+        <dt>Use it for</dt><dd>a referral ask, once they are clearly happy</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- ─────────── BUSINESS ─────────── -->
+  <h2 class="sec">The business campaigns — Colaberry Business and AI Flotation</h2>
+  <p class="lede">A different generator with its own tiers. Two registered flows, one per
+     brand, and <strong>never crossed</strong>: the lookup refuses to return another
+     brand's flow.</p>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t5">5</span><span class="key">gj_colaberry_business_discovery_questions</span>
+      <span class="who">proposed by: discovery questions</span></div>
+    <div class="bd">
+      <p><strong>Ask them what they actually need, before proposing anything.</strong>
+      Registered to <code>colaberry / colaberry-enterprise</code>, purpose "Layer 2
+      discovery questions".</p>
+      <dl>
+        <dt>Wins when</dt><dd>the brand's flow is approved and the lead is at the discovery stage</dd>
+        <dt>Use it for</dt><dd>a business lead whose requirement is not yet understood</dd>
+        <dt>Note</dt><dd>until the flow is approved, the proposal is recorded as the gap <code>no_approved_flow:discovery_questions</code> rather than silently skipped</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="camp">
+    <div class="hd"><span class="tier t5">5</span><span class="key">gj_ai_flotation_discovery_questions</span>
+      <span class="who">proposed by: discovery questions</span></div>
+    <div class="bd">
+      <p><strong>The same thing for AI Flotation, as a separate campaign.</strong>
+      Registered to <code>ai-flotation / ai-flotation</code>. Two brands, two campaigns,
+      deliberately — so one brand's questions can never be sent under the other's name.</p>
+      <dl>
+        <dt>Wins when</dt><dd>as above, for an AI Flotation lead</dd>
+        <dt>Use it for</dt><dd>consulting, automation and app-build enquiries</dd>
+        <dt>Never for</dt><dd>business training — AI Flotation does not sell it, and the request is <em>referred to Colaberry Business</em> instead</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="box">
+    <p><strong>The business generator also proposes things that are not campaigns.</strong>
+    At tier 6 a <code>clarification_question</code> when a lead has stalled; at tier 7
+    <code>capability_education</code> or a <code>case_study</code>; at tier 8 another
+    clarification; at tier 9 a nudge; and at tier <strong>1</strong> — above everything —
+    a <em>suppression</em>, when the right answer is to stop contacting them.</p>
+    <p>Those are content <em>purposes</em> rather than registered campaign keys, which is
+    why they are not in the list of eleven. They still need approved content to execute.</p>
+  </div>
+
+  <!-- ─────────── ALI ─────────── -->
+  <h2 class="sec">Ali's own outreach</h2>
+
+  <div class="camp">
+    <div class="hd"><span class="tier rev">REV</span><span class="key">ali_personal_outreach</span>
+      <span class="who">ownership: shared</span></div>
+    <div class="bd">
+      <p><strong>This one is yours, and the system can only ever prepare it.</strong>
+      Registered as <code>shared</code> rather than <code>journey</code>, because the
+      existing hourly cron enrols people into it with no journey receipt at all.</p>
+      <dl>
+        <dt>Mode</dt><dd><strong>REVIEW, permanently.</strong> The channel answers "review" whatever any rollout says</dd>
+        <dt>Can be</dt><dd>paused from the Controls tab</dd>
+        <dt>Cannot be</dt><dd>started from the Controls tab — it is not a rollout channel at all</dd>
+        <dt>Today</dt><dd>nothing proposes it. No generator emits that action, pinned by a dedicated guard test</dd>
+        <dt>Before it is ever used</dt><dd>section 6A has to be written: who may be contacted in your name, on what evidence. The shape it must take is an explicit request inside 72 hours, or a proposal-stage pipeline position</dd>
+      </dl>
+      <p>The <code>shared</code> ownership has a practical consequence: a send-time hold
+      that cannot read a receipt leaves ordinary Ali-outreach sends exactly as they are
+      today, and holds only a send whose receipt it actually found. Journey-owned
+      campaigns fail closed instead.</p>
+    </div>
+  </div>
+
+  <!-- ─────────── HARD STOPS ─────────── -->
+  <h2 class="sec">When no campaign may run at all</h2>
+  <p class="lede">Checked before any proposal is even considered. Any one of these and the
+     person is left alone entirely.</p>
+  <table>
+    <tr><th>Reason</th><th>Means</th></tr>
+    <tr><td><code>converted</code></td><td>they already bought. Stop selling</td></tr>
+    <tr><td><code>unsubscribed</code></td><td>they opted out</td></tr>
+    <tr><td><code>dnc</code></td><td>do not contact</td></tr>
+    <tr><td><code>consent_revoked</code></td><td>consent withdrawn</td></tr>
+    <tr><td><code>kill_switch</code></td><td>the global stop is on — <em>or</em> the health record could not be read at all, which is treated the same way on purpose</td></tr>
+    <tr><td><code>campaign_inactive</code></td><td>the campaign itself is switched off</td></tr>
+  </table>
+
+  <h2 class="sec">What this means in practice</h2>
+  <div class="box good">
+    <p><strong>You do not choose campaigns. You choose which ones exist and are
+    approved.</strong> After that the sort decides, the same way every time, and records
+    why.</p>
+    <p>So the lever you actually hold is the <em>content</em>: which of these eleven have
+    approved assets for a given brand and offer. Today none of the learner brands has a
+    single approved content rule, which is why the whole pipeline would stop at step 6
+    even with every switch on.</p>
+  </div>
+
+  <table>
+    <tr><th>If you want to…</th><th>Do this</th></tr>
+    <tr><td>Stop one campaign reaching anyone</td><td>pause its channel, or set the campaign inactive</td></tr>
+    <tr><td>Change what a campaign says</td><td>edit the campaign's sequence — the journey reads it, it does not own it</td></tr>
+    <tr><td>Make a campaign usable at all</td><td>approve a content rule for its brand and offer family</td></tr>
+    <tr><td>Stop a campaign winning so often</td><td>you cannot tune the tiers from the UI — they are in code, by design, so the ordering stays reproducible</td></tr>
+    <tr><td>See which campaign won and why</td><td>the Decisions tab: the winner, every loser, and each loser's reason</td></tr>
+  </table>
+
+</div>
+
+<footer><div class="wrap">
+  <p><strong>Read from the code on 2026-10-05.</strong> The eleven keys and their purposes
+  come from <code>execution/campaignKeys.ts</code>; the tiers and trigger conditions from
+  the four learner generators and the business strategy. Five further keys that appear in
+  the repo are test fixtures only and are deliberately excluded.</p>
+  <p>One person end to end: <code>docs/GROWTH_JOURNEY_WORKED_EXAMPLE.html</code> · The
+  diagrams: <code>docs/GROWTH_JOURNEY_HOW_IT_WORKS.html</code> · How to operate it:
+  <code>docs/GROWTH_JOURNEY_HOW_TO_USE.html</code></p>
+</div></footer>
+
+</body>
+</html>

@@ -80,3 +80,61 @@ export async function meetingAttendanceSummary(enrollmentId: string): Promise<At
     joined_at: new Date((r as any).joined_at).toISOString(),
   })));
 }
+
+/**
+ * ── THE CONSOLE'S ATTENDANCE, WHICH DELIBERATELY HAS NO PERCENTAGE ──────────────────────
+ *
+ * The Intern Console design asks for "9/12 - 75%". There is no honest way to produce the 12.
+ *
+ * `internship_meeting_attendance` records **joins only**: a row appears when an intern clicks
+ * into a meeting. Nothing anywhere records that a meeting was scheduled and missed.
+ * `required_meetings` (DEFAULT_INTERNSHIP_SETTINGS, internshipCohortService.ts) is a weekly
+ * *pattern* of four meetings, not a list of occurrences — turning it into a denominator means
+ * multiplying it by a week count, and that invents every one of the following: holidays, weeks
+ * before the intern joined, a cancelled session, a session moved, and the intern's own paused
+ * weeks. The resulting "75%" would be a number no table can be asked to confirm.
+ *
+ * So `expected` and `pct` are typed as the literal `null`. Not `number | null`: literal `null`,
+ * so that assigning a computed denominator is a compile error rather than a quiet regression.
+ * `basis` names which fact the reader is holding. When a scheduled-occurrence table exists this
+ * widens to a real ratio and `basis` becomes the thing that changed.
+ *
+ * Note the type is a *second* line of defence and not the first: `ts-jest` runs with
+ * `isolatedModules`, so a fabricated percentage would still execute under a green suite. The
+ * test that no input produces a percentage is what actually holds this.
+ */
+export interface ConsoleAttendance {
+  /** Distinct meeting-occurrences this intern joined. A count, not a rate. */
+  readonly attended: number;
+  readonly by_meeting: Record<string, number>;
+  readonly last_attended_at: string | null;
+  /** Always null — no table records a scheduled-and-missed occurrence. See above. */
+  readonly expected: null;
+  /** Always null. A percentage here would be fabricated. */
+  readonly pct: null;
+  /** Names what the numbers above are made of, so the absence above is readable. */
+  readonly basis: 'joins_only';
+}
+
+/**
+ * Project a join summary into the console's shape. Pure, so "no input yields a percentage"
+ * can be asserted across every fixture without a database.
+ *
+ * `expected` and `pct` are emitted as explicit keys rather than omitted: a missing key invites
+ * `attended / (expected ?? 12)` downstream, which is the fabrication this exists to prevent.
+ */
+export function toConsoleAttendance(summary: AttendanceSummary): ConsoleAttendance {
+  return {
+    attended: summary.total,
+    by_meeting: summary.by_meeting,
+    last_attended_at: summary.last_attended_at,
+    expected: null,
+    pct: null,
+    basis: 'joins_only',
+  };
+}
+
+/** This intern's attendance, in the shape the Intern Console renders. */
+export async function consoleAttendance(enrollmentId: string): Promise<ConsoleAttendance> {
+  return toConsoleAttendance(await meetingAttendanceSummary(enrollmentId));
+}

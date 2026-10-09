@@ -12,7 +12,7 @@
  */
 import OpenAI from 'openai';
 import type {
-  ProcessRecord, FactoryTask, Assignment, TransitionEdge, Role,
+  ProcessRecord, FactoryTask, Assignment, TransitionEdge, Role, AllocationRow, RoleMapRow,
 } from './contracts/factoryContract';
 import { FACTORY_DECOMPOSITION_JSON_SCHEMA } from './contracts/factoryContractSchema';
 import {
@@ -48,6 +48,16 @@ export interface FactoryDecomposition {
   assignments: Assignment[];
   transitions: TransitionEdge[];
   roles: Role[];
+  /**
+   * OPTIONAL on the type, REQUIRED in the JSON schema, and those are not in conflict.
+   *
+   * Strict structured outputs force every property into `required`, so a compliant model always
+   * sends both keys - as `null` when it has nothing to state. Every decomposition stored BEFORE
+   * P3-T3 has neither, which is why they stay optional here: making them required on the type
+   * would break `isDecompositionShaped` callers that read older rows.
+   */
+  allocation?: AllocationRow[] | null;
+  role_map?: RoleMapRow[] | null;
 }
 
 export interface FactoryDecomposeOptions {

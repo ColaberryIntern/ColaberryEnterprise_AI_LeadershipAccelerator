@@ -38,8 +38,14 @@ beforeEach(() => {
 });
 
 const now = new Date('2026-07-14T08:00:00.000Z');
-const memberA: any = { id: 'member-a', enrollment_id: 'enr-a', enrollment: { id: 'enr-a', cohort_id: 'cohort-1', email: 'ada@example.com', full_name: 'Ada Lovelace' } };
-const memberB: any = { id: 'member-b', enrollment_id: 'enr-b', enrollment: { id: 'enr-b', cohort_id: 'cohort-1', email: 'grace@example.com', full_name: 'Grace Hopper' } };
+// `status` and `notifications_paused_at` are part of the fixture because the
+// digest now reads them (see isDigestEligible). They were absent while the
+// recipient query had no filter at all — which is precisely why no test here
+// noticed that withdrawn and notification-paused members were being mailed
+// every morning. A fixture that cannot express "this member opted out" cannot
+// catch a sender that ignores the opt-out.
+const memberA: any = { id: 'member-a', enrollment_id: 'enr-a', enrollment: { id: 'enr-a', cohort_id: 'cohort-1', email: 'ada@example.com', full_name: 'Ada Lovelace', status: 'active', notifications_paused_at: null } };
+const memberB: any = { id: 'member-b', enrollment_id: 'enr-b', enrollment: { id: 'enr-b', cohort_id: 'cohort-1', email: 'grace@example.com', full_name: 'Grace Hopper', status: 'active', notifications_paused_at: null } };
 
 describe('runDailyDigest', () => {
   it('happy path: sends one digest per member with an unsent log row for today', async () => {
@@ -120,6 +126,53 @@ describe('runDailyDigest', () => {
     const result = await runDailyDigest(now);
 
     expect(result).toEqual({ sent: 1, skipped: 1, errors: 0 });
+  });
+
+  it('does not mail a member who paused notifications, even if the query returns them', async () => {
+    // END TO END, not just the predicate. The query is narrowed too, but a
+    // refactor can drop an include-where and no test would notice — so this
+    // feeds an ineligible member straight into the batch and proves the send
+    // still does not happen. This is the reported bug: notifications_paused_at
+    // was set on 2026-09-28, honoured by every other sender, and ignored here
+    // for three days.
+    findAllMembers.mockResolvedValue([{
+      ...memberA,
+      enrollment: { ...memberA.enrollment, notifications_paused_at: new Date('2026-09-28T15:04:33Z') },
+    }]);
+
+    const result = await runDailyDigest(now);
+
+    expect(result).toEqual({ sent: 0, skipped: 1, errors: 0 });
+    expect(sendCommunityDigestEmailMock).not.toHaveBeenCalled();
+    // No log row either: claiming one would assert a digest for somebody who
+    // should never have been in the batch.
+    expect(findOrCreateDigestLog).not.toHaveBeenCalled();
+  });
+
+  it('does not mail a member who has left', async () => {
+    // 26 of the 29 wrongly mailed on 2026-10-01 were withdrawn.
+    findAllMembers.mockResolvedValue([{
+      ...memberA,
+      enrollment: { ...memberA.enrollment, status: 'withdrawn' },
+    }]);
+
+    const result = await runDailyDigest(now);
+
+    expect(result).toEqual({ sent: 0, skipped: 1, errors: 0 });
+    expect(sendCommunityDigestEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('asks the database for eligible members only, rather than filtering 315 rows in memory', async () => {
+    findAllMembers.mockResolvedValue([]);
+
+    await runDailyDigest(now);
+
+    const include = (findAllMembers.mock.calls[0][0] as any).include[0];
+    expect(include.required).toBe(true);
+    expect(include.where).toEqual({ status: 'active', notifications_paused_at: null });
+    // The columns the rule reads must actually be selected. Not selecting them
+    // is how the original query made the mistake unobservable.
+    expect(include.attributes).toEqual(expect.arrayContaining(['status', 'notifications_paused_at']));
   });
 
   it('boundary path: a member with no enrollment record is skipped, not errored', async () => {

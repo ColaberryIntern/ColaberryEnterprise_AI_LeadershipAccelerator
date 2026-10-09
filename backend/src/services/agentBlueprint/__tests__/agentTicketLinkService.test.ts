@@ -129,4 +129,24 @@ describe('logAgentExchangeActivity', () => {
     await logAgentExchangeActivity('ticket-1', 'human', 'user-1', 'msg-5', 'Hello', 'curriculumqa', 'curriculum_review');
     expect(mockEmitEvent.mock.calls[0][0].workUnitId).toBeUndefined();
   });
+
+  // Approval-correlation fix (2026-10-02) — the new, optional eventId/
+  // authorizationDecisionId parameters, threaded straight through to
+  // emitEvent()'s own real, already-supported eventId/authorizationDecisionId
+  // fields, so a caller's own authorization-check id can correlate to the
+  // real ledger row this function writes.
+  it('passes eventId and authorizationDecisionId through to emitEvent() when supplied', async () => {
+    await logAgentExchangeActivity(
+      'ticket-1', 'ai_staff', AGENT_ADMIN_ID, 'msg-6', 'Reviewed.', 'curriculumqa', 'curriculum_review',
+      'wu-1', 'event-abc', 'decision-xyz',
+    );
+    expect(mockEmitEvent.mock.calls[0][0].eventId).toBe('event-abc');
+    expect(mockEmitEvent.mock.calls[0][0].authorizationDecisionId).toBe('decision-xyz');
+  });
+
+  it('genuine no-op when eventId/authorizationDecisionId are omitted — every existing caller is unaffected', async () => {
+    await logAgentExchangeActivity('ticket-1', 'human', 'user-1', 'msg-7', 'Hello', 'curriculumqa', 'curriculum_review');
+    expect(mockEmitEvent.mock.calls[0][0].eventId).toBeUndefined();
+    expect(mockEmitEvent.mock.calls[0][0].authorizationDecisionId).toBeUndefined();
+  });
 });

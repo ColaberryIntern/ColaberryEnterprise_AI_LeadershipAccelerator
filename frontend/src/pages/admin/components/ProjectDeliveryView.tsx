@@ -115,8 +115,14 @@ interface GanttRelease extends ReleaseSummaryLike {
 interface Gantt {
   project_id: string;
   releases: GanttRelease[];
-  /** REQ id -> statement, from the published plan. Empty for a project that has none. */
+  /** REQ id -> statement, from the newest plan. Empty for a project that has none. */
   requirements?: Record<string, string>;
+  /**
+   * These releases came from the PLAN, not from materialised tasks — a build held for
+   * review. Said on screen rather than inferred, because stories with no dates would
+   * otherwise read as a schedule that went missing.
+   */
+  plan_only?: boolean;
   totals: { tasks: number; complete: number; overdue: number; undated: number };
 }
 
@@ -467,6 +473,22 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
 
                 {/* The release table. Each row expands to its stories, so the spine and
                     the work sit in one place rather than in separate panels. */}
+                {/* A build held for review has a plan and no tasks. Say which you are
+                    looking at: the stories are real, the absent dates are not a fault. */}
+                {g?.plan_only && (
+                  <div
+                    className="mb-2"
+                    style={{
+                      border: '0.5px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
+                      background: 'var(--surface-subtle, #f8f9fa)', padding: '7px 10px', fontSize: 12.5,
+                    }}
+                  >
+                    <strong>Not assigned yet.</strong> This is the plan as built — releases and
+                    stories, with the requirements each one fulfils. Dates and progress appear once
+                    it is assigned, and nobody but you can see it until then.
+                  </div>
+                )}
+
                 {g && g.totals.tasks > 0 && (
                   <div style={{
                     border: '0.5px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',

@@ -91,6 +91,7 @@ export const DOMAINS: readonly DomainDef[] = [
       '/admin/opportunities',
       '/admin/business-accounts',
       '/admin/explorer-growth',
+      '/admin/growth-journey',
       '/admin/sources',
       '/admin/ingest-logs',
       '/admin/routing-rules',

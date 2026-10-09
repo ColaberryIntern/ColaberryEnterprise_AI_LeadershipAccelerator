@@ -41,6 +41,10 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/content', 'campaigns'],
   // Publishing queue and receipts (T026): the same surface the composer submits into.
   ['/api/admin/publishing', 'campaigns'],
+  // Landing page authoring (brief -> draft -> preview -> publish at /p/:brand/:slug). Mapped the
+  // day the routes landed, for the reason the brands row above gives: these are the destinations
+  // campaigns point at, so they belong to the same section rather than a new key.
+  ['/api/admin/landing-pages', 'campaigns'],
   // Explorer Growth OS Command Center (spec §27; §1381 assigns it
   // `section: 'campaigns'` explicitly, so no new section key is needed).
   //
@@ -52,6 +56,14 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // Classified paths fail predictably. The case-studies row below is the
   // receipt for learning that the expensive way.
   ['/api/admin/explorer-growth', 'campaigns'],
+  // Growth Journey OS (Phase 6, T604): the multi-brand framework Explorer Growth became the
+  // first programme on, so it is the same section for the same reason - it governs who may be
+  // contacted on behalf of which brand, which is campaigns work. DEFENSIVE in the same way as
+  // the row above: no scoped role holds 'campaigns' today, so this admits nobody new, and the
+  // day one does, a classified path fails predictably rather than 403ing for a reason nothing
+  // in the code explains. It covers `/status` too (the matcher is '/'-delimited), which is
+  // deliberate - an always-readable registry is still campaigns data.
+  ['/api/admin/growth-journey', 'campaigns'],
   ['/api/admin/sources', 'lead_ingestion'], ['/api/admin/ingest-logs', 'lead_ingestion'],
   ['/api/admin/routing-rules', 'lead_ingestion'], ['/api/admin/autonomous', 'lead_ingestion'],
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],
@@ -117,6 +129,15 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/import', 'lead_ingestion'],
   ['/api/admin/tracking-estate', 'campaigns'],
   ['/api/admin/executive-narrative', 'dashboard'],
+  // Unified project lifecycle (docs/project-lifecycle/architecture.md). A project's lifecycle is
+  // program-domain work, the same section as the delivery contracts and projects it governs.
+  //
+  // Mapped the day the routes landed, for the reason the rows above give: THIS GATE IS
+  // DENY-BY-DEFAULT, so an unmapped path reaches the final 403 with nothing explaining why. There
+  // is no frontend route yet (Phase 5 adds the review page), so there is deliberately no
+  // UNLISTED_PATH_SECTIONS twin — that list pairs FRONTEND routes lacking a sidebar entry with a
+  // section, and this is an API-only surface for now.
+  ['/api/admin/project-lifecycle', 'program'],
   // Audit ledger — classified from what it returns (event_type, actor,
   // entity_type, entity_id, payload), not from its name.
   ['/api/admin/events', 'system'],

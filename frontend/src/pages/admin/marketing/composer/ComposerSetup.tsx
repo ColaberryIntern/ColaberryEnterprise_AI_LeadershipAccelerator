@@ -1,8 +1,15 @@
 import React from 'react';
 import type { Brand } from '../../../../services/adminBrandApi';
-import type { ContentType, Poll } from '../../../../services/contentComposerApi';
+import type { ContentType, Poll, ProviderSummary } from '../../../../services/contentComposerApi';
 import ComposerPollEditor, { EMPTY_POLL } from './ComposerPollEditor';
 import { blockerSentence, canCreate } from './setupGate';
+import { setupShape } from './setupShape';
+import { checkVideoLink, excludedByContentType, linkPostNotice } from './videoSource';
+import {
+  applyDestination, destinationMode, externalUrlNote, pickerNote, selectablePages,
+  type LandingPageOption,
+} from './landingPageChoices';
+import { forBrand } from '../marketingCampaigns';
 
 /**
  * Steps 1, 3 and 4: the choices that fix WHAT is being said and FOR WHOM.
@@ -23,6 +30,8 @@ export interface SetupValues {
   brand_id: string;
   campaign_id: string;
   title: string;
+  /** A landing page this platform built. Mutually exclusive with destination_url. */
+  landing_page_id: string | null;
   destination_url: string;
   canonical_body: string;
   content_type: ContentType;
@@ -39,6 +48,18 @@ export interface ComposerSetupProps {
   /** True once the item exists - brand and campaign can no longer change. */
   locked: boolean;
   busy: boolean;
+  /**
+   * Why the brand is already decided, if it is. The marketing shell has ONE brand bar above
+   * every page - its own header says pages below it 'read the choice instead of asking for it
+   * again, which is why the per-page pickers could go'. This one was missed, so the composer
+   * kept a second, independent brand and the bar's promise - 'Everything below is this brand
+   * only' - was false here. Null means nothing has decided yet, and only then is a picker shown.
+   */
+  /** Create a marketing campaign for this brand, in place. Absent when creation is unavailable. */
+  onCreateCampaign?: (name: string) => void;
+  brandFixedBy?: 'scope' | 'draft' | null;
+  /** The decided brand's name, for display when there is no picker. */
+  brandName?: string | null;
   onChange: (next: SetupValues) => void;
   onSubmit: () => void;
   /** Assign the chosen campaign its UTM slug (the composer cannot mint links without one). */
@@ -47,19 +68,51 @@ export interface ComposerSetupProps {
   onDraftMessage?: (topic: string) => void;
   /** Holes and unsupported specifics in the last draft, surfaced beside the message box. */
   draftNotes?: { placeholders: string[]; unverifiedClaims: string[] } | null;
+  /** Connected networks, so a link post can name which of them it would exclude. */
+  providers?: readonly ProviderSummary[];
+  /**
+   * This brand's landing pages. Unfiltered on purpose: the picker shows the ones that can be
+   * chosen AND names the ones it is withholding with a reason, which a pre-filtered list could
+   * not do.
+   */
+  landingPages?: readonly LandingPageOption[];
+  /** Send the operator off to build one. Absent when there is nowhere to send them yet. */
+  onCreateLandingPage?: () => void;
+  /** The inline landing-page builder, rendered in place of navigating away. */
+  builderSlot?: React.ReactNode;
+  /**
+   * The upload control, rendered INSIDE the content-type column.
+   *
+   * It is a slot rather than a prop bundle because the upload needs the item id, the upload
+   * progress and the attach/detach handlers - all of which live on the page. Passing the node
+   * keeps that ownership where it is and still puts the control where the eye expects it:
+   * directly under "video", not at the bottom of the form.
+   */
+  mediaSlot?: React.ReactNode;
 }
 
 const CONTENT_TYPES: ContentType[] = ['text', 'image', 'video', 'carousel', 'thread', 'link', 'poll', 'document'];
-/** Types the validator refuses without at least one media item; attach one under Channels. */
-const MEDIA_TYPES: ReadonlySet<ContentType> = new Set<ContentType>(['image', 'video', 'carousel', 'document']);
 
 export default function ComposerSetup({
   values, brands, campaigns, locked, busy, onChange, onSubmit, onAssignSlug, onDraftMessage, draftNotes,
+  brandFixedBy = null, brandName = null, onCreateCampaign,
+  providers = [], mediaSlot = null, landingPages = [], onCreateLandingPage, builderSlot = null,
 }: ComposerSetupProps) {
   const [topic, setTopic] = React.useState('');
+  const [namingCampaign, setNamingCampaign] = React.useState(false);
+  const [campaignName, setCampaignName] = React.useState('');
+  /** 'upload' or 'link', for a video. Local: choosing it is not yet a change to the post. */
+  const [videoSource, setVideoSource] = React.useState<'upload' | 'link'>('upload');
+  const [videoLink, setVideoLink] = React.useState('');
+  const [videoLinkError, setVideoLinkError] = React.useState<string | null>(null);
+
   const set = <K extends keyof SetupValues>(k: K, v: SetupValues[K]) => onChange({ ...values, [k]: v });
-  const visibleCampaigns = campaigns.filter((c) => !values.brand_id || !c.brand_id || c.brand_id === values.brand_id);
+  const note = pickerNote(landingPages, values.brand_id);
+  // Same rule as brand setup's Campaigns tab, so the count there matches what this offers.
+  const visibleCampaigns = forBrand(campaigns, values.brand_id || null);
   const chosen = campaigns.find((c) => c.id === values.campaign_id);
+  // What THIS content type needs. Drives the labels and which fields render at all.
+  const shape = setupShape(values.content_type);
   const canSubmit = canCreate(values, busy);
   const blocker = blockerSentence(values);
 
@@ -67,11 +120,30 @@ export default function ComposerSetup({
     <form onSubmit={(e) => { e.preventDefault(); if (canSubmit) onSubmit(); }}>
       <div className="row g-3">
         <div className="col-md-4">
-          <label className="form-label small mb-1" htmlFor="composer-brand">Brand</label>
-          <select id="composer-brand" className="form-select form-select-sm" value={values.brand_id} disabled={locked || busy} onChange={(e) => set('brand_id', e.target.value)}>
-            <option value="">Choose a brand</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+          {brandFixedBy ? (
+            <>
+              <div className="form-label small mb-1">Brand</div>
+              <div className="form-control form-control-sm bg-light" data-testid="composer-brand-fixed">
+                {brandName ?? 'Not set'}
+              </div>
+              <div className="form-text small">
+                {brandFixedBy === 'scope'
+                  ? 'Set by the brand bar at the top of Marketing. Change it there and every page follows.'
+                  : 'Fixed when this draft was created, so its tracked links keep pointing at one brand.'}
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="form-label small mb-1" htmlFor="composer-brand">Brand</label>
+              <select id="composer-brand" className="form-select form-select-sm" value={values.brand_id} disabled={locked || busy} onChange={(e) => set('brand_id', e.target.value)}>
+                <option value="">Choose a brand</option>
+                {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+              <div className="form-text small">
+                The bar above is on all brands, so this post needs one. Choosing here sets the bar too.
+              </div>
+            </>
+          )}
         </div>
         <div className="col-md-4">
           <label className="form-label small mb-1" htmlFor="composer-campaign">Campaign</label>
@@ -79,6 +151,39 @@ export default function ComposerSetup({
             <option value="">No campaign (links cannot be tracked)</option>
             {visibleCampaigns.map((c) => <option key={c.id} value={c.id}>{c.name}{c.utm_campaign_slug ? '' : ' - no UTM slug'}</option>)}
           </select>
+          {/* Creating one in place, for the same reason the landing page builder is here: leaving
+              the composer to make a campaign loses whatever is typed. Until 2026-10-08 the API
+              could not create a marketing campaign at all, so this picker could be empty with no
+              way to fill it. */}
+          {onCreateCampaign && !locked && values.brand_id && (
+            namingCampaign ? (
+              <div className="d-flex flex-wrap gap-2 mt-2" data-testid="campaign-creator">
+                <input
+                  className="form-control form-control-sm" style={{ minWidth: '10rem', flex: 1 }}
+                  placeholder="Name it, e.g. October $0 class"
+                  value={campaignName} disabled={busy}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  data-testid="new-campaign-name"
+                />
+                <button
+                  type="button" className="btn btn-sm btn-primary"
+                  disabled={busy || campaignName.trim().length < 3}
+                  onClick={() => { onCreateCampaign(campaignName.trim()); setCampaignName(''); setNamingCampaign(false); }}
+                  data-testid="create-campaign"
+                >
+                  Create and use
+                </button>
+                <button type="button" className="btn btn-sm btn-link" disabled={busy} onClick={() => { setNamingCampaign(false); setCampaignName(''); }}>
+                  Cancel
+                </button>
+                <div className="form-text small w-100">Its tracked-link slug is made for you, so clicks can be attributed.</div>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-link btn-sm p-0 mt-1" disabled={busy} onClick={() => setNamingCampaign(true)} data-testid="open-campaign-creator">
+                + Create a campaign here
+              </button>
+            )
+          )}
           {chosen && !chosen.utm_campaign_slug && (
             <div className="form-text text-warning d-flex align-items-center gap-2">
               <span>This campaign has no UTM slug; tracked links will be refused until it does.</span>
@@ -94,20 +199,66 @@ export default function ComposerSetup({
           <label className="form-label small mb-1" htmlFor="composer-type">Content type</label>
           <select id="composer-type" className="form-select form-select-sm" value={values.content_type} disabled={busy} onChange={(e) => set('content_type', e.target.value as ContentType)}>
             {CONTENT_TYPES.map((t) => (
-              <option key={t} value={t}>{t === 'document' ? 'document (a PDF carousel, LinkedIn only - attach it under Channels)' : MEDIA_TYPES.has(t) ? `${t} (attach a file under Channels)` : t}</option>
+              <option key={t} value={t}>{t}</option>
             ))}
           </select>
-          {MEDIA_TYPES.has(values.content_type) && (
-            // The content type is a DECLARATION the validator holds each network to, not a
-            // generator. Declaring an image post with no way to attach an image fails at
-            // validation with "needs at least one media item" - a trap Ali walked into on the
-            // first run. Said here, at the moment of choosing, not two steps later.
-            <div className="form-text text-warning" data-testid="media-type-warning">
-              This declares what you will attach; it does not create one. Once the draft exists,
-              attach the file under <strong>Channels &rsaquo; Media</strong>, or validation will
-              block this post.
+          {/* The option labels used to carry "(attach a file under Channels)" and the warning
+              below pointed there too. Both are gone because the upload now sits in this section,
+              under this field - which is what Ali asked for: "the video should be uploaded at the
+              time you select that you want a video." */}
+          {shape.mediaHint && (
+            <div className="form-text" data-testid="media-type-hint">{shape.mediaHint}</div>
+          )}
+
+          {values.content_type === 'video' && (
+            // A video can be a file OR a link. The link is not a video file, so saying what it
+            // BECOMES - and what that costs - has to happen before the choice applies.
+            <div className="mt-2" data-testid="video-source">
+              <div className="btn-group btn-group-sm w-100" role="group" aria-label="Video source">
+                <button type="button" className={`btn btn-outline-secondary ${videoSource === 'upload' ? 'active' : ''}`}
+                  aria-pressed={videoSource === 'upload'} disabled={busy}
+                  onClick={() => { setVideoSource('upload'); setVideoLinkError(null); }}>Upload a file</button>
+                <button type="button" className={`btn btn-outline-secondary ${videoSource === 'link' ? 'active' : ''}`}
+                  aria-pressed={videoSource === 'link'} disabled={busy}
+                  onClick={() => setVideoSource('link')} data-testid="video-source-link">Link to a video</button>
+              </div>
+              {videoSource === 'link' && (
+                <div className="mt-2">
+                  <div className="form-text text-warning-emphasis mb-1" data-testid="link-post-notice">
+                    {linkPostNotice(excludedByContentType(providers, 'link'))}
+                  </div>
+                  <div className="d-flex gap-1">
+                    <input
+                      className="form-control form-control-sm"
+                      placeholder="https://vimeo.com/... or https://youtube.com/watch?v=..."
+                      value={videoLink}
+                      disabled={busy}
+                      onChange={(e) => { setVideoLink(e.target.value); setVideoLinkError(null); }}
+                      data-testid="video-link-input"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary text-nowrap"
+                      disabled={busy}
+                      data-testid="video-link-apply"
+                      onClick={() => {
+                        const check = checkVideoLink(videoLink);
+                        // A refused link changes NOTHING - the content type stays `video`, so a
+                        // typo cannot silently turn the post into something else.
+                        if (!check.ok) { setVideoLinkError(check.reason); return; }
+                        setVideoLinkError(null);
+                        onChange(applyDestination({ ...values, content_type: 'link' }, { kind: 'url', url: videoLink.trim() }));
+                      }}
+                    >
+                      Use this link
+                    </button>
+                  </div>
+                  {videoLinkError && <div className="form-text text-danger" data-testid="video-link-error">{videoLinkError}</div>}
+                </div>
+              )}
             </div>
           )}
+          {mediaSlot}
         </div>
         <div className="col-md-6">
           <label className="form-label small mb-1" htmlFor="composer-title">
@@ -119,14 +270,62 @@ export default function ComposerSetup({
           <input id="composer-title" className="form-control form-control-sm" value={values.title} disabled={busy} maxLength={200} required aria-required="true" onChange={(e) => set('title', e.target.value)} />
           <div className="form-text small">Names the post in the queue and the calendar. Not published.</div>
         </div>
+        {shape.showLandingPage && (
         <div className="col-md-6">
           <label className="form-label small mb-1" htmlFor="composer-destination">Landing page (destination for tracked links)</label>
-          <input id="composer-destination" className="form-control form-control-sm" type="url" placeholder="https://" value={values.destination_url} disabled={busy} onChange={(e) => set('destination_url', e.target.value)} />
+          {/* A picker, not a text box. The text box was the whole problem: it could point a
+              tracked campaign anywhere, including at a page this platform cannot measure, and
+              what was typed was never stored. Only this brand's published, platform-built pages
+              are offered; a plain URL is still possible and says what it costs. */}
+          <select
+            id="composer-destination"
+            className="form-select form-select-sm"
+            value={destinationMode(values) === 'url' ? '__url__' : (values.landing_page_id ?? '')}
+            disabled={busy}
+            data-testid="landing-page-picker"
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '__url__') return onChange(applyDestination(values, { kind: 'url', url: values.destination_url || 'https://' }));
+              if (v === '') return onChange(applyDestination(values, { kind: 'none' }));
+              onChange(applyDestination(values, { kind: 'page', id: v }));
+            }}
+          >
+            <option value="">No landing page</option>
+            {selectablePages(landingPages, values.brand_id).map((p) => (
+              <option key={p.id} value={p.id}>{p.name} ({p.path ?? `/lp/.../${p.slug}`})</option>
+            ))}
+            <option value="__url__">A URL we did not build...</option>
+          </select>
+          {note && <div className="form-text small text-warning-emphasis" data-testid="landing-page-note">{note}</div>}
+          {destinationMode(values) === 'url' && (
+            <>
+              <input
+                className="form-control form-control-sm mt-2" type="url" placeholder="https://"
+                value={values.destination_url} disabled={busy} aria-label="Destination URL"
+                data-testid="landing-page-url"
+                onChange={(e) => onChange(applyDestination(values, { kind: 'url', url: e.target.value }))}
+              />
+              <div className="form-text small text-warning-emphasis" data-testid="external-url-note">{externalUrlNote('url')}</div>
+            </>
+          )}
+          {/*
+            The builder opens HERE rather than navigating. This button used to call
+            `navigate('/admin/marketing/landing-pages')`, which abandoned the composer and took
+            anything unsaved with it. `builderSlot` is the panel; the button only offers to open
+            it, and disappears while it is open so there is one way back out (its own Close).
+          */}
+          {onCreateLandingPage && !builderSlot && (
+            <button type="button" className="btn btn-link btn-sm px-0 mt-1" disabled={busy} onClick={onCreateLandingPage} data-testid="build-landing-page">
+              + Build a new landing page here
+            </button>
+          )}
+          {builderSlot}
         </div>
+        )}
         <div className="col-12">
           <div className="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-1">
-            <label className="form-label small mb-0" htmlFor="composer-body">Canonical message</label>
-            {onDraftMessage && (
+            <label className="form-label small mb-0" htmlFor="composer-body" data-testid="message-label">{shape.messageLabel}</label>
+            {onDraftMessage && shape.offerDraft && (
               // Starting from a topic instead of an empty box. The draft lands in the SAME
               // field and goes through the same validation and approval as anything typed,
               // so this is a faster start, not a shortcut past anything.

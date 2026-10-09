@@ -115,6 +115,102 @@ export function isAccountSecurityMail(subject: string | null | undefined): boole
 }
 
 /**
+ * True when a message carries an operational-health alert header.
+ *
+ * WHY THIS EXISTS. On 2026-10-01 a delivery-health alert — the control built to
+ * shout when Cora's SMS, email or call channel goes silent — was itself archived
+ * by this engine. The LLM classifier filed it AUTOMATION at a recorded
+ * confidence of 15, reasoning "This is a test email with no action needed."
+ * The alert that exists to catch a silent failure failed silently, and the only
+ * reason anyone noticed is that Ali went looking for it in the audit log.
+ *
+ * MATCHED ON THE HEADER, DELIBERATELY, NOT THE SENDER OR THE SUBJECT.
+ * Kes's recommendation and it is the right one twice over. The From is his
+ * ordinary mailbox, so a sender rule would drag all his personal mail into the
+ * inbox. And the subject is prose — "[CRITICAL] Cora: SMS has gone quiet" —
+ * which breaks the first time anyone rewords it. The header is the shape of the
+ * thing, and matching on shape is what finally stopped the account-security
+ * defect (rule 0g) recurring after four sender-by-sender patches.
+ *
+ * `X-Cora-Alert: health` is on every delivery-health alert; `X-Cora-Alert:
+ * system` is on every other system alert (queue lag, new critical exception).
+ * Presence of the header alone is the test, so a value added later still
+ * matches. Header casing varies by provider, so keys are compared lowercased.
+ */
+export function hasOperationalAlertHeader(headers: any): boolean {
+  if (!headers || typeof headers !== 'object') return false;
+  return Object.keys(headers).some((k) => k.toLowerCase() === 'x-cora-alert');
+}
+
+/**
+ * True when a financial or insurance provider is asking the recipient to finish
+ * something they already started: an application, an enrolment, a signature.
+ *
+ * WHY. Protective Life's "Action Required! Complete your life insurance
+ * application" was archived twice, on 2026-10-02 and again on 2026-10-03, both
+ * times by the LLM calling it "a marketing communication". It was not. It
+ * carried a policy number and said underwriting could not begin until the
+ * application was registered, completed and signed. Ali went looking for it and
+ * it was not there.
+ *
+ * The classifier is not malfunctioning, which is the uncomfortable part. It
+ * scores how likely mail needs Ali's personal attention, and transactional mail
+ * from a provider he is mid-application with looks exactly like the marketing
+ * those same providers send constantly. The score is a judgement, so the answer
+ * is to take this class of mail out of its hands rather than to retune it.
+ *
+ * BOTH HALVES ARE REQUIRED, and that is what keeps it narrow. "Action required"
+ * alone is marketing's favourite phrase. A reference number alone appears in
+ * every receipt. Together they mean a file is open in the recipient's name and
+ * somebody is waiting on them. Deliberately NOT a list of carrier domains: that
+ * is the sender-by-sender patching that let the account-security defect recur
+ * four times before rule 0g matched on shape instead.
+ */
+export function isFinancialApplicationMail(
+  subject: string | null | undefined,
+  bodyText: string | null | undefined,
+): boolean {
+  const s = (subject || '').trim();
+  const b = (bodyText || '').trim();
+  if (!s || !b) return false;
+
+  const asksYouToFinish =
+    /\b(?:complete|finish|submit|sign|e-?sign|activate)\b[^.!?]{0,40}\b(?:your|the)\b[^.!?]{0,40}\b(?:application|enrol?lment|policy|claim|coverage|paperwork|packet)\b/i.test(s) ||
+    /\baction required\b/i.test(s);
+
+  const namesAnOpenFile =
+    /\b(?:policy|application|claim|member|contract|account)\s*(?:number|no\.?|#|id)\s*[:#]?\s*[A-Z0-9][A-Z0-9-]{3,}/i.test(b) ||
+    /\bunderwriting\b/i.test(b) ||
+    /\bapplication packet\b/i.test(b);
+
+  return asksYouToFinish && namesAnOpenFile;
+}
+
+/**
+ * True when a subject is a recurring calendar reminder with a countdown suffix:
+ * "DA Bootcamp Thursday Weekly Help Session  (1 wk out)". Community platforms
+ * send three of these per event — a week out, a day out, an hour out — and a
+ * recurring event therefore generates three every week, forever.
+ *
+ * WHY THIS IS A HARD RULE. Ali deleted these at least three times and they kept
+ * reappearing. Nothing was restoring them; each week's are new messages. What
+ * made it feel like a resurrection is that the LLM gave IDENTICAL mail a
+ * different verdict almost every time — INBOX for the Oct 1 week-out notice,
+ * AUTOMATION for the Sep 24 one; AUTOMATION for the Oct 1 hour-out, INBOX for
+ * the Sep 24. These sit right on the 25-point boundary between SILENT_HOLD and
+ * AUTOMATION, so the score lands on either side run to run and roughly one in
+ * three reaches the inbox at random. A coin flip is worse than either answer.
+ *
+ * Subject-only, and anchored on the countdown parenthetical rather than on the
+ * sender, so the same convention is covered wherever it comes from.
+ */
+export function isRecurringEventReminder(subject: string | null | undefined): boolean {
+  return /\(\s*\d+\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours|day|days|wk|wks|week|weeks)\s+out\s*\)\s*$/i.test(
+    (subject || '').trim(),
+  );
+}
+
+/**
  * True when a Basecamp notification is a person directly tagging or assigning
  * Ali — an @mention or a to-do assignment — rather than project-management
  * noise. Basecamp encodes both directly in the subject:
@@ -169,6 +265,30 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   const headers = email.headers || {};
   const forwardedFromHotmail = isForwardedFromHotmail(email);
   const fwdSuffix = forwardedFromHotmail ? ' (forwarded from Hotmail)' : '';
+
+  // --- 00. Operational health alerts → INBOX, ahead of every other rule ---
+  // FIRST on purpose. This is the alert that tells us the alerting is broken,
+  // so it outranks everything, including any rule added after it. 0c already
+  // sends self-sent "[Alert]" mail to AUTOMATION; these alerts come from a
+  // person's mailbox with a "[CRITICAL]" subject and would not match 0c today,
+  // but putting this above the whole chain means no future rule can quietly
+  // start swallowing them either. See hasOperationalAlertHeader for the
+  // 2026-10-01 incident this closes.
+  if (hasOperationalAlertHeader(headers)) {
+    const reason = 'Operational health alert (X-Cora-Alert) - never archive';
+    console.log(`${LOG_PREFIX} Health alert: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'operational_alert_00', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 0i. A financial/insurance application waiting on Ali → INBOX ---
+  // Early, alongside the other 0-series keeps, because the cost of archiving one
+  // of these is a stalled underwriting file nobody knows is stalled. See
+  // isFinancialApplicationMail for the Protective Life case this closes.
+  if (isFinancialApplicationMail(email.subject, email.body_text)) {
+    const reason = 'Financial/insurance application awaiting action - keep visible';
+    console.log(`${LOG_PREFIX} Application mail: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'financial_application_0i', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
 
   // --- 0a. Cory + Inbox COS system emails → INBOX (keep visible) ---
   // Cory's daily/weekly briefings and the Inbox COS decision digests are sent
@@ -386,6 +506,19 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
       console.log(`${LOG_PREFIX} Keyword match: ${reason}`);
       return { matched: true, state: 'INBOX', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
     }
+  }
+
+  // --- 3.4. Recurring event reminders with a countdown → AUTOMATION ---
+  // DELIBERATELY PLACED HERE, not in the 0-series. Every rule above this one can
+  // still rescue the mail: a VIP sender (1), Ali addressed by name by someone
+  // who has written before (2), and the family keyword list (3) all win first.
+  // So a reminder that genuinely matters can still reach him; what this kills is
+  // the unattended weekly drip that was landing at random. See
+  // isRecurringEventReminder for the coin-flip this replaces.
+  if (isRecurringEventReminder(email.subject)) {
+    const reason = 'Recurring event reminder (countdown notice)';
+    console.log(`${LOG_PREFIX} Event reminder: ${reason}`);
+    return { matched: true, state: 'AUTOMATION', rule_id: 'event_reminder_34', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 3.5. P3 Noise Sender Hard List (Inbox Manager v1 Phase 1) ---

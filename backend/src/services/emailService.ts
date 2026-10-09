@@ -41,6 +41,24 @@ const transporter = env.mandrillApiKey
  * mail). Returns a SentMessageInfo-shaped stub when blocked so callers keep working.
  */
 export async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nodemailer.SentMessageInfo> {
+  // BRAND PREFLIGHT (Component E): MEASURED, DELIBERATELY NOT YET ENABLED.
+  //
+  // This is the one transport chokepoint for all 30 senders in this file plus
+  // four external riders, so the single call below would gate every one of
+  // them. It stays commented because enabling it today refuses real mail whose
+  // copy this file does not own, and would not boot in production at all.
+  //
+  // Three blockers, each proved by a test that FAILS once it is cleared, so this
+  // comment cannot go stale:
+  //   1 DEPLOY  mandrillPreflight is .js, tsconfig sets no allowJs, and the image
+  //             ships only dist/ - a require here would not resolve in production.
+  //   2 COPY    services/leadAlertMessage.ts:97
+  //   3 COPY    services/internship/internshipEmails.ts:107,121,138,152,162
+  //
+  // Full reasoning, the measurement behind it and the enablement checklist:
+  // services/__tests__/emailServiceBrandPreflight.test.ts
+  //
+  // validateBeforeSend(options.html ?? '', options.text ?? '');
   if (await isKillSwitchActive()) {
     const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
     console.warn(`[Email] BLOCKED by kill switch — not sending to ${redactForLogs(to)} (subject: ${options.subject ?? ''})`);
@@ -303,7 +321,7 @@ export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
   <title>Welcome to Colaberry</title>
 </head>
 <body style="margin:0; padding:0; background:#f7fafc;">
-  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">Your seat is ready — step inside your Colaberry portal and get started.</div>
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">Your seat is ready. Step inside your Colaberry portal and get started.</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc; padding:24px 0;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; font-family:'Segoe UI', system-ui, -apple-system, sans-serif;">
@@ -363,7 +381,7 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
     console.warn('[Email] SMTP not configured. Skipping training welcome to:', redactForLogs(data.to));
     return { sent: false };
   }
-  const subject = 'Welcome to Colaberry — your AI journey starts now';
+  const subject = 'Welcome to Colaberry: your AI journey starts now';
   const r = await resolveEmailRecipient(data.to, subject);
   const html = buildTrainingWelcomeHtml(data);
   const fromHeader = `"${env.trainingWelcomeFromName}" <${env.trainingWelcomeFromEmail}>`;
@@ -1845,9 +1863,9 @@ function buildOrgInviteHtml(data: OrgInviteData, magicLink: string): string {
 
   <p>Hi ${name},</p>
 
-  <p>Your team lead set up <strong>${org}</strong> on the Colaberry Enterprise AI platform and invited you to join. A free member account is ready for you — click below to activate it and start building.</p>
+  <p>Your team lead set up <strong>${org}</strong> on the Colaberry Enterprise AI platform and invited you to join. A member account is ready for you, $0 to start. Click below to activate it and start building.</p>
 
-  <p><a href="${magicLink}" class="cta">Activate My Free Account</a></p>
+  <p><a href="${magicLink}" class="cta">Activate My Account</a></p>
 
   <div class="highlight">
     <strong>Your account includes:</strong><br>
@@ -1959,12 +1977,12 @@ function buildOrgWelcomeHtml(data: OrgWelcomeData, companyLink: string): string 
 
   <div class="highlight">
     <strong>What you can do now:</strong><br>
-    &bull; Invite teammates &mdash; each gets their own free builder account<br>
+    &bull; Invite teammates. Each gets their own builder account, $0 to start<br>
     &bull; Watch skills, evidence and readiness roll up across your team<br>
     &bull; Keep your own builder track alongside the manager view
   </div>
 
-  <p class="notice">You are signed in already &mdash; this link opens your workspace directly. If you did not create this account, reply to this email and we will remove it.</p>
+  <p class="notice">You are signed in already, so this link opens your workspace directly. If you did not create this account, reply to this email and we will remove it.</p>
 
   <div class="footer">
     <p>Colaberry Enterprise AI Division<br>
@@ -2160,12 +2178,12 @@ export async function sendTicketApprovalEmail(data: {
   </style>
 </head>
 <body>
-  <div class="alert-bar">AI Workforce — approval needed</div>
+  <div class="alert-bar">AI Workforce: approval needed</div>
   <h1>${safeTitle}</h1>
   ${safeDescription ? `<div class="detail">${safeDescription}</div>` : ''}
   <div class="meta"><strong>Raised by:</strong> ${escapeHtml(data.directorName)}</div>
   <p><a href="${ticketUrl}" class="cta">Review the ticket</a></p>
-  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. Everything else here runs on its own — you're only hearing about this one because it needs a decision first.</p>
+  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. Everything else here runs on its own. You're only hearing about this one because it needs a decision first.</p>
   <div class="footer">
     <p>Colaberry AI Workforce</p>
   </div>
@@ -2208,7 +2226,7 @@ export async function sendTicketReplyConfirmation(data: {
     return;
   }
   const outcomeText = data.outcome === 'done' ? 'approved and marked done' : data.outcome === 'cancelled' ? 'rejected and cancelled' : 'recorded as a comment (no status change)';
-  const text = `Got it — ticket #${data.ticketNumber} ("${data.title}") ${outcomeText}.\n\n— Colaberry AI Workforce`;
+  const text = `Got it. Ticket #${data.ticketNumber} ("${data.title}") ${outcomeText}.\n\n- Colaberry AI Workforce`;
   const r = await resolveEmailRecipient(data.to, `Re: [Approval needed] ${data.title}`);
   const info = await guardedSendMail({
     from: `"Colaberry AI Workforce" <${env.emailFrom}>`,
@@ -2615,7 +2633,7 @@ export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): 
         .slice(0, 5)
         .map(
           (e) =>
-            `<li><strong>${e.title}</strong> — ${e.starts_at.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</li>`
+            `<li><strong>${e.title}</strong> - ${e.starts_at.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</li>`
         )
         .join('')}</ul>`
     : '<p style="color:#64748b">No upcoming sessions or Open Houses scheduled.</p>';

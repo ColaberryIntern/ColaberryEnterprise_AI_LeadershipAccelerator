@@ -88,6 +88,16 @@ export interface DraftPatch {
   canonical_body?: string;
   content_type?: string;
   scheduled_for?: string | null;
+  /**
+   * Where the post sends people. A selected page or a typed URL; null clears either.
+   *
+   * These do not reset variant validation - the platform checks copy, and the copy is unchanged -
+   * but they DO bump the revision like every other recorded edit, which is correct: changing
+   * where a post sends people should re-require approval rather than inherit one earned when it
+   * pointed somewhere else.
+   */
+  landing_page_id?: string | null;
+  destination_url?: string | null;
   /** Null clears the poll; absent leaves it; a value replaces it. */
   poll?: PollSpec | null;
 }

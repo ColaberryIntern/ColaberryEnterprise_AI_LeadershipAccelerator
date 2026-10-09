@@ -50,6 +50,7 @@ describe('portalFlagsService — cape_today_plan flag', () => {
     delete process.env.CAPE_TODAY_PLAN_ENABLED;
     delete process.env.PORTAL_TODAY_REDESIGN_ENABLED;
     delete process.env.INTERNSHIP_ENABLED;
+    delete process.env.PRESENTATION_STUDIO_ENABLED;
     const { getPortalFlags } = await import('../portalFlagsService');
     // Whole-object equality on purpose: this guard exists so that ADDING a flag
     // is a deliberate, visible act rather than something that slips in with a
@@ -59,7 +60,35 @@ describe('portalFlagsService — cape_today_plan flag', () => {
       today_redesign: true,
       cape_today_plan: false,
       internship: false,
+      // Presentation Studio ships dark. Added deliberately, per the note above.
+      presentation_studio: false,
     });
+  });
+
+  it('ships the Presentation Studio dark, and only the exact string "true" turns it on', async () => {
+    // Default OFF is load-bearing here: flag-off must leave a student opening a
+    // demo-prep card with exactly today's DemoEvidencePanel. The Studio's tables are
+    // created at boot regardless, but empty unread tables change no behaviour — the
+    // flag is the only thing that changes what a student sees.
+    jest.resetModules();
+    delete process.env.PRESENTATION_STUDIO_ENABLED;
+    const off = await import('../portalFlagsService');
+    expect(off.getPortalFlags().presentation_studio).toBe(false);
+
+    jest.resetModules();
+    process.env.PRESENTATION_STUDIO_ENABLED = 'true';
+    const on = await import('../portalFlagsService');
+    expect(on.getPortalFlags().presentation_studio).toBe(true);
+
+    // A truthy-looking value must NOT enable it. Anything other than 'true' is off,
+    // so a typo in a deploy env fails closed rather than exposing an unfinished surface.
+    for (const loose of ['1', 'yes', 'TRUE', 'True', '']) {
+      jest.resetModules();
+      process.env.PRESENTATION_STUDIO_ENABLED = loose;
+      const mod = await import('../portalFlagsService');
+      expect(mod.getPortalFlags().presentation_studio).toBe(false);
+    }
+    delete process.env.PRESENTATION_STUDIO_ENABLED;
   });
 
   it('ships the internship funnel dark, and only env turns it on', async () => {

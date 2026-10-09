@@ -61,6 +61,9 @@ import Enrollment from '../../models/Enrollment';
 import Cohort from '../../models/Cohort';
 import { getReeseEnrollmentId, getReeseAdminUserId, isReeseEnabled } from './reeseIdentitySeed';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
+import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
+import { recordHeldAction, recordSentAction } from './reeseGovernedActionLog';
+import { RISK_TIER } from './reeseAutonomousOutreachService';
 
 export type WelcomeOutcome =
   | 'sent'
@@ -72,7 +75,11 @@ export type WelcomeOutcome =
   | 'reese_not_seeded'
   | 'is_reese'
   | 'enrollment_not_found'
-  | 'send_failed';
+  | 'send_failed'
+  /** Real-enforcement scoping, Phase 3 (R211, 2026-10-01) — the real ABAC
+   * check denied this send. Never retried later, per `ReeseWelcome.ts`'s
+   * own 'held' outcome doc comment. */
+  | 'held_for_approval';
 
 export interface WelcomeResult {
   kind: ReeseWelcomeKind;
@@ -222,6 +229,61 @@ async function sendOnce(
   }
 
   try {
+    // Real-enforcement scoping, Phase 3 (R211, 2026-10-01) — gated the same
+    // way Reese's other autonomous sends already are, evaluated BEFORE the
+    // real `initiateDm()` call below. Welcome sends have no ticket at all
+    // (unlike her other 3 gated paths), so this passes `resourceType`/
+    // `resourceId` instead of `ticketId` — the widened, additive
+    // `AuthorizeTicketDispatchInput` shape `agentActionAuthorizationBridge.ts`
+    // added specifically for this case.
+    const eventId = crypto.randomUUID();
+    // Hoisted to a single const (2026-10-07): the governed action name is now
+    // read by the authorization call AND the activity-log write below, and the
+    // two MUST agree or the activity row stops joining to its
+    // approval_requests row by action.
+    const welcomeAction = kind === 'student' ? 'reese_welcome_student' : 'reese_welcome_account';
+    const authResult = await authorizeTicketDispatch({
+      eventId,
+      ticketId: null,
+      resourceType: 'reese_welcome',
+      resourceId: enrollmentId,
+      agentName: 'Reese',
+      action: welcomeAction,
+      riskTier: RISK_TIER,
+      preparedAction: { studentEnrollmentId: enrollmentId, kind },
+    });
+
+    if (!authResult.allowed) {
+      // Same finality as a real failure, per ReeseWelcome.ts's own 'held'
+      // doc comment — this claim is never retried later, even once/if a
+      // human approves the hold.
+      await claim.update({ outcome: 'held', detail: authResult.reason.slice(0, 500) }).catch(() => {});
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'info', service: 'reese_welcome',
+        event: 'welcome_held_for_approval', outcome: 'partial', correlation_id: eventId,
+        context: { enrollment_id: enrollmentId, kind, reason: authResult.reason },
+      }));
+      // The `reese_welcomes` row above already records the hold honestly
+      // (outcome 'held'); this is the same fact in the table Reese's own
+      // scorecard reads, which showed nothing at all. Production 2026-10-07:
+      // 10 such rows exist with outcome 'held' and no message_id, and zero
+      // corresponding activity rows. Bookkeeping only — the hold is unchanged.
+      await recordHeldAction({
+        action: welcomeAction,
+        riskTier: RISK_TIER,
+        verdict: authResult.verdict,
+        reasonCode: authResult.reason,
+        // One intro per person per kind, enforced by the ReeseWelcome claim
+        // above (a second run returns 'already_sent' before reaching here), so
+        // the enrollment+kind pair IS the unit.
+        unitKey: `enrollment:${enrollmentId}:${kind}`,
+        eventId,
+        decisionId: authResult.decisionId,
+        details: { enrollment_id: enrollmentId, kind },
+      });
+      return { kind, outcome: 'held_for_approval' };
+    }
+
     const { initiateDm } = await import('./reeseInitiateDmService');
     const { roomId, messageId } = await initiateDm(enrollmentId, messageFor(kind, firstName, cohortName));
     await claim.update({ room_id: roomId, message_id: messageId }).catch(() => {});
@@ -230,9 +292,14 @@ async function sendOnce(
     // Ledger. Fail-open (emitReeseLedgerEvent's own contract) and never
     // awaited-to-block: this must never be the thing that makes a login slow
     // or fail, matching this file's own design decision 5.
+    // Approval-correlation fix (2026-10-02) — thread the same eventId/
+    // decisionId the authorization check above already generated, instead
+    // of a fresh, disconnected traceId.
     const reeseAdminUserId = await getReeseAdminUserId();
     emitReeseLedgerEvent({
       ticketId: null,
+      eventId,
+      authorizationDecisionId: authResult.decisionId,
       traceId: crypto.randomUUID(),
       actorType: 'ai_staff',
       actorId: reeseAdminUserId || 'Reese',
@@ -245,6 +312,26 @@ async function sendOnce(
       result: 'success',
       sourceRecordType: 'room_message',
       sourceRecordId: messageId,
+    }).catch(() => {});
+
+    // Added alongside the held write above, deliberately: this path had NO
+    // activity-log write at all, so recording only the holds would make
+    // `reese_welcome_student` read 100% held in the log — a new false signal,
+    // not an improvement (production: 125 welcomes really sent vs 10 held).
+    // Bookkeeping only; the send above already happened.
+    //
+    // NOT awaited, matching this file's own design decision 5 and the
+    // emitReeseLedgerEvent call directly above: maybeSendWelcomes() runs on the
+    // LOGIN path, so no bookkeeping write is allowed to add a round-trip to it.
+    // The `.catch` is a guard against an unhandled rejection, not a swallow —
+    // recordSentAction() resolves rather than throwing by contract and logs its
+    // own failures internally (see reeseGovernedActionLog.ts).
+    recordSentAction({
+      action: welcomeAction,
+      riskTier: RISK_TIER,
+      reason: 'welcome_sent',
+      eventId,
+      details: { enrollment_id: enrollmentId, kind, room_id: roomId, message_id: messageId },
     }).catch(() => {});
 
     return { kind, outcome: 'sent', roomId, messageId };

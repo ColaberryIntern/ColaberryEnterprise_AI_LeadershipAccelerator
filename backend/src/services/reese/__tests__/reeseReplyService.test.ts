@@ -30,6 +30,8 @@ jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActiv
 jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: jest.fn() }));
 jest.mock('../../workGraph/workGraphService', () => ({ createWorkUnit: jest.fn(), updateWorkUnitStatus: jest.fn() }));
+jest.mock('../../../models/ReeseTicketFollowUp', () => ({ update: jest.fn() }));
+jest.mock('../reeseGovernedActionLog', () => ({ recordHeldAction: jest.fn() }));
 
 import RoomMembership from '../../../models/RoomMembership';
 import RoomMessage from '../../../models/RoomMessage';
@@ -41,9 +43,11 @@ import { ensureReeseTicketForRoom, logReeseExchangeActivity } from '../reeseTick
 import { maybeRefreshStudentAssessment } from '../../studentHealthAssessment';
 import { executeReeseTool } from '../reeseTools';
 import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
+import { recordHeldAction } from '../reeseGovernedActionLog';
 import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
 import { createWorkUnit, updateWorkUnitStatus } from '../../workGraph/workGraphService';
+import ReeseTicketFollowUp from '../../../models/ReeseTicketFollowUp';
 import { maybeTriggerReeseReply } from '../reeseReplyService';
 
 const mockMembershipFindOne = RoomMembership.findOne as unknown as jest.Mock;
@@ -60,10 +64,12 @@ const mockLogExchange = logReeseExchangeActivity as unknown as jest.Mock;
 const mockMaybeRefreshAssessment = maybeRefreshStudentAssessment as unknown as jest.Mock;
 const mockExecuteReeseTool = executeReeseTool as unknown as jest.Mock;
 const mockLogAgentActivity = logAgentActivity as unknown as jest.Mock;
+const mockRecordHeldAction = recordHeldAction as unknown as jest.Mock;
 const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 const mockResolveStudentDisplayName = resolveStudentDisplayName as unknown as jest.Mock;
 const mockCreateWorkUnit = createWorkUnit as unknown as jest.Mock;
 const mockUpdateWorkUnitStatus = updateWorkUnitStatus as unknown as jest.Mock;
+const mockFollowUpUpdate = ReeseTicketFollowUp.update as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_AGENT_ID = 'reese-agent-1';
@@ -108,6 +114,8 @@ beforeEach(() => {
   mockCreateWorkUnit.mockResolvedValue({ id: 'wu-1', update: jest.fn().mockResolvedValue(undefined) });
   mockUpdateWorkUnitStatus.mockResolvedValue(undefined);
   mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok', allowed: true });
+  mockRecordHeldAction.mockResolvedValue('written');
+  mockFollowUpUpdate.mockResolvedValue([0]);
 });
 
 describe('maybeTriggerReeseReply', () => {
@@ -142,7 +150,13 @@ describe('maybeTriggerReeseReply', () => {
     // 6th arg is the real work unit id (Workspace mission, Phase 2 slice 1) —
     // createWorkUnit() resolves to { id: 'wu-1', ... } under the default mocks.
     expect(mockLogExchange).toHaveBeenNthCalledWith(1, 'ticket-1', 'human', STUDENT_ID, 'student-msg-1', 'Hi Reese, I am stuck on my project.', 'wu-1');
-    expect(mockLogExchange).toHaveBeenNthCalledWith(2, 'ticket-1', 'ai_staff', REESE_ADMIN_ID, 'reply-msg-1', 'Here is your next move.', 'wu-1');
+    // Approval-correlation fix (2026-10-02) — ONLY Reese's own reply call gets
+    // the authorization eventId/decisionId threaded through (7th/8th args);
+    // the student's own message above is never gated, so it stays 6-arg.
+    expect(mockLogExchange).toHaveBeenNthCalledWith(
+      2, 'ticket-1', 'ai_staff', REESE_ADMIN_ID, 'reply-msg-1', 'Here is your next move.', 'wu-1',
+      expect.any(String), 'auth-1',
+    );
   });
 
   it('ProofDesk linkage boundary: if ticket-ensure fails, the reply is still generated and sent (ticket layer never blocks messaging)', async () => {
@@ -157,6 +171,35 @@ describe('maybeTriggerReeseReply', () => {
     // nothing real to attach it to, and this must never become a new blocking path.
     expect(mockCreateWorkUnit).not.toHaveBeenCalled();
     expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalled();
+  });
+
+  it('ticket follow-up reset: a real student reply resets this ticket\'s follow-up attempt counter (T12 completion, 2026-10-02) — their silence streak genuinely broke', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockFollowUpUpdate).toHaveBeenCalledWith(
+      { attempt_count: 0, status: 'active' },
+      { where: { ticket_id: 'ticket-1' } },
+    );
+  });
+
+  it('ticket follow-up reset: a failure here is best-effort and never blocks the real reply', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockFollowUpUpdate.mockRejectedValue(new Error('db down'));
+
+    await expect(maybeTriggerReeseReply(ROOM_ID, STUDENT_ID)).resolves.toBeUndefined();
+
+    expect(mockSendDmMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('ticket follow-up reset: never attempted when ticket-ensure itself failed (no real ticketId to reset against)', async () => {
+    mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+    mockEnsureTicket.mockRejectedValue(new Error('ticket service down'));
+
+    await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+    expect(mockFollowUpUpdate).not.toHaveBeenCalled();
   });
 
   it('scope guard: a message in a room Reese is NOT a member of never invokes the LLM (cost + scope protection)', async () => {
@@ -351,6 +394,48 @@ describe('maybeTriggerReeseReply', () => {
       expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalledWith('wu-1', 'failed');
     });
 
+    it('records the held reply as a skipped activity row, keyed on the message that triggered it', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: false });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
+      expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
+        action: 'reese_dm_reply',
+        riskTier: 'R3',
+        verdict: 'would_require_approval',
+        reasonCode: 'requires_approval:high_risk_tier',
+        decisionId: 'auth-1',
+      }));
+      // Each held turn is its own decision, so the unit names the triggering
+      // message rather than the whole conversation.
+      expect(mockRecordHeldAction.mock.calls[0][0].unitKey).toMatch(/^room_message:/);
+    });
+
+    it('correlates the held row to the same authorization decision it logs', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+      expect(mockRecordHeldAction.mock.calls[0][0].eventId).toBe(authArgs.eventId);
+    });
+
+    it('a log layer that is down still leaves the reply held, never sent', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+      mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+      mockRecordHeldAction.mockResolvedValue('log_unavailable');
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockSendDmMessage).not.toHaveBeenCalled();
+      expect(mockUpdateWorkUnitStatus).toHaveBeenCalledWith('wu-1', 'blocked');
+      // A logging failure is not a send failure.
+      expect(mockUpdateWorkUnitStatus).not.toHaveBeenCalledWith('wu-1', 'failed');
+    });
+
     it('ticketId === null (ticket-ensure already failed and was swallowed) skips the authorization call entirely and sends exactly as today — the disclosed design decision, not a new blocking condition', async () => {
       mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
       mockEnsureTicket.mockRejectedValue(new Error('ticket service down'));
@@ -392,6 +477,22 @@ describe('maybeTriggerReeseReply', () => {
 
       expect(mockLogAgentActivity).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: REESE_AGENT_ID, action: 'reese_dm_reply', result: 'failed', reason: 'OpenAI is down' }),
+      );
+      // A failure is a failure, never reclassified as a policy hold.
+      expect(mockRecordHeldAction).not.toHaveBeenCalled();
+      expect(mockLogAgentActivity).not.toHaveBeenCalledWith(
+        expect.objectContaining({ result: 'skipped' }),
+      );
+    });
+
+    it('a real reply writes success and never a skipped row', async () => {
+      mockMembershipFindOne.mockResolvedValue({ id: 'membership-1' });
+
+      await maybeTriggerReeseReply(ROOM_ID, STUDENT_ID);
+
+      expect(mockRecordHeldAction).not.toHaveBeenCalled();
+      expect(mockLogAgentActivity).not.toHaveBeenCalledWith(
+        expect.objectContaining({ result: 'skipped' }),
       );
     });
 

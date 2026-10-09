@@ -26,11 +26,32 @@ export interface ExplainabilityProposedAction {
   reviewedAt: string | null;
 }
 
+// Decision Journal enrichment (2026-10-03) — the real human-review lifecycle for this
+// agent's own authorization-gated sends (approval_requests). Optional on
+// AgentExplainability (not required) so every existing consumer/fixture of this type
+// stays valid without modification — the real backend response always includes it;
+// callers that render it should treat a missing value as an empty array.
+export interface ExplainabilityApprovalRequest {
+  action: string;
+  verdict: string;
+  riskTier: string;
+  autonomyLevel: string | null;
+  status: string;
+  reasonCode: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionChannel: string | null;
+  replayedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
 export interface AgentExplainability {
   agentId: string;
   agentName: string;
   events: ExplainabilityEvent[];
   proposedActions: ExplainabilityProposedAction[];
+  approvalRequests?: ExplainabilityApprovalRequest[];
 }
 
 export async function getAgentExplainability(agentId: string): Promise<AgentExplainability> {

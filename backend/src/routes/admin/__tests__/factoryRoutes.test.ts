@@ -27,6 +27,29 @@ const backfillUnassessedContract = jest.fn();
 jest.mock('../../../services/factory/factoryBackfill', () => ({ backfillUnassessedContract: (...a: any[]) => backfillUnassessedContract(...a) }));
 const lookupGovContractsContainer = jest.fn();
 jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ lookupGovContractsContainer: (...a: any[]) => lookupGovContractsContainer(...a) }));
+const dismissOpportunity = jest.fn();
+const restoreOpportunity = jest.fn();
+const listActiveDismissedKeys = jest.fn();
+jest.mock('../../../services/factory/opportunities/govOpportunityDismissals', () => ({
+  dismissOpportunity: (...a: any[]) => dismissOpportunity(...a),
+  restoreOpportunity: (...a: any[]) => restoreOpportunity(...a),
+  listActiveDismissedKeys: (...a: any[]) => listActiveDismissedKeys(...a),
+}));
+// Partial mock: override the CRUD fns but KEEP the real error class (instanceof must work in the route).
+const createServiceOffering = jest.fn();
+const updateServiceOffering = jest.fn();
+const retireServiceOffering = jest.fn();
+const listServiceOfferings = jest.fn();
+jest.mock('../../../services/factory/serviceCatalog', () => {
+  const actual = jest.requireActual('../../../services/factory/serviceCatalog');
+  return {
+    ...actual,
+    createServiceOffering: (...a: any[]) => createServiceOffering(...a),
+    updateServiceOffering: (...a: any[]) => updateServiceOffering(...a),
+    retireServiceOffering: (...a: any[]) => retireServiceOffering(...a),
+    listServiceOfferings: (...a: any[]) => listServiceOfferings(...a),
+  };
+});
 const ingestProposal = jest.fn();
 jest.mock('../../../services/factory/proposal/proposalIngest', () => ({ ingestProposal: (...a: any[]) => ingestProposal(...a) }));
 const generateDecomposition = jest.fn();
@@ -49,6 +72,7 @@ import request from 'supertest';
 import factoryRoutes, { toContractRequirement } from '../factoryRoutes';
 import { buildSampleContractProject } from '../../../services/factory/sample/sampleContractProject';
 import { ApprovalConflictError, ApprovalGateError } from '../../../services/factory/factoryApproval';
+import { ServiceOfferingNotFoundError } from '../../../services/factory/serviceCatalog';
 
 const app = express();
 app.use(express.json());
@@ -187,6 +211,15 @@ describe('GET /api/admin/factory/contracts', () => {
 });
 
 describe('GET /api/admin/factory/opportunities', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  const liveFeed = {
+    opportunities: [
+      { uuid: 'u1', title: 'A', agency: 'X', closeDate: null, fitScore: 70, estimatedValue: 100, sourceUrl: null },
+      { uuid: 'u2', title: 'B', agency: 'Y', closeDate: null, fitScore: 80, estimatedValue: 200, sourceUrl: null },
+    ],
+    source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50,
+  };
+
   it('returns the best-fit feed from the client (source + snapshotDate passthrough)', async () => {
     fetchBestFitOpportunities.mockResolvedValue({
       opportunities: [{ uuid: 'u1', title: 'A', agency: 'X', closeDate: null, fitScore: 70, estimatedValue: 100, sourceUrl: null }],
@@ -197,6 +230,132 @@ describe('GET /api/admin/factory/opportunities', () => {
     expect(res.body.source).toBe('snapshot');
     expect(res.body.snapshotDate).toBe('2026-06-08');
     expect(res.body.opportunities).toHaveLength(1);
+  });
+
+  it('filters out actively-dismissed keys and reports totalAvailable + dismissedCount', async () => {
+    fetchBestFitOpportunities.mockResolvedValue(liveFeed);
+    lookupGovContractsContainer.mockResolvedValue(container);
+    listActiveDismissedKeys.mockResolvedValue(new Set(['u1'])); // u1 dismissed for this team
+    const res = await request(app).get('/api/admin/factory/opportunities');
+    expect(res.status).toBe(200);
+    expect(res.body.opportunities.map((o: any) => o.uuid)).toEqual(['u2']);
+    expect(res.body.dismissedCount).toBe(1);
+    expect(res.body.totalAvailable).toBe(50);
+    expect(listActiveDismissedKeys).toHaveBeenCalledWith('ten-1'); // tenant-scoped
+  });
+
+  it('serves the UNFILTERED feed (dismissedCount 0) when the gov container is not configured — discovery stays up', async () => {
+    fetchBestFitOpportunities.mockResolvedValue(liveFeed);
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).get('/api/admin/factory/opportunities');
+    expect(res.status).toBe(200);
+    expect(res.body.opportunities).toHaveLength(2);
+    expect(res.body.dismissedCount).toBe(0);
+    expect(listActiveDismissedKeys).not.toHaveBeenCalled();
+  });
+
+  it('serves the UNFILTERED feed when the dismissal lookup throws (non-fatal)', async () => {
+    fetchBestFitOpportunities.mockResolvedValue(liveFeed);
+    lookupGovContractsContainer.mockResolvedValue(container);
+    listActiveDismissedKeys.mockRejectedValue(new Error('db down'));
+    const res = await request(app).get('/api/admin/factory/opportunities');
+    expect(res.status).toBe(200);
+    expect(res.body.opportunities).toHaveLength(2); // filter failure must not hide the feed
+    expect(res.body.dismissedCount).toBe(0);
+  });
+});
+
+describe('GET /api/admin/factory/opportunities/:uuid — one row detail for the ZIP workspace (fail-closed)', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  const UUID = '11111111-1111-4111-a111-111111111111';
+  const feed = {
+    opportunities: [{ uuid: UUID, title: 'IVR', agency: 'Fort Worth', closeDate: '2026-10-22', fitScore: 75, estimatedValue: 500000, sourceUrl: 'https://bonfire.example/op', preliminarySummary: 'AI IVR solution.' }],
+    source: 'live', snapshotDate: null, snapshotReason: null,
+  };
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('200 returns the mapped discovery row for a known uuid (+ source passthrough)', async () => {
+    fetchBestFitOpportunities.mockResolvedValue(feed);
+    const res = await request(app).get(`/api/admin/factory/opportunities/${UUID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.opportunity.uuid).toBe(UUID);
+    expect(res.body.opportunity.sourceUrl).toBe('https://bonfire.example/op'); // the Source link the workspace shows
+    expect(res.body.source).toBe('live');
+  });
+
+  it('503 fail-closed when the gov container is not configured (never reaches the feed for scope)', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).get(`/api/admin/factory/opportunities/${UUID}`);
+    expect(res.status).toBe(503);
+    expect(fetchBestFitOpportunities).not.toHaveBeenCalled();
+  });
+
+  it('404 honest-null when the uuid is not in the live feed (aged out / degraded dark)', async () => {
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [], source: 'live', snapshotDate: null });
+    const res = await request(app).get(`/api/admin/factory/opportunities/${UUID}`);
+    expect(res.status).toBe(404);
+    expect(res.body.found).toBe(false);
+  });
+
+  it('400 on a non-uuid id (before any scope lookup)', async () => {
+    const res = await request(app).get('/api/admin/factory/opportunities/not-a-uuid');
+    expect(res.status).toBe(400);
+    expect(lookupGovContractsContainer).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/factory/opportunities/:key/dismiss — team-scoped, idempotent, fail-closed', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('dismisses an opportunity (200) with tenant/org + actor from the token, not the body', async () => {
+    dismissOpportunity.mockResolvedValue({ id: 'd1', opportunity_key: 'u1', restored_at: null });
+    const res = await request(app).post('/api/admin/factory/opportunities/u1/dismiss').send({ reason: 'out of scope', title: 'A', agency: 'X' });
+    expect(res.status).toBe(200);
+    expect(res.body.dismissed).toMatchObject({ opportunity_key: 'u1' });
+    const arg = dismissOpportunity.mock.calls[0][0];
+    expect(arg).toMatchObject({ tenantId: 'ten-1', organizationId: 'org-1', opportunityKey: 'u1', dismissedBy: 'admin@test', reason: 'out of scope' });
+  });
+
+  it('is idempotent at the route: a second dismiss of the same key still returns 200', async () => {
+    dismissOpportunity.mockResolvedValue({ id: 'd1', opportunity_key: 'u1', restored_at: null });
+    const r1 = await request(app).post('/api/admin/factory/opportunities/u1/dismiss').send({});
+    const r2 = await request(app).post('/api/admin/factory/opportunities/u1/dismiss').send({});
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    expect(dismissOpportunity).toHaveBeenCalledTimes(2);
+  });
+
+  it('FAILS CLOSED (503) when the gov container is unresolvable — never dismisses', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).post('/api/admin/factory/opportunities/u1/dismiss').send({});
+    expect(res.status).toBe(503);
+    expect(dismissOpportunity).not.toHaveBeenCalled();
+  });
+
+  it('400s a too-long opportunity key (never dismisses)', async () => {
+    const res = await request(app).post(`/api/admin/factory/opportunities/${'x'.repeat(201)}/dismiss`).send({});
+    expect(res.status).toBe(400);
+    expect(dismissOpportunity).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/factory/opportunities/:key/restore — reversible, fail-closed', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('restores an opportunity (200), tenant-scoped', async () => {
+    restoreOpportunity.mockResolvedValue({ id: 'd1', opportunity_key: 'u1', restored_at: new Date().toISOString() });
+    const res = await request(app).post('/api/admin/factory/opportunities/u1/restore').send({});
+    expect(res.status).toBe(200);
+    expect(restoreOpportunity.mock.calls[0][0]).toMatchObject({ tenantId: 'ten-1', opportunityKey: 'u1' });
+  });
+
+  it('FAILS CLOSED (503) when the gov container is unresolvable', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).post('/api/admin/factory/opportunities/u1/restore').send({});
+    expect(res.status).toBe(503);
+    expect(restoreOpportunity).not.toHaveBeenCalled();
   });
 });
 
@@ -325,11 +484,117 @@ describe('POST /api/admin/factory/contract/:id/generate — run the generation e
   });
 });
 
+describe('Service catalog routes — /api/admin/factory/services (program-gated, tenant-scoped)', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  const UUIDV4 = '33333333-3333-4333-a333-333333333333';
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('GET lists the tenant\'s services (status passthrough, tenant from the container)', async () => {
+    listServiceOfferings.mockResolvedValue([{ id: 's1', name: 'Data Platform', status: 'active' }]);
+    const res = await request(app).get('/api/admin/factory/services?status=all');
+    expect(res.status).toBe(200);
+    expect(res.body.services).toHaveLength(1);
+    expect(listServiceOfferings.mock.calls[0][0]).toMatchObject({ tenantId: 'ten-1', status: 'all' });
+  });
+
+  it('GET 400s an invalid status filter', async () => {
+    const res = await request(app).get('/api/admin/factory/services?status=bogus');
+    expect(res.status).toBe(400);
+    expect(listServiceOfferings).not.toHaveBeenCalled();
+  });
+
+  it('POST creates a service with tenant/org/createdBy from scope + token, not the body', async () => {
+    createServiceOffering.mockResolvedValue({ id: 's1', name: 'Data Platform', status: 'active' });
+    const res = await request(app).post('/api/admin/factory/services').send({ name: 'Data Platform', category: 'Data', keywords: ['etl', 'dashboards'], tenantId: 'HACK' });
+    expect(res.status).toBe(201);
+    const arg = createServiceOffering.mock.calls[0][0];
+    expect(arg).toMatchObject({ tenantId: 'ten-1', organizationId: 'org-1', createdBy: 'admin@test', name: 'Data Platform', keywords: ['etl', 'dashboards'] });
+    expect(arg.tenantId).not.toBe('HACK'); // body cannot spoof the tenant
+  });
+
+  it('POST 400s a missing name without creating', async () => {
+    const res = await request(app).post('/api/admin/factory/services').send({ category: 'Data' });
+    expect(res.status).toBe(400);
+    expect(createServiceOffering).not.toHaveBeenCalled();
+  });
+
+  it('PATCH updates a service (200) and maps a not-found id to 404', async () => {
+    updateServiceOffering.mockResolvedValueOnce({ id: 's1', name: 'New' });
+    let res = await request(app).patch(`/api/admin/factory/services/${UUIDV4}`).send({ name: 'New' });
+    expect(res.status).toBe(200);
+    expect(updateServiceOffering.mock.calls[0][0]).toMatchObject({ tenantId: 'ten-1', id: UUIDV4 });
+    updateServiceOffering.mockRejectedValueOnce(new ServiceOfferingNotFoundError(UUIDV4));
+    res = await request(app).patch(`/api/admin/factory/services/${UUIDV4}`).send({ name: 'New' });
+    expect(res.status).toBe(404);
+  });
+
+  it('PATCH 400s a non-uuid id', async () => {
+    const res = await request(app).patch('/api/admin/factory/services/not-a-uuid').send({ name: 'x' });
+    expect(res.status).toBe(400);
+    expect(updateServiceOffering).not.toHaveBeenCalled();
+  });
+
+  it('POST retire soft-retires (200) and 404s an unknown id', async () => {
+    retireServiceOffering.mockResolvedValueOnce({ id: 's1', status: 'retired' });
+    let res = await request(app).post(`/api/admin/factory/services/${UUIDV4}/retire`);
+    expect(res.status).toBe(200);
+    expect(res.body.service.status).toBe('retired');
+    retireServiceOffering.mockRejectedValueOnce(new ServiceOfferingNotFoundError(UUIDV4));
+    res = await request(app).post(`/api/admin/factory/services/${UUIDV4}/retire`);
+    expect(res.status).toBe(404);
+  });
+
+  it('FAILS CLOSED (503) when the gov container is unresolvable — never writes', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).post('/api/admin/factory/services').send({ name: 'X' });
+    expect(res.status).toBe(503);
+    expect(createServiceOffering).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/factory/opportunities/match — advisory suggested services (program-gated, tenant-scoped)', () => {
+  const container = { tenant: { id: 'ten-1' }, org: { id: 'org-1' } };
+  beforeEach(() => { lookupGovContractsContainer.mockResolvedValue(container); });
+
+  it('returns ranked matches from the real matcher over the tenant\'s active catalog', async () => {
+    listServiceOfferings.mockResolvedValue([
+      { id: 'data', name: 'Managed Data Services', category: 'Data', keywords: ['data analytics', 'dashboards'], naicsCodes: [] },
+      { id: 'train', name: 'Workforce Training', category: 'Training', keywords: ['upskilling'], naicsCodes: [] },
+    ]);
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ title: 'RFP for a data analytics dashboards platform' });
+    expect(res.status).toBe(200);
+    expect(res.body.catalogSize).toBe(2);
+    expect(res.body.matches.map((m: any) => m.id)).toContain('data');
+    expect(res.body.matches[0].reason).toContain('data analytics');
+    expect(listServiceOfferings.mock.calls[0][0]).toMatchObject({ tenantId: 'ten-1', status: 'active' });
+  });
+
+  it('returns an empty match list when nothing overlaps (still 200)', async () => {
+    listServiceOfferings.mockResolvedValue([{ id: 'data', name: 'Data', category: 'Data', keywords: ['dashboards'], naicsCodes: [] }]);
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ title: 'snow plowing and road salt' });
+    expect(res.status).toBe(200);
+    expect(res.body.matches).toEqual([]);
+  });
+
+  it('400s a malformed body (requirements not an array)', async () => {
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ requirements: 'not-an-array' });
+    expect(res.status).toBe(400);
+    expect(listServiceOfferings).not.toHaveBeenCalled();
+  });
+
+  it('FAILS CLOSED (503) when the gov container is unresolvable', async () => {
+    lookupGovContractsContainer.mockResolvedValue(null);
+    const res = await request(app).post('/api/admin/factory/opportunities/match').send({ title: 'x' });
+    expect(res.status).toBe(503);
+    expect(listServiceOfferings).not.toHaveBeenCalled();
+  });
+});
+
 describe('route-auth — every route is section-gated (required CI lint)', () => {
   it('the source guards every route with requireSection(\'program\')', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'factoryRoutes.ts'), 'utf8');
     const guards = src.match(/requireSection\('program'\)/g) ?? [];
-    expect(guards.length).toBeGreaterThanOrEqual(9); // sample, contract, contracts, approve, request-changes, opportunities, start, ingest-proposal, generate
+    expect(guards.length).toBeGreaterThanOrEqual(16); // + opportunities/match + opportunities/:uuid detail (prev 15: 11 + services GET/POST/PATCH/retire)
   });
 });
 

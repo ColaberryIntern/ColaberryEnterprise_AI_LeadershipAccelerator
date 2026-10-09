@@ -47,6 +47,10 @@ const CreateDraftSchema = z.object({
   is_paid: z.boolean().default(false),
   has_offer: z.boolean().default(false),
   kinds: z.array(z.string()).default([]),
+  /** A page this platform built. Validated against the item's brand before it is stored. */
+  landing_page_id: UUID.nullable().optional(),
+  /** A destination that is not ours to build. */
+  destination_url: z.string().trim().url().max(2048).nullable().optional(),
   /** Required by validation when content_type is `poll`; ignored otherwise. */
   poll: PollSchema.nullable().optional(),
 }).strict();
@@ -56,6 +60,9 @@ const UpdateDraftSchema = z.object({
   canonical_body: z.string().max(20000).optional(),
   content_type: contentTypeSchema.optional(),
   scheduled_for: z.string().datetime().nullable().optional(),
+  /** Null clears the selection; absent leaves it. Validated against the item's brand. */
+  landing_page_id: UUID.nullable().optional(),
+  destination_url: z.string().trim().url().max(2048).nullable().optional(),
   /** Null clears the poll; absent leaves it. */
   poll: PollSchema.nullable().optional(),
 }).strict().refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update' });
@@ -64,7 +71,15 @@ const GenerateSchema = z.object({ providers: z.array(providerSchema).min(1) }).s
 const EditVariantSchema = z.object({ text: z.string().max(20000) }).strict();
 const TransitionSchema = z.object({ to: z.enum(CONTENT_ITEM_STATUSES as unknown as [string, ...string[]]) }).strict();
 // Shape only. The allowlist check needs the brand domains and runs in the service (422).
-const LinksSchema = z.object({ destination_url: z.string().trim().url().max(2048) }).strict();
+/**
+ * `destination_url` is OPTIONAL now. When it is absent the destination is read from the item -
+ * the landing page the operator selected, or the URL they typed - which is the whole point of
+ * storing it. Passing one explicitly still works and wins, so nothing that called this before
+ * behaves differently.
+ */
+const LinksSchema = z.object({
+  destination_url: z.string().trim().url().max(2048).optional(),
+}).strict();
 const ActionSchema = z.object({
   action: z.enum(COMPOSER_ACTIONS as unknown as [string, ...string[]]),
   scheduled_for: z.string().datetime({ offset: true }).optional(),
@@ -96,6 +111,21 @@ function fail(res: Response, err: unknown, event: string): void {
     error_class: e?.name ?? 'Error', context: { message: String(e?.message ?? e).slice(0, 200) },
   }));
   res.status(500).json({ error: 'Composer operation failed', error_class: 'InternalError' });
+}
+
+/**
+ * Check a selected landing page against the brand it is being attached to.
+ *
+ * The rules live in `landingPageSelection` because three callers need the same answer and the
+ * reasons are Ali's, not obvious: only a page this platform built, only this brand's pages, and
+ * only one that is already published. Returns the page so the caller can derive its URL.
+ */
+async function checkSelectedLandingPage(landingPageId: string, brandId: string | null) {
+  const { LandingPage, Brand } = await import('../../models');
+  const { assertSelectable } = await import('../../services/marketing/landingPageSelection');
+  const page = await LandingPage.findByPk(landingPageId);
+  const brand = brandId ? await Brand.findByPk(brandId) : null;
+  return assertSelectable(page as never, brand ? { id: brand.id, slug: brand.slug } : null);
 }
 
 /** Load an item the caller may see, or null - a 404 for foreign tenants, never a 403. */
@@ -163,6 +193,12 @@ router.post('/api/admin/content', requireAdmin, async (req: Request, res: Respon
     const brand = await Brand.findByPk(parsed.data.brand_id);
     if (!brand || !scopeAllows(scope, brand.tenant_id)) return void res.status(404).json({ error: 'Brand not found', error_class: 'NotFound' });
 
+    // Validated BEFORE the row exists, so a bad selection never gets stored and then rejected
+    // later at publish time.
+    if (parsed.data.landing_page_id) {
+      await checkSelectedLandingPage(parsed.data.landing_page_id, brand.id);
+    }
+
     const item = await ContentItem.create({
       tenant_id: brand.tenant_id,
       brand_id: brand.id,
@@ -170,6 +206,8 @@ router.post('/api/admin/content', requireAdmin, async (req: Request, res: Respon
       title: parsed.data.title,
       canonical_body: parsed.data.canonical_body,
       content_type: parsed.data.content_type,
+      landing_page_id: parsed.data.landing_page_id ?? null,
+      destination_url: parsed.data.destination_url ?? null,
       status: 'draft',
       // `created_by` is a UUID column: the admin id (`sub`), never the email. Writing the
       // email here 500'd every "Create draft" on production (found 2026-09-11, T032).
@@ -235,7 +273,13 @@ router.patch('/api/admin/content/:id', requireAdmin, async (req: Request, res: R
   const parsed = UpdateDraftSchema.safeParse(req.body);
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
-    if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
+    const existing = await visibleItem(req, id.data);
+    if (!existing) return void res.status(404).json(NOT_FOUND);
+    // Against THIS item's brand, not one from the body. Null clears the selection and needs no
+    // check - there is nothing to point at.
+    if (parsed.data.landing_page_id) {
+      await checkSelectedLandingPage(parsed.data.landing_page_id, existing.brand_id);
+    }
     const { item, invalidation } = await updateItemDraft(id.data, parsed.data, actorOf(req));
     res.json({ item, invalidation });
   } catch (err) { fail(res, err, 'composer_update_failed'); }
@@ -304,8 +348,32 @@ router.post('/api/admin/content/:id/links', requireAdmin, async (req: Request, r
   const parsed = LinksSchema.safeParse(req.body);
   if (!parsed.success) return bad(res, parsed.error.flatten());
   try {
-    if (!(await visibleItem(req, id.data))) return void res.status(404).json(NOT_FOUND);
-    res.json({ links: await generateItemLinks(id.data, parsed.data.destination_url.trim(), req.admin?.sub ?? null) });
+    const item = await visibleItem(req, id.data);
+    if (!item) return void res.status(404).json(NOT_FOUND);
+
+    // An explicit URL still wins, so every existing caller behaves exactly as before. Otherwise
+    // the destination comes from the item - which is the point of storing it, and the reason a
+    // reload no longer loses the page the operator picked.
+    let destination = parsed.data.destination_url?.trim() ?? null;
+    if (!destination) {
+      const { LandingPage, Brand } = await import('../../models');
+      const { itemDestination } = await import('../../services/marketing/landingPageSelection');
+      const page = item.landing_page_id ? await LandingPage.findByPk(item.landing_page_id) : null;
+      const brand = item.brand_id ? await Brand.findByPk(item.brand_id) : null;
+      destination = itemDestination(
+        { landing_page_id: item.landing_page_id, destination_url: item.destination_url },
+        page ? { slug: page.slug } : null,
+        brand ? { id: brand.id, slug: brand.slug } : null,
+      ).url;
+    }
+    if (!destination) {
+      return void res.status(400).json({
+        error: 'This post has no destination yet. Choose a landing page, or give it a URL.',
+        error_class: 'NoDestination',
+      });
+    }
+
+    res.json({ links: await generateItemLinks(id.data, destination, req.admin?.sub ?? null) });
   } catch (err) { fail(res, err, 'composer_links_failed'); }
 });
 
