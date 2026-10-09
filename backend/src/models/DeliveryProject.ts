@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import { deliveryProjectLifecycleHook } from '../services/lifecycle/projectLifecycleRegistration';
 
 /**
  * DeliveryProject — one thing being built for one engagement.
@@ -163,6 +164,16 @@ DeliveryProject.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    // Every creation path registers a lifecycle, because this is the one place all of them pass
+    // through. Five call sites create delivery projects directly and a hand-maintained list of
+    // them was measured wrong within three days of being written, so the registration lives here
+    // rather than in a wrapper someone can forget to call. UNLIKE the ticket-ledger hook this
+    // pattern comes from, this one joins the caller's transaction and lets its errors propagate:
+    // a delivery project that cannot be registered must not exist. The full contract, and why a
+    // try/catch here would reintroduce the exact defect it prevents, is in the hook's own header.
+    hooks: {
+      afterCreate: deliveryProjectLifecycleHook,
+    },
     indexes: [
       {
         unique: true,
