@@ -1,3 +1,34 @@
+/**
+ * ESCALATION-002, decision 1 of 4 — Ali, 2026-09-10, implemented 2026-10-09.
+ *
+ * This service was the THIRD place computing revenue as `enrollments x 4500`, after the same
+ * defect was found and removed from `campaignLinkService.ts` and `marketingAnalyticsService.ts`.
+ * `docs/marketing/ESCALATION-002-fabricated-metrics.md:28` tracked it as NOT TOUCHED.
+ *
+ * The decision, verbatim: *"`revenueDashboardService` reports `actualRevenue`, which must come
+ * from real payments or report unavailable, exactly as the marketing services now do."* The same
+ * decision separately rules that a PROJECTION may use an assumed price, "provided it is labelled
+ * an assumption and read from the setting rather than from a private constant" — which is why
+ * this change removes one figure and re-sources two others rather than deleting all three.
+ *
+ * Why 4500 was not merely stale but wrong in kind, in Ali's words: *"4500 is no longer
+ * applicable. It's all about the subscription now, 149 per month if they pay for a year up
+ * front."* And the measurement that settles it:
+ * `SELECT COUNT(*) FROM enrollments WHERE amount_paid = 4500` returns **0**. Nobody has ever been
+ * charged it. So the old `actualRevenue` billed a single $4,500 charge for what is a recurring
+ * subscription — a different billing model, not a percentage error.
+ *
+ * Option B in that escalation ("just use the right price") was rejected for a reason worth
+ * keeping in view: it "makes the number *plausible*, which removes the only clue anyone had that
+ * it was fabricated."
+ *
+ * `actualRevenue` is now ABSENT from the contract and reported through `unavailable`, derived by
+ * ASKING the metric registry rather than hand-listing — so when the payments join lands and
+ * `revenue.net_revenue` flips to trusted, this stops saying unavailable on its own. A hardcoded
+ * "unavailable" would be the same class of lie in the opposite direction.
+ */
+import { getMetric, mayComputeWith } from './adminOs/metricRegistry';
+import { getSetting } from './settingsService';
 import { Op, fn, col, literal, QueryTypes } from 'sequelize';
 import { Lead, Activity, Appointment, InteractionOutcome, CampaignLead } from '../models';
 import { sequelize } from '../config/database';
@@ -8,7 +39,26 @@ const PIPELINE_STAGES = [
   'new_lead', 'contacted', 'meeting_scheduled', 'proposal_sent', 'negotiation', 'enrolled', 'lost',
 ];
 
-const PRICE_PER_ENROLLMENT = 4500;
+/**
+ * The price a PROJECTION is allowed to assume. Read from the `price_per_enrollment` setting, never
+ * a private constant — that is the explicit condition the accepted decision attaches to using an
+ * assumed price at all. `null` when the setting is unset, and a null price makes every projection
+ * null rather than defaulting to a number nobody chose.
+ */
+async function readAssumedPrice(): Promise<number | null> {
+  const raw = await getSetting('price_per_enrollment');
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** The registry key that owns real revenue. Asked, not assumed — see the header. */
+const NET_REVENUE_KEY = 'revenue.net_revenue';
+
+export interface UnavailableMetric {
+  key: string;
+  name: string;
+  reason: string;
+}
 
 export async function getRevenueDashboard() {
   const forecastStart = Date.now();
@@ -91,8 +141,23 @@ export async function getRevenueDashboard() {
     ? (pipelineCounts['enrolled'] || 0) / totalActive
     : 0.1; // default 10%
   const projectedEnrollments = Math.round(qualifiedLeads * Math.max(historicalRate, 0.1));
-  const projectedRevenue = projectedEnrollments * PRICE_PER_ENROLLMENT;
-  const actualRevenue = (pipelineCounts['enrolled'] || 0) * PRICE_PER_ENROLLMENT;
+  // A projection may assume a price; an ACTUAL may not be assumed at all.
+  const assumedPrice = await readAssumedPrice();
+  const projectedRevenue = assumedPrice === null ? null : projectedEnrollments * assumedPrice;
+
+  // `actualRevenue` is deliberately not computed. It would have been
+  // `enrolled_count * price`, which counts enrolments rather than payments. The registry owns
+  // whether real revenue is reportable, and it is asked rather than second-guessed here.
+  const unavailable: UnavailableMetric[] = [];
+  if (!mayComputeWith(NET_REVENUE_KEY)) {
+    const def = getMetric(NET_REVENUE_KEY);
+    unavailable.push({
+      key: NET_REVENUE_KEY,
+      name: def?.name ?? 'Net revenue',
+      reason: def?.statusReason
+        ?? 'Not registered in the metric registry, so no honest figure can be produced.',
+    });
+  }
 
   // Upcoming appointments (next 7 days)
   const now = new Date();
@@ -130,13 +195,21 @@ export async function getRevenueDashboard() {
     leadVelocity,
     conversionBySource,
     revenueForecast: {
-      actualRevenue,
+      // No `actualRevenue`. Its absence is the point, and a test asserts the key is gone rather
+      // than present-and-zero: a zero reads as "we measured nothing earned", which is a
+      // different and equally false claim.
       projectedEnrollments,
       projectedRevenue,
-      pipelineValue: qualifiedLeads * PRICE_PER_ENROLLMENT,
+      pipelineValue: assumedPrice === null ? null : qualifiedLeads * assumedPrice,
+      /** Disclosed so no consumer can mistake a projection for a measurement. */
+      priceAssumption: assumedPrice === null
+        ? { value: null, source: 'price_per_enrollment setting', note: 'Setting unset, so every projection above is null rather than guessed.' }
+        : { value: assumedPrice, source: 'price_per_enrollment setting', note: 'An ASSUMED plan price, not collected revenue. Projections only.' },
       enrolled: pipelineCounts['enrolled'] || 0,
       qualifiedLeads,
     },
+    /** Figures this surface will not fabricate, with the registry's own reason attached. */
+    unavailable,
     upcomingAppointments,
     recentActivities,
     campaignAttribution,
@@ -210,7 +283,9 @@ export async function calculateMultiTouchAttribution(leadId: number): Promise<Le
 
   // Calculate revenue based on pipeline stage
   const isEnrolled = lead.pipeline_stage === 'enrolled';
-  const totalRevenue = isEnrolled ? PRICE_PER_ENROLLMENT : 0;
+  // Was `isEnrolled ? 4500 : 0` — an enrolment is not a payment, so this reported money that
+  // may never have been collected. Null until the payments join lands; see the header.
+  const totalRevenue = null;
 
   const touchpoints: TouchpointAttribution[] = outcomes.map((o: any) => ({
     channel: o.channel,
