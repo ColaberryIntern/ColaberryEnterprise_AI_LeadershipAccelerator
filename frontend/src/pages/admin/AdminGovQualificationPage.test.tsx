@@ -567,6 +567,23 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(container.textContent ?? '').toContain('SAM registration required.'); // candidates shown
   });
 
+  it('decoupled + no record yet: one "Extract & attest" AUTO-OPENS the qualification, then attests (no separate Open step)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({ qualification: null, zipAttestation: null }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
+    (factoryApi.createGovQualification as jest.Mock).mockResolvedValue({ qualification: { id: 'q1', version: 1 } });
+    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const inp = container.querySelector('input[type=file]') as HTMLInputElement;
+    Object.defineProperty(inp, 'files', { value: [new File(['zip'], 'sol.zip', { type: 'application/zip' })], configurable: true });
+    await act(async () => { inp.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Extract & attest');
+    await flush();
+    expect(factoryApi.createGovQualification).toHaveBeenCalled();                                     // auto-opened the qualification
+    expect(factoryApi.attestSolicitationZip).toHaveBeenCalled();                                      // then attested the ZIP
+    expect((factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0][1].expectedVersion).toBe(1); // bound to the just-created version
+  });
+
   it('decoupled: when the server says canApprove (requirements + attested ZIP), Approve is ENABLED and calls approveGovQualification', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'RQ1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }] } },

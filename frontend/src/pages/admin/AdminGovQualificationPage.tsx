@@ -56,11 +56,11 @@ const BLOCK_REASON: Record<string, string> = {
   submission_prerequisite_no_evidence: 'Binding submission requirement with no evidence on file',
 };
 const COVERAGE_REASON: Record<string, string> = {
-  no_requirements_established: 'No applicable requirements have been established yet (an empty list is not "no requirements")',
-  no_zip_attested: 'The solicitation ZIP has not been attested yet — attest it below before a pursuit can be approved',
-  no_authoritative_source: 'The authoritative solicitation was not established/reviewed',
-  authoritative_package_unreviewed: 'An amendment or the base solicitation has not been reviewed',
-  document_coverage_unknown: 'Document coverage is unknown or inaccessible',
+  no_requirements_established: 'Confirm the detected requirements to establish them — on Solicitation, click "Establish selected" (nothing is established until you confirm)',
+  no_zip_attested: 'Attest the solicitation ZIP as the evidence of record — upload it on the Solicitation step (one upload opens the qualification and attests it)',
+  no_authoritative_source: 'Establish / review the authoritative solicitation',
+  authoritative_package_unreviewed: 'Review the base solicitation or its amendment',
+  document_coverage_unknown: 'Document coverage is unknown or inaccessible — re-check the uploaded package',
 };
 
 // The seven numbered pursuit STEPS (and the legacy ?tab= → step mapping) live in
@@ -869,6 +869,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<ExtractedRequirementCandidate[] | null>(null);
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
+  const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
@@ -1000,18 +1001,27 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     }, `Established ${mapped.length} requirement(s) from the solicitation.`);
   };
 
-  // ONE upload does both: extract the requirement candidates (read-only) AND attest the SAME ZIP as the evidence of
-  // record (a server hash). Attestation runs only on the decoupled path once the qualification is open and it is not
-  // already attested; it is skipped silently otherwise (e.g. before Open qualification), and extraction still stands.
+  // ONE upload does it ALL on the decoupled path: extract the requirement candidates (read-only) AND attest the SAME
+  // ZIP as the evidence of record (a server hash) — AUTO-OPENING the qualification first if it isn't open yet. No
+  // separate "Open qualification" click is needed: upload opens it and attests in one step. If the qualification is
+  // already open, it just attests (unless already attested). Extraction always stands.
   const uploadSolicitationZip = useCallback(async () => {
     const extracted = await extract();
-    if (extracted && isDecoupled && record && version && extractFile && !(ws && ws.zipAttestation && ws.zipAttestation.sha256)) {
+    if (!extracted || !isDecoupled || !extractFile) return;
+    if (!record) {
+      await run(async () => {
+        const created = await createGovQualification(canonical, { biddingEntity, from: fromParam || undefined, agency: agencyParam || undefined });
+        await attestSolicitationZip(canonical, { biddingEntity, expectedVersion: created.qualification.version, mode: 'add', file: extractFile });
+      }, 'Qualification opened, and the ZIP extracted and attested as the evidence of record. Confirm the detected requirements below.');
+      return;
+    }
+    if (version && !(ws && ws.zipAttestation && ws.zipAttestation.sha256)) {
       await run(
         () => attestSolicitationZip(canonical, { biddingEntity, expectedVersion: version, mode: 'add', file: extractFile }),
         'Solicitation ZIP extracted and attested as the evidence of record.',
       );
     }
-  }, [extract, isDecoupled, record, version, extractFile, ws, run, canonical, biddingEntity]);
+  }, [extract, isDecoupled, record, version, extractFile, ws, run, canonical, biddingEntity, fromParam, agencyParam]);
 
   return (
     <div className="admin-page">
@@ -1213,7 +1223,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <>
                   <div className="small text-secondary mb-2">{candidates.length} candidate requirement(s) detected <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span></div>
                   <ul className="list-unstyled mb-3">
-                    {candidates.map((c, idx) => {
+                    {(showAllCandidates ? candidates : candidates.slice(0, 10)).map((c, idx) => {
                       const row = candRows[c.id] ?? { checked: true, applicability: 'always', dueStage: 'submission' };
                       return (
                         <li key={c.id + idx} className="py-2 border-bottom">
@@ -1243,6 +1253,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                       );
                     })}
                   </ul>
+                  {candidates.length > 10 && (
+                    <button type="button" className="btn btn-link btn-sm px-0 mb-2 d-block" onClick={() => setShowAllCandidates((v) => !v)} aria-expanded={showAllCandidates}>
+                      {showAllCandidates ? 'Show fewer' : `Show all ${candidates.length} (${candidates.length - 10} more) — all are selected by default`}
+                    </button>
+                  )}
                   {record ? (
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy || selectedCandidateCount === 0} onClick={establishSelected}>
                       <i className="ri-check-double-line me-1" aria-hidden="true" />Establish selected ({selectedCandidateCount})
@@ -1366,7 +1381,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <RequirementStageList key={stage} stage={stage} rows={ws.evaluation!.byDueStage[stage]} />
               ))}
               {ws.coverage && !ws.coverage.sufficient && (
-                <div className="small text-warning-emphasis mt-2"><i className="ri-information-line me-1" aria-hidden="true" />Coverage not yet sufficient for approval: {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
+                <div className="small text-warning-emphasis mt-2"><i className="ri-guide-line me-1" aria-hidden="true" /><strong>Before this pursuit can be approved, do this next:</strong> {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
               )}
               {(ws.evaluation.openSubmissionRequirements?.length ?? 0) > 0 && (
                 <div className="small text-secondary mt-2"><i className="ri-information-line me-1" aria-hidden="true" />{ws.evaluation.openSubmissionRequirements!.length} submission requirement{ws.evaluation.openSubmissionRequirements!.length === 1 ? '' : 's'} still need evidence. These do <strong>not</strong> block approving the <strong>pursuit</strong> (research) — they must be evidenced before a bid is <strong>submitted</strong>.</div>
