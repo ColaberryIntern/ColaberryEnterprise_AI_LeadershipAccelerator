@@ -143,7 +143,7 @@ describe('AdminGovQualificationPage — journey', () => {
     await renderAt(`?canonical=${CANON}`);
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(container.textContent ?? '').toContain('No applicable requirements have been established');
+    expect(container.textContent ?? '').toContain('Confirm the detected requirements to establish them');
   });
 
   it('changed source → review-changes prompt and Approve disabled', async () => {
@@ -419,7 +419,7 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Requirements by due stage');           // renders from evaluation on the decoupled path
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(text).toContain('solicitation ZIP has not been attested yet'); // honest coverage reason, not an OP-source block
+    expect(text).toContain('Attest the solicitation ZIP as the evidence of record'); // honest coverage reason, not an OP-source block
   });
 
   it('Requirements by due stage caps a long list to a few and expands on "Show all"', async () => {
