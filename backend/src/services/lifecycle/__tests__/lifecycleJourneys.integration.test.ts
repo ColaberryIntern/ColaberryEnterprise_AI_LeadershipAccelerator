@@ -298,6 +298,11 @@ describeIfDb('the review journeys, each seeding and deleting its own fixture', (
       const outcomes: string[] = [];
       for (let i = 0; i < MAX_ATTEMPTS; i += 1) {
         // The lease must be free for the next attempt; the machine sets it while working.
+        // REDUNDANT, deliberately: `executeStage` already releases the lease on a failed
+        // attempt (`lifecycleExecution.ts:169`). Kept so this loop reads as a sequence of
+        // independent attempts rather than relying on that release — but it does mean this
+        // journey would not notice a regression that stopped releasing it. That is covered in
+        // `lifecycleExecution.test.ts`, which is where it belongs.
         const key = `${stateId}:design_ready`;
         const held = runs.get(key);
         if (held) held.leaseUntil = null;
@@ -325,12 +330,26 @@ describeIfDb('the review journeys, each seeding and deleting its own fixture', (
       expect(failures[0]).toMatchObject({
         attempted_stage: 'design_ready',
         attempts: MAX_ATTEMPTS,
-        // Classified by production code, from the thrown error, not asserted as a literal here.
-        error_class: classifyError(new Error('model returned no usable design')),
+        // A LITERAL, not `classifyError(...)`. Computing the expectation with the same function
+        // that produced the stored value makes the assertion insensitive to a mutation of that
+        // function — it would agree with itself however wrong it became.
+        error_class: 'UnclassifiedError',
       });
+      // And the literal is pinned to production's own classification, so this fails if either
+      // the stored value or the classifier moves, rather than only when they disagree.
+      expect(classifyError(new Error('model returned no usable design'))).toBe('UnclassifiedError');
 
-      // THE RESUME POINT IS INTACT, and now that claim can fail: the machine ran for real and
-      // could have moved the stage. It does not — recording a failure is not advancing.
+      // THE RESUME POINT IS INTACT — and this assertion CANNOT FAIL, which is worth saying
+      // rather than dressing up. A verifier caught the previous comment here claiming "the
+      // machine ran for real and could have moved the stage". It could not: `lifecycleExecution`
+      // has exactly ONE import and it is type-only, so it holds no Sequelize, no model and no
+      // query, and its only persistence is the injected store's `get`/`put`/`deadLetter` over
+      // `StageRun` and `DeadLetter` — none of which can reach `project_lifecycle_states.stage`.
+      //
+      // That is a STRUCTURAL guarantee and a better one than a test: a failure-recording machine
+      // that cannot touch the stage column cannot lose a resume point by accident. What the line
+      // below actually guards is the FIXTURE — that `seedLifecycle` put the project where this
+      // journey thinks it did. Read it as that, not as evidence about the machine.
       const row = await lifecycleRow(P.failed);
       expect(row.stage).toBe('allocation_ready');
     } finally {
