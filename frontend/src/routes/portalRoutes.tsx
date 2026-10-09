@@ -10,6 +10,7 @@ const PortalViewAsPage = lazy(() => import('../pages/portal/PortalViewAsPage'));
 const PortalMgmtEnterPage = lazy(() => import('../pages/portal/PortalMgmtEnterPage'));
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import { BroadcastPlayerProvider } from '../contexts/BroadcastPlayerContext';
+import { BroadcastDiscoveryProvider } from '../contexts/BroadcastDiscoveryContext';
 import LiveMiniPlayer from '../components/portal/LiveMiniPlayer';
 import LiveNowBadge from '../components/portal/LiveNowBadge';
 const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage'));
@@ -51,33 +52,48 @@ const portalRoutes = (
   <Route
     element={(
       <ParticipantAuthProvider>
-        <BroadcastPlayerProvider>
-          <ReadOnlyBanner />
-          <Outlet />
-          {/*
-            THE MINI-PLAYER IS A SIBLING OF <Outlet/>, AND THAT IS THE WHOLE DESIGN.
-            React Router keeps a layout route's element mounted while the outlet's contents
-            change, so the <video> inside this component is the same DOM node across every
-            portal navigation and playback does not stop.
+        {/*
+          ONE DISCOVERY POLL FOR THE WHOLE PORTAL, and it belongs here rather than in each
+          placement. `useBroadcastDiscovery` keeps all of its state per-instance, so every
+          call site is an independent poller with its own timer. The runbook's capacity table
+          projects `viewers / 45 s` — one request per tab per cadence — and five placements
+          each calling the hook would be five times that, making the documented number wrong
+          the moment the placements shipped. Wrapping the outlet means the badge, the room
+          pane and anything added later read the same poll.
 
-            It must NOT move into PortalShell, which looks like the natural home for portal
-            chrome: PortalShell is rendered independently by 29 different page components, so
-            anything inside it unmounts and remounts on every route change. A player there
-            would restart on every click.
+          The provider also owns the AUTH GATE, so no placement can reach an authenticated
+          endpoint from `/portal/login` by forgetting to check. This layout route wraps the
+          login, signup and verify pages too.
+        */}
+        <BroadcastDiscoveryProvider>
+          <BroadcastPlayerProvider>
+            <ReadOnlyBanner />
+            <Outlet />
+            {/*
+              THE MINI-PLAYER IS A SIBLING OF <Outlet/>, AND THAT IS THE WHOLE DESIGN.
+              React Router keeps a layout route's element mounted while the outlet's contents
+              change, so the <video> inside this component is the same DOM node across every
+              portal navigation and playback does not stop.
 
-            components/portal/__tests__/liveMiniPlayer.persistence.test.tsx builds both
-            arrangements and asserts the node survives this one and is destroyed by the other,
-            so a future re-parenting fails a test rather than a release.
-          */}
-          {/*
-            Beside the player, and a sibling of <Outlet/> for the same two reasons: the
-            badge must not disappear on navigation, and DISMISSAL must not re-fire on
-            navigation. A dismissal held in page state comes back on every route change,
-            which is the acceptance criterion this placement satisfies.
-          */}
-          <LiveNowBadge />
-          <LiveMiniPlayer />
-        </BroadcastPlayerProvider>
+              It must NOT move into PortalShell, which looks like the natural home for portal
+              chrome: PortalShell is rendered independently by 29 different page components,
+              so anything inside it unmounts and remounts on every route change. A player
+              there would restart on every click.
+
+              components/portal/__tests__/liveMiniPlayer.persistence.test.tsx builds both
+              arrangements and asserts the node survives this one and is destroyed by the
+              other, so a future re-parenting fails a test rather than a release.
+            */}
+            {/*
+              Beside the player, and a sibling of <Outlet/> for the same two reasons: the
+              badge must not disappear on navigation, and DISMISSAL must not re-fire on
+              navigation. A dismissal held in page state comes back on every route change,
+              which is the acceptance criterion this placement satisfies.
+            */}
+            <LiveNowBadge />
+            <LiveMiniPlayer />
+          </BroadcastPlayerProvider>
+        </BroadcastDiscoveryProvider>
       </ParticipantAuthProvider>
     )}
   >

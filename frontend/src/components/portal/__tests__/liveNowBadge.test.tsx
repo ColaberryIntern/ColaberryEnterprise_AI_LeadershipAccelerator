@@ -5,6 +5,7 @@ import { MemoryRouter, Routes, Route, Outlet, useNavigate } from 'react-router-d
 import LiveNowBadge from '../LiveNowBadge';
 import { BroadcastPlayerProvider, useBroadcastPlayer } from '../../../contexts/BroadcastPlayerContext';
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
+import { BroadcastDiscoveryProvider } from '../../../contexts/BroadcastDiscoveryContext';
 import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
 import type { DiscoveryResponse, DiscoveryBroadcast } from '../../../hooks/useBroadcastDiscovery';
 
@@ -86,7 +87,14 @@ function App() {
   return (
     <MemoryRouter initialEntries={['/portal/a']}>
       <ParticipantAuthProvider>
-        <BroadcastPlayerProvider>
+        {/*
+          Deps are injected into the PROVIDER, not the badge. The badge no longer polls for
+          itself — a second poller would be a second request per cadence per tab, and the
+          runbook's capacity table assumes one — so this mirrors the real tree in
+          `portalRoutes.tsx` rather than hand-feeding the component.
+        */}
+        <BroadcastDiscoveryProvider deps={deps()}>
+          <BroadcastPlayerProvider>
           <Nav />
           <OpenState />
           <Routes>
@@ -94,7 +102,7 @@ function App() {
               element={(
                 <>
                   <Outlet />
-                  <LiveNowBadge discoveryDeps={deps()} />
+                  <LiveNowBadge />
                 </>
               )}
             >
@@ -103,7 +111,8 @@ function App() {
               <Route path="/portal/c" element={<p data-testid="page">c</p>} />
             </Route>
           </Routes>
-        </BroadcastPlayerProvider>
+          </BroadcastPlayerProvider>
+        </BroadcastDiscoveryProvider>
       </ParticipantAuthProvider>
     </MemoryRouter>
   );

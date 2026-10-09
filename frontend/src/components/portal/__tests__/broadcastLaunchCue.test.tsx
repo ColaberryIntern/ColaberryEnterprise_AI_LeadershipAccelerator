@@ -15,6 +15,7 @@ const chime = playChime as jest.MockedFunction<typeof playChime>;
 const { playChime: realPlayChime } = jest.requireActual('../broadcastLaunchCue');
 import { BroadcastPlayerProvider } from '../../../contexts/BroadcastPlayerContext';
 import { ParticipantAuthProvider } from '../../../contexts/ParticipantAuthContext';
+import { BroadcastDiscoveryProvider } from '../../../contexts/BroadcastDiscoveryContext';
 import { PARTICIPANT_TOKEN_KEY } from '../../../utils/participantToken';
 import type { DiscoveryResponse, DiscoveryBroadcast } from '../../../hooks/useBroadcastDiscovery';
 
@@ -80,15 +81,17 @@ function App() {
   return (
     <MemoryRouter initialEntries={['/portal/a']}>
       <ParticipantAuthProvider>
-        <BroadcastPlayerProvider>
+        <BroadcastDiscoveryProvider deps={deps()}>
+          <BroadcastPlayerProvider>
           <Nav />
           <Routes>
-            <Route element={<><Outlet /><LiveNowBadge discoveryDeps={deps()} /></>}>
+            <Route element={<><Outlet /><LiveNowBadge /></>}>
               <Route path="/portal/a" element={<p data-testid="page">a</p>} />
               <Route path="/portal/b" element={<p data-testid="page">b</p>} />
             </Route>
           </Routes>
-        </BroadcastPlayerProvider>
+          </BroadcastPlayerProvider>
+        </BroadcastDiscoveryProvider>
       </ParticipantAuthProvider>
     </MemoryRouter>
   );

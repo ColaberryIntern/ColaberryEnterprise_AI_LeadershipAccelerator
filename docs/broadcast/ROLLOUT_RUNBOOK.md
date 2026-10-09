@@ -83,6 +83,20 @@ and by `ACTIVE_DISCOVERY_LIMIT = 25`. KB below is 1 000 B, and the arithmetic is
 | 500 | 11.1 | ~7.6 KB/s |
 | 1 000 | 22.2 | ~15.1 KB/s |
 
+**THESE NUMBERS ASSUME ONE POLL PER TAB, and that is an architectural commitment rather than
+an observation.** `useBroadcastDiscovery` keeps all of its state in `useState`/`useRef`: it
+has no shared cache and no dedupe, so every component that calls it is an independent poller
+with its own timer. P3-04 puts the live state in several places at once (the badge, the room
+pane, and more later), and if each called the hook directly the real request rate would be the
+figures above multiplied by the number of surfaces — which would make this table quietly false
+the moment those placements shipped.
+
+`contexts/BroadcastDiscoveryContext.tsx` is what keeps it true: one provider at the portal
+layout route owns the single poll, every placement reads it, and
+`contexts/__tests__/broadcastDiscoveryContext.test.tsx` asserts that five consumers produce
+exactly one request and one armed timer. **If a future placement calls `useBroadcastDiscovery`
+directly, this table is wrong and that test is the thing that should have stopped it.**
+
 Two client behaviours cut the real figure well below these, and both are asserted by test:
 
 - **A hidden tab polls not at all.** Most open portal tabs are in a background window. The

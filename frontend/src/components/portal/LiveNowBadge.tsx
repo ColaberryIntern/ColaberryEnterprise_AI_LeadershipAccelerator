@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBroadcastPlayer } from '../../contexts/BroadcastPlayerContext';
-import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
-import { useBroadcastDiscovery, DiscoveryBroadcast, DiscoveryDeps } from '../../hooks/useBroadcastDiscovery';
+import { useDiscoveryState } from '../../contexts/BroadcastDiscoveryContext';
+import type { DiscoveryBroadcast } from '../../hooks/useBroadcastDiscovery';
 import {
   readCued, markCued, uncued, readSoundOptIn, writeSoundOptIn, playChime, ChimeOutcome,
 } from './broadcastLaunchCue';
@@ -62,9 +62,13 @@ export function writeDismissed(ids: string[]): void {
 }
 
 export interface LiveNowBadgeProps {
-  /** Injected in tests. */
-  discoveryDeps?: DiscoveryDeps;
-  enabled?: boolean;
+  /**
+   * Nothing. The badge takes its data from `BroadcastDiscoveryProvider` rather than polling
+   * for itself, so there is deliberately no `discoveryDeps` or `enabled` prop to pass: a
+   * second poller is a second request per cadence per tab, and the runbook's capacity table
+   * assumes one. Tests inject through the provider.
+   */
+  _?: never;
 }
 
 function label(b: DiscoveryBroadcast): string {
@@ -74,17 +78,11 @@ function label(b: DiscoveryBroadcast): string {
   return 'Live';
 }
 
-export default function LiveNowBadge({
-  discoveryDeps, enabled = true,
-}: LiveNowBadgeProps): React.ReactElement | null {
+export default function LiveNowBadge(): React.ReactElement | null {
   const { open, session } = useBroadcastPlayer();
-  const { isAuthenticated } = useParticipantAuth();
-  // `isAuthenticated` is only `!!token` and does not inspect expiry, so a stale token still
-  // reaches the endpoint — which is why the 401 branch in the hook is terminal as well.
-  const { broadcasts, unavailable, disabled } = useBroadcastDiscovery(
-    enabled && isAuthenticated,
-    discoveryDeps ?? {},
-  );
+  // One poll per tab, shared with every other placement, and auth-gated inside the provider
+  // so this surface cannot reach an authenticated endpoint from the login page.
+  const { broadcasts, unavailable, disabled } = useDiscoveryState();
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const [cued, setCued] = useState<string[]>(readCued);
   const [soundOn, setSoundOn] = useState<boolean>(readSoundOptIn);
