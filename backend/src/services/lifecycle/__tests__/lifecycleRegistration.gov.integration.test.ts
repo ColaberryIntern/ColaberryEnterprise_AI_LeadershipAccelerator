@@ -122,6 +122,31 @@ describeIfDb('P6-T1a — the gov approval path registers a lifecycle, and replay
 
   afterAll(async () => {
     if (!sequelize) return;
+    // REMOVE WHAT THIS SUITE WROTE. An earlier version only closed the connection, which made the
+    // suite single-use per database: a second run died in `beforeAll` at `Tenant.create` on the
+    // unique `slug`, and a graded re-run on the same database reported 4/4 failures that had
+    // nothing to do with the code. A suite that cannot be run twice is a suite whose green result
+    // you cannot reproduce, so this is correctness of the evidence, not tidiness.
+    //
+    // Deleted parent-last so no FK blocks the delete. `delivery_projects` cascades to
+    // `project_lifecycle_states`, but it is deleted explicitly anyway: relying on a cascade to
+    // clean up means the cleanup silently stops working if the FK is ever changed.
+    if (tenantId) {
+      for (const sql of [
+        'DELETE FROM project_lifecycle_states WHERE tenant_id = $1',
+        'DELETE FROM contract_requirements WHERE delivery_project_id IN (SELECT id FROM delivery_projects WHERE tenant_id = $1)',
+        'DELETE FROM contract_tracks WHERE delivery_project_id IN (SELECT id FROM delivery_projects WHERE tenant_id = $1)',
+        'DELETE FROM delivery_projects WHERE tenant_id = $1',
+        'DELETE FROM delivery_engagements WHERE tenant_id = $1',
+        'DELETE FROM gov_qualifications WHERE tenant_id = $1',
+        'DELETE FROM organizations WHERE tenant_id = $1',
+        'DELETE FROM tenants WHERE id = $1',
+      ]) {
+        // Each statement is tolerated individually: a failure in beforeAll can leave some of these
+        // tables absent, and a cleanup that aborts halfway is worse than one that reports.
+        await sequelize.query(sql, { bind: [tenantId] }).catch(() => undefined);
+      }
+    }
     await sequelize.close();
   });
 

@@ -123,12 +123,23 @@ describeIfDb('P6-T1a — registration write-feasibility against a real Postgres'
       await import('../projectLifecycleRegistration') as any);
     const { ensureProjectLifecycleSchema } = await import('../../../db/ensureProjectLifecycleSchema');
 
-    // The lifecycle tables FK to tenants/projects/delivery_projects. A disposable database has
-    // none of them, and nothing in the lifecycle tree creates `tenants`.
-    await sequelize.query('CREATE TABLE IF NOT EXISTS tenants (id UUID PRIMARY KEY)');
+    // The lifecycle tables FK to tenants/projects/delivery_projects, and a disposable database has
+    // none of them.
+    //
+    // `tenants` is built FROM ITS MODEL, not by hand. An earlier version wrote
+    // `CREATE TABLE IF NOT EXISTS tenants (id UUID PRIMARY KEY)`, which looked harmless and was
+    // not: `CREATE TABLE IF NOT EXISTS` makes a later `Tenant.sync()` a NO-OP, so the real `slug`
+    // and `name` columns never appeared. The gov suite beside this one resolves its container by
+    // `slug`, so running the two in one database broke the second one in EITHER order — and the
+    // shared-scratch-database regression workflow this run has used since Phase 5 would have
+    // reported that as a red from the task under test. A one-column stand-in for a table a sibling
+    // suite needs properly is a trap, not a shortcut.
+    const Tenant = (await import('../../../models/Tenant')).default as any;
+    await Tenant.sync();
     await sequelize.query('CREATE TABLE IF NOT EXISTS projects (id UUID PRIMARY KEY)');
-    await sequelize.query('INSERT INTO tenants (id) VALUES ($1) ON CONFLICT DO NOTHING', { bind: [TENANT] });
-    await sequelize.query('INSERT INTO tenants (id) VALUES ($1) ON CONFLICT DO NOTHING', { bind: [OTHER_TENANT] });
+    for (const [id, slug] of [[TENANT, 't1a-reg-primary'], [OTHER_TENANT, 't1a-reg-other']]) {
+      await Tenant.findOrCreate({ where: { id }, defaults: { id, slug, name: `T1a ${slug}` } });
+    }
 
     // `delivery_projects` is created FROM THE MODEL rather than by hand-written DDL, so the table
     // under test is the real one. A hand-written stand-in would drift from the model and the hook

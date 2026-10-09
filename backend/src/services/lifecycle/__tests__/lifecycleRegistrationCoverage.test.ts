@@ -97,12 +97,6 @@ function rel(file: string): string {
 }
 
 /**
- * Every match of `pattern`, as `src/relative/path.ts:LINE <matched text>`.
- *
- * Line numbers come from counting newlines in the prefix, so they are 1-indexed and match what an
- * editor shows.
- */
-/**
  * Read and strip each file ONCE.
  *
  * The first version re-walked and re-read all 3,747 sources for every sweep, and the suite took
@@ -129,6 +123,12 @@ const STRIPPED: ReadonlyArray<readonly [string, string]> = SOURCE_FILES.flatMap(
   return [[rel(file), stripComments(raw)] as const];
 });
 
+/**
+ * Every match of `pattern`, as `src/relative/path.ts:LINE <matched text>`.
+ *
+ * Line numbers come from counting newlines in the prefix, so they are 1-indexed and match what an
+ * editor shows.
+ */
 function sweep(pattern: RegExp): string[] {
   const out: string[] = [];
   for (const [relPath, text] of STRIPPED) {
@@ -164,9 +164,15 @@ describe('LC-01 — the set of project-creation sites is derived, not listed', (
   });
 
   it('reads the NUL-byte files that plain grep skips as binary', () => {
-    // These three carry deliberate NUL bytes. `grep -r` without `-a` omits them silently, so a
-    // sweep built on it would report a clean result it never actually checked. If this ever fails,
-    // the sweep above has stopped covering the approval surface and no other test will say so.
+    // Three `.ts` files in this repository carry deliberate NUL bytes; these are the TWO inside
+    // this walker's scope (the third is `routes/__tests__/trackedLinkRedirectRoutes.test.ts`, which
+    // the walker excludes along with every other `__tests__` directory). An earlier version of this
+    // comment said "these three" above a two-element array, which read as a guard that had been
+    // quietly shrunk — it had not, but the prose made it impossible to tell at a glance.
+    //
+    // `grep -r` without `-a` omits these silently, so a sweep built on it would report a clean
+    // result it never actually checked. If this ever fails, the sweep above has stopped covering
+    // the approval surface and no other test will say so.
     const nulBearing = [
       'services/factory/factoryApproval.ts',
       'services/factory/factoryIds.ts',
@@ -269,25 +275,85 @@ describe('LC-01 — tripwires for the mechanisms a model hook CANNOT see', () =>
    * than a gap: it fails by name the moment someone introduces a mechanism that would silently
    * bypass registration. That converts the hook's disclosed residual gap from a paragraph in a
    * header comment into something CI enforces.
+   *
+   * SCOPE, stated because the test names now carry it and it is a real limit: this walker covers
+   * the `backend/src` tree recursively, TypeScript files only. It does not see JavaScript, SQL,
+   * the frontend, or the repository-root `scripts` tree. A wider sweep was run independently over
+   * the whole repository and every file type: zero raw inserts into either identity table, zero
+   * `upsert` or `bulkCreate` on either model, and the only `hooks: false` in the tree is inside
+   * the hook's own header comment — which is incidentally the proof that the comment-stripper
+   * above is load-bearing rather than decorative. That sweep also found 8 `DeliveryProject.create(`
+   * sites under the root `scripts` tree; they `require` the real COMPILED model out of `dist`, so
+   * the hook fires for them too and the coverage is genuinely structural. Widening this walker
+   * would pull in `node_modules` and the frontend for no new signal, so the test NAMES carry the
+   * limit instead of the sweep hiding it.
+   *
+   * (Written without a `**` glob on purpose: a `*` followed by `/` inside a block comment closes
+   * it, and an earlier version of this paragraph did exactly that — everything after it parsed as
+   * code and the whole suite failed to compile. It reported as ONE FAILED SUITE WITH ZERO FAILED
+   * TESTS, so the run's totals still read "16 passed, 16 total". That is the selection trap this
+   * programme already records: read the suite line, never only the test line.)
    */
 
-  it('has no bulkCreate or upsert on either identity model', () => {
+  it('has no bulkCreate or upsert on either identity model anywhere in backend/src', () => {
     expect(sweep(/(?:^|[^A-Za-z0-9_])(?:Delivery)?Project\.(?:upsert|bulkCreate)\(/)).toEqual([]);
   });
 
-  it('has no raw INSERT into either identity table', () => {
+  it('has no raw INSERT into either identity table anywhere in backend/src', () => {
     expect(sweep(/insert\s+into\s+"?(?:projects|delivery_projects)"?/i)).toEqual([]);
   });
 
-  it('has no queryInterface.bulkInsert into either identity table', () => {
+  it('has no queryInterface.bulkInsert into either identity table anywhere in backend/src', () => {
     expect(sweep(/bulkInsert\(\s*['"`](?:projects|delivery_projects)/)).toEqual([]);
   });
 
-  it('has no `hooks: false`, which would disable registration one call site at a time', () => {
+  it('has no `hooks: false` in backend/src, which would disable registration one site at a time', () => {
     // Word-boundaried on the left for a measured reason: the first version of this sweep matched
     // `webhooks: false` in services/publishing/providerCapabilities.ts and reported a false
     // positive — the same substring bug that made an earlier `Project.create(` count wrong by 6.
     expect(sweep(/(?:^|[^A-Za-z0-9_])hooks:\s*false/)).toEqual([]);
+  });
+});
+
+describe('each seed script labels its own lifecycle', () => {
+  /**
+   * Why this is a source assertion and not only a behavioural one.
+   *
+   * The behavioural test beside this (in the integration suite) proves the MECHANISM: a supplied
+   * `lifecycleEntryPoint` reaches `entry_point`, and the default is the mechanism name. It uses a
+   * probe label, so it says nothing about the three real ones.
+   *
+   * And nothing else can. Each seed passes its label inside an `as any` cast on the options object
+   * — necessary because `lifecycleEntryPoint` is not part of Sequelize's `CreateOptions` — which
+   * removes the compile-time guard. So a typo in `seed:factoryDemoContract` would be caught by
+   * neither `tsc` nor any behavioural test, and would surface only as a mislabelled row nobody is
+   * reading yet. The consequence is small; the fact that nothing at all would notice is not.
+   *
+   * These assertions are therefore about the one property left unguarded: that each script carries
+   * exactly the label this test names.
+   */
+  const SCRIPTS: ReadonlyArray<readonly [string, string]> = [
+    ['scripts/seedDevClientReviewer.ts', 'seed:devClientReviewer'],
+    ['scripts/seedFactoryDemoContract.ts', 'seed:factoryDemoContract'],
+    ['scripts/seedOrdinaryProjectDemo.ts', 'seed:ordinaryProjectDemo'],
+  ];
+
+  it.each(SCRIPTS)('%s passes %s', (file, label) => {
+    const source = stripComments(readNormalised(path.join(SRC, file)));
+    // Stripped, so a label mentioned only in a comment cannot satisfy this — the same discipline
+    // the rest of this suite uses, and the failure mode a comment-satisfiable sweep already caused
+    // once in this programme.
+    expect(source).toContain(`lifecycleEntryPoint: '${label}'`);
+  });
+
+  it('every seed that creates a delivery project is in the list above', () => {
+    // The guard against this describe block going stale: if a fourth seed script starts creating
+    // delivery projects, the enumeration test fails on the new site AND this fails on the missing
+    // label, so neither the coverage nor the provenance can drift silently.
+    const seedCreationSites = sweep(CREATION)
+      .filter((s) => s.startsWith('scripts/') && / DeliveryProject\./.test(s))
+      .map((s) => s.split(':')[0]);
+    expect(seedCreationSites.sort()).toEqual(SCRIPTS.map(([f]) => f).sort());
   });
 });
 
