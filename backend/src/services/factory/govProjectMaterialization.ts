@@ -61,18 +61,19 @@ export interface MaterializeGovProjectResult {
   storyCount: number;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 function startOfUtcDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-/** Synthetic [today → deadline] schedule — the same window math the Build-step Gantt uses (P2.2). PURE. */
-export function govSyntheticSchedule(plan: BuildPlan, deadline: Date | null, now: Date): Schedule {
+/**
+ * Schedule the build over the plan's NATURAL weeks (the POST-AWARD build timeline), starting from `now`.
+ * Deliberately NOT bound to the proposal's submission deadline — the build happens after award — so the
+ * materialized tasks are never crammed or born late against the submission cutoff. PURE.
+ */
+export function govSyntheticSchedule(plan: BuildPlan, now: Date): Schedule {
   const now0 = startOfUtcDay(now);
-  const deadline0 = deadline ? startOfUtcDay(deadline) : null;
-  const daysToDeadline = deadline0 ? Math.round((deadline0.getTime() - now0.getTime()) / DAY_MS) : null;
-  const prepWeek = daysToDeadline != null ? Math.max(2, Math.floor(daysToDeadline / 7) + 1) : 9;
-  const window: CohortWindow = { cohortStart: now0, asOf: now0, startWeek: 1, prepWeek, demoWeek: prepWeek + 1 };
+  const maxWeek = Math.max(1, ...plan.releases.map((r) => r.week_end || r.week_start || 1));
+  const window: CohortWindow = { cohortStart: now0, asOf: now0, startWeek: 1, prepWeek: maxWeek + 1, demoWeek: maxWeek + 2 };
   const releases = plan.releases.map((r) => ({ key: r.key, name: r.name, week_start: r.week_start, week_end: r.week_end }));
   const storiesByRelease = new Map<string, string[]>();
   for (const s of plan.stories) {
@@ -145,7 +146,7 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
   }
 
   // 4. Schedule + materialize (idempotent on (project_id, story_id); injects the STORY-000 Command Center).
-  const schedule = govSyntheticSchedule(plan, input.deadline ? new Date(input.deadline) : null, now);
+  const schedule = govSyntheticSchedule(plan, now);
   const mat = await materializePlanAsTasks(projectId, enrollmentId, plan, { schedule, now });
 
   return {

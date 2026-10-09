@@ -49,7 +49,7 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     expect(getInstrumentedOpenAI).not.toHaveBeenCalled();
   });
 
-  it('success → a dated plan; every story has a due date on/before the deadline, every release a window', async () => {
+  it("success → a dated plan over the plan's natural build weeks; STORY-000 leads; not bound to the submission deadline", async () => {
     const client = fakeClient(okCreate);
     (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
     const r = await generateGovBuildPlanAI(baseReq);
@@ -60,13 +60,13 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     expect(r.plan!.releases).toHaveLength(2);
     for (const s of r.plan!.stories) {
       expect(s.dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(s.dueDate <= '2026-10-19').toBe(true);          // the deadline rail
+      expect(s.dueDate >= '2026-10-01').toBe(true);          // scheduled forward from the build start
       expect(Array.isArray(s.acceptance)).toBe(true);
     }
     for (const rel of r.plan!.releases) {
       expect(rel.startDate <= rel.endDate).toBe(true);
-      expect(rel.endDate <= '2026-10-19').toBe(true);
     }
+    expect(r.plan!.unscheduled).toBe(false);
     expect(r.cached).toBe(false);
   });
 
@@ -104,26 +104,20 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
 });
 
 describe('assembleGovDatedPlan (pure, deterministic)', () => {
-  it('places every story on/before the deadline and orders release windows', () => {
-    const { plan, verdict } = assembleGovDatedPlan(PLAN, new Date('2026-10-19'), new Date('2026-10-01'));
+  it("schedules over the plan's natural weeks from the start, orders windows, leads with STORY-000, and is NOT bound to the submission deadline", () => {
+    const { plan, verdict } = assembleGovDatedPlan(PLAN, new Date('2026-10-01'));
     expect(typeof verdict).toBe('string');
-    expect(plan.stories.every((s) => s.dueDate <= '2026-10-19')).toBe(true);
-    const last = plan.stories.map((s) => s.dueDate).sort().slice(-1)[0];
-    expect(last <= '2026-10-19').toBe(true);                 // the load-bearing deadline rail
+    expect(plan.stories[0].id).toBe('STORY-000');
+    expect(plan.stories.every((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.dueDate) && s.dueDate >= '2026-10-01')).toBe(true);
     expect(plan.releases.every((r) => r.startDate <= r.endDate)).toBe(true);
     expect(plan.unscheduled).toBe(false);
+    // PLAN's r1 (weeks 3-4) lands well AFTER an Oct-19 submission deadline — proving the build is NOT clamped to it.
+    const last = plan.stories.map((s) => s.dueDate).sort().slice(-1)[0];
+    expect(last > '2026-10-19').toBe(true);
   });
 
-  it('no deadline → unscheduled flag, still a valid dated plan', () => {
-    const { plan } = assembleGovDatedPlan(PLAN, null, new Date('2026-10-01'));
-    expect(plan.unscheduled).toBe(true);
-    expect(plan.stories.every((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.dueDate))).toBe(true);
-  });
-
-  it('a TIGHT deadline (2 days out) still clamps every due date on/before it — the clamp rail', () => {
-    // The raw schedule window would run ~a week out; the clamp forces every due date ≤ the deadline.
-    const { plan } = assembleGovDatedPlan(PLAN, new Date('2026-10-03'), new Date('2026-10-01'));
-    expect(plan.stories.every((s) => s.dueDate <= '2026-10-03')).toBe(true);
-    expect(plan.releases.every((r) => r.endDate <= '2026-10-03')).toBe(true);
+  it('unscheduled is always false — the build timeline no longer depends on a deadline', () => {
+    const { plan } = assembleGovDatedPlan(PLAN, new Date('2026-10-01'));
+    expect(plan.unscheduled).toBe(false);
   });
 });

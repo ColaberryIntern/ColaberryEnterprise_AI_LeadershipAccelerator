@@ -1553,7 +1553,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
           {(
             <SectionCard title="Build plan — releases, stories & schedule (AI)" icon="flow-chart"
-              subtitle="A rich, dated build-out of the opportunity — releases and stories with narratives, acceptance criteria, dependencies and completion dates, scheduled to the submission deadline — so you can inspect the work before authorizing the build. Advisory only: it authors no requirement-cited story (the Solution build track below is the record) and changes no gate.">
+              subtitle="A rich build-out of the opportunity — releases and stories with narratives, acceptance criteria, dependencies and a projected post-award build timeline (the build runs after award, not before the proposal deadline) — so you can inspect the work before authorizing the build. Advisory only: it authors no requirement-cited story and changes no gate.">
               <GovBuildPlanAIPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}

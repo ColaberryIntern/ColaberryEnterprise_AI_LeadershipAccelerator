@@ -47,7 +47,6 @@ function logFail(event: string, err: unknown): void {
   }));
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 function toDate(d: string | Date | null | undefined): Date | null {
   if (d == null) return null;
   const p = d instanceof Date ? d : new Date(d);
@@ -108,18 +107,18 @@ export interface GovBuildPlanAIRequest {
 }
 
 /**
- * PURE: place a decomposed BuildPlan on real dates against a synthetic [now → deadline] window, and map it
- * to the GovDatedPlan read-model. Deterministic (now is injected). Each due date is CLAMPED on/before the
- * deadline when one is known, so the plan can never read as finishing after the submission cutoff.
+ * PURE: place a decomposed BuildPlan on real dates over the plan's NATURAL weeks (the decomposer assigns each
+ * release to week_start..week_end), starting from `now` as a reference, and map it to the GovDatedPlan
+ * read-model. This is the POST-AWARD build timeline — it is deliberately NOT bound to the proposal's
+ * submission deadline (the build happens after award), so nothing is crammed or flagged "late" against the
+ * submission cutoff. Deterministic (now is injected).
  */
-export function assembleGovDatedPlan(plan: BuildPlan, deadline: Date | null, now: Date): { plan: GovDatedPlan; verdict: string } {
+export function assembleGovDatedPlan(plan: BuildPlan, now: Date): { plan: GovDatedPlan; verdict: string } {
   const now0 = startOfUtcDay(now);
-  const deadline0 = deadline ? startOfUtcDay(deadline) : null;
-  // Synthetic cohort window: week 1 = today; prep week ≈ the week the deadline falls in (so the build window
-  // ends on/before the deadline), at least 2 (one real build week). demoWeek is the week after prep.
-  const daysToDeadline = deadline0 ? Math.round((deadline0.getTime() - now0.getTime()) / DAY_MS) : null;
-  const prepWeek = daysToDeadline != null ? Math.max(2, Math.floor(daysToDeadline / 7) + 1) : 9; // null → ~8-week default
-  const window: CohortWindow = { cohortStart: now0, asOf: now0, startWeek: 1, prepWeek, demoWeek: prepWeek + 1 };
+  // Span the plan's own weeks: prep/demo sit just AFTER the last release, so every release fits its natural
+  // window (no deadline compression, no roadmap-overflow).
+  const maxWeek = Math.max(1, ...plan.releases.map((r) => r.week_end || r.week_start || 1));
+  const window: CohortWindow = { cohortStart: now0, asOf: now0, startWeek: 1, prepWeek: maxWeek + 1, demoWeek: maxWeek + 2 };
 
   const releasesIn = plan.releases.map((r) => ({ key: r.key, name: r.name, week_start: r.week_start, week_end: r.week_end }));
   const storiesByRelease = new Map<string, string[]>();
@@ -130,15 +129,14 @@ export function assembleGovDatedPlan(plan: BuildPlan, deadline: Date | null, now
   }
   const schedule = buildSchedule({ window, releases: releasesIn, storiesByRelease });
 
-  const clamp = (d: Date): Date => (deadline0 && d.getTime() > deadline0.getTime() ? deadline0 : d);
   const dueByStory = new Map<string, Date>();
-  for (const t of schedule.tasks) dueByStory.set(t.storyId, clamp(startOfUtcDay(t.dueOn)));
+  for (const t of schedule.tasks) dueByStory.set(t.storyId, startOfUtcDay(t.dueOn));
 
   const stories: GovDatedStory[] = plan.stories.map((s) => ({
     id: s.id, release: s.release, title: s.title, narrative: s.narrative,
     fulfills: s.fulfills ?? [], acceptance: s.acceptance ?? [], taskGuidance: s.task_guidance,
     failurePaths: s.failure_paths ?? [], blockedBy: s.blocked_by ?? [], ownerAgent: s.owner_agent,
-    dueDate: iso(dueByStory.get(s.id) ?? clamp(now0)),
+    dueDate: iso(dueByStory.get(s.id) ?? now0),
   }));
 
   const roadmap = new Set(schedule.roadmapReleaseKeys);
@@ -166,7 +164,7 @@ export function assembleGovDatedPlan(plan: BuildPlan, deadline: Date | null, now
   const allStories = stories.length ? [commandCenter, ...stories] : stories;
 
   return {
-    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories: allStories, unscheduled: deadline0 === null },
+    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories: allStories, unscheduled: false },
     verdict: schedule.verdict,
   };
 }
@@ -229,8 +227,7 @@ export async function generateGovBuildPlanAI(req: GovBuildPlanAIRequest): Promis
     return { plan: null, verdict: '', cached: raw.cached, generatedAt: nowIso(), error: raw.error ?? 'The AI build plan could not be generated right now.' };
   }
   const now = toDate(req.now) ?? new Date();
-  const deadline = toDate(req.deadline ?? null);
-  const assembled = assembleGovDatedPlan(raw.plan, deadline, now);
+  const assembled = assembleGovDatedPlan(raw.plan, now);
   return { plan: assembled.plan, verdict: assembled.verdict, cached: raw.cached, generatedAt: nowIso() };
 }
 

@@ -49,7 +49,7 @@ export function GovBuildPlanAIPanel({ canonical, requirements, title, buyer, dea
       {err && <div className="alert alert-warning py-2 mt-2 mb-0 small" role="status">{err}</div>}
       {plan && (
         <div className="mt-2">
-          <GovBuildGantt plan={plan} verdict={result?.verdict ?? ''} />
+          <GovBuildGantt plan={plan} />
           <div className="small text-secondary mt-2"><i className="ri-robot-2-line me-1" aria-hidden="true" />AI build plan — advisory, generated from the established requirements; it authors no requirement-cited story (the Solution build track below is the record) and changes no gate. Review the stories before authorizing the build.</div>
         </div>
       )}
