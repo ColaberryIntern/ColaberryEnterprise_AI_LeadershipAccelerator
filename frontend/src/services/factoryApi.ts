@@ -691,6 +691,30 @@ export async function getGovBuildSpec(
   return data;
 }
 
+/** ADVISORY, DATED build plan for the Build-step Gantt — SBP decompose + schedule. Advisory only (gates
+ *  nothing, creates no build); the deterministic requirement-cited build track stays the record. */
+export interface GovDatedStory {
+  id: string; release: string; title: string; narrative: string;
+  fulfills: string[]; acceptance: string[]; taskGuidance: string; failurePaths: string[];
+  blockedBy: string[]; ownerAgent: string; dueDate: string;
+}
+export interface GovDatedRelease {
+  key: string; name: string; goal: string; demo: string;
+  startDate: string; endDate: string; isDemoRelease: boolean; isRoadmap: boolean;
+}
+export interface GovDatedPlan {
+  projectName: string; descriptor: string;
+  releases: GovDatedRelease[]; stories: GovDatedStory[]; unscheduled: boolean;
+}
+export interface GovBuildPlanAI { plan: GovDatedPlan | null; verdict: string; generatedAt: string; cached: boolean; }
+export async function getGovBuildPlanAI(
+  canonicalOpportunityId: string,
+  body: { requirements: { id: string; text: string }[]; title?: string | null; buyer?: string | null; buildSpec?: string | null; deadline?: string | null },
+): Promise<GovBuildPlanAI> {
+  const { data } = await api.post(qUrl(canonicalOpportunityId, '/build-plan-ai'), body);
+  return data;
+}
+
 /** Record a NON-approval decision and/or the reviewer-established cited requirements. */
 export async function recordGovQualificationDecision(canonicalOpportunityId: string, body: {
   biddingEntity: string; expectedVersion: number; decision: 'pending_review' | 'needs_evidence' | 'no_bid';
