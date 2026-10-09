@@ -16,6 +16,7 @@ import {
 } from './panels/acquisitionPanels';
 import { JourneySummary, buildJourney } from './panels/journeyPanel';
 import { ExplorerScorePanel, loadExplorerScore } from './panels/explorerPanel';
+import { TrustPanel, buildTrust } from './panels/trustPanel';
 import { ClassActivityPanel, CurriculumPanel, loadClassActivity, loadCurriculum } from './panels/classPanels';
 import { WorkPanel, loadWork } from './panels/workPanels';
 import { AccountPanel, BillingDetailPanel, loadAccount, loadBillingDetail } from './panels/accountPanels';
@@ -62,6 +63,7 @@ export type {
   AcquisitionPanel, AppointmentRow, AutomationRow,
 } from './panels/acquisitionPanels';
 export type { JourneySummary } from './panels/journeyPanel';
+export type { TrustPanel } from './panels/trustPanel';
 export type { ExplorerScorePanel } from './panels/explorerPanel';
 export type { ClassActivityPanel, CurriculumPanel } from './panels/classPanels';
 export type { WorkPanel, ProjectRow, CaseStudyRow, CapstoneRow, CertPrepPanel } from './panels/workPanels';
@@ -74,25 +76,6 @@ export type {
   SkillsPanel, MentorPanel, ContentPanel, CommunityPanel, ProfileContextPanel,
 } from './panels/growthPanels';
 
-/**
- * Data & trust — the brief's last profile section, and the one this whole
- * workstream has been arguing for.
- *
- * It answers "how much of this should you believe": which source records
- * resolve to this person, how they were matched, whether consent was recorded,
- * how fresh the data is, and — most usefully — what CANNOT be computed for them
- * and why. A gap stated is a gap a reader can act on; a gap left blank reads as
- * a zero.
- */
-export interface TrustPanel {
-  leadIds: number[];
-  enrollmentIds: string[];
-  matchMethod: 'exact_email' | 'none';
-  tracedToLead: boolean;
-  consentRecorded: boolean | null;
-  lastActivity: string | null;
-  gaps: Array<{ field: string; reason: string }>;
-}
 
 export interface LearningPanel {
   enrollmentId: string;
@@ -485,6 +468,12 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   // is the honest answer and not 0/0/0.
   if (may('acquisition', query.sections)) {
     profile.explorerScore = await loadExplorerScore(enrollmentIds);
+  } else {
+    // NAMED when withheld, never silently omitted - this module's own contract,
+    // and an existing test holds every other panel to it. The first version of
+    // this block omitted the push, which would have made E/I/F the one panel
+    // that disappears without saying so.
+    profile.withheldPanels.push('explorerScore');
   }
 
   profile.trust = buildTrust(profile, leadIds, enrollmentIds);
@@ -498,68 +487,3 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   return profile;
 }
 
-/**
- * What we cannot say about this person, and why.
- *
- * Derived from what the lifecycle contract records as unjoinable plus what is
- * genuinely absent for THIS person, so the list is specific rather than a
- * generic disclaimer nobody reads.
- */
-function buildTrust(
-  profile: PersonProfile,
-  leadIds: number[],
-  enrollmentIds: string[],
-): TrustPanel {
-  const gaps: Array<{ field: string; reason: string }> = [];
-
-  if (leadIds.length === 0) {
-    gaps.push({
-      field: 'Acquisition history',
-      reason: 'No lead record. This person enrolled without ever being captured as a lead, '
-        + 'so there is nothing recorded about how they found us.',
-    });
-  }
-  if (profile.acquisition && profile.acquisition.consentContact === null) {
-    gaps.push({
-      field: 'Contact consent',
-      reason: 'Never recorded. This is not the same as consent being refused.',
-    });
-  }
-  gaps.push({
-    field: 'Graduation',
-    reason: 'Computable but never set. enrollments.status supports "completed", and this profile '
-      + 'reads it, but no enrolment has ever carried it (464 active, 24 lapsed, 0 completed as '
-      + 'of 2026-09-09). Nothing marks a student complete when their cohort ends, so an empty '
-      + 'graduate count means "not recorded", not "did not graduate".',
-  });
-  gaps.push({
-    field: 'Placement and employment',
-    reason: 'Not tracked anywhere in this database, so outcomes beyond graduation cannot be '
-      + 'reported at all.',
-  });
-  if (enrollmentIds.length > 0) {
-    gaps.push({
-      field: 'Payment transactions',
-      reason: 'Subscription STATE is local and shown above, but the individual charges live in '
-        + 'PaySimple and are not joined. A failed subscription row proves a collection failed; '
-        + 'it does not tell you the amount actually collected to date.',
-    });
-    if (profile.classActivity && profile.classActivity.attendanceTotal === 0) {
-      gaps.push({
-        field: 'Attendance',
-        reason: 'No register was taken for this person\'s sessions. Content consumption and '
-          + 'curriculum progress are the reliable engagement signals here, not attendance.',
-      });
-    }
-  }
-
-  return {
-    leadIds,
-    enrollmentIds,
-    matchMethod: leadIds.length > 0 && enrollmentIds.length > 0 ? 'exact_email' : 'none',
-    tracedToLead: profile.tracedToLead,
-    consentRecorded: profile.acquisition?.consentContact ?? null,
-    lastActivity: profile.journey?.lastActivity ?? null,
-    gaps,
-  };
-}

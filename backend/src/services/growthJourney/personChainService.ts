@@ -266,6 +266,13 @@ async function outcomesHop(subjectRef: string, where: Record<string, unknown>): 
 }
 
 /**
+ * T211: NOT a competing person profile. This answers whether the identity
+ * CHAIN is intact — which hops are linked, which are unavailable and why.
+ * `adminOs/personProfileService` is the canonical assembler.
+ */
+export const PERSON_VIEW_ROLE = 'answers' as const;
+
+/**
  * The chain for one lead, under the caller's scope.
  *
  * Scoped exactly like Person 360 - `personScopeWhere` builds the clause and
@@ -273,13 +280,6 @@ async function outcomesHop(subjectRef: string, where: Record<string, unknown>): 
  * caller's brands is `not_found` and answers with the same 404 body as a lead
  * that does not exist. A foreign tenant must not be able to tell those apart.
  */
-/**
- * T211: NOT a competing person profile. This answers whether the identity
- * CHAIN is intact — which hops are linked, which are unavailable and why.
- * `adminOs/personProfileService` is the canonical assembler.
- */
-export const PERSON_VIEW_ROLE = 'answers' as const;
-
 export async function buildPersonChain(
   // `limit` is deliberately NOT accepted. Every hop is one row or one count, so
   // there is no collection to page, and taking the sibling's `limit` whole would

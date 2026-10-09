@@ -340,3 +340,46 @@ describe('person profile', () => {
     expect(String(query.mock.calls[0][0])).toContain(':email');
   });
 });
+
+// ── T211: the Explorer E/I/F panel is actually assembled ────────────────────
+
+describe('T211 — Explorer E/I/F is loaded by the assembler, not merely available', () => {
+  it('issues the explorer snapshot query for a caller who may see acquisition', async () => {
+    // A verifier's mutant commented the load out and every test stayed green,
+    // because the suite only exercised the LOADER. This asserts the CALL.
+    //
+    // The enrolment-id read has to return something: `loadExplorerScore` returns
+    // early for an empty id list (so an idless person issues no query at all),
+    // which means the default all-empty priming cannot exercise this path.
+    query.mockReset();
+    query.mockImplementation((sql: string) => {
+      if (String(sql).includes('COALESCE(l.email, e.email)')) return Promise.resolve([IDENTITY]);
+      if (/SELECT id FROM enrollments/i.test(String(sql))) return Promise.resolve([{ id: 'enr-1' }]);
+      return Promise.resolve([]);
+    });
+    await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('revenue'),
+      visibleEnrollmentIds: null,
+    });
+    const explorerCalls = query.mock.calls
+      .map((c) => String(c[0]))
+      .filter((sql) => sql.includes('explorer_score_snapshots'));
+    expect(explorerCalls).toHaveLength(1);
+    // and it asked for THIS person's enrolment, not everyone's
+    const call = query.mock.calls.find((c) => String(c[0]).includes('explorer_score_snapshots'))!;
+    expect((call[1] as { replacements: { enrollmentIds: string[] } }).replacements.enrollmentIds)
+      .toEqual(['enr-1']);
+  });
+
+  it('NAMES explorerScore as withheld for a caller who may not, rather than omitting it', async () => {
+    primeIdentity();
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('support'),
+      visibleEnrollmentIds: null,
+    });
+    expect(profile!.withheldPanels).toContain('explorerScore');
+    expect(panelSql().some((sql) => sql.includes('explorer_score_snapshots'))).toBe(false);
+  });
+});

@@ -205,3 +205,54 @@ describe('T211 — chronology is preserved as ORDER, not as counts', () => {
     expect(src).toContain('WHERE pe.lead_id IN (:leadIds)');
   });
 });
+
+jest.setTimeout(120000);
+
+describe('T211 — the same person resolves to the same identity through all three views', () => {
+  /**
+   * The acceptance criterion attempt 1 did not have a test for at all, and it
+   * is the phase's fifth checkpoint question: a person who resolves differently
+   * depending on which view an operator opened is not a trustworthy input.
+   *
+   * Asserted through T208's shared precedence, which is the one definition all
+   * three are supposed to agree with — not by re-implementing a fourth answer
+   * here, which would be the very thing T211 forbids.
+   */
+  it('gives one subject key for one anchor, whichever view asks', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- heavy graph, kept local
+    const { subjectRefFrom, identifyingLevel } = require('../../identity/identifierPrecedence');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { subjectRef } = require('../../../models/GrowthJourneyEnrollment');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { subjectRefOf } = require('../../growthJourney/classification/inputs');
+
+    const anchor = { enrollmentId: 'enr-1', leadId: 7 };
+    const view = { enrollment_id: 'enr-1', lead_id: 7 };
+
+    // The shared precedence, the models builder and the classification builder
+    // must all name the same person the same way.
+    expect(subjectRefFrom(anchor)).toBe('enrollment:enr-1');
+    expect(subjectRef(anchor)).toBe('enrollment:enr-1');
+    expect(subjectRefOf(view)).toBe('enrollment:enr-1');
+    expect(identifyingLevel(anchor)).toBe('enrollment_id');
+  });
+
+  it('still agrees when only the WEAKER anchor is present', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { subjectRefFrom } = require('../../identity/identifierPrecedence');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { subjectRef } = require('../../../models/GrowthJourneyEnrollment');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { subjectRefOf } = require('../../growthJourney/classification/inputs');
+
+    expect(subjectRefFrom({ leadId: 7 })).toBe('lead:7');
+    expect(subjectRef({ leadId: 7 })).toBe('lead:7');
+    expect(subjectRefOf({ lead_id: 7 })).toBe('lead:7');
+  });
+
+  it('declares exactly one canonical view, so there is one answer to prefer', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PERSON_VIEWS } = require('../personViewRoles');
+    expect(PERSON_VIEWS.filter((v: { role: string }) => v.role === 'canonical')).toHaveLength(1);
+  });
+});
