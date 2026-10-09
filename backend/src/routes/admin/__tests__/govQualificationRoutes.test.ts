@@ -83,6 +83,11 @@ jest.mock('../../../services/factory/proposal/govSourceBundleStore', () => ({
 // Step 6 — the two-track project creator, mocked so the flag-on tests don't touch the DB.
 const ensureGovTwoTrackProject = jest.fn();
 jest.mock('../../../services/factory/govDeliveryProject', () => ({ ensureGovTwoTrackProject: (...a: any[]) => ensureGovTwoTrackProject(...a) }));
+// Keep the real GovMaterializeError (so the route's `instanceof` + status mapping works) but stub the service.
+jest.mock('../../../services/factory/govProjectMaterialization', () => {
+  const actual = jest.requireActual('../../../services/factory/govProjectMaterialization');
+  return { __esModule: true, ...actual, materializeGovBuildProject: jest.fn() };
+});
 
 import express from 'express';
 import request from 'supertest';
@@ -99,6 +104,7 @@ import { SubmissionError } from '../../../services/factory/govSubmission';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
 import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL } from '../../../services/factory/opportunities/govOpportunityFixtures';
 import { FLAGS } from '../../../config/featureFlags';
+import { materializeGovBuildProject, GovMaterializeError } from '../../../services/factory/govProjectMaterialization';
 
 const app = express();
 app.use(express.json());
@@ -115,7 +121,7 @@ describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
     const routeLines = src.split('\n').filter((l) => /router\.(get|post|put|patch|delete)\(/.test(l));
-    expect(routeLines.length).toBe(28); // +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome; +2 AI advisory (risk-narrative, proposal-summary); +1 P1 build-spec; +1 P2 build-plan-ai
+    expect(routeLines.length).toBe(29); // +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome; +2 AI advisory (risk-narrative, proposal-summary); +1 P1 build-spec; +1 P2 build-plan-ai; +1 P2.3 materialize-build-project
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -823,5 +829,32 @@ describe('P5 submission + outcome routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.outcome).toBe('won');
     expect(recordOutcome).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', projectName: 'TxDOT', outcome: 'won' }));
+  });
+});
+
+describe('materialize-build-project route (P2.3)', () => {
+  const U = '11111111-1111-4111-8111-111111111111';
+  const mUrl = `/api/admin/factory/qualification/${CLEAN_CANONICAL}/materialize-build-project`;
+  const mBody = { deliveryProjectId: U, assigneeIdentityId: U, requirements: [{ id: 'REQ-001', text: 'x' }] };
+  it('201 with the result on success', async () => {
+    (materializeGovBuildProject as jest.Mock).mockResolvedValue({ projectId: 'p1', created: true, enrollmentId: 'e1', lists: 2, tasks: 3, releaseCount: 2, storyCount: 3 });
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(201);
+    expect(res.body.projectId).toBe('p1');
+  });
+  it('422 (reason no_enrollment) when the assigned builder has no enrollment', async () => {
+    (materializeGovBuildProject as jest.Mock).mockRejectedValue(new GovMaterializeError('no_enrollment', 'no enrollment'));
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('no_enrollment');
+  });
+  it('409 (reason plan_blocked) when the generated plan is blocked', async () => {
+    (materializeGovBuildProject as jest.Mock).mockRejectedValue(new GovMaterializeError('plan_blocked', 'blocked'));
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(409);
+  });
+  it('400 on a malformed body (non-uuid ids)', async () => {
+    const res = await request(app).post(mUrl).send({ deliveryProjectId: 'nope', assigneeIdentityId: 'nope', requirements: [] });
+    expect(res.status).toBe(400);
   });
 });

@@ -21,6 +21,7 @@ import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
 import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
 import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
+import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
 import { scheduleReleases } from './govWorkspace/buildSchedule';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
@@ -1550,6 +1551,17 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             <SectionCard title="Build plan — releases, stories & schedule (AI)" icon="flow-chart"
               subtitle="A rich, dated build-out of the opportunity — releases and stories with narratives, acceptance criteria, dependencies and completion dates, scheduled to the submission deadline — so you can inspect the work before authorizing the build. Advisory only: it authors no requirement-cited story (the Solution build track below is the record) and changes no gate.">
               <GovBuildPlanAIPanel canonical={canonical}
+                requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
+                title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
+                deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null} />
+            </SectionCard>
+          )}
+          {(
+            <SectionCard title="Create the monitored project" icon="rocket-2-line"
+              subtitle="Once the plan looks right, assign the build to an intern — this creates a real project under their profile, monitored like the Command Center. It materializes the reviewed plan's releases and stories; it starts no build and changes no gate.">
+              <GovMaterializePanel canonical={canonical}
+                deliveryProjectId={ws.build?.deliveryProjectId ?? null}
+                assignableBuilders={ws.build?.assignableBuilders ?? []}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
                 deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null} />
