@@ -1,0 +1,68 @@
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">Student Profiles</h2>
+    <p class="text-muted mb-0 small">360-degree resident records — attendance, incidents, agreements, staff notes</p>
+  </div>
+  <span class="badge {{tierBadge}} px-3 py-2">
+    <i class="bi bi-shield-check me-1"></i>{{tierLabel}}
+  </span>
+</div>
+
+{{#unless isRD}}
+<div class="alert alert-info border-0 d-flex gap-3 align-items-start mb-4">
+  <i class="bi bi-person-lock fs-5 mt-1"></i>
+  <div class="small">
+    <strong>Showing {{user.building}} only.</strong>
+    Your access is limited to residents in your assigned building.
+    {{#unless canManage}}Staff notes and private records are not visible at your role level.{{/unless}}
+  </div>
+</div>
+{{/unless}}
+
+{{#if buildingGroups.length}}
+{{#each buildingGroups}}
+<div class="mb-5">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-building text-muted"></i>
+    <h5 class="mb-0 fw-semibold">{{building}}</h5>
+    <span class="badge bg-light text-dark border">{{list.length}} resident{{#if (ne list.length 1)}}s{{/if}}</span>
+  </div>
+  <div class="row g-3">
+    {{#each list}}
+    <div class="col-md-6 col-lg-4">
+      <a href="/students/{{id}}" class="text-decoration-none">
+        <div class="card border-0 shadow-sm h-100" style="transition:box-shadow .15s">
+          <div class="card-body">
+            <div class="d-flex align-items-start gap-3">
+              <div class="rounded-circle bg-light d-flex align-items-center justify-content-center flex-shrink-0"
+                style="width:42px;height:42px">
+                <i class="bi bi-person text-muted fs-5"></i>
+              </div>
+              <div>
+                <div class="fw-semibold text-dark">{{name}}</div>
+                <div class="text-muted small">Room {{room}}</div>
+                {{#if major}}<div class="text-muted small">{{major}}</div>{{/if}}
+              </div>
+            </div>
+            <div class="mt-2">
+              <span class="badge {{yearBadge}} me-1">{{yearLabel}}</span>
+              {{#if student_id}}
+              <span class="badge bg-light text-muted border" style="font-size:.72rem">{{student_id}}</span>
+              {{/if}}
+            </div>
+          </div>
+        </div>
+      </a>
+    </div>
+    {{/each}}
+  </div>
+</div>
+{{/each}}
+{{else}}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center text-muted py-5">
+    <i class="bi bi-people fs-2 d-block mb-2 opacity-25"></i>
+    No residents found.
+  </div>
+</div>
+{{/if}}

@@ -1,0 +1,143 @@
+<div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+  <a href="/proposals" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div class="flex-grow-1">
+    <h2 class="mb-0">{{proposal.title}}</h2>
+    <p class="text-muted mb-0 small">Submitted by {{proposal.submitter_name}}</p>
+  </div>
+  <span class="badge bg-{{proposal.statusBadge}} {{proposal.statusText}} fs-6">{{proposal.statusLabel}}</span>
+</div>
+
+{{#if submitted}}
+<div class="alert alert-success d-flex gap-2 align-items-center mb-3">
+  <i class="bi bi-check-circle-fill flex-shrink-0"></i>
+  Proposal submitted for review. The Residence Director has been notified.
+</div>
+{{/if}}
+
+{{#if reviewed}}
+<div class="alert alert-info d-flex gap-2 align-items-center mb-3">
+  <i class="bi bi-check-circle flex-shrink-0"></i>
+  Review decision saved. The submitter has been notified.
+</div>
+{{/if}}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-file-earmark-text me-2 text-muted"></i>Proposal Details
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4 text-muted fw-normal">Submitted By</dt>
+          <dd class="col-sm-8 fw-semibold">{{proposal.submitter_name}}
+            <span class="text-muted fw-normal">({{roleLabel proposal.submitter_role}})</span>
+          </dd>
+
+          <dt class="col-sm-4 text-muted fw-normal">Description</dt>
+          <dd class="col-sm-8">{{proposal.description}}</dd>
+
+          <dt class="col-sm-4 text-muted fw-normal">Target Audience</dt>
+          <dd class="col-sm-8">{{proposal.target_audience}}</dd>
+
+          <dt class="col-sm-4 text-muted fw-normal">Expected Outcomes</dt>
+          <dd class="col-sm-8">{{proposal.expected_outcomes}}</dd>
+
+          {{#if proposal.proposed_date}}
+          <dt class="col-sm-4 text-muted fw-normal">Proposed Date</dt>
+          <dd class="col-sm-8">{{proposal.proposed_date}}</dd>
+          {{/if}}
+
+          {{#if proposal.budgetFmt}}
+          <dt class="col-sm-4 text-muted fw-normal">Budget Estimate</dt>
+          <dd class="col-sm-8">{{proposal.budgetFmt}}</dd>
+          {{/if}}
+
+          {{#if proposal.outcome_code}}
+          <dt class="col-sm-4 text-muted fw-normal">Curriculum Outcome</dt>
+          <dd class="col-sm-8">
+            <span class="badge bg-{{proposal.catBadge}} bg-opacity-75 me-1">{{proposal.outcome_code}}</span>
+            {{proposal.outcome_title}}
+            {{#if proposal.outcome_desc}}
+            <div class="text-muted mt-1">{{proposal.outcome_desc}}</div>
+            {{/if}}
+          </dd>
+          {{/if}}
+        </dl>
+      </div>
+    </div>
+
+    {{#if proposal.reviewer_name}}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-person-check me-2 text-muted"></i>Review Decision
+      </div>
+      <div class="card-body small">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="badge bg-{{proposal.statusBadge}} {{proposal.statusText}}">{{proposal.statusLabel}}</span>
+          <span class="text-muted">by {{proposal.reviewer_name}}</span>
+        </div>
+        {{#if proposal.review_notes}}
+        <p class="mb-0 mt-2 fst-italic text-muted">"{{proposal.review_notes}}"</p>
+        {{/if}}
+      </div>
+    </div>
+    {{/if}}
+
+  </div>
+
+  <div class="col-lg-5">
+
+    {{#if canReview}}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-clipboard-check me-2 text-muted"></i>Review Proposal
+      </div>
+      <div class="card-body">
+        <form method="POST" action="/proposals/{{proposal.id}}/review">
+          <div class="mb-3">
+            <label class="form-label small">Review Notes <span class="text-muted">(optional)</span></label>
+            <textarea class="form-control form-control-sm" name="review_notes" rows="3"
+              placeholder="Feedback for the submitter, budget concerns, suggested changes…"></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button name="decision" value="approved" class="btn btn-success btn-sm flex-grow-1">
+              <i class="bi bi-check-lg me-1"></i>Approve
+            </button>
+            <button name="decision" value="rejected" class="btn btn-outline-danger btn-sm flex-grow-1">
+              <i class="bi bi-x-lg me-1"></i>Reject
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {{/if}}
+
+    {{#if (eq proposal.status "draft")}}
+    {{#if isOwn}}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <p class="small text-muted mb-2">This proposal is saved as a draft. Submit it when ready.</p>
+        <form method="POST" action="/proposals/{{proposal.id}}/submit">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-send me-1"></i>Submit for Review
+          </button>
+        </form>
+      </div>
+    </div>
+    {{/if}}
+    {{/if}}
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2 small">
+        <i class="bi bi-info-circle me-2 text-muted"></i>About Curriculum Mapping
+      </div>
+      <div class="card-body small text-muted">
+        <p class="mb-1">Each proposal is linked to a residential curriculum learning outcome — a goal the ResLife program is actively working toward.</p>
+        <p class="mb-0">Linking programs to outcomes helps the Residence Director track coverage and report impact to university administration.</p>
+      </div>
+    </div>
+
+  </div>
+</div>

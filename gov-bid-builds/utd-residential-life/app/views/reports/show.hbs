@@ -1,0 +1,144 @@
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/reports" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div class="flex-grow-1">
+    <div class="d-flex align-items-center gap-2">
+      <h2 class="mb-0">Report #{{report.id}}</h2>
+      <span class="badge bg-{{badgeClass report.status}} fs-6">{{statusLabel report.status}}</span>
+      {{#if report.escalation_reason}}
+      <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Escalated</span>
+      {{/if}}
+    </div>
+    <p class="text-muted mb-0 small">
+      <i class="bi {{formTypeIcon report.form_type}} me-1"></i>{{formTypeLabel report.form_type}}
+      · Filed by {{report.reporter_name}} · {{formatDate report.created_at}}
+    </p>
+  </div>
+
+  <!-- Status update -->
+  {{#if statusOptions.length}}
+  <form method="POST" action="/reports/{{report.id}}/status" class="d-flex align-items-center gap-2">
+    <select name="status" class="form-select form-select-sm" style="width:auto">
+      {{#each statusOptions}}
+      <option value="{{value}}">→ {{label}}</option>
+      {{/each}}
+    </select>
+    <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+  </form>
+  {{/if}}
+</div>
+
+{{#if report.escalation_reason}}
+<div class="alert alert-danger d-flex align-items-center gap-2 mb-4">
+  <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+  <div>
+    <strong>Escalated</strong> — {{report.escalation_reason}}
+    {{#if report.escalated_to_name}}
+    <span class="ms-2 text-muted">→ Assigned to {{report.escalated_to_name}}</span>
+    {{/if}}
+  </div>
+</div>
+{{/if}}
+
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    <!-- Core details -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2">Report Details</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-3 text-muted small">Form Type</dt>
+          <dd class="col-sm-9 small">
+            <i class="bi {{formTypeIcon report.form_type}} me-1"></i>{{formTypeLabel report.form_type}}
+          </dd>
+
+          {{#if report.building}}
+          <dt class="col-sm-3 text-muted small">Location</dt>
+          <dd class="col-sm-9 small">
+            {{report.building}}{{#if report.room_number}}, Room {{report.room_number}}{{/if}}
+          </dd>
+          {{/if}}
+
+          {{#if report.occurred_at}}
+          <dt class="col-sm-3 text-muted small">Occurred At</dt>
+          <dd class="col-sm-9 small">{{formatDate report.occurred_at}}</dd>
+          {{/if}}
+
+          <dt class="col-sm-3 text-muted small">Reporter</dt>
+          <dd class="col-sm-9 small">{{report.reporter_name}} <span class="text-muted">({{roleLabel report.reporter_role}})</span></dd>
+
+          <dt class="col-sm-3 text-muted small">Filed</dt>
+          <dd class="col-sm-9 small">{{formatDate report.created_at}}</dd>
+
+          {{#if report.updated_at}}
+          <dt class="col-sm-3 text-muted small">Last Updated</dt>
+          <dd class="col-sm-9 small">{{formatDate report.updated_at}}</dd>
+          {{/if}}
+        </dl>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2">Description</div>
+      <div class="card-body">
+        <p class="mb-0" style="white-space:pre-wrap">{{report.description}}</p>
+      </div>
+    </div>
+
+    <!-- Type-specific form data -->
+    {{#if formDataEntries.length}}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2">Additional Fields</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          {{#each formDataEntries}}
+          <dt class="col-sm-4 text-muted small">{{key}}</dt>
+          <dd class="col-sm-8 small">{{value}}</dd>
+          {{/each}}
+        </dl>
+      </div>
+    </div>
+    {{/if}}
+
+    <!-- Photo -->
+    {{#if hasPhoto}}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold py-2">
+        <i class="bi bi-image me-2 text-muted"></i>Attached Photo
+      </div>
+      <div class="card-body text-center">
+        <img src="/uploads/{{report.photo_filename}}" alt="Report photo"
+             class="img-fluid rounded" style="max-height:480px">
+        <div class="mt-2">
+          <a href="/uploads/{{report.photo_filename}}" target="_blank"
+             class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Open full size
+          </a>
+        </div>
+      </div>
+    </div>
+    {{/if}}
+
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-light fw-semibold py-2">Quick Actions</div>
+      <div class="list-group list-group-flush">
+        <a href="/reports/new?type={{report.form_type}}"
+           class="list-group-item list-group-item-action small">
+          <i class="bi bi-plus-circle me-2 text-muted"></i>File another {{formTypeLabel report.form_type}}
+        </a>
+        <a href="/reports" class="list-group-item list-group-item-action small">
+          <i class="bi bi-list me-2 text-muted"></i>Back to all reports
+        </a>
+        <a href="/" class="list-group-item list-group-item-action small">
+          <i class="bi bi-speedometer2 me-2 text-muted"></i>Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
