@@ -28,7 +28,7 @@ function StoryDetail({ story }: { story: GovDatedStory }): React.ReactElement {
   );
 }
 
-export function GovBuildGantt({ plan, verdict }: { plan: GovDatedPlan; verdict: string }): React.ReactElement {
+export function GovBuildGantt({ plan }: { plan: GovDatedPlan }): React.ReactElement {
   const [openReleases, setOpenReleases] = useState<Record<string, boolean>>({});
   const [openStories, setOpenStories] = useState<Record<string, boolean>>({});
   const toggleRelease = (k: string) => setOpenReleases((m) => ({ ...m, [k]: !m[k] }));
@@ -50,7 +50,7 @@ export function GovBuildGantt({ plan, verdict }: { plan: GovDatedPlan; verdict: 
     <div>
       <div className="d-flex justify-content-between small text-secondary mb-1" style={{ fontVariantNumeric: 'tabular-nums' }}>
         <span>{axis ? axis.minDate : ''}</span>
-        <span>{plan.unscheduled ? 'no deadline — default window' : axis ? `${axis.totalDays} days` : ''}</span>
+        <span>{axis ? `~${Math.max(1, Math.round(axis.totalDays / 7))} wks` : ''}</span>
         <span>{axis ? axis.maxDate : ''}</span>
       </div>
       <ul className="list-unstyled mb-2">
@@ -63,7 +63,7 @@ export function GovBuildGantt({ plan, verdict }: { plan: GovDatedPlan; verdict: 
               <button type="button" className="btn btn-link btn-sm px-0 text-decoration-none d-flex align-items-center gap-2 w-100" onClick={() => toggleRelease(r.key)}>
                 <i className={`ri-arrow-${open ? 'down' : 'right'}-s-line`} aria-hidden="true" />
                 <span className="fw-semibold">{r.name}</span>
-                <span className={`badge ${releaseTone(r)}`}>{r.isRoadmap ? 'roadmap' : r.isDemoRelease ? 'demo release' : 'build'}</span>
+                <span className={`badge ${releaseTone(r)}`}>{r.isRoadmap ? 'later' : r.isDemoRelease ? 'final' : 'build'}</span>
                 <span className="text-secondary small ms-auto" style={{ fontVariantNumeric: 'tabular-nums' }}>{r.startDate} → {r.endDate} · {stories.length} stor{stories.length === 1 ? 'y' : 'ies'}</span>
               </button>
               {/* The Gantt bar on the shared date axis. */}
@@ -93,7 +93,7 @@ export function GovBuildGantt({ plan, verdict }: { plan: GovDatedPlan; verdict: 
           );
         })}
       </ul>
-      {verdict && <div className="small text-secondary"><i className="ri-information-line me-1" aria-hidden="true" />{verdict}</div>}
+      <div className="small text-secondary"><i className="ri-time-line me-1" aria-hidden="true" />Projected <strong>post-award</strong> build timeline — the build runs after award, so dates are relative to the build start, not the proposal submission deadline.</div>
     </div>
   );
 }
