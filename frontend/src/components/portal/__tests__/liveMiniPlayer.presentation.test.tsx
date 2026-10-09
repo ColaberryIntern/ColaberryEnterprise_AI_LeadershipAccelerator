@@ -334,10 +334,36 @@ describe('theming comes from the global token layer, not the portal shell', () =
     // same colour in both themes by design, plus the two non-colour tokens.
     const invariant = new Set([
       '--neutral-1000', '--border-brand', '--border-focus', '--shadow-lg', '--z-player',
+      // --action-fg is theme-invariant BECAUSE --action-bg is: the primary action is red-500
+      // in both themes, so a white foreground is required in both, not merely tolerated. That
+      // premise is asserted in the next test rather than trusted here — an allowlist entry
+      // whose reason is only a comment is how a guard like this stops guarding.
+      '--action-fg',
     ]);
 
     const unthemed = [...used].filter((name) => !invariant.has(name) && !darkBlock.includes(`${name}:`));
     expect(unthemed).toEqual([]);
+  });
+
+  it('the action pair really is theme-invariant, which is why --action-fg may skip the dark block', () => {
+    // The premise behind the allowlist entry above. If a future theme pass gives the dark
+    // mode its own --action-bg, the white foreground stops being automatically correct and
+    // this fails — which is the point: the exemption expires with its reason.
+    const tokens = fs.readFileSync(
+      path.resolve(__dirname, '..', '..', '..', 'colaberry', 'tokens', 'colors.css'), 'utf8',
+    );
+    const cut = tokens.indexOf('[data-theme="dark"]');
+    expect(cut).toBeGreaterThan(0);
+    const lightSide = tokens.slice(0, cut);
+    const darkSide = tokens.slice(cut);
+
+    const light = /--action-bg:\s*(.+?);/.exec(lightSide);
+    const dark = /--action-bg:\s*(.+?);/.exec(darkSide);
+    expect(light).not.toBeNull();
+    expect(dark).not.toBeNull();
+    expect(dark?.[1].trim()).toBe(light?.[1].trim());
+    // and --action-fg genuinely has no dark override to find
+    expect(darkSide).not.toContain('--action-fg:');
   });
 
   it('positions the mini player clear of the DM dock and the tab bar', () => {
@@ -358,5 +384,146 @@ describe('theming comes from the global token layer, not the portal shell', () =
   it('guards the transition in CSS as well as in JS', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
     expect(css).toMatch(/\.lmp\.is-still\s*\{\s*transition:\s*none/);
+  });
+});
+
+describe('denied autoplay offers a labelled control, not a dead player', () => {
+  /**
+   * The counterpart to the adapter's `autoplayBlocked`. Chrome and Safari refuse unmuted
+   * autoplay without a user gesture, and the gesture has to come from a real click handler —
+   * which is why the adapter is held in a ref and `resume()` is called straight from onClick
+   * rather than from a timer or an effect.
+   *
+   * NOTE ON THE DOUBLE: `resetMocks: true` wipes the `beforeAll` play stub before every test,
+   * so a mock installed there would be a no-op returning undefined. The rejecting stub is
+   * installed inside each test below, after the reset has run.
+   */
+  function refusePlay(): jest.Mock {
+    const play = jest.fn(() => Promise.reject(
+      Object.assign(new Error('gesture required'), { name: 'NotAllowedError' }),
+    ));
+    window.HTMLMediaElement.prototype.play = play as unknown as () => Promise<void>;
+    return play;
+  }
+
+  it('renders no Play control when playback starts normally — the positive control', async () => {
+    // Without this, every assertion below could pass against a button that is simply always
+    // rendered. jsdom's own play() returns undefined, which the adapter reads as "started".
+    window.HTMLMediaElement.prototype.play = jest.fn(() => Promise.resolve()) as unknown as () => Promise<void>;
+    await mount();
+
+    expect(find('lmp-resume')).toBeNull();
+    expect(find('lmp-status')?.textContent ?? '').not.toMatch(/press Play/i);
+  });
+
+  it('renders a labelled Play button when the browser refuses', async () => {
+    refusePlay();
+    await mount();
+
+    const button = find('lmp-resume');
+    expect(button).not.toBeNull();
+    // A LABEL, not an icon and not an aria-label on a bare glyph: this is the one action the
+    // viewer must take, and it has to be readable by everyone including a screen reader.
+    expect(button?.textContent?.trim()).toBe('Play');
+    expect(button?.tagName).toBe('BUTTON');
+    expect(button?.getAttribute('type')).toBe('button');
+  });
+
+  it('says what happened in the live region, for a viewer who is not looking at the button', async () => {
+    refusePlay();
+    await mount();
+
+    const status = find('lmp-status');
+    expect(status?.getAttribute('role')).toBe('status');
+    expect(status?.getAttribute('aria-live')).toBe('polite');
+    expect(status?.textContent).toMatch(/press Play/i);
+    expect(status?.textContent).toMatch(/blocked playback/i);
+  });
+
+  it('the Play button is the FIRST control, so the next action is the first one reached', async () => {
+    refusePlay();
+    await mount({ ...BASE, captionsAsset: 'replay.vtt' });
+
+    const ids = [...container.querySelectorAll('.lmp-controls [data-testid]')]
+      .map((el) => el.getAttribute('data-testid'));
+    expect(ids[0]).toBe('lmp-resume');
+    // and the rest of the established order is undisturbed
+    expect(ids).toEqual(['lmp-resume', 'lmp-captions', 'lmp-theater', 'lmp-fullscreen-unavailable', 'lmp-close']);
+  });
+
+  it('clicking it calls play() again, from inside the click handler', async () => {
+    const play = refusePlay();
+    await mount();
+    const before = play.mock.calls.length;
+
+    await click('lmp-resume');
+
+    // The retry MUST originate in the click. A deferred retry is refused for the same reason
+    // the first attempt was, so this assertion is about where the call comes from, not just
+    // that one happens.
+    expect(play.mock.calls.length).toBe(before + 1);
+  });
+
+  it('the control disappears once playback actually starts', async () => {
+    const play = refusePlay();
+    await mount();
+    expect(find('lmp-resume')).not.toBeNull();
+
+    play.mockImplementation(() => Promise.resolve());
+    await click('lmp-resume');
+
+    expect(find('lmp-resume')).toBeNull();
+    expect(find('lmp-status')?.textContent ?? '').not.toMatch(/press Play/i);
+  });
+
+  it('stays on screen when the retry is refused again', async () => {
+    refusePlay();
+    await mount();
+
+    await click('lmp-resume');
+
+    expect(find('lmp-resume')).not.toBeNull();
+  });
+
+  it('withdraws the control when the broadcast is denied AFTER the refusal', async () => {
+    // The case the previous test could not reach, and a surviving mutation proved it: there,
+    // the denial arrives before any play() call, so the flag is never raised and the button
+    // is absent whatever the guard does. Here the refusal comes FIRST — the viewer has a Play
+    // button on screen — and only then is the replay unpublished. Without the phase guard the
+    // button stays, inviting a press that can do nothing, beside a denial message.
+    const play = refusePlay();
+    await mount();
+    expect(find('lmp-resume')).not.toBeNull();
+
+    play.mockImplementation(() => Promise.resolve());
+    fetchGrant.mockRejectedValue({ response: { status: 403, data: { reason: 'not_watchable' } } });
+
+    // The element's `error` does not deny immediately — it schedules a retry on a backoff,
+    // through a REAL setTimeout, because the component injects no timer. Asserting straight
+    // after the dispatch passed for the wrong reason: the denial had not arrived yet. The
+    // clock is driven here instead of waited on, so the test is deterministic.
+    jest.useFakeTimers();
+    try {
+      await act(async () => {
+        container.querySelector('video')!.dispatchEvent(new Event('error'));
+      });
+      await act(async () => { jest.advanceTimersByTime(10_000); });
+      await act(async () => { await Promise.resolve(); });
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(find('lmp-resume')).toBeNull();
+    expect(find('lmp-status')?.textContent).toMatch(/Nothing is airing/i);
+  });
+
+  it('is not offered when the server denied access — there is nothing to play', async () => {
+    refusePlay();
+    fetchGrant.mockRejectedValue({ response: { status: 403, data: { reason: 'not_entitled' } } });
+    await mount();
+
+    expect(find('lmp-resume')).toBeNull();
+    // The denial is what the viewer needs to read, not an invitation to press Play.
+    expect(find('lmp-status')?.textContent).toMatch(/do not have access/i);
   });
 });

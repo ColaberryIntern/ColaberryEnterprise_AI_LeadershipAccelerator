@@ -552,7 +552,218 @@ describe('no signed URL reaches any error surface', () => {
     h.adapter.start();
     await flush();
     expect(Object.keys(h.adapter.snapshot()).sort()).toEqual([
-      'attempt', 'credentialExpiresAt', 'offerUpgrade', 'phase', 'previewSecondsRemaining', 'reason',
+      'attempt', 'autoplayBlocked', 'credentialExpiresAt', 'offerUpgrade', 'phase',
+      'previewSecondsRemaining', 'reason',
     ]);
+  });
+});
+
+describe('denied autoplay is reported, not swallowed', () => {
+  /**
+   * `media.play()` REJECTS with NotAllowedError when the browser wants a user gesture.
+   * Chrome and Safari both refuse unmuted autoplay by default, so this is the ordinary first
+   * experience, not an edge case — and until this landed the adapter did `void media.play()`,
+   * discarding the rejection. The viewer got a loaded, silent, paused video and the snapshot
+   * still said `phase: 'playing'`.
+   *
+   * These tests assert on the FLAG and on the absence of a retry, because the two things that
+   * can go wrong are opposite: saying nothing, or spending the recovery budget on a refusal
+   * that no retry can clear.
+   */
+  const refusal = (): Error => Object.assign(new Error('play() failed because the user'
+    + ' didn\'t interact with the document first'), { name: 'NotAllowedError' });
+
+  it('raises autoplayBlocked when the initial play is refused', async () => {
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+
+    h.adapter.start();
+    await flush();
+
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+    // Still 'playing' as far as the credential lifecycle goes: the element is loaded and the
+    // renewal is armed. It is paused, not broken — conflating the two would send the UI to an
+    // error surface and lose the viewer's place.
+    expect(h.adapter.snapshot().phase).toBe('playing');
+    expect(h.pending.length).toBe(1);
+  });
+
+  it('does NOT spend a recovery attempt on a refusal', async () => {
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+
+    h.adapter.start();
+    await flush();
+
+    // A refusal is not an outage. Backing off and re-fetching a credential would burn the
+    // budget AND mint a second signed url, for a condition only a click can clear.
+    expect(h.adapter.snapshot().attempt).toBe(0);
+    expect(h.adapter.snapshot().reason).toBeNull();
+    expect(h.fetchGrant).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs the error NAME and never the signed url', async () => {
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+
+    h.adapter.start();
+    await flush();
+
+    const line = h.logs.find((l) => l.includes('broadcast_playback_autoplay_blocked'));
+    expect(line).toBeDefined();
+    expect(line).toContain('error=NotAllowedError');
+    expect(line).toContain('context=load');
+    // The browser's own message for this quotes the document; a media-element error can
+    // quote the source. Neither goes in a log line.
+    expect(line).not.toContain(SIG);
+    expect(line).not.toContain('/bm/');
+  });
+
+  it('reports a refusal on RENEWAL, which is the case that silently stops a replay', async () => {
+    const h = harness();
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(false);
+
+    // Ninety minutes into a replay, the credential renews, `src` is swapped, and the element
+    // reloads. If play() is refused here the video just stops — with the old code, silently.
+    h.media.currentTime = 1_200;
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant({ expires_at: T0 + 240_000 }));
+    await h.fire();
+    h.emitMedia('loadedmetadata');
+    await flush();
+
+    expect(h.media.currentTime).toBe(1_200);
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+    const line = h.logs.find((l) => l.includes('broadcast_playback_autoplay_blocked'));
+    expect(line).toContain('context=renewal');
+  });
+
+  it('clears the flag when resume() succeeds', async () => {
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+
+    h.adapter.resume();          // the UI calls this from a click handler
+    await flush();
+
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(false);
+    expect(h.media.play).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the flag up when resume() is refused again', async () => {
+    const h = harness();
+    h.media.play.mockRejectedValue(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+
+    h.adapter.resume();
+    await flush();
+
+    // The control must stay on screen. A button that disappears on a failed press is worse
+    // than one that does nothing.
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+  });
+
+  it('resume() does nothing once the server has denied access', async () => {
+    const h = harness();
+    h.fetchGrant.mockRejectedValue({ response: { status: 403, data: { reason: 'not_entitled' } } });
+    h.adapter.start();
+    await flush();
+    expect(h.adapter.snapshot().phase).toBe('denied');
+    const before = h.media.play.mock.calls.length;
+
+    h.adapter.resume();
+    await flush();
+
+    // There is no src to play and no entitlement behind it; calling play() here would ask
+    // the element to replay whatever it last held.
+    expect(h.media.play).toHaveBeenCalledTimes(before);
+  });
+
+  it('survives an element that throws synchronously instead of rejecting', async () => {
+    const h = harness();
+    h.media.play.mockImplementationOnce(() => { throw refusal(); });
+    h.fetchGrant.mockResolvedValue(grant());
+
+    h.adapter.start();
+    await flush();
+
+    // Older WebKit threw rather than returning a rejected promise. An uncaught throw here
+    // would abort acquire() BEFORE the renewal timer is armed, so the credential would
+    // expire and never renew — a dead player 120 seconds later.
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+    expect(h.pending.length).toBe(1);
+  });
+
+  it('tolerates an element whose play() returns void', async () => {
+    const h = harness();
+    h.media.play.mockReturnValueOnce(undefined as unknown as Promise<void>);
+    h.fetchGrant.mockResolvedValue(grant());
+
+    h.adapter.start();
+    await flush();
+
+    // There is nothing to observe, so the only correct answer is "not blocked". The `error`
+    // listener still covers a real media failure.
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(false);
+    expect(h.adapter.snapshot().phase).toBe('playing');
+  });
+
+  it('drops the flag when a later renewal is DENIED, so it cannot outlive the media', async () => {
+    // The sequence a surviving mutation (M13) exposed: autoplay is refused, the viewer has
+    // not pressed Play yet, and meanwhile the replay is unpublished. The renewal comes back
+    // 403 and `deny()` clears `media.src` — at which point a Play button would be an offer to
+    // start something that no longer exists, sitting next to "you do not have access".
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+
+    h.fetchGrant.mockRejectedValue({ response: { status: 403, data: { reason: 'not_watchable' } } });
+    await h.fire();
+
+    expect(h.adapter.snapshot()).toMatchObject({
+      phase: 'denied', reason: 'not_watchable', autoplayBlocked: false,
+    });
+    expect(h.media.src).toBe('');
+  });
+
+  it('drops the flag when the recovery budget is spent', async () => {
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+    h.adapter.start();
+    await flush();
+    expect(h.adapter.snapshot().autoplayBlocked).toBe(true);
+
+    h.fetchGrant.mockRejectedValue({ response: { status: 503 } });
+    for (let i = 0; i <= MAX_RECOVERY_ATTEMPTS; i += 1) {
+      if (h.pending.length === 0) break;
+      await h.fire();
+    }
+
+    expect(h.adapter.snapshot()).toMatchObject({ phase: 'failed', autoplayBlocked: false });
+  });
+
+  it('a refusal never reaches the caller as an unhandled rejection', async () => {
+    const h = harness();
+    h.media.play.mockRejectedValueOnce(refusal());
+    h.fetchGrant.mockResolvedValue(grant());
+
+    // acquire() is fire-and-forget from start(); an unhandled rejection inside it would
+    // surface as a process-level warning in CI and as nothing at all in a browser.
+    await expect((async () => { h.adapter.start(); await flush(); })()).resolves.toBeUndefined();
   });
 });

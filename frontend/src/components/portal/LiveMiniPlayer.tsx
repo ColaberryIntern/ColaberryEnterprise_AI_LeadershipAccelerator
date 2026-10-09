@@ -5,6 +5,7 @@ import {
   requestPlaybackGrant,
   GrantResponse,
   PlaybackSnapshot,
+  PlaybackAdapter,
 } from '../../services/broadcastPlaybackAdapter';
 import { usePlayerPresentation } from './usePlayerPresentation';
 import './liveMiniPlayer.css';
@@ -46,6 +47,7 @@ export interface LiveMiniPlayerProps {
 const INITIAL: PlaybackSnapshot = {
   phase: 'idle', reason: null, offerUpgrade: false,
   previewSecondsRemaining: null, attempt: 0, credentialExpiresAt: null,
+  autoplayBlocked: false,
 };
 
 /** Codes to sentences. The adapter never carries wording, so the mapping lives here. */
@@ -80,6 +82,9 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
   const { session, close } = useBroadcastPlayer();
   const frameRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Held in a ref, not just a closure, because `resume()` is called from a click handler
+  // rendered outside the effect that creates the adapter.
+  const adapterRef = useRef<PlaybackAdapter | null>(null);
   const [snapshot, setSnapshot] = useState<PlaybackSnapshot>(INITIAL);
   const [captionsUrl, setCaptionsUrl] = useState<string | null>(null);
   const [captionsFailed, setCaptionsFailed] = useState(false);
@@ -104,8 +109,12 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
       media,
       onChange: setSnapshot,
     });
+    adapterRef.current = adapter;
     adapter.start();
-    return () => adapter.stop();
+    return () => {
+      adapter.stop();
+      adapterRef.current = null;
+    };
   }, [occurrenceId, asset, grantFetcher]);
 
   // A new session starts with captions off and no stale url from the previous one.
@@ -137,6 +146,14 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
   if (!session) return null;
 
   const status = statusLine(snapshot);
+  // No phase check here, deliberately. The adapter clears `autoplayBlocked` in `deny()` and
+  // `giveUp()` — both of which also clear `media.src`, so a gesture would have nothing to
+  // start — and two adapter tests enforce that ("drops the flag when a later renewal is
+  // DENIED" and "...when the recovery budget is spent"). An extra guard here was unreachable
+  // given that invariant: removing it changed no test, which is the definition of code that
+  // cannot be verified. Reading the flag directly means the component's own tests now fail if
+  // the adapter ever stops upholding it.
+  const needsGesture = snapshot.autoplayBlocked;
   const preview = previewLabel(snapshot.previewSecondsRemaining);
   const stopped = snapshot.phase === 'denied' || snapshot.phase === 'failed';
   const theater = mode === 'theater';
@@ -182,6 +199,29 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
 
       {/* After the video, so tab order is play/mute → captions → theater → fullscreen → close. */}
       <div className="lmp-controls">
+        {/*
+          A LABELLED control for denied autoplay, not a silent dead player.
+
+          Chrome and Safari both refuse unmuted autoplay without a user gesture, so a viewer
+          who opens a replay sees a loaded, paused video and no explanation. The adapter now
+          reports that refusal instead of discarding the rejected promise, and this is the
+          gesture it needs: `resume()` is called straight from onClick, because a retry from
+          a timer would be refused for exactly the same reason.
+
+          First in the row for the same reason the fullscreen fallback is a sentence rather
+          than a hidden button — the thing the viewer has to do next should be the thing
+          they reach first.
+        */}
+        {needsGesture && (
+          <button
+            type="button"
+            className="lmp-btn lmp-btn-primary"
+            data-testid="lmp-resume"
+            onClick={() => adapterRef.current?.resume()}
+          >
+            Play
+          </button>
+        )}
         {captionsAsset && (
           <button
             type="button"
@@ -239,7 +279,9 @@ export default function LiveMiniPlayer({ fetchGrant }: LiveMiniPlayerProps): Rea
         DOM at the same moment it gains text is frequently not announced at all.
       */}
       <p className="lmp-status" role="status" aria-live="polite" data-testid="lmp-status">
-        {captionsFailed ? 'Captions are unavailable for this broadcast.' : status}
+        {needsGesture
+          ? 'Ready to play — press Play to start. Your browser blocked playback from starting on its own.'
+          : (captionsFailed ? 'Captions are unavailable for this broadcast.' : status)}
         {status && snapshot.offerUpgrade && (
           <a className="lmp-upgrade" href="/portal/settings">Upgrade for full access</a>
         )}

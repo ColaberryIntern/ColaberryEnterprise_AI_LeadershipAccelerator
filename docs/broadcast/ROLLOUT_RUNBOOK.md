@@ -55,23 +55,33 @@ with no frontend build. A client that picks its own interval cannot be turned do
 matters. The client clamps the value it is handed anyway, because a stale or misconfigured
 answer must not be able to drive a one-second loop.
 
-### Load, as a sensitivity curve rather than a measurement
+### Load at the Phase 1 planning scenarios
 
-**The plan's acceptance criterion asks for "measured load at the Phase 1 audience scenarios".
-Phase 1 never defined audience scenarios** — `request.md` and `discovery-architecture.md`
-contain no concurrency figures — so there is nothing to measure against, and inventing a
-number would be worse than saying so. What follows is a sensitivity table instead: the
-decision holds across three orders of magnitude, which is the useful property when the real
-figure is unknown.
+**CORRECTION, 2026-10-09.** An earlier version of this section claimed "Phase 1 never defined
+audience scenarios — `request.md` and `discovery-architecture.md` contain no concurrency
+figures". That was false. `request.md:182`, the P1-05 row, reads: *"expected audience scenarios
+(100/500/1,000 are planning scenarios, not measured traffic)"*. The scenarios were defined, by
+number, in the file named as not containing them — and the substituted table then used
+100/500/**2,000**, getting the third figure wrong.
 
-Payload is ~200 B per airing broadcast plus ~80 B of envelope; the active set is bounded by a
-partial UNIQUE index permitting one airing per room, and by `ACTIVE_DISCOVERY_LIMIT = 25`.
+The claim came from a grep for `audience of` and a numeric pattern, neither of which matches
+"audience scenarios" or "100/500/1,000". A path- or pattern-limited search returning nothing
+is not evidence of absence, which is a rule this run had already paid for twice before.
+
+The figures below are now the ones Phase 1 actually named. Note what they are: **planning
+scenarios, not measured traffic** — `request.md` says so itself, so this is a projection
+against agreed planning numbers, not a measurement, and it should not be read as one.
+
+Payload is ~200 B per airing broadcast plus ~80 B of envelope, so 680 B per response at three
+airings; the active set is bounded by a partial UNIQUE index permitting one airing per room,
+and by `ACTIVE_DISCOVERY_LIMIT = 25`. KB below is 1 000 B, and the arithmetic is
+`viewers / 45 s * 680 B` — stated so the next reader can check it rather than trust it.
 
 | Concurrent signed-in viewers | Requests/s at 45 s | Egress at 3 airings |
 |---|---|---|
 | 100 | 2.2 | ~1.5 KB/s |
-| 500 | 11.1 | ~7.4 KB/s |
-| 2 000 | 44.4 | ~30 KB/s |
+| 500 | 11.1 | ~7.6 KB/s |
+| 1 000 | 22.2 | ~15.1 KB/s |
 
 Two client behaviours cut the real figure well below these, and both are asserted by test:
 
@@ -86,7 +96,8 @@ consider caching the active set across viewers.
 
 ### Revisit when
 
-- A real concurrency figure exists. Replace the table above with a measurement.
+- A MEASURED concurrency figure exists. The table above is a projection against Phase 1's
+  planning scenarios; replace it with observed numbers once the feature has run live.
 - Sub-45-second latency becomes a product requirement. That is the trigger for reconsidering
   a push transport, and it brings the portal-authentication question above with it.
 - The active set stops being small. The query is index-backed only while

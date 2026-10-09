@@ -129,6 +129,20 @@
   cursor: pointer;
 }
 
+/* The denied-autoplay control is the one thing the viewer must do next, so it reads as the
+   primary action. --action-bg/--action-fg is the Layer-A pair for exactly that, and it is a
+   token pair rather than two independent picks so the contrast stays paired in dark mode. */
+.lmp-btn-primary {
+  background: var(--action-bg);
+  border-color: var(--action-bg);
+  color: var(--action-fg);
+}
+
+.lmp-btn-primary:hover {
+  background: var(--action-bg-hover);
+  border-color: var(--action-bg-hover);
+}
+
 .lmp-btn[aria-pressed='true'] {
   background: var(--surface-brand-subtle);
   border-color: var(--border-brand);

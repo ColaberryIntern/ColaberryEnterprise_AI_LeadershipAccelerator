@@ -57,6 +57,14 @@ export interface PlaybackSnapshot {
   attempt: number;
   /** Epoch ms at which the current credential dies; null when there is none. */
   credentialExpiresAt: number | null;
+  /**
+   * The browser refused to start playback without a user gesture.
+   *
+   * NOT an error phase: the element is loaded, seeked and ready — it is simply paused, and
+   * only a real click can un-pause it. The UI must render a labelled control and call
+   * `resume()` from that click's handler. Nothing else clears this.
+   */
+  autoplayBlocked: boolean;
 }
 
 /** Shape of POST /api/portal/broadcasts/:id/playback on success. */
@@ -149,6 +157,8 @@ export function reasonFromGrantError(err: unknown): { reason: PlaybackReason; of
 export interface PlaybackAdapter {
   start(): void;
   stop(): void;
+  /** Retry after `autoplayBlocked`. Only meaningful inside a user-gesture handler. */
+  resume(): void;
   snapshot(): PlaybackSnapshot;
 }
 
@@ -166,6 +176,7 @@ export function createPlaybackAdapter(
   let state: PlaybackSnapshot = {
     phase: 'idle', reason: null, offerUpgrade: false,
     previewSecondsRemaining: null, attempt: 0, credentialExpiresAt: null,
+    autoplayBlocked: false,
   };
   let timer: unknown = null;
   let stopped = false;
@@ -193,13 +204,19 @@ export function createPlaybackAdapter(
     emit({
       phase: 'denied', reason, offerUpgrade,
       previewSecondsRemaining: previewLeft, credentialExpiresAt: null,
+      // `media.src` is cleared above, so there is nothing a gesture could start. Leaving the
+      // flag up would offer a Play button beside "you do not have access".
+      autoplayBlocked: false,
     });
   }
 
   function giveUp(): void {
     cancelTimer();
     media.src = '';
-    emit({ phase: 'failed', reason: 'retries_exhausted', credentialExpiresAt: null });
+    emit({
+      phase: 'failed', reason: 'retries_exhausted', credentialExpiresAt: null,
+      autoplayBlocked: false,
+    });
   }
 
   /** Recoverable failure: back off and try again, or give up when the budget is spent. */
@@ -213,6 +230,55 @@ export function createPlaybackAdapter(
     emit({ reason, attempt });
     log(`broadcast_playback_recovering reason=${reason} attempt=${attempt}`);
     schedule(() => void acquire(true), backoffMs(attempt));
+  }
+
+  /**
+   * Start playback and SURVIVE a refusal.
+   *
+   * `media.play()` returns a promise that REJECTS with NotAllowedError when the browser
+   * requires a user gesture. Chrome and Safari both refuse unmuted autoplay by default, so
+   * this is the ordinary path for a first-time viewer, not an edge case.
+   *
+   * Two call sites reach here and the second one is why this matters. A fresh load refusing
+   * is survivable — the viewer clicked something to get to the player and will click again.
+   * But a RENEWAL also swaps `src`, which reloads the element, and a refusal there stops a
+   * replay the viewer was already watching, ninety minutes in, with the UI still showing
+   * `phase: 'playing'`. That is the failure this flag exists to make visible.
+   *
+   * The rejection is reported, never rethrown: a refusal is not a playback failure, and
+   * spending a recovery attempt on it would burn the budget on something no retry can fix.
+   */
+  function startPlayback(context: 'load' | 'renewal'): void {
+    let result: Promise<void> | void;
+    try {
+      result = media.play();
+    } catch (err) {
+      // Older elements threw synchronously instead of rejecting.
+      blockPlayback(context, err);
+      return;
+    }
+    if (!result || typeof result.then !== 'function') {
+      // A void-returning element (or a test double) gives us nothing to observe. Treat it as
+      // started — the `error` listener still covers a genuine media failure.
+      if (state.autoplayBlocked) emit({ autoplayBlocked: false });
+      return;
+    }
+    result.then(
+      () => {
+        if (stopped) return;
+        if (state.autoplayBlocked) emit({ autoplayBlocked: false });
+      },
+      (err: unknown) => blockPlayback(context, err),
+    );
+  }
+
+  function blockPlayback(context: 'load' | 'renewal', err: unknown): void {
+    if (stopped) return;
+    // The error NAME is the only part worth keeping. A `message` is browser-worded and, on a
+    // media element, has been seen to quote the source URL — which carries a live HMAC.
+    const name = (err as { name?: string } | null)?.name ?? 'unknown';
+    log(`broadcast_playback_autoplay_blocked context=${context} error=${name}`);
+    emit({ autoplayBlocked: true });
   }
 
   /**
@@ -252,11 +318,11 @@ export function createPlaybackAdapter(
       const restore = (): void => {
         media.removeEventListener('loadedmetadata', restore);
         media.currentTime = resumeAt;
-        if (wasPlaying) void media.play();
+        if (wasPlaying) startPlayback('renewal');
       };
       media.addEventListener('loadedmetadata', restore);
     } else if (wasPlaying) {
-      void media.play();
+      startPlayback('load');
     }
 
     // A successful acquisition clears the recovery budget: the next failure gets a full set
@@ -293,6 +359,9 @@ export function createPlaybackAdapter(
       stopped = false;
       media.addEventListener('error', onMediaError);
       media.addEventListener('ended', onEnded);
+      // Guarded, not unconditional: an unconditional emit here publishes an extra `idle`
+      // snapshot on every start, which is noise for every subscriber.
+      if (state.autoplayBlocked) emit({ autoplayBlocked: false });
       void acquire(false);
     },
     stop(): void {
@@ -303,7 +372,21 @@ export function createPlaybackAdapter(
       media.removeEventListener('ended', onEnded);
       // Clear the source so no in-flight range request carries a live credential onward.
       media.src = '';
-      emit({ phase: 'idle', reason: null, attempt: 0, credentialExpiresAt: null });
+      emit({
+        phase: 'idle', reason: null, attempt: 0, credentialExpiresAt: null,
+        autoplayBlocked: false,
+      });
+    },
+    /**
+     * Retry playback from inside a user gesture.
+     *
+     * MUST be called synchronously from a real event handler — a click, a key, a tap. Called
+     * from a timer or a promise callback the browser will refuse again, because the gesture
+     * is what it is checking for. There is deliberately no automatic retry for that reason.
+     */
+    resume(): void {
+      if (stopped || state.phase === 'denied' || state.phase === 'failed') return;
+      startPlayback('load');
     },
     snapshot(): PlaybackSnapshot {
       return state;
