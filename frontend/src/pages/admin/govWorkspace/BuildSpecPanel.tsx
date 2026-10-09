@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getGovBuildSpec, type GovBuildSpec } from '../../../services/factoryApi';
 
 /**
@@ -10,7 +10,12 @@ import { getGovBuildSpec, type GovBuildSpec } from '../../../services/factoryApi
  * changes no gate and authors no requirement-cited story (that stays deterministic). The research is
  * LLM-knowledge-based (no live web search), so it is clearly labelled "verify". The last result is kept
  * in localStorage (per-viewer convenience) so a revisit does not force a re-run; a "Re-run" stays available.
+ *
+ * The spec can be long, so it is CLAMPED by default with a measured "Show more / Show less" toggle — the
+ * toggle appears only when the content actually overflows the clamp, so a short spec shows no pointless button.
  */
+const CLAMP_PX = 340;
+
 export function BuildSpecPanel({ canonical, requirements, title, buyer, daysLeft }: {
   canonical: string;
   requirements: { id: string; text: string }[];
@@ -22,14 +27,24 @@ export function BuildSpecPanel({ canonical, requirements, title, buyer, daysLeft
   const [spec, setSpec] = useState<GovBuildSpec | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     try { const raw = localStorage.getItem(storeKey); if (raw) setSpec(JSON.parse(raw) as GovBuildSpec); } catch { /* storage may be unavailable */ }
   }, [storeKey]);
+  // Measure whether the rendered content exceeds the clamp, so the toggle shows only when it is needed.
+  // scrollHeight reports the full content height even while the container is clamped (overflow hidden).
+  useEffect(() => {
+    const el = contentRef.current;
+    setOverflowing(!!spec && !!el && el.scrollHeight > CLAMP_PX + 8);
+  }, [spec]);
   const run = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
       const s = await getGovBuildSpec(canonical, { requirements, title: title ?? null, buyer: buyer ?? null, daysLeft: daysLeft ?? null });
       setSpec(s);
+      setExpanded(false);
       try { localStorage.setItem(storeKey, JSON.stringify(s)); } catch { /* ignore */ }
     } catch { setErr('Could not generate the build spec right now.'); }
     finally { setBusy(false); }
@@ -42,24 +57,33 @@ export function BuildSpecPanel({ canonical, requirements, title, buyer, daysLeft
       {requirements.length === 0 && <div className="small text-secondary mt-1">Establish the cited requirements first — the spec reads from them.</div>}
       {err && <div className="alert alert-warning py-2 mt-2 mb-0 small" role="status">{err}</div>}
       {spec && (spec.spec || spec.research) && (
-        <div className="row g-3 mt-1">
-          {spec.spec && (
-            <div className="col-12">
-              <div className="border rounded p-3 h-100">
-                <div className="fw-semibold small mb-1"><i className="ri-tools-line me-1" aria-hidden="true" />Build spec — capabilities &amp; functionality</div>
-                <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{spec.spec}</div>
-              </div>
+        <div className="mt-1">
+          <div ref={contentRef} style={!expanded ? { maxHeight: CLAMP_PX, overflow: 'hidden', WebkitMaskImage: 'linear-gradient(to bottom, #000 78%, transparent)', maskImage: 'linear-gradient(to bottom, #000 78%, transparent)' } : undefined}>
+            <div className="row g-3">
+              {spec.spec && (
+                <div className="col-12">
+                  <div className="border rounded p-3 h-100">
+                    <div className="fw-semibold small mb-1"><i className="ri-tools-line me-1" aria-hidden="true" />Build spec — capabilities &amp; functionality</div>
+                    <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{spec.spec}</div>
+                  </div>
+                </div>
+              )}
+              {spec.research && (
+                <div className="col-12">
+                  <div className="border rounded p-3 h-100">
+                    <div className="fw-semibold small mb-1"><i className="ri-search-eye-line me-1" aria-hidden="true" />Buyer-system research <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1">advisory — verify</span></div>
+                    <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{spec.research}</div>
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
+          {overflowing && (
+            <button type="button" className="btn btn-link btn-sm px-0 mt-1 text-decoration-none" onClick={() => setExpanded((e) => !e)}>
+              <i className={`me-1 ${expanded ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'}`} aria-hidden="true" />{expanded ? 'Show less' : 'Show more'}
+            </button>
           )}
-          {spec.research && (
-            <div className="col-12">
-              <div className="border rounded p-3 h-100">
-                <div className="fw-semibold small mb-1"><i className="ri-search-eye-line me-1" aria-hidden="true" />Buyer-system research <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1">advisory — verify</span></div>
-                <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{spec.research}</div>
-              </div>
-            </div>
-          )}
-          <div className="col-12"><div className="small text-secondary"><i className="ri-robot-2-line me-1" aria-hidden="true" />AI build spec — advisory, grounded only in the established requirements; the buyer-system research is the model&apos;s best guess (no live web search), so confirm it before relying on it. Nothing here authors a story or changes a gate.</div></div>
+          <div className="small text-secondary mt-1"><i className="ri-robot-2-line me-1" aria-hidden="true" />AI build spec — advisory, grounded only in the established requirements; the buyer-system research is the model&apos;s best guess (no live web search), so confirm it before relying on it. Nothing here authors a story or changes a gate.</div>
         </div>
       )}
     </div>
