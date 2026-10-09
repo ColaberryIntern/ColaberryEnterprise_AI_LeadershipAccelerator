@@ -19,6 +19,8 @@ import { parseDeadline, countdownTo, deadlineTone, formatCountdown } from './gov
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
+import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
+import { scheduleReleases } from './govWorkspace/buildSchedule';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -925,10 +927,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
   // Every write runs one at a time (in-flight guard → no duplicate qualification/decision from repeated clicks),
   // reloads the server truth, and maps its error to a recoverable state.
-  const run = useCallback(async (fn: () => Promise<any>, okNote: string) => {
+  // onSuccess (optional) fires ONLY after the write resolved and the server truth reloaded — never on a
+  // thrown/blocked write (a 403 lands in catch), so a navigation passed here cannot fire on a failed approve.
+  const run = useCallback(async (fn: () => Promise<any>, okNote: string, onSuccess?: () => void) => {
     if (inFlight.current) return;         // synchronous: blocks a same-tick double-click before any await
     inFlight.current = true; setBusy(true); setActionError(null); setNotice(null);
-    try { await fn(); setNotice(okNote); await load(); }
+    try { await fn(); setNotice(okNote); await load(); onSuccess?.(); }
     catch (err: any) { setActionError(errToAction(err)); }
     finally { inFlight.current = false; setBusy(false); }
   }, [load]);
@@ -1462,7 +1466,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* ── Qualification drawer: provenance / assessment / approvals. Always reachable from any tab, but
                 de-emphasized (collapsible) so it does not dominate the workspace; open by default only until a
                 record exists so "Open qualification" is one glance away on arrival. ─ */}
-          <SectionCard title="Qualification drawer — open, decide & approve" icon="quill-pen-line" collapsible defaultOpen={!record}>
+          <SectionCard key={record?.decision ?? 'none'} title="Qualification drawer — open, decide & approve" icon="quill-pen-line" collapsible defaultOpen={!record || record.decision !== 'approved_bid_pursuit'}>
             <div className="mb-3 d-flex flex-wrap align-items-end gap-2">
               <label className="form-label small mb-0">Bidding entity
                 <input className="form-control form-control-sm" value={biddingEntity} onChange={(e) => setBiddingEntity(e.target.value)} />
@@ -1517,7 +1521,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 <div className="d-flex flex-wrap align-items-center gap-3">
                   <button type="button" className="btn btn-success" disabled={busy || !ws.canApprove}
                     title={ws.canApprove ? undefined : 'Approval is blocked until the source is current and every requirement is established, evidenced, and cleared.'}
-                    onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.')}>
+                    onClick={() => run(() => approveGovQualification(canonical, { biddingEntity, expectedVersion: version, decision: 'approved_bid_pursuit', rationale: rationale || undefined }), 'Bid pursuit approved.', () => setStep('build'))}>
                     <i className="ri-shield-check-line me-1" aria-hidden="true" />Approve bid pursuit
                   </button>
                   {!ws.canApprove && <span className="small text-secondary">{isDecoupled ? (ws.coverage && !ws.coverage.sufficient ? `Blocked: ${ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.` : 'Blocked: resolve the flagged requirements before approving.') : ws.changedSource ? 'Blocked: source changed since review.' : ws.sourceState !== 'available' ? `Blocked: source ${ws.sourceState}.` : 'Blocked: requirements/coverage not yet sufficient.'}</span>}
@@ -1531,7 +1535,43 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </SectionCard>
 
           <GovTabPanel active={activeStep === 'build'}>
-          {/* ── Build tab: the solution-build track (forward) + the separate build authorization ─ */}
+          {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}
+          {(
+            <SectionCard title="Build spec & buyer-system research (AI)" icon="sparkling-2-line"
+              subtitle="After approval: a lengthy spec of the capabilities we'd build, plus advisory research into the buyer's likely systems so a vague 'connect to their system' becomes a concrete integration target. Advisory only — it authors no story and changes no gate.">
+              <BuildSpecPanel canonical={canonical}
+                requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
+                title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null}
+                daysLeft={daysLeft(oppDetail?.opportunity?.closeDate ?? null)} />
+            </SectionCard>
+          )}
+          {(() => {
+            const releases = ws.build?.releases ?? [];
+            if (releases.length === 0) return null;
+            const deadlineSrc = oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null;
+            const schedule = scheduleReleases(releases.map((r) => ({ key: r.key, name: r.name })), { deadline: deadlineSrc, now: new Date() });
+            return (
+              <SectionCard title="Release schedule — deadline-aware" icon="calendar-schedule-line"
+                subtitle="Each release back-scheduled from the submission deadline (with a short buffer) so the plan finishes on time. Advisory planning overlay — it changes no story and no gate.">
+                {schedule.unscheduled
+                  ? <div className="small text-secondary mb-2"><i className="ri-information-line me-1" aria-hidden="true" />No submission deadline captured yet — windows are laid out forward from today at a default cadence (unscheduled).</div>
+                  : <div className={`small mb-2 ${schedule.feasible ? 'text-success' : 'text-danger'}`}>
+                      <i className={`me-1 ${schedule.feasible ? 'ri-check-line' : 'ri-error-warning-line'}`} aria-hidden="true" />
+                      {schedule.feasible
+                        ? <>Scheduled to finish on/before the deadline ({schedule.deadline}), with a submission buffer.</>
+                        : <>The deadline ({schedule.deadline}) leaves no room to back-schedule — the last window is pinned to the latest feasible point. Compress scope or escalate the date.</>}
+                    </div>}
+                <ul className="list-unstyled mb-0 small">
+                  {schedule.releases.map((r) => (
+                    <li key={r.key} className="d-flex flex-wrap justify-content-between border-bottom py-1 gap-2">
+                      <span className="fw-semibold">{r.name}</span>
+                      <span className="text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>{r.startDate} → {r.endDate}</span>
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+            );
+          })()}
           {(
             <SectionCard title="Solution build track — releases, stories & prompts" icon="tools-line"
               subtitle="The won proposal's technical requirements, projected into buildable stories (each citing its requirement) with a student Claude Code prompt. A pursuit approval is NOT a build authorization, and the autonomous builder stays parked — nothing here runs a build.">
