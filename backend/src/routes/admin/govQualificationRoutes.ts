@@ -33,6 +33,7 @@ import { ensureGovTwoTrackProject } from '../../services/factory/govDeliveryProj
 import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
 import { generateRiskNarrative, generateProposalSummary } from '../../services/factory/govBidNarrative';
 import { generateBuildSpec } from '../../services/factory/govBuildSpec';
+import { generateGovBuildPlanAI } from '../../services/factory/govBuildPlanAI';
 
 /**
  * Admin — Government Qualification Workspace (Phase 2).
@@ -474,6 +475,39 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/build-spec
     res.json(result);
   } catch (err: any) {
     logFail('gov_build_spec_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the build spec.' });
+  }
+});
+
+const buildPlanAIBody = z.object({
+  requirements: z.array(z.object({ id: z.string().max(60), text: z.string().max(4000) })).max(200),
+  title: z.string().max(300).nullable().optional(),
+  buyer: z.string().max(200).nullable().optional(),
+  buildSpec: z.string().max(200_000).nullable().optional(),
+  deadline: z.string().max(40).nullable().optional(),
+});
+
+/** POST …/build-plan-ai — an ADVISORY, DATED build plan (SBP decompose + schedule) for the Build-step Gantt.
+ *  Advisory only (gates nothing, creates no build); fails soft (no key / decomposition error → `error`). */
+router.post('/api/admin/factory/qualification/:canonicalOpportunityId/build-plan-ai', requireSection('program'), async (req: Request, res: Response) => {
+  const pk = qualKeyParam.safeParse({ canonicalOpportunityId: req.params.canonicalOpportunityId });
+  if (!pk.success) { res.status(400).json({ error: 'Invalid opportunity key.' }); return; }
+  const { canonicalOpportunityId } = pk.data;
+  const body = buildPlanAIBody.safeParse(req.body ?? {});
+  if (!body.success) { res.status(400).json({ error: 'Invalid requirements payload.' }); return; }
+  const scope = await scopeOrFail(res, 'gov_build_plan_ai_scope', { canonicalOpportunityId });
+  if (!scope) return;
+  try {
+    const result = await generateGovBuildPlanAI({
+      requirements: body.data.requirements,
+      title: body.data.title ?? null,
+      buyer: body.data.buyer ?? null,
+      buildSpec: body.data.buildSpec ?? null,
+      deadline: body.data.deadline ?? null,
+    });
+    if (result.error) { res.status(result.error.includes('No established') ? 400 : 503).json({ error: result.error }); return; }
+    res.json(result);
+  } catch (err: any) {
+    logFail('gov_build_plan_ai_failed', err, { canonicalOpportunityId }); res.status(500).json({ error: 'Could not generate the build plan.' });
   }
 });
 
