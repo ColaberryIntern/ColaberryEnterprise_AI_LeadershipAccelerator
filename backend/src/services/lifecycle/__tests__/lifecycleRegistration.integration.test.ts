@@ -336,6 +336,33 @@ describeIfDb('P6-T1a — registration write-feasibility against a real Postgres'
     expect(await lifecycleCount(p.id)).toBe(1);
   });
 
+  it('records a caller-supplied entry point, which is how the seed scripts label themselves', async () => {
+    // A model hook cannot know which service called it, so guessing the caller from the row's shape
+    // would be fabricated provenance. Instead a caller that wants to be identifiable says so, and
+    // the three seed scripts now do: `seed:devClientReviewer`, `seed:factoryDemoContract`,
+    // `seed:ordinaryProjectDemo`.
+    //
+    // This is the acceptance for "the seed scripts are covered too, and labelled". The hook
+    // deliberately does NOT special-case them — a conditional on "is this a seed" is precisely the
+    // bypass the model-hook design exists to prevent — so they are labelled rather than skipped.
+    const p = await DeliveryProject.create(attrs(), { lifecycleEntryPoint: 'seed:probe' } as any);
+    created.push(p.id);
+    const rows = await sequelize.query<{ entry_point: string }>(
+      'SELECT entry_point FROM project_lifecycle_states WHERE delivery_project_id = $1',
+      { bind: [p.id], type: QueryTypes.SELECT },
+    );
+    expect(rows[0].entry_point).toBe('seed:probe');
+
+    // And the default is the mechanism, not a guess at a caller.
+    const q = await DeliveryProject.create(attrs());
+    created.push(q.id);
+    const qRows = await sequelize.query<{ entry_point: string }>(
+      'SELECT entry_point FROM project_lifecycle_states WHERE delivery_project_id = $1',
+      { bind: [q.id], type: QueryTypes.SELECT },
+    );
+    expect(qRows[0].entry_point).toBe('delivery_project.afterCreate');
+  });
+
   it('writes the row OWN tenant and cannot be steered to another', async () => {
     // The one new cross-tenant surface this phase introduces. The hook takes its tenant from the
     // row, so the test that matters is that the stored lifecycle tenant always equals the

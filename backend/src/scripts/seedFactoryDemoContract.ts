@@ -34,7 +34,11 @@ export async function seedFactoryDemoContract(): Promise<{ deliveryProjectId: st
       name: 'AI Government Contract Finder (demo)', slug: DEMO_PROJECT_SLUG,
       status: 'building', project_class: 'sandbox',
       business_problem: 'Demo contract for the AI Project Factory Command Center approval flow.',
-    });
+      // Provenance for the lifecycle this create registers. The model's afterCreate hook cannot
+      // know which service called it, so a caller that wants to be identifiable says so. The hook
+      // deliberately does NOT special-case seeds - a conditional on "is this a seed" is exactly the
+      // bypass that design exists to prevent - so this labels the row instead of skipping it.
+    }, { lifecycleEntryPoint: 'seed:factoryDemoContract' } as any);
     created = true;
   }
 
