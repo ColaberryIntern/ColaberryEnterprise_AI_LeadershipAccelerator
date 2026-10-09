@@ -22,7 +22,6 @@ import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
 import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
 import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
-import { scheduleReleases } from './govWorkspace/buildSchedule';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -168,6 +167,12 @@ function OpportunityDossier({ dossier }: { dossier: GovDossier }): React.ReactEl
                 </li>
               ))}
             </ul>
+            {contacts.length > 0 && (
+              <div className="alert alert-warning py-2 px-2 small mb-2" role="note">
+                <i className="ri-alert-line me-1" aria-hidden="true" />
+                <strong>Single point of contact.</strong> Direct ALL questions about this solicitation only to the designated contact(s) above. Contacting other agency staff (ex-parte contact) can disqualify the bid — confirm the solicitation&apos;s communication rules before reaching out.
+              </div>
+            )}
             {codes.length > 0 && (
               <div className="d-flex flex-wrap align-items-center gap-1">
                 <span className="small text-secondary me-1">Codes:</span>
@@ -864,7 +869,6 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   const inFlight = useRef(false); // synchronous guard so a same-tick double-click cannot fire two writes
   const [rationale, setRationale] = useState('');
   const [reqDraft, setReqDraft] = useState({ id: '', text: '', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', docId: '' });
-  const [build, setBuild] = useState({ deliveryProjectId: '', scope: '', resourceLimit: '' });
   const [docFile, setDocFile] = useState<File | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [svcMatches, setSvcMatches] = useState<ServiceMatch[] | null>(null);
@@ -1567,36 +1571,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 deadline={oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null} />
             </SectionCard>
           )}
-          {(() => {
-            const releases = ws.build?.releases ?? [];
-            if (releases.length === 0) return null;
-            const deadlineSrc = oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null;
-            const schedule = scheduleReleases(releases.map((r) => ({ key: r.key, name: r.name })), { deadline: deadlineSrc, now: new Date() });
-            return (
-              <SectionCard title="Release schedule — deadline-aware" icon="calendar-schedule-line"
-                subtitle="Each release back-scheduled from the submission deadline (with a short buffer) so the plan finishes on time. Advisory planning overlay — it changes no story and no gate.">
-                {schedule.unscheduled
-                  ? <div className="small text-secondary mb-2"><i className="ri-information-line me-1" aria-hidden="true" />No submission deadline captured yet — windows are laid out forward from today at a default cadence (unscheduled).</div>
-                  : <div className={`small mb-2 ${schedule.feasible ? 'text-success' : 'text-danger'}`}>
-                      <i className={`me-1 ${schedule.feasible ? 'ri-check-line' : 'ri-error-warning-line'}`} aria-hidden="true" />
-                      {schedule.feasible
-                        ? <>Scheduled to finish on/before the deadline ({schedule.deadline}), with a submission buffer.</>
-                        : <>The deadline ({schedule.deadline}) leaves no room to back-schedule — the last window is pinned to the latest feasible point. Compress scope or escalate the date.</>}
-                    </div>}
-                <ul className="list-unstyled mb-0 small">
-                  {schedule.releases.map((r) => (
-                    <li key={r.key} className="d-flex flex-wrap justify-content-between border-bottom py-1 gap-2">
-                      <span className="fw-semibold">{r.name}</span>
-                      <span className="text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>{r.startDate} → {r.endDate}</span>
-                    </li>
-                  ))}
-                </ul>
-              </SectionCard>
-            );
-          })()}
           {(
-            <SectionCard title="Solution build track — releases, stories & prompts" icon="tools-line"
-              subtitle="The won proposal's technical requirements, projected into buildable stories (each citing its requirement) with a student Claude Code prompt. A pursuit approval is NOT a build authorization, and the autonomous builder stays parked — nothing here runs a build.">
+            <SectionCard title="Requirement coverage (deterministic cross-check)" icon="list-check-2" collapsible defaultOpen={false}
+              subtitle="A secondary, deterministic check: every solution_build requirement projected into a cited story. The AI build plan above is the working plan; this confirms each requirement is covered. A pursuit approval is NOT a build authorization.">
               <GovBuildPlanPanel build={ws.build} assign={{
                 builders: ws.build?.assignableBuilders ?? [],
                 canAssign: !!(ws.build?.deliveryProjectId && (ws.build?.assignableBuilders?.length ?? 0) > 0),
@@ -1608,16 +1585,15 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
           {(
           <SectionCard title="Authorize a build (separate)" icon="shield-keyhole-line" collapsible defaultOpen={false} subtitle="A pursuit approval is NOT a build authorization. Recording this does not run any build; the autonomous builder stays parked.">
-            <div className="d-flex flex-wrap gap-2 align-items-end">
-              <input className="form-control form-control-sm" style={{ maxWidth: 260 }} placeholder="delivery project id (uuid)" value={build.deliveryProjectId} onChange={(e) => setBuild({ ...build, deliveryProjectId: e.target.value })} />
-              <input className="form-control form-control-sm" style={{ maxWidth: 180 }} placeholder="scope" value={build.scope} onChange={(e) => setBuild({ ...build, scope: e.target.value })} />
-              <input className="form-control form-control-sm" style={{ maxWidth: 180 }} placeholder="resource limit" value={build.resourceLimit} onChange={(e) => setBuild({ ...build, resourceLimit: e.target.value })} />
-              <button type="button" className="btn btn-outline-warning btn-sm" disabled={busy || !build.deliveryProjectId || !build.scope || !build.resourceLimit}
-                onClick={() => run(() => authorizeGovBuild(canonical, { deliveryProjectId: build.deliveryProjectId, scope: build.scope, resourceLimit: build.resourceLimit, govQualificationId: record?.id }), 'Build authorization recorded (no build started).')}>
-                <i className="ri-shield-keyhole-line me-1" aria-hidden="true" />Authorize build
-              </button>
-            </div>
-            <p className="small text-secondary mt-2 mb-0">The acting program admin authorizes the build (a super admin may authorize their own). Recording this only logs who authorized it — it starts no build; the autonomous builder stays parked.</p>
+            <button type="button" className="btn btn-outline-warning btn-sm" disabled={busy || !ws.build?.deliveryProjectId}
+              onClick={() => run(() => authorizeGovBuild(canonical, { deliveryProjectId: ws.build!.deliveryProjectId!, scope: 'solution_build', resourceLimit: 'standard', govQualificationId: record?.id }), 'Build authorization recorded (no build started).')}>
+              <i className="ri-shield-keyhole-line me-1" aria-hidden="true" />Authorize build
+            </button>
+            <p className="small text-secondary mt-2 mb-0">
+              {ws.build?.deliveryProjectId
+                ? "Authorizes the build for this pursuit's delivery project — no IDs to enter. The acting program admin authorizes (a super admin may authorize their own); this only logs who authorized it — it starts no build; the autonomous builder stays parked."
+                : 'Approve the pursuit into a delivery project first — then this authorizes the build automatically (no IDs to enter).'}
+            </p>
           </SectionCard>
           )}
 

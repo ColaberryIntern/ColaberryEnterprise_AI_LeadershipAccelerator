@@ -55,7 +55,8 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     const r = await generateGovBuildPlanAI(baseReq);
     expect(r.error).toBeUndefined();
     expect(r.plan).not.toBeNull();
-    expect(r.plan!.stories).toHaveLength(2);
+    expect(r.plan!.stories[0].id).toBe('STORY-000');            // the Command Center leads the preview
+    expect(r.plan!.stories).toHaveLength(3);                    // STORY-000 + the 2 plan stories
     expect(r.plan!.releases).toHaveLength(2);
     for (const s of r.plan!.stories) {
       expect(s.dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -73,14 +74,30 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     const client = fakeClient(okCreate);
     (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
     expect((await generateGovBuildPlanAI(baseReq)).cached).toBe(false);
+    const afterFirst = client.chat.completions.create.mock.calls.length; // decompose (+ any gate/repair passes)
+    expect(afterFirst).toBeGreaterThanOrEqual(1);
     expect((await generateGovBuildPlanAI(baseReq)).cached).toBe(true);
-    expect(client.chat.completions.create).toHaveBeenCalledTimes(1);
+    expect(client.chat.completions.create).toHaveBeenCalledTimes(afterFirst); // the 2nd call hit the cache — no new model calls
   });
 
   it('a decomposition error returns an error field, not a throw (fails soft)', async () => {
     const client = fakeClient(() => Promise.reject(new Error('boom')));
     (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
     const r = await generateGovBuildPlanAI({ ...baseReq, now: '2026-10-02' }); // different input → dodge cache
+    expect(r.error).toBeTruthy();
+    expect(r.plan).toBeNull();
+  });
+
+  it('a plan with blocking gate violations it cannot repair → error (fail closed, never a broken plan)', async () => {
+    // REQ-999 is a `must` requirement no story fulfills → must_uncovered (a BLOCKING gate rule); the fake model
+    // cannot repair it, so after the repair passes the plan is still not publishable and the service must error.
+    const PLAN_BAD: BuildPlan = {
+      ...PLAN,
+      requirements: [...PLAN.requirements, { id: 'REQ-999', statement: 'An uncovered must-have', kind: 'FUNC', priority: 'must', cluster: 'Gap', from_dimensions: [] }],
+    };
+    const client = fakeClient(() => Promise.resolve({ choices: [{ message: { content: JSON.stringify(PLAN_BAD) } }] }));
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+    const r = await generateGovBuildPlanAI({ ...baseReq, title: 'Blocking plan case' }); // distinct input → own cache
     expect(r.error).toBeTruthy();
     expect(r.plan).toBeNull();
   });

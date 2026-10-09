@@ -17,8 +17,11 @@
 import crypto from 'crypto';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { decomposeBuild, DecomposeError } from '../sbp/decomposeService';
+import { gateAndRepair } from '../sbp/planRepair';
+import { isPublishable } from '../sbp/planGate';
 import { buildSchedule, type CohortWindow } from '../sbp/buildSchedule';
 import type { BuildPlan } from '../sbp/planContract';
+import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_NARRATIVE, COMMAND_CENTER_ACCEPTANCE } from '../sbp/commandCenterStory';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000; // 1h — advisory, regenerable
@@ -150,8 +153,20 @@ export function assembleGovDatedPlan(plan: BuildPlan, deadline: Date | null, now
     };
   });
 
+  // STORY-000 — the Command Center. It is kept OUT of the gate/decomposition (by design) and injected as the
+  // first task at materialization; here it is shown (display-only) as the first story of the first release so the
+  // preview matches what the builder will actually see.
+  const firstReleaseKey = plan.releases[0]?.key ?? 'r0';
+  const commandCenter: GovDatedStory = {
+    id: COMMAND_CENTER_STORY_ID, release: firstReleaseKey, title: COMMAND_CENTER_TITLE, narrative: COMMAND_CENTER_NARRATIVE,
+    fulfills: [], acceptance: [...COMMAND_CENTER_ACCEPTANCE], taskGuidance: 'One page that shows what you are building and how far along it is — stood up first, and what you demo from.',
+    failurePaths: [], blockedBy: [], ownerAgent: 'builder',
+    dueDate: releases.find((r) => r.key === firstReleaseKey)?.startDate ?? iso(now0),
+  };
+  const allStories = stories.length ? [commandCenter, ...stories] : stories;
+
   return {
-    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories, unscheduled: deadline0 === null },
+    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories: allStories, unscheduled: deadline0 === null },
     verdict: schedule.verdict,
   };
 }
@@ -160,9 +175,14 @@ export interface GovRawPlanRequest { requirements: { id: string; text: string }[
 export interface GovRawPlanResult { plan: BuildPlan | null; cached: boolean; error?: string; }
 
 /**
- * The raw SBP `BuildPlan` for a gov pursuit, cached on (brief, document) so the Build-step Gantt (P2.2) and
- * the project materialization (P2.3) consume the SAME decomposition — materialize exactly what was reviewed.
- * The decomposition does NOT depend on the deadline/now, so those are not part of the cache key. Fail-soft.
+ * The raw SBP `BuildPlan` for a gov pursuit — produced the SAME way the student pipeline produces one:
+ * decompose → gate + up-to-3-pass model REPAIR → fail closed on blocking violations. Cached (on the brief) so
+ * the Build-step Gantt (P2.2) and the project materialization (P2.3) consume the IDENTICAL, gate-clean plan.
+ *
+ * GROUNDING: the plan is grounded ONLY in the established requirements (the author's real intent). The
+ * capability-heavy AI build SPEC is deliberately NOT fed as the decomposer's "document" — doing so pushed r0
+ * toward premature integration (integrating with the buyer's systems before the system itself exists); the
+ * walking-skeleton sequencing comes from the engine's system prompt, grounded on the requirements.
  */
 export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<GovRawPlanResult> {
   if (!process.env.OPENAI_API_KEY) {
@@ -177,17 +197,22 @@ export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<
     'Established requirements (ground truth — build to exactly these):',
     reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n'),
   ].filter(Boolean).join('\n');
-  const document = (req.buildSpec ?? '').slice(0, 200_000);
 
-  const key = 'rawplan:' + hash({ brief, document });
+  const key = 'rawplan:v2:' + hash({ brief }); // v2: re-grounded + gate/repair (invalidates older cached plans)
   const hit = cacheGet<BuildPlan>(key);
   if (hit) return { plan: hit, cached: true };
 
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_build_plan_ai' }, { timeout: 240_000, maxRetries: 1 }).chat.completions;
-    const { plan } = await decomposeBuild({ brief, document, correlationId: 'gov_build_plan_ai', client });
-    cacheSet(key, plan);
-    return { plan, cached: false };
+    const model = process.env.SBP_DECOMPOSE_MODEL || 'gpt-4o';
+    const { plan } = await decomposeBuild({ brief, document: '', model, correlationId: 'gov_build_plan_ai', client });
+    // Mirror the student pipeline: gate + up-to-3 model repair passes, then fail closed on blocking violations.
+    const repaired = await gateAndRepair(plan, brief, { client, model, correlationId: 'gov_build_plan_ai' });
+    if (!isPublishable(repaired.gate.violations)) {
+      return { plan: null, cached: false, error: 'The generated build plan did not pass the quality gate — regenerate to try again.' };
+    }
+    cacheSet(key, repaired.plan);
+    return { plan: repaired.plan, cached: false };
   } catch (err) {
     logFail('gov_build_plan_ai', err);
     const msg = err instanceof DecomposeError && err.error_class === 'ConfigError'
