@@ -309,6 +309,21 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
       mimeType: 'video/mp4',
       sizeBytes: best.file_size ?? null,
       recordingType: best.recording_type ?? null,
+      // THE FIELD THIS PATH USED TO DROP.
+      //
+      // `zoomService.toRecordingMatch` has always carried it; this object did not,
+      // so every webhook-delivered recording reached correlation with a null file
+      // id and parked in review owned by nobody — while the slower cron sweep,
+      // which does carry it, would have attributed the same recording correctly.
+      // The fast path is the one that wins the race, so in practice NOTHING was
+      // ever attributed. Found on 2026-10-09 by the first real production
+      // rehearsal; Zoom had sent an id for all six files.
+      //
+      // The comment above claims the two paths "can never pick different files".
+      // That was true of the SELECTOR and false of the MAPPING, which is the kind
+      // of drift a shared selector invites. `webhookRecordingMatchParity` now
+      // asserts the two objects agree, so this cannot come apart again silently.
+      providerFileId: best.id ?? null,
     };
 
     // Ack fast — a multi-hundred-MB download shouldn't block Zoom's webhook

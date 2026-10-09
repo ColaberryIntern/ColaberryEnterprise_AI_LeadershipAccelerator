@@ -200,9 +200,23 @@ export async function correlateRecording(rec: IncomingRecording): Promise<Correl
   // this subsystem's business.
   if (candidates.length === 0) return { kind: 'unrelated' };
 
+  // NO FILE ID: PARK IT, even when exactly one candidate makes the owner obvious.
+  //
+  // It is tempting to move this below the single-candidate branch and attribute
+  // anyway. That would be wrong, and the reason is `recordPart`'s
+  // `ON CONFLICT (occurrence_uuid, provider_file_id) DO NOTHING`. With no real id
+  // every part of one occurrence synthesises the SAME `nofile:<uuid>` key, so
+  // part 1 would insert and part 2 would be swallowed by the conflict clause —
+  // no error, no row, no trace. A visible review row beats invisible data loss.
+  //
+  // This branch was firing on EVERY webhook delivery until 2026-10-09, but that
+  // was `webhookController` dropping the id, not Zoom withholding it. With the
+  // mapping fixed this is once again what it was meant to be: rare.
   if (!rec.providerFileId) {
     const recorded = await recordPart(rec, null, 'review',
-      'Zoom sent no per-file id, so this file cannot be identified across deliveries.');
+      'No per-file id arrived with this delivery, so a second part of the same '
+      + 'recording could not be told apart from this one. Parked rather than '
+      + 'attributed, because a wrong owner is worse than a queued one.');
     return {
       kind: 'review',
       reason: 'missing_provider_file_id',
