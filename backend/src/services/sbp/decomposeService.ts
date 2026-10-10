@@ -17,6 +17,7 @@ import {
   DecomposeInputs,
   DECOMPOSE_SYSTEM_PROMPT,
   buildDecomposeUserPrompt,
+  sourceOverflows,
 } from './decomposePrompt';
 
 /** Bounded per CLAUDE.md: no unbounded external call. Decomposition is a big completion. */
@@ -105,6 +106,25 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
   const model = opts.model || process.env.SBP_DECOMPOSE_MODEL || 'gpt-4o';
   const client = opts.client ?? defaultClient();
   const userPrompt = buildDecomposeUserPrompt(opts);
+
+  // SOURCE THAT NEVER REACHES THE MODEL, said out loud.
+  //
+  // `delimited` clips an over-budget brief or document and writes `…[truncated at N chars]`
+  // into the prompt — which informs the MODEL and nobody else. A 250,000-character document
+  // lost 50,000 characters and the build looked completely normal. `request.md:243` forbids
+  // exactly that, and it is the same defect Ali rejected when a tier band was silently capping
+  // requirements: "I would rather have all the requirements there."
+  //
+  // Logged as `partial`, not `success`: the generation that follows is working from less than
+  // it was given, and an operator reading outcomes should be able to see that without diffing
+  // character counts by hand. It does NOT refuse — see `SourceOverflow`'s own comment for why
+  // refusing on an unmeasured budget would fail builds that succeed today.
+  const overflows = sourceOverflows(opts);
+  for (const o of overflows) {
+    log('sbp_decompose_source_truncated', opts.correlationId, 'partial', {
+      tag: o.tag, limit: o.limit, actual: o.actual, droppedChars: o.droppedChars,
+    });
+  }
 
   const started = Date.now();
   let lastProblem = '';
