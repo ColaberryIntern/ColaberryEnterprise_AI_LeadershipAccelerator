@@ -39,6 +39,11 @@ import { completeEvidence as complete } from './evidenceFixture';
  * Amendment 2 asks for a control per claimed position.
  */
 const GUARDED_POSITIONS: ReadonlyArray<[LifecycleStage, string, EvidenceField]> = [
+  // P6-T4. The rule emitted here is the UNASSESSED one, not the measured failure: this list
+  // is derived by withholding each field in turn, and withholding a field is by definition
+  // the not-assessed branch. `release_without_user_visible_workflow` is the other branch and
+  // has no field-guard position, which is exactly the two-class split being visible here.
+  ['release_review', 'release_workflow_unassessed', 'releasesWithoutUserVisibleWorkflow'],
   ['requirements_ready', 'no_requirements', 'requirementCount'],
   ['requirements_ready', 'requirement_without_provenance', 'requirementsWithoutProvenance'],
   ['requirements_ready', 'source_block_uncited', 'uncitedRequirementSourceBlocks'],

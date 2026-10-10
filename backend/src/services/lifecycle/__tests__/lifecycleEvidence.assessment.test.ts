@@ -240,7 +240,7 @@ describe('the read-field set is honest in BOTH directions', () => {
     const base = await readLifecycleEvidence(ROW);
     expect(base.requirementCount).toBe(0);
 
-    const out = applyMeasurements(base, { requirementCount: () => 7 }, { row: ROW, refs: null });
+    const out = applyMeasurements(base, { requirementCount: () => 7 }, { row: ROW, refs: null, plan: null });
 
     expect(out.requirementCount).toBe(7);
     expect(out.assessedFields.has('requirementCount')).toBe(true);
@@ -254,7 +254,7 @@ describe('the read-field set is honest in BOTH directions', () => {
 
     applyMeasurements(base, {
       requirementCount: (c) => { seen.push(c.row.tenant_id); return 1; },
-    }, { row: ROW, refs: null });
+    }, { row: ROW, refs: null, plan: null });
 
     // Without this, a measurement map that ignored its argument would pass everything above.
     expect(seen).toEqual(['tenant-1']);
@@ -404,7 +404,7 @@ describe('a measurement that cannot measure leaves the field UNASSESSED', () => 
     mustHaveRequirementsWithoutStory: [], storiesWithoutTraceability: [],
   }) as unknown as LifecycleEvidence;
 
-  const CTX = { row: ROW, refs: null };
+  const CTX = { row: ROW, refs: null, plan: null };
 
   it('NOT_MEASURED keeps the placeholder AND keeps the field out of assessedFields', () => {
     const out = applyMeasurements(base(), {
@@ -432,7 +432,7 @@ describe('a measurement that cannot measure leaves the field UNASSESSED', () => 
   it('the real map measures NOTHING when there are no refs, so everything still blocks', () => {
     // Not an incidental property: a project with no blueprint yet is the normal case, and
     // reporting it as "assessed, nothing wrong" would advance it on evidence nobody gathered.
-    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: null });
+    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: null, plan: null });
     expect(out.assessedFields.size).toBe(0);
   });
 
@@ -508,7 +508,7 @@ describe('a measurement that cannot measure leaves the field UNASSESSED', () => 
     // everything.
     const good = { sources: [{ id: 'g-1', state: 'open', provenanceKind: null }] } as unknown as
       Parameters<typeof applyMeasurements>[2]['refs'];
-    expect(applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: good })
+    expect(applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: good, plan: null })
       .assessedFields.size).toBe(2);
   });
 
@@ -517,7 +517,17 @@ describe('a measurement that cannot measure leaves the field UNASSESSED', () => 
     // superset of requirements and `sources.length` would be a count meaning something slightly
     // different from its name. Left unassessed, where it BLOCKS, rather than measured loosely.
     expect(Object.keys(EVIDENCE_MEASUREMENTS)).not.toContain('requirementCount');
+    // P6-T4 added the three plan-derived measurements. `requirementCount` is STILL absent,
+    // and the reason above still holds: `sources` is a superset of requirements, so
+    // `sources.length` would be a count meaning something slightly different from its name.
+    // Pinned as a sorted list rather than a size so an addition has to name itself here.
     expect(Object.keys(EVIDENCE_MEASUREMENTS).sort())
-      .toEqual(['requirementsWithoutProvenance', 'unresolvedSourceBlocks']);
+      .toEqual([
+        'mustHaveRequirementsWithoutStory',
+        'releasesWithoutUserVisibleWorkflow',
+        'requirementsWithoutProvenance',
+        'storiesWithoutTraceability',
+        'unresolvedSourceBlocks',
+      ]);
   });
 });

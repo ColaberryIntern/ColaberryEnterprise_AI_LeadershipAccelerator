@@ -59,6 +59,7 @@ function clean(): LifecycleEvidence {
     actorStillAuthorized: true,
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
+    releasesWithoutUserVisibleWorkflow: [],
   };
   return { ...measured, assessedFields: allAssessed(measured) };
 }

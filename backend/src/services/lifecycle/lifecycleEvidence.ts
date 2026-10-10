@@ -12,6 +12,13 @@
  */
 import type { LifecycleEvidence, EvidenceField } from './lifecyclePrerequisites';
 import type { ManifestRefs } from './adapters/manifestRefs';
+import { requirementsNeedingCoverage } from './adapters/sbpAdapter';
+import {
+  requirementsWithoutStory,
+  storiesWithoutTraceability as storiesMissingCitations,
+  releasesWithoutUserVisibleWorkflow,
+  type StoryLike,
+} from './storyTraceability';
 
 export interface LifecycleRow {
   id: string;
@@ -44,6 +51,31 @@ export interface EvidenceContext {
   row: LifecycleRow;
   /** `null` when no manifest exists yet, or its refs could not be read. NOT an empty refs. */
   refs: ManifestRefs | null;
+  /**
+   * The project's PUBLISHED build plan, or `null`.
+   *
+   * `null` is load-bearing and means the same three things `refs: null` means: no plan exists,
+   * the project is not a student build at all, or the read failed. It NEVER means an empty
+   * plan. Every measurement that reads this returns NOT_MEASURED on `null`, so a project whose
+   * plan could not be read blocks on `not_assessed` rather than passing with no gaps found.
+   *
+   * It is resolved BEFORE `applyMeasurements` because `Measurement` is synchronous and pure —
+   * the same reason `refs` is resolved here rather than inside a measurement.
+   */
+  plan: PlanLike | null;
+}
+
+/**
+ * The part of a build plan these measurements read.
+ *
+ * Structural, not imported from `services/sbp`: the lifecycle coordinator stays ignorant of
+ * SBP's plan model, which is the same reason `adapters/sbpAdapter.ts` declares its own `*Like`
+ * shapes. SBP's `BuildPlan` satisfies this.
+ */
+export interface PlanLike {
+  requirements?: ReadonlyArray<{ id: string; kind?: string | null; priority?: string | null }> | null;
+  releases?: ReadonlyArray<{ key: string }> | null;
+  stories?: ReadonlyArray<StoryLike> | null;
 }
 
 /**
@@ -89,6 +121,51 @@ function readableSources(ctx: EvidenceContext): ReadonlyArray<SourceLike> | null
   return readable ? (list as ReadonlyArray<SourceLike>) : null;
 }
 export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> = {
+  /**
+   * Must-have requirements no story fulfils.
+   *
+   * Both halves of the judgement are borrowed rather than re-decided: which requirements NEED
+   * coverage is `adapters/sbpAdapter.requirementsNeedingCoverage` (mirroring
+   * `planContract.requiresStoryCoverage`), and which are covered is
+   * `storyTraceability.requirementsWithoutStory`. Re-deciding either here would be a second
+   * place to get it wrong, and the coverage predicate has already been wrong once.
+   */
+  mustHaveRequirementsWithoutStory: (ctx) => {
+    const plan = ctx.plan;
+    if (!plan || !Array.isArray(plan.requirements) || !Array.isArray(plan.stories)) return NOT_MEASURED;
+    return requirementsWithoutStory(requirementsNeedingCoverage(plan.requirements), plan.stories);
+  },
+
+  /**
+   * Stories citing no requirement, business task or blueprint revision.
+   *
+   * Assessable on a LEGACY plan, deliberately: `fulfills` has always existed, so a plan with no
+   * `references` is still measurable for this and reporting it unassessable would block every
+   * pre-2026-10-09 project for a gap it does not have.
+   */
+  storiesWithoutTraceability: (ctx) => {
+    const plan = ctx.plan;
+    if (!plan || !Array.isArray(plan.stories)) return NOT_MEASURED;
+    return storiesMissingCitations(plan.stories);
+  },
+
+  /**
+   * Releases demonstrating nothing a human can see.
+   *
+   * The one measurement here that can return NOT_MEASURED on a plan it CAN read: if no story
+   * declares a workspace — every plan generated before P6-T3 — then nobody has looked, and
+   * `releasesWithoutUserVisibleWorkflow` says so with `null`. Passing that through as `[]`
+   * would turn "unmeasured" into "no gaps", which is the exact bypass `NOT_MEASURED` exists
+   * to prevent — and it would do it on the rule that was written for a real student's
+   * twelve unreachable services.
+   */
+  releasesWithoutUserVisibleWorkflow: (ctx) => {
+    const plan = ctx.plan;
+    if (!plan || !Array.isArray(plan.releases) || !Array.isArray(plan.stories)) return NOT_MEASURED;
+    const failing = releasesWithoutUserVisibleWorkflow(plan.releases.map((r) => r.key), plan.stories);
+    return failing === null ? NOT_MEASURED : failing;
+  },
+
   /**
    * Requirements carrying no recorded provenance.
    *
@@ -185,6 +262,49 @@ export function applyMeasurements(
  * measured" rather than 500, because a project with no blueprint yet is the NORMAL case, not
  * an error.
  */
+/**
+ * The project's published build plan, or `null`.
+ *
+ * Mirrors `latestManifestRefs` below: module-private, dynamic import so nothing connects at
+ * module load, raw SQL rather than importing SBP's `planStore` (which would couple the
+ * coordinator to SBP's service layer), and `null` on ANY failure.
+ *
+ * STUDENT PROJECTS ONLY, and that is a fact about the product rather than a shortcut:
+ * `build_plans.project_id` is a `projects` id. A delivery project has no SBP build plan to
+ * read, so it returns `null` and every plan-derived measurement reports NOT_MEASURED for it.
+ * That is the honest answer — the traceability of a delivery project is the Factory's contract,
+ * not an SBP plan — and it must not be confused with "measured, no gaps".
+ *
+ * Reads the PUBLISHED plan, not the latest draft. A draft is a proposal nobody authorized, and
+ * judging a stage's prerequisites against one would let an unapproved edit satisfy a gate.
+ */
+async function latestPublishedPlan(row: LifecycleRow): Promise<PlanLike | null> {
+  if (row.student_project_id === null) return null;
+  try {
+    const { sequelize } = await import('../../config/database');
+    const rows = await sequelize.query<{ plan_json: unknown }>(
+      `SELECT plan_json
+         FROM build_plans
+        WHERE project_id = $1 AND status = 'published'
+        ORDER BY version DESC
+        LIMIT 1`,
+      {
+        bind: [row.student_project_id],
+        type: (await import('sequelize')).QueryTypes.SELECT,
+      },
+    );
+    const raw = rows[0]?.plan_json ?? null;
+    // `plan_json` is JSONB and arrives parsed, but a string is possible if a writer ever stored
+    // text. Parse defensively and fall back to null rather than throwing inside a gatherer whose
+    // whole contract is that an unreadable input yields NOT_MEASURED.
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (parsed === null || typeof parsed !== 'object') return null;
+    return parsed as PlanLike;
+  } catch {
+    return null;
+  }
+}
+
 async function latestManifestRefs(row: LifecycleRow): Promise<ManifestRefs | null> {
   const projectId = row.student_project_id ?? row.delivery_project_id;
   if (projectId === null) return null;
@@ -267,5 +387,6 @@ export async function readLifecycleEvidence(row: LifecycleRow): Promise<Lifecycl
   return applyMeasurements(base, EVIDENCE_MEASUREMENTS, {
     row,
     refs: await latestManifestRefs(row),
+    plan: await latestPublishedPlan(row),
   });
 }
