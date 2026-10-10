@@ -250,19 +250,6 @@ export function applyMeasurements(
 }
 
 /**
- * The refs of the newest manifest for this project, or `null`.
- *
- * `null` on ANY of: no project id, no manifest row, no `refs_json`, unparseable JSON, or a
- * query that throws. Every one of those means the same thing to a caller — the evidence could
- * not be read — and the measurements above turn that into NOT_MEASURED, which leaves the
- * prerequisite BLOCKING rather than passing on a placeholder.
- *
- * The throw is caught and LOGGED with an `error_class`, not swallowed. CLAUDE.md forbids the
- * silent catch, and the honest answer here really is `null`: a status read should report "not
- * measured" rather than 500, because a project with no blueprint yet is the NORMAL case, not
- * an error.
- */
-/**
  * The project's published build plan, or `null`.
  *
  * Mirrors `latestManifestRefs` below: module-private, dynamic import so nothing connects at
@@ -300,11 +287,39 @@ async function latestPublishedPlan(row: LifecycleRow): Promise<PlanLike | null> 
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (parsed === null || typeof parsed !== 'object') return null;
     return parsed as PlanLike;
-  } catch {
+  } catch (err: unknown) {
+    // LOGGED, not swallowed. The docblock on the sibling reader states the rule this
+    // violated for one commit: "CLAUDE.md forbids the silent catch." A wrong column name
+    // here would be permanently invisible AND would silently block every project, because
+    // an unreadable plan becomes NOT_MEASURED on three fields at once.
+    const e = err as { name?: string; message?: string };
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'lifecycle_evidence_plan_unavailable',
+      outcome: 'partial',
+      error_class: e?.name ?? 'UnclassifiedError',
+      context: { lifecycle_id: row.id, measured: false },
+    }));
     return null;
   }
 }
 
+/**
+ * The refs of the newest manifest for this project, or `null`.
+ *
+ * `null` on ANY of: no project id, no manifest row, no `refs_json`, unparseable JSON, or a
+ * query that throws. Every one of those means the same thing to a caller — the evidence could
+ * not be read — and the measurements above turn that into NOT_MEASURED, which leaves the
+ * prerequisite BLOCKING rather than passing on a placeholder.
+ *
+ * The throw is caught and LOGGED with an `error_class`, not swallowed. CLAUDE.md forbids the
+ * silent catch, and the honest answer here really is `null`: a status read should report "not
+ * measured" rather than 500, because a project with no blueprint yet is the NORMAL case, not
+ * an error.
+ */
 async function latestManifestRefs(row: LifecycleRow): Promise<ManifestRefs | null> {
   const projectId = row.student_project_id ?? row.delivery_project_id;
   if (projectId === null) return null;
