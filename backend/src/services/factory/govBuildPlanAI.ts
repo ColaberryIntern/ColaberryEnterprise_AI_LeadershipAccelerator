@@ -22,6 +22,7 @@ import { isPublishable } from '../sbp/planGate';
 import { buildSchedule, type CohortWindow } from '../sbp/buildSchedule';
 import type { BuildPlan } from '../sbp/planContract';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_NARRATIVE, COMMAND_CENTER_ACCEPTANCE } from '../sbp/commandCenterStory';
+import { generateBuildSpec } from './govBuildSpec';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000; // 1h — advisory, regenerable
@@ -177,10 +178,12 @@ export interface GovRawPlanResult { plan: BuildPlan | null; cached: boolean; err
  * decompose → gate + up-to-3-pass model REPAIR → fail closed on blocking violations. Cached (on the brief) so
  * the Build-step Gantt (P2.2) and the project materialization (P2.3) consume the IDENTICAL, gate-clean plan.
  *
- * GROUNDING: the plan is grounded ONLY in the established requirements (the author's real intent). The
- * capability-heavy AI build SPEC is deliberately NOT fed as the decomposer's "document" — doing so pushed r0
- * toward premature integration (integrating with the buyer's systems before the system itself exists); the
- * walking-skeleton sequencing comes from the engine's system prompt, grounded on the requirements.
+ * GROUNDING: the plan decomposes OUR SOLUTION — the service/product we would build to deliver this and win the
+ * bid (the AI build SPEC) — NOT a restatement of the buyer's requirements. The spec is the `brief` (what we
+ * build, the ground truth for the release structure), and the solicitation requirements are the `document`
+ * (what the product must satisfy, cited for traceability in the stories that fulfil them). That is what makes
+ * r0 a walking skeleton of OUR system rather than a reshaping of the buyer's functional areas. If no spec is
+ * passed in, one is generated first, so the plan is always a product build.
  */
 export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<GovRawPlanResult> {
   if (!process.env.OPENAI_API_KEY) {
@@ -190,22 +193,38 @@ export async function decomposeGovBuildPlanRaw(req: GovRawPlanRequest): Promise<
   if (reqs.length === 0) {
     return { plan: null, cached: false, error: 'No established requirements to plan a build from yet.' };
   }
+
+  // Our solution/product to build. Use the spec the operator already generated; otherwise generate one now so
+  // the plan is always a decomposition of what WE'd build, not of the raw requirements.
+  let specText = (req.buildSpec ?? '').trim();
+  if (!specText) {
+    const s = await generateBuildSpec({ requirements: reqs, title: req.title ?? null, buyer: req.buyer ?? null });
+    if (s.error || !s.spec) {
+      return { plan: null, cached: false, error: s.error ?? 'Could not generate the solution spec to plan the build from.' };
+    }
+    specText = s.spec;
+  }
+
   const brief = [
     req.title ? `Opportunity: ${req.title}${req.buyer ? ` (buyer: ${req.buyer})` : ''}` : '',
-    'Established requirements (ground truth — build to exactly these):',
-    reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n'),
+    'OUR SOLUTION — the service/product we would build to deliver this and win the bid. Plan the build of THIS system:',
+    specText,
   ].filter(Boolean).join('\n');
+  const document = [
+    'Solicitation requirements the product must satisfy (cite their ids in the stories that fulfil them):',
+    reqs.map((r) => `- ${r.id}: ${r.text}`).join('\n'),
+  ].join('\n');
 
-  const key = 'rawplan:v2:' + hash({ brief }); // v2: re-grounded + gate/repair (invalidates older cached plans)
+  const key = 'rawplan:v3:' + hash({ brief, document }); // v3: decompose our solution (spec) — invalidates older cached plans
   const hit = cacheGet<BuildPlan>(key);
   if (hit) return { plan: hit, cached: true };
 
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_build_plan_ai' }, { timeout: 240_000, maxRetries: 1 }).chat.completions;
     const model = process.env.SBP_DECOMPOSE_MODEL || 'gpt-4o';
-    const { plan } = await decomposeBuild({ brief, document: '', model, correlationId: 'gov_build_plan_ai', client });
+    const { plan } = await decomposeBuild({ brief, document, model, correlationId: 'gov_build_plan_ai', client });
     // Mirror the student pipeline: gate + up-to-3 model repair passes, then fail closed on blocking violations.
-    const repaired = await gateAndRepair(plan, brief, { client, model, correlationId: 'gov_build_plan_ai' });
+    const repaired = await gateAndRepair(plan, `${brief}\n${document}`, { client, model, correlationId: 'gov_build_plan_ai' });
     if (!isPublishable(repaired.gate.violations)) {
       return { plan: null, cached: false, error: 'The generated build plan did not pass the quality gate — regenerate to try again.' };
     }
