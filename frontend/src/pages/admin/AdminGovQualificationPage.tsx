@@ -1485,7 +1485,14 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               )}
             </div>
 
-            {record && (
+            {record && record.decision === 'approved_bid_pursuit' && (
+              <div className="alert alert-success py-2 mb-0 small" role="status">
+                <i className="ri-shield-check-line me-1" aria-hidden="true" />
+                Bid pursuit <strong>approved</strong> — it moved to the Build step. A pursuit can only be approved once, so the decision controls are closed here.
+              </div>
+            )}
+
+            {record && record.decision !== 'approved_bid_pursuit' && (
               <>
                 <div className="mb-3">
                   <label className="form-label small">Rationale (optional)</label>

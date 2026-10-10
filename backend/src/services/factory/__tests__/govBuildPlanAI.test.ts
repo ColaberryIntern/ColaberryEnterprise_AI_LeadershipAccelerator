@@ -6,6 +6,8 @@ import type { BuildPlan } from '../../sbp/planContract';
 
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
+jest.mock('../govBuildSpec', () => ({ generateBuildSpec: jest.fn() }));
+import { generateBuildSpec } from '../govBuildSpec';
 
 // A minimal, plan-shaped BuildPlan (passes decomposeService.isPlanShaped) returned by the fake model.
 const PLAN: BuildPlan = {
@@ -32,7 +34,7 @@ const baseReq: GovBuildPlanAIRequest = {
 
 describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
   const OLD = process.env.OPENAI_API_KEY;
-  beforeEach(() => { __clearGovBuildPlanAICache(); (getInstrumentedOpenAI as jest.Mock).mockReset(); process.env.OPENAI_API_KEY = 'test-key'; });
+  beforeEach(() => { __clearGovBuildPlanAICache(); (getInstrumentedOpenAI as jest.Mock).mockReset(); (generateBuildSpec as jest.Mock).mockReset(); process.env.OPENAI_API_KEY = 'test-key'; });
   afterAll(() => { if (OLD === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = OLD; });
 
   it('no API key → error, never calls the model', async () => {
@@ -86,6 +88,25 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     const r = await generateGovBuildPlanAI({ ...baseReq, now: '2026-10-02' }); // different input → dodge cache
     expect(r.error).toBeTruthy();
     expect(r.plan).toBeNull();
+  });
+
+  it('decomposes OUR SOLUTION: generates the build spec when none is passed and plans from IT (requirements become the traceability document)', async () => {
+    (generateBuildSpec as jest.Mock).mockResolvedValue({ spec: 'OUR PRODUCT: a claims search system with a thin audited core.', research: '', cached: false, generatedAt: 'x' });
+    const client = fakeClient(okCreate);
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+    const r = await generateGovBuildPlanAI({ ...baseReq, buildSpec: null, title: 'Spec-gen case' });
+    expect(generateBuildSpec).toHaveBeenCalled();                               // no spec passed → generate our solution first
+    const userPrompt = client.chat.completions.create.mock.calls[0][0].messages[1].content as string;
+    expect(userPrompt).toContain('OUR PRODUCT');                                // the spec (our solution) is the brief
+    expect(userPrompt).toContain('REQ-001');                                    // requirements are the document (traceability)
+    expect(r.plan).not.toBeNull();
+  });
+
+  it('uses a provided build spec as-is (does not regenerate it)', async () => {
+    const client = fakeClient(okCreate);
+    (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
+    await generateGovBuildPlanAI(baseReq); // baseReq carries buildSpec
+    expect(generateBuildSpec).not.toHaveBeenCalled();
   });
 
   it('a plan with blocking gate violations it cannot repair → error (fail closed, never a broken plan)', async () => {
