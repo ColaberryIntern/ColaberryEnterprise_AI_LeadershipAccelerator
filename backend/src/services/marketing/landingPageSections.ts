@@ -86,7 +86,7 @@ const CHECK_ICON = '<svg class="tick" viewBox="0 0 20 20" aria-hidden="true" foc
 
 function renderBulletItems(
   items: ReadonlyArray<{ label: string; detail?: string }>,
-  variant: 'cards' | 'checks' | 'steps',
+  variant: 'cards' | 'checks' | 'steps' | 'grid',
 ): string {
   const detail = (d: string | undefined) => (d ? `<span class="b-detail">${esc(d)}</span>` : '');
 

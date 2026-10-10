@@ -71,7 +71,7 @@ export interface RenderLandingPageInput {
 
 /** A link target that is safe to put in an href: absolute http(s), or a site-relative path. */
 
-type Tone = 'default' | 'subtle' | 'inverse' | 'accent';
+type Tone = 'default' | 'subtle' | 'inverse' | 'accent' | 'cool';
 
 /**
  * Which band each section paints on, resolved for the whole page in one pass.

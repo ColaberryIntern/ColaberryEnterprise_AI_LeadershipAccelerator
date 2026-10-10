@@ -44,6 +44,11 @@ export interface BrandTheme {
   '--accent-contrast': string;
   '--accent-soft': string;
   '--line': string;
+  '--accent-2': string;
+  '--accent-3': string;
+  '--accent-deep': string;
+  '--bg-cool': string;
+  '--bg-warm': string;
 }
 
 /**
@@ -71,6 +76,15 @@ const THEMES: Readonly<Record<string, BrandTheme>> = {
     '--accent-contrast': '#FFFFFF',
     '--accent-soft': '#FBE4D5',
     '--line': '#DEDAD3',
+    // No second or third brand colour has been agreed for AI Flotation, so these resolve to
+    // its own accent and neutrals rather than borrowing Colaberry's green and blue. A page
+    // under this brand stays single-accent, which is honest, instead of wearing another
+    // brand's palette.
+    '--accent-2': '#BA430E',
+    '--accent-3': '#56524B',
+    '--accent-deep': '#93350B',
+    '--bg-cool': '#F1EEE9',
+    '--bg-warm': '#F7F6F4',
   },
   'training': {
     '--bg': '#FFFFFF',
@@ -81,6 +95,20 @@ const THEMES: Readonly<Record<string, BrandTheme>> = {
     '--accent-contrast': '#FFFFFF',
     '--accent-soft': '#FFF0F1',
     '--line': '#E4E4E3',
+    // The other two logo colours, and two band grounds. Every value is lifted from
+    // `src/colaberry/tokens/colors.css`, which is built from the Colaberry School Style Guide -
+    // the same sourcing rule as the eight above. Named there as: Leaf Green #77BB4A with
+    // #5BA63C the logo leaf mid, Berry Blue #367895, #C20E1E the logo core shadow.
+    //
+    // A design brief on 2026-10-09 proposed #2B6A94, #C8102E and #EEF2F5 for three of these.
+    // They are near-misses of documented brand values, so the documented ones are used: the
+    // point of a style guide is that it decides, and three almost-right reds and blues across
+    // a site is how a brand stops looking like one.
+    '--accent-2': '#5BA63C',
+    '--accent-3': '#367895',
+    '--accent-deep': '#C20E1E',
+    '--bg-cool': '#EAF2F6',
+    '--bg-warm': '#F8F8F7',
   },
 };
 

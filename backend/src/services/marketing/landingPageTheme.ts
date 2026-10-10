@@ -34,6 +34,11 @@ export interface LandingPageTheme {
   '--accent-contrast': string;
   '--accent-soft': string;
   '--line': string;
+  '--accent-2': string;
+  '--accent-3': string;
+  '--accent-deep': string;
+  '--bg-cool': string;
+  '--bg-warm': string;
 }
 
 /**
@@ -50,6 +55,11 @@ export const LANDING_PAGE_THEMES: Readonly<Record<string, LandingPageTheme>> = {
     '--accent-contrast': '#FFFFFF',
     '--accent-soft': '#FBE4D5',
     '--line': '#DEDAD3',
+    '--accent-2': '#BA430E',
+    '--accent-3': '#56524B',
+    '--accent-deep': '#93350B',
+    '--bg-cool': '#F1EEE9',
+    '--bg-warm': '#F7F6F4',
   },
   'training': {
     '--bg': '#FFFFFF',
@@ -60,6 +70,12 @@ export const LANDING_PAGE_THEMES: Readonly<Record<string, LandingPageTheme>> = {
     '--accent-contrast': '#FFFFFF',
     '--accent-soft': '#FFF0F1',
     '--line': '#E4E4E3',
+    // Mirrors the frontend source of truth; the parity test enforces it.
+    '--accent-2': '#5BA63C',
+    '--accent-3': '#367895',
+    '--accent-deep': '#C20E1E',
+    '--bg-cool': '#EAF2F6',
+    '--bg-warm': '#F8F8F7',
   },
 };
 
@@ -76,6 +92,13 @@ export const NEUTRAL_THEME: LandingPageTheme = {
   '--accent-contrast': '#FFFFFF',
   '--accent-soft': '#E8EDF4',
   '--line': '#DFE1E5',
+  // Navy-and-grey equivalents rather than Colaberry's green and blue: an unbranded page must
+  // read as unbranded, not as some other company's palette.
+  '--accent-2': '#3E6B4F',
+  '--accent-3': '#2F5272',
+  '--accent-deep': '#122844',
+  '--bg-cool': '#EEF1F5',
+  '--bg-warm': '#F7F7F8',
 };
 
 /**

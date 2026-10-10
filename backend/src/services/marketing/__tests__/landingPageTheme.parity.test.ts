@@ -29,7 +29,10 @@ function parseFrontendThemes(source: string): Record<string, Record<string, stri
   for (const line of body.split('\n')) {
     const keyMatch = line.match(/^\s*'([a-z0-9-]+)':\s*\{\s*$/);
     if (keyMatch) { current = keyMatch[1]; out[current] = {}; continue; }
-    const tokenMatch = line.match(/^\s*'(--[a-z-]+)':\s*'(#[0-9A-Fa-f]{3,8})'/);
+    // `[a-z0-9-]` and not `[a-z-]`: --accent-2 and --accent-3 carry digits, and a class that
+    // excluded them silently skipped two real tokens rather than failing - the count check
+    // above is what surfaced it.
+    const tokenMatch = line.match(/^\s*'(--[a-z0-9-]+)':\s*'(#[0-9A-Fa-f]{3,8})'/);
     if (tokenMatch && current) out[current][tokenMatch[1]] = tokenMatch[2];
   }
   return out;
@@ -43,10 +46,13 @@ describe('the frontend registry is readable, which this whole test depends on', 
   it('the parser actually finds themes - a silently empty parse would make every check below vacuous', () => {
     const parsed = parseFrontendThemes(fs.readFileSync(FRONTEND_THEME_FILE, 'utf8'));
     expect(Object.keys(parsed).length).toBeGreaterThan(0);
-    // Positive control: each parsed theme must have the full 8-token set. If the regex drifts and
+    // Positive control: each parsed theme must have the full token set. 8 until 2026-10-09,
+    // then 13 - the renderer v2 work added the other two Colaberry logo colours
+    // (--accent-2 leaf green, --accent-3 berry blue), --accent-deep for the closing band,
+    // and --bg-cool / --bg-warm for the two extra band grounds. If the regex drifts and
     // starts matching nothing, this fails instead of the comparison below passing on two empties.
     expect(Object.entries(parsed).map(([key, tokens]) => [key, Object.keys(tokens).length]))
-      .toEqual(Object.keys(parsed).map((key) => [key, 8]));
+      .toEqual(Object.keys(parsed).map((key) => [key, 13]));
   });
 });
 
