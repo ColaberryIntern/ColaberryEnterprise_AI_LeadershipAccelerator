@@ -1,8 +1,11 @@
-/* Refactored.ai design system entry point.
- * Order matters: tokens define the variables every later rule reads. */
-@import url("./tokens/colors.css");
-@import url("./tokens/typography.css");
-@import url("./tokens/spacing.css");
-@import url("./tokens/motion.css");
-@import url("./base/base.css");
-@import url("./base/components.css");
+/* Refactored.ai design system — global entry. Link this one file.
+   Option A — Terminal is the default (:root). Option B — Geometric: data-variant="geometric" on <html>.
+   Dark mode: data-theme="dark" on <html>. Both work together. Fonts are self-hosted via tokens/fonts.css. */
+@import "tokens/fonts.css";
+@import "tokens/colors.css";
+@import "tokens/typography.css";
+@import "tokens/spacing.css";
+@import "tokens/motion.css";
+@import "css/base.css";
+@import "css/components.css";
+@import "css/motion.css";
