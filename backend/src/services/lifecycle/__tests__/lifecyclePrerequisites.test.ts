@@ -12,6 +12,7 @@ import {
   prerequisiteGaps,
   blockingGaps,
   advisoryGaps,
+  ADVISORY_RULES,
   satisfied,
   stagesWithPrerequisites,
   type LifecycleEvidence,
@@ -59,6 +60,7 @@ function clean(): LifecycleEvidence {
     actorStillAuthorized: true,
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
+    releasesWithoutUserVisibleWorkflow: [],
   };
   const assessedFields = new Set(
     Object.keys(measured).filter((k) => k !== 'tenantId'),
@@ -221,5 +223,13 @@ describe('blocking versus advisory', () => {
     const broken = prerequisiteGaps('design_ready', { ...clean(), screensWithoutRationale: ['a'], tasksUnmappedToSurface: ['b'] });
     expect(advisoryGaps(broken)).toHaveLength(1);
     expect(blockingGaps(broken)).toHaveLength(1);
+
+    // The set's CONTENTS, pinned by name. P6-T4 added the second member, so 'small' needed to
+    // stop meaning 'one' without anyone noticing which one arrived. A rule reaching this set
+    // can be waived, so each entry has to earn it in ADVISORY_RULES' own comment.
+    expect([...ADVISORY_RULES].sort()).toEqual([
+      'release_without_user_visible_workflow',
+      'screen_without_rationale',
+    ]);
   });
 });

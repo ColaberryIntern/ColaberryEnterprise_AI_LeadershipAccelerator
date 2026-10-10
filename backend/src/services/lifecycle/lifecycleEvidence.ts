@@ -261,6 +261,7 @@ export async function readLifecycleEvidence(row: LifecycleRow): Promise<Lifecycl
     actorStillAuthorized: true,
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
+    releasesWithoutUserVisibleWorkflow: [],
   };
 
   return applyMeasurements(base, EVIDENCE_MEASUREMENTS, {

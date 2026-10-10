@@ -19,6 +19,7 @@ import { ADVANCE, LIFECYCLE_STAGES, type LifecycleStage } from '../lifecycleStag
 import {
   prerequisiteGaps,
   blockingGaps,
+  satisfied,
   notAssessedGaps,
   ADVISORY_RULES,
   type LifecycleEvidence,
@@ -54,7 +55,14 @@ const ROW = {
  * is NOT closed by this task (Phase 6 owns it), but it is pinned here so that closing it, or
  * widening it, changes a test rather than passing unnoticed.
  */
-const GAPLESS_TARGETS: ReadonlySet<string> = new Set(['release_review', 'launch_ready']);
+/**
+ * Stages that still permit unconditionally on a stub.
+ *
+ * `release_review` LEFT THIS SET on 2026-10-09 (P6-T4), which is the deliberate change the test
+ * below was written to force. It now reads `releasesWithoutUserVisibleWorkflow` and reports
+ * `not_assessed` on a stub rather than passing. `launch_ready` is still here and is P6-T5's.
+ */
+const GAPLESS_TARGETS: ReadonlySet<string> = new Set(['launch_ready']);
 
 /** Everything measured, derived from the snapshot's own keys. The positive-control snapshot. */
 
@@ -92,14 +100,25 @@ describe('THE GATE IS NOT LOOSENED: unassessed evidence still refuses a transiti
     expect(refused).toEqual([]);
   });
 
-  it('PINS THE KNOWN HOLE: release_review and launch_ready permit unconditionally', async () => {
+  it('PINS THE REMAINING HOLE: launch_ready permits unconditionally, release_review no longer does', async () => {
     const stub = await readLifecycleEvidence(ROW);
 
-    // Not an endorsement. Phase 6 owns closing this; the test exists so that closing it is a
-    // deliberate change to this assertion rather than a silent one.
+    // Not an endorsement. The test exists so that closing a hole is a deliberate change to this
+    // assertion rather than a silent one — and P6-T4 is that change arriving for one of the two.
     for (const to of GAPLESS_TARGETS) {
       expect(prerequisiteGaps(to as LifecycleStage, stub)).toEqual([]);
     }
+    expect([...GAPLESS_TARGETS]).toEqual(['launch_ready']);
+
+    // release_review now REFUSES a stub, and refuses it as not-assessed rather than as a
+    // measured failure: nothing in a stub declares a workspace, so nobody has looked.
+    const released = prerequisiteGaps('release_review' as LifecycleStage, stub);
+    expect(released.map((g) => g.rule)).toEqual(['release_workflow_unassessed']);
+    expect(released.map((g) => g.kind)).toEqual(['not_assessed']);
+    // And it BLOCKS rather than riding along: nobody has looked, so the stage is not
+    // satisfied. The measured-failure rule is the advisory one; ignorance is not waivable.
+    expect(blockingGaps(released)).toHaveLength(1);
+    expect(satisfied(released)).toBe(false);
   });
 });
 
@@ -166,10 +185,20 @@ describe('not_assessed BLOCKS', () => {
     }
   });
 
-  it('ADVISORY_RULES is unchanged by this task', () => {
+  it('ADVISORY_RULES holds exactly the two rules that have earned it', () => {
     // Asserted against the now-exported constant. The whole change would be undone by one
     // careless addition here, so the contents are pinned rather than the size.
-    expect([...ADVISORY_RULES]).toEqual(['screen_without_rationale']);
+    //
+    // P6-T4 added the second member and this assertion is the deliberate act of doing so.
+    // What it buys: `release_without_user_visible_workflow` is waivable, but the UNMEASURED
+    // case is a SEPARATE rule — `release_workflow_unassessed` — which is NOT here and
+    // therefore blocks. A stub cannot pass release_review by calling its own ignorance a
+    // waivable note.
+    expect([...ADVISORY_RULES].sort()).toEqual([
+      'release_without_user_visible_workflow',
+      'screen_without_rationale',
+    ]);
+    expect([...ADVISORY_RULES]).not.toContain('release_workflow_unassessed');
   });
 });
 
