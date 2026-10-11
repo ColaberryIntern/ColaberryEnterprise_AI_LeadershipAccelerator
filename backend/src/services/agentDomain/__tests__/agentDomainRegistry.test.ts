@@ -142,11 +142,30 @@ describe('manager fields are measured, and blockers are named rather than generi
         expect(d.blocker).toBeNull();
       } else {
         expect(d.blocker).toBeTruthy();
-        // named, not generic: it must say what is missing and who it belongs to
-        expect(d.blocker).toContain('manager_has_no_admin_login');
+        // Named, not generic: it must open with a snake_case reason CODE and then say what is
+        // missing and who it belongs to. An earlier version asserted the single literal
+        // 'manager_has_no_admin_login', which broke the moment a domain turned out to have a
+        // SECOND, worse blocker -- admissions, where no /api/admin/admissions prefix is mapped in
+        // mgmtSectionGate, so a scoped login would still 403. Asserting one literal would have
+        // pushed the honest finding back out of the data to keep the test green.
+        expect(d.blocker).toMatch(/^manager_[a-z_]+:/);
         expect(d.blocker!.length).toBeGreaterThan(60);
       }
     }
+  });
+
+  it('the reason CODE is specific per domain, not one copied string', () => {
+    const codes = blockedDomains().map((d) => /^(manager_[a-z_]+):/.exec(d.blocker!)![1]);
+    // admissions carries a different, worse code than the other three, and that must survive.
+    expect(new Set(codes).size).toBeGreaterThan(1);
+    expect(codes).toContain('manager_access_unreachable_two_ways');
+  });
+
+  it('admissions records BOTH access failures, not just the missing login', () => {
+    const a = getAgentDomain('admissions')!;
+    expect(a.blocker).toContain('no admin_users row');
+    expect(a.blocker).toContain('mgmtSectionGate');
+    expect(a.blocker).toMatch(/still 403/);
   });
 
   it('POSITIVE CONTROL: a blocked domain with a null blocker fails the pairing', () => {

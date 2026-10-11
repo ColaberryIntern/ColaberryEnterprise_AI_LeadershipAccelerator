@@ -146,10 +146,32 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     manager_identity_id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
     manager_email: 'taiwooludimimu@gmail.com',
     can_reach_surface: false,
-    blocker: MANAGER_NO_LOGIN(
-      'Taiwo Oludimimu',
-      'Already the reports_to target for 4 agents, which makes the missing login the only gap.',
-    ),
+    // NOT just a missing login, and the ownership half is now SETTLED.
+    //
+    // OWNER DECISION, 2026-10-11: "admissions is taiwo." So the Admissions DOMAIN manager is
+    // Taiwo Oludimimu, full stop. What remains is NOT a question about who owns the domain; it is
+    // two mechanical access failures plus one naming collision, and they are different things:
+    //
+    //   (a) Taiwo has no `admin_users` row, so he cannot authenticate to the surface at all.
+    //   (b) Measured 2026-10-09: `/api/admin/admissions` appears ZERO times in
+    //       `middlewares/mgmtSectionGate.ts`, whose :213-215 allows a scoped role ONLY its mapped
+    //       sections and 403s everything else. So granting him a scoped login would STILL refuse
+    //       him on all nine of his own routes. Fixing (a) without (b) looks like a fix and is not.
+    //   (c) Separately, the mgmt ROLE literally named `admissions` grants the `internship`
+    //       section, and `mgmtSectionGate.ts:100` attributes that role to Dhee. With ownership
+    //       decided, that is no longer an ownership dispute -- it is a role NAME that means
+    //       something other than the domain it is named after. Recorded so nobody later "fixes"
+    //       the domain owner to match the role name and undoes the owner's decision.
+    blocker:
+      'manager_access_unreachable_two_ways: Taiwo Oludimimu owns this domain (owner decision, '
+      + '2026-10-11) and is already the reports_to target for 4 agents, but he cannot reach the '
+      + 'surface for two independent reasons: (a) he has no admin_users row, and (b) no '
+      + '/api/admin/admissions prefix is mapped in mgmtSectionGate PATH_SECTION, which is '
+      + 'deny-by-default for scoped roles -- so granting a scoped login alone would still 403 him '
+      + 'on all nine of his own routes. Both must be fixed together. Note separately that the mgmt '
+      + "ROLE named 'admissions' grants the 'internship' section and is attributed to Dhee at "
+      + 'mgmtSectionGate.ts:100: a role-name collision, not an ownership question. Neither is '
+      + 'fixed by this build.',
     agent_id: null,
     intended_builder: 'Kalkidan Bezabeh',
     intended_builder_state: 'verified_active',
