@@ -271,3 +271,141 @@ describe('the operations queue', () => {
     expect(String(q.mock.calls[0][0])).toMatch(/ingest_status IN \('missing', 'failed', 'review'\)/);
   });
 });
+
+/**
+ * THE WIRING BETWEEN THE DERIVATION AND THE INSERT.
+ *
+ * `recordingFacts` is tested on its own and the webhook mapping is tested on its
+ * own, and a mutation run on 2026-10-11 showed that neither notices if correlation
+ * simply stops passing the derived values through — replacing them with `null`
+ * reproduced the original defect and every test still passed.
+ *
+ * That is exactly how this class of bug has arrived twice already: the pure logic
+ * was fine and the plumbing dropped the field. These tests watch the plumbing.
+ */
+describe('the derived facts actually reach the INSERT', () => {
+  it('writes has_shared_screen derived from the recording type', async () => {
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec({ recordingType: 'shared_screen_with_speaker_view' }));
+
+    expect(insertCall()![1].replacements).toMatchObject({ screen: true });
+  });
+
+  it('writes has_shared_screen FALSE for a camera-only composition', async () => {
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec({ recordingType: 'active_speaker' }));
+
+    // The one case where `false` is correct, and the one that raises the
+    // "your demo will not be visible" warning the learner needs before handing in.
+    expect(insertCall()![1].replacements).toMatchObject({ screen: false });
+  });
+
+  it('writes duration_seconds computed from the two ends', async () => {
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec());
+
+    // The fixture runs 19:10:00 to 19:15:00.
+    expect(insertCall()![1].replacements).toMatchObject({ dur: 300 });
+  });
+
+  it('writes NULL duration when the timings are missing rather than 0', async () => {
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec({ startedAt: null, endedAt: null }));
+
+    // A `0` here would print "0 seconds" beside a take the learner can watch.
+    expect(insertCall()![1].replacements).toMatchObject({ dur: null });
+  });
+
+  it('passes has_audio through from the caller, and defaults it to NULL not false', async () => {
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec({ hasAudio: true }));
+    expect(insertCall()![1].replacements).toMatchObject({ audio: true });
+
+    jest.clearAllMocks();
+    q.mockReset();
+    candidates([cand('at2', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    // Only the webhook sees the file list; the sweep cannot say. Unknown, not false.
+    await correlateRecording(rec());
+    expect(insertCall()![1].replacements).toMatchObject({ audio: null });
+  });
+
+  it('writes NULL screen for a composition type it does not recognise', async () => {
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec({ recordingType: 'some_future_composition' }));
+
+    expect(insertCall()![1].replacements).toMatchObject({ screen: null });
+  });
+});
+
+/**
+ * `recording_state` had ONE write site in the whole backend and it only ever set
+ * `'processing'`, so every attempt that recorded sat there permanently while the
+ * Practice panel read that column to tell the learner where their take was.
+ */
+describe('an attributed recording moves the attempt off processing', () => {
+  const readyCall = () => q.mock.calls.find((c: any[]) => String(c[0]).includes("recording_state = 'ready'"));
+
+  it('sets the attempt to ready', async () => {
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec());
+
+    expect(readyCall()).toBeDefined();
+    expect(readyCall()![1].replacements).toMatchObject({ aid: 'at1' });
+  });
+
+  it('only advances from expected or processing, never over a human decision', async () => {
+    // A `review` or `failed` state somebody set deliberately must not be trampled
+    // by a late re-delivery.
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+    anyUpdate();
+    anyUpdate();
+
+    await correlateRecording(rec());
+
+    expect(String(readyCall()![0])).toContain("recording_state IN ('expected', 'processing')");
+  });
+
+  it('does NOT mark ready when the recording was parked for review', async () => {
+    // No owner means nothing to mark. Advancing here would say a take is ready
+    // when nobody knows whose it is.
+    candidates([cand('at1', null, null)]);
+    insertCreates();
+
+    await correlateRecording(rec({ providerFileId: null }));
+
+    expect(readyCall()).toBeUndefined();
+  });
+});

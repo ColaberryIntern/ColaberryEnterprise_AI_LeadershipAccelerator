@@ -602,7 +602,7 @@ describe('handleZoomWebhook', () => {
     // This fixture carries no uuid, so the occurrence is passed as empty and the
     // ingest falls back to its booking-wide check. The next test covers the case
     // that matters.
-    }), '');
+    }), '', expect.any(Object));
     expect(ingestRecordingForSession).not.toHaveBeenCalled();
   });
 
@@ -630,7 +630,7 @@ describe('handleZoomWebhook', () => {
 
     await handleZoomWebhook(req as Request, res as Response);
 
-    expect(ingestRecordingForBooking).toHaveBeenCalledWith(booking, expect.any(Object), 'OCCURRENCE==');
+    expect(ingestRecordingForBooking).toHaveBeenCalledWith(booking, expect.any(Object), 'OCCURRENCE==', expect.any(Object));
   });
 
   it('does not look up a RoomBooking at all when a LiveSession already matched (avoids a redundant query)', async () => {
@@ -688,6 +688,9 @@ describe('handleZoomWebhook', () => {
       // field must be PRESENT, because correlation distinguishes "no id supplied"
       // from "field never mapped" and only the first is a real Zoom condition.
       providerFileId: null,
+      // Derived from the file list. This fixture has no audio rendering and no
+      // transcript, and `null` is the honest answer: absence is not silence.
+      hasAudio: null,
     });
   });
 
@@ -737,6 +740,52 @@ describe('handleZoomWebhook', () => {
     // the review queue, and would give every part of one meeting the same "file" id.
     expect(match.providerFileId).not.toBe('123');
     expect(match.providerFileId).not.toBe(123);
+  });
+
+  /**
+   * THE SECOND FIELD THIS PATH DROPPED, found the same way as the first.
+   *
+   * `ingestRecordingForBooking` hardcoded `startedAt: null, endedAt: null` for a
+   * webhook-supplied match while the polling path filled them from `instanceTiming`.
+   * With both null the recording's duration could never be computed, so every take
+   * was offered to the learner with no length beside it — and `duration_seconds`
+   * was one of three columns nothing in the backend wrote at all.
+   */
+  it('derives the real start and end from the payload instead of passing nulls', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+    const booking = { id: 'booking-9', google_event_id: '456', title: 'Study Group' };
+    (RoomBooking.findOne as jest.Mock).mockResolvedValue(booking);
+    (ingestRecordingForBooking as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r1' });
+
+    const event = {
+      event: 'recording.completed',
+      payload: {
+        object: {
+          id: 456,
+          uuid: 'OCCURRENCE==',
+          topic: 'Study Group',
+          recording_files: [
+            { id: 'f1', file_type: 'MP4', recording_type: 'shared_screen_with_speaker_view', file_size: 500, download_url: 'https://zoom.us/rec/a', recording_start: '2026-10-11T18:46:00Z', recording_end: '2026-10-11T18:49:00Z' },
+            { id: 'f2', file_type: 'M4A', recording_type: 'audio_only', file_size: 20, download_url: 'https://zoom.us/rec/b', recording_start: '2026-10-11T18:46:00Z', recording_end: '2026-10-11T18:49:00Z' },
+          ],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    const [, match, , timing] = (ingestRecordingForBooking as jest.Mock).mock.calls[0];
+    expect(timing.startedAt).toBeInstanceOf(Date);
+    expect(timing.endedAt).toBeInstanceOf(Date);
+    expect(timing.startedAt.toISOString()).toBe('2026-10-11T18:46:00.000Z');
+    expect(timing.endedAt.toISOString()).toBe('2026-10-11T18:49:00.000Z');
+    // Three minutes. Without this the picker shows a take with no length.
+    expect((timing.endedAt.getTime() - timing.startedAt.getTime()) / 1000).toBe(180);
+    // And the audio rendering in the same delivery is what makes hasAudio true.
+    expect(match.hasAudio).toBe(true);
   });
 
   it('prefers the shared-screen composition over a larger webcam-only file, and records which one it chose', async () => {

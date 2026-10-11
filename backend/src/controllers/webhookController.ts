@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { audioFromFileList, timingFromFileList } from '../services/presentation/recordingFacts';
 import { verifyWebhookSignature, getPayment } from '../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaign } from '../services/enrollmentService';
 import { Cohort, EnrollmentLead } from '../models';
@@ -324,7 +325,22 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
       // of drift a shared selector invites. `webhookRecordingMatchParity` now
       // asserts the two objects agree, so this cannot come apart again silently.
       providerFileId: best.id ?? null,
+      // Whether the delivery carried an audio rendering. Derived from the file
+      // list, which this handler has and the correlation layer does not.
+      hasAudio: audioFromFileList(files),
     };
+
+    // THE SECOND FIELD THIS PATH DROPPED. `ingestRecordingForBooking` hardcodes
+    // `startedAt: null, endedAt: null` for a webhook-supplied match, while the
+    // polling path fills them from `instanceTiming`. With both null the recording's
+    // duration could never be computed, so every take was offered to the learner
+    // with no length — the same drift as the file id, one field over, found the
+    // same way: by running it.
+    const timing = timingFromFileList(
+      files,
+      event.payload?.object?.start_time as string | undefined,
+      typeof event.payload?.object?.duration === 'number' ? event.payload.object.duration : null,
+    );
 
     // Ack fast — a multi-hundred-MB download shouldn't block Zoom's webhook
     // response window. Ingest is idempotent (sessionRecordingService's
@@ -341,7 +357,7 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
       // booking path cannot dedupe per occurrence and falls back to a
       // booking-wide check that hides every later part.
       const bookingInstanceUuid = String(event.payload?.object?.uuid || '');
-      ingestRecordingForBooking(booking, preResolvedMatch, bookingInstanceUuid).catch((err: any) => {
+      ingestRecordingForBooking(booking, preResolvedMatch, bookingInstanceUuid, timing).catch((err: any) => {
         console.error(`[Webhook] Zoom recording ingest failed for booking ${booking.id}:`, err.message);
       });
     } else if (room) {
