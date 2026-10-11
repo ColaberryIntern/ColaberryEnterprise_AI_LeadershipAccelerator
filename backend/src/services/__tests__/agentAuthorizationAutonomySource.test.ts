@@ -13,14 +13,24 @@ import { getAgentPermission } from '../agentPermissionService';
  * -- `classifyAiAgentAutonomyLevels` and `agentAutonomyReclassificationService` -- stamp the same
  * column while recording `autonomy_level_source: 'auto'`, and the gate never selects `source`.
  *
- * Measured in production 2026-10-11 across 257 agents: ZERO autonomy levels were set by a human,
- * 12 by the classifier, 245 never set, and exactly 2 sit above `observe` (Reese and Dara, both
- * `communicate`, both 'auto').
+ * Measured in production 2026-10-11 across 257 agents, then CHANGED by an approved write the same
+ * day, so both readings matter:
+ *   before  -- 0 `manual`, 12 'auto' (9 enabled), 245 never set, 1 legacy human reactivation with
+ *              `set_at` stamped and `source` NULL (disabled). Exactly 2 above `observe`: Reese and
+ *              Dara, both `communicate`, both 'auto'.
+ *   after   -- Ali approved recording those two as human decisions, so the fleet reads
+ *              2 `manual` / 10 'auto' / 1 legacy-null / 244 never set. Their LEVEL did not move.
+ *
+ * An earlier version of this very docblock said "ZERO autonomy levels were set by a human". That
+ * was wrong by one -- it read "no `manual` rows" as "no human decisions", when a pre-source-column
+ * reactivation is exactly a human decision that could not record itself. Noted here because a test
+ * file whose own header carries a stale count is the same defect it exists to catch.
  *
  * These tests deliberately do NOT assert the gate reads `source`, because making it do so is wrong
  * in two directions -- it would demote Reese (who is the only agent enforcing) and promote ten
  * others. They assert the SHAPE of the hazard instead, so the decision stays with a human and the
- * next reader is not misled into the naive fix.
+ * next reader is not misled into the naive fix. They also avoid pinning any single figure, since
+ * the figures move when the DRI decides something.
  */
 
 const GATE_SRC = path.join(__dirname, '..', 'agentAuthorizationService.ts');
