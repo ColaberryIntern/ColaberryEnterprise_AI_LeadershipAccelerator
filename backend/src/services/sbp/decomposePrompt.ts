@@ -186,6 +186,21 @@ export function buildDecomposeUserPrompt(inputs: DecomposeInputs): string {
     // tier minimum — which, now that stories follow the requirements, would
     // be a tighter number than the gate asks for and read as a story cap.
     `Spread the stories across releases: no release may hold more than twice the average per release.`,
+    // THE RELEASE-LEVEL INSTRUCTION, and the one with a named incident behind it. A student
+    // finished 20 of 20 stories, platform-verified, with twelve of her fourteen services
+    // unreachable, because her releases were layered by pipeline stage and nothing asked whether
+    // a release reached a person. `release_review` now asks, and reads the field this paragraph
+    // makes the model fill. Stated as a PROPERTY OF EACH RELEASE rather than a story quota,
+    // because the failure was a release-shaped one: every individual story was fine.
+    `For every story, declare \`workspace\`: whether finishing it gives a person something to `
+      + `open, click or see (\`kind: "workspace"\`, and name the surface as the product names `
+      + `it), or whether it is background work no page shows (\`kind: "headless"\`, and name the `
+      + `job or queue). Headless is a legitimate and common answer - say it when it is true `
+      + `rather than inventing a page.`,
+    `EVERY RELEASE MUST CONTAIN AT LEAST ONE \`workspace\` STORY. A release in which every story `
+      + `is headless demonstrates nothing a person can look at, which means nobody can tell `
+      + `whether it works. If a release would be entirely headless, the release is wrong - `
+      + `re-cut it so each one carries the thin user-visible path through the work it contains.`,
     '',
     delimited('ORIGINAL_BRIEF', inputs.brief, MAX_BRIEF_CHARS),
     '',

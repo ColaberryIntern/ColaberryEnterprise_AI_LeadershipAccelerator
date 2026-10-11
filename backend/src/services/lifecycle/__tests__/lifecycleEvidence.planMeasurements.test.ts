@@ -42,15 +42,14 @@ function gapsFor(plan: PlanLike | null, stage = 'release_review') {
   return { e, gaps: prerequisiteGaps(stage as never, e) };
 }
 
-const ws = (kind: 'workspace' | 'headless') => ({
-  business_task_ids: [], blueprint: { revision: 1 }, workspace: { kind, ref: 'X' },
-});
+/** Model-emitted and top-level since 2026-10-10 — see `StoryWorkspace`. */
+const ws = (kind: 'workspace' | 'headless') => ({ kind, ref: 'X' });
 
 describe('P6-T4 wiring — a plan reaches release_review', () => {
   it('a headless-only release is MEASURED and reported as the advisory failure', () => {
     const { e, gaps } = gapsFor({
       requirements: [], releases: [{ key: 'r0' }],
-      stories: [{ id: 'S-1', release: 'r0', fulfills: ['REQ-1'], references: ws('headless') }],
+      stories: [{ id: 'S-1', release: 'r0', fulfills: ['REQ-1'], workspace: ws('headless') }],
     });
 
     // The field became assessed — the value and the set move together, which is the property
@@ -71,8 +70,8 @@ describe('P6-T4 wiring — a plan reaches release_review', () => {
     const { e, gaps } = gapsFor({
       requirements: [], releases: [{ key: 'r0' }],
       stories: [
-        { id: 'S-1', release: 'r0', references: ws('headless') },
-        { id: 'S-2', release: 'r0', references: ws('workspace') },
+        { id: 'S-1', release: 'r0', workspace: ws('headless') },
+        { id: 'S-2', release: 'r0', workspace: ws('workspace') },
       ],
     });
     expect(e.assessedFields.has('releasesWithoutUserVisibleWorkflow')).toBe(true);

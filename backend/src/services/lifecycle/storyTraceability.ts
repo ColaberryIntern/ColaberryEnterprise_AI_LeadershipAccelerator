@@ -33,13 +33,18 @@ export interface StoryLike {
   /** Requirement ids this story fulfils. */
   fulfills?: ReadonlyArray<string> | null;
   /**
-   * Lifecycle references, when they have been resolved. Deliberately loose: this module asks
+   * Whether the story reaches a human. MODEL-EMITTED and top-level since 2026-10-10 - it was
+   * briefly inside `references`, where it could never be populated on a student build because
+   * nothing writes `ManifestRefs.surfaces` and workspaces live on the delivery side.
+   */
+  workspace?: { kind?: string | null; ref?: string | null } | null;
+  /**
+   * Server-resolved lifecycle references, when they exist. Deliberately loose: this module asks
    * whether a story cites anything, not what the reference block's full shape is.
    */
   references?: {
     business_task_ids?: ReadonlyArray<string> | null;
     blueprint?: { revision?: number | null } | null;
-    workspace?: { kind?: string | null; ref?: string | null } | null;
   } | null;
 }
 
@@ -101,7 +106,7 @@ export function storiesWithoutTraceability(stories: ReadonlyArray<StoryLike>): s
  * `planGate.ts`'s `r0_no_trust_spine` is the standing in-repo example of the alternative: a
  * keyword regex over story text, measured by a peer session to miss `Approval`, `Notification`,
  * `Generation`, `Deliver` and `Upload` while flagging correct plans. It is advisory for that
- * reason. This reads `references.workspace.kind`, which somebody declared, so there is nothing to
+ * reason. This reads `story.workspace.kind`, which the generator declared, so there is nothing to
  * infer.
  *
  * ## RETURNS null WHEN THE RELEASE CANNOT BE ASSESSED
@@ -115,18 +120,18 @@ export function releasesWithoutUserVisibleWorkflow(
   releaseKeys: ReadonlyArray<string>,
   stories: ReadonlyArray<StoryLike>,
 ): string[] | null {
-  const anyWorkspaceDeclared = stories.some((s) => (s.references?.workspace?.kind ?? null) !== null);
+  const anyWorkspaceDeclared = stories.some((s) => (s.workspace?.kind ?? null) !== null);
   if (!anyWorkspaceDeclared) return null;
 
   const failing: string[] = [];
   for (const key of releaseKeys) {
     const inRelease = stories.filter((s) => s.release === key);
     if (!inRelease.length) continue;
-    const declared = inRelease.filter((s) => (s.references?.workspace?.kind ?? null) !== null);
+    const declared = inRelease.filter((s) => (s.workspace?.kind ?? null) !== null);
     // Per-release assessability, not just per-plan: one release may be referenced and another not.
     if (!declared.length) continue;
     // `headless` is a real answer, so a release fails only when EVERY declared story is headless.
-    if (!declared.some((s) => s.references?.workspace?.kind === 'workspace')) failing.push(key);
+    if (!declared.some((s) => s.workspace?.kind === 'workspace')) failing.push(key);
   }
   return failing;
 }

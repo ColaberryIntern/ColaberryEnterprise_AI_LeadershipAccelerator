@@ -35,17 +35,26 @@ const LEGACY: BuildPlan = JSON.parse(
 
 const REFS: StoryReferences = {
   business_task_ids: ['BT-004', 'BT-011'],
-  workspace: { kind: 'workspace', ref: 'WS-intake', action: 'approve' },
   blueprint: { revision: 3, content_sha256: 'abcdef0123456789'.repeat(4) },
   design_refs: ['DD-002'],
   builder_agent: 'claude-code',
   acceptance_evidence: ['an approval row exists carrying the approver identity'],
 };
 
+/**
+ * The workspace reference, now a TOP-LEVEL model-emitted story field rather than part of
+ * `references`. The two are independent: a plan generated after 2026-10-10 has `workspace` from
+ * the model, while `references` appears only once a blueprint exists to resolve against.
+ */
+const WS = { kind: 'workspace' as const, ref: 'WS-intake', action: 'approve' };
+
 /** The same plan with `references` on exactly one story, so a diff isolates the change. */
-function withRefsOnFirstStory(refs: StoryReferences): BuildPlan {
+function withRefsOnFirstStory(
+  refs: StoryReferences | undefined,
+  workspace: PlanStory['workspace'] = WS,
+): BuildPlan {
   const clone: BuildPlan = JSON.parse(JSON.stringify(LEGACY));
-  clone.stories[0] = { ...clone.stories[0], references: refs };
+  clone.stories[0] = { ...clone.stories[0], ...(refs ? { references: refs } : {}), workspace };
   return clone;
 }
 
@@ -138,11 +147,9 @@ describe('P6-T3 — references render, and change nothing else', () => {
   it('renders headless work as headless, not as a missing workspace', () => {
     // `headless` is a real answer. If it rendered as an absent workspace, whoever fills this in
     // would either invent a page or leave the field off — and absence means "not established".
-    const headless: StoryReferences = {
-      ...REFS,
-      workspace: { kind: 'headless', ref: 'nightly-reconciliation', action: null },
-    };
-    const doc = fileMap(withRefsOnFirstStory(headless))[`docs/stories/${LEGACY.stories[0].id}.md`];
+    const doc = fileMap(withRefsOnFirstStory(REFS, {
+      kind: 'headless', ref: 'nightly-reconciliation', action: null,
+    }))[`docs/stories/${LEGACY.stories[0].id}.md`];
     expect(doc).toContain('**Runs headless:** nightly-reconciliation');
     expect(doc).not.toContain('**Workspace:**');
   });
@@ -150,12 +157,11 @@ describe('P6-T3 — references render, and change nothing else', () => {
   it('omits the optional lines it has nothing for, rather than printing empty ones', () => {
     const sparse: StoryReferences = {
       business_task_ids: [],
-      workspace: { kind: 'headless', ref: 'job' },
       blueprint: { revision: 1, content_sha256: 'f'.repeat(64) },
       design_refs: [],
       acceptance_evidence: [],
     };
-    const doc = fileMap(withRefsOnFirstStory(sparse))[`docs/stories/${LEGACY.stories[0].id}.md`];
+    const doc = fileMap(withRefsOnFirstStory(sparse, { kind: 'headless', ref: 'job' }))[`docs/stories/${LEGACY.stories[0].id}.md`];
     expect(doc).toContain('## Where this fits');
     expect(doc).not.toContain('**Business tasks:**');
     expect(doc).not.toContain('**Design decisions:**');

@@ -100,19 +100,29 @@ export function renderRequirements(plan: BuildPlan): string {
  */
 function renderStoryReferences(story: PlanStory): string[] {
   const refs = story.references;
-  if (!refs) return [];
+  const ws = story.workspace;
+  // Two INDEPENDENT sources now, which is why neither gates the other: `workspace` is
+  // model-emitted and present on any plan generated after 2026-10-10, while `references` is
+  // server-resolved and present only once a blueprint exists. A story can legitimately have
+  // one and not the other, and rendering nothing because the other half is missing would
+  // hide the half that IS known.
+  if (!refs && !ws) return [];
 
   const lines = ['## Where this fits', ''];
-  lines.push(refs.workspace.kind === 'headless'
-    ? `**Runs headless:** ${refs.workspace.ref} — no page shows this; it is background work.`
-    : `**Workspace:** ${refs.workspace.ref}${refs.workspace.action ? ` · ${refs.workspace.action}` : ''}`);
-  lines.push(`**Blueprint:** revision ${refs.blueprint.revision} (\`${refs.blueprint.content_sha256.slice(0, 12)}\`)`);
-  if (refs.business_task_ids.length) lines.push(`**Business tasks:** ${refs.business_task_ids.join(', ')}`);
-  if (refs.design_refs.length) lines.push(`**Design decisions:** ${refs.design_refs.join(', ')}`);
-  if (refs.builder_agent) lines.push(`**Built by:** ${refs.builder_agent}`);
+  if (ws) {
+    lines.push(ws.kind === 'headless'
+      ? `**Runs headless:** ${ws.ref} — no page shows this; it is background work.`
+      : `**Workspace:** ${ws.ref}${ws.action ? ` · ${ws.action}` : ''}`);
+  }
+  if (refs) {
+    lines.push(`**Blueprint:** revision ${refs.blueprint.revision} (\`${refs.blueprint.content_sha256.slice(0, 12)}\`)`);
+  }
+  if (refs?.business_task_ids.length) lines.push(`**Business tasks:** ${refs.business_task_ids.join(', ')}`);
+  if (refs?.design_refs.length) lines.push(`**Design decisions:** ${refs.design_refs.join(', ')}`);
+  if (refs?.builder_agent) lines.push(`**Built by:** ${refs.builder_agent}`);
   lines.push('');
 
-  if (refs.acceptance_evidence.length) {
+  if (refs?.acceptance_evidence.length) {
     lines.push(
       '### Evidence this story needs',
       '',

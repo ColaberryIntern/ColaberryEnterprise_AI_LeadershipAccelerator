@@ -78,7 +78,20 @@ describe('the clip itself still happens, and the overflow report agrees with it'
     const doc = over(MAX_DOCUMENT_CHARS + 1_000);
     const prompt = buildDecomposeUserPrompt({ brief: 'b', document: doc } as never);
     expect(prompt).toContain(`…[truncated at ${MAX_DOCUMENT_CHARS} chars]`);
-    expect(prompt.length).toBeLessThan(doc.length);
+
+    // Measure THE BLOCK, not the whole prompt.
+    //
+    // My first version asserted `prompt.length < doc.length`, which is a proxy that only holds
+    // while the instruction text is shorter than the overflow — and it broke the moment I added
+    // the workspace paragraphs to the prompt, reporting a failure where the clip was working
+    // perfectly. A proxy that depends on unrelated text is not a measurement of truncation.
+    const body = prompt.slice(
+      prompt.indexOf('<EXPANDED_DOCUMENT>') + '<EXPANDED_DOCUMENT>'.length,
+      prompt.indexOf('</EXPANDED_DOCUMENT>'),
+    );
+    const xs = (body.match(/x/g) ?? []).length;
+    expect(xs).toBe(MAX_DOCUMENT_CHARS);
+    expect(xs).toBeLessThan(doc.length);
   });
 
   it('the report fires exactly when the prompt carries a truncation marker', () => {

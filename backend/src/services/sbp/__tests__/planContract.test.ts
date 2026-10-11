@@ -49,6 +49,11 @@ const MODEL_EMITTED = {
   story: [
     'id', 'release', 'title', 'narrative', 'fulfills', 'owner_agent',
     'acceptance', 'task_guidance', 'failure_paths', 'blocked_by',
+    // MOVED HERE from SERVER_POPULATED on 2026-10-10. `workspace` is a classification of
+    // the story's own content, not a pointer to an existing row, so the model can emit it
+    // without fabricating anything - and as a server-populated field it was unfeedable on
+    // the student side, which is the only side `release_review` was built for.
+    'workspace',
   ] as const,
   plan: ['project_name', 'descriptor', 'requirements', 'releases', 'stories'] as const,
 };
@@ -57,7 +62,7 @@ const MODEL_EMITTED = {
  * Fields the SERVER fills in after generation, which the schema must never declare.
  *
  * `agents` is scoped from the requirements once the plan is gate-clean. `references` pins a
- * blueprint revision and hash, a workspace id and business-task ids — identifiers of rows that
+ * blueprint revision and hash and business-task ids — identifiers of rows that
  * exist, which a model asked to produce would invent.
  */
 const SERVER_POPULATED = {
