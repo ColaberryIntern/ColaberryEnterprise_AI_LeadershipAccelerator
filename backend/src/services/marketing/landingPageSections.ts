@@ -1,6 +1,7 @@
 import { esc } from '../classKit/kitRenderUtils';
 import { safeHttpUrl } from '../caseStudy/caseStudyPublicSections';
 import type { LandingPageSection } from '../../schemas/landingPageContentSchema';
+import { iconFor, tileTone } from './landingPageIcons';
 
 /**
  * One render function per section type, plus the small helpers they share.
@@ -56,12 +57,52 @@ function heading(value: string | undefined): string {
  * sentence exactly as written - the alternatives (appending it, or highlighting a fuzzy match)
  * would silently rewrite a headline somebody approved.
  */
+/**
+ * Paint one exact substring, leaving the rest escaped and untouched.
+ *
+ * The single rule behind headlineAccent, headingAccent, text emphasis and callout highlights.
+ * A phrase that is not found returns the plain escaped string: the alternatives - appending it,
+ * or matching fuzzily - would silently rewrite a sentence somebody approved. Written once so
+ * four features cannot drift into four behaviours.
+ */
+function paintPhrase(whole: string, phrase: string | undefined, cls: string): string {
+  if (!phrase) return esc(whole);
+  const at = whole.indexOf(phrase);
+  if (at === -1) return esc(whole);
+  return `${esc(whole.slice(0, at))}<span class="${cls}">${esc(phrase)}</span>`
+    + `${esc(whole.slice(at + phrase.length))}`;
+}
+
 function renderHeadline(headlineText: string, accent: string | undefined): string {
-  if (!accent) return esc(headlineText);
-  const at = headlineText.indexOf(accent);
-  if (at === -1) return esc(headlineText);
-  return `${esc(headlineText.slice(0, at))}<span class="hl">${esc(accent)}</span>`
-    + `${esc(headlineText.slice(at + accent.length))}`;
+  return paintPhrase(headlineText, accent, 'hl');
+}
+
+/** A heading with one accented phrase. Same rule as the headline. */
+function headingWith(value: string | undefined, accent: string | undefined): string {
+  return value ? `<h2>${paintPhrase(value, accent, 'hl')}</h2>` : '';
+}
+
+/** Several phrases inside one paragraph, each set bold in the tertiary colour. */
+function paintMany(whole: string, phrases: ReadonlyArray<string> | undefined): string {
+  if (!phrases || phrases.length === 0) return esc(whole);
+  // One phrase at a time against the ESCAPED-SAFE split, so a phrase cannot match inside the
+  // markup a previous phrase introduced.
+  let parts: Array<{ text: string; painted: boolean }> = [{ text: whole, painted: false }];
+  for (const phrase of phrases) {
+    if (!phrase) continue;
+    const next: typeof parts = [];
+    for (const part of parts) {
+      if (part.painted) { next.push(part); continue; }
+      const at = part.text.indexOf(phrase);
+      if (at === -1) { next.push(part); continue; }
+      if (at > 0) next.push({ text: part.text.slice(0, at), painted: false });
+      next.push({ text: phrase, painted: true });
+      const rest = part.text.slice(at + phrase.length);
+      if (rest) next.push({ text: rest, painted: false });
+    }
+    parts = next;
+  }
+  return parts.map((p) => (p.painted ? `<em class="em">${esc(p.text)}</em>` : esc(p.text))).join('');
 }
 
 /**
@@ -85,7 +126,7 @@ const CHECK_ICON = '<svg class="tick" viewBox="0 0 20 20" aria-hidden="true" foc
   + 'stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
 function renderBulletItems(
-  items: ReadonlyArray<{ label: string; detail?: string }>,
+  items: ReadonlyArray<{ label: string; detail?: string; icon?: string }>,
   variant: 'cards' | 'checks' | 'steps' | 'grid',
 ): string {
   const detail = (d: string | undefined) => (d ? `<span class="b-detail">${esc(d)}</span>` : '');
@@ -99,7 +140,15 @@ function renderBulletItems(
       + `<span class="step-n">${String(n + 1).padStart(2, '0')}</span>`
       + `<span class="b-label">${esc(i.label)}</span>${detail(i.detail)}</li>`).join('')}</ol>`;
   }
-  return `<ul class="cards">${items.map((i) => `<li>`
+  if (variant === 'grid') {
+    // One bordered block with hairlines between cells, not separate cards. The reference uses
+    // this for an 8-item sequence, where eight shadowed cards would read as eight products.
+    return `<ol class="gridlist">${items.map((i, n) => `<li>`
+      + `<span class="grid-n">${String(n + 1).padStart(2, '0')}</span>`
+      + `<span class="b-label">${esc(i.label)}</span>${detail(i.detail)}</li>`).join('')}</ol>`;
+  }
+  return `<ul class="cards">${items.map((i, n) => `<li>`
+    + `<span class="tile tile--${tileTone(n)}">${iconFor(i.icon, n)}</span>`
     + `<span class="b-label">${esc(i.label)}</span>${detail(i.detail)}</li>`).join('')}</ul>`;
 }
 
@@ -114,14 +163,88 @@ function split(head: string, body: string): string {
  *
  * Not a progress card. See the schema - rows state contents, never a reader's state.
  */
-function renderPanel(panel: { title: string; items: Array<{ label: string; note?: string }>; footnote?: string }): string {
-  const rows = panel.items.map((i) => `<li><span class="panel-label">${esc(i.label)}</span>`
-    + `${i.note ? `<span class="panel-note">${esc(i.note)}</span>` : ''}</li>`).join('');
+function renderPanel(panel: {
+  eyebrow?: string; title: string; badge?: string;
+  items: Array<{ label: string; note?: string }>; footnote?: string;
+}): string {
+  // Each row carries an index marker. The FIRST is filled, as a start-here cue and nothing
+  // more, labelled for a screen reader as exactly that. The reference fills markers to show
+  // modules a reader has finished; on a page a stranger just opened that is a claim about them
+  // which is untrue, and this renderer does not make it.
+  const rows = panel.items.map((row, n) => {
+    const mark = n === 0
+      ? '<span class="pmark pmark--start"><span class="vh">Start here</span>'
+        + '<span aria-hidden="true">&#10003;</span></span>'
+      : `<span class="pmark" aria-hidden="true">${n + 1}</span>`;
+    const note = row.note ? `<span class="panel-note">${esc(row.note)}</span>` : '';
+    return `<li>${mark}<span class="panel-label">${esc(row.label)}</span>${note}</li>`;
+  }).join('');
+
+  // The TRUE count, taken from the rows. Never a percentage, never a progress figure.
+  const total = panel.items.length;
+  const bar = panel.items.map((_row, n) => `<span class="seg${n === 0 ? ' seg--on' : ''}"></span>`).join('');
+  const eyebrowEl = panel.eyebrow ? `<p class="panel-eyebrow">${esc(panel.eyebrow)}</p>` : '';
+  const badgeEl = panel.badge ? `<span class="panel-badge">${esc(panel.badge)}</span>` : '';
+  const footEl = panel.footnote ? `<p class="panel-note-l">${esc(panel.footnote)}</p>` : '';
+
   return `<aside class="panel">`
-    + `<p class="panel-title">${esc(panel.title)}</p>`
+    + `<div class="panel-head"><div>${eyebrowEl}`
+    + `<p class="panel-title">${esc(panel.title)}</p></div>${badgeEl}</div>`
     + `<ul class="panel-list">${rows}</ul>`
-    + `${panel.footnote ? `<p class="panel-foot">${esc(panel.footnote)}</p>` : ''}`
-    + `</aside>`;
+    + `<div class="panel-foot"><span class="panel-foot-l">Your path</span>`
+    + `<span class="panel-count">${total} ${total === 1 ? 'module' : 'modules'}</span>`
+    + `<span class="panel-bar" aria-hidden="true">${bar}</span></div>`
+    + footEl + `</aside>`;
+}
+
+/** A takeaway strip under a list, with up to three brand-coloured phrases. */
+function renderCallout(c: {
+  lead?: string; text: string; tone?: 'plain' | 'success';
+  highlights?: ReadonlyArray<{ phrase: string; color: 'accent' | 'accent-2' | 'accent-3' }>;
+}): string {
+  // Painted one phrase at a time over the already-split pieces, so a highlight cannot match
+  // inside the markup an earlier highlight introduced.
+  let parts: Array<{ text: string; cls: string | null }> = [{ text: c.text, cls: null }];
+  for (const h of c.highlights ?? []) {
+    const next: typeof parts = [];
+    for (const part of parts) {
+      if (part.cls) { next.push(part); continue; }
+      const at = part.text.indexOf(h.phrase);
+      if (at === -1 || !h.phrase) { next.push(part); continue; }
+      if (at > 0) next.push({ text: part.text.slice(0, at), cls: null });
+      next.push({ text: h.phrase, cls: `c-${h.color}` });
+      const rest = part.text.slice(at + h.phrase.length);
+      if (rest) next.push({ text: rest, cls: null });
+    }
+    parts = next;
+  }
+  const body = parts.map((p) => (p.cls ? `<span class="${p.cls}">${esc(p.text)}</span>` : esc(p.text))).join('');
+  const tone = c.tone === 'success' ? ' callout--success' : '';
+  return `<div class="callout${tone}">`
+    + `${c.lead ? `<span class="callout-lead">${esc(c.lead)}</span>` : ''}`
+    + `<span class="callout-text">${body}</span></div>`;
+}
+
+/** What people do today, then what becomes possible. */
+function renderContrast(c: {
+  title: string; chips: ReadonlyArray<string>; caption?: string;
+  resultEyebrow?: string; resultLine: string;
+}): string {
+  return `<div class="contrast">`
+    + `<div class="contrast-card"><p class="contrast-title">${esc(c.title)}</p>`
+    + `<ul class="chips">${c.chips.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`
+    + `${c.caption ? `<p class="contrast-cap">${esc(c.caption)}</p>` : ''}</div>`
+    + `<div class="contrast-arrow" aria-hidden="true">&darr;</div>`
+    + `<div class="contrast-result">`
+    + `${c.resultEyebrow ? `<p class="eyebrow">${esc(c.resultEyebrow)}</p>` : ''}`
+    + `<p class="contrast-line">${esc(c.resultLine)}</p></div></div>`;
+}
+
+/** A supporting card beside prose: "in the full program, learners...". */
+function renderAside(a: { title: string; items: ReadonlyArray<string> }): string {
+  return `<aside class="sidecard"><p class="sidecard-title">${esc(a.title)}</p>`
+    + `<ul class="sidecard-list">${a.items.map((x, n) => `<li>`
+    + `<span class="dot dot--${tileTone(n)}" aria-hidden="true"></span>${esc(x)}</li>`).join('')}</ul></aside>`;
 }
 
 export function renderSectionBody(section: LandingPageSection): string {
@@ -134,33 +257,48 @@ export function renderSectionBody(section: LandingPageSection): string {
 ${renderEyebrow(section.eyebrow)}
 <h1>${renderHeadline(section.headline, section.headlineAccent)}</h1>
 ${section.subhead ? `<p class="lede">${esc(section.subhead)}</p>` : ''}
-${section.audience ? renderAudience(section.audience) : ''}
+${section.body ? `<p class="prose">${esc(section.body)}</p>` : ''}
+${section.kicker ? `<p class="hero-kicker">${esc(section.kicker)}</p>` : ''}
 ${section.cta ? `<div class="cta-row">${renderCta(section.cta)}</div>` : ''}
+${section.ctaNote ? `<p class="cta-note">${esc(section.ctaNote)}</p>` : ''}
+${section.audience ? renderAudience(section.audience) : ''}
 </div>
 ${section.panel ? renderPanel(section.panel) : ''}${!section.panel && section.image ? `<div class="hero-img">${renderImage(section.image)}</div>` : ''}
 </div>`;
 
     case 'text': {
-      const prose = `<div class="prose">${section.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</div>`
-        + `${section.kicker ? `<p class="kicker">${esc(section.kicker)}</p>` : ''}`;
+      const prose = `<div class="prose">${section.paragraphs
+        .map((para) => `<p>${paintMany(para, section.emphasis)}</p>`).join('')}</div>`
+        + `${section.kicker ? `<p class="kicker">${esc(section.kicker)}</p>` : ''}`
+        + `${section.cta ? `<div class="cta-row">${renderCta(section.cta)}</div>` : ''}`;
       // Heading left, body right. A heading stacked on top of a 42rem column leaves half the
       // page empty at desktop width, which is most of what makes a page read as a document
       // rather than as a designed one. With no heading there is no left column to make.
-      return section.heading
-        ? split(`${renderEyebrow(section.eyebrow)}${heading(section.heading)}`, prose)
-        : `${renderEyebrow(section.eyebrow)}${prose}`;
+      const head = `${renderEyebrow(section.eyebrow)}${headingWith(section.heading, section.headingAccent)}`;
+      const tail = section.callout ? renderCallout(section.callout) : '';
+      // A contrast visual or a side card claims the right column, so the prose moves LEFT under
+      // the heading. With neither, the original shape stands: heading left, prose right.
+      if (section.contrast) return split(`${head}${prose}`, renderContrast(section.contrast)) + tail;
+      if (section.aside) return split(`${head}${prose}`, renderAside(section.aside)) + tail;
+      return (section.heading ? split(head, prose) : `${head}${prose}`) + tail;
     }
 
     case 'bullets': {
       const variant = section.variant ?? 'cards';
-      const head = `${renderEyebrow(section.eyebrow)}${heading(section.heading)}`
-        + `${section.intro ? `<p class="intro">${esc(section.intro)}</p>` : ''}`;
-      const items = renderBulletItems(section.items, variant);
+      const head = `${renderEyebrow(section.eyebrow)}${headingWith(section.heading, section.headingAccent)}`
+        + `${section.intro ? `<p class="intro">${esc(section.intro)}</p>` : ''}`
+        + `${(section.paragraphs ?? []).map((para) => `<p class="prose">${esc(para)}</p>`).join('')}`
+        + `${section.kicker ? `<p class="kicker">${esc(section.kicker)}</p>` : ''}`;
+      const items = `${section.itemsLabel ? `<p class="items-label">${esc(section.itemsLabel)}</p>` : ''}`
+        + renderBulletItems(section.items, variant)
+        + `${section.cta ? `<div class="cta-row">${renderCta(section.cta)}</div>` : ''}`;
+      const after = section.callout ? renderCallout(section.callout) : '';
       // A qualifying list is narrow and pairs with its heading; a card or step grid needs the
       // full width and takes its heading above it.
-      return variant === 'checks' && section.heading
-        ? split(head, items)
-        : `${head}${items}`;
+      // A qualifying list, or a section that argues before it lists, pairs with its heading in
+      // two columns. A card, step or grid block needs the full width, with the heading above.
+      const paired = (variant === 'checks' || (section.paragraphs?.length ?? 0) > 0) && Boolean(section.heading);
+      return (paired ? split(head, items) : `${head}${items}`) + after;
     }
 
     case 'stats':
@@ -197,8 +335,10 @@ ${section.items.map((i) => `<details><summary>${esc(i.question)}</summary>`
       return `<div class="closer">
 ${renderEyebrow(section.eyebrow)}
 <h2>${esc(section.headline)}</h2>
+${section.subhead ? `<p class="closer-sub">${esc(section.subhead)}</p>` : ''}
 ${section.body ? `<p class="lede">${esc(section.body)}</p>` : ''}
 <div class="cta-row">${renderCta(section.cta)}</div>
+${section.ctaNote ? `<p class="cta-note">${esc(section.ctaNote)}</p>` : ''}
 </div>`;
 
     default: {

@@ -26,7 +26,9 @@ a{color:inherit}
 .band{padding-block:clamp(3rem,7vw,5.5rem)}
 .band--subtle{background:var(--bg-elevated)}
 .band--inverse{background:#1A1A1A;color:#FFFFFF}
-.band--accent{background:var(--accent);color:var(--accent-contrast)}
+.band--accent{background:var(--accent-deep);color:var(--accent-contrast)}
+.band--cool{background:var(--bg-cool)}
+.band--cool h2{color:var(--accent-3)}
 .band--hero{padding-block:clamp(3rem,8vw,6rem)}
 .band--joined{padding-top:0}
 .inner{max-width:68rem;margin:0 auto;padding-inline:1.25rem}
@@ -51,9 +53,21 @@ p{margin:0 0 1rem}
    accent, so this degrades to the brand colour rather than to nothing. Surfaces (the buttons, the
    closing band) keep the undarkened brand red - that is a brand decision, not a CSS one. */
 .eyebrow{font-size:.74rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);color:color-mix(in srgb,var(--accent) 76%,#000);margin:0 0 .85rem}
-.band--inverse .eyebrow,.band--accent .eyebrow{color:currentColor;opacity:.78}
+/* Blue on light, green on dark: the other two logo colours, so a page is not one hue. */
+.eyebrow{color:var(--accent-3)}
+.band--inverse .eyebrow{color:var(--accent-2);opacity:1}
+.band--accent .eyebrow{color:currentColor;opacity:.8}
+/* The hero eyebrow is a pill with a dot rather than bare small caps. */
+.s-hero .eyebrow{display:inline-flex;align-items:center;gap:.45rem;background:var(--accent-soft);
+  border:1px solid var(--line);border-radius:999px;padding:.3rem .8rem;margin-bottom:1rem}
+.s-hero .eyebrow::before{content:"";width:.45rem;height:.45rem;border-radius:50%;background:var(--accent-2)}
 .hl{color:var(--accent)}
-.band--accent .hl,.band--inverse .hl{color:inherit}
+/* The accent SURVIVES on the dark band. Cherry on #1A1A1A measures above the 3:1 AA-large
+   floor, and these are display sizes only - h1 and h2 - never body text. On the brand-coloured
+   band it still inherits, because accent-on-accent is invisible. */
+.band--inverse h1 .hl,.band--inverse h2 .hl{color:var(--accent)}
+.band--accent .hl{color:inherit}
+.em{font-style:normal;font-weight:700;color:var(--accent-3)}
 .lede{font-size:clamp(1.05rem,1.6vw,1.2rem);color:var(--fg-muted);max-width:40rem}
 .band--inverse .lede,.band--accent .lede{color:currentColor;opacity:.9}
 .prose{max-width:42rem;color:var(--fg-muted)}
@@ -78,15 +92,32 @@ p{margin:0 0 1rem}
 .panel{background:var(--bg);border:1px solid var(--line);border-radius:.9rem;padding:1.4rem 1.5rem;box-shadow:0 10px 30px rgba(0,0,0,.07)}
 .band--subtle .panel{background:#FFFFFF}
 .band--inverse .panel{background:#2B2B2B;border-color:#3A3A3A}
-.panel-title{font-size:.74rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--fg-muted);margin:0 0 .9rem}
+.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;margin-bottom:.9rem}
+.panel-eyebrow{font-size:.68rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent-3);margin:0 0 .25rem}
+.panel-title{font-size:1.05rem;font-weight:700;margin:0}
+.panel-badge{flex:0 0 auto;font-size:.72rem;font-weight:700;padding:.2rem .6rem;border-radius:999px;
+  background:#F1F9EA;color:#468A2E}
+.pmark{flex:0 0 auto;display:inline-grid;place-items:center;width:1.3rem;height:1.3rem;border-radius:50%;
+  border:1.5px solid var(--line);font-size:.7rem;font-weight:700;color:var(--fg-muted)}
+.pmark--start{background:var(--accent-2);border-color:var(--accent-2);color:#fff}
+.panel-foot{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:1rem;padding-top:.85rem;
+  border-top:1px solid var(--line)}
+.panel-foot-l{font-size:.78rem;font-weight:700;color:var(--fg-muted)}
+.panel-count{font-size:.78rem;font-variant-numeric:tabular-nums;color:var(--fg-muted);margin-left:auto}
+.panel-bar{display:flex;gap:3px;width:100%}
+.seg{flex:1;height:4px;border-radius:2px;background:var(--line)}
+.seg--on{background:var(--accent-2)}
+.panel-note-l{margin:.6rem 0 0;font-size:.8rem;color:var(--fg-muted)}
 .band--inverse .panel-title{color:#D8D8D8}
 .panel-list{list-style:none;margin:0;padding:0;display:grid;gap:.1rem}
 /* Rows wrap rather than collide: the label takes the space it needs and the note drops
    beneath it on a narrow panel instead of being squeezed to one character per line. */
-.panel-list li{display:flex;flex-wrap:wrap;gap:.25rem .75rem;align-items:baseline;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid var(--line)}
+.panel-list li{display:flex;flex-wrap:wrap;gap:.5rem .75rem;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--line)}
+.panel-list .panel-note{margin-left:auto}
 .band--inverse .panel-list li{border-color:#3A3A3A}
 .panel-list li:last-child{border-bottom:0}
-.panel-label{font-weight:600;min-width:0}
+.panel-label{font-weight:500;min-width:0;flex:1}
 .panel-note{font-size:.8rem;color:var(--fg-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .band--inverse .panel-note{color:#D8D8D8}
 .panel-foot{margin:.9rem 0 0;font-size:.82rem;color:var(--fg-muted)}
@@ -99,6 +130,13 @@ p{margin:0 0 1rem}
 .cta-row{margin-top:1.8rem;display:flex;flex-wrap:wrap;gap:.75rem}
 .cta{display:inline-flex;align-items:center;gap:.5rem;background:var(--accent);color:var(--accent-contrast);padding:.85rem 1.6rem;border-radius:.5rem;text-decoration:none;font-weight:700;line-height:1.2;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .cta:hover{filter:brightness(1.07)}
+.cta,.cta-sm{border-radius:999px}
+.cta-note{margin:.7rem 0 0;font-size:.85rem;color:var(--fg-muted)}
+.band--accent .cta-note{color:currentColor;opacity:.85}
+.hero-kicker{font-weight:700;color:var(--accent-3);margin:.9rem 0 0;max-width:40rem}
+.closer-sub{font-weight:700;font-size:1.05rem;margin:0 0 .5rem}
+.items-label{font-weight:700;font-size:.92rem;margin:0 0 .8rem}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .cta-arrow{transition:transform .15s ease}
 .cta:hover .cta-arrow{transform:translateX(3px)}
 .cta-secondary{background:transparent;color:var(--accent);border:1.5px solid var(--accent);box-shadow:none}
@@ -112,14 +150,53 @@ a:focus-visible,.cta:focus-visible,details summary:focus-visible,.brand:focus-vi
 /* ---- bullets: cards / checks / steps ------------------------------------ */
 .cards,.checks,.steps{list-style:none;padding:0;margin:0}
 .cards{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}
-.cards li{background:var(--bg);border:1px solid var(--line);border-radius:.75rem;padding:1.15rem 1.25rem;border-top:3px solid var(--accent)}
+/* No red top border: the reference cards are plain white with a hairline and a soft shadow,
+   and the colour arrives on the icon tile instead. */
+.cards li{background:var(--bg);border:1px solid var(--line);border-radius:.75rem;
+  padding:1.15rem 1.25rem;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.tile{display:inline-grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:.55rem;margin-bottom:.7rem}
+.tile-i{width:1.15rem;height:1.15rem;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.tile--a{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 80%,#000)}
+.tile--b{background:#EAF2F6;color:var(--accent-3)}
+.tile--c{background:#F1F9EA;color:#468A2E}
+.band--inverse .tile--a,.band--inverse .tile--b,.band--inverse .tile--c{background:#333;color:#fff}
 .band--subtle .cards li{background:#FFFFFF}
 .band--inverse .cards li{background:#2B2B2B;border-color:#3A3A3A}
 .checks{display:grid;gap:.85rem;max-width:46rem}
+.checks{gap:1.1rem}
 .checks li{display:flex;gap:.7rem;align-items:flex-start}
+/* A qualifying list is read, not scanned: bold on every row removes the emphasis it is for. */
+.checks .b-label{font-weight:400}
+.tick{color:var(--accent-2)}
 .tick{width:1.3rem;height:1.3rem;flex:0 0 auto;margin-top:.14rem;color:#5BA63C}
 .steps{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}
 .steps li{background:var(--bg);border:1px solid var(--line);border-radius:.75rem;padding:1.15rem 1.25rem}
+/* One bordered block with hairlines between cells - not eight shadowed cards, which would
+   read as eight products rather than one sequence. */
+.gridlist{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);
+  border-radius:.6rem;overflow:hidden;background:var(--bg)}
+.gridlist li{padding:1rem 1.1rem;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.gridlist li:nth-child(4n){border-right:0}
+.gridlist li:nth-last-child(-n+4){border-bottom:0}
+@media (max-width:62rem){.gridlist{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gridlist li:nth-child(4n){border-right:1px solid var(--line)}
+  .gridlist li:nth-child(2n){border-right:0}
+  .gridlist li:nth-last-child(-n+4){border-bottom:1px solid var(--line)}
+  .gridlist li:nth-last-child(-n+2){border-bottom:0}}
+@media (max-width:40rem){.gridlist{grid-template-columns:minmax(0,1fr)}
+  .gridlist li{border-right:0;border-bottom:1px solid var(--line)}
+  .gridlist li:last-child{border-bottom:0}}
+.grid-n{display:block;font-size:.72rem;font-weight:800;color:var(--accent);
+  font-variant-numeric:tabular-nums;margin-bottom:.35rem}
+/* Step rules cycle the three logo colours. */
+.steps li{position:relative;padding-top:1.4rem}
+.steps li::before{content:"";position:absolute;top:1.15rem;left:1.25rem;width:1.5rem;height:3px;border-radius:2px;background:var(--accent)}
+.steps li:nth-child(3n+2)::before{background:var(--accent-2)}
+.steps li:nth-child(3n)::before{background:var(--accent-3)}
+.steps li:nth-child(3n+2) .step-n{color:var(--accent-2)}
+.steps li:nth-child(3n) .step-n{color:var(--accent-3)}
+.band--inverse .steps li{background:#2A2A2A;border-color:#3A3A3A}
 .band--subtle .steps li{background:#FFFFFF}
 .band--inverse .steps li{background:#2B2B2B;border-color:#3A3A3A}
 .step-n{display:block;font-size:.78rem;font-weight:800;letter-spacing:.08em;color:var(--accent);color:color-mix(in srgb,var(--accent) 76%,#000);margin-bottom:.4rem;font-variant-numeric:tabular-nums}
@@ -146,6 +223,44 @@ dd{margin:0;color:var(--fg-muted);flex:1 1 14rem}
 details{border-bottom:1px solid var(--line);padding:1rem 0;max-width:46rem}
 summary{cursor:pointer;font-weight:700}
 details p{margin:.75rem 0 0;color:var(--fg-muted)}
+
+/* ---- contrast: today, then what becomes possible ----------------------- */
+.contrast{display:grid;gap:.75rem;justify-items:stretch}
+.contrast-card{background:var(--bg-elevated);border:1px solid var(--line);border-radius:.75rem;padding:1.1rem 1.2rem}
+.contrast-title{font-size:.9rem;font-weight:600;margin:0 0 .8rem}
+.chips{list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem;padding:0;margin:0}
+@media (max-width:30rem){.chips{grid-template-columns:minmax(0,1fr)}}
+.chips li{background:var(--bg);border:1px solid var(--line);border-radius:.45rem;padding:.5rem .7rem;font-size:.85rem}
+.contrast-cap{margin:.8rem 0 0;font-size:.82rem;color:var(--fg-muted)}
+.contrast-arrow{text-align:center;color:var(--fg-muted);font-size:1.1rem;line-height:1}
+.contrast-result{background:#1A1A1A;color:#fff;border-radius:.75rem;padding:1.1rem 1.2rem}
+.contrast-result .eyebrow{color:var(--accent-2);margin-bottom:.4rem}
+.contrast-line{margin:0;font-weight:700;font-size:1.02rem}
+
+/* ---- callout: the one-line takeaway under a list ----------------------- */
+.callout{display:flex;flex-wrap:wrap;gap:.4rem 1.5rem;align-items:baseline;margin-top:1.25rem;
+  background:var(--bg);border:1px solid var(--line);border-radius:.6rem;padding:.9rem 1.1rem}
+.band--subtle .callout{background:#FFFFFF}
+.callout-lead{color:var(--fg-muted);font-size:.9rem}
+.callout-text{font-weight:700;margin-left:auto}
+@media (max-width:48rem){.callout-text{margin-left:0}}
+.callout--success{background:#F1F9EA;border-color:#DEF0CC}
+.callout--success .callout-lead{color:#356A24;font-weight:700}
+.callout--success .callout-text{font-weight:400;color:#356A24}
+.c-accent{color:color-mix(in srgb,var(--accent) 80%,#000)}
+.c-accent-2{color:#468A2E}
+.c-accent-3{color:var(--accent-3)}
+
+/* ---- side card beside prose -------------------------------------------- */
+.sidecard{background:var(--bg);border:1px solid var(--line);border-radius:.75rem;padding:1.2rem 1.3rem;
+  box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.sidecard-title{font-size:.7rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--fg-muted);margin:0 0 .85rem}
+.sidecard-list{list-style:none;margin:0;padding:0;display:grid;gap:.7rem}
+.sidecard-list li{display:flex;gap:.6rem;align-items:baseline;font-size:.92rem}
+.dot{flex:0 0 auto;width:.45rem;height:.45rem;border-radius:1px;background:var(--accent)}
+.dot--b{background:var(--accent-2)}
+.dot--c{background:var(--accent-3)}
 
 /* ---- closer ------------------------------------------------------------- */
 .closer{max-width:44rem;margin:0 auto;text-align:center}
