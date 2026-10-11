@@ -33,6 +33,8 @@ async function db() {
   return sequelize;
 }
 
+import { sharedScreenFromRecordingType, durationSecondsFrom } from './recordingFacts';
+
 export type IngestProvenance = 'webhook' | 'cron_sweep' | 'manual_upload' | 'staff_rematch';
 
 export interface IncomingRecording {
@@ -45,6 +47,11 @@ export interface IncomingRecording {
   startedAt: Date | null;
   endedAt: Date | null;
   recordingType?: string | null;
+  /**
+   * Whether the delivery included an audio rendering, when the caller could see the
+   * file list. `null`/absent means unknown — never guessed. See `recordingFacts`.
+   */
+  hasAudio?: boolean | null;
   provenance: IngestProvenance;
 }
 
@@ -139,8 +146,10 @@ async function recordPart(
   const [rows] = await sequelize.query(
     `INSERT INTO presentation_recordings
        (attempt_id, occurrence_uuid, provider_file_id, recording_type,
-        starts_at, ends_at, ingest_status, ingest_provenance, review_reason)
-     VALUES (:aid, :uuid, :fid, :rtype, :s, :e, :status, :prov, :reason)
+        starts_at, ends_at, ingest_status, ingest_provenance, review_reason,
+        has_audio, has_shared_screen, duration_seconds)
+     VALUES (:aid, :uuid, :fid, :rtype, :s, :e, :status, :prov, :reason,
+             :audio, :screen, :dur)
      ON CONFLICT (occurrence_uuid, provider_file_id) DO NOTHING
      RETURNING id`,
     {
@@ -156,6 +165,13 @@ async function recordPart(
         status,
         prov: rec.provenance,
         reason: reviewReason,
+        // THE COLUMNS NOTHING USED TO WRITE. Derived from what the provider already
+        // said — no download. Every one of them is null when unknown rather than
+        // false, because `describeTakeContents` turns false into a warning shown to
+        // the learner, and a wrong warning on a good take is the costly error.
+        audio: rec.hasAudio ?? null,
+        screen: sharedScreenFromRecordingType(rec.recordingType),
+        dur: durationSecondsFrom(rec.startedAt, rec.endedAt),
       },
     },
   ) as [Array<{ id: string }>, unknown];
@@ -229,6 +245,7 @@ export async function correlateRecording(rec: IncomingRecording): Promise<Correl
     const only = candidates[0];
     const recorded = await recordPart(rec, only.id, 'ingested', null);
     await claimOccurrence(only.id, rec.occurrenceUuid);
+    await markRecordingReady(only.id);
     return { kind: 'matched', attemptId: only.id, recorded };
   }
 
@@ -240,6 +257,7 @@ export async function correlateRecording(rec: IncomingRecording): Promise<Correl
     const only = inWindow[0];
     const recorded = await recordPart(rec, only.id, 'ingested', null);
     await claimOccurrence(only.id, rec.occurrenceUuid);
+    await markRecordingReady(only.id);
     return { kind: 'matched', attemptId: only.id, recorded };
   }
 
@@ -301,6 +319,30 @@ async function claimOccurrence(attemptId: string, occurrenceUuid: string): Promi
         SET occurrence_uuid = :uuid, recording_state = 'processing', updated_at = NOW()
       WHERE id = :aid AND occurrence_uuid IS NULL`,
     { replacements: { aid: attemptId, uuid: occurrenceUuid } },
+  );
+}
+
+/**
+ * The attempt has its recording. Move it off `processing`.
+ *
+ * `claimOccurrence` set `processing` and, until 2026-10-11, NOTHING ever moved it on
+ * — there was exactly one write site for this column in the whole backend, and it
+ * only ever wrote that one value. Every attempt that ever recorded sat in
+ * `processing` permanently, and the Practice panel reads this column to tell the
+ * learner where their take is.
+ *
+ * Deliberately NOT guarded on the previous state: a re-delivery that lands on an
+ * attempt already `ready` should leave it `ready`, and an attempt that reached
+ * `review` or `failed` by another route is a human's decision to revisit, so those
+ * are left alone.
+ */
+async function markRecordingReady(attemptId: string): Promise<void> {
+  const sequelize = await db();
+  await sequelize.query(
+    `UPDATE presentation_attempts
+        SET recording_state = 'ready', updated_at = NOW()
+      WHERE id = :aid AND recording_state IN ('expected', 'processing')`,
+    { replacements: { aid: attemptId } },
   );
 }
 
