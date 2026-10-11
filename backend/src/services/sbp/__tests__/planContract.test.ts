@@ -298,7 +298,6 @@ describe('P6-T3 — StoryReferences is server-populated, and the schema must not
     // How it actually travels: `plan_json` in Postgres, then into the repo documents.
     const refs: StoryReferences = {
       business_task_ids: ['BT-004', 'BT-011'],
-      workspace: { kind: 'workspace', ref: 'WS-intake', action: 'approve' },
       blueprint: { revision: 3, content_sha256: 'a'.repeat(64) },
       design_refs: ['DD-002'],
       builder_agent: 'claude-code',
@@ -307,17 +306,33 @@ describe('P6-T3 — StoryReferences is server-populated, and the schema must not
     expect(JSON.parse(JSON.stringify(refs))).toEqual(refs);
   });
 
-  it('headless is a real answer, not a missing one', () => {
-    // Background work that no page shows must be expressible, or whoever fills this in will either
-    // invent a workspace or leave the field absent — and absence means "not established".
+  it('headless is a real answer, and it lives on the STORY not in references', () => {
+    // Background work that no page shows must be expressible, or whoever fills this in will
+    // either invent a workspace or leave the field absent — and absence means "not established".
+    //
+    // REWRITTEN 2026-10-11. This test used to build `workspace` INSIDE `StoryReferences`, which
+    // stopped being true when the field moved to `PlanStory`. It kept passing, because nothing
+    // type-checks a backend test file (tsconfig excludes `__tests__`, ts-jest transpiles) and it
+    // asserted a property of a literal it had just written. A test that cannot fail, asserting
+    // the opposite of what shipped - which is why it is now written against the real type.
+    const story: PlanStory = {
+      id: 'STORY-001', release: 'r0', title: 't', narrative: 'n', fulfills: [],
+      owner_agent: 'AGENT-001', acceptance: [], task_guidance: 'g', failure_paths: [],
+      workspace: { kind: 'headless', ref: 'nightly-reconciliation', action: null },
+    };
+    expect(story.workspace!.kind).toBe('headless');
+
+    // And the source confirms the move rather than the literal confirming itself: the model-
+    // emitted field is declared on PlanStory, and StoryReferences no longer carries one.
+    expect(declaredFields('PlanStory')).toContain('workspace');
+    expect(declaredFields('StoryReferences')).not.toContain('workspace');
+
     const refs: StoryReferences = {
       business_task_ids: [],
-      workspace: { kind: 'headless', ref: 'nightly-reconciliation', action: null },
       blueprint: { revision: 1, content_sha256: 'b'.repeat(64) },
       design_refs: [],
       acceptance_evidence: [],
     };
-    expect(refs.workspace.kind).toBe('headless');
     // `builder_agent` is optional; omitting it must not make the object invalid.
     expect('builder_agent' in refs).toBe(false);
   });
@@ -330,7 +345,7 @@ describe('P6-T3 — StoryReferences is server-populated, and the schema must not
       id: 'STORY-001', release: 'r0', title: 't', narrative: 'n', fulfills: [],
       owner_agent: 'AGENT-001', acceptance: [], task_guidance: 'g', failure_paths: [],
       references: {
-        business_task_ids: [], workspace: { kind: 'headless', ref: 'x' },
+        business_task_ids: [],
         blueprint: { revision: 1, content_sha256: 'c'.repeat(64) },
         design_refs: [], builder_agent: 'claude-code', acceptance_evidence: [],
       },

@@ -49,12 +49,25 @@ const REFS: StoryReferences = {
 const WS = { kind: 'workspace' as const, ref: 'WS-intake', action: 'approve' };
 
 /** The same plan with `references` on exactly one story, so a diff isolates the change. */
+/**
+ * Either half may be omitted, and `null` is how you say so.
+ *
+ * NOT `undefined`: a default parameter makes `undefined` indistinguishable from "not passed", so
+ * `withRefsOnFirstStory(REFS, undefined)` silently received the default workspace and the test
+ * that was meant to exercise the no-workspace branch exercised the both-halves branch instead.
+ * It failed loudly, which is the only reason I know. `null` carries the intent the type system
+ * cannot infer from an absent argument.
+ */
 function withRefsOnFirstStory(
-  refs: StoryReferences | undefined,
-  workspace: PlanStory['workspace'] = WS,
+  refs: StoryReferences | null,
+  workspace: PlanStory['workspace'] | null = WS,
 ): BuildPlan {
   const clone: BuildPlan = JSON.parse(JSON.stringify(LEGACY));
-  clone.stories[0] = { ...clone.stories[0], ...(refs ? { references: refs } : {}), workspace };
+  clone.stories[0] = {
+    ...clone.stories[0],
+    ...(refs ? { references: refs } : {}),
+    ...(workspace ? { workspace } : {}),
+  };
   return clone;
 }
 
@@ -142,6 +155,38 @@ describe('P6-T3 — references render, and change nothing else', () => {
     expect(doc).toContain('**Built by:** claude-code');
     expect(doc).toContain('### Evidence this story needs');
     expect(doc).toContain('an approval row exists carrying the approver identity');
+  });
+
+  it('renders a workspace with NO references — the primary production shape', () => {
+    // THE CASE THE REST OF THIS FILE NEVER EXERCISED, and a grader found the gap by mutation:
+    // changing `if (!refs && !ws) return []` to `if (!refs) return []` left every test green.
+    //
+    // It matters because this is the COMMON configuration, not an edge: `workspace` is
+    // model-emitted and arrives on every plan generated after 2026-10-10, while `references` is
+    // server-resolved and appears only once a blueprint exists to resolve against. So on a
+    // freshly generated student build the workspace is known and the references are not, and
+    // the bug the mutation exposes would have hidden the half that IS known on exactly those
+    // plans. Every other call in this file passes both halves, which is why nothing caught it.
+    const doc = fileMap(withRefsOnFirstStory(null, {
+      kind: 'workspace', ref: 'Intake review', action: 'approve',
+    }))[`docs/stories/${LEGACY.stories[0].id}.md`];
+
+    expect(doc).toContain('## Where this fits');
+    expect(doc).toContain('**Workspace:** Intake review · approve');
+    // And nothing blueprint-shaped is claimed, because nothing resolved one.
+    expect(doc).not.toContain('**Blueprint:**');
+    expect(doc).not.toContain('undefined');
+  });
+
+  it('renders references with NO workspace, the other half of the same branch', () => {
+    // The mirror case: a legacy plan whose project later gained a blueprint. The references are
+    // resolvable and the model never declared a workspace, so the blueprint line must appear and
+    // no workspace line may be invented.
+    const doc = fileMap(withRefsOnFirstStory(REFS, null))[`docs/stories/${LEGACY.stories[0].id}.md`];
+    expect(doc).toContain('## Where this fits');
+    expect(doc).toContain('revision 3');
+    expect(doc).not.toContain('**Workspace:**');
+    expect(doc).not.toContain('**Runs headless:**');
   });
 
   it('renders headless work as headless, not as a missing workspace', () => {
