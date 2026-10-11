@@ -86,9 +86,9 @@ export const LIFECYCLE: Record<LifecycleStage, LifecycleStageDef> = {
   },
   explorer: {
     stage: 'explorer',
-    label: 'Explorer (free account)',
+    label: 'Explorer ($0 to start)',
     definition:
-      'Someone with a free account on the AI learner programme who has not paid. A real ' +
+      'Someone on the AI learner programme who has not paid - $0 to start, no card needed. A real ' +
       'relationship and a real login — but not a student, and not a conversion.',
     evidence: "enrollments row with enrollment_type 'explorer' and no paid/subscription state",
     // THE STAGE THE VOCABULARY WAS MISSING, and its absence was not cosmetic.

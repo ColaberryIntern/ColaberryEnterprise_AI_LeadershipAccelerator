@@ -93,6 +93,12 @@ const PAID_FILES: Record<string, string> = {
   'services/enrollmentService.ts':
     'TWO WRITERS. (a) markEnrollmentPaid - a LIVE UPDATE on the plan\'s "legacy webhook" path, called from webhookController; writes by PROPERTY ASSIGNMENT then .save(), which is why the first pass of T206 missed it. Coherent as of T206 attempt 2. (b) the legacy invoice CREATE, coherent by column default only.',
 
+  // ---- Added by T207/T210. These are the files this phase itself introduced;
+  // the tripwire caught that I had not classified my own work. ----
+
+
+  'services/adminOs/conversionState.ts':
+    'READ (T210). The one conversion definition: SQL aggregates plus a TS predicate over payment_status, amount_paid and subscription state. No write of any kind - it is a derivation consumed by the roster, the profile and subjectResolver.',
   // ---- READS: filters, counts and reports. No write. ----
   'services/cohortService.ts': 'READ. Dashboard filter on paid enrolments.',
   'services/ops/schoolSignals.ts': 'READ. Count of paid actives.',
@@ -143,6 +149,13 @@ const OFF_EXPLORER_FILES: Record<string, string> = {
   'services/paymentReconciliationService.ts': 'WRITER (model update). Coherent as of T206.',
   'services/paymentSyncService.ts': 'WRITER (raw SQL). Coherent as of T206.',
   'services/appPaymentReconcileService.ts': 'WRITER (raw SQL). Coherent as of T206.',
+
+  // ---- Added by T207/T209/T210, the files this phase introduced. ----
+
+  'scripts/backfillFreeAccountCoherence.ts':
+    'WRITER, OPT-IN ONLY (T207). Moves rows ONTO explorer (never off it) and only with --confirm-production; the inverse is ledger-driven so it cannot touch rows the sweep never wrote.',
+  'services/adminOs/conversionState.ts':
+    'READ (T210). The shared lifecycle-stage CASE reads enrollment_type to tell an Explorer from a student. No write.',
 
   // ---- READS ----
   'services/explorerRosterService.ts': 'READ. SQL WHERE for the Explorer revenue roster.',

@@ -189,7 +189,7 @@ export async function retireRedundantExplorerAccounts(email: string, paidEnrollm
       status: 'withdrawn',
       notes: `${stray.notes ? stray.notes + ' | ' : ''}Retired ${today}: superseded by paid enrollment ${paidEnrollmentId}`,
     });
-    console.log(`[Enrollment] Retired redundant Explorer ${stray.id} (${email}) — now a paid student`);
+    console.log(`[Enrollment] Retired redundant Explorer ${stray.id} (${redactForLogs(email)}) — now a paid student`);
   }
 }
 
@@ -433,7 +433,7 @@ export async function createExplorerEnrollment(input: {
       errorMessage = err?.message || 'unknown error';
     }
     if (!sent) {
-      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${email}): ${errorMessage}`);
+      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${redactForLogs(email)}): ${errorMessage}`);
     }
     try {
       const { logCommunication } = await import('./communicationLogService');

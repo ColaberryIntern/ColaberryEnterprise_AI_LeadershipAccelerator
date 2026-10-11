@@ -57,7 +57,7 @@ Two refinements the first scan needed, both recorded because they changed the an
    consumer into the reporting bucket, where it would never have been given a behaviour test. A
    rule was added for that form and the file is now row 29. Branching: 31 → 28 → **29**.
 
-## BRANCHING — 30 files
+## BRANCHING — 33 files
 
 **Row 17 is retired, and why is worth recording.** It was `services/freeSignupService.ts`, which
 used to decide `tier: 'guest'` itself. T202b made it delegate to the canonical service, so it no
@@ -101,6 +101,9 @@ any row does not.
 | 29 | `services/cohortService.ts` | `{ enrollment_type: { [Op.ne]: 'explorer' } }` | **CHANGES** | — | **Added on the fix pass; the first scan misfiled this as reporting-only.** `getDashboardStats()` builds one `notExplorer` filter and reuses it for three counts — `totalEnrollments`, `paidEnrollments` and `pendingInvoice`. Once population A gains `enrollment_type: 'explorer'`, **`totalEnrollments` and `pendingInvoice` on the admin dashboard drop** by the number of portal free accounts. `paidEnrollments` does not move, because those rows are not paid. Appended rather than inserted in theme order so the existing row numbers, and the determinations that reference them, stay stable. |
 | 30 | `services/freeSignupService.ts` | `enrollment.enrollment_type === 'explorer'` | **CHANGES** | unchanged | **Added by T205, and it is row 17 returning under a new number.** T202b retired row 17 because delegating to the canonical service removed both column literals from this file, and the scan moved it to REPORTING on its own. T205 reintroduces a branch here deliberately: the Explorer profile is created only when the RESOLVED row is an Explorer, so a `programme: 'standard'` account — an org teammate, a prospect — gets no journey profile and stays invisible to Explorer Growth. Population A gains a profile at registration; population B is unaffected because it never takes this branch. Renumbered rather than reusing 17, so citations that reference other rows by number stay valid. |
 | 31 | `services/appPaymentReconcileService.ts` | `tier = 'member'` in a raw-SQL UPDATE | writer | writer | **Added by T206, and it is the FIFTH paid-status writer — the plan named three.** Found by deriving the writer set from source rather than trusting the written list, which is the fifth time in this phase a population in the plan came up short when derived. It marks an enrolment paid in raw SQL while linking the payment id; in the happy path `activateByRef` has already granted membership, so this is a no-op re-assertion, but on the ERROR path it would otherwise leave paid-but-guest. Now writes the pair in the same statement. Neither population changes: a $50 deposit holder cannot be promoted by it because of `MEMBERSHIP_MIN_CENTS`, enforced on BOTH membership-selection paths — `backend/src/services/appPaymentReconcileService.ts:98` → "if (cents < MEMBERSHIP_MIN_CENTS) continue; // skip the $50 deposit" and `backend/src/services/appPaymentReconcileService.ts:331` → ".filter((p) => Math.round(Number(p.Amount) * 100) >= MEMBERSHIP_MIN_CENTS)". **An earlier version of this determination cited `paysimple_customer_id IS NOT NULL` instead, and that was wrong twice over:** `loadCandidates`' WHERE is a disjunction whose other branch needs no customer id, and path B searches the whole `unlinkedPool` by amount, timing and email - its own comment says path A's customer-id matches are a subset of it. Right conclusion, wrong mechanism, in the enumeration of record. |
+| 32 | `services/adminOs/conversionState.ts` | `WHEN e.email IS NOT NULL AND ${HAS_PROGRAM_ACCESS_SQL} THEN 'enrolled_student'` | **CHANGES** | **CHANGES** | **Added by T210, and it is the file that fixes the defect this enumeration exists to track.** Both stage derivations previously read `WHEN e.email IS NOT NULL THEN 'enrolled_student'`, so the mere EXISTENCE of an enrollments row staged a person as converted. Population A (free AI learners) was therefore represented as converted and, worse, had intent and temperature SUPPRESSED as post-conversion noise -- the people whose intent matters most. Conversion now derives from authoritative paid/subscription state, and T209's `explorer` stage gives the population a name. Population B (org teammates, AI Flotation prospects) also CHANGES: an unpaid non-Explorer account holder falls through to applicant/lead rather than being staged a student, which is correct and was previously wrong in the same way. Read-only: a derivation consumed by the roster, the profile and `subjectResolver`. It writes nothing. |
+| 33 | `scripts/backfillFreeAccountCoherence.ts` | `count(*) FILTER (WHERE enrollment_type = 'standard' AND tier = 'guest')` | writer | writer | **Added by T207. A WRITER, but opt-in only and not yet run.** Dry-run by default; the single `UPDATE` site is pinned to the value read (`WHERE id = :id AND col = :from`) so a row changed underneath is skipped rather than overwritten, and nothing reaches the database without `--confirm-production`, asserted by a test that counts statements rather than reading printed text. It writes `tier` and `enrollment_type` and never `payment_status`. Population A: rows that are free-AI learners by provenance gain the coherent pair. Population B: explicitly EXCLUDED -- org members, AI Flotation prospect accounts, staff by the union of all three disagreeing predicates, agent identities and anything undeclared. Rows it cannot prove either way are REPORTED for human decision, never guessed. **Nothing has run against production.** |
+| 34 | `scripts/lib/freeAccountCoherenceBackfill.ts` | pure predicate; `enrollment_type` only in prose | — | — | **Added by T207, and it is in this table by judgement rather than by the scan.** The write-site scanner does NOT match it: its only `enrollment_type: 'standard'` occurrence is inside a docblock, and the scanner strips comments before matching -- correctly, and my own `grep` disagreed with it until I checked which of us was reading code. It is listed anyway because it is where the backfill's decision actually lives: the pure predicate that classifies every row, excludes six populations and requires POSITIVE free-signup provenance before moving anything onto the learner programme. A reader looking for "what decides" would otherwise find only the CLI. Writes nothing; returns a ledger the CLI applies. |
 
 **Tallies, counted from the table's own cells rather than by hand** — the first draft said "12 for
 A" and "9 unchanged", both off by one in **compensating** directions, so the two wrong numbers
@@ -109,13 +112,13 @@ asserts them from the parsed cells so they cannot drift again:
 
 | Tally | Rows | Command |
 |---|---|---|
-| Changes for population A | **13** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
-| Changes for population B | **2** (rows 1 and 13) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
-| Writers | **4** | `grep -c "\| writer \| writer \|"` |
+| Changes for population A | **14** | `grep -cE '^\| [0-9]+ \| ` + "`[^`]+`" + ` \| [^\|]*\| \*\*CHANGES\*\* \|'` |
+| Changes for population B | **3** (rows 1, 13 and 32) | `grep -cE '\| — \| \*\*CHANGES\*\* \|'` |
+| Writers | **5** | `grep -c "\| writer \| writer \|"` |
 | Unchanged, with a stated reason | **11** | `grep -c "\| unchanged \| unchanged \|"` |
-| **Total** | **30** | matches the generator's `BRANCHING` count |
+| **Total** | **33** | matches the generator's `BRANCHING` count |
 
-## REPORTING — 18 files
+## REPORTING — 19 files
 
 **`paymentSyncService.ts` is listed as REPORTING although it is a WRITER**, and the
 mismatch is recorded rather than corrected. It writes both columns, but in raw SQL via a
@@ -130,7 +133,8 @@ determination saying what it really does; its coherence is proved behaviourally 
 Disclosure, not behaviour tests. **Pasted from the generator's output, after it caught me
 hand-transcribing this list and dropping a file** — see the note below.
 
-`controllers/challengeController.ts` · `intelligence/systemStateEngine/systemStateEngine.ts` ·
+`controllers/challengeController.ts` ·
+`services/adminOs/lifecycle.ts` · `intelligence/systemStateEngine/systemStateEngine.ts` ·
 `routes/admin/flotationIntakeRoutes.ts` · `routes/projectRoutes.ts` ·
 `scripts/enumerateFreeAccountConsumers.ts` · `server.ts` · `services/adminOrgService.ts` ·
 `services/adminOs/metricRegistry.ts` · `services/adminOs/personProfileService.ts` ·

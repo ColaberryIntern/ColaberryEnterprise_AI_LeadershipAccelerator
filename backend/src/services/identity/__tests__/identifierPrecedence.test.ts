@@ -233,8 +233,29 @@ describe('T208 — the tripwire: every file that builds a subject key is account
     'backend/src/services/growthJourney/replyHandoffHook.ts',
   ];
 
+  /**
+   * Files that build an `enrollment:`-PREFIXED string that is NOT a subject key.
+   *
+   * Both construct COMPOUND IDEMPOTENCY keys — `enrollment:<id>:signal:<type>`
+   * and `enrollment:<id>:<kind>` — which share the prefix and nothing else.
+   *
+   * They are CLASSIFIED rather than excluded by narrowing the pattern. Tightening
+   * the regex to dodge them (a subject ref has no second colon) would also stop
+   * the scan seeing the next genuine constructor that happens to be compound, and
+   * weakening a pattern to make a tripwire pass is how it comes to protect
+   * nothing. This mirrors how the free-account enumeration records
+   * `paymentSyncService` as REPORTING though it is a writer: the classification
+   * is the scanner's, and what matters is that the file is accounted for.
+   */
+  const NOT_SUBJECT_KEYS = [
+    'backend/src/services/reese/reeseAutonomousOutreachService.ts',
+    'backend/src/services/reese/reeseWelcomeService.ts',
+  ];
+
   it('names every non-test file that constructs a subject key', () => {
-    expect(constructors()).toEqual([...SANCTIONED_BUILDERS, ...LITERAL_CONSTRUCTORS].sort());
+    expect(constructors()).toEqual(
+      [...SANCTIONED_BUILDERS, ...LITERAL_CONSTRUCTORS, ...NOT_SUBJECT_KEYS].sort(),
+    );
   });
 
   it('the positive control: the scan really does see a known constructor', () => {

@@ -61,6 +61,18 @@ const CANONICAL = 'services/freeAccountRegistration.ts';
 const ALLOW_LISTED = [
   'services/enrollmentService.ts',
   'services/openHouseCreditService.ts',
+  // Added by T207/T210. Both match the scanner by SHAPE, not by behaviour: the
+  // scanner counts a returned object literal as a write (deliberately - that is
+  // how it catches `freeEnrollmentDefaults`), and both of these return literals
+  // that name the columns without writing a row.
+  //
+  // `freeAccountCoherenceBackfill.ts` is the backfill's PURE predicate. It
+  // returns a ledger of {id, column, from, to} patches; the CLI is what applies
+  // them, and only with --confirm-production.
+  'scripts/lib/freeAccountCoherenceBackfill.ts',
+  // `conversionState.ts` is a DERIVATION - SQL fragments and a TS predicate. It
+  // writes nothing at all; its literals are the stage CASE's branch values.
+  'services/adminOs/conversionState.ts',
 ];
 
 describe('T203 — the scanner can tell a write from a read', () => {
@@ -276,7 +288,11 @@ describe('T203 — the writer allow-list', () => {
     // The site count is a floor because refactoring moves it; the FILE set is the
     // property being guarded and is asserted exactly below.
     expect(writers.length).toBeGreaterThanOrEqual(7);
-    expect(files).toHaveLength(3);
+    // 3 -> 5: T207's pure predicate and T210's derivation both match the
+    // scanner by SHAPE (a returned object literal naming the columns) while
+    // writing nothing. Updated deliberately, which is what the pinned number
+    // is for.
+    expect(files).toHaveLength(5);
   });
 
   it('the canonical service is one of them', () => {
@@ -288,12 +304,18 @@ describe('T203 — the writer allow-list', () => {
     expect(unexpected).toEqual([]);
   });
 
-  it('the allow-list has exactly two members, so growing it is a deliberate edit', () => {
-    // The plan said one. Derived from source it is two, and both are justified in
-    // this file's docblock. Stated as an exact number so a third cannot be added
-    // quietly.
-    expect(ALLOW_LISTED).toHaveLength(2);
+  it('the allow-list has exactly four members, so growing it is a deliberate edit', () => {
+    // The plan said one. Derived from source it was two; T207 and T210 added two
+    // more, both SHAPE matches that write nothing, justified where they are
+    // listed. Stated as an exact set so a fifth cannot be added quietly.
+    expect(ALLOW_LISTED).toHaveLength(4);
     expect(ALLOW_LISTED).toEqual([
+      'services/enrollmentService.ts',
+      'services/openHouseCreditService.ts',
+      'scripts/lib/freeAccountCoherenceBackfill.ts',
+      'services/adminOs/conversionState.ts',
+    ]);
+    expect([
       'services/enrollmentService.ts',
       'services/openHouseCreditService.ts',
     ]);
