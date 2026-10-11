@@ -152,12 +152,29 @@ function isAgentDisabledFromRow(row: AgentRegistryRow | null): boolean {
 // but NOT `autonomy_level_source` (see fetchAgentRegistryRow's attribute list),
 // so a keyword-classifier's output is honoured here as a human decision.
 //
-// MEASURED IN PRODUCTION 2026-10-11, across 257 agents:
-//   - autonomy levels set by a human:            0
-//   - set by the classifier (`source: 'auto'`): 12  (9 enabled)
-//   - never classified at all (`set_at` NULL):  245
-//   - above `observe`:                            2  — Reese and Dara, both
-//                                                     `communicate`, both 'auto'
+// MEASURED IN PRODUCTION 2026-10-11, across 257 agents. Two readings, because
+// the DRI approved a correction partway through and the first number moved.
+//
+// BEFORE the approval:
+//   - recorded as a human decision (`source: 'manual'`):   0
+//   - set by the classifier (`source: 'auto'`):           12  (9 enabled)
+//   - never classified at all (`set_at` NULL):           245
+//   - a legacy human reactivation (`set_at` set, `source`
+//     NULL — what a deliberate choice looked like before
+//     the source column was written at all):               1  (disabled)
+//   - above `observe`:                                     2  — Reese and Dara,
+//                                                              both `communicate`,
+//                                                              both 'auto'
+//
+// AFTER the approval (Ali, 2026-10-11): Reese and Dara are `source: 'manual'`,
+// so the fleet reads 2 manual / 10 auto / 1 legacy-null / 244 never set. Their
+// LEVEL did not move — only its provenance — and the write was guarded by a
+// transaction that aborted unless `enabled` and `abac_mode_override` survived.
+//
+// An earlier draft of this comment said "set by a human: 0". That was wrong by
+// one: it read "no `manual` rows" as "no human decisions", conflating the two,
+// when a pre-source-column reactivation is exactly a human decision that simply
+// could not say so. The root cause is below.
 //
 // WHY NOT JUST MAKE resolveLevel IGNORE 'auto'. Because the fallback is
 // `levelForTier(tier)`, and neither Reese nor Dara appears in
@@ -172,11 +189,21 @@ function isAgentDisabledFromRow(row: AgentRegistryRow | null): boolean {
 //     tier-derived level is higher than their stored one. A change sold as
 //     tightening would widen authority for ten agents.
 //
-// So the fix is NOT here. It is to record a human decision for the two agents
-// that are above `observe` (two rows, through the reactivation flow that writes
-// `source: 'manual'`), after which this gate honours them for the right reason
-// and ignoring 'auto' becomes safe. That is an authority decision for the DRI,
-// not a refactor. Tracked by
+// THE ROOT CAUSE, fixed 2026-10-11: `agentReactivationService.reactivateAgent`
+// — the DESIGNATED human path — never wrote `autonomy_level_source` either. Its
+// own comment claims `set_at` "is exactly what distinguishes a deliberate
+// reactivation choice", and that held only while it was the sole writer. So the
+// one field that could tell human from machine was, until now, written
+// exclusively BY the machine. The human path now records `source: 'manual'`, and
+// `recordHumanAutonomyDecision()` exists for an already-enabled agent (it never
+// touches `enabled`, unlike reactivation).
+//
+// The two agents above `observe` are now human-attributed. Tightening this gate
+// is STILL not safe, for the ten-agent reason above — approving two fixed the two
+// that mattered and did nothing about the promotion direction. What to do about
+// those ten (approve each at the level it already runs at, or make the unlisted-
+// agent fallback fail closed to `observe` instead of DEFAULT_PERMISSION's
+// `suggest`) is an authority decision for the DRI, not a refactor. Tracked by
 // `__tests__/agentAuthorizationAutonomySource.test.ts`, which pins the measured
 // state so this cannot drift further unnoticed.
 function resolveLevel(row: AgentRegistryRow | null, tier: string | null): AutonomyLevel {

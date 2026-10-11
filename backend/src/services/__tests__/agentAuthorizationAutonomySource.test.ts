@@ -109,8 +109,26 @@ describe('the gate documents the hazard, so the next reader is not misled', () =
   });
 
   it('records the measured fleet state rather than an impression', () => {
-    expect(gate).toMatch(/autonomy levels set by a human:\s*0/);
+    // Asserts the SHAPE of a recorded measurement, not one figure. The earlier version pinned
+    // "set by a human: 0" -- a number my own approved write then changed, which would have left
+    // this test guarding a stale citation. It now requires both readings and the agent total.
     expect(gate).toContain('257 agents');
+    expect(gate).toMatch(/BEFORE the approval/);
+    expect(gate).toMatch(/AFTER the approval/);
+    expect(gate).toMatch(/2 manual \/ 10 auto/);
+  });
+
+  it('owns the off-by-one rather than quietly restating it', () => {
+    // "no manual rows" is not "no human decisions": a pre-source-column reactivation is a human
+    // decision that could not say so. The comment says this, so the next reader inherits the
+    // correction instead of the error.
+    expect(gate).toMatch(/was wrong by\s*\n?\/\/ one|wrong by one/);
+    expect(gate).toContain('legacy human reactivation');
+  });
+
+  it('names the root cause: the human path did not record itself', () => {
+    expect(gate).toContain('reactivateAgent');
+    expect(gate).toMatch(/written\s*\n?\/\/ exclusively BY the machine|exclusively BY the machine/);
   });
 
   it('states both directions of the naive fix and who owns the decision', () => {
