@@ -116,11 +116,31 @@ export const LANDING_PAGE_LOGOS: Readonly<Record<string, { src: string; alt: str
   training: { src: '/colaberry-horizontal.png', alt: 'Colaberry' },
 };
 
+/**
+ * The lockup for a DARK ground, where the normal one disappears.
+ *
+ * A real white asset exists - `/knowledge/assets/logo/colaberry-horizontal-white.png`, part of
+ * the brand asset set already served from this host - so the footer uses it. The alternative
+ * considered was matching the footer background to a logo's own baked-in box, which only works
+ * until the footer colour changes and is a workaround for an asset that turned out to exist.
+ */
+export const LANDING_PAGE_LOGOS_ON_DARK: Readonly<Record<string, { src: string; alt: string }>> = {
+  training: { src: '/knowledge/assets/logo/colaberry-horizontal-white.png', alt: 'Colaberry' },
+};
+
 /** The lockup for a brand's key, or null when the page should show the brand name as text. */
 export function logoForLandingPage(
   themeKey: string | null | undefined,
 ): { src: string; alt: string } | null {
   return themeKey ? LANDING_PAGE_LOGOS[themeKey] ?? null : null;
+}
+
+/** The lockup to use on the dark footer. Falls back to the light one, then to text. */
+export function logoOnDarkForLandingPage(
+  themeKey: string | null | undefined,
+): { src: string; alt: string } | null {
+  if (!themeKey) return null;
+  return LANDING_PAGE_LOGOS_ON_DARK[themeKey] ?? LANDING_PAGE_LOGOS[themeKey] ?? null;
 }
 
 export interface ResolvedTheme {

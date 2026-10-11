@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { renderLandingPage } from '../landingPageRenderer';
 import { parseLandingPageContent, type LandingPageContentShape } from '../../../schemas/landingPageContentSchema';
 
@@ -18,6 +20,8 @@ import { parseLandingPageContent, type LandingPageContentShape } from '../../../
  * because there is no browser here. It asserts the DECLARATIONS that make those properties hold -
  * which is why each one names the failure it prevents rather than just matching a string.
  */
+
+const SRC = join(__dirname, '..', '..', '..');
 
 const BRAND = { name: 'Colaberry Training', default_theme_key: 'training' };
 
@@ -79,6 +83,40 @@ const BARE = content({
     { type: 'hero', headline: 'One line' },
     { type: 'bullets', items: [{ label: 'One' }] },
   ],
+});
+
+/**
+ * The stylesheet is a TEMPLATE LITERAL, and a backtick inside it ends the string.
+ *
+ * This has now bitten twice: once on 2026-10-09 writing `anywhere` for emphasis in a CSS
+ * comment, and again on 2026-10-11 writing a filename in backticks. Both times the compiler
+ * reported a syntax error dozens of lines later, because the damage is everything after the
+ * stray character rather than the character itself - and both times a file nobody had touched
+ * failed to build.
+ *
+ * Manual vigilance has failed twice, so this is a test. It reads the source rather than the
+ * rendered output, because by render time the file either compiled or did not.
+ */
+describe('the stylesheet source cannot close its own template literal', () => {
+  const source = readFileSync(join(SRC, 'services', 'marketing', 'landingPageStyles.ts'), 'utf8');
+  const open = source.indexOf('export const STYLES = `') + 'export const STYLES = `'.length;
+  const body = source.slice(open, source.indexOf('`.trim();', open));
+
+  it('found the stylesheet body, so the checks below are not vacuous', () => {
+    expect(open).toBeGreaterThan(0);
+    expect(body.length).toBeGreaterThan(500);
+    expect(body).toContain('.band');
+  });
+
+  it('contains no backtick, which would end the string early', () => {
+    expect(body).not.toContain('`');
+  });
+
+  it('contains no ${ interpolation, which would evaluate as code', () => {
+    // A CSS value that happens to look like one would be silently substituted or crash the
+    // render - neither of which a stylesheet should be able to do.
+    expect(body).not.toMatch(/\$\{/);
+  });
 });
 
 describe('text cannot push the page sideways', () => {

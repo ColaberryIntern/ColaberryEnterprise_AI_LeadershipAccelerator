@@ -1,6 +1,6 @@
 import { esc } from '../classKit/kitRenderUtils';
 import { safeHttpUrl } from '../caseStudy/caseStudyPublicSections';
-import { themeCssVars, themeForLandingPage, logoForLandingPage } from './landingPageTheme';
+import { themeCssVars, themeForLandingPage, logoForLandingPage, logoOnDarkForLandingPage } from './landingPageTheme';
 import type { LandingPageContentShape, LandingPageSection } from '../../schemas/landingPageContentSchema';
 import { STYLES } from './landingPageStyles';
 import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
@@ -50,9 +50,15 @@ import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
  *   3. BULLET VARIANTS. A qualifying list ("this is for you if"), an ordered sequence and a
  *      capability grid are three different things that were all rendering as the same <ul>.
  *
- * NO WEBFONT, ON PURPOSE. This page serves its own CSP: `default-src 'none'`, with no `font-src`
- * and no external `style-src`. A Google Fonts <link> would be blocked and the page would fall
- * back silently, so the stack below is the real typeface and is chosen rather than defaulted.
+ * THE BRAND TYPEFACE, SELF-HOSTED. This page serves its own CSP, which until 2026-10-11 had no
+ * `font-src` at all - so the comment here said there was deliberately no webfont, and the page
+ * fell back to a system stack. That was a constraint, not a decision: `colaberry/tokens/
+ * fonts.css` names Roboto as the brand spec, and the woff2 was already in this repo.
+ *
+ * So the CSP now allows `font-src 'self'` and nothing else - no Google Fonts link, which would
+ * still be blocked and would leak a request to a third party before anyone consented. The file
+ * is served from our own origin, declared with `font-display: swap` so the page is readable
+ * before it arrives, and the old system stack remains the fallback.
  */
 
 export interface RenderableBrand {
@@ -119,6 +125,7 @@ export function renderLandingPage(input: RenderLandingPageInput): RenderedLandin
   const { content, brand, siteSlug, pageUrl } = input;
   const { theme, branded } = themeForLandingPage(brand.default_theme_key);
   const logo = logoForLandingPage(brand.default_theme_key);
+  const darkLogo = logoOnDarkForLandingPage(brand.default_theme_key);
 
   const hero = content.sections.find((s) => s.type === 'hero');
   const title = content.title ?? (hero && hero.type === 'hero' ? hero.headline : brand.name);
@@ -191,8 +198,12 @@ ${body}
 </main>
 <footer class="site-foot">
 <div class="inner">
-<span class="foot-mark">${esc(brand.name)}</span>
-<p class="foot-note">&copy; ${new Date().getFullYear()} ${esc(brand.name)}</p>
+${darkLogo
+  ? `<img class="foot-logo" src="${esc(darkLogo.src)}" alt="${esc(darkLogo.alt)}">`
+  : `<span class="foot-mark">${esc(brand.name)}</span>`}
+<p class="foot-note">${content.footerNote
+  ? esc(content.footerNote)
+  : `&copy; ${new Date().getFullYear()} ${esc(brand.name)}`}</p>
 </div>
 </footer>
 ${tracker}
