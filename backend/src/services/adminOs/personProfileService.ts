@@ -182,7 +182,6 @@ function may(panel: string, sections: readonly string[]): boolean {
   return (PANEL_SECTIONS[panel] ?? []).some((s) => sections.includes(s));
 }
 
-/** Whether a caller with these sections may read a named panel. The one rule, exported for per-panel endpoints. */
 /**
  * T211: this is the CANONICAL person assembler. The other two read-side views
  * declare 'answers' and say which different question they answer; a tripwire
@@ -190,6 +189,7 @@ function may(panel: string, sections: readonly string[]): boolean {
  */
 export const PERSON_VIEW_ROLE = 'canonical' as const;
 
+/** Whether a caller with these sections may read a named panel. The one rule, exported for per-panel endpoints. */
 export function mayReadPanel(panel: string, sections: readonly string[]): boolean {
   return may(panel, sections);
 }

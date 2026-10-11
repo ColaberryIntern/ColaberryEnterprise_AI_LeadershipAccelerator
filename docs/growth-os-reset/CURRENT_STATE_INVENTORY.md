@@ -52,7 +52,7 @@ A file named in prose without a line number is **not** evidence. Only the cited 
 The evidence, one citation per line:
 
 - Claim 1 — `backend/src/models/Lead.ts:102` → "declare ghl_contact_id: string | null;"
-- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:112` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
+- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:132` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
 - Claim 3 — `backend/src/services/ghlService.ts:54` → "const GHL_BASE = 'https://rest.gohighlevel.com/v1';"
 - Claim 4 — `backend/src/routes/calendarRoutes.ts:6` → "router.get('/api/calendar/availability', handleGetAvailability);"
 - Claim 4 — `backend/src/services/calendarService.ts:225` → "export async function createBooking(data: BookingInput): Promise<BookingResult> {"
@@ -83,7 +83,7 @@ constraints require. But "supports different sub-accounts" overstates what is li
 Fail-closed is confirmed at the deciding line — a lead routed to a non-default account
 with no key returns this rather than the default account's credential:
 
-`backend/src/services/leads/ghlAccountRouting.ts:122` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:142` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 The type-level guarantee is stronger than the runtime one: the result union only carries an
 `apiKey` on the ready branch, so a caller cannot reach a credential on the unconfigured
@@ -340,11 +340,11 @@ So whichever he picks is already enforceable.
    and that stage is treated as post-conversion, which nulls temperature and lead score
    **on the server**, not merely hiding them in the UI:
 
-`backend/src/services/adminOs/personProfileService.ts:300` → "row.temperatureUpdatedAt = null;"
+`backend/src/services/adminOs/personProfileService.ts:297` → "row.temperatureUpdatedAt = null;"
 
    with this explanation attached to the suppression:
 
-`backend/src/services/adminOs/panels/acquisitionPanels.ts:92` → "+ 'someone is to convert, and this person already has.';"
+`backend/src/services/adminOs/panels/acquisitionPanels.ts:100` → "+ 'someone is to convert, and this person already has.';"
 
    For an unpaid Explorer that sentence is false, and the suppressed population is exactly
    the one whose intent score is the point.

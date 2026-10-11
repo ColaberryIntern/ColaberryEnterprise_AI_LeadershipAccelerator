@@ -88,9 +88,29 @@ export function parseRoutes(raw: unknown): Record<string, string> | null {
   }
   if (typeof value !== 'object' || Array.isArray(value)) return null;
 
+  // A PRESENT-but-unusable ENTRY makes the whole map unreadable, exactly as a
+  // present-but-unparseable setting does.
+  //
+  // This used to drop such entries silently and return the rest, which read as
+  // "this group has no route configured" — and `routes[group] ||
+  // DEFAULT_ACCOUNT` then sent that brand's lead into the DEFAULT account, the
+  // Agent Cory AI dialer. So `{"open_house": ""}` routed open-house leads to the
+  // dialer CRM and reported `ready`: the same fail-OPEN this function exists to
+  // close, one level down. It was found by probing the real function rather than
+  // by reading it, and `ghlAccountRouting.test.ts` had pinned the permissive
+  // behaviour as intended — the same shape of mistake this docblock already
+  // describes above, which is why it is spelled out again rather than fixed
+  // quietly.
+  //
+  // An ABSENT group still defaults, which is correct and separately tested:
+  // every source behaved that way before routing existed. The distinction is
+  // between "no route configured for this group" and "a route IS configured and
+  // we cannot read it". The second is "we do not know", and the only safe answer
+  // to that is to withhold and name the setting so an operator can fix it.
   const out: Record<string, string> = {};
   for (const [group, account] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof account === 'string' && account.trim()) out[group] = account.trim();
+    if (typeof account !== 'string' || !account.trim()) return null;
+    out[group] = account.trim();
   }
   return out;
 }

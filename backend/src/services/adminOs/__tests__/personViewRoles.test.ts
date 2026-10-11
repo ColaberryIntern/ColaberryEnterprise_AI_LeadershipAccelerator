@@ -255,4 +255,63 @@ describe('T211 — the same person resolves to the same identity through all thr
     const { PERSON_VIEWS } = require('../personViewRoles');
     expect(PERSON_VIEWS.filter((v: { role: string }) => v.role === 'canonical')).toHaveLength(1);
   });
+
+  /**
+   * ── ATTEMPT 3: NO VIEW MAY SPELL AN IDENTITY FOR ITSELF ─────────────────────
+   *
+   * The three tests above assert that three ID BUILDERS agree. A verifier
+   * pointed out that none of the three VIEWS calls any of them, and found the
+   * reason: `personChainService` carried its own local
+   * `` const subjectRefOf = (leadId) => `lead:${leadId}` `` — a FOURTH
+   * re-implementation, in the very file T211 edited to declare that this view
+   * does not compete with the canonical one.
+   *
+   * Two things were wrong, and they need different fixes:
+   *
+   *   1. THE CODE. That local spelling is now `subjectRefFrom({ leadId })`, so
+   *      the spelling has one definition instead of four. The behavioural kill
+   *      for it lives where the view's own harness is:
+   *      `growthJourney/__tests__/personChainService.test.ts` pins
+   *      `ref: \`lead:${LEAD}\`` on the journey and outcomes hops, so changing
+   *      the spelling fails named tests there. That suite is part of T211's
+   *      evidence set for exactly this reason — the verifier's M16 "survived"
+   *      only because its safety scope excluded the suite that pins it.
+   *
+   *   2. THE RE-INTRODUCTION. Nothing stopped a fifth copy being written
+   *      tomorrow. This test is that tripwire: a view may CONSTRUCT a subject
+   *      ref only if it imports the shared builder. It reads stripped code, so
+   *      the docblock above — which contains the literal on purpose — cannot
+   *      satisfy or trip it, and it carries a positive control, because a scan
+   *      that finds nothing is indistinguishable from a scan that cannot see.
+   */
+  it('no person view spells a subject ref itself unless it imports the one builder', () => {
+    const PREFIX_LITERAL = /[`'"](?:enrollment|lead|org_member|visitor):(?:\$\{|'|"|\s*\+)/;
+
+    for (const view of PERSON_VIEWS) {
+      const code = stripComments(readModule(view.module));
+      if (PREFIX_LITERAL.test(code)) {
+        expect(code).toContain('identifierPrecedence');
+      }
+    }
+
+    // POSITIVE CONTROL. The pattern must actually fire on a planted literal,
+    // or the loop above is a no-op that passes whatever the views contain.
+    expect('const r = `lead:${leadId}`;').toMatch(PREFIX_LITERAL);
+    expect("const r = 'enrollment:' + id;").toMatch(PREFIX_LITERAL);
+    // NEGATIVE CONTROL. It must not fire on ordinary code, or every view would
+    // be forced to import the builder and the check would mean nothing.
+    expect('const r = buildChain(leadId);').not.toMatch(PREFIX_LITERAL);
+  });
+
+  it('the chain view really does import the shared builder — the two-way control', () => {
+    // Without this, the test above passes while `personChainService` constructs
+    // nothing and imports nothing, which is also how it would look if the
+    // stripper had eaten the file.
+    const code = stripComments(
+      readModule('backend/src/services/growthJourney/personChainService.ts'),
+    );
+    expect(code).toContain('identifierPrecedence');
+    expect(code).toContain('subjectRefFrom({ leadId })');
+    expect(code).toContain('export async function buildPersonChain');
+  });
 });

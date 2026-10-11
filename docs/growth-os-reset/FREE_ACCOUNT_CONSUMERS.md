@@ -186,7 +186,7 @@ advisory.
 
 **The two columns, and the mechanism that creates them:**
 
-- `backend/src/server.ts:1023` → "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'"
+- `backend/src/server.ts:1031` → "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'"
 
 **The partner-app gate reads `tier`, not `enrollment_type` — row 1, and the correction to the
 plan's assumption:**
@@ -230,7 +230,7 @@ does not reroute the deposit path:**
 
 **Reese keys `isStudent` on `tier`, which is why that change belongs to population B — row 13:**
 
-- `backend/src/services/reese/reeseWelcomeService.ts:354` → "const isStudent = enrollment.tier === 'member' || inRealClass;"
+- `backend/src/services/reese/reeseWelcomeService.ts:398` → "const isStudent = enrollment.tier === 'member' || inRealClass;"
 
 **Row 14 — the tier guard I first mistook for a behaviour change, the guard above it that fires
 first, and the writer that makes the first one unreachable. All three, because the retraction only

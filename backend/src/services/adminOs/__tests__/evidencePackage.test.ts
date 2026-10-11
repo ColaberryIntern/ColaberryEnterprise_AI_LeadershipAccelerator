@@ -175,7 +175,17 @@ describe('T211 — cross-brand history appears only where stitching happened', (
       // No brand filter is applied here on purpose: the stitch decides what is
       // visible, and filtering by brand as well would HIDE the cross-brand
       // history this criterion exists to surface.
-      expect(sql).not.toMatch(/brand_id\s*=/);
+      //
+      // A verifier called this assertion VACUOUS, and it was: `brand_id` appears
+      // nowhere in `personTimelineService`, so the absence could never fail and
+      // the line proved only that a string is missing from a file that never had
+      // it. An absence claim needs a control showing the matcher can fire — the
+      // same rule as grepping for a zero. So the pattern is applied to a string
+      // that DOES contain a brand filter first; if that ever stops matching, the
+      // regex has rotted and the absence below means nothing.
+      const BRAND_FILTER = /brand_id\s*=/;
+      expect('WHERE l.brand_id = :brandId').toMatch(BRAND_FILTER);
+      expect(sql).not.toMatch(BRAND_FILTER);
     });
   });
 

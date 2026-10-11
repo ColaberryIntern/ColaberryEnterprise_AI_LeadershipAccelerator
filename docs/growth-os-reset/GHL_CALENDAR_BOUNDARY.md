@@ -159,7 +159,7 @@ the browser receives results.
 
 **DECISION 8 — fail-closed is preserved exactly as it is**, and extended to the new calls:
 
-`backend/src/services/leads/ghlAccountRouting.ts:122` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:142` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 A rep whose GHL configuration is incomplete gets a refusal naming what is missing — never a
 call against another brand's account. **And the one existing fail-open sub-case is closed

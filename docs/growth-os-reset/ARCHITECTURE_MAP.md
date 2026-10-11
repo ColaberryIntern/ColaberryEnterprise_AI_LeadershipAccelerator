@@ -65,7 +65,7 @@ profile rows, and a `tier='guest'` account never gets a row to iterate.
 **Intended (§5):** one evidence view answering "who is this person" — identity, acquisition,
 cross-brand history, learning, building, community, commercial, and intelligence including
 Explorer E/I/F and the readiness score.
-**Owned by:** `backend/src/services/adminOs/personProfileService.ts:278` → "export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfile | null> {"
+**Owned by:** `backend/src/services/adminOs/personProfileService.ts:275` → "export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfile | null> {"
 **Missing, and this is the second most consequential gap in the map:**
 
 - **No Explorer intelligence reaches it.** `PersonProfile` carries no E/I/F, no Explorer
@@ -82,7 +82,7 @@ both consumers:
   derives the stage from the mere existence of an enrollment row by email, with no check of
   `enrollment_type`, `tier` or `payment_status`, and that stage is post-conversion, so:
 
-`backend/src/services/adminOs/personProfileService.ts:300` → "row.temperatureUpdatedAt = null;"
+`backend/src/services/adminOs/personProfileService.ts:297` → "row.temperatureUpdatedAt = null;"
 
 - **A second assembler exists and the two do not know about each other.** §5 warns against
   a second profile that drifts; there are already two.
@@ -143,7 +143,7 @@ open handoff's value; and the human's own moves are not race-safe.
 **Intended (§10):** a bounded modern adapter for calendars, users and appointments, leaving
 the stable contact sync alone.
 **Owned by:** `backend/src/services/ghlService.ts:54` → "const GHL_BASE = 'https://rest.gohighlevel.com/v1';"
-**Routing:** `backend/src/services/leads/ghlAccountRouting.ts:112` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
+**Routing:** `backend/src/services/leads/ghlAccountRouting.ts:132` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
 **Missing:** everything §10 asks for. No calendar, user-listing, free-slot or appointment
 code exists — `ABSENT` for all four. Six contact endpoints, one static key per sub-account,
 no retry.

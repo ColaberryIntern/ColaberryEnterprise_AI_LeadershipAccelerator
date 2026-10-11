@@ -67,8 +67,32 @@ describe('parseRoutes', () => {
     }
   });
 
-  it('drops entries that are not non-empty strings', () => {
-    expect(parseRoutes({ a: '', b: '  ', c: 5, d: null, e: 'ok' })).toEqual({ e: 'ok' });
+  it('withholds the WHOLE map when any entry is present but unusable', () => {
+    // This test previously asserted `{ e: 'ok' }` — it PINNED the permissive
+    // behaviour as intended, which is what let the hole survive T214's
+    // whole-map fix. A verifier found it by probing the real function rather
+    // than reading it: `{"open_house": ""}` dropped the entry, then
+    // `routes[group] || DEFAULT_ACCOUNT` fired and the lead resolved `ready`
+    // into the Agent Cory AI dialer. Dropping an entry says "no route for this
+    // group"; the truth is "a route IS configured and we cannot read it".
+    for (const corrupt of [
+      { open_house: '' },
+      { open_house: '   ' },
+      { open_house: 42 },
+      { open_house: null },
+      { open_house: { nested: 1 } },
+      { good: 'school_of_data_analytics', bad: '' },
+    ]) {
+      expect(parseRoutes(corrupt as unknown)).toBeNull();
+    }
+  });
+
+  it('still returns a readable map when every entry is usable', () => {
+    // The control. Without it the test above is satisfied by a function that
+    // returns null for everything, which would withhold all routing forever —
+    // fail-closed taken to the point of being no routing at all.
+    expect(parseRoutes({ open_house: 'school_of_data_analytics', webinar: ' trimmed ' }))
+      .toEqual({ open_house: 'school_of_data_analytics', webinar: 'trimmed' });
   });
 });
 
@@ -103,6 +127,41 @@ describe('resolveGhlAccountForSource', () => {
       settingKey: 'ghl_api_key_school_of_data_analytics',
     });
     expect(JSON.stringify(r)).not.toContain('default-key-for-agent-cory');
+  });
+
+  it('WITHHOLDS when one entry is corrupt, instead of defaulting that lead', async () => {
+    // The end-to-end half of the per-entry fix. Before it, an empty route value
+    // was dropped, `routes.open_house || DEFAULT_ACCOUNT` returned the default,
+    // and this resolved `ready` with the dialer's own key — a brand's lead
+    // written into Agent Cory AI because its route was misconfigured rather
+    // than absent. The unit assertion on `parseRoutes` alone would not have
+    // caught a consumer that re-defaulted after it.
+    settings({
+      [ROUTES_SETTING]: { open_house: '' },
+      ghl_api_key: 'default-key-for-agent-cory',
+    });
+
+    const r = await resolveGhlAccountForSource('open_house');
+
+    expect(r).toEqual({ status: 'routes_unreadable', settingKey: ROUTES_SETTING });
+    expect(JSON.stringify(r)).not.toContain('default-key-for-agent-cory');
+  });
+
+  it('the CONTROL: an absent group still defaults, so fail-closed is not fail-always', async () => {
+    // Guards the fix from overreach. `open_house` is simply not in a readable
+    // map, which is the legitimate pre-existing state, and that lead must still
+    // reach the default account.
+    settings({
+      [ROUTES_SETTING]: { webinar: 'school_of_data_analytics' },
+      ghl_api_key: 'default-key',
+    });
+
+    const r = await resolveGhlAccountForSource('open_house');
+
+    expect(r).toEqual({
+      status: 'ready',
+      account: { apiKey: 'default-key', accountKey: DEFAULT_ACCOUNT },
+    });
   });
 
   it('routes to the sub-account once its key is provisioned', async () => {

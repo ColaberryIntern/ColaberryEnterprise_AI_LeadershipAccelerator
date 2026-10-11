@@ -249,7 +249,7 @@ external boundary.
 **Current:** both routed source groups resolve to `unconfigured` and are withheld.
 **Disposition: CONFIGURE — Phase 4**, and **KEEP fail-closed**:
 
-`backend/src/services/leads/ghlAccountRouting.ts:122` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:142` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 ### F5 — A corrupt route map fails open to the default account
 **CLOSED by T214, 2026-10-08** — brought forward from Phase 4 because T214 was already in the
@@ -260,7 +260,7 @@ control test asserts an ABSENT map still routes to the default so the fix did no
 "withhold everything". The withheld activity row that justifies failing closed now has its own
 test. See Part 8.3 of `GHL_CALENDAR_BOUNDARY.md`.
 
-`backend/src/services/leads/ghlAccountRouting.ts:121` → "if (accountKey !== DEFAULT_ACCOUNT) {"
+`backend/src/services/leads/ghlAccountRouting.ts:141` → "if (accountKey !== DEFAULT_ACCOUNT) {"
 
 ### F6 — The internal appointment table has no provider id
 **Intent:** §12 requires a mirror carrying external ids for audit and reconciliation.
