@@ -140,6 +140,45 @@ function isAgentDisabledFromRow(row: AgentRegistryRow | null): boolean {
 // cory-engine — keeps the exact tier-derived level this gate has used since
 // PR #69, so this change cannot silently demote the existing shadow signal
 // the day it ships.
+//
+// ─── 2026-10-11: THE INVARIANT ABOVE IS NO LONGER TRUE. Read this before
+// ─── "fixing" it, because the obvious fix is wrong in two directions at once.
+//
+// "`autonomy_level_set_at` is stamped ⇒ an operator actually chose it" held when
+// it was written, because `agentReactivationService.ts` was the only writer. It
+// is now false: `classifyAiAgentAutonomyLevels.ts` and
+// `agentAutonomyReclassificationService.ts` both stamp `set_at` while writing
+// `autonomy_level_source: 'auto'`. This gate selects `autonomy_level_set_at`
+// but NOT `autonomy_level_source` (see fetchAgentRegistryRow's attribute list),
+// so a keyword-classifier's output is honoured here as a human decision.
+//
+// MEASURED IN PRODUCTION 2026-10-11, across 257 agents:
+//   - autonomy levels set by a human:            0
+//   - set by the classifier (`source: 'auto'`): 12  (9 enabled)
+//   - never classified at all (`set_at` NULL):  245
+//   - above `observe`:                            2  — Reese and Dara, both
+//                                                     `communicate`, both 'auto'
+//
+// WHY NOT JUST MAKE resolveLevel IGNORE 'auto'. Because the fallback is
+// `levelForTier(tier)`, and neither Reese nor Dara appears in
+// `agentPermissionService`'s 45-entry AGENT_PERMISSIONS map, so both resolve
+// through DEFAULT_PERMISSION (`suggest_only`) to `suggest`. The consequences
+// run opposite ways:
+//   - Reese would drop `communicate` → `suggest`, losing the `communicate` and
+//     `write` caps. She is the ONLY agent in the fleet with
+//     `abac_mode_override: 'enforce'`, so for her that is a real denial, not a
+//     shadow signal — it would stop her messaging students, which is her job.
+//   - The 10 `observe` agents would RISE `observe` → `suggest`, because their
+//     tier-derived level is higher than their stored one. A change sold as
+//     tightening would widen authority for ten agents.
+//
+// So the fix is NOT here. It is to record a human decision for the two agents
+// that are above `observe` (two rows, through the reactivation flow that writes
+// `source: 'manual'`), after which this gate honours them for the right reason
+// and ignoring 'auto' becomes safe. That is an authority decision for the DRI,
+// not a refactor. Tracked by
+// `__tests__/agentAuthorizationAutonomySource.test.ts`, which pins the measured
+// state so this cannot drift further unnoticed.
 function resolveLevel(row: AgentRegistryRow | null, tier: string | null): AutonomyLevel {
   if (row?.autonomy_level_set_at && row.autonomy_level) return row.autonomy_level;
   return levelForTier(tier);
