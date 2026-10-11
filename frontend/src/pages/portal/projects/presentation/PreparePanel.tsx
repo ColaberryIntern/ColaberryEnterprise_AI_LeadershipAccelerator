@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchAssignment, saveAssignment, type PresentationAssignment } from './presentationApi';
-import TemplateChooser from './TemplateChooser';
 
 /**
  * The Prepare stage: who the audience is, what this presentation is for, and the
@@ -81,21 +80,6 @@ export default function PreparePanel({ projectId, storyId, demo }: PreparePanelP
     push({ [field]: value });
   };
 
-  const chooseTemplate = (templateId: string) => {
-    if (demo || !data || templateId === data.templateId) return;
-    // Saved immediately, NOT debounced: this is a deliberate choice rather than typing,
-    // and the server's response rewrites the checklist on screen. Waiting 700ms to act
-    // on a click reads as the control being broken.
-    if (timer.current) window.clearTimeout(timer.current);
-    setStatus('saving');
-    saveAssignment(projectId, storyId, { template: templateId })
-      .then((d) => { if (alive.current) { setData(d); setStatus('saved'); } })
-      .catch((err: any) => {
-        if (!alive.current) return;
-        setStatus('error');
-        setMessage(err?.response?.data?.error || 'Could not change the presentation type.');
-      });
-  };
 
   const toggle = (item: string) => {
     if (!data) return;
@@ -125,9 +109,19 @@ export default function PreparePanel({ projectId, storyId, demo }: PreparePanelP
 
   return (
     <div data-testid="ps-prepare">
-      <div className="ps-card">
+      {/* The type is CHOSEN on Learn, the first stage, because it drives the
+          checklist below, the timings and the deck prompt. Prepare shows what was
+          chosen and sends you back to change it rather than offering a second copy
+          of the same radio group: two controls for one decision is how they drift. */}
+      <div className="ps-card" data-testid="ps-prepare-type">
         <h3>Presentation type</h3>
-        <TemplateChooser value={data.templateId} onChange={chooseTemplate} disabled={status === 'saving'} />
+        <p className="ps-note" style={{ margin: 0 }}>
+          <strong data-testid="ps-prepare-type-value">{data.templateLabel || data.templateId}</strong>
+        </p>
+        <p className="ps-note ps-note--soft" style={{ margin: '6px 0 0' }}>
+          Chosen on <strong>Learn</strong>, the first stage, because the checklist below and
+          your deck prompt both follow from it. Change it there and they change with it.
+        </p>
       </div>
 
       <div className="ps-card">

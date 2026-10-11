@@ -176,8 +176,12 @@ router.patch('/api/portal/projects/tasks/by-story/:storyId', requireParticipant,
 // the row, openable by a reviewer — and the service refuses stories (verified
 // from the repo) and Demo Day (marked by staff). 422 says what was wrong with
 // the evidence, so the student can fix it rather than guess.
+// `recording` names one of the student's own takes that this platform already
+// holds, by attempt id — the alternative to downloading the video and republishing
+// it publicly just to produce a link. The id is proved against this task in the
+// service; the enum here only says the shape is one we accept.
 const demoEvidenceSchema = z.object({
-  kind: z.enum(['link', 'text']),
+  kind: z.enum(['link', 'text', 'recording']),
   value: z.string().trim().min(1).max(5000),
 });
 router.post('/api/portal/projects/:projectId/tasks/:taskKey/demo-evidence', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {

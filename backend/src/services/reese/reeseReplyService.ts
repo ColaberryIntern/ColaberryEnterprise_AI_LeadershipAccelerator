@@ -9,6 +9,7 @@ import { buildReeseSystemPrompt } from './reeseSystemPrompt';
 import { ensureReeseTicketForRoom, logReeseExchangeActivity } from './reeseTicketLinkService';
 import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
+import { recordHeldAction } from './reeseGovernedActionLog';
 import { agentHasTool } from '../agents/tools/agentToolRegistry';
 import { readAttachments, attachmentInstruction } from '../agents/tools/readAttachmentsTool';
 import type { AttachmentRef } from '../agents/tools/types';
@@ -305,6 +306,23 @@ export async function maybeTriggerReeseReply(roomId: string, senderEnrollmentId:
           event: 'reply_held_for_approval', outcome: 'partial',
           context: { room_id: roomId, ticket_id: ticketId, reason: authResult.reason },
         }));
+        // Make the hold visible in the one table Reese's own scorecard reads.
+        // Pure bookkeeping, after the branch has already decided not to send —
+        // see reeseGovernedActionLog.ts's header. Fail-open by contract.
+        await recordHeldAction({
+          action: 'reese_dm_reply',
+          riskTier: REPLY_RISK_TIER,
+          verdict: authResult.verdict,
+          reasonCode: authResult.reason,
+          // The unit is the student message that triggered this reply: each
+          // held turn in a conversation is its own decision, so a second
+          // message held later is correctly a second row — only a re-run
+          // against the SAME triggering message dedupes.
+          unitKey: `room_message:${triggeringMessage?.id ?? `room:${roomId}`}`,
+          eventId: replyEventId,
+          decisionId: authResult.decisionId,
+          details: { room_id: roomId, ticket_id: ticketId },
+        });
         // Workspace mission, Phase 2 slice 1 — 'blocked' is the real, correct
         // existing status value for exactly this case.
         if (workUnitId) await updateWorkUnitStatus(workUnitId, 'blocked');

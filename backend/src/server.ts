@@ -56,6 +56,8 @@ import { ensurePresentationSlotSchema } from './db/ensurePresentationSlotSchema'
 import { ensureZoomHostSchema } from './db/ensureZoomHostSchema';
 import { ensurePresenterSlotSchema } from './db/ensurePresenterSlotSchema';
 import { ensurePresentationStudioSchema } from './db/ensurePresentationStudioSchema';
+import { ensurePresentationDeckSchema } from './db/ensurePresentationDeckSchema';
+import { ensurePresentationOpsSchema } from './db/ensurePresentationOpsSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureInboxCommitmentSchema } from './db/ensureInboxCommitmentSchema';
 import { ensureLeadViewPreferenceSchema } from './db/ensureLeadViewPreferenceSchema';
@@ -77,6 +79,12 @@ import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
+import { ensureGovSourceBundleSchema } from './db/ensureGovSourceBundleSchema';
+import { ensureGovBuildStoryEvidenceSchema } from './db/ensureGovBuildStoryEvidenceSchema';
+import { ensureGovBuildStoryAssignmentSchema } from './db/ensureGovBuildStoryAssignmentSchema';
+import { ensureGovProposalResponseSchema } from './db/ensureGovProposalResponseSchema';
+import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmentSchema';
+import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -2499,6 +2507,8 @@ async function start(): Promise<void> {
   // the tables must exist before the flag can be turned on, and empty unread tables
   // change no behaviour while it is off.
   await ensurePresentationStudioSchema();
+  await ensurePresentationDeckSchema();
+  await ensurePresentationOpsSchema();
   // Demo-day running order. Its own module rather than columns on the Studio
   // schema: a slot belongs to the SESSION, and the uniqueness that matters (one
   // presenter per position) cannot be expressed on the attempt.
@@ -2788,6 +2798,29 @@ async function start(): Promise<void> {
   // additive NEW table so a reviewer can hide a discovered v1 candidate from the whole team's feed (reversible).
   // No existing table is altered; it FKs to nothing (keyed by tenant_id + OP's opportunity uuid).
   await ensureGovOpportunityDismissalSchema();
+  // Gov source bundles (gov_source_bundles): the private solicitation-ZIP evidence of record retained by the gov
+  // qualification workspace. A single additive NEW table (no existing table altered); keyed by tenant_id +
+  // qualification key + sha256, with the bytes on the uploads volume. See ensureGovSourceBundleSchema.
+  await ensureGovSourceBundleSchema();
+  // Gov build-story evidence (gov_build_story_evidence): the student's completion hand-in for a Build story,
+  // recorded `submitted` (never self-verified). A single additive NEW table; see ensureGovBuildStoryEvidenceSchema.
+  await ensureGovBuildStoryEvidenceSchema();
+  // Gov build-story assignment (gov_build_story_assignment): the operator's assignment of a Build story to a student
+  // builder. A single additive NEW table (UNIQUE per project+story, so re-assigning upserts); it overlays the derived
+  // plan to `assigned` and NEVER confers a built/verified state. See ensureGovBuildStoryAssignmentSchema.
+  await ensureGovBuildStoryAssignmentSchema();
+  // Gov proposal production (P4): gov_proposal_response (the authored answer per established requirement, with its
+  // draft->reviewed->approved lifecycle + commit-bound figures) and gov_proposal_amendment (the dates/messages/
+  // amendment inbox, whose `affects` flips affected reviewed/approved responses back to revision_required). Two
+  // additive NEW tables (UNIQUE per project+key); no existing table is altered. The agent never advances a response
+  // to approved or records an amendment on its own — these are operator actions.
+  await ensureGovProposalResponseSchema();
+  await ensureGovProposalAmendmentSchema();
+  // Gov submission + outcome (gov_submission): the per-project submission lifecycle (preparing→…→exported→
+  // externally_submitted→acknowledged; exported ≠ submitted), the export manifest, the MANUAL external receipt, the
+  // win/loss outcome, and the PRIVATE case-study + service-capability candidates. One additive NEW table (UNIQUE per
+  // project); it never writes to the published case_studies / live service_offerings systems. See ensureGovSubmissionSchema.
+  await ensureGovSubmissionSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).

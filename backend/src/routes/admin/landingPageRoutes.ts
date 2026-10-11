@@ -14,6 +14,7 @@ import type LandingPage from '../../models/LandingPage';
  * Once the image is approved, we will build the actual landing page and save the link."
  *
  *   POST   /api/admin/landing-pages              a brief becomes a draft row with generated content
+ *   POST   /api/admin/landing-pages/suggest-name  name the page from the brief, before it exists
  *   POST   /api/admin/landing-pages/:id/revise   feedback becomes a new revision of that content
  *   PATCH  /api/admin/landing-pages/:id          hand-edit the content, slug, name or site
  *   GET    /api/admin/landing-pages/:id/preview  the REAL page, rendered, before it is public
@@ -185,6 +186,24 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
 });
 
 /** Feedback becomes a new revision of the content. The brief is re-sent, so this is a change. */
+/**
+ * Suggest what to call a page, from the brief that is already typed.
+ *
+ * NOT TIED TO A PAGE ID on purpose: this is asked BEFORE the page exists, while the operator is
+ * still filling the form, which is the only moment the answer is useful.
+ *
+ * Nothing is written. A failure is a 502 the form shows beside the field, because a name can
+ * always be typed and this must never be the thing that stops a page being built.
+ */
+router.post('/api/admin/landing-pages/suggest-name', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const source = String((req.body as { source?: unknown }).source ?? '');
+    const { suggestLandingPageName } = await import('../../services/marketing/landingPageNameService');
+    const { name, model } = await suggestLandingPageName(source);
+    res.json({ name, model });
+  } catch (err) { fail(res, err, 'landing_page_suggest_name_failed'); }
+});
+
 router.post('/api/admin/landing-pages/:id/revise', requireAdmin, async (req: Request, res: Response) => {
   const parsed = ReviseSchema.safeParse(req.body);
   if (!parsed.success) return bad(res, parsed.error.flatten());

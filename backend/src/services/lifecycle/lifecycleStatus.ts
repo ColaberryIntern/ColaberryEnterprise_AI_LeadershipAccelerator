@@ -16,9 +16,14 @@
  * load and breaks every route test that stubs `config/database`.
  */
 import type { LifecycleStage, LifecycleCondition } from './lifecycleStages';
-import type { PrerequisiteGap, LifecycleEvidence } from './lifecyclePrerequisites';
+import { LIFECYCLE_STAGES } from './lifecycleStages';
+import type { PrerequisiteGap, LifecycleEvidence, EvidenceField } from './lifecyclePrerequisites';
 import type { TransitionDecision } from './lifecycleTransition';
+import type { ManifestRefs } from './adapters/manifestRefs';
 import type { ApprovalScope, ApproveBlueprintResult } from './blueprintApproval';
+import { readLifecycleEvidence, type LifecycleRow } from './lifecycleEvidence';
+import type { Persona } from './lifecyclePersonas';
+import type { GatedAction } from './lifecycleActions';
 
 export type ProjectKind = 'student' | 'delivery';
 
@@ -44,6 +49,28 @@ export interface LifecycleStatus {
   condition: LifecycleCondition | null;
   conditionReason: string | null;
   completedStages: ReadonlyArray<LifecycleStage>;
+  /**
+   * The whole ladder, in order, so a UI can render it without keeping its own copy.
+   *
+   * Served rather than duplicated on purpose: a stage list hand-written in the frontend is a
+   * second definition of the vocabulary, and this phase has corrected that class of error
+   * three times already.
+   */
+  stages: ReadonlyArray<LifecycleStage>;
+  /**
+   * The review personas this caller holds, and the gated actions they may actually perform.
+   *
+   * SERVED, NOT COMPUTED ON THE CLIENT. A frontend copy of the role-to-permission table would be
+   * a second definition of the grant table, and the drift shows up as a surface offering an
+   * action the server then refuses — which is what happened before this field existed: the
+   * change-request panel was offered to an observer and 403'd on submit.
+   *
+   * `permittedActions` is the authority of THIS caller's role, not of their persona. A persona
+   * spans roles of different authority, so "an author may approve" is true while an associate
+   * builder may not.
+   */
+  viewerPersonas: ReadonlyArray<Persona>;
+  permittedActions: ReadonlyArray<GatedAction>;
   /** The next stage, or null at steady state. */
   nextStage: LifecycleStage | null;
   /** What is missing before the next stage. Empty when it is ready. */
@@ -55,13 +82,6 @@ export interface LifecycleStatus {
 }
 
 /** Narrow the Sequelize row to the fields this service reads. */
-interface LifecycleRow {
-  id: string;
-  tenant_id: string;
-  stage: string;
-  condition: string | null;
-  condition_reason: string | null;
-}
 
 /**
  * Load the lifecycle row for a project, then judge tenant access with the AUDITED guard.
@@ -71,7 +91,14 @@ interface LifecycleRow {
  * than the caller silently returning null. Nothing is returned to the caller before the guard
  * has run.
  */
-async function loadAndAuthorize(
+/**
+ * Load a lifecycle row and record an audited access decision for it.
+ *
+ * EXPORTED so sibling services reuse this guard instead of running a second one. A second
+ * implementation is how one path ends up recording the attempt and another does not, and the
+ * audit trail is the whole point of the guard.
+ */
+export async function loadAndAuthorize(
   projectId: string,
   kind: ProjectKind,
   admin: AdminIdentity | undefined,
@@ -106,51 +133,14 @@ async function loadAndAuthorize(
   return {
     id: String(row.get('id')),
     tenant_id: tenantId,
+    student_project_id: (row.get('student_project_id') as string | null) ?? null,
+    delivery_project_id: (row.get('delivery_project_id') as string | null) ?? null,
     stage: String(row.get('stage')),
     condition: (row.get('condition') as string | null) ?? null,
     condition_reason: (row.get('condition_reason') as string | null) ?? null,
   };
 }
 
-/**
- * Gather the evidence a prerequisite predicate needs.
- *
- * STUBBED DELIBERATELY, and visibly. Every field is the honest "nothing assessed yet" value, not
- * a value that would let a stage pass. The adapters (P2-T5) produce the pinned references and
- * Phase 3 produces the allocation and effort measures that fill these in; wiring those here
- * before they exist would mean inventing readiness. The consequence is that a transition request
- * is currently REFUSED with the real list of what is missing, which is the correct behaviour for
- * a feature that ships dark — not a stub that waves projects through.
- */
-async function gatherEvidence(row: LifecycleRow): Promise<LifecycleEvidence> {
-  return {
-    tenantId: row.tenant_id,
-    requirementCount: 0,
-    requirementsWithoutProvenance: [],
-    uncitedRequirementSourceBlocks: [],
-    unresolvedSourceBlocks: [],
-    processesWithoutTasks: [],
-    graphHasStart: false,
-    graphHasEnd: false,
-    unreachableTasks: [],
-    unboundedReworkLoops: [],
-    tasksWithoutExecutionClass: [],
-    tasksWithoutAccountableHuman: [],
-    agentTasksAccountableForThemselves: [],
-    tasksUnmappedToSurface: [],
-    screensWithoutRationale: [],
-    selectedDesignRef: null,
-    manifestContentHash: null,
-    unknownAllocationCount: 0,
-    effortCoverageDisclosed: false,
-    proposedBy: null,
-    approval: null,
-    currentManifestRevision: null,
-    actorStillAuthorized: true,
-    mustHaveRequirementsWithoutStory: [],
-    storiesWithoutTraceability: [],
-  };
-}
 
 export async function readLifecycleStatus(input: {
   projectId: string;
@@ -164,9 +154,16 @@ export async function readLifecycleStatus(input: {
   const { prerequisiteGaps, blockingGaps } = await import('./lifecyclePrerequisites');
   const { STAGE_PERMISSION } = await import('./lifecycleTransition');
 
+  const { personasForRole } = await import('./lifecyclePersonas');
+  const { permittedActionsForRole } = await import('./lifecycleActions');
+  const role = input.admin?.role ?? '';
+  // Both fail closed on an unknown or absent role — see `permittedActionsForRole`, which is
+  // where that behaviour is tested rather than being inline and unreachable from a test.
+  const permittedActions = permittedActionsForRole(role);
+
   const stage = stages.isLifecycleStage(row.stage) ? row.stage : 'discovery';
   const nextStage = stages.ADVANCE[stage];
-  const blockers = nextStage ? blockingGaps(prerequisiteGaps(nextStage, await gatherEvidence(row))) : [];
+  const blockers = nextStage ? blockingGaps(prerequisiteGaps(nextStage, await readLifecycleEvidence(row))) : [];
 
   return {
     projectId: input.projectId,
@@ -175,6 +172,9 @@ export async function readLifecycleStatus(input: {
     condition: stages.isLifecycleCondition(row.condition) ? row.condition : null,
     conditionReason: row.condition_reason,
     completedStages: stages.completedStages(stage),
+    stages: LIFECYCLE_STAGES,
+    viewerPersonas: personasForRole(role),
+    permittedActions,
     nextStage,
     blockers,
     nextActorRole: nextStage ? STAGE_PERMISSION[nextStage] : null,
@@ -200,8 +200,12 @@ export async function requestTransition(input: {
     // No lifecycle row means nothing to transition. Returned as a refusal rather than thrown, so
     // the route maps it like any other refusal instead of a 500.
     return evaluateTransition({
-      from: null, to: input.to, actorPermissions: [], evidence: await gatherEvidence({
+      from: null, to: input.to, actorPermissions: [], evidence: await readLifecycleEvidence({
         id: '', tenant_id: '', stage: 'discovery', condition: null, condition_reason: null,
+        // Both null: there is no project, so there is no manifest and nothing is measurable.
+        // Every field stays unassessed, which keeps every prerequisite BLOCKING — the right
+        // answer for a transition request against a project with no lifecycle row at all.
+        student_project_id: null, delivery_project_id: null,
       }),
     });
   }
@@ -215,7 +219,7 @@ export async function requestTransition(input: {
     to: input.to,
     actorPermissions: deliveryPermissionsFor(roles),
     isDraftScenario: input.isDraftScenario,
-    evidence: await gatherEvidence(row),
+    evidence: await readLifecycleEvidence(row),
   });
 
   if (!decision.allowed) return decision;

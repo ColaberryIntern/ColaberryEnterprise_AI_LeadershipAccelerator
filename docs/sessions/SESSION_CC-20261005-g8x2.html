@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261005-g8x2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, October 6, 2026 at 5:53 AM</div>
+    <div><span class="sid">CC-20261005-g8x2</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Gov bid decision, Phase 2: opportunity dossier (who &amp; when) parsed from the attested ZIP**</h2>
+          <span class="badge">2026-10-05</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The qualify workspace now answers &quot;who do I contact and when are the key dates?&quot; from the solicitation itself, so a reviewer deciding whether to pursue is not left in the dark. A new PURE, deterministic `extractDossier(blocks)` in `proposalExtractor.ts` scans the already-extracted context blocks and pulls, by literal regex, email + ≥10-digit phone contacts (each citing its source document), 6-digit NAICS codes, and meeting/key-date lines that carry a date (pre-bid/site-visit/Q&amp;A for meetings; due/deadline/closing for key dates, gated on a date being present in the same sentence) — deduped, capped, and labeled &quot;detected — verify&quot;, never authoritative; it fabricates nothing and returns empty arrays when nothing matches. `ProposalExtraction` gained a `dossier` field so the existing extractor returns it alongside requirements. The decoupled attest path (`POST .../attest-zip`) now parses the dossier from the uploaded ZIP once (best-effort; a parse failure is non-fatal and logged `gov_qualification_dossier_extract_failed` — the attestation gate still records) and persists it on `requirements_json.dossier` via `recordZipAttestation` (add only; revoke never writes one). `getDecoupledWorkspace` surfaces it as `workspace.dossier` (null until attested). Frontend: a new &quot;Opportunity dossier — who &amp; when&quot; `SectionCard` (new `OpportunityDossier` component) renders contacts with mailto/tel links, NAICS badges, and meeting/key-date lines with their dates and source docs, plus an honest empty-state and a &quot;verify against the solicitation&quot; rail; new `GovDossier` type on `factoryApi`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `jest -c jest.ci.config.ts` — proposalExtractor 12/12 (incl. 8 new: email/phone detection + source citation + dedupe, short-digit rejection, 6-digit NAICS + dedupe, meeting + dated key-date capture, no-date→not-captured, empty + non-context-block ignored, total/garbage-safe) and govQualification 71/71 (incl. 2 new: attest add persists dossier / revoke does not; getDecoupledWorkspace surfaces stored dossier / null when none); govQualificationRoutes 48/48 unchanged. Backend + frontend `tsc --noEmit` clean on the changed files on an isolated tsc 5.7.3 (the worktree junction resolves the stale 4.9.5, and lacks @anthropic-ai/sdk and @dnd-kit/* so those unrelated files error — not mine; CI, which has the deps, is the authoritative gate — Frontend typecheck passed on #2983 in 1m43s).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive + reversible — NO schema change (dossier stores in the existing `requirements_json` JSONB), NO new dependency (adm-zip/pdf-parse already parse the ZIP). HONESTY RAILS intact: the dossier is reference only and gates NOTHING — it is never consulted by evaluateRequirements, coverage, canApprovePursuit/canApproveBid, or any approval path; every item cites its source document and is labeled &quot;detected — verify&quot;. Bonfire is login-gated (no programmatic access), so contacts/meetings come from the uploaded ZIP, not an auto-sync. PROGRESS.md is the sealed pre-2026-08-23 archive in this main-tracking worktree (`generateSessionChangelog.js` confirms), so this per-session file is the live log; neither PR touches PROGRESS.md.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Gov bid decision, Phase 3: journey strip + &quot;have we pursued this agency before?&quot; relationship cross-ref**</h2>
+          <span class="badge">2026-10-05</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two advisory, deterministic reads that finish the bid-decision brief — where the opportunity sits in our pipeline, and whether we have history with the agency. (1) JOURNEY STRIP: new PURE `frontend/src/pages/admin/govJourney.ts` `deriveJourney(ws state)` → a six-stage pipeline (Discovered → Requirements established → Solicitation attested → Assessed → Pursuit approved → Build authorized), each stage&#39;s done/current/todo state read from workspace fields (record present, established count, zipAttestation, evaluation+coverage, decision); the current marker is the first not-done stage; Build is shown but never auto-marked done (it is a separate reserved authorization). Rendered as a compact `GovJourneyStrip` SectionCard at the top of the decoupled workspace. (2) RELATIONSHIP: new `backend/src/services/factory/govRelationship.ts` — PURE `normalizeAgency` + `matchPriorPursuits(agency, rows, excludeKey)` (normalized exact agency match, exclude the current opportunity, dedupe by canonicalOpportunityId keeping the newest-dated, newest-first, capped at 10) + `rowFromQualification` (agency/title from decoupled provenance, else the OP source snapshot) + `getAgencyRelationship(tenantId, gwsKey, agency)` (loads active tenant qualifications, best-effort). Folded into `getDecoupledWorkspace` as `workspace.relationship` behind a try/catch (mirrors the existing sync/dossier best-effort pattern; null on any throw). Frontend `RelationshipPanel` lists prior pursuits (title + decision badge + date) or an honest &quot;first opportunity we&#39;ve worked with them&quot; empty-state; `GovRelationship` type on factoryApi.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend `jest -c jest.ci.config.ts` — NEW govRelationship 13/13 (normalizeAgency variants + blank; matcher exact-match/exclude-self/dedupe-keep-newest/no-overlap/empty-agency/cap-10/garbage-safe; rowFromQualification provenance+snapshot+defaults; getAgencyRelationship blank-skips-DB + loads-active-matches), govQualification 72/72 (+1: workspace surfaces relationship, null when the lookup throws), govQualificationRoutes 48/48 + schema parity unchanged (143 across the 4 suites). Frontend `react-scripts test` — NEW govJourney 7/7 (stage order, each transition, assessed-requires-established, approval marks done + Build is the current tail, rfi_response), AdminGovQualificationPage 38/38 (+3: journey strip renders + marks current stage, relationship panel lists prior pursuits, empty-state). Backend + frontend `tsc --noEmit` clean on the changed files (isolated TS 5.7.3; the only errors in the run are pre-existing missing-dep noise in unrelated files — @anthropic-ai/sdk, @dnd-kit/* — present on CI). CI authoritative.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive + reversible — NO schema change (reads existing rows; relationship stores nothing), NO new route (folds into the existing program-gated GET workspace), NO new dependency. ADVISORY ONLY: both reads gate nothing — the journey strip mirrors the real gates without changing them, the relationship match is &quot;possible prior work — verify&quot; (agency names are free text, matched by normalized exact string). Stacks on Phase 2 (#2983); GitHub retargets #2985 to main when #2983 merges. Not merged, not deployed; merge stays the DRI&#39;s click.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261005-g8x2.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

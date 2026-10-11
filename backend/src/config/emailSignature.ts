@@ -11,7 +11,7 @@ export const ALI_EMAIL_SIGNATURE = `
       </td>
       <td style="padding-left: 15px; vertical-align: top;">
         <div style="font-size: 16px; font-weight: bold; color: #333;">Ali Muwwakkil</div>
-        <div style="font-size: 13px; color: #4ab1c4; font-weight: 500;">Managing Director &mdash; AI Systems Architect</div>
+        <div style="font-size: 13px; color: #4ab1c4; font-weight: 500;">Managing Director / AI Systems Architect</div>
         <div style="font-size: 12px; color: #777;">Colaberry Inc.</div>
         <div style="margin-top: 10px; font-size: 12px; color: #555;">
           &#x1F4CD; 200 Chisholm Place, Suite 200 &middot; Plano, TX 75075

@@ -502,6 +502,8 @@ import DeliveryAgentTrustRequirement from './DeliveryAgentTrustRequirement';
 import DeliveryEvidence from './DeliveryEvidence';
 import DeliveryClientAcceptance from './DeliveryClientAcceptance';
 import DeliveryChangeRequest from './DeliveryChangeRequest';
+import BlueprintDesignDecision from './BlueprintDesignDecision';
+import BlueprintVisualContract from './BlueprintVisualContract';
 // Memory Graph. Imported here so the models register with Sequelize when the index is
 // loaded, not only when an intelligence service happens to import them directly. The
 // schema/model parity test walks sequelize.models, so an unregistered model is an
@@ -1699,6 +1701,8 @@ export {
   DeliveryEvidence,
   DeliveryClientAcceptance,
   DeliveryChangeRequest,
+  BlueprintDesignDecision,
+  BlueprintVisualContract,
   GraphNode,
   GraphEdge,
   GraphEvent,

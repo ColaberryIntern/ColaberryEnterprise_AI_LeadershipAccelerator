@@ -58,6 +58,15 @@ export const GENERATION_STAGES = [
   'allocation',
   'agents',
   'effort',
+  // ADDED BY P5-T1.4 for the four checks the generation input could not reach. They live
+  // HERE, in the one stage vocabulary, rather than in a private list inside
+  // `blueprintComposition.ts` — two definitions of the same vocabulary is the duplicate-truth
+  // failure this phase has already corrected twice. Extending a const adds no public symbol,
+  // so the 12-symbol surface ceiling on this module is untouched.
+  'workspaces',
+  'workspace_states',
+  'controls',
+  'design',
   'complete',
 ] as const;
 export type GenerationStage = (typeof GENERATION_STAGES)[number];

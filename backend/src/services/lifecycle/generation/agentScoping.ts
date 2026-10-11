@@ -157,7 +157,8 @@ export interface ScopingReport {
  * `refs` is optional because builder/runtime distinctness is a property of the MANIFEST, not of
  * the roster: when refs are supplied the check is delegated to `checkRefIntegrity`, which already
  * computes `agentNamespaceCollisions` over `refs.agents.builder` and `refs.agents.runtime`
- * (`manifestRefs.ts:159-162`). It is reused rather than reimplemented, so a fix there is a fix
+ * (`checkRefIntegrity`'s `agentNamespaceCollisions`, cited by symbol because this line number
+ * moved twice). It is reused rather than reimplemented, so a fix there is a fix
  * here.
  */
 export function validateAgentScoping(

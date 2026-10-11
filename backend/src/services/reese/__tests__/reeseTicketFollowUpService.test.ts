@@ -16,6 +16,7 @@ jest.mock('../reeseInitiateDmService', () => ({ initiateDm: jest.fn() }));
 jest.mock('../reeseAutonomousOutreachService', () => ({ RISK_TIER: 'R3' }));
 jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
 jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
+jest.mock('../reeseGovernedActionLog', () => ({ recordHeldAction: jest.fn(), recordSentAction: jest.fn() }));
 
 import Ticket from '../../../models/Ticket';
 import RoomMessage from '../../../models/RoomMessage';
@@ -26,6 +27,7 @@ import { generateTicketFollowUpMessage } from '../reeseTicketFollowUpMessageServ
 import { initiateDm } from '../reeseInitiateDmService';
 import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
+import { recordHeldAction, recordSentAction } from '../reeseGovernedActionLog';
 import { processDueReeseTicketFollowUps } from '../reeseTicketFollowUpService';
 
 const mockTicketFindAll = Ticket.findAll as unknown as jest.Mock;
@@ -41,6 +43,8 @@ const mockGenerateMessage = generateTicketFollowUpMessage as unknown as jest.Moc
 const mockInitiateDm = initiateDm as unknown as jest.Mock;
 const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.Mock;
 const mockEmitReeseLedgerEvent = emitReeseLedgerEvent as unknown as jest.Mock;
+const mockRecordHeldAction = recordHeldAction as unknown as jest.Mock;
+const mockRecordSentAction = recordSentAction as unknown as jest.Mock;
 
 const REESE_ADMIN_ID = 'reese-admin-1';
 const REESE_ID = 'reese-enrollment-1';
@@ -87,6 +91,8 @@ beforeEach(() => {
   mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: null, verdict: 'would_allow', reason: 'ok', allowed: true });
   mockAddTicketComment.mockResolvedValue(undefined);
   mockEmitReeseLedgerEvent.mockResolvedValue(undefined);
+  mockRecordHeldAction.mockResolvedValue('written');
+  mockRecordSentAction.mockResolvedValue('written');
 });
 
 afterEach(() => {
@@ -194,6 +200,32 @@ describe('processDueReeseTicketFollowUps — attempt cap + escalation', () => {
     expect(result.decisions).toEqual([{ ticketId: TICKET_ID, branch: 'held_for_approval' }]);
     expect(mockAddTicketComment).not.toHaveBeenCalled();
   });
+
+  it('records a held escalation too — the path that previously left no record at all', async () => {
+    mockFollowUpFindOne.mockResolvedValue(makeFollowUpRow({ attempt_count: 3 }));
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'd1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+
+    await processDueReeseTicketFollowUps(false);
+
+    expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
+    expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_ticket_followup_escalated',
+      riskTier: 'R3',
+      verdict: 'would_require_approval',
+      unitKey: 'ticket_follow_up:followup-1:escalate',
+    }));
+  });
+
+  it('a real escalation is still recorded as success', async () => {
+    mockFollowUpFindOne.mockResolvedValue(makeFollowUpRow({ attempt_count: 3 }));
+
+    await processDueReeseTicketFollowUps(false);
+
+    expect(mockRecordHeldAction).not.toHaveBeenCalled();
+    expect(mockRecordSentAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_ticket_followup_escalated',
+    }));
+  });
 });
 
 describe('processDueReeseTicketFollowUps — daily cap', () => {
@@ -233,6 +265,54 @@ describe('processDueReeseTicketFollowUps — send held by authorization', () => 
     expect(mockInitiateDm).not.toHaveBeenCalled();
     expect(mockAddTicketComment).not.toHaveBeenCalled();
   });
+
+  it('records the hold as a skipped activity row instead of leaving no trace', async () => {
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'd1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+
+    await processDueReeseTicketFollowUps(false);
+
+    expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
+    expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_ticket_followup',
+      riskTier: 'R3',
+      verdict: 'would_require_approval',
+      reasonCode: 'held',
+      decisionId: 'd1',
+      // Keyed on the attempt that was held, which a hold leaves unbumped.
+      unitKey: 'ticket_follow_up:followup-1:attempt:1',
+    }));
+    // Never recorded as a send.
+    expect(mockRecordSentAction).not.toHaveBeenCalled();
+  });
+
+  it('correlates the held row to the same authorization decision it logs', async () => {
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'd1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+
+    await processDueReeseTicketFollowUps(false);
+
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    expect(mockRecordHeldAction.mock.calls[0][0].eventId).toBe(authArgs.eventId);
+  });
+
+  it('a log layer that is down still leaves the hold a clean hold', async () => {
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'd1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+    mockRecordHeldAction.mockResolvedValue('log_unavailable');
+
+    const result = await processDueReeseTicketFollowUps(false);
+
+    expect(result.decisions).toEqual([{ ticketId: TICKET_ID, branch: 'held_for_approval' }]);
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+  });
+
+  it('a real send is still recorded as success, never as skipped', async () => {
+    await processDueReeseTicketFollowUps(false);
+
+    expect(mockRecordHeldAction).not.toHaveBeenCalled();
+    expect(mockRecordSentAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_ticket_followup',
+      reason: 'follow_up_attempt_1_sent',
+    }));
+  });
 });
 
 describe('processDueReeseTicketFollowUps — dry run makes ZERO real writes/sends', () => {
@@ -246,6 +326,10 @@ describe('processDueReeseTicketFollowUps — dry run makes ZERO real writes/send
     expect(mockAddTicketComment).not.toHaveBeenCalled();
     expect(mockFollowUpCreate).not.toHaveBeenCalled();
     expect(mockFollowUpFindOrCreate).not.toHaveBeenCalled();
+    // Dry run must not write activity rows either — a simulated send is not a
+    // send and a simulated hold is not a hold.
+    expect(mockRecordSentAction).not.toHaveBeenCalled();
+    expect(mockRecordHeldAction).not.toHaveBeenCalled();
   });
 
   it('an at-cap ticket is reported as "escalated" in dry-run without ever writing the real escalation', async () => {

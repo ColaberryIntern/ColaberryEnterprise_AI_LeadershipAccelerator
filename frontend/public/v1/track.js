@@ -135,17 +135,42 @@
 
   function push(event_type, props) {
     props = props || {};
-    buffer.push(
-      Object.assign(
-        {
-          event_type: event_type,
-          timestamp: new Date().toISOString(),
-          page_url: location.href,
-          page_path: location.pathname,
-        },
-        props,
-      ),
+
+    // EVERY property a caller passed used to be spread at the TOP LEVEL only, but the ingest
+    // reads `req.body.event_data` for a single event and `event.event_data` inside a batch
+    // (backend trackingController.ts). Nothing ever assembled that key, so
+    // `page_events.event_data` was written NULL for every event this file has ever sent - the
+    // label on a CTA click included. `frontend/src/utils/tracker.ts` fixed exactly this for the
+    // in-app tracker and left this one alone; the split is visible in the table as
+    // cta_click rows with a payload (from the app) beside cta_click rows without (from here).
+    //
+    // THE TOP-LEVEL SPREAD IS KEPT, for the same reason it was kept there: the ingest
+    // destructures several of these keys from the body root. Sending both is additive - the
+    // body gains the key the server was already looking for and loses nothing it already read.
+    var eventData = {};
+    var hasPayload = false;
+    for (var k in props) {
+      if (Object.prototype.hasOwnProperty.call(props, k)) {
+        eventData[k] = props[k];
+        hasPayload = true;
+      }
+    }
+
+    var event = Object.assign(
+      {
+        event_type: event_type,
+        timestamp: new Date().toISOString(),
+        page_url: location.href,
+        page_path: location.pathname,
+      },
+      props,
     );
+    // Omitted entirely for a payload-free event rather than sent as `{}`: the ingest stores
+    // `event_data || null`, and `{}` would read as truthy to every consumer that tests the
+    // column while every historical row holds NULL.
+    if (hasPayload) event.event_data = eventData;
+
+    buffer.push(event);
   }
 
   // ---- Flush ------------------------------------------------------------
@@ -234,6 +259,37 @@
     }
   }
 
+  /**
+   * Send straight away when the click is about to navigate off the page.
+   *
+   * THE BUG THIS FIXES. A click used to be buffered like any other event and sent by the
+   * `beforeunload` beacon. On a landing page that is the ONLY kind of click there is - the CTA
+   * is the point of the page - and the beacon does not survive it: `sendBeacon` with an
+   * `application/json` body is not a CORS-safelisted content type, so it needs a preflight, and
+   * the browser is already tearing the page down. Measured on production: zero `cta_click` rows
+   * had ever been recorded for a landing page, while suppressing the navigation and clicking the
+   * same button produced one immediately.
+   *
+   * `flush()` uses `fetch(..., { keepalive: true })`, which IS specified to outlive the
+   * document, and it is issued here while the page is still alive so the preflight completes
+   * normally. A same-document link (an in-page anchor) is left to the normal flush - there is no
+   * unload to race.
+   */
+  function flushIfLeaving(el) {
+    try {
+      var a = el && el.tagName === 'A' ? el : (el && el.closest ? el.closest('a[href]') : null);
+      if (!a || !a.getAttribute('href')) return;
+      var href = a.getAttribute('href');
+      // A pure fragment or a javascript: handler does not unload the document.
+      if (href.charAt(0) === '#' || href.toLowerCase().indexOf('javascript:') === 0) return;
+      // Opening in a new tab leaves this document alive, so the normal flush still runs.
+      if (a.target && a.target !== '_self') return;
+      flush();
+    } catch (err) {
+      // Never let instrumentation break the click itself.
+    }
+  }
+
   // ---- Click tracking ---------------------------------------------------
   function onClick(e) {
     var target = e.target;
@@ -269,6 +325,7 @@
           data_track: el.getAttribute('data-track') || el.getAttribute('data-track-cta') || null,
           is_cta: true,
         });
+        flushIfLeaving(el);
         return;
       }
       if (el.matches && el.matches(interactiveSelectors)) {
@@ -278,6 +335,7 @@
           href: el.href || null,
           data_track: el.getAttribute('data-track') || null,
         });
+        flushIfLeaving(el);
         return;
       }
       el = el.parentElement;

@@ -11,8 +11,9 @@ jest.mock('../../../models/GovQualification', () => ({
   __esModule: true,
   default: { findOne: (...a: any[]) => findOne(...a), create: (...a: any[]) => create(...a) },
 }));
-// getDecoupledWorkspace reads the daily-sync state; keep that DB-free in these unit tests.
+// getDecoupledWorkspace reads the daily-sync state + the agency relationship; keep both DB-free in these unit tests.
 jest.mock('../govOpportunitySync', () => ({ getGovSyncEntry: jest.fn().mockResolvedValue(null) }));
+jest.mock('../govRelationship', () => ({ getAgencyRelationship: jest.fn().mockResolvedValue({ agency: null, priorCount: 0, pursuits: [] }) }));
 
 import {
   evaluateRequirements, evaluateEvidenceCoverage, createQualification, recordDecision, approveGovQualification,
@@ -262,6 +263,16 @@ describe('approveGovQualification (server-side, source-snapshot bound)', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('MASTER-ADMIN override: approver == reviewer is exempt from separation of duties, audit-logged', async () => {
+    findOne.mockResolvedValue(base({ reviewer_identity_id: 'rev-1' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let caught: any = null;
+    await approveGovQualification(approveInput({ approverIdentityId: 'rev-1', masterAdminOverride: true })).catch((e) => { caught = e; });
+    expect(caught).not.toBeInstanceOf(SelfApprovalError);                                      // the gate is bypassed for the master admin
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('self_approval_master_admin_override')); // and it is audit-logged
+    warn.mockRestore();
+  });
+
   it('records the approver in the immutable evidence, distinct from the reviewer', async () => {
     findOne.mockResolvedValue(base());
     create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
@@ -450,6 +461,18 @@ describe('recordZipAttestation — no OP-docId check; forks preserving establish
     expect(out.requirements_json.provenance.title).toBe('T');
   });
 
+  it('Phase 2: add PERSISTS the parsed dossier on requirements_json; revoke does not add one', async () => {
+    const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: ['541512'], meetings: [], keyDates: [] };
+    findOne.mockResolvedValue(current());
+    create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
+    const added = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', sha256: 'b'.repeat(64), dossier });
+    expect(added.requirements_json.dossier).toEqual(dossier);
+    expect(added.requirements_json.established).toHaveLength(1); // established still preserved
+    findOne.mockResolvedValue(current({ requirements_json: { established: [{ id: 'R1' }], reviewedDocuments: [{ method: 'solicitation_zip', sha256: 'd'.repeat(64) }] } }));
+    const revoked = await recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'revoke', dossier });
+    expect(revoked.requirements_json.dossier).toBeUndefined(); // revoke never writes a dossier
+  });
+
   it('stale expectedVersion -> QualificationConflictError (no write)', async () => {
     findOne.mockResolvedValue(current({ version: 3 }));
     await expect(recordZipAttestation({ gwsKey: GWS, biddingEntity: 'colaberry', expectedVersion: 1, reviewerIdentityId: 'rev', mode: 'add', sha256: 'c'.repeat(64) })).rejects.toBeInstanceOf(QualificationConflictError);
@@ -503,6 +526,43 @@ describe('getDecoupledWorkspace — canApprove from ZIP coverage + requirement b
     expect(ws.canApprove).toBe(false);
     expect(ws.coverage.reasons).toContain('no_requirements_established');
   });
+
+  it('Phase 2 (P2-T3): surfaces a response slot per established requirement, each citing its source ref, all unanswered', async () => {
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.responseSlots).toEqual([{ requirementId: 'R1', statement: 'x', sourceRef: 'D1', status: 'unanswered' }]);
+  });
+
+  it('Phase 3 (P3-T1): surfaces the Build plan — a story per solution_build requirement (with its prompt), admin reqs excluded', async () => {
+    findOne.mockResolvedValue(rec({ established: [
+      { id: 'B1', text: 'The vendor shall provide a claims search database system.' }, // build signal -> story
+      { id: 'A1', text: 'Submit a completed Execution of Offer form.' },               // admin -> no story
+    ], reviewedDocuments: [zip] }));
+    const ws = await getDecoupledWorkspace('t', GWS, 'colaberry');
+    expect(ws.build.buildStoryCount).toBe(1);
+    expect(ws.build.stories.map((s: any) => s.requirementId)).toEqual(['B1']); // admin A1 excluded
+    expect(ws.build.stories[0].id).toBe('STORY-B1');
+    expect(ws.build.stories[0].status).toBe('unassigned');
+    expect(ws.build.stories[0].prompt).toContain('claims search database system'); // the prompt cites the requirement verbatim
+    expect(ws.build.releases[0].storyIds).toEqual(['STORY-B1']);
+  });
+
+  it('Phase 2: surfaces the stored dossier (null when none stored)', async () => {
+    const dossier = { contacts: [{ kind: 'email', value: 'po@agency.gov', sourceDocument: 'RFP.txt' }], naics: [], meetings: [], keyDates: [] };
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip], dossier }));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toEqual(dossier);
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).dossier).toBeNull();
+  });
+
+  it('Phase 3: surfaces the agency relationship, and is null when the lookup throws (best-effort)', async () => {
+    const { getAgencyRelationship } = require('../govRelationship');
+    findOne.mockResolvedValue(rec({ established: estOk, reviewedDocuments: [zip] }));
+    getAgencyRelationship.mockResolvedValueOnce({ agency: 'Harris County', priorCount: 1, pursuits: [{ canonicalOpportunityId: 'gws:other', title: 'Prior RFP', agency: 'Harris County', decision: 'no_bid', date: null }] });
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toMatchObject({ agency: 'Harris County', priorCount: 1 });
+    getAgencyRelationship.mockRejectedValueOnce(new Error('db down'));
+    expect((await getDecoupledWorkspace('t', GWS, 'colaberry')).relationship).toBeNull();
+  });
 });
 
 describe('approveDecoupledQualification — ZIP-evidence gate; never calls OP; canonical path untouched', () => {
@@ -528,6 +588,15 @@ describe('approveDecoupledQualification — ZIP-evidence gate; never calls OP; c
   it('self-approval (approver == reviewer) -> SelfApprovalError', async () => {
     findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { reviewer_identity_id: 'same' }));
     await expect(approveDecoupledQualification(input({ approverIdentityId: 'same' }))).rejects.toBeInstanceOf(SelfApprovalError);
+  });
+  it('MASTER-ADMIN override: approver == reviewer bypasses separation of duties, audit-logged', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { reviewer_identity_id: 'same' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let caught: any = null;
+    await approveDecoupledQualification(input({ approverIdentityId: 'same', masterAdminOverride: true })).catch((e) => { caught = e; });
+    expect(caught).not.toBeInstanceOf(SelfApprovalError);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('self_approval_master_admin_override'));
+    warn.mockRestore();
   });
   it('stale expectedVersion -> QualificationConflictError', async () => {
     findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { version: 3 }));

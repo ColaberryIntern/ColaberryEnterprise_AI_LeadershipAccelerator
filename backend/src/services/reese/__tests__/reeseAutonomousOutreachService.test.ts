@@ -25,12 +25,14 @@ jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: je
 jest.mock('../outreachChecklist', () => ({ createOutreachChecklistInstance: jest.fn() }));
 jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
 jest.mock('../../workGraph/workGraphService', () => ({ createWorkUnit: jest.fn(), updateWorkUnitStatus: jest.fn() }));
+jest.mock('../reeseGovernedActionLog', () => ({ recordHeldAction: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import { createTicket } from '../../ticketService';
 import { authorizeTicketDispatch } from '../../workLedger/agentActionAuthorizationBridge';
 import { getReeseAdminUserId, getReeseAgentId } from '../reeseIdentitySeed';
 import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
+import { recordHeldAction } from '../reeseGovernedActionLog';
 import { isEligibleForAutonomousOutreach } from '../reeseEligibilityService';
 import {
   getPilotCohortStudentEnrollmentIds,
@@ -53,6 +55,7 @@ const mockAuthorizeTicketDispatch = authorizeTicketDispatch as unknown as jest.M
 const mockGetReeseAdminUserId = getReeseAdminUserId as unknown as jest.Mock;
 const mockGetReeseAgentId = getReeseAgentId as unknown as jest.Mock;
 const mockLogAgentActivity = logAgentActivity as unknown as jest.Mock;
+const mockRecordHeldAction = recordHeldAction as unknown as jest.Mock;
 const mockIsEligible = isEligibleForAutonomousOutreach as unknown as jest.Mock;
 const mockGetPilotCohortStudentIds = getPilotCohortStudentEnrollmentIds as unknown as jest.Mock;
 const mockEvaluateInactivity = evaluateInactivitySignal as unknown as jest.Mock;
@@ -76,6 +79,7 @@ beforeEach(() => {
   mockReeseOutreachCreate.mockResolvedValue({ id: 'outreach-1' });
   mockCreateTicket.mockResolvedValue({ ...TICKET, update: jest.fn().mockResolvedValue(undefined) });
   mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_allow', reason: 'ok', allowed: true });
+  mockRecordHeldAction.mockResolvedValue('written');
   mockGetReeseAdminUserId.mockResolvedValue('reese-admin-1');
   mockGetReeseAgentId.mockResolvedValue('reese-agent-1');
   mockLogAgentActivity.mockResolvedValue(undefined);
@@ -403,6 +407,8 @@ describe('runReeseAutonomousOutreachSweep — Real-enforcement Phase 2 (respects
     // via wasContactedWithinCadence().
     expect(mockReeseOutreachCreate).not.toHaveBeenCalled();
     expect(mockEmitReeseLedgerEvent).not.toHaveBeenCalled();
+    // Never recorded as a real send. The hold gets its OWN record instead —
+    // see the dedicated test below.
     expect(mockLogAgentActivity).not.toHaveBeenCalled();
     expect(mockCreateOutreachChecklistInstance).not.toHaveBeenCalled();
     expect(result.decisions[0]).toEqual(
@@ -417,6 +423,62 @@ describe('runReeseAutonomousOutreachSweep — Real-enforcement Phase 2 (respects
     // matching the existing ordering) — only the send and its downstream bookkeeping
     // are held.
     expect(mockCreateTicket).toHaveBeenCalled();
+  });
+
+  it('records the hold as a skipped activity row, so it is no longer only a console line', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: false });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
+    expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'reese_autonomous_outreach',
+      riskTier: 'R3',
+      verdict: 'would_require_approval',
+      reasonCode: 'requires_approval:high_risk_tier',
+      decisionId: 'auth-1',
+      unitKey: `enrollment:${STUDENT_ID}:signal:inactivity`,
+    }));
+  });
+
+  it('correlates the held row to the same authorization decision it logs', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    const [authArgs] = mockAuthorizeTicketDispatch.mock.calls[0];
+    expect(mockRecordHeldAction.mock.calls[0][0].eventId).toBe(authArgs.eventId);
+  });
+
+  it('a log layer that is down leaves the hold a clean hold, never a send and never a crash', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+    mockAuthorizeTicketDispatch.mockResolvedValue({ decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'held', allowed: false });
+    mockRecordHeldAction.mockResolvedValue('log_unavailable');
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    expect(result.decisions[0]).toEqual(
+      expect.objectContaining({ action: 'skipped', reason: 'held_for_approval' }),
+    );
+  });
+
+  it('a real send still writes success and never a held row', async () => {
+    mockEvaluateInactivity.mockResolvedValue({ daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['x'] });
+
+    await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockRecordHeldAction).not.toHaveBeenCalled();
+    expect(mockLogAgentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'reese_autonomous_outreach', result: 'success' }),
+    );
+    expect(mockLogAgentActivity).not.toHaveBeenCalledWith(
+      expect.objectContaining({ result: 'skipped' }),
+    );
   });
 });
 

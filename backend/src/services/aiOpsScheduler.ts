@@ -79,6 +79,7 @@ import {
   runAgentBehaviorMonitor,
   runAdmissionsKnowledgeSync,
   runOfferRouting,
+  runCampaignPerformance,
   // Super agents
   runCampaignOpsSuperAgent,
   runLeadIntelligenceSuperAgent,
@@ -176,6 +177,16 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'ConversationOptimizationAgent', hardcodedSchedule: '0 4 * * *', runner: runConversationOptimization, label: 'Conversation optimization' },
   { agentName: 'CampaignQAAgent', hardcodedSchedule: '0 */6 * * *', runner: runCampaignQA, label: 'Campaign QA agent' },
   { agentName: 'CampaignSelfHealingAgent', hardcodedSchedule: '15,45 * * * *', runner: runSelfHealing, label: 'Campaign self-healing' },
+
+  // Marketing department — funnel performance analysis (agent_group 'marketing').
+  // Read-only: it SELECTs and returns a per-tenant report, writing no campaign,
+  // lead or email row. Its runner is aiOrchestrator's runAgent() wrapper, which
+  // already writes run_count/error_count and the activity-log row, so this entry
+  // must NOT be added to UNINSTRUMENTED_AGENTS above — that set means the runner
+  // ALSO gets instrumentCronJob(), and two writers on one AiAgent row
+  // double-count every run. Offset to :25 rather than joining the four other
+  // jobs already on '0 */6 * * *'.
+  { agentName: 'DeptCampaignPerformanceAgent', hardcodedSchedule: '25 */6 * * *', runner: runCampaignPerformance, label: 'Marketing campaign performance analysis' },
 
   // Platform agents
   { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth, label: 'Orchestration health' },

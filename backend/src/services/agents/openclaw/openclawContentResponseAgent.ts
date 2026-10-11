@@ -355,8 +355,8 @@ Closings should land. Not invite. The reader should walk away with the thought, 
 const SYSTEM_PROMPT_WITH_LINK = `${SYSTEM_PROMPT}
 
 LINK INSTRUCTION: You MUST end your response with a natural reference to a working tool or live resource our team has built, using the tracked URL provided. Frame it as something the reader can use on their own business, not as marketing collateral or an article they should go read. Good framings:
-   - "We built a free tool that takes your operation and shows you what your AI org would look like: [URL]"
-   - "If you want to see this on your own business, we have a free advisor that walks through it: [URL]"
+   - "We built a tool that takes your operation and shows you what your AI org would look like: [URL]"
+   - "If you want to see this on your own business, we have an advisor that walks through it: [URL]"
    - "Here is a working demo you can try on your own scenario: [URL]"
 The URL MUST appear in your response. Do NOT use the phrase "I wrote more about this here" or anything that implies the destination is an article. The destination is a tool. Frame it as a tool.`;
 
@@ -404,7 +404,7 @@ function buildUserPrompt(signal: any, tone: string, maxLength: number, trackedUr
 
   let linkInstruction = '';
   if (trackedUrl) {
-    linkInstruction = `\n\nIMPORTANT: End your response with this exact link on its own line, introduced naturally as a working tool the reader can use on their own business (e.g. "We built a free tool that walks through this on your own data:" or "If you want to see what this looks like for your operation, try this:"). The link MUST appear: ${trackedUrl}. Do NOT use phrases like "I wrote more about this here" or "we published a guide" - the destination is a tool, not an article.`;
+    linkInstruction = `\n\nIMPORTANT: End your response with this exact link on its own line, introduced naturally as a working tool the reader can use on their own business (e.g. "We built a tool that walks through this on your own data:" or "If you want to see what this looks like for your operation, try this:"). The link MUST appear: ${trackedUrl}. Do NOT use phrases like "I wrote more about this here" or "we published a guide" - the destination is a tool, not an article.`;
   }
 
   return `Platform: ${platform}
@@ -477,7 +477,7 @@ async function generateLLMResponse(signal: any, tone: string, maxLength: number,
     }
     // Truncate content BEFORE appending tracked URL to prevent URL cutoff
     if (trackedUrl && !cleaned.includes(trackedUrl)) {
-      const suffix = `\n\nWe built a free tool that walks through this on your own business: ${trackedUrl}`;
+      const suffix = `\n\nWe built a tool that walks through this on your own business: ${trackedUrl}`;
       cleaned = cleaned.slice(0, maxLength - suffix.length) + suffix;
     } else {
       cleaned = cleaned.slice(0, maxLength);

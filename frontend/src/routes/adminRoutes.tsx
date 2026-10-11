@@ -87,6 +87,7 @@ const CEOCommandCenter = lazy(() => import('../pages/admin/CEOCommandCenter'));
 const AdminFunnelPage = lazy(() => import('../pages/admin/AdminFunnelPage'));
 const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
+import lifecycleRoutes from './lifecycleRoutes';
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
 // Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
 // no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
@@ -297,6 +298,9 @@ const adminRoutes = (
             Redirect the old URL to the CB System Command dashboard. */}
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
+        {/* Project lifecycle. Ships dark behind ENABLE_PROJECT_LIFECYCLE; the page renders the
+            disabled answer explicitly rather than an empty state. */}
+        {lifecycleRoutes}
       </Route>
     </Route>
   </>

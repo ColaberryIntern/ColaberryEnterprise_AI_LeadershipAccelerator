@@ -12,9 +12,11 @@ import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage'));
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
+const ShowcaseGalleryPage = lazy(() => import('../pages/portal/showcase/ShowcaseGalleryPage'));
 import PageGate from '../components/paywall/PageGate';
 const RuntimeWorkspace = lazy(() => import('../pages/portal/runtime/RuntimeWorkspace'));
 const ProjectWorkspacePage = lazy(() => import('../pages/portal/projects/ProjectWorkspacePage'));
+const GovProjectPortalPage = lazy(() => import('../pages/portal/projects/GovProjectPortalPage'));
 const PortalLessonPage = lazy(() => import('../pages/portal/PortalLessonPage'));
 const PortalSessionsPage = lazy(() => import('../pages/portal/PortalSessionsPage'));
 const PortalAssignmentsPage = lazy(() => import('../pages/portal/PortalAssignmentsPage'));
@@ -60,6 +62,7 @@ const portalRoutes = (
       {/* Design E student surfaces — each renders its own PortalShell chrome,
           so they sit OUTSIDE PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
+      <Route path="/portal/showcase" element={<ShowcaseGalleryPage />} />
       {/* Employee → management portal: mints a scoped admin token, redirects to /admin. */}
       <Route path="/portal/mgmt-enter" element={<PortalMgmtEnterPage />} />
       <Route path="/portal/settings" element={<SettingsPage />} />
@@ -108,6 +111,9 @@ const portalRoutes = (
       {/* The build-side twin of the runtime: same page shape, a story instead
           of a card. Keyed on the STORY id, which is what a student sees. */}
       <Route path="/portal/projects/workspace/:projectId/:taskId" element={<ProjectWorkspacePage />} />
+      {/* Student view of an ASSIGNED government project. Access is enforced server-side (the guarded
+          /api/portal/gov-projects/:id endpoint); an unassigned project resolves to a "not found" page. */}
+      <Route path="/portal/gov-projects/:projectId" element={<GovProjectPortalPage />} />
       {/* Retired AI Project Builder entry points → student home. */}
       <Route path="/portal/home" element={<Navigate to="/portal/today" replace />} />
       <Route path="/portal/dashboard" element={<Navigate to="/portal/today" replace />} />

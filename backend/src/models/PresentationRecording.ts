@@ -41,6 +41,7 @@ export interface PresentationRecordingAttributes {
   has_audio?: boolean | null;
   has_shared_screen?: boolean | null;
   review_reason?: string | null;
+  recovery_url?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -64,6 +65,7 @@ class PresentationRecording
   declare has_audio: boolean | null;
   declare has_shared_screen: boolean | null;
   declare review_reason: string | null;
+  declare recovery_url: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -88,6 +90,10 @@ PresentationRecording.init(
     has_audio: { type: DataTypes.BOOLEAN, allowNull: true },
     has_shared_screen: { type: DataTypes.BOOLEAN, allowNull: true },
     review_reason: { type: DataTypes.TEXT, allowNull: true },
+    // Set ONLY on a student recovery row. A recording we actually ingested has
+    // no URL here, so a non-null value is itself the marker that nobody verified
+    // what is on the other end of it.
+    recovery_url: { type: DataTypes.TEXT, allowNull: true },
   },
   {
     sequelize,

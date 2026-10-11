@@ -34,7 +34,10 @@ function forgeLightTokens(css: string): Record<string, string> {
   const root = /:root\s*\{([^}]*)\}/.exec(css);
   if (!root) throw new Error('no :root block in colors.css');
   const tokens: Record<string, string> = {};
-  for (const [, name, value] of root[1].matchAll(/(--[a-z-]+)\s*:\s*([^;]+);/g)) {
+  // Digits are part of a token name: the Forge tokens have none, but the Colaberry ramp is
+  // `--red-500` / `--neutral-900`, and a name class of `[a-z-]` silently matched none of them.
+  // Strictly broader, so it cannot change what the AI Flotation comparison already saw.
+  for (const [, name, value] of root[1].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
     tokens[name] = value.trim();
   }
   return tokens;
@@ -75,10 +78,50 @@ describe('the client surface theme matches the vendored design system', () => {
 
   it('themes only the brands whose palette was actually agreed', () => {
     // Five theme keys are seeded - enterprise, training, cpn, ai-flotation, refactored -
-    // and only one has a design system. A guessed palette in front of a real client is
-    // worse than the neutral surface, so the others must stay absent until their tokens
-    // land the way this one did.
+    // and two now have a documented design system. A guessed palette in front of a real
+    // client is worse than the neutral surface, so `enterprise`, `cpn` and `refactored`
+    // must stay absent until their tokens land the way these two did.
     const keys = [...ts.matchAll(/^\s{2}'([a-z-]+)':\s*\{/gm)].map((m) => m[1]);
-    expect(keys).toEqual(['ai-flotation']);
+    expect(keys.sort()).toEqual(['ai-flotation', 'training']);
+  });
+
+  /**
+   * Colaberry's palette is sourced, not guessed - so it is pinned to its source too.
+   *
+   * `frontend/src/colaberry/tokens/colors.css` is headed "Built from the Colaberry School
+   * Style Guide". Every token in the `training` theme is one of its named ramp values, and
+   * each is pinned to the ramp token it came from rather than to a bare hex, so a drift in
+   * the style guide fails here instead of leaving the landing pages on a stale red.
+   */
+  describe('the training theme is the Colaberry School Style Guide', () => {
+    const COLABERRY_TOKENS = path.join(
+      REPO_ROOT, 'frontend', 'src', 'colaberry', 'tokens', 'colors.css',
+    );
+    const ramp = forgeLightTokens(fs.readFileSync(COLABERRY_TOKENS, 'utf8'));
+    const training = registryTokens(ts, 'training');
+
+    it('the ramp parsed - otherwise every check below would be vacuous', () => {
+      expect(ramp['--red-500']).toBeDefined();
+      expect(Object.keys(training)).toHaveLength(8);
+    });
+
+    it.each([
+      ['--accent', '--red-500'],
+      ['--accent-soft', '--red-50'],
+      ['--accent-contrast', '--neutral-0'],
+      ['--bg', '--neutral-0'],
+      ['--bg-elevated', '--neutral-50'],
+      ['--fg', '--neutral-900'],
+      ['--fg-muted', '--neutral-700'],
+      ['--line', '--neutral-200'],
+    ])('%s is the style guide\'s %s', (themeToken, rampToken) => {
+      expect(training[themeToken].toUpperCase()).toEqual(ramp[rampToken].toUpperCase());
+    });
+
+    it('the accent is cherry red, named explicitly', () => {
+      // Named rather than left to the table above, which would pass vacuously if the ramp
+      // parser ever silently matched nothing.
+      expect(training['--accent'].toUpperCase()).toEqual('#FB2832');
+    });
   });
 });

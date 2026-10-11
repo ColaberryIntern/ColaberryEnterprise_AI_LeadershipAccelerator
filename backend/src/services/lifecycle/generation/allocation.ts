@@ -120,8 +120,10 @@ function assignmentsByTask(project: FactoryProject): Map<string, Assignment[]> {
  * Returns `null` — not a guess — when there is no performer or no executor. An unknown allocation
  * must stay visible: `lifecyclePrerequisites`' `allocation_unknown` rule exists precisely so an
  * unknown is INTENDED to block full approval while still permitting a draft. That path is not
- * live yet - `lifecycleStatus.ts:144` hardcodes `unknownAllocationCount: 0` in
- * `gatherEvidence`, so the rule cannot fire until T6 loads a real project there. The count
+ * live yet - `readLifecycleEvidence` in `lifecycleStatus.ts` leaves `unknownAllocationCount`
+ * unassessed (cited by symbol rather than line, which moved) in
+ * `readLifecycleEvidence` (renamed from `gatherEvidence` by P5-T1.1), so the rule cannot fire
+ * until a later task loads a real project there. The count
  * this module returns is correct and tested at both ends; only the middle is stubbed.
  * Defaulting to `human` here would make a blank look like a decision somebody took.
  */

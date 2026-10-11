@@ -9,15 +9,18 @@
  *    the flag is on, so deploying it changes nothing until it is deliberately switched on.
  *  - Creating the project NEVER authorizes or runs a build — buildAuthorization + factoryGenerate are untouched.
  *    The tracks ship `unassessed` and every requirement's `evidence_state` is `unassessed` (never fabricated).
- *  - Idempotent + atomic: the project is resolved by a deterministic slug scoped to the fixed gov container
- *    (fail-closed if the container is not configured), tracks + requirements use deterministic `factoryId`s and
- *    `upsert`, and the whole write is one transaction — so approving twice is a no-op, not a duplicate.
+ *  - Idempotent + atomic + REPLAY-SAFE: the project is resolved by a deterministic slug scoped to the fixed gov
+ *    container (fail-closed if not configured), tracks are create-if-absent and requirements create-or-GUARDED-
+ *    update (source-derived fields only), all in one transaction — so re-approving is a no-op that NEVER resets an
+ *    existing track's owner / student-build link / status, or a requirement's human-assessed evidence. (Gov
+ *    ingestion runs LIVE in prod, so a blind upsert here was erasing ownership/links/evidence on every re-approval.)
  *  - Reversible: deleting the `delivery_projects` row cascades the tracks/requirements away.
  */
 import { sequelize } from '../../config/database';
 import { factoryId } from './factoryIds';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 import type { ContractRequirementAttributes } from '../../models/ContractRequirement';
+import type { SourceLinkRefusal } from '../delivery/projectSourceLink';
 
 const TRACK_TYPES = ['proposal', 'solution_build'] as const;
 
@@ -35,7 +38,26 @@ export function govProjectSlug(canonicalOpportunityId: string): string {
 }
 
 /**
- * Map one reviewer-ESTABLISHED requirement onto a `contract_requirements` row for both tracks. PURE + deterministic
+ * A technical/solution signal in a requirement's text/section/kind. Its PRESENCE is what adds the solution_build
+ * track; its absence keeps the requirement proposal-only. Deliberately broad on build words, so an administrative
+ * form (pricing, execution-of-offer, a legal schedule, a certification, a registration) carries NO build signal.
+ */
+const BUILD_SIGNAL_RE = /\b(system|software|application|platform|database|integration|api|interface|data\s+(migration|conversion|search)|search\s+database|report(ing)?|dashboard|workflow|hosting|deployment|encryption|security\s+control|uptime|sla|performance|scalab|architecture|develop|implement|configure|technical|functional\s+requirement|user\s+interface)\b/i;
+
+/**
+ * Classify which track(s) a requirement belongs to, deterministically. EVERY requirement maps to `proposal` (the
+ * bid must respond to it); `solution_build` is added ONLY when the requirement carries a technical/build signal —
+ * so an ADMINISTRATIVE requirement (a pricing schedule, an execution-of-offer form, a legal schedule, a SAM
+ * registration) is never mapped to the build track and cannot generate a software feature. Build stories appear
+ * "where relevant" (the spec's rule), not for every form. Pure + total; reviewable/overridable later.
+ */
+export function classifyRequirementTracks(est: any): string[] {
+  const hay = `${String(est?.text ?? '')} ${String(est?.section ?? '')} ${String(est?.kind ?? '')}`.toLowerCase();
+  return BUILD_SIGNAL_RE.test(hay) ? ['proposal', 'solution_build'] : ['proposal'];
+}
+
+/**
+ * Map one reviewer-ESTABLISHED requirement onto a `contract_requirements` row for its classified track(s). PURE + deterministic
  * (the id is `factoryId('contract_requirement', [deliveryProjectId, canonical_req_id])`, so a re-run upserts the
  * same row). Fabricates nothing: `evidence_state` is always `unassessed` (the factory has not assessed evidence),
  * and only fields the established requirement actually carries are copied. `human_confirmed` is true because the
@@ -51,7 +73,7 @@ export function toContractRequirementRow(deliveryProjectId: string, est: any): C
     statement: String(est?.text ?? ''),
     kind: String(est?.kind ?? 'compliance'),
     priority: est?.bindingStatus === 'binding_solicitation_requirement' ? 'must' : 'should',
-    tracks: ['proposal', 'solution_build'],
+    tracks: classifyRequirementTracks(est),
     source_document: String(est?.sourceDocument ?? ''),
     amendment_version: '',
     section: String(est?.section ?? ''),
@@ -124,22 +146,42 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
     }
     const deliveryProjectId = project.id as string;
 
+    // Create-if-absent. A re-approval must NEVER reset an existing track's owner, student-build link, or status
+    // (ingestion runs live in prod — a blind upsert here erased them). findOrCreate inserts only when missing.
     for (const trackType of TRACK_TYPES) {
-      await ContractTrack.upsert({
-        id: factoryId('track', [deliveryProjectId, trackType]),
-        delivery_project_id: deliveryProjectId,
-        track_type: trackType,
-        status: 'unassessed',
-        owner_identity_id: null,
-        solution_student_project_id: null,
-      }, { transaction });
+      const trackId = factoryId('track', [deliveryProjectId, trackType]);
+      await ContractTrack.findOrCreate({
+        where: { id: trackId },
+        defaults: {
+          id: trackId,
+          delivery_project_id: deliveryProjectId,
+          track_type: trackType,
+          status: 'unassessed',
+          owner_identity_id: null,
+          solution_student_project_id: null,
+        },
+        transaction,
+      });
     }
 
+    // Replay-safe requirements: create a new one, else GUARD the update to source-derived descriptive fields only.
+    // The reviewer's evidence assessment (evidence_state / source_evidence / human_confirmed) is never overwritten
+    // on an existing row — the established set refreshes WHAT a requirement says, not how far its evidence got.
+    // Stale rows (absent from the new established set) are left in place: non-destructive; marking them superseded
+    // needs an additive column and is a separate task.
     let requirements = 0;
     for (const est of established) {
       const row = toContractRequirementRow(deliveryProjectId, est);
       if (!row) continue;
-      await ContractRequirement.upsert(row, { transaction });
+      const existing = await ContractRequirement.findOne({ where: { id: row.id }, transaction });
+      if (!existing) {
+        await ContractRequirement.create(row, { transaction });
+      } else {
+        await ContractRequirement.update({
+          statement: row.statement, kind: row.kind, priority: row.priority, tracks: row.tracks,
+          source_document: row.source_document, section: row.section, extracted_text: row.extracted_text,
+        }, { where: { id: row.id }, transaction });
+      }
       requirements += 1;
     }
 
@@ -147,4 +189,42 @@ export async function ensureGovTwoTrackProject(input: EnsureGovTwoTrackProjectIn
 
     return { deliveryProjectId, created, tracks: TRACK_TYPES.length, requirements };
   });
+}
+
+export interface LinkGovBuildResult { ok: true; linkId: string; created: boolean; }
+
+/**
+ * Link a gov project's SOLUTION_BUILD track to a student build project. Reuses the existing bridge
+ * (`linkStudentProject` — idempotent, verifies both ends exist, NEVER mutates the student row), and only on a
+ * real link sets `ContractTrack.solution_student_project_id` — so the link is never fabricated. Only the
+ * solution_build track is wired (the proposal track never carries a build link). Idempotent; on a refusal
+ * (no such project / reason required) nothing is wired. Replay-safe (ensureGovTwoTrackProject preserves it).
+ */
+export async function linkGovBuildToStudentProject(input: {
+  deliveryProjectId: string;
+  studentProjectId: string;
+  reason: string;
+  actorIdentityId?: string | null;
+}): Promise<LinkGovBuildResult | SourceLinkRefusal> {
+  const { default: DeliveryProject } = await import('../../models/DeliveryProject');
+  const { default: Project } = await import('../../models/Project');
+  const { default: DeliveryProjectSourceLink } = await import('../../models/DeliveryProjectSourceLink');
+  const { default: ContractTrack } = await import('../../models/ContractTrack');
+  const { linkStudentProject } = await import('../delivery/projectSourceLink');
+
+  const link = await linkStudentProject({
+    deliveryProjectId: input.deliveryProjectId,
+    studentProjectId: input.studentProjectId,
+    reason: input.reason,
+    actorIdentityId: input.actorIdentityId ?? null,
+    models: { DeliveryProject, Project, DeliveryProjectSourceLink },
+  });
+  if (!link.ok) return link; // refusal: no such delivery/student project, or reason required — wire nothing.
+
+  // Only now (a real, existence-checked link) set the column, and ONLY on the solution_build track.
+  await ContractTrack.update(
+    { solution_student_project_id: input.studentProjectId },
+    { where: { delivery_project_id: input.deliveryProjectId, track_type: 'solution_build' } },
+  );
+  return { ok: true, linkId: link.linkId, created: link.created };
 }

@@ -76,6 +76,10 @@ import { runAiSafetyMonitorAgent } from './agents/security/aiSafetyMonitorAgent'
 import { runAgentBehaviorMonitorAgent } from './agents/security/agentBehaviorMonitorAgent';
 import { runAdmissionsKnowledgeSyncAgent } from './agents/admissions/admissionsKnowledgeSyncAgent';
 import { runOfferRoutingAgent } from './agents/offerRoutingAgent';
+import {
+  AGENT_NAME as CAMPAIGN_PERFORMANCE_AGENT_NAME,
+  runCampaignPerformanceAgent,
+} from './agents/departments/marketing/campaignPerformanceAgent';
 import { logAiEvent, logAgentActivity } from './aiEventService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import type { AgentExecutionResult, AgentAction } from './agents/types';
@@ -879,4 +883,17 @@ export async function runFinanceSuperAgent(): Promise<AgentExecutionResult | nul
 
 export async function runOfferRouting(): Promise<AgentExecutionResult | null> {
   return runAgent('OfferRoutingAgent', runOfferRoutingAgent);
+}
+
+/**
+ * Marketing department — campaign funnel performance analysis.
+ *
+ * Goes through runAgent() deliberately: that is what buys the enabled/paused
+ * gate, run_count/error_count and the activity-log row. The agent itself is a
+ * pure reader and writes none of those, so its SCHEDULE_REGISTRY entry must
+ * NOT also be listed in aiOpsScheduler's UNINSTRUMENTED_AGENTS — two trackers
+ * on one row double-count every run.
+ */
+export async function runCampaignPerformance(): Promise<AgentExecutionResult | null> {
+  return runAgent(CAMPAIGN_PERFORMANCE_AGENT_NAME, runCampaignPerformanceAgent);
 }

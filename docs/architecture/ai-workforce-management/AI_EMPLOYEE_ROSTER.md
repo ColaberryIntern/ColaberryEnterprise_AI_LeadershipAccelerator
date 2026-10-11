@@ -35,7 +35,7 @@ Names are domains, not employee names. Employee names, voices and personalities 
 | 7 | Internship & Career Readiness | Dhee (`dhee@colaberry.com`, admin) | `org_members` row approved for creation at that employee's Phase 1 | 1 (`WorkforceCareerDirector`) | Near-greenfield |
 | 8 | Website Portfolio & Conversion | Sai Tejesh Kowtharapu (`saitejesh@colaberry.com`) | resolved; has admin login | 8, **all retire candidates** (Website orchestrator wrappers, zero callers) | Effectively greenfield: the existing website agents were never wired |
 | 9 | Platform Automation & Reliability | Kes Delele (`kesetebirhan@gmail.com`) | resolved; no admin login | 38 (28 behaviours, 1 tool, 6 retire, 3 unresolved) | Also the natural owner of the 33 untracked scheduler crons |
-| 10 | Executive Intelligence & Governance | *unresolved; Ali is the only `manager` in `org_members`* | **decide** | **75** (51 behaviours, 3 tools, 18 retire, 2 duplicates, 1 unresolved) | The largest bucket by far: reporting, dept-strategy architects, CoryBrain family, strategic cycles |
+| 10 | Executive Intelligence & Governance | **Ali Muwwakkil** (`ali@colaberry.com`, decided 2026-10-07) | decided | **75** (51 behaviours, 3 tools, 18 retire, 2 duplicates, 1 unresolved) | The largest bucket by far: reporting, dept-strategy architects, CoryBrain family, strategic cycles |
 | — | Unassigned | | | 21 (behavioural scoring, alumni, partnerships) | No target domain in the mission; needs a home or a new decision |
 
 Total across rows: 246.

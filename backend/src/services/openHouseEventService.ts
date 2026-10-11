@@ -121,7 +121,7 @@ export async function getCurrentOpenHouseEvent(opts: { force?: boolean } = {}): 
       is_online: isOnline,
       is_free: isFree,
       format_label: isOnline ? 'Live online event' : 'In person',
-      price_label: isFree ? 'Free to attend' : 'Paid',
+      price_label: isFree ? 'No card needed' : 'Paid',
       capacity,
       registered,
       seats_remaining: capacity == null ? null : Math.max(0, capacity - registered),

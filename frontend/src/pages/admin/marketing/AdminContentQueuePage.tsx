@@ -62,10 +62,10 @@ export default function AdminContentQueuePage() {
   return (
     <div className="admin-page">
       <PageHeader
-        title="Content queue"
+        title="All posts"
         subtitle={subtitle}
         icon="list-check-2"
-        breadcrumb={[{ label: 'Marketing', to: '/admin/marketing' }, { label: 'Content queue' }]}
+        breadcrumb={[{ label: 'Marketing', to: '/admin/marketing' }, { label: 'All posts' }]}
         actions={<Link to="/admin/marketing/composer" className="btn btn-sm btn-primary">New post</Link>}
       />
       <SectionCard>

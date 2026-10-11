@@ -96,6 +96,7 @@ import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
+import govProjectPortalRoutes from './govProjectPortalRoutes';
 import presentationPortalRoutes from './presentationPortalRoutes';
 import certPrepRoutes from './certPrepRoutes';
 import certificationRoutes from './certificationRoutes';
@@ -634,6 +635,11 @@ router.use(studentOpsRoutes);
 // mount's own comment. Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark).
 router.use('/api/portal/projects', requireParticipant, requireContentEntitlement('projects'));
 router.use(projectsPortalRoutes);
+// Government project portal (student entry point to an ASSIGNED gov project). Mounted here with the other
+// portal-project routes; it is self-guarded per route (requireParticipant + requireGovProjectAccess, a
+// project-membership check — NOT the /api/portal/projects content entitlement, which is path-scoped to that
+// prefix and does not cover /api/portal/gov-projects).
+router.use(govProjectPortalRoutes);
 // Presentation Studio, split out of projectsPortalRoutes when that file crossed
 // the line ceiling. Mounted IMMEDIATELY after it and nowhere else: the
 // `/api/portal/projects` entitlement gate above is path-scoped, so it already

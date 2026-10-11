@@ -175,7 +175,7 @@ const GENTLE_COLD_STEPS: SequenceStep[] = [
     subject: 'Resource: AI leadership readiness checklist',
     body_template: '',
     ai_instructions:
-      "Offer a free resource (AI readiness checklist). Ask if they'd find it useful for their team. Soft CTA: reply to get it.",
+      "Offer a resource (AI readiness checklist). Ask if they'd find it useful for their team. Soft CTA: reply to get it.",
     step_goal: 'resource_offer',
     ai_tone: 'helpful',
     max_attempts: 1,

@@ -10,6 +10,7 @@ import RendererEngine from './studio/RendererEngine';
 import LifecycleStepper from './studio/LifecycleStepper';
 import VersionCompare from './studio/VersionCompare';
 import Sandbox from './studio/Sandbox';
+import PresentationStudioPanel from './studio/PresentationStudioPanel';
 import VideoEmbed from '../../../components/timeline/VideoEmbed';
 import { parseVideoUrl } from '../../../utils/videoEmbed';
 import AutofillButton from '../../../components/common/AutofillButton';
@@ -801,6 +802,10 @@ const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initia
           </div>
         </div>
       )}
+      {/* Instructor controls for the Presentation Studio. A child component rather than
+          more lines here: this file is already past the 500-line ceiling, so the next
+          change to it must not grow it. */}
+      <PresentationStudioPanel />
     </div>
   );
 };

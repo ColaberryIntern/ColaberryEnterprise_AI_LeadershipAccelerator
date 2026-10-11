@@ -350,6 +350,15 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(container.querySelector('[data-testid="ps-prepare-demo"]')).not.toBeNull();
     expect(portalApi.patch).not.toHaveBeenCalled();
   });
+  it('Prepare shows the chosen type but does NOT offer a second chooser', async () => {
+    // Two controls for one decision is how they drift, and this one SAVES - a second
+    // would be a second writer.
+    mount('PREP-3');
+    click(stageBtn('prepare'));
+    await flush();
+    expect(container.querySelector('[data-testid="ps-prepare-type"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ps-chooser"]')).toBeNull();
+  });
 
   it('the Learn stage shows the authored lesson, not a placeholder', async () => {
     mount('PREP-3');
@@ -423,11 +432,14 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     expect(status.getAttribute('aria-live')).toBe('polite');
   });
 
-  it('Prepare offers a template chooser — without it a student is locked to one type', async () => {
-    // The gap this closes: someone on PREP-3 preparing for the Capstone Expo could only
-    // ever generate a 5-minute visual presentation, never the 8-minute final showcase.
+  it('LEARN offers the template chooser, before the lesson that depends on it', async () => {
+    // Moved from Prepare on 2026-10-06. Ali: "the presentation types should be at the very
+    // beginning since they drive what is being built". Learn was already fetching a lesson
+    // keyed on a type the student had not been asked about yet.
+    // The original gap this closes still holds: someone on PREP-3 preparing for the Capstone
+    // Expo could only ever generate a 5-minute visual presentation, never the 8-minute showcase.
     mount('PREP-3');
-    click(stageBtn('prepare'));
+    click(stageBtn('learn'));
     await flush();
     expect(container.querySelector('[data-testid="ps-chooser"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ps-choice-final_showcase"]')).not.toBeNull();
@@ -435,7 +447,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
 
   it('leads with the four prominent types and hides the rest behind "more"', async () => {
     mount('PREP-3');
-    click(stageBtn('prepare'));
+    click(stageBtn('learn'));
     await flush();
     // Seven exist; four prominent are shown (the current selection is among them).
     expect(container.querySelectorAll('.ps-choice')).toHaveLength(4);
@@ -448,7 +460,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
 
   it('marks the current type with aria-checked, not colour alone', async () => {
     mount('PREP-3');
-    click(stageBtn('prepare'));
+    click(stageBtn('learn'));
     await flush();
     const current = container.querySelector('[data-testid="ps-choice-ai_visual_presentation"]')!;
     expect(current.getAttribute('aria-checked')).toBe('true');
@@ -461,7 +473,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
     // Debouncing a deliberate click by 700ms reads as the control being broken, and the
     // response rewrites the checklist on screen.
     mount('PREP-3');
-    click(stageBtn('prepare'));
+    click(stageBtn('learn'));
     await flush();
 
     click(container.querySelector('[data-testid="ps-choice-final_showcase"]'));
@@ -473,7 +485,7 @@ describe('Presentation Studio — six stages over the existing prep task', () =>
 
   it('clicking the already-selected type does not fire a pointless save', async () => {
     mount('PREP-3');
-    click(stageBtn('prepare'));
+    click(stageBtn('learn'));
     await flush();
     click(container.querySelector('[data-testid="ps-choice-ai_visual_presentation"]'));
     await flush();

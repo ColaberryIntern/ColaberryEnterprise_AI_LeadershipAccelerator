@@ -11,6 +11,14 @@ import DepartmentReport from '../models/DepartmentReport';
 import AgentTask from '../models/AgentTask';
 import StrategicInitiative from '../models/StrategicInitiative';
 import { Op, QueryTypes } from 'sequelize';
+import { classifyError } from '../utils/errorClassifier';
+import { projectDepartmentReports } from './briefings/departmentHealthVerdict';
+import type { DepartmentHealth, DepartmentHealthProjection } from './briefings/departmentHealthVerdict';
+
+// Re-exported so a consumer can name the verdict union without reaching into
+// briefings/ - `health` used to be a bare `string`, which is how 'healthy' as
+// the else-branch of "no anomalies" survived review.
+export type { DepartmentHealth, DepartmentHealthProjection };
 
 // ─── Idempotency Guard ──────────────────────────────────────────────────────
 // The daily briefing, the weekly strategic briefing, the executive digest and
@@ -158,11 +166,24 @@ export interface ExecutiveBriefingData {
     critical: number;
     items: { problem: string; risk_tier: string; confidence: number }[];
   };
-  departmentReports: {
-    department: string;
-    summary: string;
-    health: string;
-  }[];
+  /**
+   * One row per department, newest first. `health` is a three-state union
+   * ('healthy' | 'degraded' | 'unknown') rather than a string: a supervisor
+   * that watched nothing, or whose status query threw, reports 'unknown'.
+   * See briefings/departmentHealthVerdict.
+   *
+   * NO RENDERER, as of 2026-10-06. This field is computed on every briefing and
+   * read by nobody: grep `departmentReports` and the only hits are this type,
+   * the assignment in compileExecutiveBriefing, and the empty fallback in
+   * generateExecutiveDigest; emailService.ts - which owns the briefing email
+   * template - has zero hits for "department", and coryEngine's
+   * 'executive_briefing' case reads only agentFleet/alertSummary/ticketSummary.
+   * The surface where a department verdict is actually displayed is the COO
+   * dashboard, fed by cory/coryBrain.getCOODashboardData. It is kept correct
+   * here because the field is already computed and a renderer may yet be added;
+   * it is not kept here INSTEAD of fixing the live consumer.
+   */
+  departmentReports: DepartmentHealthProjection[];
   activeTasks: {
     total: number;
     completed: number;
@@ -200,11 +221,30 @@ export async function compileExecutiveBriefing(
       order: [['risk_score', 'DESC']],
       limit: 10,
     }).catch(() => [] as IntelligenceDecision[]),
+    // LIMIT: 8 super agents x 48 cycles/day = ~384 rows per 24h, so the old
+    // limit of 20 was the last ~75 minutes, and the dedup below only saw a
+    // department if it had written inside that window. 20 >= 8 held only while
+    // every supervisor wrote exactly once per sweep; a department that stopped
+    // writing (the Finance/Partnership failure mode) aged out of the window and
+    // vanished from the briefing silently, which reads identically to "nothing
+    // to report". 500 covers the whole 24h window with headroom for new
+    // departments, so a department that has gone quiet now shows up as its last
+    // report - and judgeDepartmentHealth calls a four-cycle-old report
+    // 'unknown' rather than 'healthy'.
     DepartmentReport.findAll({
       where: { created_at: { [Op.gte]: cutoff24h } },
       order: [['created_at', 'DESC']],
-      limit: 20,
-    }).catch(() => [] as DepartmentReport[]),
+      limit: 500,
+    }).catch((err: unknown) => {
+      // Was a silent swallow. An empty list renders as "no departments", which
+      // is indistinguishable from a healthy quiet day, so the failure has to be
+      // visible somewhere.
+      console.error(
+        `[Briefing] error_class=${classifyError(err)} department report query failed - the briefing will omit every department:`,
+        (err as Error)?.message,
+      );
+      return [] as DepartmentReport[];
+    }),
     AgentTask.findAll({
       attributes: ['status'],
       where: { created_at: { [Op.gte]: lookback } },
@@ -249,16 +289,11 @@ export async function compileExecutiveBriefing(
         confidence: i.confidence_score || 0,
       })),
     },
-    departmentReports: (() => {
-      const seen = new Set<string>();
-      return deptReports
-        .filter((r) => { if (seen.has(r.department)) return false; seen.add(r.department); return true; })
-        .map((r) => ({
-          department: r.department,
-          summary: r.summary,
-          health: r.anomalies && (r.anomalies as any[]).length > 0 ? 'degraded' : 'healthy',
-        }));
-    })(),
+    // Dedup + verdict both live in briefings/departmentHealthVerdict, which is
+    // pure and therefore testable without a database. Rows arrive created_at
+    // DESC, which is what makes the kept row the most recent one. This field
+    // has no renderer today - see the note on ExecutiveBriefingData above.
+    departmentReports: projectDepartmentReports(deptReports),
     activeTasks: {
       total: taskCounts.length,
       completed: taskCounts.filter((t) => t.status === 'completed').length,

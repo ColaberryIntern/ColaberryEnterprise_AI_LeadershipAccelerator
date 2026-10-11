@@ -219,3 +219,57 @@ export async function assignBuilderToProject(input: {
 
   return { assigned: true, membershipId: membership.id, assessment };
 }
+
+export interface RevokeOutcome {
+  revoked: boolean;
+  reason?: 'not_assigned';
+  membershipId?: string;
+  message?: string;
+}
+
+/**
+ * Revoke a builder's role on a project.
+ *
+ * Sets the ACTIVE membership to `revoked` (status + revoked_at) so the delivery access guard — which honours
+ * only `status: 'active'` memberships — stops serving that builder on their very next request. Idempotent: if
+ * there is no active membership for (project, builder, role) it is a no-op (`not_assigned`), never an error, so
+ * revoking twice or revoking someone who was never assigned does not fail. Emits a `builder_revoked` event
+ * (best-effort, like the assignment event). This is the counterpart the assignment path shipped without.
+ */
+export async function revokeBuilderFromProject(input: {
+  projectId: string;
+  builderIdentityId: string;
+  role: string;
+  actorIdentityId: string;
+  now?: Date;
+  models: any;
+}): Promise<RevokeOutcome> {
+  const now = input.now ?? new Date();
+  const { models } = input;
+
+  const membership = await models.DeliveryProjectMember.findOne({
+    where: {
+      delivery_project_id: input.projectId,
+      platform_identity_id: input.builderIdentityId,
+      delivery_role: input.role,
+      status: 'active',
+    },
+  });
+  if (!membership) {
+    return { revoked: false, reason: 'not_assigned', message: 'That builder does not hold that active role on this project.' };
+  }
+
+  await membership.update({ status: 'revoked', revoked_at: now });
+
+  await models.DeliveryEvent.create({
+    delivery_project_id: input.projectId,
+    event_type: 'builder_revoked',
+    actor_identity_id: input.actorIdentityId,
+    outcome: 'success',
+    context: { builder_identity_id: input.builderIdentityId, role: input.role },
+  }).catch(() => {
+    // The revocation already happened; losing the event must not undo it.
+  });
+
+  return { revoked: true, membershipId: membership.id };
+}

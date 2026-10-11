@@ -11,6 +11,7 @@ import type { GovQualificationWorkspace } from '../../services/factoryApi';
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({ ...jest.requireActual('react-router-dom'), useNavigate: () => mockNavigate }));
 jest.mock('../../services/factoryApi');
+jest.mock('../../components/visuals/MermaidDiagram', () => ({ __esModule: true, default: () => null }));
 
 const CANON = 'op:gov:0000000000000000000000000000aaaa';
 
@@ -142,7 +143,7 @@ describe('AdminGovQualificationPage — journey', () => {
     await renderAt(`?canonical=${CANON}`);
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(container.textContent ?? '').toContain('No applicable requirements have been established');
+    expect(container.textContent ?? '').toContain('Confirm the detected requirements to establish them');
   });
 
   it('changed source → review-changes prompt and Approve disabled', async () => {
@@ -360,6 +361,43 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(openBtn.disabled).toBe(false);                                      // enabled even though sourceAvailable:false
   });
 
+  it('Step bar: renders the seven numbered pursuit steps and marks the current one (replaces the journey strip)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 1, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const steps = Array.from(container.querySelectorAll('[role="tab"]')).map((b) => (b.textContent ?? '').trim());
+    for (const s of ['Solicitation', 'Requirements', 'Go / No-go', 'Proposal', 'Build', 'Submit', 'Outcome']) {
+      expect(steps.some((l) => l.includes(s))).toBe(true);
+    }
+    const current = container.querySelector('[role="tab"][aria-current="step"]');
+    expect(current?.textContent ?? '').toContain('Solicitation'); // default step (no ?tab=) is Solicitation
+  });
+
+  it('Phase 3 relationship panel: lists prior pursuits for the same agency with their decision', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'RQ1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
+      evaluation: { evals: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], award: [], delivery: [], unknown: [] }, canApproveBid: true },
+      relationship: { agency: 'City of Fort Worth', priorCount: 1, pursuits: [{ canonicalOpportunityId: 'gws:prior-1', title: 'Prior 311 System RFP', agency: 'City of Fort Worth', decision: 'no_bid', date: '2026-02-01T00:00:00.000Z' }] },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Have we pursued this agency before?');
+    expect(text).toContain('Prior 311 System RFP');
+    expect(text).toContain('no bid'); // decision badge (underscores replaced)
+  });
+
+  it('Phase 3 relationship panel: honest empty-state when there is no prior work with the agency', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      relationship: { agency: 'City of Fort Worth', priorCount: 0, pursuits: [] },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No prior pursuits recorded for');
+  });
+
   it('Next-step banner: 0 established requirements -> tells the reviewer to capture the requirements', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
@@ -381,7 +419,7 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Requirements by due stage');           // renders from evaluation on the decoupled path
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
-    expect(text).toContain('solicitation ZIP has not been attested yet'); // honest coverage reason, not an OP-source block
+    expect(text).toContain('Attest the solicitation ZIP as the evidence of record'); // honest coverage reason, not an OP-source block
   });
 
   it('Requirements by due stage caps a long list to a few and expands on "Show all"', async () => {
@@ -402,6 +440,24 @@ describe('AdminGovQualificationPage — journey', () => {
     text = container.textContent ?? '';
     expect(text).toContain('REQ-008');                 // now visible after expand
     expect(text).toContain('Show fewer');
+  });
+
+  it('Bid decision dashboard: screens eligibility knockouts + renders the PWin band once requirements are established (decoupled)', async () => {
+    const evalRow = { id: 'E1', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' };
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'E1', text: 'Offeror must be registered in SAM.gov.', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement' }] } },
+      evaluation: { evals: [evalRow], blocking: [evalRow], pursuitBlocking: [], openSubmissionRequirements: [evalRow], deliveryObligations: [], byDueStage: { submission: [evalRow], award: [], delivery: [], unknown: [] }, canApproveBid: false, canApprovePursuit: true },
+    }));
+    (factoryApi.getGovOpportunityDetail as jest.Mock).mockResolvedValue({ opportunity: { uuid: '11111111-1111-4111-a111-111111111111', title: 'IVR', agency: 'FW', closeDate: '2099-12-31', fitScore: null, priorityScore: null, estimatedValue: 500000, valueBasis: null, sourceUrl: null, preliminarySummary: null }, source: 'live', snapshotDate: null });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Bid decision — should we pursue this?');
+    expect(text).toContain('Eligibility screen');                            // Stage A knockout/eligibility screen renders
+    expect(text).toContain('SAM.gov registration');                          // the SAM requirement is screened as a knockout (feeds the decision)
+    expect(text).toContain('CONDITIONAL');                                   // an unmet knockout surfaces as a conditional gap in the decision
+    expect(text).toMatch(/Bid with conditions|No-bid|Bid/);                  // a go/no-go band rendered
+    expect(text).toContain('Win-probability factors');                       // Stage B weighted scorecard renders
   });
 
   // ── Discovery details card + Source link + Gaps panel (decoupled only) ──
@@ -478,25 +534,16 @@ describe('AdminGovQualificationPage — journey', () => {
   });
 
   // ── Step 4: attest the ZIP + enable pursuit approval on the decoupled path ──
-  it('decoupled: the "Attest the solicitation ZIP" card renders (with a record) and uploading calls attestSolicitationZip', async () => {
+  it('decoupled: the "Evidence of record" card shows guidance (no second upload) when not attested — only ONE file input on the page', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
       zipAttestation: null,
     }));
-    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
     await renderAt(`?gws=${encodeURIComponent(GWS)}`);
     await flush();
     expect(container.textContent ?? '').toContain('Evidence of record (attested ZIP)');
-    const fileInputs = Array.from(container.querySelectorAll('input[type=file]')) as HTMLInputElement[]; // extract card first, attest card last
-    const attestInput = fileInputs[fileInputs.length - 1];
-    const file = new File(['zip'], 'sol.zip', { type: 'application/zip' });
-    Object.defineProperty(attestInput, 'files', { value: [file], configurable: true });
-    await act(async () => { attestInput.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
-    await clickButton('Attest ZIP');
-    const call = (factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0];
-    expect(call[0]).toBe(GWS);
-    expect(call[1].mode).toBe('add');
-    expect(call[1].file).toBeTruthy();
+    expect(container.textContent ?? '').toContain('recorded automatically when you'); // points to Extract & attest above
+    expect(container.querySelectorAll('input[type=file]').length).toBe(1);             // ONE upload now, not two
   });
 
   it('decoupled: one "Extract & attest" upload runs BOTH extraction and attestation', async () => {
@@ -520,6 +567,23 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(container.textContent ?? '').toContain('SAM registration required.'); // candidates shown
   });
 
+  it('decoupled + no record yet: one "Extract & attest" AUTO-OPENS the qualification, then attests (no separate Open step)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({ qualification: null, zipAttestation: null }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
+    (factoryApi.createGovQualification as jest.Mock).mockResolvedValue({ qualification: { id: 'q1', version: 1 } });
+    (factoryApi.attestSolicitationZip as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await flush();
+    const inp = container.querySelector('input[type=file]') as HTMLInputElement;
+    Object.defineProperty(inp, 'files', { value: [new File(['zip'], 'sol.zip', { type: 'application/zip' })], configurable: true });
+    await act(async () => { inp.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Extract & attest');
+    await flush();
+    expect(factoryApi.createGovQualification).toHaveBeenCalled();                                     // auto-opened the qualification
+    expect(factoryApi.attestSolicitationZip).toHaveBeenCalled();                                      // then attested the ZIP
+    expect((factoryApi.attestSolicitationZip as jest.Mock).mock.calls[0][1].expectedVersion).toBe(1); // bound to the just-created version
+  });
+
   it('decoupled: when the server says canApprove (requirements + attested ZIP), Approve is ENABLED and calls approveGovQualification', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [{ id: 'RQ1', text: 'x', applicability: 'always', dueStage: 'submission', bindingStatus: 'binding_solicitation_requirement', evidenceRef: { docId: 'D1' } }] } },
@@ -538,5 +602,284 @@ describe('AdminGovQualificationPage — journey', () => {
     const call = (factoryApi.approveGovQualification as jest.Mock).mock.calls[0];
     expect(call[0]).toBe(GWS);
     expect(call[1].decision).toBe('approved_bid_pursuit');
+  });
+
+  // ── P2-T4: the 7-tab shared workspace shell ──
+  const navTabs = () => Array.from(container.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
+  const tabByLabel = (label: string) => navTabs().find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+
+  it('Step bar: renders all seven pursuit steps with Solicitation active by default', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    const labels = navTabs().map((b) => (b.textContent ?? '').trim());
+    for (const t of ['Solicitation', 'Requirements', 'Go / No-go', 'Proposal', 'Build', 'Submit', 'Outcome']) {
+      expect(labels.some((l) => l.includes(t))).toBe(true);
+    }
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Proposal').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('Step bar: the active step is restored from the URL (?tab=) so a reload keeps your place', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    expect(tabByLabel('Build').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('Step bar: clicking a step activates it', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}`);
+    await flush();
+    await act(async () => { tabByLabel('Requirements').dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(tabByLabel('Requirements').getAttribute('aria-selected')).toBe('true');
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('Step bar: a legacy ?tab= link (documents) still resolves — lands on the Solicitation step', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}&tab=documents`);
+    await flush();
+    expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('Right rail: the persistent rail (messages + team) renders regardless of the active step', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
+    await renderAt(`?canonical=${CANON}&tab=outcome`); // a non-Solicitation step
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Messages & amendments'); // the rail's amendment inbox section
+    expect(text).toContain('Builders become assignable'); // the rail's Team section empty-state
+  });
+
+  it('Proposal tab: renders the response checklist from responseSlots, each citing its requirement source', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      responseSlots: [
+        { requirementId: 'R1', statement: 'Offeror shall register in SAM.', sourceRef: 'SOLICITATION', status: 'unanswered' },
+      ],
+    }));
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Response checklist');
+    expect(text).toContain('Offeror shall register in SAM.');
+    expect(text).toContain('cites SOLICITATION');   // the citation anchor is shown
+    expect(text).toContain('unanswered');            // honest status, never a fabricated "done"
+  });
+
+  it('Dates tab dossier: shows a system-tagged NIGP code and flags a stated time with no zone as "verify tz"', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 2, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
+      dossier: {
+        contacts: [], naics: ['541512'],
+        codes: [{ system: 'nigp', code: '920-05', sourceDocument: 'rfp.pdf' }, { system: 'naics', code: '541512', sourceDocument: 'rfp.pdf' }],
+        meetings: [],
+        keyDates: [{ text: 'Proposals are due.', date: '03/15/2026', time: '2:00 PM', timezone: null, sourceDocument: 'rfp.pdf' }],
+      },
+    }));
+    await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=dates`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('nigp');          // the system tag (lowercased in the badge, uppercased via CSS)
+    expect(text).toContain('920-05');        // the normalised NIGP code
+    expect(text).toContain('2:00 PM');       // the captured time
+    expect(text).toContain('verify tz');     // a stated time with no zone is flagged, never assumed local
+  });
+
+  // ── P3-T1: the Build tab renders the release/story/prompt plan ──
+  it('Build tab: renders the release + story (cited, unassigned) and reveals the prompt on demand', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      build: {
+        buildStoryCount: 1,
+        releases: [{ key: 'r0', name: 'Release 0 — initial build', storyIds: ['STORY-B1'] }],
+        stories: [{
+          id: 'STORY-B1', requirementId: 'B1', title: 'Claims search database', release: 'r0', status: 'unassigned',
+          statement: 'The vendor shall provide a claims search database.',
+          acceptance: ['The solution demonstrably satisfies: The vendor shall provide a claims search database.'],
+          prompt: '# STORY-B1\nThe vendor shall provide a claims search database.\ntraced back to B1',
+        }],
+      },
+    }));
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('STORY-B1');
+    expect(text).toContain('from B1');                                   // traced to its requirement
+    expect(text).toContain('The vendor shall provide a claims search database.');
+    expect(text).toContain('unassigned');                               // honest status
+    expect(text).not.toContain('traced back to B1');                    // the prompt body is hidden until revealed
+    const promptBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('student build prompt')) as HTMLButtonElement;
+    expect(promptBtn).toBeTruthy();
+    await act(async () => { promptBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(container.textContent ?? '').toContain('traced back to B1'); // prompt revealed on click
+  });
+
+  it('Build tab: honest empty state when the requirements are all administrative (no build stories)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      build: { buildStoryCount: 0, releases: [], stories: [] },
+    }));
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    expect(container.textContent ?? '').toContain('No build stories');
+  });
+
+  // ── P3-T2: assign a story to a builder; show the assignee; surface preserved orphans ──
+  it('Build tab: assigns an unassigned story to a builder, shows the assignee for an assigned one, and surfaces preserved orphans', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      build: {
+        buildStoryCount: 2,
+        deliveryProjectId: 'dp-1',
+        assignableBuilders: [{ identityId: 'bld-1', email: 'builder@colaberry.com', roles: ['associate_builder'] }],
+        releases: [{ key: 'r0', name: 'Release 0 — initial build', storyIds: ['STORY-B1', 'STORY-B2'] }],
+        stories: [
+          { id: 'STORY-B1', requirementId: 'B1', title: 'Claims search', release: 'r0', status: 'unassigned', statement: 'A claims search database.', acceptance: [], prompt: 'p1' },
+          { id: 'STORY-B2', requirementId: 'B2', title: 'Reporting', release: 'r0', status: 'assigned', assigneeIdentityId: 'bld-1', assignedAt: null, statement: 'A reporting dashboard.', acceptance: [], prompt: 'p2' },
+        ],
+        orphanedStories: [
+          { id: 'STORY-GONE', requirementId: 'GONE', title: 'orphan', release: 'orphaned', status: 'assigned', assigneeIdentityId: 'bld-1', orphaned: true, statement: '', acceptance: [], prompt: 'p3' },
+        ],
+      },
+    }));
+    (factoryApi.assignGovBuildStory as jest.Mock).mockResolvedValue({ id: 'as-1', storyId: 'STORY-B1', requirementId: 'B1', title: 'Claims search', statement: '', release: 'r0', acceptance: [], status: 'assigned', assigneeIdentityId: 'bld-1' });
+    await renderAt(`?canonical=${CANON}&tab=build`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Assigned to builder@colaberry.com');          // the assigned story shows its assignee (B2)
+    expect(text).toContain('Needs attention');                            // the preserved-orphan section header (P3-T4)
+    expect(text).toContain('STORY-GONE');                                 // the orphan is surfaced, not dropped
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Unassign')).toBe(true);
+    // Pick the builder in B1's assign control and click Assign → calls the API with the story + builder.
+    const select = container.querySelector('select[aria-label="Assign STORY-B1 to a builder"]') as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')!.set!;
+    await act(async () => { setVal.call(select, 'bld-1'); select.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve(); });
+    const assignBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Assign') as HTMLButtonElement;
+    await act(async () => { assignBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(factoryApi.assignGovBuildStory).toHaveBeenCalledWith(CANON, 'STORY-B1', 'bld-1');
+  });
+
+  // ── P4: proposal response authoring + the amendment inbox ──
+  const withProject = (over: Partial<GovQualificationWorkspace> = {}): GovQualificationWorkspace => cleanWs({
+    build: { buildStoryCount: 0, releases: [], stories: [], deliveryProjectId: 'dp-1', assignableBuilders: [] },
+    ...over,
+  });
+
+  it('Proposal tab authoring: a draft response shows the editor + Save + Mark reviewed; Save calls the API with the content', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'Offeror shall register in SAM.', sourceRef: 'D1', status: 'draft', content: 'We are SAM-registered.' }],
+    }));
+    (factoryApi.saveGovProposalResponse as jest.Mock).mockResolvedValue({ requirementId: 'R1', statement: '', sourceRef: null, status: 'draft', content: 'We are SAM-registered.' });
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    const ta = container.querySelector('textarea[aria-label="Response to R1"]') as HTMLTextAreaElement;
+    expect(ta).toBeTruthy();
+    expect(ta.value).toBe('We are SAM-registered.');
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Mark reviewed')).toBe(true); // the legal next step for a draft
+    await clickButton('Save draft');
+    expect(factoryApi.saveGovProposalResponse).toHaveBeenCalledWith(CANON, 'R1', 'We are SAM-registered.');
+  });
+
+  it('Proposal tab authoring: a reviewed response offers Approve, and clicking it advances via the API', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'reviewed', content: 'done' }],
+    }));
+    (factoryApi.reviewGovProposalResponse as jest.Mock).mockResolvedValue({ requirementId: 'R1', statement: '', sourceRef: null, status: 'approved', content: 'done' });
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    // Exact match: "Approve bid pursuit" (in the always-on qualification drawer, in the DOM) also contains "Approve".
+    const approveBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Approve') as HTMLButtonElement;
+    expect(approveBtn).toBeTruthy();
+    await act(async () => { approveBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(factoryApi.reviewGovProposalResponse).toHaveBeenCalledWith(CANON, 'R1', 'approved');
+  });
+
+  it('Dates tab inbox: lists a recorded amendment with its reopened-count + provenance, and records a new entry', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'done' }],
+      amendments: [{ id: 'am-1', amendmentKey: 'Addendum 2', kind: 'amendment', summary: 'Scope expanded to include hosting.', affects: ['R1'], provenance: 'portal/add-2', observedAt: null, invalidatedCount: 2, createdAt: null }],
+    }));
+    (factoryApi.recordGovProposalAmendment as jest.Mock).mockResolvedValue({ id: 'am-2', amendmentKey: 'Q-1', kind: 'message', summary: 's', affects: [], provenance: null, observedAt: null, invalidatedCount: 0, createdAt: null });
+    await renderAt(`?canonical=${CANON}&tab=dates`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Scope expanded to include hosting.');
+    expect(text).toContain('reopened 2 responses');   // the invalidation effect is surfaced
+    expect(text).toContain('portal/add-2');            // provenance shown
+    // Record a new entry.
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    const keyInput = container.querySelector('input[aria-label="Entry key"]') as HTMLInputElement;
+    const taSummary = container.querySelector('textarea[aria-label="Entry summary"]') as HTMLTextAreaElement;
+    const setTa = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    await act(async () => { setVal.call(keyInput, 'Addendum 3'); keyInput.dispatchEvent(new Event('input', { bubbles: true })); setTa.call(taSummary, 'Deadline moved.'); taSummary.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Record entry');
+    expect(factoryApi.recordGovProposalAmendment).toHaveBeenCalledWith(CANON, expect.objectContaining({ amendmentKey: 'Addendum 3', summary: 'Deadline moved.' }));
+  });
+
+  // ── P5: submission package + outcome ──
+  const sub = (over: any = {}): any => ({
+    status: 'preparing', outcome: 'pending', exportManifest: null, exportedAt: null, externalRef: null,
+    externallySubmittedAt: null, acknowledgedRef: null, acknowledgedAt: null, outcomeNote: null,
+    outcomeRecordedAt: null, caseStudyCandidate: null, serviceCapabilityCandidate: null, ...over,
+  });
+
+  it('Submission tab: when ready, Export is enabled and clicking it calls the API', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'c' }],
+      submission: sub(), submissionReadiness: { ready: true, blocking: [] },
+    }));
+    (factoryApi.exportGovSubmission as jest.Mock).mockResolvedValue(sub({ status: 'exported' }));
+    await renderAt(`?canonical=${CANON}&tab=submission`);
+    await flush();
+    const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Export package')) as HTMLButtonElement;
+    expect(exportBtn).toBeTruthy();
+    expect(exportBtn.disabled).toBe(false);
+    await act(async () => { exportBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(factoryApi.exportGovSubmission).toHaveBeenCalledWith(CANON);
+  });
+
+  it('Submission tab: when NOT ready, Export is disabled and the blocking reasons are shown', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'draft', content: 'c' }],
+      submission: sub(), submissionReadiness: { ready: false, blocking: ['responses_not_approved:R1', 'coverage_insufficient'] },
+    }));
+    await renderAt(`?canonical=${CANON}&tab=submission`);
+    await flush();
+    const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Export package')) as HTMLButtonElement;
+    expect(exportBtn.disabled).toBe(true);
+    const text = container.textContent ?? '';
+    expect(text).toContain('Some responses are not yet approved');
+    expect(text).toContain('coverage is not sufficient');
+  });
+
+  it('Submission tab: once exported, a receipt can be recorded (exported ≠ submitted)', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'c' }],
+      submission: sub({ status: 'exported', exportedAt: '2026-10-08T00:00:00Z' }), submissionReadiness: { ready: true, blocking: [] },
+    }));
+    (factoryApi.recordGovSubmissionReceipt as jest.Mock).mockResolvedValue(sub({ status: 'externally_submitted', externalRef: 'CONF-9' }));
+    await renderAt(`?canonical=${CANON}&tab=submission`);
+    await flush();
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Download package'))).toBe(true);
+    const refInput = container.querySelector('input[aria-label="External submission ref"]') as HTMLInputElement;
+    const setVal = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => { setVal.call(refInput, 'CONF-9'); refInput.dispatchEvent(new Event('input', { bubbles: true })); await Promise.resolve(); });
+    await clickButton('Record submission');
+    expect(factoryApi.recordGovSubmissionReceipt).toHaveBeenCalledWith(CANON, 'CONF-9');
+  });
+
+  it('Outcome tab: records won and shows the PRIVATE case-study + service-capability candidates', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      submission: sub({ outcome: 'won', caseStudyCandidate: { title: 'TxDOT — won', summary: 'A private draft.', status: 'candidate', published: false }, serviceCapabilityCandidate: { name: 'Capability from: TxDOT', rationale: 'Suggested from a won pursuit.', state: 'suggested' } }),
+    }));
+    (factoryApi.recordGovOutcome as jest.Mock).mockResolvedValue(sub({ outcome: 'won' }));
+    await renderAt(`?canonical=${CANON}&tab=outcome`);
+    await flush();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Case-study candidate');
+    expect(text).toContain('private — not published');       // the agent never publishes
+    expect(text).toContain('Service-capability candidate');
+    await clickButton('Record outcome');
+    expect(factoryApi.recordGovOutcome).toHaveBeenCalledWith(CANON, 'won', null);
   });
 });

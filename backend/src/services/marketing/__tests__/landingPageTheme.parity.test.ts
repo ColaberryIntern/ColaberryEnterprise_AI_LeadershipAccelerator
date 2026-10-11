@@ -63,11 +63,18 @@ describe('the backend copy matches the frontend source of truth', () => {
 });
 
 describe('resolution always yields something paintable', () => {
-  it('a known key is branded', () => {
-    expect(themeForLandingPage('ai-flotation')).toEqual({ theme: LANDING_PAGE_THEMES['ai-flotation'], branded: true });
+  it.each(['ai-flotation', 'training'])('%s is branded', (key) => {
+    expect(themeForLandingPage(key)).toEqual({ theme: LANDING_PAGE_THEMES[key], branded: true });
   });
 
-  it.each(['enterprise', 'training', 'cpn', 'refactored'])(
+  it('training renders the Colaberry cherry red, not the neutral navy', () => {
+    // Pinned to the value, not merely to "branded": the whole point of adding this palette was
+    // that Colaberry pages were painting #1A365D, a colour from nobody's brand.
+    expect(themeForLandingPage('training').theme['--accent']).toBe('#FB2832');
+    expect(themeForLandingPage('training').theme['--accent']).not.toBe(NEUTRAL_THEME['--accent']);
+  });
+
+  it.each(['enterprise', 'cpn', 'refactored'])(
     '%s has no agreed palette yet, so it renders neutral rather than guessed',
     (key) => {
       const r = themeForLandingPage(key);

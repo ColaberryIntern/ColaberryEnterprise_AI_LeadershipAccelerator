@@ -30,7 +30,7 @@ export const STAGE_META: Record<PresentationStage, StageMeta> = {
   learn: {
     id: 'learn',
     label: 'Learn',
-    blurb: 'See what good looks like for this kind of presentation, and what it is for.',
+    blurb: 'Pick the kind of presentation this is, then see what good looks like for it.',
   },
   prepare: {
     id: 'prepare',

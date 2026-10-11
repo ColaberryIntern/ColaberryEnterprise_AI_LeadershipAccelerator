@@ -166,6 +166,82 @@ describe('demo day: one meeting, many students', () => {
   });
 });
 
+describe('a recording of the WHOLE session belongs to nobody', () => {
+  it('classifies a full-length demo-day recording as the session, not as ambiguous', async () => {
+    // Demo day is one unbroken recording of the whole cohort. Calling that
+    // "ambiguous" sends EVERY demo day to review, and resolving it would end up
+    // labelling a cohort-wide video as one student's demo.
+    candidates([
+      cand('at-a', '2026-11-20T19:00:00Z', 300),
+      cand('at-b', '2026-11-20T19:10:00Z', 300),
+      cand('at-c', '2026-11-20T19:20:00Z', 300),
+    ]);
+    insertCreates();
+
+    const r = await correlateRecording(rec({
+      startedAt: new Date('2026-11-20T19:00:00Z'),
+      endedAt: new Date('2026-11-20T19:25:00Z'),
+    }));
+
+    expect(r.kind).toBe('session');
+    if (r.kind !== 'session') return;
+    expect(r.presenterCount).toBe(3);
+    expect(r.attemptIds).toEqual(['at-a', 'at-b', 'at-c']);
+    // Stored as ingested, NOT as a review item, and owned by no attempt.
+    expect(insertCall()![1].replacements.status).toBe('ingested');
+    expect(insertCall()![1].replacements.aid).toBe('00000000-0000-0000-0000-000000000000');
+  });
+
+  it('still calls a SHORT recording inside overlapping slots ambiguous', async () => {
+    // REGRESSION GUARD. The first version of this rule used "overlaps every slot",
+    // which a five-minute recording also does when two slots overlap each other —
+    // quietly relabelling real ambiguity as a session recording and attaching a
+    // range to someone who may not be in it. The rule is span, not count.
+    candidates([
+      cand('at-a', '2026-11-20T19:09:00Z', 600),
+      cand('at-b', '2026-11-20T19:11:00Z', 600),
+    ]);
+    insertCreates();
+
+    const r = await correlateRecording(rec({
+      startedAt: new Date('2026-11-20T19:10:00Z'),
+      endedAt: new Date('2026-11-20T19:15:00Z'),
+    }));
+
+    expect(r.kind).toBe('review');
+    if (r.kind !== 'review') return;
+    expect(r.reason).toBe('ambiguous_slot_match');
+  });
+
+  it('does not call a single presenter a session, however long the recording', async () => {
+    candidates([cand('at-solo', '2026-11-20T19:00:00Z', 300)]);
+    insertCreates();
+    anyUpdate();
+
+    const r = await correlateRecording(rec({
+      startedAt: new Date('2026-11-20T19:00:00Z'),
+      endedAt: new Date('2026-11-20T20:00:00Z'),
+    }));
+
+    // One candidate is a plain match, not a cohort session.
+    expect(r.kind).toBe('matched');
+  });
+
+  it('cannot classify a session without recording timings', async () => {
+    candidates([
+      cand('at-a', '2026-11-20T19:00:00Z', 300),
+      cand('at-b', '2026-11-20T19:10:00Z', 300),
+    ]);
+    insertCreates();
+
+    const r = await correlateRecording(rec({ startedAt: null, endedAt: null }));
+
+    // No timings means no span, so it falls through to review rather than being
+    // guessed as the session.
+    expect(r.kind).toBe('review');
+  });
+});
+
 describe('a file Zoom cannot identify is never matched on a guess', () => {
   it('reviews when the per-file id is missing', async () => {
     candidates([cand('at1', null, null)]);

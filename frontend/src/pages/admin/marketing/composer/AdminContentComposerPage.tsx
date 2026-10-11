@@ -21,10 +21,14 @@ import { mediaGateNote, setupShape } from './setupShape';
 import { canGenerateLinks, pruneDestination } from './landingPageChoices';
 import ComposerStepRail from './ComposerStepRail';
 import ComposerSummaryRail from './ComposerSummaryRail';
+import InlineLandingPageBuilder from './InlineLandingPageBuilder';
 import {
   blockedReason, firstOpenStep, isStepKey, nextOpenStep, previousStep, stepDefinition, stepStates,
   type StepFacts, type StepKey,
 } from './composerSteps';
+import { toMarketingCampaigns } from '../marketingCampaigns';
+import { useMarketingBrand } from '../MarketingBrandContext';
+import { ALL_BRANDS } from '../brandScope';
 
 /**
  * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
@@ -73,6 +77,8 @@ export default function AdminContentComposerPage() {
   const [publications, setPublications] = useState<ExternalPublication[]>([]);
   const [scheduledFor, setScheduledFor] = useState<string>('');
   const [busy, setBusy] = useState(false);
+  /** The inline landing-page builder is open. Local: opening it changes nothing on the post. */
+  const [buildingPage, setBuildingPage] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
 
   /**
@@ -101,9 +107,7 @@ export default function AdminContentComposerPage() {
     listBrands().then((r) => setBrands(r.brands)).catch(() => setBrands([]));
     composer.listProviders().then(setProviders).catch(() => setProviders([]));
     api.get('/api/admin/campaigns', { params: { limit: 200 } })
-      .then((r) => setCampaigns((r.data.campaigns ?? []).map((c: Record<string, unknown>) => ({
-        id: String(c.id), name: String(c.name), brand_id: (c.brand_id as string | null) ?? null, utm_campaign_slug: (c.utm_campaign_slug as string | null) ?? null,
-      }))))
+      .then((r) => setCampaigns(toMarketingCampaigns(r.data.campaigns ?? [])))
       .catch(() => setCampaigns([]));
   }, []);
 
@@ -150,6 +154,65 @@ export default function AdminContentComposerPage() {
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
 
   /**
+   * ONE brand on this page, not two.
+   *
+   * The marketing shell holds the brand in a bar above every page and promises 'Everything
+   * below is this brand only'. This page never read it: it kept its own `setup.brand_id`, so the
+   * bar could say Colaberry Enterprise while Setup said Colaberry Training and the post was
+   * created under the second. The bar's promise was false here, which is how Ali found it.
+   *
+   * A DRAFT STILL WINS. Once the item exists its brand is fixed - retargeting an existing post
+   * because someone changed a bar would move its tracked links to another brand.
+   *
+   * Campaign and landing page are CLEARED when the brand changes: both are brand-scoped, and
+   * carrying a selection across would point this post at another brand's destination.
+   */
+  const { brandId: scopeBrandId, setBrandId: setScopeBrand } = useMarketingBrand();
+  useEffect(() => {
+    if (item) return;
+    if (scopeBrandId === ALL_BRANDS) return;
+    setSetup((s) => (s.brand_id === scopeBrandId
+      ? s
+      : { ...s, brand_id: scopeBrandId, campaign_id: '', landing_page_id: null }));
+  }, [scopeBrandId, item]);
+
+  const brandFixedBy: 'scope' | 'draft' | null = item ? 'draft' : (scopeBrandId !== ALL_BRANDS ? 'scope' : null);
+
+  /**
+   * Create a marketing campaign without leaving the post.
+   *
+   * The picker could be empty with NO WAY to fill it: the create route admitted only email
+   * lifecycle types, so every campaign it could make was one this picker correctly filtered out.
+   * The backend now accepts marketing types and this puts the door where the gap is.
+   *
+   * Selected on success, because creating one and leaving it unchosen is a step nobody wants.
+   */
+  const createCampaign = async (name: string) => {
+    setBusy(true);
+    try {
+      const created = await composer.createMarketingCampaign({ name, brand_id: setup.brand_id || null });
+      setCampaigns((cs) => [{ id: created.id, name: created.name, brand_id: created.brand_id, utm_campaign_slug: created.utm_campaign_slug }, ...cs]);
+      setSetup((s2) => ({ ...s2, campaign_id: created.id }));
+      say(created.utm_campaign_slug ? 'success' : 'info',
+        created.utm_campaign_slug
+          ? `Campaign "${created.name}" created and selected.`
+          : `Campaign "${created.name}" created, but its tracked-link slug could not be made. Assign one before publishing.`);
+    } catch (err) {
+      fail(err, 'The campaign could not be created.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Picking a brand here (only possible on 'All brands') moves the bar, so the rest follows. */
+  const onSetupChange = useCallback((next: SetupValues) => {
+    setSetup((prev) => {
+      if (next.brand_id && next.brand_id !== prev.brand_id) setScopeBrand(next.brand_id);
+      return next;
+    });
+  }, [setScopeBrand]);
+
+  /**
    * What the chosen content type needs. The upload lives in Setup for types that take a file,
    * because that is the moment the operator decided they wanted one - reported 2026-10-01:
    * "the video should be uploaded at the time you select that you want a video."
@@ -178,6 +241,15 @@ export default function AdminContentComposerPage() {
    * failure rather than left showing another brand's list.
    */
   const [landingPages, setLandingPages] = useState<composer.LandingPageSummary[]>([]);
+  /**
+   * Bumped when the inline builder publishes one, to re-read the list.
+   *
+   * The new page is RE-FETCHED rather than spliced into state: the builder speaks the
+   * landing-page API's `LandingPage`, this picker holds the composer API's
+   * `LandingPageSummary`, and pushing one shape into the other would be a cast that compiles and
+   * then renders wrong. One extra request is the cheaper correctness.
+   */
+  const [landingPagesEpoch, setLandingPagesEpoch] = useState(0);
   useEffect(() => {
     if (!setup.brand_id) { setLandingPages([]); return; }
     let cancelled = false;
@@ -185,7 +257,7 @@ export default function AdminContentComposerPage() {
       .then((rows) => { if (!cancelled) setLandingPages(rows); })
       .catch(() => { if (!cancelled) setLandingPages([]); });
     return () => { cancelled = true; };
-  }, [setup.brand_id]);
+  }, [setup.brand_id, landingPagesEpoch]);
 
   /**
    * A selection that is no longer valid must not survive a brand change, or the save fails with
@@ -443,10 +515,10 @@ export default function AdminContentComposerPage() {
   return (
     <div className="admin-page">
       <PageHeader
-        title={item ? `Composer: ${item.title}` : 'New post'}
+        title={item ? item.title : 'New post'}
         subtitle="Draft once, publish per network - with tracked links, validation and a confirmation you can read."
         icon="quill-pen-line"
-        breadcrumb={[{ label: 'Marketing', to: '/admin/marketing' }, { label: 'Composer' }]}
+        breadcrumb={[{ label: 'Marketing', to: '/admin/marketing' }, { label: 'New post' }]}
         trust={{ level: item ? 'live' : 'unverified', source: 'content', updatedAt: item?.updated_at ?? null, summary: item ? `Revision ${item.revision}, ${item.status.replace(/_/g, ' ')}` : 'Not saved yet' }}
       />
 
@@ -462,10 +534,29 @@ export default function AdminContentComposerPage() {
         <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
           <ComposerSetup
             values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy}
-            onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug}
+            onChange={onSetupChange} onSubmit={saveSetup} onAssignSlug={assignSlug}
+            brandFixedBy={brandFixedBy} brandName={brand?.name ?? null}
+            onCreateCampaign={createCampaign}
             onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers}
           landingPages={landingPages}
-          onCreateLandingPage={() => navigate('/admin/marketing/landing-pages')}
+          onCreateLandingPage={() => setBuildingPage(true)}
+            builderSlot={buildingPage && setup.brand_id ? (
+              <InlineLandingPageBuilder
+                brandId={setup.brand_id}
+                initialName={setup.title || ''}
+                initialBrief={setup.canonical_body || ''}
+                busy={busy}
+                onClose={() => setBuildingPage(false)}
+                onPublished={(page) => {
+                  // Chosen for this post straight away - building it and then having to find it
+                  // in the picker is the step that made this worth doing inline at all.
+                  setSetup((s) => ({ ...s, landing_page_id: page.id, destination_url: '' }));
+                  setLandingPagesEpoch((n) => n + 1);
+                  setBuildingPage(false);
+                  say('success', `"${page.name}" is live and selected for this post.`);
+                }}
+              />
+            ) : null}
             mediaSlot={shape.mediaRole !== 'none' ? (
               // Inside the content-type column, directly under the type that asked for it.
               // It sat after the whole form until 2026-10-01: "why isn't the video upload closer

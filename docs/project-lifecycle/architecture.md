@@ -241,5 +241,16 @@ removal already settled that students get no say in the build.
   findings from Phase 3 that bind later phases, including why an r0 keyword rule does not work and
   why a new r0 gate rule must ship advisory. Kept here because the run directory it was first
   written in is gitignored.
-- `acceptance-evidence.md` — LC-01…LC-18 evidence table. **NOT YET CREATED**; Phase 8 owns it.
-  Listed here since Phase 1 as a forward reference, which is why it reads as though it exists.
+- `acceptance-evidence.md` — LC-01…LC-18 evidence table. **CREATED 2026-10-06 by Phase 4**
+  (P4-T6), carrying the **LC-08 and LC-09 rows only**. **Phase 8 still owns the completed
+  table; each phase appends its own rows as it finishes.** That reconciles two sources rather
+  than overriding one: `execution-contract.md:103` requires all eighteen IDs evidenced here and
+  no task owned the file, while this line previously said Phase 8 owned it and it did not exist.
+  Phase 8 assembling eight phases of evidence at the end would mean reconstructing it from
+  memory, which is the stale-record failure this run has already paid for twice.
+  **LC-01 to LC-07, LC-13 and LC-14 are owed retroactively by Phases 1-3** and are recorded as
+  a gap in `carried-forward-obligations.md` rather than backfilled from a plan that did not
+  measure them.
+- `phase4-handoff.md` — created 2026-10-06 (P4-T6). Carries the **required post-deploy schema
+  check** with its exact command and pass condition, because the boot loop that runs the DDL
+  only `console.warn`s and a failed migration is therefore silent.

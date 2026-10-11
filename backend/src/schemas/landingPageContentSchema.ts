@@ -44,27 +44,92 @@ const cta = z.object({
   style: z.enum(['primary', 'secondary']).optional(),
 });
 
+/**
+ * The small uppercase label above a heading ("WHY START NOW?", "WHAT YOU'LL LEARN").
+ *
+ * This is not decoration invented by the renderer. A real brief already carries it: Sohail's
+ * 2026-10-05 draft headed every block with BOTH a section label and a headline ("Section 3:
+ * What You'll Learn" / "Learn AI Beyond Basic Prompts"). The schema had nowhere to put the
+ * first, so the generator discarded half of each heading and the page lost its navigation.
+ */
+const eyebrow = text(60).optional();
+
+/**
+ * Which band a section paints on. The renderer alternates these so a long page reads as
+ * chapters rather than one undifferentiated column.
+ *
+ * `inverse` is the dark band, `accent` the brand-coloured one - both carry their own
+ * foreground colours, so contrast is a property of the tone rather than something each
+ * section has to get right.
+ */
+const tone = z.enum(['default', 'subtle', 'inverse', 'accent']).optional();
+
 const heroSection = z.object({
   type: z.literal('hero'),
+  eyebrow,
+  tone,
   /** One promise. Not a slogan and not a paragraph. */
   headline: text(160),
+  /**
+   * A phrase INSIDE `headline` to paint in the brand accent. Rendered only when it really is a
+   * substring; anything else is ignored rather than appended, so a mismatch loses the emphasis
+   * and never corrupts the sentence.
+   */
+  headlineAccent: text(160).optional(),
   subhead: text(400).optional(),
   /** "Who this is for" - the line that disqualifies the wrong reader early. */
   audience: text(240).optional(),
   cta: cta.optional(),
   image: z.object({ src: safeUrl, alt: text(300) }).optional(),
+  /**
+   * A card beside the headline, listing what the thing CONTAINS.
+   *
+   * The shape Ali's reference page opens with, and the one thing the hero could not express:
+   * a hero with only a headline and a button leaves half the fold empty at desktop width.
+   *
+   * DELIBERATELY NOT A PROGRESS CARD. The reference shows modules ticked off with "2 of 9
+   * complete" and "In progress". On a page generated for a visitor who has done nothing, those
+   * are claims about that visitor which are not true - and inventing is the one thing this
+   * pipeline refuses to do. So the rows say what is inside, and `note` is a label like
+   * "Module 1", never a state like "Complete".
+   *
+   * At most 8, because this sits beside a headline: a ninth row pushes the fold past the CTA.
+   */
+  panel: z.object({
+    title: text(120),
+    items: z.array(z.object({
+      label: text(160),
+      /** A short marker beside the row. Not a status. */
+      note: text(60).optional(),
+    })).min(2).max(8),
+    footnote: text(160).optional(),
+  }).optional(),
 });
 
 const richTextSection = z.object({
   type: z.literal('text'),
+  eyebrow,
+  tone,
   heading: text(160).optional(),
   /** Paragraphs as separate strings, so the renderer never has to interpret newlines as markup. */
   paragraphs: z.array(text(2000)).min(1).max(20),
+  /** A single emphasised line under the paragraphs - the "You just need a place to start." beat. */
+  kicker: text(300).optional(),
 });
 
 const bulletsSection = z.object({
   type: z.literal('bullets'),
+  eyebrow,
+  tone,
   heading: text(160).optional(),
+  /** A line of prose between the heading and the items. */
+  intro: text(600).optional(),
+  /**
+   * How the items are drawn. `checks` for a qualifying list ("this is for you if"), `steps` for
+   * an ordered sequence, `cards` for a capability grid. Absent means `cards`, which is the
+   * layout that reads well whether or not the items carry a `detail`.
+   */
+  variant: z.enum(['cards', 'checks', 'steps']).optional(),
   items: z.array(z.object({
     label: text(200),
     detail: text(600).optional(),
@@ -74,6 +139,8 @@ const bulletsSection = z.object({
 /** The numbers. Each one needs a source, because an unsourced outcome claim is the thing we refuse to publish. */
 const statsSection = z.object({
   type: z.literal('stats'),
+  eyebrow,
+  tone,
   heading: text(160).optional(),
   items: z.array(z.object({
     value: text(40),
@@ -85,6 +152,8 @@ const statsSection = z.object({
 
 const quoteSection = z.object({
   type: z.literal('quote'),
+  eyebrow,
+  tone,
   heading: text(160).optional(),
   items: z.array(z.object({
     quote: text(1200),
@@ -96,18 +165,24 @@ const quoteSection = z.object({
 /** Dates, price, format, location - the practical block a reader scans before deciding. */
 const detailsSection = z.object({
   type: z.literal('details'),
+  eyebrow,
+  tone,
   heading: text(160).optional(),
   rows: z.array(z.object({ label: text(120), value: text(400) })).min(1).max(20),
 });
 
 const faqSection = z.object({
   type: z.literal('faq'),
+  eyebrow,
+  tone,
   heading: text(160).optional(),
   items: z.array(z.object({ question: text(300), answer: text(2000) })).min(1).max(30),
 });
 
 const ctaSection = z.object({
   type: z.literal('cta'),
+  eyebrow,
+  tone,
   headline: text(200),
   body: text(800).optional(),
   cta,
@@ -136,9 +211,41 @@ export type LandingPageSectionType = LandingPageSection['type'];
  * Is this row renderable? A published page whose content does not parse is a blank public URL,
  * so the answer has to be known before anything is served, not discovered mid-render.
  */
+/**
+ * Drop every null before validating.
+ *
+ * `z.optional()` accepts a MISSING key but refuses an explicit `null` - they are different things
+ * to zod and the same thing to a language model. A generated section carrying `"intro": null`
+ * failed with "Invalid input: expected string, received null" and the whole section was thrown
+ * away, which is how Ali's page lost two of its bullet lists on 2026-10-07 while the copy that
+ * mattered was sitting right there in the payload.
+ *
+ * Dropping the key is the correct reading rather than a lenient one: `null` here means "I had
+ * nothing for this field", which is exactly what absence means. Nothing else is coerced - a
+ * number stays a number and still fails, because that really is a malformed section.
+ */
+function dropNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(dropNulls);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value as Record<string, unknown>)) {
+      if (inner === null) continue;
+      out[key] = dropNulls(inner);
+    }
+    return out;
+  }
+  return value;
+}
+
+/** Exported for the generator, which validates section-by-section before this runs. */
+export function withoutNulls(raw: unknown): unknown {
+  return dropNulls(raw);
+}
+
 export function parseLandingPageContent(
   raw: unknown,
 ): { ok: true; content: LandingPageContentShape } | { ok: false; problems: string[] } {
+  raw = dropNulls(raw);
   const parsed = landingPageContentSchema.safeParse(raw);
   if (parsed.success) return { ok: true, content: parsed.data };
   // Zod 4: `issues`, not `errors`.

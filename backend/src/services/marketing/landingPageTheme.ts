@@ -51,6 +51,16 @@ export const LANDING_PAGE_THEMES: Readonly<Record<string, LandingPageTheme>> = {
     '--accent-soft': '#FBE4D5',
     '--line': '#DEDAD3',
   },
+  'training': {
+    '--bg': '#FFFFFF',
+    '--bg-elevated': '#F8F8F7',
+    '--fg': '#1A1A1A',
+    '--fg-muted': '#4A4A4A',
+    '--accent': '#FB2832',
+    '--accent-contrast': '#FFFFFF',
+    '--accent-soft': '#FFF0F1',
+    '--line': '#E4E4E3',
+  },
 };
 
 /**
@@ -67,6 +77,28 @@ export const NEUTRAL_THEME: LandingPageTheme = {
   '--accent-soft': '#E8EDF4',
   '--line': '#DFE1E5',
 };
+
+/**
+ * The brand lockup for the page header, keyed the same way the palette is.
+ *
+ * Same refusal-to-guess rule: a brand appears here only when a real asset exists for it in
+ * `frontend/public/`, and anything absent renders its name as text instead. Putting one brand's
+ * logo above another brand's page would be a worse failure than showing no logo at all.
+ *
+ * `/colaberry-horizontal.png` is the colour lockup, which is the one that works on the light
+ * header band. The footer deliberately uses a text wordmark rather than `colaberry-logo-dark.png`,
+ * because that file has an opaque black box baked into it.
+ */
+export const LANDING_PAGE_LOGOS: Readonly<Record<string, { src: string; alt: string }>> = {
+  training: { src: '/colaberry-horizontal.png', alt: 'Colaberry' },
+};
+
+/** The lockup for a brand's key, or null when the page should show the brand name as text. */
+export function logoForLandingPage(
+  themeKey: string | null | undefined,
+): { src: string; alt: string } | null {
+  return themeKey ? LANDING_PAGE_LOGOS[themeKey] ?? null : null;
+}
 
 export interface ResolvedTheme {
   theme: LandingPageTheme;

@@ -12,6 +12,7 @@ import organizationRoutes from './admin/organizationRoutes';
 import brandRoutes from './admin/brandRoutes';
 import contentComposerRoutes from './admin/contentComposerRoutes';
 import landingPageRoutes from './admin/landingPageRoutes';
+import marketingBugReportRoutes from './admin/marketingBugReportRoutes';
 import publishingRoutes from './admin/publishingRoutes';
 import channelAccountRoutes from './admin/channelAccountRoutes';
 import contentMediaRoutes from './admin/contentMediaRoutes';
@@ -126,6 +127,7 @@ import studentStoryRoutes from './admin/studentStoryRoutes';
 import internshipAdminRoutes from './admin/internshipRoutes';
 import factoryAdminRoutes from './admin/factoryRoutes';
 import projectLifecycleRoutes from './admin/projectLifecycleRoutes';
+import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 // Which case study evidences which service. Its own router rather than more handlers in factoryRoutes, which is
 // already past the 500-line ceiling; the route prefixes still live under /api/admin/factory/.
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
@@ -151,6 +153,7 @@ router.use(brandRoutes);
 router.use(contentComposerRoutes);
 // Landing page authoring: the destinations the composer points campaigns at.
 router.use(landingPageRoutes);
+router.use(marketingBugReportRoutes);
 router.use(publishingRoutes);
 router.use(channelAccountRoutes);
 router.use(contentMediaRoutes);
@@ -334,6 +337,7 @@ router.use(studentStoryRoutes);
 router.use(internshipAdminRoutes);
 router.use(factoryAdminRoutes);
 router.use(projectLifecycleRoutes);
+router.use(projectLifecycleReviewRoutes);
 router.use(caseStudyServiceLinkRoutes);
 // Gov qualification workspace (Phase 2). Paths are nested under /api/admin/factory/qualification, so
 // mgmtSectionGate's existing '/api/admin/factory' → 'program' PREFIX row already covers them.
