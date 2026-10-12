@@ -33,6 +33,8 @@ async function db() {
   return sequelize;
 }
 
+import { sharedScreenFromRecordingType, durationSecondsFrom } from './recordingFacts';
+
 export type IngestProvenance = 'webhook' | 'cron_sweep' | 'manual_upload' | 'staff_rematch';
 
 export interface IncomingRecording {
@@ -45,6 +47,11 @@ export interface IncomingRecording {
   startedAt: Date | null;
   endedAt: Date | null;
   recordingType?: string | null;
+  /**
+   * Whether the delivery included an audio rendering, when the caller could see the
+   * file list. `null`/absent means unknown — never guessed. See `recordingFacts`.
+   */
+  hasAudio?: boolean | null;
   provenance: IngestProvenance;
 }
 
@@ -139,8 +146,10 @@ async function recordPart(
   const [rows] = await sequelize.query(
     `INSERT INTO presentation_recordings
        (attempt_id, occurrence_uuid, provider_file_id, recording_type,
-        starts_at, ends_at, ingest_status, ingest_provenance, review_reason)
-     VALUES (:aid, :uuid, :fid, :rtype, :s, :e, :status, :prov, :reason)
+        starts_at, ends_at, ingest_status, ingest_provenance, review_reason,
+        has_audio, has_shared_screen, duration_seconds)
+     VALUES (:aid, :uuid, :fid, :rtype, :s, :e, :status, :prov, :reason,
+             :audio, :screen, :dur)
      ON CONFLICT (occurrence_uuid, provider_file_id) DO NOTHING
      RETURNING id`,
     {
@@ -156,6 +165,13 @@ async function recordPart(
         status,
         prov: rec.provenance,
         reason: reviewReason,
+        // THE COLUMNS NOTHING USED TO WRITE. Derived from what the provider already
+        // said — no download. Every one of them is null when unknown rather than
+        // false, because `describeTakeContents` turns false into a warning shown to
+        // the learner, and a wrong warning on a good take is the costly error.
+        audio: rec.hasAudio ?? null,
+        screen: sharedScreenFromRecordingType(rec.recordingType),
+        dur: durationSecondsFrom(rec.startedAt, rec.endedAt),
       },
     },
   ) as [Array<{ id: string }>, unknown];
@@ -200,9 +216,23 @@ export async function correlateRecording(rec: IncomingRecording): Promise<Correl
   // this subsystem's business.
   if (candidates.length === 0) return { kind: 'unrelated' };
 
+  // NO FILE ID: PARK IT, even when exactly one candidate makes the owner obvious.
+  //
+  // It is tempting to move this below the single-candidate branch and attribute
+  // anyway. That would be wrong, and the reason is `recordPart`'s
+  // `ON CONFLICT (occurrence_uuid, provider_file_id) DO NOTHING`. With no real id
+  // every part of one occurrence synthesises the SAME `nofile:<uuid>` key, so
+  // part 1 would insert and part 2 would be swallowed by the conflict clause —
+  // no error, no row, no trace. A visible review row beats invisible data loss.
+  //
+  // This branch was firing on EVERY webhook delivery until 2026-10-09, but that
+  // was `webhookController` dropping the id, not Zoom withholding it. With the
+  // mapping fixed this is once again what it was meant to be: rare.
   if (!rec.providerFileId) {
     const recorded = await recordPart(rec, null, 'review',
-      'Zoom sent no per-file id, so this file cannot be identified across deliveries.');
+      'No per-file id arrived with this delivery, so a second part of the same '
+      + 'recording could not be told apart from this one. Parked rather than '
+      + 'attributed, because a wrong owner is worse than a queued one.');
     return {
       kind: 'review',
       reason: 'missing_provider_file_id',
@@ -215,6 +245,7 @@ export async function correlateRecording(rec: IncomingRecording): Promise<Correl
     const only = candidates[0];
     const recorded = await recordPart(rec, only.id, 'ingested', null);
     await claimOccurrence(only.id, rec.occurrenceUuid);
+    await markRecordingReady(only.id);
     return { kind: 'matched', attemptId: only.id, recorded };
   }
 
@@ -226,6 +257,7 @@ export async function correlateRecording(rec: IncomingRecording): Promise<Correl
     const only = inWindow[0];
     const recorded = await recordPart(rec, only.id, 'ingested', null);
     await claimOccurrence(only.id, rec.occurrenceUuid);
+    await markRecordingReady(only.id);
     return { kind: 'matched', attemptId: only.id, recorded };
   }
 
@@ -287,6 +319,30 @@ async function claimOccurrence(attemptId: string, occurrenceUuid: string): Promi
         SET occurrence_uuid = :uuid, recording_state = 'processing', updated_at = NOW()
       WHERE id = :aid AND occurrence_uuid IS NULL`,
     { replacements: { aid: attemptId, uuid: occurrenceUuid } },
+  );
+}
+
+/**
+ * The attempt has its recording. Move it off `processing`.
+ *
+ * `claimOccurrence` set `processing` and, until 2026-10-11, NOTHING ever moved it on
+ * — there was exactly one write site for this column in the whole backend, and it
+ * only ever wrote that one value. Every attempt that ever recorded sat in
+ * `processing` permanently, and the Practice panel reads this column to tell the
+ * learner where their take is.
+ *
+ * Deliberately NOT guarded on the previous state: a re-delivery that lands on an
+ * attempt already `ready` should leave it `ready`, and an attempt that reached
+ * `review` or `failed` by another route is a human's decision to revisit, so those
+ * are left alone.
+ */
+async function markRecordingReady(attemptId: string): Promise<void> {
+  const sequelize = await db();
+  await sequelize.query(
+    `UPDATE presentation_attempts
+        SET recording_state = 'ready', updated_at = NOW()
+      WHERE id = :aid AND recording_state IN ('expected', 'processing')`,
+    { replacements: { aid: attemptId } },
   );
 }
 

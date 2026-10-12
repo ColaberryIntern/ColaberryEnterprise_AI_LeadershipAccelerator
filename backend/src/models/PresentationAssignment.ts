@@ -1,4 +1,5 @@
 import { DataTypes, Model } from 'sequelize';
+import { AUDIENCE_MAX } from '../schemas/presentationFieldLimits';
 import { sequelize } from '../config/database';
 
 /**
@@ -64,7 +65,7 @@ PresentationAssignment.init(
     cohort_id: { type: DataTypes.UUID, allowNull: true },
     template_slug: { type: DataTypes.STRING(80), allowNull: false },
     template_version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
-    audience: { type: DataTypes.STRING(60), allowNull: true },
+    audience: { type: DataTypes.STRING(AUDIENCE_MAX), allowNull: true },
     duration_seconds: { type: DataTypes.INTEGER, allowNull: true },
     due_on: { type: DataTypes.DATEONLY, allowNull: true },
     // Defaults closed: nothing is required of a student by omission.

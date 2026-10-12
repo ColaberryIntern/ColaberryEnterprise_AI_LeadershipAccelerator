@@ -25,9 +25,41 @@ const createDecoupledQualification = jest.fn();
 const getDecoupledWorkspace = jest.fn();
 const recordZipAttestation = jest.fn();
 const approveDecoupledQualification = jest.fn();
+const resolveDecoupledDeliveryProjectId = jest.fn();
 jest.mock('../../../services/factory/govQualification', () => {
   const actual = jest.requireActual('../../../services/factory/govQualification');
-  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a), createDecoupledQualification: (...a: any[]) => createDecoupledQualification(...a), getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a), recordZipAttestation: (...a: any[]) => recordZipAttestation(...a), approveDecoupledQualification: (...a: any[]) => approveDecoupledQualification(...a) };
+  return { ...actual, createQualification: (...a: any[]) => createQualification(...a), recordDecision: (...a: any[]) => recordDecision(...a), approveGovQualification: (...a: any[]) => approveGovQualification(...a), recordDocumentReview: (...a: any[]) => recordDocumentReview(...a), createDecoupledQualification: (...a: any[]) => createDecoupledQualification(...a), getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a), recordZipAttestation: (...a: any[]) => recordZipAttestation(...a), approveDecoupledQualification: (...a: any[]) => approveDecoupledQualification(...a), resolveDecoupledDeliveryProjectId: (...a: any[]) => resolveDecoupledDeliveryProjectId(...a) };
+});
+// P3-T2 build-story assignment — service mocked (its own unit test proves the assignee rail); keep AssignmentError real.
+const assignBuildStory = jest.fn();
+const unassignBuildStory = jest.fn();
+jest.mock('../../../services/factory/govBuildAssignment', () => {
+  const actual = jest.requireActual('../../../services/factory/govBuildAssignment');
+  return { ...actual, assignBuildStory: (...a: any[]) => assignBuildStory(...a), unassignBuildStory: (...a: any[]) => unassignBuildStory(...a) };
+});
+const resolveGovProjectActor = jest.fn();
+jest.mock('../../../middlewares/govProjectAccess', () => ({ resolveGovProjectActor: (...a: any[]) => resolveGovProjectActor(...a), requireGovProjectAccess: () => (_r: any, _s: any, n: any) => n() }));
+// P4 proposal-production services — mocked (their own unit tests prove the lifecycle + invalidation rails); keep the real error classes.
+const saveProposalResponse = jest.fn();
+const reviewProposalResponse = jest.fn();
+const addProposalFigure = jest.fn();
+const removeProposalFigure = jest.fn();
+jest.mock('../../../services/factory/govProposalResponse', () => {
+  const actual = jest.requireActual('../../../services/factory/govProposalResponse');
+  return { ...actual, saveProposalResponse: (...a: any[]) => saveProposalResponse(...a), reviewProposalResponse: (...a: any[]) => reviewProposalResponse(...a), addProposalFigure: (...a: any[]) => addProposalFigure(...a), removeProposalFigure: (...a: any[]) => removeProposalFigure(...a) };
+});
+const recordProposalAmendment = jest.fn();
+jest.mock('../../../services/factory/govProposalAmendment', () => {
+  const actual = jest.requireActual('../../../services/factory/govProposalAmendment');
+  return { ...actual, recordProposalAmendment: (...a: any[]) => recordProposalAmendment(...a) };
+});
+// P5 submission services — mocked (unit tests prove the rails); keep SubmissionError + the pure package helpers real.
+const exportSubmission = jest.fn();
+const recordSubmissionReceipt = jest.fn();
+const recordOutcome = jest.fn();
+jest.mock('../../../services/factory/govSubmission', () => {
+  const actual = jest.requireActual('../../../services/factory/govSubmission');
+  return { ...actual, exportSubmission: (...a: any[]) => exportSubmission(...a), recordSubmissionReceipt: (...a: any[]) => recordSubmissionReceipt(...a), recordOutcome: (...a: any[]) => recordOutcome(...a) };
 });
 const authorizeBuild = jest.fn();
 jest.mock('../../../services/factory/buildAuthorization', () => {
@@ -51,6 +83,11 @@ jest.mock('../../../services/factory/proposal/govSourceBundleStore', () => ({
 // Step 6 — the two-track project creator, mocked so the flag-on tests don't touch the DB.
 const ensureGovTwoTrackProject = jest.fn();
 jest.mock('../../../services/factory/govDeliveryProject', () => ({ ensureGovTwoTrackProject: (...a: any[]) => ensureGovTwoTrackProject(...a) }));
+// Keep the real GovMaterializeError (so the route's `instanceof` + status mapping works) but stub the service.
+jest.mock('../../../services/factory/govProjectMaterialization', () => {
+  const actual = jest.requireActual('../../../services/factory/govProjectMaterialization');
+  return { __esModule: true, ...actual, materializeGovBuildProject: jest.fn() };
+});
 
 import express from 'express';
 import request from 'supertest';
@@ -61,9 +98,13 @@ import {
 } from '../../../services/factory/govQualification';
 import { DocumentNotListedError } from '../../../services/factory/govQualification';
 import { BuildNotAuthorizedError } from '../../../services/factory/buildAuthorization';
+import { AssignmentError } from '../../../services/factory/govBuildAssignment';
+import { ResponseError } from '../../../services/factory/govProposalResponse';
+import { SubmissionError } from '../../../services/factory/govSubmission';
 import { AliasConflictError } from '../../../services/factory/opportunities/govOpportunityAlias';
 import { CLEAN_CANONICAL, BLOCKING_CANONICAL, UNAVAILABLE_CANONICAL } from '../../../services/factory/opportunities/govOpportunityFixtures';
 import { FLAGS } from '../../../config/featureFlags';
+import { materializeGovBuildProject, GovMaterializeError } from '../../../services/factory/govProjectMaterialization';
 
 const app = express();
 app.use(express.json());
@@ -79,8 +120,8 @@ beforeEach(() => {
 describe('the section gate + tenant scoping', () => {
   it('mounts every route behind requireSection("program") (source-level, route-auth lint)', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'govQualificationRoutes.ts'), 'utf8');
-    const routeLines = src.split('\n').filter((l) => /router\.(get|post)\(/.test(l));
-    expect(routeLines.length).toBe(11); // +1: GET source-bundle/:bundleId (the retained-ZIP download)
+    const routeLines = src.split('\n').filter((l) => /router\.(get|post|put|patch|delete)\(/.test(l));
+    expect(routeLines.length).toBe(29); // +2 P3 assign; +5 P4 responses/amendments; +6 P5 submission export/package(GET)/receipt/acknowledge/reopen + outcome; +2 AI advisory (risk-narrative, proposal-summary); +1 P1 build-spec; +1 P2 build-plan-ai; +1 P2.3 materialize-build-project
     // Each route DEFINITION line must carry the section guard (not just somewhere in the file).
     const unguarded = routeLines.filter((l) => !l.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
@@ -636,5 +677,184 @@ describe('step 6 — two-track project creation on approval (behind FLAGS.govIng
     expect(r.status).toBe(200);
     expect(r.body.qualification).toMatchObject({ id: 'q-approved' });
     expect(r.body.projectWarning).toContain('will be retried');
+  });
+});
+
+describe('POST/DELETE build-stories/:storyId/assign (P3-T2 assignment)', () => {
+  const GWS = 'gws:4d14fa10-5752-4ad3-bbea-061453ac6341';
+  const STORY = 'STORY-REQ-1';
+  const ASSIGNEE = '11111111-1111-4111-8111-111111111111'; // a real v4 UUID (DataTypes.UUIDV4 shape)
+  const assignUrl = `/api/admin/factory/qualification/${GWS}/build-stories/${STORY}/assign`;
+
+  it('assigns: resolves the gws→project, derives the canonical req id, and records the operator as assigner', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    resolveGovProjectActor.mockResolvedValue({ platformIdentityId: 'op-id', email: 'reviewer@test' });
+    assignBuildStory.mockResolvedValue({ id: 'as-1', storyId: STORY, canonicalReqId: 'REQ-1', assigneeIdentityId: ASSIGNEE, assignedByIdentityId: 'op-id', assignedAt: null });
+    const res = await request(app).post(assignUrl).send({ assigneeIdentityId: ASSIGNEE });
+    expect(res.status).toBe(200);
+    expect(assignBuildStory).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryProjectId: 'dp-1', storyId: STORY, canonicalReqId: 'REQ-1', assigneeIdentityId: ASSIGNEE, assignedByIdentityId: 'op-id',
+    }));
+    expect(res.body.assigneeIdentityId).toBe(ASSIGNEE);
+  });
+
+  it('404s when the opportunity has no delivery project yet (not approved)', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue(null);
+    const res = await request(app).post(assignUrl).send({ assigneeIdentityId: ASSIGNEE });
+    expect(res.status).toBe(404);
+    expect(assignBuildStory).not.toHaveBeenCalled();
+  });
+
+  it('422s with the reason when the assignee is not a builder (the service rail)', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    resolveGovProjectActor.mockResolvedValue({ platformIdentityId: 'op-id', email: 'reviewer@test' });
+    assignBuildStory.mockRejectedValue(new AssignmentError('The assignee is not a builder on this project.', 'assignee_not_builder'));
+    const res = await request(app).post(assignUrl).send({ assigneeIdentityId: ASSIGNEE });
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('assignee_not_builder');
+  });
+
+  it('400s a non-uuid assignee and a non-STORY story id, without calling the service', async () => {
+    const bad = await request(app).post(assignUrl).send({ assigneeIdentityId: 'not-a-uuid' });
+    expect(bad.status).toBe(400);
+    const badStory = await request(app).post(`/api/admin/factory/qualification/${GWS}/build-stories/REQ-1/assign`).send({ assigneeIdentityId: ASSIGNEE });
+    expect(badStory.status).toBe(400);
+    expect(assignBuildStory).not.toHaveBeenCalled();
+  });
+
+  it('DELETE removes the assignment (back to unassigned) via the resolved project', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    unassignBuildStory.mockResolvedValue({ ok: true, removed: 1 });
+    const res = await request(app).delete(assignUrl);
+    expect(res.status).toBe(200);
+    expect(unassignBuildStory).toHaveBeenCalledWith('dp-1', STORY);
+    expect(res.body).toMatchObject({ ok: true, removed: 1 });
+  });
+});
+
+describe('P4 proposal-production routes', () => {
+  const GWS = 'gws:4d14fa10-5752-4ad3-bbea-061453ac6341';
+  const REQ = 'R1';
+  beforeEach(() => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1');
+    resolveGovProjectActor.mockResolvedValue({ platformIdentityId: 'op-id', email: 'reviewer@test' });
+  });
+
+  it('POST responses/:req saves the authored response and records the operator as author', async () => {
+    saveProposalResponse.mockResolvedValue({ requirementId: REQ, status: 'draft', content: 'We comply.', figures: [], authoredByIdentityId: 'op-id', reviewedByIdentityId: null, updatedAt: null });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}`).send({ content: 'We comply.' });
+    expect(res.status).toBe(200);
+    expect(saveProposalResponse).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', requirementId: REQ, content: 'We comply.', authoredByIdentityId: 'op-id' }));
+  });
+
+  it('POST responses/:req/review maps a lifecycle violation (draft→approved) to 409 with the reason', async () => {
+    reviewProposalResponse.mockRejectedValue(new ResponseError('A response must be reviewed before it can be approved.', 'not_reviewed'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}/review`).send({ decision: 'approved' });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_reviewed');
+  });
+
+  it('POST responses/:req/figures maps an unbound figure to 422', async () => {
+    addProposalFigure.mockRejectedValue(new ResponseError('A figure must be bound to a commit.', 'figure_not_commit_bound'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}/figures`).send({ ref: 'docs/x.png' });
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('figure_not_commit_bound');
+  });
+
+  it('404s a response write before the opportunity has a delivery project', async () => {
+    resolveDecoupledDeliveryProjectId.mockResolvedValue(null);
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/responses/${REQ}`).send({ content: 'x' });
+    expect(res.status).toBe(404);
+    expect(saveProposalResponse).not.toHaveBeenCalled();
+  });
+
+  it('POST amendments records an inbox entry (the service runs the invalidation)', async () => {
+    recordProposalAmendment.mockResolvedValue({ id: 'am-1', amendmentKey: 'ADD-2', kind: 'amendment', summary: 's', affects: ['R1'], provenance: null, observedAt: null, invalidatedCount: 1, createdAt: null });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/amendments`).send({ amendmentKey: 'ADD-2', summary: 's', affects: ['R1'] });
+    expect(res.status).toBe(200);
+    expect(recordProposalAmendment).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', amendmentKey: 'ADD-2', affects: ['R1'] }));
+    expect(res.body.invalidatedCount).toBe(1);
+  });
+});
+
+describe('P5 submission + outcome routes', () => {
+  const GWS = 'gws:4d14fa10-5752-4ad3-bbea-061453ac6341';
+  const ws = (over: any = {}) => ({
+    responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'c', figures: [] }],
+    coverage: { sufficient: true, reasons: [] }, evaluation: { canApproveBid: true }, provenance: { title: 'TxDOT' }, ...over,
+  });
+  beforeEach(() => { resolveDecoupledDeliveryProjectId.mockResolvedValue('dp-1'); getDecoupledWorkspace.mockResolvedValue(ws()); });
+
+  it('export: 409 not_ready + blocking when a response is not approved', async () => {
+    exportSubmission.mockRejectedValue(new SubmissionError('not ready', 'not_ready', ['responses_not_approved:R1']));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/submission/export`).send({});
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_ready');
+    expect(res.body.blocking).toContain('responses_not_approved:R1');
+  });
+
+  it('export: 200 passes the workspace readiness signals to the service', async () => {
+    exportSubmission.mockResolvedValue({ status: 'exported', outcome: 'pending', exportManifest: { responseCount: 1 } });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/submission/export`).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('exported');
+    expect(exportSubmission).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', projectName: 'TxDOT', coverageSufficient: true, canApproveBid: true }));
+  });
+
+  it('package: downloads a REAL zip (application/zip attachment, non-empty) when the current responses are ready', async () => {
+    const res = await request(app).get(`/api/admin/factory/qualification/${GWS}/submission/package`);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/zip');
+    expect(res.headers['content-disposition']).toContain('attachment');
+    expect(Number(res.headers['content-length'])).toBeGreaterThan(0);
+  });
+
+  it('package: 409 not_ready when a material amendment reopened a response (current responses not all approved)', async () => {
+    getDecoupledWorkspace.mockResolvedValue(ws({ responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'revision_required', content: 'c', figures: [] }] }));
+    const res = await request(app).get(`/api/admin/factory/qualification/${GWS}/submission/package`);
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_ready');
+  });
+
+  it('receipt: 409 not_exported maps through (exported ≠ submitted)', async () => {
+    recordSubmissionReceipt.mockRejectedValue(new SubmissionError('export first', 'not_exported'));
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/submission/receipt`).send({ externalRef: 'CONF-9' });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('not_exported');
+  });
+
+  it('outcome: 200 records won (the service generates the private candidates)', async () => {
+    recordOutcome.mockResolvedValue({ status: 'preparing', outcome: 'won', caseStudyCandidate: { published: false } });
+    const res = await request(app).post(`/api/admin/factory/qualification/${GWS}/outcome`).send({ outcome: 'won' });
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe('won');
+    expect(recordOutcome).toHaveBeenCalledWith(expect.objectContaining({ deliveryProjectId: 'dp-1', projectName: 'TxDOT', outcome: 'won' }));
+  });
+});
+
+describe('materialize-build-project route (P2.3)', () => {
+  const U = '11111111-1111-4111-8111-111111111111';
+  const mUrl = `/api/admin/factory/qualification/${CLEAN_CANONICAL}/materialize-build-project`;
+  const mBody = { deliveryProjectId: U, assigneeIdentityId: U, requirements: [{ id: 'REQ-001', text: 'x' }] };
+  it('201 with the result on success', async () => {
+    (materializeGovBuildProject as jest.Mock).mockResolvedValue({ projectId: 'p1', created: true, enrollmentId: 'e1', lists: 2, tasks: 3, releaseCount: 2, storyCount: 3 });
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(201);
+    expect(res.body.projectId).toBe('p1');
+  });
+  it('422 (reason no_enrollment) when the assigned builder has no enrollment', async () => {
+    (materializeGovBuildProject as jest.Mock).mockRejectedValue(new GovMaterializeError('no_enrollment', 'no enrollment'));
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('no_enrollment');
+  });
+  it('409 (reason plan_blocked) when the generated plan is blocked', async () => {
+    (materializeGovBuildProject as jest.Mock).mockRejectedValue(new GovMaterializeError('plan_blocked', 'blocked'));
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(409);
+  });
+  it('400 on a malformed body (non-uuid ids)', async () => {
+    const res = await request(app).post(mUrl).send({ deliveryProjectId: 'nope', assigneeIdentityId: 'nope', requirements: [] });
+    expect(res.status).toBe(400);
   });
 });

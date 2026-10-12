@@ -80,14 +80,15 @@ export const NAV_GROUPS: NavGroup[] = [
     //
     // "Composer" and "Content" were the system's words for itself. "New post" and "All posts"
     // are what somebody is actually trying to do, which is the whole point of the redesign.
-    { path: '/admin/marketing', label: 'Overview', icon: 'broadcast-line' },
-    { path: '/admin/marketing/composer', label: 'New post', icon: 'quill-pen-line' },
-    { path: '/admin/marketing/content', label: 'All posts', icon: 'list-check-2' },
-    { path: '/admin/marketing/calendar', label: 'Calendar', icon: 'calendar-2-line' },
-    { path: '/admin/marketing/landing-pages', label: 'Landing pages', icon: 'layout-masonry-line' },
-    { path: '/admin/marketing/publishing', label: 'Publishing queue', icon: 'send-plane-line' },
-    { path: '/admin/marketing/performance', label: 'Performance', icon: 'line-chart-line' },
-    { path: '/admin/marketing/brands', label: 'Brands & channels', icon: 'price-tag-3-line' },
+    // ONE ENTRY, on purpose. Ali, 2026-10-08: "Delete the link on the left side navigation so we
+    // can just have one button for Marketing." Eight sidebar rows for one section made the rail
+    // the navigation and the Overview a page nobody needed; now the Overview IS the navigation.
+    //
+    // THE PAGES ARE NOT DELETED - explicitly: "Don't delete the page." Every route still exists
+    // and is reachable from the Overview, from a breadcrumb and from a bookmark. Deleting them
+    // would delete the composer, which is where a post is written. See MarketingHub for the
+    // entry points this replaced.
+    { path: '/admin/marketing', label: 'Marketing', icon: 'broadcast-line' },
   ]},
   { label: 'Campaigns', section: 'campaigns', links: [
     { path: '/admin/campaigns', label: 'Campaigns', icon: 'megaphone-line' },

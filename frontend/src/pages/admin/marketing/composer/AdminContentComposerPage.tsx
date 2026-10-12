@@ -26,6 +26,9 @@ import {
   blockedReason, firstOpenStep, isStepKey, nextOpenStep, previousStep, stepDefinition, stepStates,
   type StepFacts, type StepKey,
 } from './composerSteps';
+import { toMarketingCampaigns } from '../marketingCampaigns';
+import { useMarketingBrand } from '../MarketingBrandContext';
+import { ALL_BRANDS } from '../brandScope';
 
 /**
  * The marketing composer (spec 8.1). One page, five sections, in the order the work happens:
@@ -41,41 +44,6 @@ import {
  * links, validation and the confirmation all come back from the API, so what the operator
  * confirms is what the server will act on, not a client-side approximation of it.
  */
-
-/**
- * Campaigns that can actually carry a social post.
- *
- * Ali, 2026-10-07, looking at this dropdown: "This list are not campaigns that exist so I'm
- * confused." They did exist - the list was every row in `campaigns`, filtered by brand and
- * nothing else, so it offered forty-odd EMAIL sequences (warm_nurture, cold_outbound,
- * executive_outreach, behavioral triggers, alumni win-back) alongside anything made for
- * marketing. Most were paused months ago. Choosing one of those for a LinkedIn post is not a
- * thing anybody wants to do, and the UI was inviting it.
- *
- * Two filters, both about whether the row can do THIS job rather than about what it is called:
- *
- *   - A finished or shelved campaign is not a destination for new posts.
- *   - An email-lifecycle `type` is a different machine from a marketing post. The allowlist is
- *     deliberately a list of what IS marketing rather than a list of what is not, so a new
- *     lifecycle type added later does not silently reappear here.
- *
- * Campaigns with no UTM slug are KEPT, because the composer can mint one in place and the
- * dropdown already says "- no UTM slug" against them. Hiding those would turn a fixable gap
- * into an invisible one.
- */
-const POST_CAMPAIGN_TYPES = new Set(['marketing', 'paid_social', 'organic_social', 'content', 'launch']);
-const DEAD_CAMPAIGN_STATUSES = new Set(['completed', 'archived', 'cancelled']);
-
-export function usableForAPost(rows: Record<string, unknown>[]): Record<string, unknown>[] {
-  return rows.filter((c) => {
-    const status = String(c.status ?? '').toLowerCase();
-    if (DEAD_CAMPAIGN_STATUSES.has(status)) return false;
-    const type = String(c.type ?? '').toLowerCase();
-    // No type at all is treated as a marketing campaign: that is what the Campaigns screen
-    // creates when nobody picks one, and hiding a row somebody just made would be the worse bug.
-    return type === '' || POST_CAMPAIGN_TYPES.has(type);
-  });
-}
 
 /** Blank options are dropped before the backend sees them, so "two filled, one empty" is a valid two-option poll. */
 function trimPoll(poll: NonNullable<SetupValues['poll']>): NonNullable<SetupValues['poll']> {
@@ -139,9 +107,7 @@ export default function AdminContentComposerPage() {
     listBrands().then((r) => setBrands(r.brands)).catch(() => setBrands([]));
     composer.listProviders().then(setProviders).catch(() => setProviders([]));
     api.get('/api/admin/campaigns', { params: { limit: 200 } })
-      .then((r) => setCampaigns(usableForAPost(r.data.campaigns ?? []).map((c: Record<string, unknown>) => ({
-        id: String(c.id), name: String(c.name), brand_id: (c.brand_id as string | null) ?? null, utm_campaign_slug: (c.utm_campaign_slug as string | null) ?? null,
-      }))))
+      .then((r) => setCampaigns(toMarketingCampaigns(r.data.campaigns ?? [])))
       .catch(() => setCampaigns([]));
   }, []);
 
@@ -186,6 +152,65 @@ export default function AdminContentComposerPage() {
   }, [routeId]);
 
   const brand = useMemo(() => brands.find((b) => b.id === setup.brand_id) ?? null, [brands, setup.brand_id]);
+
+  /**
+   * ONE brand on this page, not two.
+   *
+   * The marketing shell holds the brand in a bar above every page and promises 'Everything
+   * below is this brand only'. This page never read it: it kept its own `setup.brand_id`, so the
+   * bar could say Colaberry Enterprise while Setup said Colaberry Training and the post was
+   * created under the second. The bar's promise was false here, which is how Ali found it.
+   *
+   * A DRAFT STILL WINS. Once the item exists its brand is fixed - retargeting an existing post
+   * because someone changed a bar would move its tracked links to another brand.
+   *
+   * Campaign and landing page are CLEARED when the brand changes: both are brand-scoped, and
+   * carrying a selection across would point this post at another brand's destination.
+   */
+  const { brandId: scopeBrandId, setBrandId: setScopeBrand } = useMarketingBrand();
+  useEffect(() => {
+    if (item) return;
+    if (scopeBrandId === ALL_BRANDS) return;
+    setSetup((s) => (s.brand_id === scopeBrandId
+      ? s
+      : { ...s, brand_id: scopeBrandId, campaign_id: '', landing_page_id: null }));
+  }, [scopeBrandId, item]);
+
+  const brandFixedBy: 'scope' | 'draft' | null = item ? 'draft' : (scopeBrandId !== ALL_BRANDS ? 'scope' : null);
+
+  /**
+   * Create a marketing campaign without leaving the post.
+   *
+   * The picker could be empty with NO WAY to fill it: the create route admitted only email
+   * lifecycle types, so every campaign it could make was one this picker correctly filtered out.
+   * The backend now accepts marketing types and this puts the door where the gap is.
+   *
+   * Selected on success, because creating one and leaving it unchosen is a step nobody wants.
+   */
+  const createCampaign = async (name: string) => {
+    setBusy(true);
+    try {
+      const created = await composer.createMarketingCampaign({ name, brand_id: setup.brand_id || null });
+      setCampaigns((cs) => [{ id: created.id, name: created.name, brand_id: created.brand_id, utm_campaign_slug: created.utm_campaign_slug }, ...cs]);
+      setSetup((s2) => ({ ...s2, campaign_id: created.id }));
+      say(created.utm_campaign_slug ? 'success' : 'info',
+        created.utm_campaign_slug
+          ? `Campaign "${created.name}" created and selected.`
+          : `Campaign "${created.name}" created, but its tracked-link slug could not be made. Assign one before publishing.`);
+    } catch (err) {
+      fail(err, 'The campaign could not be created.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Picking a brand here (only possible on 'All brands') moves the bar, so the rest follows. */
+  const onSetupChange = useCallback((next: SetupValues) => {
+    setSetup((prev) => {
+      if (next.brand_id && next.brand_id !== prev.brand_id) setScopeBrand(next.brand_id);
+      return next;
+    });
+  }, [setScopeBrand]);
 
   /**
    * What the chosen content type needs. The upload lives in Setup for types that take a file,
@@ -509,7 +534,9 @@ export default function AdminContentComposerPage() {
         <SectionCard title="1. Setup" subtitle="Brand, campaign, landing page and the canonical message." icon="settings-3-line">
           <ComposerSetup
             values={setup} brands={brands} campaigns={campaigns} locked={Boolean(item)} busy={busy}
-            onChange={setSetup} onSubmit={saveSetup} onAssignSlug={assignSlug}
+            onChange={onSetupChange} onSubmit={saveSetup} onAssignSlug={assignSlug}
+            brandFixedBy={brandFixedBy} brandName={brand?.name ?? null}
+            onCreateCampaign={createCampaign}
             onDraftMessage={draftMessage} draftNotes={draftNotes} providers={providers}
           landingPages={landingPages}
           onCreateLandingPage={() => setBuildingPage(true)}

@@ -1,8 +1,9 @@
-import { Sequelize } from 'sequelize';
+import { Op, Sequelize } from 'sequelize';
 import { CommunityMember, Enrollment, EnrollmentLead, ExplorerJourneyProfile, Lead, OrgMember, Subscription, Visitor } from '../../models';
 import { resolveExplorerLead, normalizeEmail } from '../explorerGrowth/explorerIdentityBridge';
 import { getLeadContexts } from '../../modules/tenancy/leadContextService';
 import { pickBestEnrollment } from '../enrollmentPick';
+import { isConverted } from '../adminOs/conversionState';
 
 /**
  * The generic subject, as a READ-ONLY VIEW over the identity that already
@@ -353,12 +354,33 @@ async function enrollmentForLead(leadId: number, emailNormalized: string | null)
   return best ? { enrollmentId: best.id, via: 'enrollment_email' } : null;
 }
 
-/** A paid, non-guest enrolment, else an active subscription on it, else not a customer. */
+/**
+ * A paid, non-guest enrolment, else a PAYING subscription on it, else not a customer.
+ *
+ * T210: the subscription branch was `status: 'active'` with no plan term, so an
+ * admin-granted `plan: 'comp'` seat -- "Free Access, full program access at $0,
+ * never billed" -- read as a paying customer, and the strategy brief addressed
+ * them as one. The rule now comes from `adminOs/conversionState`, which the
+ * lifecycle-stage SQL derives from too: one definition instead of three variants.
+ *
+ * A comp holder still has program ACCESS. That is a DIFFERENT question, answered
+ * by `conversionState.hasProgramAccess`. Do not merge the two.
+ */
 async function customerFactFor(enrollmentId: string): Promise<CustomerFact> {
   const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'payment_status', 'tier'] });
-  if (enrollment && enrollment.tier !== 'guest' && enrollment.payment_status === 'paid') return { paid: true, basis: 'payment_status' };
-  const subscription = await Subscription.findOne({ where: { enrollment_id: enrollmentId, status: 'active' }, attributes: ['id'] });
-  if (subscription) return { paid: true, basis: 'subscription' };
+  const hasPaidEnrollment = Boolean(
+    enrollment && enrollment.tier !== 'guest' && enrollment.payment_status === 'paid',
+  );
+  if (isConverted({ has_paid_enrollment: hasPaidEnrollment, has_paid_subscription: false })) {
+    return { paid: true, basis: 'payment_status' };
+  }
+  const subscription = await Subscription.findOne({
+    where: { enrollment_id: enrollmentId, status: 'active', plan: { [Op.ne]: 'comp' } },
+    attributes: ['id'],
+  });
+  if (isConverted({ has_paid_enrollment: false, has_paid_subscription: Boolean(subscription) })) {
+    return { paid: true, basis: 'subscription' };
+  }
   return NOT_A_CUSTOMER;
 }
 

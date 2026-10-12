@@ -13,6 +13,7 @@ import {
 import type { SubjectSource } from './subjectResolver';
 import { getAuthorizedLeadContexts } from '../../modules/tenancy/leadContextService';
 import { matchesScope, personScopeWhere, type PersonJourneyArgs } from './personJourneyService';
+import { subjectRefFrom } from '../identity/identifierPrecedence';
 
 /**
  * The drillthrough chain: can this person be followed end to end, and where does the trail break?
@@ -145,8 +146,31 @@ const unavailable = (name: ChainHopName, reason: ChainUnavailableReason, extra: 
   ...extra,
 });
 
-/** `lead:<id>` - the subject_ref spelling every journey table uses for a lead anchor. */
-const subjectRefOf = (leadId: number): string => `lead:${leadId}`;
+/**
+ * The subject_ref spelling every journey table uses, from the ONE builder.
+ *
+ * This was a local `` `lead:${leadId}` `` — a FOURTH re-implementation of the
+ * spelling, in the very file T211 edited to declare that this view does not
+ * compete with the canonical profile. A verifier mutated it to
+ * `` `visitor:${leadId}-MUTANT` `` — a different identity for the same person —
+ * and all 58 tests stayed green, because T211's cross-view identity test
+ * asserted that three OTHER builders agree while none of the three views called
+ * any of them. The assertion sat beside the views instead of running through
+ * them, which is the same defect class as the attempt-1 source-text tests.
+ *
+ * `subjectRefFrom` is T208's builder and the reason T208 exists. For a
+ * lead-anchored chain it returns exactly `lead:<id>`, so this is spelling-
+ * identical to what stood here; the difference is that the spelling now has one
+ * definition instead of four, and a change to it is caught.
+ *
+ * The anchor carries ONLY `leadId` deliberately. Passing an enrollment id would
+ * make the builder return `enrollment:<id>` by precedence — correct for the
+ * person, wrong for this function, which reads rows keyed to the LEAD anchor.
+ * The `?? ''` is unreachable for a numeric id (the builder returns null only
+ * when every field is absent) and is written as an empty ref rather than a
+ * throw so a malformed anchor can match no rows instead of taking the view down.
+ */
+const subjectRefOf = (leadId: number): string => subjectRefFrom({ leadId }) ?? '';
 
 async function campaignHop(leadId: number, where: Record<string, unknown>, visible: Record<string, unknown>[]): Promise<ChainHop> {
   // First touch, per brand, is the context row's own column - the only campaign link
@@ -264,6 +288,13 @@ async function outcomesHop(subjectRef: string, where: Record<string, unknown>): 
   if (n === 0) return unavailable('outcomes', 'no_row');
   return linked('outcomes', subjectRef, { via: 'subject_ref', count: n });
 }
+
+/**
+ * T211: NOT a competing person profile. This answers whether the identity
+ * CHAIN is intact — which hops are linked, which are unavailable and why.
+ * `adminOs/personProfileService` is the canonical assembler.
+ */
+export const PERSON_VIEW_ROLE = 'answers' as const;
 
 /**
  * The chain for one lead, under the caller's scope.

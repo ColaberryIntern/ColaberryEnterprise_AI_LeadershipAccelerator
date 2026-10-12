@@ -303,6 +303,69 @@ export async function latestDeck(assignmentId: string): Promise<{ deck: DeckRow 
  * This is the entry point a route uses; `latestDeck` is the inner read and assumes the
  * caller already holds the project.
  */
+/**
+ * Generate a deck for a task this enrollment owns.
+ *
+ * THE ROUTE THAT WAS MISSING. `generateDeck` has existed, tested and instrumented,
+ * since Phase 5 — with nothing able to call it. The Build stage told the learner
+ * "build your prompt above, then generate one" and offered no way to do it. Found by
+ * using the page rather than by reading it (2026-10-08).
+ *
+ * Ownership first, exactly like `latestDeckForOwner`: a project that is missing and a
+ * project that belongs to someone else give the same answer, so a status code cannot
+ * be used to discover that a project exists.
+ *
+ * THE PROMPT IS REBUILT SERVER-SIDE and never accepted from the client. A caller who
+ * could post their own prompt could make the platform spend an OpenAI call on anything
+ * at all, and the deck would no longer be traceable to a template version.
+ *
+ * GROUNDING SOURCES ARE THE LEARNER'S OWN MATERIAL, not the prompt — see `deckSources`.
+ */
+export async function generateDeckForOwner(
+  enrollmentId: string,
+  projectId: string,
+  storyId: string,
+  cohortId?: string | null,
+): Promise<
+  | { ok: true; result: GenerateResult }
+  | { ok: false; reason: 'not_found' | 'unknown_template' }
+> {
+  const { getOwnedProjectTree } = await import('../projects/projectReadService');
+  const tree = await getOwnedProjectTree(enrollmentId, projectId);
+  if (!tree) return { ok: false, reason: 'not_found' };
+
+  // Creating the assignment here is deliberate and is the one place it is right: the
+  // learner has asked for a deck, which is an act of starting. The READ path must not
+  // create a row as a side effect; this is not the read path.
+  const { getOrCreateAssignment } = await import('./presentationAssignmentService');
+  const assigned = await getOrCreateAssignment(enrollmentId, projectId, storyId, cohortId ?? null);
+  if (!assigned.ok) return { ok: false, reason: assigned.reason === 'unknown_template' ? 'unknown_template' : 'not_found' };
+
+  const { buildPresentationPrompt } = await import('./presentationPromptService');
+  const built = await buildPresentationPrompt({ enrollmentId, projectId, storyId });
+  if (!built.ok) return { ok: false, reason: built.reason };
+
+  // `getOrCreateAssignment` returns a view, not the row, and the row's id is what
+  // claims the one-in-flight slot. Re-read it: the call above guarantees it exists.
+  const { sourcesFromTree } = await import('./deckSources');
+  const { default: PresentationAssignment } = await import('../../models/PresentationAssignment');
+  const row = await PresentationAssignment.findOne({ where: { project_id: projectId, story_id: storyId } });
+  if (!row) return { ok: false, reason: 'not_found' };
+  const saved = (row.checklist_json || {}) as Record<string, unknown>;
+
+  const result = await generateDeck({
+    assignmentId: String(row.id),
+    prompt: built.prompt.text,
+    // `<template>@<version>`, so a deck traces to the exact template that made it.
+    promptVersion: `${built.prompt.templateId}@${built.prompt.templateVersion}`,
+    sources: sourcesFromTree(tree, {
+      audience: row.audience ?? null,
+      purpose: typeof saved.purpose === 'string' ? saved.purpose : null,
+    }),
+  });
+  return { ok: true, result };
+}
+
 export async function latestDeckForOwner(
   enrollmentId: string,
   projectId: string,

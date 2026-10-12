@@ -263,3 +263,107 @@ describe('findUnbridgedExplorers', () => {
     await expect(findUnbridgedExplorers()).resolves.toEqual([]);
   });
 });
+
+/**
+ * Growth OS Reset Phase 2 T202b, row 5 of
+ * `docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md`.
+ *
+ * `loadActiveExplorers` is the query that decides who Explorer Growth can see,
+ * and making portal free accounts satisfy it is the entire point of the phase.
+ * It was uncovered: a verifier inverted `enrollment_type: 'explorer'` to
+ * `'standard'` and nothing failed — 16 tests in this suite and 6 in
+ * `explorerRecomputeDiscovery`, all green — so the one filter this phase exists to
+ * satisfy could have been changed without a single test noticing. (An earlier note
+ * gave that as "22 of 22 green" for this suite alone. 22 was the two suites
+ * combined; stating it as one was a retyped figure, which is the habit this phase
+ * is supposed to have stopped.)
+ *
+ * It is NOT raw SQL — it is `Enrollment.findAll({ where: { … } })`, the same
+ * mockable seam `dashboardExplorerExclusion.test.ts` uses. An earlier version of
+ * T202b's coverage note claimed otherwise and used that claim to justify leaving
+ * it untested. The claim was false, and a false reason for skipping a test is
+ * worse than no reason.
+ */
+describe('loadActiveExplorers — the population filter (T202b row 5)', () => {
+  const whereOf = () => enrollmentFindAll.mock.calls[0][0].where as Record<string, unknown>;
+
+  beforeEach(() => {
+    enrollmentFindAll.mockResolvedValue([]);
+    profileFindAll.mockResolvedValue([]);
+  });
+
+  it('selects on the learner programme, which is how a free AI account becomes visible', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    expect(whereOf().enrollment_type).toBe('explorer');
+  });
+
+  it('selects only ACTIVE rows, so a withdrawn row is never treated as a live Explorer', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    expect(whereOf().status).toBe('active');
+  });
+
+  it('filters on exactly those two things and nothing else', async () => {
+    // A third condition would narrow the population silently — for example
+    // excluding deposit holders, which the REVENUE roster does deliberately and
+    // this loader deliberately does not.
+    await repairAllExplorerBridges({ dryRun: true });
+
+    expect(Object.keys(whereOf()).sort()).toEqual(['enrollment_type', 'status']);
+  });
+
+  it('asks for the communityMember include that pickBestEnrollment needs to canonicalise', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    const include = enrollmentFindAll.mock.calls[0][0].include as Array<{ as: string }>;
+    expect(include.map((i) => i.as)).toContain('communityMember');
+  });
+
+  /**
+   * T203 acceptance 2, BEHAVIOURALLY — the version the plan asked for and that
+   * three attempts had only ever asserted as a source-string match.
+   *
+   * The whole no-reroute decision rests on one claim: a $50 Open-House deposit
+   * holder is already visible to Explorer Growth, so the deposit path's direct
+   * write does not need routing through the canonical service. The source-text
+   * tests in `learnerWriterTripwire.test.ts` pin the SQL and are bypassable by a
+   * trailing comment; this drives the real function and asserts the person comes
+   * back.
+   */
+  it('a deposit-holding free account IS in the population — the claim the no-reroute decision rests on', async () => {
+    // Exactly what `openHouseCreditService` writes: explorer + guest, unpaid,
+    // placed in the deposit cohort. Nothing about holding a credit excludes it.
+    enrollmentFindAll.mockResolvedValue([
+      {
+        id: ENR_A,
+        email: 'deposit@example.com',
+        enrollment_type: 'explorer',
+        payment_status: 'pending',
+        created_at: new Date('2026-07-16'),
+        communityMember: null,
+      },
+    ]);
+    enrollmentFindByPk.mockResolvedValue({ id: ENR_A, email: 'deposit@example.com' });
+    leadFindOne.mockResolvedValue({ id: 77 });
+
+    const report = await repairAllExplorerBridges();
+
+    expect(report.scanned).toBe(1);
+    expect(report.resolved).toBe(1);
+    expect(profileCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ enrollment_id: ENR_A }),
+    );
+  });
+
+  it('and the loader asks for no credit or deposit join at all, so none can exclude them', async () => {
+    await repairAllExplorerBridges({ dryRun: true });
+
+    const args = enrollmentFindAll.mock.calls[0][0] as Record<string, unknown>;
+    // `account_credits` is how a deposit is recorded. If the loader ever joined it,
+    // the revenue roster's `ac.enrollment_id IS NULL` exclusion would become a
+    // journey-visibility exclusion and the deposit path WOULD need rerouting.
+    expect(JSON.stringify(args)).not.toContain('account_credit');
+    expect(JSON.stringify(args)).not.toContain('AccountCredit');
+  });
+});

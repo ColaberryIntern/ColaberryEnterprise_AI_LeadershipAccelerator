@@ -1,40 +1,97 @@
-import { Enrollment, Lead } from '../models';
+import { Lead } from '../models';
 import { signParticipantJwt } from './participantService';
+import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
+import {
+  resolveFreeAccount,
+  normalizeIdentity,
+  freeEnrollmentDefaults,
+  type FreeAccountProgramme,
+  type FreeAccountDisposition,
+  type FreeAccountIdentity,
+} from './freeAccountRegistration';
 
 export interface FreeSignupInput {
   full_name: string;
   email: string;
+  /**
+   * REQUIRED. Which programme this account is joining.
+   *
+   * 'learner'  — the free AI course. Becomes an Explorer, visible to Explorer Growth.
+   * 'standard' — free platform access with no learner programme: an org teammate
+   *              invited by their employer, or a prospect account.
+   *
+   * No default, deliberately. This service has five callers and only ONE of them
+   * is a free-AI signup; the other four create accounts for people who never
+   * asked to be learners. A default would have silently reclassified whichever
+   * caller forgot to pass it, and the first draft of this change defaulted to
+   * 'learner' — which would have put every org owner and every invited corporate
+   * teammate onto learner rosters and into the nurture the growth engine runs.
+   * That is the mistake `orgService` carries a comment about, and it is the one
+   * this argument exists to make impossible.
+   */
+  programme: FreeAccountProgramme;
+
+  /**
+   * Acquisition evidence, Phase 2 T204. Optional throughout, and absent means
+   * **not known** — recorded as null rather than defaulted, because a default
+   * here would invent attribution that nobody can later distinguish from a real
+   * measurement.
+   *
+   * Deliberately kept apart from `programme`: these say where the person came
+   * from, `programme` says what they joined. **Origin brand is not journey
+   * ownership** — someone arriving from a non-learner brand's page can still be a
+   * free AI learner, and the two facts live in different columns in different
+   * tables so neither can overwrite the other. Origin brand is DERIVED, via
+   * `Lead.source_id → LeadSource.brand_id`, so there is no second brand column to
+   * disagree with the first.
+   */
+  /**
+   * Field types match `models/Lead.ts` exactly, which the first draft did not: the
+   * three ids are **UUID strings**, not numbers, and there is no `referrer` because
+   * `Lead` has no such column. The draft disagreed with the model on six of nine
+   * fields and — because this capture swallows its errors — would have silently
+   * lost the lead row rather than reporting anything. See the schema for the full
+   * account.
+   */
+  acquisition?: {
+    source?: string;
+    form_type?: string;
+    source_id?: string;
+    entry_point_id?: string;
+    utm_source?: string;
+    utm_campaign?: string;
+    page_url?: string;
+    visitor_id?: string;
+  };
 }
 
 export interface FreeSignupResult {
   jwt: string;
   enrollment: { id: string; full_name: string; email: string; tier: string };
+  /**
+   * True only when a NEW row was written. `participantController` turns this into
+   * a 201 vs 200, so an account that merely gained the learner programme is a
+   * 200: nothing was created.
+   */
   created: boolean;
+  /** 'created' | 'reused' | 'upgraded'. Additive, so callers can tell the three apart. */
+  disposition: FreeAccountDisposition;
 }
 
-/** Normalize inbound signup identity (pure — email lowercased/trimmed, name trimmed). */
-export function normalizeSignupInput(input: FreeSignupInput): { full_name: string; email: string } {
-  return {
-    full_name: (input.full_name || '').trim(),
-    email: (input.email || '').toLowerCase().trim(),
-  };
-}
+/**
+ * @deprecated Use `normalizeIdentity` from `freeAccountRegistration`.
+ * Kept because two existing suites import it by this name.
+ */
+export const normalizeSignupInput = normalizeIdentity;
 
-/** The attributes a brand-new free/guest enrollment is created with (pure). */
-export function guestEnrollmentDefaults(clean: { full_name: string; email: string }) {
-  return {
-    full_name: clean.full_name,
-    email: clean.email,
-    company: '',                          // guests have no company yet (NOT NULL column)
-    cohort_id: null,                      // guests are not in a cohort
-    tier: 'guest' as const,
-    status: 'active' as const,
-    payment_status: 'pending' as const,   // not meaningful for guests; `tier` is the source of truth
-    payment_method: 'credit_card' as const,
-    portal_enabled: true,                 // free accounts get immediate portal access
-    maturity_level: 0,
-    intake_completed: false,
-  };
+/**
+ * @deprecated Use `freeEnrollmentDefaults(clean, programme)` from
+ * `freeAccountRegistration`, which is the one place the two semantic columns are
+ * decided. Kept because an existing suite imports it by this name, and delegating
+ * rather than duplicating means the old name cannot drift from the new rule.
+ */
+export function guestEnrollmentDefaults(clean: FreeAccountIdentity) {
+  return freeEnrollmentDefaults(clean, 'standard');
 }
 
 /**
@@ -64,16 +121,35 @@ export function guestEnrollmentDefaults(clean: { full_name: string; email: strin
  * nurture like an inbound enquiry, and they should not silently join those
  * lists.
  */
-async function captureGuestAsLead(clean: { full_name: string; email: string }): Promise<void> {
+async function captureGuestAsLead(
+  clean: FreeAccountIdentity,
+  acquisition: FreeSignupInput['acquisition'],
+): Promise<void> {
   try {
     await Lead.findOrCreate({
       where: { email: clean.email },
       defaults: {
         name: clean.full_name,
         email: clean.email,
-        source: 'free_signup',
-        form_type: 'free_signup',
+        // The caller's own source wins when supplied, so a signup that arrived
+        // through a named entry point keeps that provenance. `free_signup` stays
+        // the fallback, and is still what makes these rows identifiable and
+        // excludable in campaign segments.
+        source: acquisition?.source || 'free_signup',
+        form_type: acquisition?.form_type || 'free_signup',
         status: 'engaged',
+        // Acquisition evidence. `?? null` rather than `|| null` so that a
+        // deliberate 0 or empty string is preserved instead of being swallowed,
+        // and so "absent" lands as NULL rather than as an invented default.
+        source_id: acquisition?.source_id ?? null,
+        entry_point_id: acquisition?.entry_point_id ?? null,
+        utm_source: acquisition?.utm_source ?? null,
+        utm_campaign: acquisition?.utm_campaign ?? null,
+        page_url: acquisition?.page_url ?? null,
+        // No `referrer`: `Lead` has no such column, so writing it was a key
+        // Sequelize silently dropped. Preserving a referrer needs a column and
+        // that belongs to T205, which owns the drift-guard list.
+        visitor_id: acquisition?.visitor_id ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
       } as any,
     });
@@ -89,27 +165,33 @@ async function captureGuestAsLead(clean: { full_name: string; email: string }): 
 }
 
 /**
- * Create (or reuse) a free self-serve "guest" account and issue a participant
- * session JWT so the visitor lands straight in the platform preview.
+ * Create, reuse or upgrade a free account and issue a participant session JWT so
+ * the visitor lands straight in the platform preview.
  *
- * Idempotent by email: an existing enrollment (guest OR member) is returned and
- * logged in as-is — we never duplicate it, and never downgrade a member to guest.
+ * The account decision itself lives in `freeAccountRegistration.resolveFreeAccount`
+ * — one place, shared with every other free-account path — because this service
+ * and `enrollmentService.createExplorerEnrollment` each used to write ONE of the
+ * two columns that describe a free account. Explorer Growth finds its population
+ * by `enrollment_type = 'explorer'`, so every account created here was a real
+ * free AI learner that the growth engine could not see.
+ *
+ * What stays here is what is specific to this entry point: the acquisition
+ * record and Reese's intro. Both are best-effort and neither may block a signup.
  */
 export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSignupResult> {
-  const clean = normalizeSignupInput(input);
-  if (!clean.email || !clean.full_name) {
-    throw new Error('full_name and email are required');
-  }
+  const clean = normalizeIdentity(input);
 
-  const existing = await Enrollment.findOne({ where: { email: clean.email } });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Sequelize creation attrs
-  const enrollment: any = existing || (await Enrollment.create(guestEnrollmentDefaults(clean) as any));
+  const { enrollment, disposition } = await resolveFreeAccount({
+    full_name: input.full_name,
+    email: input.email,
+    programme: input.programme,
+  });
 
-  // Reese's intros. Self-serve signup is the other
-  // way a student reaches the portal for the first time, so it gets the same
-  // greeting as the magic-link path. Fire-and-forget: signup must not wait on a
-  // DM, and maybeSendWelcomes is idempotent, so a returning guest whose account
-  // is merely being reused is short-circuited rather than greeted twice.
+  // Reese's intros. Self-serve signup is the other way a student reaches the
+  // portal for the first time, so it gets the same greeting as the magic-link
+  // path. Fire-and-forget: signup must not wait on a DM, and maybeSendWelcomes
+  // is idempotent, so a returning guest whose account is merely being reused is
+  // short-circuited rather than greeted twice.
   void (async () => {
     try {
       const { maybeSendWelcomes } = await import('./reese/reeseWelcomeService');
@@ -117,7 +199,22 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     } catch { /* never allowed to affect signup */ }
   })();
 
-  await captureGuestAsLead(clean);
+  await captureGuestAsLead(clean, input.acquisition);
+
+  // T205: the Explorer journey profile, AT REGISTRATION rather than overnight.
+  //
+  // AFTER lead capture, deliberately: the bridge resolves `lead_id` by normalized
+  // email, so running it first would store `lead_id: null` and leave the link to be
+  // acquired by the nightly repair — the behaviour T205 exists to remove.
+  //
+  // ONLY for a learner. A `programme: 'standard'` account (an org teammate, a
+  // prospect) has not entered the Explorer journey, and giving it a journey profile
+  // would make it visible to Explorer Growth — the exact conscription that the
+  // required `programme` argument exists to prevent. Keyed on the RESOLVED row, not
+  // on the input, so a reused non-learner row is also correctly skipped.
+  if (enrollment.enrollment_type === 'explorer') {
+    await bridgeExplorerProfileAtRegistration(enrollment.id, 'portal_free_signup');
+  }
 
   return {
     jwt: signParticipantJwt(enrollment),
@@ -127,6 +224,7 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
       email: enrollment.email,
       tier: enrollment.tier || 'member',
     },
-    created: !existing,
+    created: disposition === 'created',
+    disposition,
   };
 }

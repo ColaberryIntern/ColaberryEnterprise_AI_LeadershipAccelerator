@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStudentGovProject, submitBuildStoryEvidence, type StudentGovProjectView, type StudentGovBuildStory } from '../../../services/govProjectPortalApi';
+import { getStudentGovProject, submitBuildStoryEvidence, verifyBuildStoryEvidence, type StudentGovProjectView, type StudentGovBuildStory } from '../../../services/govProjectPortalApi';
 
 /**
  * GovProjectPortalPage — the STUDENT view of an assigned government project (restricted shell).
@@ -22,13 +22,20 @@ const BUILD_EVIDENCE_TONE: Record<string, string> = { submitted: 'info', verifie
  * cannot mark it verified (that is a reviewer-only act, enforced server-side).
  */
 function StudentBuildStoryRow(
-  { story, projectId, onSubmitted }: { story: StudentGovBuildStory; projectId: string; onSubmitted: () => void },
+  { story, projectId, canVerify, onSubmitted }: { story: StudentGovBuildStory; projectId: string; canVerify: boolean; onSubmitted: () => void },
 ): React.ReactElement {
   const [showPrompt, setShowPrompt] = useState(false);
   const [description, setDescription] = useState('');
   const [artifactRef, setArtifactRef] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const decide = async (evidenceId: string, decision: 'verified' | 'rejected') => {
+    setBusy(true); setError(null);
+    try { await verifyBuildStoryEvidence(projectId, evidenceId, decision); onSubmitted(); }
+    catch { setError('Could not record your decision. Try again.'); }
+    finally { setBusy(false); }
+  };
 
   const submit = async () => {
     if (!description.trim()) { setError('Add a short description of what you built.'); return; }
@@ -69,24 +76,32 @@ function StudentBuildStoryRow(
               <span className={`badge bg-${BUILD_EVIDENCE_TONE[e.status] ?? 'secondary'}-subtle text-${BUILD_EVIDENCE_TONE[e.status] ?? 'secondary'}-emphasis`}>{e.status}</span>
               <span className="flex-grow-1">{e.description}</span>
               {e.artifactRef && <a href={e.artifactRef} target="_blank" rel="noopener noreferrer">artifact</a>}
+              {canVerify && e.status === 'submitted' && (
+                <span className="d-flex gap-1">
+                  <button type="button" className="btn btn-success btn-sm" disabled={busy} onClick={() => void decide(e.id, 'verified')}>Verify</button>
+                  <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy} onClick={() => void decide(e.id, 'rejected')}>Reject</button>
+                </span>
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      <div className="mt-2">
-        <label className="form-label small mb-1">Hand in your evidence <span className="text-secondary">(a reviewer verifies it — you can’t mark it done yourself)</span></label>
-        <textarea className="form-control form-control-sm mb-1" rows={2} value={description} placeholder="What did you build? How does it meet the requirement?"
-          onChange={(e) => setDescription(e.target.value)} />
-        <div className="d-flex flex-wrap gap-2 align-items-center">
-          <input className="form-control form-control-sm" style={{ maxWidth: 320 }} value={artifactRef} placeholder="link to repo PR / screenshot (optional)"
-            onChange={(e) => setArtifactRef(e.target.value)} />
-          <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void submit()}>
-            <i className="ri-upload-2-line me-1" aria-hidden="true" />{busy ? 'Submitting…' : 'Submit evidence'}
-          </button>
+      {!canVerify && (
+        <div className="mt-2">
+          <label className="form-label small mb-1">Hand in your evidence <span className="text-secondary">(a reviewer verifies it — you can’t mark it done yourself)</span></label>
+          <textarea className="form-control form-control-sm mb-1" rows={2} value={description} placeholder="What did you build? How does it meet the requirement?"
+            onChange={(e) => setDescription(e.target.value)} />
+          <div className="d-flex flex-wrap gap-2 align-items-center">
+            <input className="form-control form-control-sm" style={{ maxWidth: 320 }} value={artifactRef} placeholder="link to repo PR / screenshot (optional)"
+              onChange={(e) => setArtifactRef(e.target.value)} />
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void submit()}>
+              <i className="ri-upload-2-line me-1" aria-hidden="true" />{busy ? 'Submitting…' : 'Submit evidence'}
+            </button>
+          </div>
         </div>
-        {error && <div className="small text-danger mt-1" role="alert">{error}</div>}
-      </div>
+      )}
+      {error && <div className="small text-danger mt-1" role="alert">{error}</div>}
     </li>
   );
 }
@@ -191,11 +206,23 @@ export default function GovProjectPortalPage(): React.ReactElement {
             <ul className="list-group">
               {rel.storyIds.map((sid) => {
                 const s = view.build.stories.find((x) => x.id === sid);
-                return s ? <StudentBuildStoryRow key={sid} story={s} projectId={view.projectId} onSubmitted={() => void load()} /> : null;
+                return s ? <StudentBuildStoryRow key={sid} story={s} projectId={view.projectId} canVerify={view.viewerCanVerify} onSubmitted={() => void load()} /> : null;
               })}
             </ul>
           </div>
         ))
+      )}
+
+      {(view.build.orphanedStories?.length ?? 0) > 0 && (
+        <div className="mb-3 mt-3 pt-2 border-top">
+          <h3 className="h6 text-uppercase small mb-1 text-warning-emphasis"><i className="ri-alert-line me-1" aria-hidden="true" />Preserved work</h3>
+          <p className="small text-secondary mb-2">A requirement changed, so these stories are no longer in the current plan — but your submitted work is kept here, not lost.</p>
+          <ul className="list-group">
+            {view.build.orphanedStories!.map((s) => (
+              <StudentBuildStoryRow key={s.id} story={s} projectId={view.projectId} canVerify={view.viewerCanVerify} onSubmitted={() => void load()} />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

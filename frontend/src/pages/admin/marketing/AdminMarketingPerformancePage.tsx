@@ -9,9 +9,10 @@ import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../compone
 import { TrustSignal } from '../../../components/admin/shell/trust';
 import { deriveMarketingTrust, MarketingDataState } from './marketingTrust';
 import { formatMoneyOrUnavailable, formatRatioOrUnavailable, formatSpend } from './marketingFormat';
-import MarketingScopeStrip from './MarketingScopeStrip';
 import CampaignTableControls from './CampaignTableControls';
 import { defaultScope, scopeToQuery, type MarketingScope, type ScopeComparison } from './marketingScope';
+import { PERFORMANCE_TABS, PERFORMANCE_TAB_LABELS } from './performanceTabs';
+import PerformanceScopeBar from './PerformanceScopeBar';
 import { listBrands, type Brand as ScopeBrand } from '../../../services/adminBrandApi';
 import {
   ALL_COLUMNS, DEFAULT_COLUMNS, OBJECTIVE_LABELS, rankCampaigns,
@@ -1348,7 +1349,7 @@ function AdminMarketingPerformancePage() {
       <PageHeader
         title="Performance"
         icon="line-chart-line"
-        subtitle="Funnel performance, revenue intelligence, campaign tracking links, and AI outreach."
+        subtitle="Marketing funnel, revenue, campaign links, and AI outreach."
         breadcrumb={[
           { label: 'Admin', to: '/admin/dashboard' },
           { label: 'Marketing', to: '/admin/marketing' },
@@ -1356,44 +1357,27 @@ function AdminMarketingPerformancePage() {
         ]}
         trust={trust}
       >
-        {/* Tab Navigation */}
+        {/* One item per key in PERFORMANCE_TABS, so a renamed label can never drift from the
+            key the backend's attention queue links to. */}
         <ul className="nav nav-tabs">
-          <li className="nav-item">
-            <button
-              className={`nav-link ${activeTab === 'funnel' ? 'active' : ''}`}
-              onClick={() => setActiveTab('funnel')}
-            >
-              Marketing Funnel
-            </button>
-          </li>
-          <li className="nav-item">
-            <button
-              className={`nav-link ${activeTab === 'revenue' ? 'active' : ''}`}
-              onClick={() => setActiveTab('revenue')}
-            >
-              Revenue Intelligence
-            </button>
-          </li>
-          <li className="nav-item">
-            <button
-              className={`nav-link ${activeTab === 'registry' ? 'active' : ''}`}
-              onClick={() => setActiveTab('registry')}
-            >
-              Campaign Link Registry
-            </button>
-          </li>
-          <li className="nav-item">
-            <button
-              className={`nav-link ${activeTab === 'outreach' ? 'active' : ''}`}
-              onClick={() => setActiveTab('outreach')}
-            >
-              AI Outreach
-            </button>
-          </li>
+          {PERFORMANCE_TABS.map((key) => (
+            <li className="nav-item" key={key}>
+              <button
+                className={`nav-link ${activeTab === key ? 'active' : ''}`}
+                onClick={() => setActiveTab(key)}
+                data-testid={`performance-tab-${key}`}
+              >
+                {PERFORMANCE_TAB_LABELS[key]}
+              </button>
+            </li>
+          ))}
         </ul>
       </PageHeader>
 
-      <MarketingScopeStrip
+      {/* Decides for itself whether the filter belongs above this tab - see
+          PerformanceScopeBar, which exists so that rule can be tested. */}
+      <PerformanceScopeBar
+        activeTab={activeTab}
         scope={scope}
         brands={scopeBrands}
         brandsLoading={brandsLoading}

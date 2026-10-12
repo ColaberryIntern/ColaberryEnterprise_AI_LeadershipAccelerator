@@ -42,7 +42,7 @@ import {
   resolveCampaignBrand,
 } from '../services/campaignBrandAssignment';
 import { CampaignFunnelStageSchema } from '../schemas/campaignPlanningSchema';
-import { CAMPAIGN_FUNNEL_STAGES } from '../models/Campaign';
+import { CAMPAIGN_TYPES, CAMPAIGN_FUNNEL_STAGES } from '../models/Campaign';
 
 // ── Campaign CRUD ────────────────────────────────────────────────────
 
@@ -81,7 +81,11 @@ export async function handleCreateCampaign(req: Request, res: Response, next: Ne
       return;
     }
 
-    const validTypes = ['warm_nurture', 'cold_outbound', 're_engagement', 'behavioral_trigger', 'alumni', 'alumni_re_engagement', 'payment_readiness', 'executive_outreach'];
+    // Derived from the model rather than written out again. The literal list here admitted only
+    // email lifecycle types, so a marketing campaign - the kind a post or landing page is
+    // attributed to - could not be created through any API at all, and the composer's picker had
+    // nothing to offer and no way to be filled.
+    const validTypes: readonly string[] = CAMPAIGN_TYPES;
     if (!validTypes.includes(type)) {
       res.status(400).json({ error: 'Invalid campaign type' });
       return;

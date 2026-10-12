@@ -52,14 +52,47 @@ describe('parseRoutes', () => {
     expect(parseRoutes('{"open_house":"school"}')).toEqual({ open_house: 'school' });
   });
 
-  it('treats malformed or empty input as no routes', () => {
-    for (const bad of [null, undefined, '', 'not json', '[]', 42]) {
-      expect(parseRoutes(bad as unknown)).toEqual({});
+  it('treats an ABSENT setting as no routes — the legitimate pre-existing state', () => {
+    for (const absent of [null, undefined, '']) {
+      expect(parseRoutes(absent as unknown)).toEqual({});
     }
   });
 
-  it('drops entries that are not non-empty strings', () => {
-    expect(parseRoutes({ a: '', b: '  ', c: 5, d: null, e: 'ok' })).toEqual({ e: 'ok' });
+  it('returns null for a setting that is PRESENT but unreadable', () => {
+    // T214. These used to return {} as well, which then routed every lead to the
+    // default account. An unreadable map is not "no routes" — it is "we do not
+    // know", and those must not be the same answer.
+    for (const corrupt of ['not json', '[]', 42, '[1,2]', 'null{']) {
+      expect(parseRoutes(corrupt as unknown)).toBeNull();
+    }
+  });
+
+  it('withholds the WHOLE map when any entry is present but unusable', () => {
+    // This test previously asserted `{ e: 'ok' }` — it PINNED the permissive
+    // behaviour as intended, which is what let the hole survive T214's
+    // whole-map fix. A verifier found it by probing the real function rather
+    // than reading it: `{"open_house": ""}` dropped the entry, then
+    // `routes[group] || DEFAULT_ACCOUNT` fired and the lead resolved `ready`
+    // into the Agent Cory AI dialer. Dropping an entry says "no route for this
+    // group"; the truth is "a route IS configured and we cannot read it".
+    for (const corrupt of [
+      { open_house: '' },
+      { open_house: '   ' },
+      { open_house: 42 },
+      { open_house: null },
+      { open_house: { nested: 1 } },
+      { good: 'school_of_data_analytics', bad: '' },
+    ]) {
+      expect(parseRoutes(corrupt as unknown)).toBeNull();
+    }
+  });
+
+  it('still returns a readable map when every entry is usable', () => {
+    // The control. Without it the test above is satisfied by a function that
+    // returns null for everything, which would withhold all routing forever —
+    // fail-closed taken to the point of being no routing at all.
+    expect(parseRoutes({ open_house: 'school_of_data_analytics', webinar: ' trimmed ' }))
+      .toEqual({ open_house: 'school_of_data_analytics', webinar: 'trimmed' });
   });
 });
 
@@ -94,6 +127,41 @@ describe('resolveGhlAccountForSource', () => {
       settingKey: 'ghl_api_key_school_of_data_analytics',
     });
     expect(JSON.stringify(r)).not.toContain('default-key-for-agent-cory');
+  });
+
+  it('WITHHOLDS when one entry is corrupt, instead of defaulting that lead', async () => {
+    // The end-to-end half of the per-entry fix. Before it, an empty route value
+    // was dropped, `routes.open_house || DEFAULT_ACCOUNT` returned the default,
+    // and this resolved `ready` with the dialer's own key — a brand's lead
+    // written into Agent Cory AI because its route was misconfigured rather
+    // than absent. The unit assertion on `parseRoutes` alone would not have
+    // caught a consumer that re-defaulted after it.
+    settings({
+      [ROUTES_SETTING]: { open_house: '' },
+      ghl_api_key: 'default-key-for-agent-cory',
+    });
+
+    const r = await resolveGhlAccountForSource('open_house');
+
+    expect(r).toEqual({ status: 'routes_unreadable', settingKey: ROUTES_SETTING });
+    expect(JSON.stringify(r)).not.toContain('default-key-for-agent-cory');
+  });
+
+  it('the CONTROL: an absent group still defaults, so fail-closed is not fail-always', async () => {
+    // Guards the fix from overreach. `open_house` is simply not in a readable
+    // map, which is the legitimate pre-existing state, and that lead must still
+    // reach the default account.
+    settings({
+      [ROUTES_SETTING]: { webinar: 'school_of_data_analytics' },
+      ghl_api_key: 'default-key',
+    });
+
+    const r = await resolveGhlAccountForSource('open_house');
+
+    expect(r).toEqual({
+      status: 'ready',
+      account: { apiKey: 'default-key', accountKey: DEFAULT_ACCOUNT },
+    });
   });
 
   it('routes to the sub-account once its key is provisioned', async () => {
@@ -153,10 +221,28 @@ describe('resolveGhlAccountForSource', () => {
     expect((await resolveGhlAccountForSource('open_house')).status).toBe('unconfigured');
   });
 
-  it('falls back to the default account when the routes map is corrupt', async () => {
-    // A broken map must not withhold every lead in the system; unrouted is the
-    // pre-existing behaviour and is safe because the default key is real.
+  it('WITHHOLDS when the routes map is corrupt, even though the default key is usable', async () => {
+    // T214 — THE FAIL-OPEN SUB-CASE, CLOSED. This test previously asserted the
+    // opposite: that a corrupt map falls back to the default account, on the
+    // reasoning that a broken map must not withhold every lead and the default key
+    // is real. That argument has force, but the default account is Agent Cory AI,
+    // the wrong CRM, in front of an outbound dialer — and a corrupt map means we
+    // do not KNOW where the lead belongs, so choosing the dialer is a decision
+    // made on no evidence. It also contradicted this module's own header and the
+    // standing requirement that multi-account routing stay fail-closed.
+    //
+    // The objection is answered rather than ignored: the withholding is logged
+    // per lead and writes a `status: 'withheld'` activity row, so a typo in the
+    // setting surfaces instead of silently stopping every sync.
     settings({ [ROUTES_SETTING]: 'not json at all', ghl_api_key: 'default-key' });
+    const r = await resolveGhlAccountForSource('open_house');
+    expect(r).toEqual({ status: 'routes_unreadable', settingKey: ROUTES_SETTING });
+  });
+
+  it('still uses the default account when NO routes are configured', async () => {
+    // The control that keeps the fix from becoming "withhold everything": an
+    // absent map is not a corrupt one, and every source still syncs.
+    settings({ [ROUTES_SETTING]: '', ghl_api_key: 'default-key' });
     const r = await resolveGhlAccountForSource('open_house');
     expect(r).toMatchObject({ status: 'ready', account: { accountKey: DEFAULT_ACCOUNT } });
   });

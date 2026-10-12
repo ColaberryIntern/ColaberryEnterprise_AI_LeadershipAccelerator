@@ -24,6 +24,7 @@
  *   POST /api/portal/projects/:projectId/tasks/:storyId/presentation-practice
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/recording-evidence
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/deck
+ *   POST /api/portal/projects/:projectId/tasks/:storyId/deck
  *   GET  /api/portal/showcases
  *   POST /api/portal/projects/:projectId/tasks/:storyId/recording-recovery
  *   POST /api/portal/projects/:projectId/tasks/:storyId/final-take
@@ -33,6 +34,7 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { env } from '../config/env';
 import { z } from 'zod';
 import { eid, gate, fail } from './portalRouteHelpers';
+import { AUDIENCE_MAX, PURPOSE_MAX } from '../schemas/presentationFieldLimits';
 
 const router = Router();
 
@@ -147,10 +149,15 @@ router.get('/api/portal/presentation-templates/:templateId', requireParticipant,
 // comments. That bluntness is the point — it is a tripwire on the one path that can
 // grant completion, and it should stay blunt rather than be taught to ignore prose.
 // Naming the function here, even to say this route never calls it, fails that test.
-const assignmentPatchSchema = z.object({
+// The widths come from `presentationFieldLimits`, which the DDL and the models read
+// too. `audience` shipped validated at 200 and stored in VARCHAR(60): a learner-length
+// answer passed this schema and threw at the database as a 500. A validation boundary
+// wider than its storage is not a loose check, it is an outage with a 400 that never
+// fires. One constant now, and a contract test that proves the four places agree.
+export const assignmentPatchSchema = z.object({
   template: z.string().trim().max(80).optional(),
-  audience: z.string().trim().max(200).nullable().optional(),
-  purpose: z.string().trim().max(500).nullable().optional(),
+  audience: z.string().trim().max(AUDIENCE_MAX).nullable().optional(),
+  purpose: z.string().trim().max(PURPOSE_MAX).nullable().optional(),
   // Checklist ticks: an allowlisted map of boolean flags, capped so a crafted body
   // cannot grow the row without bound.
   checklist: z.record(z.string().max(200), z.boolean()).optional(),
@@ -299,6 +306,46 @@ router.get('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartici
     const r = await latestDeckForOwner(eid(req), String(req.params.projectId), String(req.params.storyId));
     if (!r.ok) return res.status(404).json({ error: 'Project not found' });
     res.json({ deck: r.deck, retryable: r.retryable });
+  } catch (e) { fail(res, e, next); }
+});
+
+// GENERATE a deck for this task. The counterpart the GET above has always named and
+// that never existed: `generateDeck` shipped in Phase 5, tested and instrumented, with
+// nothing able to call it, while the Build stage told the learner to "generate one".
+//
+// NO PROMPT IN THE BODY, on purpose. The prompt is rebuilt server-side from the
+// learner's own project. A client that could post its own prompt could spend an OpenAI
+// call on anything, and the deck would stop being traceable to a template version.
+//
+// 409 FOR "ALREADY GENERATING" is the partial unique index doing its job, not an
+// error: a double-clicked button must produce one deck, and the honest answer to the
+// second click is that the first is still running.
+router.post('/api/portal/projects/:projectId/tasks/:storyId/deck', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const { generateDeckForOwner } = await import('../services/presentation/presentationDeckService');
+    const r = await generateDeckForOwner(
+      eid(req),
+      String(req.params.projectId),
+      String(req.params.storyId),
+      req.participant?.cohort_id ?? null,
+    );
+    if (!r.ok) {
+      if (r.reason === 'unknown_template') return res.status(409).json({ error: 'This task points at a template that no longer exists' });
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    const { result } = r;
+    if (result.ok) return res.status(201).json({ deck: result.deck });
+    if (result.reason === 'already_generating') {
+      return res.status(409).json({ error: 'A deck is already being generated for this task.', deck: result.deck ?? null });
+    }
+    if (result.reason === 'no_prompt') {
+      return res.status(422).json({ error: 'There is nothing to build a deck from yet. Fill in the Prepare stage first.' });
+    }
+    // Exhausted: the attempts are recorded on the deck row, and the panel shows the
+    // count, because "it failed" and "it failed three times" are different facts.
+    return res.status(502).json({ error: 'Generating your deck did not work. Nothing you wrote was lost.', deck: result.deck ?? null });
   } catch (e) { fail(res, e, next); }
 });
 

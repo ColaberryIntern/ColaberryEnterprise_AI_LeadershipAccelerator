@@ -19,11 +19,19 @@ export interface GovBuildEvidenceView {
 /** A build story the student works — cites its requirement, carries the Claude Code prompt + submitted evidence. */
 export interface StudentGovBuildStory {
   id: string; requirementId: string; title: string; statement: string;
-  release: string; acceptance: string[]; status: 'unassigned'; prompt: string;
+  release: string; acceptance: string[];
+  /** `assigned` once an operator assigns it (the student never sees WHO — only the status). */
+  status: 'unassigned' | 'assigned'; prompt: string;
+  /** True when the requirement left the established set but the student's work is preserved (revision). */
+  orphaned?: boolean;
   evidence: GovBuildEvidenceView[];
 }
 export interface StudentGovBuildRelease { key: string; name: string; storyIds: string[] }
-export interface StudentGovBuildPlan { releases: StudentGovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number }
+export interface StudentGovBuildPlan {
+  releases: StudentGovBuildRelease[]; stories: StudentGovBuildStory[]; buildStoryCount: number;
+  /** Stories whose requirement was revised away but whose work is preserved (optional — absent on older backends). */
+  orphanedStories?: StudentGovBuildStory[];
+}
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -32,6 +40,8 @@ export interface StudentGovProjectView {
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
   build: StudentGovBuildPlan;
+  /** Whether the current viewer may verify evidence (a reviewer, not a student) — lights up verify/reject controls. */
+  viewerCanVerify: boolean;
 }
 
 export async function getStudentGovProject(projectId: string): Promise<StudentGovProjectView> {
@@ -48,6 +58,17 @@ export async function submitBuildStoryEvidence(
   const { data } = await portalApi.post<{ evidence: GovBuildEvidenceView }>(
     `/api/portal/gov-projects/${encodeURIComponent(projectId)}/build-stories/${encodeURIComponent(storyId)}/evidence`,
     input,
+  );
+  return data.evidence;
+}
+
+/** A reviewer (evidence.verify) decides a submitted hand-in. Students get 403 server-side; the UI hides it from them. */
+export async function verifyBuildStoryEvidence(
+  projectId: string, evidenceId: string, decision: 'verified' | 'rejected',
+): Promise<GovBuildEvidenceView> {
+  const { data } = await portalApi.post<{ evidence: GovBuildEvidenceView }>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/build-evidence/${encodeURIComponent(evidenceId)}/verify`,
+    { decision },
   );
   return data.evidence;
 }

@@ -44,9 +44,18 @@
  * `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. The CREATE is for a fresh database; the
  * ALTERs are what actually keep an existing one correct. Add a column in BOTH places
  * or it does not exist in production.
+ *
+ * AND THE SAME TRAP ONE LEVEL DEEPER: `ADD COLUMN IF NOT EXISTS` is equally a no-op
+ * against a column that already exists, so WIDENING one is not covered by editing its
+ * ADD COLUMN line. `audience` shipped as VARCHAR(60) while its Zod schema accepted 200,
+ * and on 2026-10-08 a learner-length answer - 84 characters, an ordinary sentence -
+ * passed validation and then threw at the database as a 500. Changing a column's TYPE
+ * needs an explicit `ALTER COLUMN ... TYPE`, below. Widening a varchar in Postgres is
+ * metadata-only, so it is safe to re-run and does not rewrite the table.
  */
 
 import { sequelize } from '../config/database';
+import { AUDIENCE_MAX } from '../schemas/presentationFieldLimits';
 
 /** Tables this module owns. Order matters: parents before children. */
 export const PRESENTATION_STUDIO_TABLES = [
@@ -91,7 +100,7 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
      cohort_id UUID,
      template_slug VARCHAR(80) NOT NULL,
      template_version INTEGER NOT NULL DEFAULT 1,
-     audience VARCHAR(60),
+     audience VARCHAR(${AUDIENCE_MAX}),
      duration_seconds INTEGER,
      due_on DATE,
      required BOOLEAN NOT NULL DEFAULT FALSE,
@@ -106,7 +115,11 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS cohort_id UUID`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS template_slug VARCHAR(80)`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS template_version INTEGER DEFAULT 1`,
-  `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS audience VARCHAR(60)`,
+  `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS audience VARCHAR(${AUDIENCE_MAX})`,
+  // Widening, not adding. The ADD COLUMN above does nothing where the column is
+  // already present at its old width, which is every database that ran an earlier
+  // build of this module. Metadata-only in Postgres, and idempotent.
+  `ALTER TABLE presentation_assignments ALTER COLUMN audience TYPE VARCHAR(${AUDIENCE_MAX})`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS duration_seconds INTEGER`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS due_on DATE`,
   `ALTER TABLE presentation_assignments ADD COLUMN IF NOT EXISTS required BOOLEAN DEFAULT FALSE`,
@@ -148,7 +161,7 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
      booking_id UUID,
      room_id UUID,
      occurrence_uuid VARCHAR(120),
-     audience VARCHAR(60),
+     audience VARCHAR(${AUDIENCE_MAX}),
      checklist_snapshot_json JSONB NOT NULL DEFAULT '{}'::jsonb,
      selected_material_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
      attempt_state VARCHAR(30) NOT NULL DEFAULT 'draft',
@@ -166,7 +179,10 @@ export const PRESENTATION_STUDIO_STATEMENTS: string[] = [
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS booking_id UUID`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS room_id UUID`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS occurrence_uuid VARCHAR(120)`,
-  `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS audience VARCHAR(60)`,
+  `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS audience VARCHAR(${AUDIENCE_MAX})`,
+  // The attempt SNAPSHOTS the assignment's audience, so the two widths must move
+  // together or a 200-character audience truncates on its way into the snapshot.
+  `ALTER TABLE presentation_attempts ALTER COLUMN audience TYPE VARCHAR(${AUDIENCE_MAX})`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS checklist_snapshot_json JSONB DEFAULT '{}'::jsonb`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS selected_material_ids JSONB DEFAULT '[]'::jsonb`,
   `ALTER TABLE presentation_attempts ADD COLUMN IF NOT EXISTS attempt_state VARCHAR(30) DEFAULT 'draft'`,

@@ -127,9 +127,14 @@ export async function ensureProspectAccount(params: {
   if (!email) return { created: false, reason: 'no_email' };
 
   try {
+    // 'standard': a prospect account exists so an inbound enquiry has somewhere
+    // to land, not because the person enrolled in the free AI course. They are a
+    // commercial relationship, and this file's own header says it does not touch
+    // the lead's `source` for the same reason.
     const result = await createFreeAccount({
       full_name: (params.name || '').trim() || email.split('@')[0],
       email,
+      programme: 'standard',
     });
 
     // Separate try: a cohort problem must not lose the account that already exists.

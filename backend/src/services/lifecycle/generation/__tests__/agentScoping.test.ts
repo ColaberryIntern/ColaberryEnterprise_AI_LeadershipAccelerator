@@ -301,7 +301,7 @@ describe('validateAgentScoping composes both halves', () => {
   });
 
   it('delegates builder/runtime distinctness to checkRefIntegrity when refs are supplied', () => {
-    // Reused, not reimplemented: manifestRefs.ts:159-162 already computes
+    // Reused, not reimplemented: checkRefIntegrity's agentNamespaceCollisions already computes
     // agentNamespaceCollisions over refs.agents.builder and refs.agents.runtime.
     const refs = {
       origin: 'student' as const,

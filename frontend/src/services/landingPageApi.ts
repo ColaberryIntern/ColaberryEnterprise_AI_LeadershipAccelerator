@@ -102,6 +102,18 @@ export async function previewLandingPage(id: string): Promise<string> {
   return typeof res.data === 'string' ? res.data : String(res.data ?? '');
 }
 
+/**
+ * A name for a page that does not exist yet, read off the brief already typed.
+ *
+ * Asked before creation on purpose - the name is required to build, and the brief below it
+ * already contains the answer. A failure is surfaced beside the field and never blocks building:
+ * the operator can always type one.
+ */
+export async function suggestLandingPageName(source: string): Promise<string> {
+  const res = await api.post('/api/admin/landing-pages/suggest-name', { source });
+  return String(res.data?.name ?? '');
+}
+
 /** The message a failed call should show, preferring the server's own wording. */
 export function errorMessage(err: unknown, fallback: string): string {
   const e = err as { response?: { data?: { error?: string; details?: unknown } } };

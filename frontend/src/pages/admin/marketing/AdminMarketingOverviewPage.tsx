@@ -10,6 +10,8 @@ import {
 import { expiryPhrase, presentHealth, providerLabel, pluralPosts, scheduleLabel } from './overviewFormat';
 import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
+import { newPostGate } from './newPostGate';
+import MarketingHub from './MarketingHub';
 
 /**
  * Marketing Overview - the landing page, rebuilt around the work instead of the numbers.
@@ -140,6 +142,9 @@ export default function AdminMarketingOverviewPage() {
   const handoff = overview?.handoff_providers ?? [];
   const usable = accounts.filter((a) => presentHealth(a.health).usable).length;
   const ready = overviewLoading || overviewError !== null;
+  // `ready` is true while loading OR after a failure, which is exactly when the channel count
+  // is not known - so the gate is handed null then and stays open.
+  const gate = newPostGate({ brandChosen: brand !== ALL_BRANDS, publishableChannels: ready ? null : usable });
 
   return (
     <>
@@ -148,7 +153,13 @@ export default function AdminMarketingOverviewPage() {
         icon="broadcast-line"
         subtitle="What needs you, what is going out, and whether we can still publish."
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Marketing' }]}
-        actions={<Link className="btn btn-sm btn-primary" to="/admin/marketing/composer">+ New post</Link>}
+        actions={gate.allowed
+          ? <Link className="btn btn-sm btn-primary" to="/admin/marketing/composer">+ New post</Link>
+          : (
+            <button type="button" className="btn btn-sm btn-primary" disabled title={gate.reason ?? undefined} data-testid="new-post-blocked">
+              + New post
+            </button>
+          )}
       />
 
       <div className="px-3 py-3">
@@ -164,6 +175,10 @@ export default function AdminMarketingOverviewPage() {
           publishedRecently={ready ? null : (overview?.recent.published ?? 0)}
           recentWindowDays={overview?.recent.window_days ?? 30}
         />
+
+        {/* The navigation that used to be seven more rows in the left rail. Without this the
+            rail's single button would leave those pages reachable only by typing a URL. */}
+        <MarketingHub />
 
         <div className="row g-3">
           <div className="col-12 col-xl-7">
@@ -196,13 +211,18 @@ export default function AdminMarketingOverviewPage() {
                   </button>
                 </div>
               )}
+              {/* The third way into the composer, and the one missed when the other two were
+                  gated. The action is OMITTED rather than disabled: EmptyState is a shared shell
+                  component and does not belong to Marketing, so the decision stays here - and an
+                  empty state whose only button cannot be pressed should not show one. */}
               {!ready && upcoming.length === 0 && (
                 <EmptyState
                   icon="calendar-schedule-line"
                   title="Nothing scheduled"
-                  description="When you schedule a post it appears here, soonest first, with the account it will go out from."
-                  actionLabel="Write a post"
-                  to="/admin/marketing/composer"
+                  description={gate.allowed
+                    ? 'When you schedule a post it appears here, soonest first, with the account it will go out from.'
+                    : (gate.reason ?? '')}
+                  {...(gate.allowed ? { actionLabel: 'Write a post', to: '/admin/marketing/composer' } : {})}
                 />
               )}
               {!ready && upcoming.map((p) => <UpcomingRow key={p.id} post={p} />)}
@@ -223,7 +243,15 @@ export default function AdminMarketingOverviewPage() {
             */}
             <SectionCard title="Start something" icon="add-circle-line" className="mb-3">
               <div className="d-grid gap-2" data-testid="start-something">
-                <Link className="btn btn-sm btn-primary" to="/admin/marketing/composer">+ New post</Link>
+                {gate.allowed
+                  ? <Link className="btn btn-sm btn-primary" to="/admin/marketing/composer">+ New post</Link>
+                  : (
+                    <>
+                      <button type="button" className="btn btn-sm btn-primary" disabled data-testid="start-new-post-blocked">+ New post</button>
+                      <p className="small text-muted mb-0" data-testid="new-post-reason">{gate.reason}</p>
+                      <Link className="btn btn-sm btn-outline-primary" to="/admin/marketing/brands">Connect a channel</Link>
+                    </>
+                  )}
                 <Link className="btn btn-sm btn-outline-secondary" to="/admin/marketing/landing-pages">Build a landing page</Link>
                 <Link className="btn btn-sm btn-outline-secondary" to="/admin/marketing/calendar">Open the calendar</Link>
               </div>

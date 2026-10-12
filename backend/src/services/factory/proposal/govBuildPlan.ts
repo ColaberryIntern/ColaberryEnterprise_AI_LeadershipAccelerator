@@ -14,6 +14,13 @@
  */
 import { classifyRequirementTracks } from '../govDeliveryProject';
 
+/**
+ * A derived story is `unassigned`. The ONLY persisted transition the plan adds is `assigned` (an operator assigns a
+ * story to a builder, P3-T2) — it is NEVER a fabricated built/done state. "Built" is proven by evidence + reviewer
+ * verification (gov_build_story_evidence), which is a separate, gated surface, not a story-status flag.
+ */
+export type GovBuildStoryStatus = 'unassigned' | 'assigned';
+
 export interface GovBuildStory {
   /** Stable id derived from the requirement id, so regeneration preserves identity (no renumber churn). */
   id: string;
@@ -24,8 +31,29 @@ export interface GovBuildStory {
   statement: string;
   release: string;
   acceptance: string[];
-  /** First-pass: never a fabricated assigned/built/done — assignment + execution are later, gated steps. */
-  status: 'unassigned';
+  /** Derived as `unassigned`; a persisted assignment overlay (applyAssignmentsToStories) moves it to `assigned`. */
+  status: GovBuildStoryStatus;
+  /** Set ONLY when a persisted assignment overlays the derived story — never fabricated. */
+  assigneeIdentityId?: string | null;
+  /** When the assignment was made (ISO), or null. */
+  assignedAt?: string | null;
+  /** True ONLY for a reconciled story whose requirement left the established set but which still carries persisted
+   *  assignment/evidence — surfaced (never dropped) so a revision cannot silently destroy completed work (P3-T4). */
+  orphaned?: boolean;
+}
+
+/** Minimal structural shape of a persisted assignment — kept local so this pure module never imports the DB layer. */
+export interface BuildAssignmentOverlay {
+  storyId: string;
+  canonicalReqId: string;
+  assigneeIdentityId: string;
+  assignedAt: string | null;
+}
+
+/** Minimal structural shape of a persisted evidence row — only the keys reconciliation needs. */
+export interface BuildEvidenceRef {
+  storyId: string;
+  canonicalReqId: string;
 }
 
 export interface GovBuildRelease {
@@ -97,4 +125,74 @@ export function buildGovStoryPrompt(story: GovBuildStory): string {
     '## Evidence to hand in',
     `A short description and screenshot(s) showing the requirement is met, traced back to ${story.requirementId}.`,
   ].join('\n');
+}
+
+/**
+ * Overlay persisted assignments onto the derived stories — PURE. A story with a matching assignment becomes
+ * `assigned` and carries its assignee; a story with none is explicitly `unassigned` with null assignee. The honesty
+ * rail: `assigned` is set ONLY from a real persisted assignment — this function NEVER invents an assignee, and a
+ * missing assignment always resets to `unassigned` (so a stale overlay can't leave a phantom assignee behind).
+ */
+export function applyAssignmentsToStories(stories: GovBuildStory[], assignments: BuildAssignmentOverlay[]): GovBuildStory[] {
+  const byStory = new Map<string, BuildAssignmentOverlay>();
+  for (const a of Array.isArray(assignments) ? assignments : []) if (a && a.storyId) byStory.set(a.storyId, a);
+  return (Array.isArray(stories) ? stories : []).map((s) => {
+    const a = byStory.get(s.id);
+    return a
+      ? { ...s, status: 'assigned' as const, assigneeIdentityId: a.assigneeIdentityId, assignedAt: a.assignedAt ?? null }
+      : { ...s, status: 'unassigned' as const, assigneeIdentityId: null, assignedAt: null };
+  });
+}
+
+export interface GovBuildPlanReconciliation {
+  /** The derived stories with assignment overlaid (the live plan). */
+  stories: GovBuildStory[];
+  /** Stories whose requirement is no longer derived but that carry persisted assignment/evidence — preserved. */
+  orphanedStories: GovBuildStory[];
+}
+
+/**
+ * Revision-aware reconciliation (P3-T4). When requirements are revised, re-deriving the plan can drop a story (its
+ * requirement was removed, or lost its build signal). If that story carries PERSISTED work — an assignment or
+ * submitted evidence — dropping it silently would destroy a student's completed work and its traceability. So this
+ * surfaces every persisted story id that no longer derives as an ORPHAN (flagged, assignee preserved), while the
+ * evidence itself stays in its table keyed by (story_id, canonical_req_id). PURE: it reconciles already-loaded
+ * arrays and touches no DB. The derived stories themselves are returned with assignment overlaid.
+ */
+export function reconcileGovBuildPlan(
+  derivedStories: GovBuildStory[],
+  assignments: BuildAssignmentOverlay[],
+  evidence: BuildEvidenceRef[],
+): GovBuildPlanReconciliation {
+  const stories = applyAssignmentsToStories(derivedStories, assignments);
+  const derivedIds = new Set(stories.map((s) => s.id));
+  const assignByStory = new Map<string, BuildAssignmentOverlay>();
+  for (const a of Array.isArray(assignments) ? assignments : []) if (a && a.storyId) assignByStory.set(a.storyId, a);
+
+  // Every persisted story id (assignment OR evidence) that no longer derives is an orphan to preserve.
+  const orphanReq = new Map<string, string>();
+  const consider = (storyId: string, canonicalReqId: string) => {
+    if (!storyId || derivedIds.has(storyId)) return;
+    if (!orphanReq.has(storyId)) orphanReq.set(storyId, canonicalReqId || storyId.replace(/^STORY-/, ''));
+  };
+  for (const a of Array.isArray(assignments) ? assignments : []) if (a) consider(a.storyId, a.canonicalReqId);
+  for (const e of Array.isArray(evidence) ? evidence : []) if (e) consider(e.storyId, e.canonicalReqId);
+
+  const orphanedStories: GovBuildStory[] = [...orphanReq.keys()].map((id) => {
+    const a = assignByStory.get(id);
+    return {
+      id,
+      requirementId: orphanReq.get(id) as string,
+      title: `${id} — requirement no longer in the established set`,
+      statement: '',
+      release: 'orphaned',
+      acceptance: [],
+      status: a ? ('assigned' as const) : ('unassigned' as const),
+      assigneeIdentityId: a ? a.assigneeIdentityId : null,
+      assignedAt: a ? (a.assignedAt ?? null) : null,
+      orphaned: true,
+    };
+  });
+
+  return { stories, orphanedStories };
 }

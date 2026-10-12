@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
+import { audioFromFileList, timingFromFileList } from '../services/presentation/recordingFacts';
 import { verifyWebhookSignature, getPayment } from '../services/paysimpleService';
-import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaign } from '../services/enrollmentService';
+import { markEnrollmentPaid, markEnrollmentFailed } from '../services/enrollmentService';
+import { enrollInClassReadinessCampaign } from '../services/readinessCampaignService';
 import { Cohort, EnrollmentLead } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
 import { activateByRef, isSubscriptionRef } from '../services/subscriptionService';
@@ -309,7 +311,37 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
       mimeType: 'video/mp4',
       sizeBytes: best.file_size ?? null,
       recordingType: best.recording_type ?? null,
+      // THE FIELD THIS PATH USED TO DROP.
+      //
+      // `zoomService.toRecordingMatch` has always carried it; this object did not,
+      // so every webhook-delivered recording reached correlation with a null file
+      // id and parked in review owned by nobody — while the slower cron sweep,
+      // which does carry it, would have attributed the same recording correctly.
+      // The fast path is the one that wins the race, so in practice NOTHING was
+      // ever attributed. Found on 2026-10-09 by the first real production
+      // rehearsal; Zoom had sent an id for all six files.
+      //
+      // The comment above claims the two paths "can never pick different files".
+      // That was true of the SELECTOR and false of the MAPPING, which is the kind
+      // of drift a shared selector invites. `webhookRecordingMatchParity` now
+      // asserts the two objects agree, so this cannot come apart again silently.
+      providerFileId: best.id ?? null,
+      // Whether the delivery carried an audio rendering. Derived from the file
+      // list, which this handler has and the correlation layer does not.
+      hasAudio: audioFromFileList(files),
     };
+
+    // THE SECOND FIELD THIS PATH DROPPED. `ingestRecordingForBooking` hardcodes
+    // `startedAt: null, endedAt: null` for a webhook-supplied match, while the
+    // polling path fills them from `instanceTiming`. With both null the recording's
+    // duration could never be computed, so every take was offered to the learner
+    // with no length — the same drift as the file id, one field over, found the
+    // same way: by running it.
+    const timing = timingFromFileList(
+      files,
+      event.payload?.object?.start_time as string | undefined,
+      typeof event.payload?.object?.duration === 'number' ? event.payload.object.duration : null,
+    );
 
     // Ack fast — a multi-hundred-MB download shouldn't block Zoom's webhook
     // response window. Ingest is idempotent (sessionRecordingService's
@@ -326,7 +358,7 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
       // booking path cannot dedupe per occurrence and falls back to a
       // booking-wide check that hides every later part.
       const bookingInstanceUuid = String(event.payload?.object?.uuid || '');
-      ingestRecordingForBooking(booking, preResolvedMatch, bookingInstanceUuid).catch((err: any) => {
+      ingestRecordingForBooking(booking, preResolvedMatch, bookingInstanceUuid, timing).catch((err: any) => {
         console.error(`[Webhook] Zoom recording ingest failed for booking ${booking.id}:`, err.message);
       });
     } else if (room) {

@@ -263,6 +263,16 @@ describe('approveGovQualification (server-side, source-snapshot bound)', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('MASTER-ADMIN override: approver == reviewer is exempt from separation of duties, audit-logged', async () => {
+    findOne.mockResolvedValue(base({ reviewer_identity_id: 'rev-1' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let caught: any = null;
+    await approveGovQualification(approveInput({ approverIdentityId: 'rev-1', masterAdminOverride: true })).catch((e) => { caught = e; });
+    expect(caught).not.toBeInstanceOf(SelfApprovalError);                                      // the gate is bypassed for the master admin
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('self_approval_master_admin_override')); // and it is audit-logged
+    warn.mockRestore();
+  });
+
   it('records the approver in the immutable evidence, distinct from the reviewer', async () => {
     findOne.mockResolvedValue(base());
     create.mockImplementation(async (row: any) => ({ ...row, id: 'q2', get: () => ({ ...row, id: 'q2' }) }));
@@ -578,6 +588,15 @@ describe('approveDecoupledQualification — ZIP-evidence gate; never calls OP; c
   it('self-approval (approver == reviewer) -> SelfApprovalError', async () => {
     findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { reviewer_identity_id: 'same' }));
     await expect(approveDecoupledQualification(input({ approverIdentityId: 'same' }))).rejects.toBeInstanceOf(SelfApprovalError);
+  });
+  it('MASTER-ADMIN override: approver == reviewer bypasses separation of duties, audit-logged', async () => {
+    findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { reviewer_identity_id: 'same' }));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let caught: any = null;
+    await approveDecoupledQualification(input({ approverIdentityId: 'same', masterAdminOverride: true })).catch((e) => { caught = e; });
+    expect(caught).not.toBeInstanceOf(SelfApprovalError);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('self_approval_master_admin_override'));
+    warn.mockRestore();
   });
   it('stale expectedVersion -> QualificationConflictError', async () => {
     findOne.mockResolvedValue(current({ established: estOk, reviewedDocuments: [zip] }, { version: 3 }));

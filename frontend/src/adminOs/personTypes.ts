@@ -24,6 +24,34 @@ export interface AcquisitionPanel {
   notes: string | null; consentContact: boolean | null;
   evaluating90Days: boolean | null; createdAt: string | null;
   leadId: number | null; leadScoreMax: number;
+  /**
+   * The GoHighLevel contact id, when this person has one.
+   *
+   * `null` means the linkage is absent, which is the common case and not an
+   * error: most people in the acquisition database were never pushed to GHL.
+   * The operator view reads a null as "not linked" rather than as a missing
+   * field, because "we have no CRM record for this person" is a fact a reader
+   * should see on their line.
+   */
+  ghlContactId: string | null;
+}
+
+/**
+ * Engagement / Intent / Fit, as the growth engine scored them.
+ *
+ * The whole panel is `null` when no snapshot row exists — which is most
+ * non-Explorers — rather than 0/0/0. Three zeroes are a real score, and a
+ * reader cannot tell a genuinely disengaged person from an unscored one if
+ * absence renders as zero. `asOfDate` travels with the numbers so the reader
+ * can see how stale they are instead of assuming they are current.
+ */
+export interface ExplorerScorePanel {
+  asOfDate: string;
+  engagement: number;
+  intent: number;
+  fit: number;
+  primaryState: string;
+  overlays: string[];
 }
 
 export interface VisitorData {
@@ -375,6 +403,7 @@ export interface Profile {
   community?: CommunityPanel | null;
   profileContext?: ProfileContextPanel | null;
   intentSuppressedReason?: string;
+  explorerScore?: ExplorerScorePanel | null;
   trust?: TrustPanel;
   journey?: Journey;
   timeline?: TimelineEvent[];
