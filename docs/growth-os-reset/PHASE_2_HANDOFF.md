@@ -29,7 +29,9 @@ changed.
 **Step 2 — Open the People list.**
 Navigate to `https://enterprise.colaberry.ai/admin/people` [fetched 2026-10-12].
 
-**Step 3 — Look at the Stage column for a $0-to-start learner.**
+**Step 3 — Find a $0-to-start learner and look at their Stage.**
+Type `Explorer` into the page's search or filter box, or sort by the Stage column, to bring
+them together. There are hundreds, so you do not need a particular person.
 You should see the words **`Explorer ($0 to start)`**.
 - ✅ **Right:** a readable label like that.
 - ❌ **Wrong:** the bare lowercase word `explorer` with no capital letter and no brackets. That
@@ -110,9 +112,11 @@ want it.**
 1. **86 accounts invisible to the growth engine** until the repair above is run.
 2. **No screenshots were taken.** I could have — the earlier claim that this needed extra tooling
    turned out to be wrong. It is simply a gap.
-3. **Two of the nine pieces of work did not pass independent review.** Their *behaviour* is
-   tested; the *evidence written about them* was judged incomplete. Details are in §B of the
-   checkpoint. Nothing there affects what you see on screen.
+3. **Six of the seventeen pieces of work never passed independent review**, and the plan itself
+   never passed its audit either. Their *behaviour* is tested, deployed and verified; what
+   repeatedly failed was the *evidence written about them*. The full per-task record is §B of
+   the checkpoint. Nothing there changes what you see on screen — but it is the reason to trust
+   the six steps above, which you can run yourself, over any summary of mine.
 4. **Person 360 is not yet trustworthy enough to drive automatic sales scoring**, which is the
    next phase's job. Three specific reasons are listed in §H of the checkpoint.
 
@@ -137,8 +141,11 @@ it, so a real occurrence means a test is wrong — which is worth knowing.
 
 You do not need to do this yourself, but so it is written down:
 
-1. **Nothing to undo in the database.** No table changed shape, no column was added, and the
-   repair script wrote nothing.
+1. **Nothing needs undoing in the database, but one column WAS added.** Phase 2 added
+   `explorer_entered_at` to the `enrollments` table. It is empty for everybody today, nothing
+   reads it yet, and leaving it in place is harmless — but an earlier version of this line said
+   "no column was added", which was simply wrong and contradicted the checkpoint beside it.
+   The repair script wrote nothing at all.
 2. **To put the previous version back:** redeploy the previous image using the same deploy command,
    or revert the merge on `main`.
 3. **The riskiest thing in this phase is the repair script**, and it has not been run. If it ever
