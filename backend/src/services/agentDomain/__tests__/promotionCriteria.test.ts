@@ -5,6 +5,8 @@ import {
   INTERNSHIP_ACCEPTANCE_IS_HUMAN,
   evaluatePromotion,
   isNonPromotingSignal,
+  isNonHumanIdentity,
+  isNonPromotingEvidence,
   isThresholdAccepted,
   recordEvidence,
   renderThreshold,
@@ -46,8 +48,11 @@ const criteria = (over: Partial<PromotionCriteria> = {}): PromotionCriteria => (
 const attempt = (over: Partial<PromotionAttempt> = {}): PromotionAttempt => ({
   criteria: criteria(),
   evidence: [recordEvidence({
+    // `summary` names the declared requirement ('send ledger') because `required_evidence` is now
+    // COMPARED against what arrived. The old fixture declared a requirement and supplied nothing
+    // matching it, and promoted anyway -- the hole this comparison closes.
     kind: 'pilot_ledger', source: 'email_send_ledger', observed_at: '2026-10-09',
-    evaluated_by: 'Dhee', summary: 'no duplicates',
+    evaluated_by: 'Dhee', summary: 'send ledger shows no duplicates',
   })!],
   signals: ['pilot_outcomes_reviewed'],
   human_approval: { approver: 'Dhee', approved_at: '2026-10-09T00:00:00Z' },
@@ -298,5 +303,114 @@ describe('the owner worked example is encoded, not paraphrased', () => {
       .not.toBe(INTERNSHIP_ACCEPTANCE_IS_HUMAN.capability_id);
     expect(autonomyIndex(INTERNSHIP_REMINDER_EXAMPLE.to_autonomy))
       .toBeGreaterThan(autonomyIndex(INTERNSHIP_ACCEPTANCE_IS_HUMAN.max_permitted_autonomy));
+  });
+});
+
+
+/**
+ * The four holes a verifier found by probing this module directly, each now closed and each
+ * proved by a test that names the refusal.
+ *
+ * Every one of them promoted a capability in a run where nothing had been approved. None was
+ * visible from the module's own tests, because each test fed the ONE channel the code checked.
+ */
+describe('the channels that previously promoted without an approval', () => {
+  it('REFUSES the four-hour timer as a human approver, the constraint the owner stated exactly', () => {
+    // The probe that found this: signals empty, the signal moved into evidence, and the timer
+    // itself named as the approver. It returned promoted: true with zero refusals.
+    const d = evaluatePromotion(attempt({
+      signals: [],
+      evidence: [{
+        kind: 'elapsed_time', source: 'system:auto_approve_timeout', observed_at: '2026-10-09',
+        evaluated_by: 'system:auto_approve_timeout', summary: 'four hours passed',
+      }],
+      human_approval: { approver: 'system:auto_approve_timeout', approved_at: '2026-10-09T00:00:00Z' },
+    }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('approver_is_not_human');
+    expect(d.refusals).toContain('non_promoting_evidence_only');
+    expect(d.refusals).toContain('non_promoting_signal_only');
+  });
+
+  it('REFUSES an attempt offering no signals at all', () => {
+    // The old gate was `signals.length > 0 && ...`, so an empty array turned the defence off.
+    const d = evaluatePromotion(attempt({ signals: [] }));
+    expect(d.refusals).toContain('non_promoting_signal_only');
+  });
+
+  it('REFUSES a non-promoting signal routed through evidence.kind', () => {
+    for (const sig of NON_PROMOTING_SIGNALS) {
+      const d = evaluatePromotion(attempt({
+        evidence: [{
+          kind: sig, source: 'somewhere', observed_at: '2026-10-09',
+          evaluated_by: 'Dhee', summary: 'x',
+        }],
+      }));
+      expect(d.refusals).toContain('non_promoting_evidence_only');
+    }
+  });
+
+  it('REFUSES it hidden in source or evaluated_by, not only in kind', () => {
+    const hidden = evaluatePromotion(attempt({
+      evidence: [{
+        kind: 'pilot_ledger', source: 'elapsed_time_tracker', observed_at: '2026-10-09',
+        evaluated_by: 'Dhee', summary: 'send ledger ok',
+      }],
+    }));
+    expect(hidden.refusals).toContain('non_promoting_evidence_only');
+  });
+
+  it('REFUSES an empty threshold list: absence is not acceptance', () => {
+    const d = evaluatePromotion(attempt({ criteria: criteria({ thresholds: [] }) }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('no_thresholds_defined');
+    // And the old gate genuinely passed, because `some()` over [] is false.
+    expect([].some(() => true)).toBe(false);
+  });
+
+  it('REFUSES when declared required_evidence was never supplied', () => {
+    const d = evaluatePromotion(attempt({
+      criteria: criteria({ required_evidence: ['send ledger', 'replay test', 'refusal log'] }),
+    }));
+    expect(d.refusals).toContain('required_evidence_not_supplied');
+  });
+
+  it('REFUSES a prohibited action rather than merely omitting it from the permitted list', () => {
+    const d = evaluatePromotion(attempt({ requested_actions: ['accept an application'] }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('prohibited_action_requested');
+  });
+
+  it('POSITIVE CONTROL: a fixture that OMITS the action entirely does NOT fire that refusal', () => {
+    // The distinction the criterion asks for: absence must not be reported as refusal, or the
+    // refusal means nothing. An omitted action is simply not requested.
+    const d = evaluatePromotion(attempt({ requested_actions: [] }));
+    expect(d.refusals).not.toContain('prohibited_action_requested');
+    const none = evaluatePromotion(attempt());
+    expect(none.refusals).not.toContain('prohibited_action_requested');
+    expect(none.promoted).toBe(true);
+  });
+
+  it('a permitted action is not refused', () => {
+    const d = evaluatePromotion(attempt({ requested_actions: ['send an approved template'] }));
+    expect(d.refusals).not.toContain('prohibited_action_requested');
+    expect(d.promoted).toBe(true);
+  });
+
+  it('isNonHumanIdentity names the real machine identities and clears real people', () => {
+    for (const bad of ['system:auto_approve_timeout', 'agent:self', 'cron:nightly',
+      'scheduler:queue', 'bot:reese', 'service:api', 'approval_timeout', '   ', '']) {
+      expect(isNonHumanIdentity(bad)).toBe(true);
+    }
+    for (const good of ['Dhee', 'Ali Muwwakkil', 'swati@colaberry.com', 'Taiwo Oludimimu']) {
+      expect(isNonHumanIdentity(good)).toBe(false);
+    }
+  });
+
+  it('isNonPromotingEvidence clears genuine evidence', () => {
+    expect(isNonPromotingEvidence({
+      kind: 'pilot_ledger', source: 'email_send_ledger', observed_at: '2026-10-09',
+      evaluated_by: 'Dhee', summary: 'no duplicates',
+    })).toBe(false);
   });
 });

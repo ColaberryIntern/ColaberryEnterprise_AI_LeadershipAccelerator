@@ -44,6 +44,36 @@ export const NON_PROMOTING_SIGNALS = Object.freeze([
 
 export type NonPromotingSignal = typeof NON_PROMOTING_SIGNALS[number];
 
+/**
+ * Identities that are not a human, and therefore can never be a human approver.
+ *
+ * `auto_approve_timeout` is named explicitly because it is real. The platform's four-hour
+ * auto-approve timer wrote every one of the 106 rows in `approval_requests`, and the owner's
+ * constraint is exact: "a four-hour timer must not be recorded as human approval". A verifier
+ * demonstrated that an earlier version of this module accepted
+ * `human_approval.approver = 'system:auto_approve_timeout'` and promoted, because the only
+ * elapsed-time refusal was gated on the `signals` array and this arrived by a different route.
+ */
+export const NON_HUMAN_APPROVER = /^(system|agent|bot|cron|scheduler|service):|auto_approve|timeout$/i;
+
+/** True when this identity cannot stand as a human approval, whatever channel it arrived by. */
+export function isNonHumanIdentity(identity: unknown): boolean {
+  const v = String(identity ?? '').trim();
+  return v.length === 0 || NON_HUMAN_APPROVER.test(v);
+}
+
+/**
+ * True when an evidence record is itself one of the non-promoting signals, by ANY of its fields.
+ *
+ * The signal can arrive as the `kind`, or hidden in the `source` or `evaluated_by` of a record
+ * whose kind looks innocent. Checking only `kind` leaves two open doors, which is how
+ * `{kind: 'elapsed_time', source: 'system:auto_approve_timeout'}` previously promoted.
+ */
+export function isNonPromotingEvidence(e: EvidenceRecord): boolean {
+  const fields = [e.kind, e.source, e.evaluated_by].map((x) => String(x ?? '').toLowerCase());
+  return NON_PROMOTING_SIGNALS.some((sig) => fields.some((f) => f.includes(sig)));
+}
+
 /** Scenario classes every applicable capability/release pair must define. */
 export const REQUIRED_SCENARIO_CLASSES = Object.freeze([
   'success',
@@ -106,7 +136,12 @@ export type PromotionRefusal =
   | 'non_promoting_signal_only'
   | 'human_approval_missing'
   | 'self_evaluated'
-  | 'human_decision_cannot_be_automated';
+  | 'human_decision_cannot_be_automated'
+  | 'non_promoting_evidence_only'
+  | 'approver_is_not_human'
+  | 'no_thresholds_defined'
+  | 'required_evidence_not_supplied'
+  | 'prohibited_action_requested';
 
 export interface PromotionDecision {
   readonly capability_id: string;
@@ -124,6 +159,13 @@ export interface PromotionAttempt {
   readonly proposed_by?: string | null;
   /** True when the underlying decision is human-required at every level. */
   readonly human_decision: boolean;
+  /**
+   * Actions this attempt is asking to be allowed to take. Compared against the criteria's
+   * `prohibited_actions` and REFUSED on a match -- the point being that a prohibited action is
+   * actively refused, rather than merely left off the permitted list, which is the difference
+   * between a rule and a hope.
+   */
+  readonly requested_actions?: ReadonlyArray<string>;
 }
 
 /** A threshold is only usable once a named human has accepted it. */
@@ -199,6 +241,12 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
   if (c.thresholds.some((t) => !isThresholdAccepted(t))) {
     refusals.push('threshold_not_accepted');
   }
+  // ABSENCE IS NOT APPROVAL. `some()` over an empty array is false, so a criteria object with no
+  // thresholds at all previously sailed past the acceptance gate -- promotion by having nothing to
+  // measure. Refused explicitly.
+  if (c.thresholds.length === 0) {
+    refusals.push('no_thresholds_defined');
+  }
 
   // Evidence must exist, and every record must carry a source.
   if (attempt.evidence.length === 0) {
@@ -207,19 +255,50 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
     refusals.push('evidence_without_source');
   }
 
-  // The four signals that promote nothing. If the ONLY support offered is non-promoting, say so.
+  // The four signals that promote nothing, refused on EVERY channel they can arrive by.
+  //
+  // The `signals` array was the only channel checked, and the check was gated on the array being
+  // non-empty -- so an attempt offering no signals at all switched the whole defence off, and the
+  // same four signals routed through `evidence[].kind` were never examined. Both are closed here.
   const promoting = attempt.signals.filter((s) => !isNonPromotingSignal(s));
-  if (attempt.signals.length > 0 && promoting.length === 0) {
+  if (promoting.length === 0) {
     refusals.push('non_promoting_signal_only');
+  }
+  if (attempt.evidence.length > 0 && attempt.evidence.every(isNonPromotingEvidence)) {
+    refusals.push('non_promoting_evidence_only');
+  }
+
+  // Required evidence must actually be SUPPLIED, not merely listed. Declaring what is needed and
+  // never comparing it against what arrived is a checklist nobody reads.
+  if (c.required_evidence.length > 0) {
+    const supplied = attempt.evidence.map((e) => `${e.kind} ${e.summary} ${e.source}`.toLowerCase());
+    const missing = c.required_evidence.filter(
+      (need) => !supplied.some((got) => got.includes(String(need).toLowerCase())),
+    );
+    if (missing.length > 0) refusals.push('required_evidence_not_supplied');
+  }
+
+  // A prohibited action is REFUSED, not merely absent from the permitted list.
+  if (attempt.requested_actions && attempt.requested_actions.length > 0) {
+    const prohibited = attempt.requested_actions.filter(
+      (a) => c.prohibited_actions.some((p) => String(p).toLowerCase() === String(a).toLowerCase()),
+    );
+    if (prohibited.length > 0) refusals.push('prohibited_action_requested');
   }
 
   if (c.human_approval_required) {
     const a = attempt.human_approval;
     if (!a || !a.approver || !a.approved_at) {
       refusals.push('human_approval_missing');
-    } else if (attempt.proposed_by && a.approver === attempt.proposed_by) {
-      // approver != proposer, per the ADR and govQualification's SelfApprovalError pattern.
-      refusals.push('self_evaluated');
+    } else {
+      if (attempt.proposed_by && a.approver === attempt.proposed_by) {
+        // approver != proposer, per the ADR and govQualification's SelfApprovalError pattern.
+        refusals.push('self_evaluated');
+      }
+      // A timer, a scheduler or the agent itself is not a human, whatever the field is called.
+      if (isNonHumanIdentity(a.approver)) {
+        refusals.push('approver_is_not_human');
+      }
     }
   }
 

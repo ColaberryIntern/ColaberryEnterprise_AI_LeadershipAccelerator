@@ -272,7 +272,7 @@ Registration happens through one explicit, labelled path:
 entry_point = 'agent_domain_factory_provisioner'
 ```
 
-recorded in `project_lifecycle_states.entry_point`. §109 of this document forbids a *silent*
+recorded in `project_lifecycle_states.entry_point`. `architecture.md:109` of this document forbids a *silent*
 bypass of entry-point governance; this is the opposite — a named path, declared here, exported as a
 constant from `services/agentDomain/agentDomainRegistry.ts`, and pinned by a test asserting the
 literal appears in this section so code and document cannot drift apart.
@@ -291,7 +291,7 @@ this is stated rather than assumed.
   initiating staff member, and separation of duty is explicitly not claimed for this path"* — is
   scoped to staff-initiated **student** builds, where the student is the recipient. Here there is no
   recipient, so the exception does not transfer and `approver ≠ proposer` stands.
-- **It mints no new role and introduces no new login** (§166). The existing 13 `DELIVERY_ROLES` are
+- **It mints no new role and introduces no new login** (`architecture.md:166`). The existing 13 `DELIVERY_ROLES` are
   reused.
 - **An agent may never hold accountable or approver for it.** `blueprint-contract.md:67`'s
   `OVERSIGHT` rule is enforced in both directions, and `:103` invariant 5 requires every

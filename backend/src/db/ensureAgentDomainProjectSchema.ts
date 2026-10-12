@@ -36,6 +36,7 @@
  * precedent for it.
  */
 
+import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 
 export const REQUIRED_TABLES: ReadonlyArray<string> = [
@@ -229,8 +230,35 @@ export function normalizeNameRows(rows: unknown): string[] {
     .filter((v): v is string => typeof v === 'string');
 }
 
+/**
+ * Reads one column of names.
+ *
+ * ## The destructure that made this assert lie
+ *
+ * This function used to read `const [rows] = await sequelize.query(sql, ...)`, taking the first
+ * element of Sequelize's `[results, metadata]` tuple. For a SINGLE-COLUMN select this driver
+ * returns each row as a RAW ARRAY (`architecture.md:154`), so the whole result is
+ * `[["agent_domain_build_authorizations"], ["agent_domain_projects"]]` -- and the destructure took
+ * `["agent_domain_build_authorizations"]`, which is the FIRST ROW, not the rows array.
+ *
+ * So the assert saw exactly one name however many came back, and reported every required table
+ * after the first as missing. Measured against real Postgres with both tables present and both
+ * indexes created: `SchemaInvariantViolation: missing table public.agent_domain_projects`.
+ *
+ * This is the precise failure `normalizeNameRows` was written to prevent, one layer above where it
+ * was looking: the row SHAPE was handled and the RESULT shape was not. It survived because
+ * `normalizeNameRows` was only ever tested against a rows array handed to it directly, and the
+ * assert itself had never been executed against a database -- which is why the integration suite
+ * now runs it for real rather than reading the source with a regex.
+ *
+ * `QueryTypes.SELECT` returns the rows array with no tuple to destructure, which removes the
+ * ambiguity rather than compensating for it.
+ */
 async function readNames(sql: string, names: ReadonlyArray<string>): Promise<string[]> {
-  const [rows] = await sequelize.query(sql, { bind: { names: names as string[] } } as any);
+  const rows = await sequelize.query(sql, {
+    bind: { names: names as string[] },
+    type: QueryTypes.SELECT,
+  } as any);
   return normalizeNameRows(rows);
 }
 
