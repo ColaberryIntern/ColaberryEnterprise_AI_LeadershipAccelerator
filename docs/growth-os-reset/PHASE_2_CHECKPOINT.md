@@ -378,13 +378,23 @@ memory, because a remembered list is always short:
     drop** by the number of portal free accounts; `paidEnrollments` does not move.
 15. `services/freeSignupService.ts` — the signup path itself.
 16. `services/adminOs/conversionState.ts` — the conversion definition.
+17. `services/portalSettingsService.ts` — **an Explorer's Settings page will read `explorer` /
+    `guest`** where it used to read `standard` / `member`.
 
-**Plus one the enumeration misfiled, disclosed anyway:** `services/portalSettingsService.ts` is
-classified REPORTING, but lines 253–254 return `tier` and `enrollment_type` straight to the portal,
-so **an Explorer's Settings page will read `explorer` / `guest`** where it used to read
-`standard` / `member`. This is the same misfile class the enumeration already flags in bold for
-`paymentSyncService`. It is listed here by judgement rather than by the scan, and the scan's
-classification is left alone rather than quietly edited.
+**Item 17 is here by judgement, not by the scan**, and that is worth saying plainly. The
+enumeration classifies `portalSettingsService` as REPORTING, but lines 253–254 return `tier` and
+`enrollment_type` straight to the portal, so a person sees the change. It is the same misfile class
+the enumeration already flags in bold for `paymentSyncService`. The scan's classification is left
+alone rather than quietly edited, and the exception is declared in
+`backend/src/__tests__/phase2CheckpointDisclosure.test.ts` so that "one extra entry" cannot become
+a silent habit.
+
+**This list is now asserted complete, not merely derived.** That test compares it against the
+generated enumeration in both directions: a consumer the scan finds and this list omits fails it,
+and so does a file named here with no row behind it. It was written after the phase had already
+merged, because T217's acceptance asked for the assertion and I had shipped only the derivation —
+and on its first run it caught that item 17 was sitting in prose beneath the list rather than in
+it, where a reader scanning sixteen numbered lines would have missed it.
 
 ---
 
