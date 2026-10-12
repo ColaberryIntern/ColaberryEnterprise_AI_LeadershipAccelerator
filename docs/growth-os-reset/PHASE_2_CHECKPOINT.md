@@ -83,15 +83,15 @@ ownership.**
 | T207 | `backfillFreeAccountCoherence` — a pure predicate plus a dry-run CLI | **PASS 12/12** (after FAIL 8/12) |
 | T208 | `identifierPrecedence` — one subject-key builder, pure, importing nothing | **PASS** |
 | T209 + T210 | The `explorer` lifecycle stage; conversion derived from paid state | **PASS 12/12** (after FAIL 10/12) |
-| T211 | Person 360 evidence package, one declared canonical view | **FAIL 8/12 → FAIL 10/12 → attempt 3 (below)** |
-| T212 | The operator "Who is this?" read view | **FAIL 7/12, criterion 6 = 0** → attempt 2, re-verification outstanding |
-| T213 | The fifteen acceptance scenarios as a reconstructible set | **FAIL 10/12** → attempt 2, re-verification outstanding |
+| T211 | Person 360 evidence package, one declared canonical view | **FAIL 8/12 → FAIL 10/12**; attempt 3 mutation-proved but **unverified by a grader** |
+| T212 | The operator "Who is this?" read view | FAIL 7/12 → FAIL 9/12 → **PASS 11/12** |
+| T213 | The fifteen acceptance scenarios as a reconstructible set | **FAIL 10/12 → FAIL 10/12 → FAIL 9/12**, graded DISCLOSABLE; two findings closed afterwards and **unverified by a grader** |
 | T214 | GHL discovery, configurable owner, fail-closed routing | **PASS 12/12** |
 
-**THREE OF THE EIGHT TASKS FAILED INDEPENDENT VERIFICATION, AND TWO ARE STILL
-UNVERIFIED AS OF THIS CHECKPOINT.** T212 and T213 have had every finding fixed and
-re-proved by mutation, but a *grader* has not yet re-scored them, so nothing here
-claims they passed.
+**THREE OF THE EIGHT TASKS FAILED INDEPENDENT VERIFICATION. T212 now PASSES at
+11/12 after three attempts; T213 does NOT.** T213's last grade is FAIL 9/12, ruled
+DISCLOSABLE rather than blocking, with two findings closed afterwards that no
+grader has re-scored. Nothing here claims T213 passed.
 
 **T212 scored ZERO on criterion 6 for a false claim of mine**, and that is the
 most important thing in this document about how to read the rest of it. I wrote
@@ -110,10 +110,23 @@ asserted `textContent.toContain('0')` for a 0/0/0 score, and the rendered date
 "1 Oct 2026" already contains a `0`, so suppressing a genuine zero passed too.
 Both now assert the behaviour they are named for.
 
-**T213 pinned three of fifteen scenarios to a control or a boundary instead of
-the proof**, transposed three mutation IDs, and — worst — certified a *skipped*
-test as coverage: turning a covering test into `it.skip` left the registry green.
-All closed, with the live-test check carrying its own controls.
+**T213 was graded three times and failed three times** — 10/12, 10/12, 9/12 — and
+its last grade is the one recorded above. Across those rounds verifiers found:
+three of fifteen scenarios pinned to a control or boundary instead of the proof;
+six wrong provenance labels, including three citing a task whose mutation cannot
+reach the test; a registry that certified a *skipped* test as coverage; and then,
+after I fixed that, the **`xdescribe` alias taking the same six tests dark again**
+because my fix matched one spelling of the hole. All are now closed and
+mutation-proved, **but the last two fixes landed after the final grade and no
+grader has re-scored them.** The third grader ruled the residue DISCLOSABLE
+rather than blocking: zero production surface, and "all fifteen pass"
+independently reproduced at 38/38 and 242/242.
+
+**T213's known-open items are listed in §H**, not resolved: nine of fifteen
+entries name no specific mutation (an unmet part of the acceptance), S1 pins the
+canonical decision point rather than the route wiring, S13 is proved by nothing
+in this phase, S14's live-write half is uncited, and two block-disabling shapes
+remain undetectable.
 
 **T211 failed twice, and both verdicts were right.** Attempt 1 asserted source text, and five of
 eight mutants survived. Attempt 2 was rewritten behaviourally and still failed, for a subtler
@@ -293,6 +306,17 @@ classification is left alone rather than quietly edited.
    claims it today.
 8. **`reconcileAppPayments` is ~213 lines** over the function ceiling, untouched by this phase.
 9. **The backfill has never run.** The legacy incoherent population is unmeasured.
+10. **T213's acceptance registry has named limits**, written into the file rather than left to be
+    found: nine of fifteen entries name no specific mutation, which is an unmet part of the
+    acceptance; S1 pins the canonical decision point rather than the `/enroll` route wiring (the
+    "immediately" half is S4's); **S13 is proved by no Phase 2 task at all** — its covering test
+    and production module both pre-date the phase; S14's live-write half is uncited; and an
+    emptied test body, a nested indented disabled block, and a block disabled by expression are
+    all undetectable by a registry.
+11. **T212's guard covers person surfaces only.** A verifier's role gate in `PersonProfilePage`
+    was invisible to **every required CI check** — that is a gap in the gate, not only in my
+    test. A repo-wide lint for frontend authority reads would close it; this phase did not build
+    one.
 
 ---
 

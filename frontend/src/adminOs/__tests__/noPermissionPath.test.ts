@@ -36,9 +36,10 @@ import * as path from 'path';
  *
  * Two changes follow from that:
  *
- *   1. THE SCOPE IS DERIVED FROM THE FILESYSTEM, not typed out. Every person
- *      surface is guarded by default, so a new or renamed one cannot be
- *      silently unguarded.
+ *   1. THE SCOPE IS DERIVED FROM THE FILESYSTEM, not typed out, so a new or
+ *      renamed file in the three derived locations cannot be silently
+ *      unguarded. It is NOT "every person surface" — see the note above the
+ *      describe for what it does not reach.
  *   2. A STORAGE READ IS JUDGED BY ITS KEY. A view preference held in a named
  *      constant is allowed; a string-literal key, or any other identifier, is
  *      flagged. That lets `TimelineTab` back in WITH its preference intact
@@ -128,7 +129,35 @@ export function offendingStorageKeys(code: string): string[] {
 
 const read = (rel: string): string => fs.readFileSync(path.join(SRC, rel), 'utf8');
 
-describe('T212 — no person surface decides permission for itself', () => {
+/**
+ * ── WHAT THIS DESCRIBE IS NOT CLAIMING ──────────────────────────────────────
+ *
+ * The scope is the three DERIVED locations: `components/admin/person/`,
+ * `adminOs/person*.ts`, and the two person pages. 26 files at the time of
+ * writing.
+ *
+ * It is NOT every surface the person view renders. `PersonProfilePage` also
+ * composes `LeadPipelineBar`, `JourneyTimeline`, `LeadStatusNotes`,
+ * `ActivityTimeline` and `LeadStrategyPrep` from `components/admin/` and
+ * `components/admin/lead/`, and a verifier planted a working role gate in two
+ * of those with this suite green. Those modules were authored by other tasks
+ * (`components/admin/lead/*` by the Lead-page migration, `ActivityTimeline` by
+ * session11, `drilldown.ts` by Admin OS Phase 1), and acceptance item 4 asks
+ * for a test that no NEW permission path was introduced — every file T212
+ * authored is inside the derived set, which the same verifier confirmed by
+ * provenance across all five T212 commits.
+ *
+ * The title said "no person surface decides permission for itself", which
+ * claimed more reach than 26 files deliver. Narrowed, because an overstated
+ * guard name is the defect class this phase has been failed for repeatedly:
+ * a reader who trusts the name stops looking.
+ *
+ * The honest remaining ceiling of a name-based lint, also from that verifier:
+ * `localStorage['getItem']`, `getItem.bind(localStorage)`, and naming the real
+ * token key `ADMIN_TOKEN_PREF` all evade it, as does authority computed in a
+ * third module and passed in as a prop. Each needs deliberate camouflage.
+ */
+describe('T212 — no person surface T212 AUTHORED decides permission for itself', () => {
   it('guards the page the task is named after, and every panel, by derivation', () => {
     // The hole that failed attempt 2. ATTACK A lived in PersonProfilePage and
     // ATTACK B in TimelineTab; both must be in scope, and the list must come
