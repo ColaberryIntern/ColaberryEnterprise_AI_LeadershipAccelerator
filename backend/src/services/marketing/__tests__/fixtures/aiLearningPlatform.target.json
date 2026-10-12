@@ -1,0 +1,160 @@
+{
+  "title": "AI learning platform for beginners and working professionals",
+  "description": "Start learning AI step by step at no cost, on a practical platform built for beginners, professionals, career switchers and builders.",
+  "footerNote": "Learn with Claude · Build through Colaberry · Deploy in the real world",
+  "sections": [
+    {
+      "type": "hero",
+      "eyebrow": "AI learning platform",
+      "headline": "Start learning AI today for $0",
+      "headlineAccent": "for $0",
+      "subhead": "AI is changing how people work, build, and grow.",
+      "body": "Colaberry helps you start learning AI step by step through a practical learning platform designed for beginners, working professionals, career switchers, and builders.",
+      "kicker": "No pressure. No confusion. Just start learning.",
+      "audience": "Beginners, Working professionals, Career switchers, Builders",
+      "cta": { "label": "Start learning AI for $0", "href": "/portal/signup" },
+      "ctaNote": "Create your account and begin your AI learning journey today. No card needed.",
+      "panel": {
+        "eyebrow": "Your AI learning path",
+        "title": "AI Foundations",
+        "badge": "$0",
+        "items": [
+          { "label": "AI fundamentals" },
+          { "label": "Prompting basics" },
+          { "label": "How to use AI for real work" },
+          { "label": "Research and planning with AI" },
+          { "label": "Workflow thinking" }
+        ]
+      }
+    },
+    {
+      "type": "text",
+      "eyebrow": "Why start now?",
+      "heading": "AI is no longer just a future skill",
+      "paragraphs": [
+        "AI is already being used for writing, research, planning, analysis, documentation, workflows, and business problem-solving.",
+        "But most people are still using AI only for basic tasks."
+      ],
+      "cta": { "label": "Start learning AI for $0", "href": "/portal/signup" },
+      "contrast": {
+        "title": "What most people do with AI today",
+        "chips": ["Ask quick questions", "Write emails", "Summarize content", "Generate ideas"],
+        "caption": "That is a good start.",
+        "resultEyebrow": "The real advantage",
+        "resultLine": "Comes when you learn how to use AI for real work."
+      }
+    },
+    {
+      "type": "bullets",
+      "eyebrow": "What you'll learn",
+      "heading": "Learn AI beyond basic prompts",
+      "intro": "Inside Colaberry's AI learning platform, you can begin learning how AI works and how it can be applied practically. You will start exploring:",
+      "variant": "cards",
+      "items": [
+        { "label": "AI fundamentals", "icon": "bulb" },
+        { "label": "Prompting basics", "icon": "chat" },
+        { "label": "How to use AI for real work", "icon": "briefcase" },
+        { "label": "Research and planning with AI", "icon": "search" },
+        { "label": "Documentation and analysis", "icon": "document" },
+        { "label": "Workflow thinking", "icon": "flow" },
+        { "label": "Practical AI use cases", "icon": "wrench" },
+        { "label": "How AI can support career and business growth", "icon": "trend" }
+      ],
+      "callout": {
+        "lead": "This is not random content.",
+        "text": "It's a starting point to move from AI curiosity to practical AI capability.",
+        "highlights": [
+          { "phrase": "AI curiosity", "color": "accent-3" },
+          { "phrase": "practical AI capability", "color": "accent" }
+        ]
+      }
+    },
+    {
+      "type": "bullets",
+      "eyebrow": "Who this is for",
+      "heading": "Built for people who want to start using AI practically",
+      "intro": "You do not need to be an expert to begin.",
+      "kicker": "You just need a place to start.",
+      "itemsLabel": "This platform is for you if:",
+      "variant": "checks",
+      "items": [
+        { "label": "You keep hearing about AI but do not know where to start" },
+        { "label": "You already use AI for basic tasks but want to do more" },
+        { "label": "You want to use AI at work more confidently" },
+        { "label": "You are preparing for new career opportunities" },
+        { "label": "You want your resume to show AI readiness" },
+        { "label": "You are a business owner with an AI idea" },
+        { "label": "You want to understand how AI workflows and systems are built" }
+      ]
+    },
+    {
+      "type": "bullets",
+      "tone": "inverse",
+      "eyebrow": "What makes Colaberry different?",
+      "heading": "We don't just teach AI. We help you build with it.",
+      "headingAccent": "We help you build with it.",
+      "paragraphs": [
+        "Most people consume AI. They use tools, prompts, and quick answers.",
+        "At Colaberry, the goal is to help you go beyond basic AI usage, to use AI for workflows, projects, systems, and real-world problem-solving."
+      ],
+      "itemsLabel": "Our approach is simple:",
+      "variant": "steps",
+      "items": [
+        { "label": "Learn with Claude", "detail": "Understand how to use AI tools practically." },
+        { "label": "Build through Colaberry", "detail": "Apply what you learn through guided content and real use cases." },
+        { "label": "Deploy in the real world", "detail": "Move toward practical AI systems that create value." }
+      ],
+      "cta": { "label": "Start learning AI for $0", "href": "/portal/signup" }
+    },
+    {
+      "type": "bullets",
+      "eyebrow": "What happens after you sign up?",
+      "heading": "Your AI learning journey starts immediately",
+      "intro": "Once you sign up, you will receive access to the platform and can begin learning right away. You can:",
+      "variant": "grid",
+      "items": [
+        { "label": "Log in to the AI learning portal" },
+        { "label": "Start with the opening AI learning content" },
+        { "label": "Watch lessons" },
+        { "label": "Explore learning cards" },
+        { "label": "Complete checks" },
+        { "label": "Track your progress" },
+        { "label": "Join live sessions when available" },
+        { "label": "Continue toward the full AI Systems Architect Accelerator" }
+      ],
+      "callout": {
+        "tone": "success",
+        "lead": "You do not have to wait for an Open House to begin.",
+        "text": "You can start learning now."
+      }
+    },
+    {
+      "type": "text",
+      "tone": "cool",
+      "eyebrow": "The next step",
+      "heading": "Ready to go further?",
+      "paragraphs": [
+        "The platform is your starting point. When you are ready, Colaberry's AI Systems Architect Accelerator helps you go deeper.",
+        "The goal is to help you move from simply using AI to understanding how to build with it."
+      ],
+      "emphasis": ["AI Systems Architect Accelerator"],
+      "aside": {
+        "title": "In the full program, learners",
+        "items": [
+          "Build practical AI systems",
+          "Work through guided projects",
+          "Join live sessions",
+          "Develop portfolio-ready AI skills"
+        ]
+      }
+    },
+    {
+      "type": "cta",
+      "headline": "Start your AI learning journey today",
+      "subhead": "AI is moving fast. The best time to start learning is now.",
+      "body": "Create your account and begin learning how to use AI beyond basic prompts.",
+      "cta": { "label": "Start learning AI for $0", "href": "/portal/signup" },
+      "ctaNote": "Join Colaberry's AI learning platform and take your first step today."
+    }
+  ]
+}
