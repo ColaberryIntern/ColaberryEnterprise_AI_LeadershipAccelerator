@@ -191,7 +191,18 @@ describe('SBP adapter', () => {
     expect(isConstraintKind(null)).toBe(false);
     // A constraint is context for the stories that use it, not a story of its own; demanding
     // coverage for it manufactures the "layer story" the plan contract prevents.
-    expect(requirementsNeedingCoverage(base.requirements)).toEqual(['FR-001', 'FR-002']);
+    //
+    // CORRECTED 2026-10-09 (P6-T4): was `['FR-001', 'FR-002']`, which PINNED A BUG. The function
+    // claims to mirror `planContract.requiresStoryCoverage` — `priority === 'must'` and not a
+    // CONSTRAINT — and only applied the constraint half. `FR-002` in this fixture carries
+    // `kind: 'FUNC'` and NO priority, so it is not a must-have and must not need coverage.
+    // Nothing depended on the old behaviour: the function had no production caller until T4.
+    expect(requirementsNeedingCoverage(base.requirements)).toEqual(['FR-001']);
+    // Both halves of the predicate, pinned separately so neither can be dropped again silently.
+    expect(requirementsNeedingCoverage([{ id: 'S-1', kind: 'FUNC', priority: 'should' }])).toEqual([]);
+    expect(requirementsNeedingCoverage([{ id: 'N-1', kind: 'FUNC' }])).toEqual([]);
+    expect(requirementsNeedingCoverage([{ id: 'C-9', kind: 'CONSTRAINT', priority: 'must' }])).toEqual([]);
+    expect(requirementsNeedingCoverage([{ id: 'M-1', kind: 'FUNC', priority: 'must' }])).toEqual(['M-1']);
   });
 
   it('leaves track mappings present but empty, since SBP has no track concept', () => {

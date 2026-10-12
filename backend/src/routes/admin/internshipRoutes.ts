@@ -503,7 +503,8 @@ const generateProjectSchema = projectQuestionsSchema.extend({
 const assignProjectSchema = z.object({
   project_id: z.string().uuid(),
   /** The hash of the plan the reviewer actually read. */
-  expected_sha256: z.string().regex(/^[0-9a-f]{64}$/).nullish(),
+  // REQUIRED since 2026-10-11 — was `.nullish()`. See `planStore.publishPlan`.
+  expected_sha256: z.string().regex(/^[0-9a-f]{64}$/),
 }).strict();
 
 /** Log + answer, with the service's own status when it set one. */

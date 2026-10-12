@@ -62,7 +62,56 @@ const eyebrow = text(60).optional();
  * foreground colours, so contrast is a property of the tone rather than something each
  * section has to get right.
  */
-const tone = z.enum(['default', 'subtle', 'inverse', 'accent']).optional();
+/** `cool` is the pale blue-grey band the "ready to go further" step sits on. */
+const tone = z.enum(['default', 'subtle', 'inverse', 'accent', 'cool']).optional();
+
+/**
+ * A one-line takeaway strip under a list, with up to three phrases painted in brand colours.
+ *
+ * Highlights are EXACT SUBSTRINGS of `text`, matched the same way `headlineAccent` is: a phrase
+ * that is not found is ignored rather than appended, so a near-miss loses the emphasis and can
+ * never corrupt the sentence or inject markup.
+ */
+const callout = z.object({
+  lead: text(120).optional(),
+  text: text(300),
+  highlights: z.array(z.object({
+    phrase: text(80),
+    color: z.enum(['accent', 'accent-2', 'accent-3']),
+  })).max(3).optional(),
+  /** `success` is the pale green strip; absent is the plain bordered one. */
+  tone: z.enum(['plain', 'success']).optional(),
+}).optional();
+
+/** A small supporting card beside a text section: "in the full program, learners...". */
+const aside = z.object({
+  title: text(80),
+  items: z.array(text(160)).min(2).max(6),
+}).optional();
+
+/**
+ * Today versus what is possible: a card of chips, then the result.
+ *
+ * The shape of the reference page's "what most people do with AI today" block. Only use it when
+ * the brief actually draws that contrast - it asserts a claim about what most people do.
+ */
+const contrast = z.object({
+  title: text(120),
+  chips: z.array(text(60)).min(2).max(6),
+  caption: text(120).optional(),
+  resultEyebrow: text(40).optional(),
+  resultLine: text(200),
+}).optional();
+
+/**
+ * The closed icon set a card may carry. An ENUM rather than free text on purpose: a
+ * model-supplied name would be a guess that renders as nothing, and a model-supplied SVG would
+ * be markup from a language model on a public page.
+ */
+const iconName = z.enum([
+  'bulb', 'chat', 'briefcase', 'search', 'document', 'flow',
+  'wrench', 'trend', 'check', 'clock', 'layers', 'rocket',
+]).optional();
 
 const heroSection = z.object({
   type: z.literal('hero'),
@@ -77,6 +126,12 @@ const heroSection = z.object({
    */
   headlineAccent: text(160).optional(),
   subhead: text(400).optional(),
+  /** The paragraph under the lead line. Longer and quieter than `subhead`. */
+  body: text(600).optional(),
+  /** One short emphasised line before the button: "No pressure. No confusion." */
+  kicker: text(200).optional(),
+  /** The reassurance under the button. Never a claim - it restates what pressing it does. */
+  ctaNote: text(200).optional(),
   /** "Who this is for" - the line that disqualifies the wrong reader early. */
   audience: text(240).optional(),
   cta: cta.optional(),
@@ -96,6 +151,10 @@ const heroSection = z.object({
    * At most 8, because this sits beside a headline: a ninth row pushes the fold past the CTA.
    */
   panel: z.object({
+    /** Small label above the panel title. */
+    eyebrow: text(60).optional(),
+    /** A short qualifier shown top-right, only when the brief states it. */
+    badge: text(20).optional(),
     title: text(120),
     items: z.array(z.object({
       label: text(160),
@@ -115,6 +174,14 @@ const richTextSection = z.object({
   paragraphs: z.array(text(2000)).min(1).max(20),
   /** A single emphasised line under the paragraphs - the "You just need a place to start." beat. */
   kicker: text(300).optional(),
+  /** A phrase inside `heading` painted in the accent. Exact substring, like headlineAccent. */
+  headingAccent: text(160).optional(),
+  /** Phrases inside the paragraphs to set bold in the tertiary colour. Exact substrings. */
+  emphasis: z.array(text(120)).max(4).optional(),
+  cta: cta.optional(),
+  callout,
+  aside,
+  contrast,
 });
 
 const bulletsSection = z.object({
@@ -129,10 +196,25 @@ const bulletsSection = z.object({
    * an ordered sequence, `cards` for a capability grid. Absent means `cards`, which is the
    * layout that reads well whether or not the items carry a `detail`.
    */
-  variant: z.enum(['cards', 'checks', 'steps']).optional(),
+  /** A phrase inside `heading` painted in the accent. Exact substring, like headlineAccent. */
+  headingAccent: text(160).optional(),
+  /** The emphasised beat under the intro, in the split head. */
+  kicker: text(300).optional(),
+  /** A small bold label directly above the items: "This platform is for you if:". */
+  itemsLabel: text(120).optional(),
+  /** Prose beside the heading, when the section argues before it lists. */
+  paragraphs: z.array(text(2000)).max(6).optional(),
+  cta: cta.optional(),
+  callout,
+  /**
+   * How the items are drawn. `grid` is the bordered table-like block for 6+ ordered items;
+   * `steps` stays the separate-card sequence for 3 to 5.
+   */
+  variant: z.enum(['cards', 'checks', 'steps', 'grid']).optional(),
   items: z.array(z.object({
     label: text(200),
     detail: text(600).optional(),
+    icon: iconName,
   })).min(1).max(30),
 });
 
@@ -184,8 +266,11 @@ const ctaSection = z.object({
   eyebrow,
   tone,
   headline: text(200),
+  /** The bold line between headline and body. */
+  subhead: text(300).optional(),
   body: text(800).optional(),
   cta,
+  ctaNote: text(200).optional(),
 });
 
 export const landingPageSectionSchema = z.discriminatedUnion('type', [
@@ -200,6 +285,8 @@ export const landingPageContentSchema = z.object({
   description: text(400).optional(),
   /** OG image for the link preview a social post will render. */
   socialImage: z.object({ src: safeUrl, alt: text(300) }).optional(),
+  /** The line beside the logo in the footer. */
+  footerNote: text(160).optional(),
   sections: z.array(landingPageSectionSchema).min(1).max(40),
 });
 

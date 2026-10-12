@@ -272,7 +272,8 @@ async function coverageForProject(
  */
 export async function assignGeneratedProject(params: {
   projectId: string;
-  expectedSha?: string | null;
+  /** REQUIRED since 2026-10-11 — see `planStore.publishPlan`. Optional defeated its purpose. */
+  expectedSha: string;
 }): Promise<PublishResult> {
   const project = await Project.findByPk(params.projectId, { attributes: ['id', 'enrollment_id'] });
   if (!project) throw new InternshipGenerationError('Project not found.', 404, 'NotFoundError');
@@ -282,7 +283,7 @@ export async function assignGeneratedProject(params: {
 
   return publishBuild(params.projectId, {
     enrollmentId: project.enrollment_id,
-    expectedSha: params.expectedSha ?? undefined,
+    expectedSha: params.expectedSha,
     repo,
   });
 }

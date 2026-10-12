@@ -677,7 +677,7 @@ export interface PublishResult {
  */
 export async function publishBuild(
   projectId: string,
-  opts: { enrollmentId: string; expectedSha?: string; repo?: { owner: string; repo: string; url: string } | null },
+  opts: { enrollmentId: string; expectedSha: string; repo?: { owner: string; repo: string; url: string } | null },
 ): Promise<PublishResult> {
   const draft = await getPlan(projectId);
   if (!draft) {

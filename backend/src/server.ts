@@ -78,6 +78,7 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
+import { ensureProjectTenantSchema } from './db/ensureProjectTenantSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
@@ -2803,6 +2804,9 @@ async function start(): Promise<void> {
   // reaches production on the next backend deploy by ANY session, regardless of the
   // ENABLE_PROJECT_LIFECYCLE flag — the code ships dark, the schema does not. The paired assert
   // is what makes a failed migration visible, since the statement loop is warn-only.
+  // BEFORE the lifecycle schema, because the student registration hook reads projects.tenant_id
+  // and a project created between the two would be unattributable for no reason.
+  await ensureProjectTenantSchema();
   await ensureProjectLifecycleSchema();
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects

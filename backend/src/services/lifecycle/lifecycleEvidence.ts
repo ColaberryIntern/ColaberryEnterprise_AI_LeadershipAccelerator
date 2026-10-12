@@ -12,6 +12,17 @@
  */
 import type { LifecycleEvidence, EvidenceField } from './lifecyclePrerequisites';
 import type { ManifestRefs } from './adapters/manifestRefs';
+import { requirementsNeedingCoverage } from './adapters/sbpAdapter';
+import {
+  publishedPlanState,
+  type PlanLike,
+  type PublishedPlanState,
+} from './lifecyclePlanReads';
+import {
+  requirementsWithoutStory,
+  storiesWithoutTraceability as storiesMissingCitations,
+  releasesWithoutUserVisibleWorkflow,
+} from './storyTraceability';
 
 export interface LifecycleRow {
   id: string;
@@ -44,7 +55,30 @@ export interface EvidenceContext {
   row: LifecycleRow;
   /** `null` when no manifest exists yet, or its refs could not be read. NOT an empty refs. */
   refs: ManifestRefs | null;
+  /**
+   * What `build_plans` says about this project's publication, or `null`.
+   *
+   * `null` is load-bearing and means the same three things `refs: null` means: nothing is
+   * published, the project is not a student build at all, or the read failed. It NEVER means an
+   * empty plan. Every measurement that reads this returns NOT_MEASURED on `null`, so a project
+   * whose plan could not be read blocks on `not_assessed` rather than passing with no gaps.
+   *
+   * ONE FIELD, not a `plan` beside two integrity facts. Those three answers come from a single
+   * query precisely so they cannot disagree, and splitting them across the context would put
+   * the disagreement back — a context carrying a plan body from one read and a publication
+   * count from another is a state the database was never in.
+   *
+   * Resolved BEFORE `applyMeasurements` because `Measurement` is synchronous and pure — the
+   * same reason `refs` is resolved here rather than inside a measurement.
+   */
+  published: PublishedPlanState | null;
 }
+
+/**
+ * `PlanLike` moved to `lifecyclePlanReads.ts` with the reader that produces it (P6-T5).
+ * Re-exported so every consumer keeps its import path.
+ */
+export type { PlanLike } from './lifecyclePlanReads';
 
 /**
  * What a measurement returns when it cannot measure THIS TIME.
@@ -88,7 +122,64 @@ function readableSources(ctx: EvidenceContext): ReadonlyArray<SourceLike> | null
     && typeof (x as { id?: unknown }).id === 'string');
   return readable ? (list as ReadonlyArray<SourceLike>) : null;
 }
+/**
+ * The published plan body, or `null`.
+ *
+ * Deliberately NOT `ctx.published?.plan`. Optional chaining would turn a context that forgot
+ * the field entirely into a silent NOT_MEASURED, and this programme has already shipped one
+ * absence test that passed because `undefined` was indistinguishable from "not supplied". A
+ * missing field throws here, loudly, on the first measurement that reads it.
+ */
+function publishedPlan(ctx: EvidenceContext): PlanLike | null {
+  return ctx.published === null ? null : ctx.published.plan;
+}
+
 export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> = {
+  /**
+   * Must-have requirements no story fulfils.
+   *
+   * Both halves of the judgement are borrowed rather than re-decided: which requirements NEED
+   * coverage is `adapters/sbpAdapter.requirementsNeedingCoverage` (mirroring
+   * `planContract.requiresStoryCoverage`), and which are covered is
+   * `storyTraceability.requirementsWithoutStory`. Re-deciding either here would be a second
+   * place to get it wrong, and the coverage predicate has already been wrong once.
+   */
+  mustHaveRequirementsWithoutStory: (ctx) => {
+    const plan = publishedPlan(ctx);
+    if (!plan || !Array.isArray(plan.requirements) || !Array.isArray(plan.stories)) return NOT_MEASURED;
+    return requirementsWithoutStory(requirementsNeedingCoverage(plan.requirements), plan.stories);
+  },
+
+  /**
+   * Stories citing no requirement, business task or blueprint revision.
+   *
+   * Assessable on a LEGACY plan, deliberately: `fulfills` has always existed, so a plan with no
+   * `references` is still measurable for this and reporting it unassessable would block every
+   * pre-2026-10-09 project for a gap it does not have.
+   */
+  storiesWithoutTraceability: (ctx) => {
+    const plan = publishedPlan(ctx);
+    if (!plan || !Array.isArray(plan.stories)) return NOT_MEASURED;
+    return storiesMissingCitations(plan.stories);
+  },
+
+  /**
+   * Releases demonstrating nothing a human can see.
+   *
+   * The one measurement here that can return NOT_MEASURED on a plan it CAN read: if no story
+   * declares a workspace — every plan generated before P6-T3 — then nobody has looked, and
+   * `releasesWithoutUserVisibleWorkflow` says so with `null`. Passing that through as `[]`
+   * would turn "unmeasured" into "no gaps", which is the exact bypass `NOT_MEASURED` exists
+   * to prevent — and it would do it on the rule that was written for a real student's
+   * twelve unreachable services.
+   */
+  releasesWithoutUserVisibleWorkflow: (ctx) => {
+    const plan = publishedPlan(ctx);
+    if (!plan || !Array.isArray(plan.releases) || !Array.isArray(plan.stories)) return NOT_MEASURED;
+    const failing = releasesWithoutUserVisibleWorkflow(plan.releases.map((r) => r.key), plan.stories);
+    return failing === null ? NOT_MEASURED : failing;
+  },
+
   /**
    * Requirements carrying no recorded provenance.
    *
@@ -118,6 +209,32 @@ export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> 
     if (sources === null) return NOT_MEASURED;
     return sources.filter((s) => s.state === 'open').map((s) => s.id);
   },
+
+  /**
+   * Exactly one plan is published.
+   *
+   * `publishedCount === 1`, written as an equality rather than `> 0` on purpose: TWO published
+   * rows is the failure `planStore.publishConcurrency.integration` demonstrates against the
+   * shipped schema, and a `> 0` check would call that healthy. Zero is also a failure, and the
+   * worse-reading one, because every consumer treats absence as "has not published yet".
+   */
+  publishedPlanIsSingular: (ctx) => (
+    ctx.published === null ? NOT_MEASURED : ctx.published.publishedCount === 1
+  ),
+
+  /**
+   * The published plan's stored hash still describes its stored content.
+   *
+   * NOT_MEASURED when nothing is published — `hashIntact` is `null` there, and the alternative
+   * (reporting `true`) would launder "no plan" into "an intact plan", which is the exact
+   * direction of bypass this gatherer exists to refuse. The zero case is already reported by
+   * `publishedPlanIsSingular`, so nothing goes unsaid.
+   */
+  publishedPlanHashIntact: (ctx) => (
+    ctx.published === null || ctx.published.hashIntact === null
+      ? NOT_MEASURED
+      : ctx.published.hashIntact
+  ),
 
   // DELIBERATELY NOT `requirementCount: refs.sources.length`. `SourceRef` is documented as "a
   // requirement OR OTHER CAPTURED STATEMENT", so sources is a superset of requirements and
@@ -261,10 +378,17 @@ export async function readLifecycleEvidence(row: LifecycleRow): Promise<Lifecycl
     actorStillAuthorized: true,
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
+    releasesWithoutUserVisibleWorkflow: [],
+    // Placeholders that BLOCK if they are ever trusted: `false` for both, so a measurement
+    // that failed to run leaves `launch_ready` refusing rather than permitting. `assessedFields`
+    // is the authority either way — this is the second line of defence, not the first.
+    publishedPlanIsSingular: false,
+    publishedPlanHashIntact: false,
   };
 
   return applyMeasurements(base, EVIDENCE_MEASUREMENTS, {
     row,
     refs: await latestManifestRefs(row),
+    published: await publishedPlanState(row),
   });
 }

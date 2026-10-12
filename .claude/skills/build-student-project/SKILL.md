@@ -26,6 +26,27 @@ load-bearing throughout this runbook, and the status box below records both sepa
 > draft of this skill: one fixed its headline rule, one gave its longest-standing dead end
 > a caller.
 
+## Lifecycle governance: this pipeline is NOT governed yet
+
+There is now a governed front door for project creation, **`project-lifecycle`**, which
+registers one lifecycle record per project at creation and refuses stage transitions whose
+prerequisites are unmet. It covers **delivery projects only.**
+
+**A student project created by this pipeline has no lifecycle record.** The registration hook
+is on the `DeliveryProject` model and there is no equivalent for `projects`, because `projects`
+has no tenant column and no table on its join path has one either. That work is **P6-T1b** and
+it is blocked on one decision: which tenant owns the student build path.
+
+So, concretely:
+
+- Do not describe this pipeline's output as lifecycle-governed, and do not cite a lifecycle
+  stage for a student project.
+- Use **`project-lifecycle`** for delivery projects. Keep using this skill for students; it is
+  the student path and, until P6-T1b lands, the only one.
+- `ENABLE_PROJECT_LIFECYCLE` must not be turned on before P6-T1b lands. The story-authorization
+  check treats a missing lifecycle row as absence of evidence rather than approval, so flipping
+  it early would refuse every student build rather than merely under-enforcing the gate.
+
 ## Status — what is true right now
 
 > **Re-measured against production on 2026-09-09.** Everything in the table below

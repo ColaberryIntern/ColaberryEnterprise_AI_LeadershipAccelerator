@@ -138,7 +138,7 @@ router.get('/lp/:brand/:slug', landingPageRateLimiter, async (req: Request, res:
     // built from operator-supplied content.
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; script-src 'self'; connect-src 'self' https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; script-src 'self'; connect-src 'self' https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     );
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Content-Type-Options', 'nosniff');

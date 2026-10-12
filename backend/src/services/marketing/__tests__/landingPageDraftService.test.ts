@@ -298,8 +298,8 @@ describe('the prompt states the rules it is relied on for', () => {
     const svc = require('fs').readFileSync(
       require('path').resolve(__dirname, '..', 'landingPageDraftService.ts'), 'utf8',
     );
-    expect(svc).toContain("prompt_version: 'landing-page-draft-v4'");
-    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v3'");
+    expect(svc).toContain("prompt_version: 'landing-page-draft-v6'");
+    expect(svc).not.toContain("prompt_version: 'landing-page-draft-v5'");
   });
 
   /**

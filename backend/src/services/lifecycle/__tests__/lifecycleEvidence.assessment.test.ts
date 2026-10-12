@@ -19,6 +19,7 @@ import { ADVANCE, LIFECYCLE_STAGES, type LifecycleStage } from '../lifecycleStag
 import {
   prerequisiteGaps,
   blockingGaps,
+  satisfied,
   notAssessedGaps,
   ADVISORY_RULES,
   type LifecycleEvidence,
@@ -47,17 +48,17 @@ const ROW = {
 };
 
 /**
- * The two stages whose predicate is `() => []` and therefore permits unconditionally.
+ * Stages that still permit unconditionally on a stub.
  *
- * Named rather than skipped. This is a real pre-existing hole — `lifecyclePrerequisites.ts` says
- * so in its own comment, and a peer session traced a production failure to it on 2026-10-02. It
- * is NOT closed by this task (Phase 6 owns it), but it is pinned here so that closing it, or
- * widening it, changes a test rather than passing unnoticed.
+ * **EMPTY since 2026-10-12 (P6-T5), and that is the point of this set existing.** It held two
+ * entries when this file was written; `release_review` left it in P6-T4 and `launch_ready` has
+ * now left it too. Every stage with a predicate now refuses a stub.
+ *
+ * Kept rather than deleted, because the loops below read it and because an empty set is the
+ * assertion: a future stage added without a predicate, or an existing one whose rule is
+ * weakened back to `() => []`, has to re-add itself HERE and justify it.
  */
-const GAPLESS_TARGETS: ReadonlySet<string> = new Set(['release_review', 'launch_ready']);
-
-/** Everything measured, derived from the snapshot's own keys. The positive-control snapshot. */
-
+const GAPLESS_TARGETS: ReadonlySet<string> = new Set<string>();
 
 /** Stages that actually have a next stage to advance into. */
 function advanceable(): LifecycleStage[] {
@@ -92,14 +93,48 @@ describe('THE GATE IS NOT LOOSENED: unassessed evidence still refuses a transiti
     expect(refused).toEqual([]);
   });
 
-  it('PINS THE KNOWN HOLE: release_review and launch_ready permit unconditionally', async () => {
+  it('THE HOLE IS CLOSED: nothing permits a stub unconditionally any more', async () => {
     const stub = await readLifecycleEvidence(ROW);
 
-    // Not an endorsement. Phase 6 owns closing this; the test exists so that closing it is a
-    // deliberate change to this assertion rather than a silent one.
-    for (const to of GAPLESS_TARGETS) {
-      expect(prerequisiteGaps(to as LifecycleStage, stub)).toEqual([]);
-    }
+    // THIS TEST USED TO ASSERT THE OPPOSITE, and that was its job. It read "PINS THE REMAINING
+    // HOLE: launch_ready permits unconditionally", with a comment saying the test existed "so
+    // that closing a hole is a deliberate change to this assertion rather than a silent one".
+    // This is that change arriving for the last of the two.
+    expect([...GAPLESS_TARGETS]).toEqual([]);
+
+    // Every stage, not only the advanceable ones the loops above walk: a stage reachable by a
+    // non-ADVANCE route (a correction, a re-entry) would otherwise be unguarded here.
+    //
+    // `discovery` is the one stage a stub satisfies, and it does so for a MEASURED reason
+    // rather than an unconditional one: its single requirement is that the project is
+    // registered against a tenant, and `tenant_id` comes off the row itself, so it is known
+    // without assessment. Listing it here rather than filtering it out is the point — if it
+    // ever stopped being the only one, this assertion names the newcomer.
+    const permitting = LIFECYCLE_STAGES
+      .filter((s) => blockingGaps(prerequisiteGaps(s, stub)).length === 0);
+    expect(permitting).toEqual(['discovery']);
+
+    // And it is not a rubber stamp: withhold the tenant and it refuses. Without this, a
+    // `discovery: () => []` would read identically above.
+    expect(prerequisiteGaps('discovery', { ...stub, tenantId: '' }).map((g) => g.rule))
+      .toEqual(['no_tenant']);
+
+    // And both former members refuse for the RIGHT reason: nobody has looked. A measured
+    // failure on a stub would mean the predicate invented a finding from placeholders.
+    const released = prerequisiteGaps('release_review' as LifecycleStage, stub);
+    expect(released.map((g) => g.rule)).toEqual(['release_workflow_unassessed']);
+    expect(released.map((g) => g.kind)).toEqual(['not_assessed']);
+    expect(blockingGaps(released)).toHaveLength(1);
+    expect(satisfied(released)).toBe(false);
+
+    const launch = prerequisiteGaps('launch_ready' as LifecycleStage, stub);
+    expect(launch.map((g) => g.rule))
+      .toEqual(['publish_not_exactly_one', 'publish_hash_mismatch']);
+    expect(launch.map((g) => g.kind)).toEqual(['not_assessed', 'not_assessed']);
+    // BLOCKING, unlike release_review's measured half. Neither of these is in ADVISORY_RULES:
+    // a project with no published plan is not launch-ready under any reading.
+    expect(blockingGaps(launch)).toHaveLength(2);
+    expect(satisfied(launch)).toBe(false);
   });
 });
 
@@ -166,329 +201,19 @@ describe('not_assessed BLOCKS', () => {
     }
   });
 
-  it('ADVISORY_RULES is unchanged by this task', () => {
+  it('ADVISORY_RULES holds exactly the two rules that have earned it', () => {
     // Asserted against the now-exported constant. The whole change would be undone by one
     // careless addition here, so the contents are pinned rather than the size.
-    expect([...ADVISORY_RULES]).toEqual(['screen_without_rationale']);
-  });
-});
-
-describe('the read-field set is honest in BOTH directions', () => {
-  it('every field named as assessed is a real field of the returned evidence', async () => {
-    const stub = await readLifecycleEvidence(ROW);
-    const actualKeys = new Set(Object.keys(stub));
-
-    // Catches a typo in ASSESSED_EVIDENCE_FIELDS, which would otherwise claim a measurement
-    // for a field that does not exist.
-    const phantom = [...ASSESSED_EVIDENCE_FIELDS].filter((f) => !actualKeys.has(f));
-    expect(phantom).toEqual([]);
-  });
-
-  it('the assessed set is DERIVED from the measurement map, not hand-written', () => {
-    // THE DEFECT THIS REPLACES. The previous version of this test compared
-    // `ASSESSED_EVIDENCE_FIELDS ∩ Object.keys(stub)` against `[...ASSESSED_EVIDENCE_FIELDS]`
-    // — and `stub.assessedFields` IS `ASSESSED_EVIDENCE_FIELDS`, the same object. So it was
-    // tautological. A verifier set the assessed set to three field names while the reader
-    // still returned `[]` for all three: 811 tests passed. Three fields declared measured
-    // that nobody measured.
     //
-    // A value-based check cannot close that, because `[]` is a legitimate MEASURED value
-    // meaning "assessed, nothing wrong". So the fix is structural: the set is derived from
-    // the measurement map, and this asserts the derivation holds. Sorted, so a legitimate
-    // addition in T1.3 produces a meaningful failure rather than an order mismatch.
-    expect([...ASSESSED_EVIDENCE_FIELDS].sort()).toEqual(Object.keys(EVIDENCE_MEASUREMENTS).sort());
-  });
-
-  it('DIRECTION 2, RUN rather than reserved: a measured field holds its measurement', async () => {
-    // THE DEFECT THIS REPLACES. The previous version iterated `EVIDENCE_MEASUREMENTS`, which
-    // is empty, so its body never executed. A verifier then deleted the entire overlay loop
-    // from the reader and **850 of 850 tests still passed.** The comment I had left there
-    // said it "CANNOT be vacuously satisfied by a non-empty map" — a declared expectation,
-    // which Amendment 4 forbids as a third category. An operand is tested or removed.
-    //
-    // So this drives the overlay with a NON-EMPTY map instead of waiting for T1.3 to supply
-    // one. `requirementCount` placeholder is 0; the measurement returns 7.
-    const base = await readLifecycleEvidence(ROW);
-    expect(base.requirementCount).toBe(0);
-
-    const out = applyMeasurements(base, { requirementCount: () => 7 }, { row: ROW, refs: null });
-
-    expect(out.requirementCount).toBe(7);
-    expect(out.assessedFields.has('requirementCount')).toBe(true);
-    // And it reports ONLY what the map measured, so the set cannot overstate.
-    expect([...out.assessedFields]).toEqual(['requirementCount']);
-  });
-
-  it('the measurement receives the row, so a measurement can actually read it', () => {
-    const seen: string[] = [];
-    const base = {} as LifecycleEvidence;
-
-    applyMeasurements(base, {
-      requirementCount: (c) => { seen.push(c.row.tenant_id); return 1; },
-    }, { row: ROW, refs: null });
-
-    // Without this, a measurement map that ignored its argument would pass everything above.
-    expect(seen).toEqual(['tenant-1']);
-  });
-
-  it('THE READER ROUTES THROUGH THE OVERLAY, not around it', async () => {
-    // This is the test that kills "delete the overlay loop". It injects into the real map, so
-    // a reader that ignores the map returns the placeholder and fails here. Restored in
-    // `finally` so the injection cannot leak into another test.
-    const map = EVIDENCE_MEASUREMENTS as Record<string, (c: { row: typeof ROW }) => unknown>;
-    // The baseline is no longer EMPTY: P5-T1.4 populated two fields. Captured rather than
-    // hardcoded, so this test does not have to be edited every time the map grows — what it
-    // asserts is that the injection is REMOVED afterwards, not what the map happens to hold.
-    const before = Object.keys(map).sort();
-    expect(before).not.toContain('requirementCount');
-
-    map.requirementCount = () => 42;
-    try {
-      const e = await readLifecycleEvidence(ROW);
-      expect(e.requirementCount).toBe(42);
-      expect(e.assessedFields.has('requirementCount')).toBe(true);
-
-      // And the stage that reads it must now treat it as MEASURED, not not-assessed.
-      const gap = prerequisiteGaps('requirements_ready', e)
-        .find((g) => g.rule === 'no_requirements');
-      expect(gap).toBeUndefined();
-    } finally {
-      delete map.requirementCount;
-    }
-    expect(Object.keys(map).sort()).toEqual(before);
-  });
-
-  it('reports a NOT_ASSESSED gap for every stage that reads an unassessed field', async () => {
-    const stub = await readLifecycleEvidence(ROW);
-    const silent: string[] = [];
-
-    // Every stage with a real predicate must say "not assessed" rather than return nothing,
-    // because returning nothing means the stage PASSES.
-    for (const stage of LIFECYCLE_STAGES) {
-      if (GAPLESS_TARGETS.has(stage)) continue;
-      if (stage === 'discovery') continue; // reads only tenantId, which is always known
-      if (notAssessedGaps(prerequisiteGaps(stage, stub)).length === 0) silent.push(stage);
-    }
-
-    expect(silent).toEqual([]);
-  });
-});
-
-describe('blueprint_approved guards EVERY field it reads, not just `approval`', () => {
-  /** `approval` measured, one named field deliberately not. */
-  function withhold(field: EvidenceField): LifecycleEvidence {
-    const e = complete();
-    return {
-      ...e,
-      assessedFields: new Set(
-        [...e.assessedFields].filter((f) => f !== field),
-      ) as Set<EvidenceField>,
-    };
-  }
-
-  it('THE SECOND GATE BYPASS: an unassessed currentManifestRevision must not permit the stage', () => {
-    const gaps = prerequisiteGaps('blueprint_approved', withhold('currentManifestRevision'));
-
-    // Attempt 1 read this field raw. The placeholder is null, `null !== null` is false, so
-    // the comparison was skipped and the stage emitted ZERO gaps — it PERMITTED. A verifier
-    // probed it and got `blocking(blueprint_approved) = 0`. The stale-revision refusal that
-    // vanishes here is what LC-11 rests on.
-    expect(blockingGaps(gaps).length).toBeGreaterThan(0);
-    expect(gaps.find((g) => g.rule === 'approval_revision_moved')?.kind).toBe('not_assessed');
-  });
-
-  it('and does not permit it one stage later either, through composition', () => {
-    // `planning`, `building` and `operating` all compose `blueprint_approved`, so the bypass
-    // propagated. The verifier measured `blocking(planning) = 0`.
-    for (const stage of ['planning', 'building', 'operating'] as LifecycleStage[]) {
-      const gaps = prerequisiteGaps(stage, withhold('currentManifestRevision'));
-      expect(blockingGaps(gaps).length).toBeGreaterThan(0);
-    }
-  });
-
-  it('an unassessed proposedBy is NOT_ASSESSED, never a fabricated self-approval claim', () => {
-    const gaps = prerequisiteGaps('blueprint_approved', withhold('proposedBy'));
-    const g = gaps.find((x) => x.rule === 'approval_self_approved');
-
-    // Attempt 1 emitted `kind: unmet` with "No proposer recorded, so the approver cannot be
-    // shown to differ from it" — a measured claim about a field nobody read. Same species as
-    // the `graphHasStart: false` defect this suite exists to prevent.
-    expect(g?.kind).toBe('not_assessed');
-    expect(g?.message).not.toContain('No proposer recorded');
-  });
-
-  it('PASSING COUNTERPART: with both measured, a clean approval yields no gaps', () => {
-    // Without this, the three above would pass against a predicate that refuses everything.
-    expect(prerequisiteGaps('blueprint_approved', complete())).toEqual([]);
-  });
-
-  it('PASSING COUNTERPART: a genuinely moved revision is still UNMET, not not_assessed', () => {
-    const e = complete();
-    const gaps = prerequisiteGaps('blueprint_approved', { ...e, currentManifestRevision: 9 });
-    const g = gaps.find((x) => x.rule === 'approval_revision_moved');
-
-    expect(g?.kind).toBe('unmet');
-    expect(g?.message).toContain('current revision is 9');
-  });
-});
-
-describe('notAssessedGaps actually discriminates', () => {
-  it('excludes unmet gaps from a MIXED list', () => {
-    // A verifier collapsed this function to `filter(() => true)` and 811 tests still passed:
-    // both existing callers passed it lists in which every gap was already not_assessed, so
-    // the discriminating operand was isolated by nothing. Amendment 4 allows two categories
-    // only — tested or removed — and this function has a real consumer in P5-T2, so: tested.
-    const mixed: PrerequisiteGap[] = [
-      { rule: 'graph_no_start', kind: 'not_assessed', message: 'not looked at' },
-      { rule: 'graph_no_end', kind: 'unmet', message: 'measured and missing' },
-      { rule: 'no_requirements', kind: 'unmet', message: 'measured and missing' },
-    ];
-
-    const picked = notAssessedGaps(mixed);
-    expect(picked).toHaveLength(1);
-    expect(picked[0].rule).toBe('graph_no_start');
-  });
-
-  it('returns an empty list when nothing is unassessed', () => {
-    const allUnmet: PrerequisiteGap[] = [
-      { rule: 'graph_no_end', kind: 'unmet', message: 'measured and missing' },
-    ];
-    expect(notAssessedGaps(allUnmet)).toEqual([]);
-  });
-});
-
-describe('a measurement that cannot measure leaves the field UNASSESSED', () => {
-  // THE FABRICATION PATH THIS CLOSES. `assessedFields` used to be `Object.keys(map)`, so a field
-  // was claimed assessed because a function for it EXISTED — even on a call where that function
-  // had no data. Every predicate would then trust the placeholder and the NOT_ASSESSED refusal
-  // would silently become a pass: the gate bypass the T1.1 carry-forward named in terms.
-  const base = () => ({
-    assessedFields: new Set<EvidenceField>(),
-    tenantId: 't', requirementCount: 0, requirementsWithoutProvenance: [],
-    uncitedRequirementSourceBlocks: [], unresolvedSourceBlocks: [], processesWithoutTasks: [],
-    graphHasStart: false, graphHasEnd: false, unreachableTasks: [], unboundedReworkLoops: [],
-    tasksWithoutExecutionClass: [], tasksWithoutAccountableHuman: [],
-    agentTasksAccountableForThemselves: [], tasksUnmappedToSurface: [], screensWithoutRationale: [],
-    selectedDesignRef: null, manifestContentHash: null, unknownAllocationCount: 0,
-    effortCoverageDisclosed: false, proposedBy: null, approval: null,
-    currentManifestRevision: null, actorStillAuthorized: true,
-    mustHaveRequirementsWithoutStory: [], storiesWithoutTraceability: [],
-  }) as unknown as LifecycleEvidence;
-
-  const CTX = { row: ROW, refs: null };
-
-  it('NOT_MEASURED keeps the placeholder AND keeps the field out of assessedFields', () => {
-    const out = applyMeasurements(base(), {
-      requirementCount: () => NOT_MEASURED,
-      requirementsWithoutProvenance: () => ['r-1'],
-    }, CTX);
-
-    // The unmeasurable one is absent from the set, so every predicate reading it still refuses.
-    expect(out.assessedFields.has('requirementCount')).toBe(false);
-    expect(out.requirementCount).toBe(0);                 // the placeholder, untouched
-    // The measurable one is present, so its value is now trustworthy.
-    expect(out.assessedFields.has('requirementsWithoutProvenance')).toBe(true);
-    expect(out.requirementsWithoutProvenance).toEqual(['r-1']);
-  });
-
-  it('a field whose measurement returns an EMPTY list is assessed, which is the whole point', () => {
-    // `[]` is a legitimate MEASURED value meaning "assessed, nothing wrong". It must be
-    // distinguishable from the placeholder `[]`, and the only thing that can distinguish them is
-    // membership of assessedFields.
-    const out = applyMeasurements(base(), { unresolvedSourceBlocks: () => [] }, CTX);
-    expect(out.unresolvedSourceBlocks).toEqual([]);
-    expect(out.assessedFields.has('unresolvedSourceBlocks')).toBe(true);
-  });
-
-  it('the real map measures NOTHING when there are no refs, so everything still blocks', () => {
-    // Not an incidental property: a project with no blueprint yet is the normal case, and
-    // reporting it as "assessed, nothing wrong" would advance it on evidence nobody gathered.
-    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: null });
-    expect(out.assessedFields.size).toBe(0);
-  });
-
-  it('with refs present, the two mapped fields are measured from them', () => {
-    const refs = {
-      sources: [
-        { id: 's-1', revision: 1, source: 'x', state: 'confirmed', provenanceKind: 'interview' },
-        { id: 's-2', revision: 1, source: 'x', state: 'open', provenanceKind: null },
-        { id: 's-3', revision: 1, source: 'x', state: 'heard', provenanceKind: null },
-      ],
-    } as unknown as Parameters<typeof applyMeasurements>[2]['refs'];
-
-    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs });
-
-    // provenanceKind === null is documented as "unrecorded. Never inferred by an adapter."
-    expect(out.requirementsWithoutProvenance).toEqual(['s-2', 's-3']);
-    // `open` is the only one of the six SOURCE_STATES that means genuinely undecided.
-    expect(out.unresolvedSourceBlocks).toEqual(['s-2']);
-    expect(out.assessedFields.has('requirementsWithoutProvenance')).toBe(true);
-    expect(out.assessedFields.has('unresolvedSourceBlocks')).toBe(true);
-    // And nothing else got claimed on the way: 2 measured, not 25.
-    expect(out.assessedFields.size).toBe(2);
-  });
-
-  it('a refs object WITHOUT a sources list measures nothing, rather than crashing', () => {
-    // THE SURVIVOR THIS CLOSES. The shape check used to live inside the database loader,
-    // behind a query, so no test could reach it and deleting it changed nothing. Moved into
-    // the measurements, it is reachable with a plain object — and it has to be a REFUSAL, not
-    // an empty measurement: `refs` with no `sources` is data this module cannot read, and
-    // calling that "assessed, nothing wrong" is the fabrication the whole sentinel exists for.
-    for (const bad of [{}, { sources: null }, { sources: 7 }, { sources: {} }]) {
-      const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, {
-        row: ROW,
-        refs: bad as unknown as Parameters<typeof applyMeasurements>[2]['refs'],
-      });
-      expect(out.assessedFields.size).toBe(0);
-      // and it did not throw on the way, which a bare .filter would have
-      expect(out.requirementsWithoutProvenance).toEqual([]);
-    }
-  });
-
-  it('an ABSENT provenanceKind counts as unrecorded, not as recorded', () => {
-    // THE GATE BYPASS THIS CLOSES, found by mutation at the JSONB boundary. Treating only
-    // `null` as unrecorded meant a source with the key ABSENT was reported as having
-    // provenance: the gap list came back EMPTY and the field was claimed ASSESSED, so the
-    // provenance prerequisite PASSED on data recording no provenance at all.
-    const refs = {
-      sources: [
-        { id: 's-1', state: 'heard' },                      // provenanceKind ABSENT
-        { id: 's-2', state: 'heard', provenanceKind: null },
-        { id: 's-3', state: 'heard', provenanceKind: 'interview' },
-      ],
-    } as unknown as Parameters<typeof applyMeasurements>[2]['refs'];
-
-    const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs });
-    // Both the absent and the explicit null are unrecorded; only s-3 has provenance.
-    expect(out.requirementsWithoutProvenance).toEqual(['s-1', 's-2']);
-  });
-
-  it('ONE unreadable element makes the whole list unmeasurable, rather than crashing', () => {
-    // `refs_json` is cast `parsed as ManifestRefs`, so nothing had checked its ELEMENTS:
-    // `sources: [null]` threw out of the reader, and a junk element was counted silently.
-    //
-    // The whole list is refused, not the readable subset: a gap list that quietly omitted the
-    // rows nobody could read would be SHORTER, and a shorter gap list looks like better news.
-    for (const bad of [[null], [7], [{ state: 'open' }], [{ id: 1 }], [{ id: 'ok' }, null]]) {
-      const refs = { sources: bad } as unknown as
-        Parameters<typeof applyMeasurements>[2]['refs'];
-      const out = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs });
-      expect(out.assessedFields.size).toBe(0);
-    }
-    // POSITIVE COUNTERPART: a readable list IS measured, so the guard is not refusing
-    // everything.
-    const good = { sources: [{ id: 'g-1', state: 'open', provenanceKind: null }] } as unknown as
-      Parameters<typeof applyMeasurements>[2]['refs'];
-    expect(applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: good })
-      .assessedFields.size).toBe(2);
-  });
-
-  it('requirementCount is deliberately NOT measured, and that is a decision not an omission', () => {
-    // `SourceRef` is documented as "a requirement OR OTHER CAPTURED STATEMENT", so sources is a
-    // superset of requirements and `sources.length` would be a count meaning something slightly
-    // different from its name. Left unassessed, where it BLOCKS, rather than measured loosely.
-    expect(Object.keys(EVIDENCE_MEASUREMENTS)).not.toContain('requirementCount');
-    expect(Object.keys(EVIDENCE_MEASUREMENTS).sort())
-      .toEqual(['requirementsWithoutProvenance', 'unresolvedSourceBlocks']);
+    // P6-T4 added the second member and this assertion is the deliberate act of doing so.
+    // What it buys: `release_without_user_visible_workflow` is waivable, but the UNMEASURED
+    // case is a SEPARATE rule — `release_workflow_unassessed` — which is NOT here and
+    // therefore blocks. A stub cannot pass release_review by calling its own ignorance a
+    // waivable note.
+    expect([...ADVISORY_RULES].sort()).toEqual([
+      'release_without_user_visible_workflow',
+      'screen_without_rationale',
+    ]);
+    expect([...ADVISORY_RULES]).not.toContain('release_workflow_unassessed');
   });
 });

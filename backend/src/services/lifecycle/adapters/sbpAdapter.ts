@@ -111,5 +111,20 @@ export function sbpToManifestRefs(input: SbpAdapterInput): ManifestRefs {
 export function requirementsNeedingCoverage(
   requirements: ReadonlyArray<SbpRequirementLike>,
 ): string[] {
-  return requirements.filter((r) => !isConstraintKind(r.kind)).map((r) => r.id);
+  // CORRECTED 2026-10-09 (P6-T4). This filtered ONLY constraints, so it included `should`-priority
+  // requirements and anything with no priority at all — while its comment above claimed it mirrors
+  // `planContract.requiresStoryCoverage`, which is `priority === 'must' && !isConstraint`. The two
+  // halves of that predicate were not both here.
+  //
+  // Nothing was broken in production, because this function had NO production caller: one test
+  // referenced it, and that test pinned the wrong behaviour (it expected a requirement carrying no
+  // priority to need coverage). P6-T4 is its first real caller, via
+  // `storyTraceability.requirementsWithoutStory` — and reusing it unfixed would have inflated
+  // every project's uncovered-requirement list with `should` items, reported as measured fact.
+  //
+  // `priority` is optional on this interface, so ABSENT is not `must`. That is the safe direction:
+  // over-reporting a gap blocks a stage on a requirement nobody said was mandatory.
+  return requirements
+    .filter((r) => r.priority === 'must' && !isConstraintKind(r.kind))
+    .map((r) => r.id);
 }

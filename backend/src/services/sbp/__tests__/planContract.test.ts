@@ -10,6 +10,8 @@
  *
  * This test makes that class of drift impossible to reintroduce silently.
  */
+import fs from 'fs';
+import path from 'path';
 import { DECOMPOSE_SYSTEM_PROMPT } from '../decomposePrompt';
 import {
   BUILD_PLAN_JSON_SCHEMA,
@@ -21,22 +23,100 @@ import {
   PRIORITIES,
   isConstraint,
   requiresStoryCoverage,
+  StoryReferences,
 } from '../planContract';
 
 /**
  * The TypeScript interfaces, restated as the field lists the schema must be able
  * to carry. Kept explicit rather than reflected, because TS types are erased at
- * runtime — this list IS the assertion, and adding a field to an interface
- * without adding it here will surface in review as an untested change.
+ * runtime — this list IS the assertion.
+ *
+ * SPLIT IN TWO ON 2026-10-09 (P6-T3), because one list could not express the
+ * truth. `BuildPlan.agents` has never been in the schema — it is "populated by
+ * scopeAgents, never by the model" — so it was simply left out of the list
+ * below, and nothing recorded that the omission was deliberate. An omission
+ * that looks identical to the drift this file exists to catch is not a test.
+ *
+ * So fields now belong to exactly one of two sets: MODEL_EMITTED, which the
+ * schema must declare, and SERVER_POPULATED, which it must NOT. The exhaustiveness
+ * check below reads the interfaces out of the SOURCE and fails the suite, by
+ * name, when a field lands in neither — rather than something that "will surface
+ * in review". It is a runtime check for a measured reason; see its own comment.
  */
-const TYPE_FIELDS = {
-  requirement: ['id', 'statement', 'kind', 'priority', 'cluster', 'from_dimensions',] as (keyof PlanRequirement)[],
-  release: ['key', 'name', 'goal', 'demo', 'week_start', 'week_end'] as (keyof PlanRelease)[],
+const MODEL_EMITTED = {
+  requirement: ['id', 'statement', 'kind', 'priority', 'cluster', 'from_dimensions',] as const,
+  release: ['key', 'name', 'goal', 'demo', 'week_start', 'week_end'] as const,
   story: [
     'id', 'release', 'title', 'narrative', 'fulfills', 'owner_agent',
     'acceptance', 'task_guidance', 'failure_paths', 'blocked_by',
-  ] as (keyof PlanStory)[],
-  plan: ['project_name', 'descriptor', 'requirements', 'releases', 'stories'] as (keyof BuildPlan)[],
+    // MOVED HERE from SERVER_POPULATED on 2026-10-10. `workspace` is a classification of
+    // the story's own content, not a pointer to an existing row, so the model can emit it
+    // without fabricating anything - and as a server-populated field it was unfeedable on
+    // the student side, which is the only side `release_review` was built for.
+    'workspace',
+  ] as const,
+  plan: ['project_name', 'descriptor', 'requirements', 'releases', 'stories'] as const,
+};
+
+/**
+ * Fields the SERVER fills in after generation, which the schema must never declare.
+ *
+ * `agents` is scoped from the requirements once the plan is gate-clean. `references` pins a
+ * blueprint revision and hash and business-task ids — identifiers of rows that
+ * exist, which a model asked to produce would invent.
+ */
+const SERVER_POPULATED = {
+  requirement: [] as const,
+  release: [] as const,
+  story: ['references'] as const,
+  plan: ['agents'] as const,
+};
+
+/**
+ * EXHAUSTIVENESS, read out of the SOURCE at runtime.
+ *
+ * The first version of this was a type-level assertion — `Unaccounted<T, …> extends never ? true :
+ * never`, assigned `true`, so a forgotten field would make the file fail to compile. It was
+ * DECORATIVE, and I only know that because I tested it: adding an unaccounted field to `PlanStory`
+ * and re-running the suite returned 27/27 green.
+ *
+ * Two things in this repository make any type-level assertion in a backend test unenforceable, and
+ * together they close the door completely:
+ *
+ *   - `backend/tsconfig.json` excludes `**\/*.test.ts`, so `tsc --noEmit` never sees this file;
+ *   - `jest.config.ts:30` sets ts-jest's `isolatedModules: true`, which TRANSPILES instead of
+ *     type-checking. That is why a stray `*` + `/` inside a block comment in a sibling suite DID
+ *     fail (a syntax error survives transpilation) while `Type 'true' is not assignable to type
+ *     'never'` does not.
+ *
+ * So the check reads the interface declarations out of `planContract.ts` and asserts every field
+ * lands in exactly one list. TS types are erased at runtime; the source text is not.
+ */
+const CONTRACT_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'planContract.ts'), 'utf8',
+).replace(/\r\n/g, '\n');
+
+/**
+ * Top-level field names declared by one interface.
+ *
+ * Deliberately simple: these four interfaces have no nested object literals at the top level, and
+ * doc-comment lines are indented three spaces plus `*` so they cannot match a two-space field
+ * pattern. The guard against this parser silently matching nothing is the test below, which
+ * asserts a known field is found.
+ */
+function declaredFields(iface: string): string[] {
+  const start = CONTRACT_SOURCE.indexOf(`export interface ${iface} {`);
+  if (start < 0) return [];
+  const body = CONTRACT_SOURCE.slice(start, CONTRACT_SOURCE.indexOf('\n}', start));
+  return [...body.matchAll(/^ {2}([a-z_][a-zA-Z0-9_]*)\??:/gm)].map((m) => m[1]).sort();
+}
+
+/** Kept so the existing assertions below read unchanged. */
+const TYPE_FIELDS = {
+  requirement: [...MODEL_EMITTED.requirement] as (keyof PlanRequirement)[],
+  release: [...MODEL_EMITTED.release] as (keyof PlanRelease)[],
+  story: [...MODEL_EMITTED.story] as (keyof PlanStory)[],
+  plan: [...MODEL_EMITTED.plan] as (keyof BuildPlan)[],
 };
 
 const schema = BUILD_PLAN_JSON_SCHEMA as any;
@@ -180,5 +260,129 @@ describe('requirement traceability', () => {
     };
     expect(legacy).not.toHaveProperty('from_dimensions');
     expect(JSON.parse(JSON.stringify(legacy)).from_dimensions).toBeUndefined();
+  });
+});
+
+/**
+ * P6-T3 — the server-populated references.
+ *
+ * `request.md:245` requires every story to carry requirement ids, business-task ids, a
+ * runtime-agent reference, a workspace/action or headless reference, a blueprint revision/hash,
+ * design/policy references, failure paths, dependency links and acceptance evidence. Four of those
+ * already existed (`fulfills`, `owner_agent`, `failure_paths`, `blocked_by`); `StoryReferences`
+ * carries the rest.
+ */
+describe('P6-T3 — StoryReferences is server-populated, and the schema must not declare it', () => {
+  it('the story schema does NOT declare `references`, so the model can never emit one', () => {
+    // The point of the design, asserted rather than described. A blueprint content hash emitted by
+    // a language model would be a plausible hex string with nothing behind it.
+    expect(Object.keys(itemSchema('stories').properties)).not.toContain('references');
+  });
+
+  it('the two field sets are disjoint, so nothing is claimed by both', () => {
+    for (const kind of ['requirement', 'release', 'story', 'plan'] as const) {
+      const overlap = (MODEL_EMITTED[kind] as readonly string[])
+        .filter((f) => (SERVER_POPULATED[kind] as readonly string[]).includes(f));
+      expect(overlap).toEqual([]);
+    }
+  });
+
+  it('every server-populated field is one the schema genuinely omits', () => {
+    // Guards the inverse mistake: listing a field as server-populated while the schema also
+    // declares it, which would let the model emit a value the server then silently overwrites.
+    expect(Object.keys(schema.properties)).not.toContain('agents');
+    expect(Object.keys(itemSchema('stories').properties)).not.toContain('references');
+  });
+
+  it('a fully-populated references block survives a JSON round trip', () => {
+    // How it actually travels: `plan_json` in Postgres, then into the repo documents.
+    const refs: StoryReferences = {
+      business_task_ids: ['BT-004', 'BT-011'],
+      blueprint: { revision: 3, content_sha256: 'a'.repeat(64) },
+      design_refs: ['DD-002'],
+      builder_agent: 'claude-code',
+      acceptance_evidence: ['the approval row exists with the approver identity'],
+    };
+    expect(JSON.parse(JSON.stringify(refs))).toEqual(refs);
+  });
+
+  it('headless is a real answer, and it lives on the STORY not in references', () => {
+    // Background work that no page shows must be expressible, or whoever fills this in will
+    // either invent a workspace or leave the field absent — and absence means "not established".
+    //
+    // REWRITTEN 2026-10-11. This test used to build `workspace` INSIDE `StoryReferences`, which
+    // stopped being true when the field moved to `PlanStory`. It kept passing, because nothing
+    // type-checks a backend test file (tsconfig excludes `__tests__`, ts-jest transpiles) and it
+    // asserted a property of a literal it had just written. A test that cannot fail, asserting
+    // the opposite of what shipped - which is why it is now written against the real type.
+    const story: PlanStory = {
+      id: 'STORY-001', release: 'r0', title: 't', narrative: 'n', fulfills: [],
+      owner_agent: 'AGENT-001', acceptance: [], task_guidance: 'g', failure_paths: [],
+      workspace: { kind: 'headless', ref: 'nightly-reconciliation', action: null },
+    };
+    expect(story.workspace!.kind).toBe('headless');
+
+    // And the source confirms the move rather than the literal confirming itself: the model-
+    // emitted field is declared on PlanStory, and StoryReferences no longer carries one.
+    expect(declaredFields('PlanStory')).toContain('workspace');
+    expect(declaredFields('StoryReferences')).not.toContain('workspace');
+
+    const refs: StoryReferences = {
+      business_task_ids: [],
+      blueprint: { revision: 1, content_sha256: 'b'.repeat(64) },
+      design_refs: [],
+      acceptance_evidence: [],
+    };
+    // `builder_agent` is optional; omitting it must not make the object invalid.
+    expect('builder_agent' in refs).toBe(false);
+  });
+
+  it('builder_agent is a DIFFERENT field from owner_agent', () => {
+    // `request.md:245`: "Do not overload `owner_agent` with both the coding agent and the runtime
+    // employee." `owner_agent` names a PlanAgent — a unit of autonomous work inside the system the
+    // student is building. The thing that writes the code is a different actor.
+    const story: PlanStory = {
+      id: 'STORY-001', release: 'r0', title: 't', narrative: 'n', fulfills: [],
+      owner_agent: 'AGENT-001', acceptance: [], task_guidance: 'g', failure_paths: [],
+      references: {
+        business_task_ids: [],
+        blueprint: { revision: 1, content_sha256: 'c'.repeat(64) },
+        design_refs: [], builder_agent: 'claude-code', acceptance_evidence: [],
+      },
+    };
+    expect(story.owner_agent).not.toBe(story.references!.builder_agent);
+  });
+});
+
+describe('every contract field is accounted for as model-emitted or server-populated', () => {
+  const CASES = [
+    ['PlanRequirement', 'requirement', 'statement'] as const,
+    ['PlanRelease', 'release', 'demo'] as const,
+    ['PlanStory', 'story', 'owner_agent'] as const,
+    ['BuildPlan', 'plan', 'descriptor'] as const,
+  ];
+
+  it.each(CASES)('%s: the parser finds real fields, so a miss cannot pass vacuously', (iface, _k, known) => {
+    // The apparatus guard. A regex that matches nothing makes every assertion below trivially
+    // true, which is how the type-level version of this check passed while doing nothing.
+    const found = declaredFields(iface);
+    expect(found.length).toBeGreaterThan(3);
+    expect(found).toContain(known);
+  });
+
+  it.each(CASES)('%s: every declared field is in exactly one list', (iface, key) => {
+    const model = MODEL_EMITTED[key] as readonly string[];
+    const server = SERVER_POPULATED[key] as readonly string[];
+    const unaccounted = declaredFields(iface).filter((f) => !model.includes(f) && !server.includes(f));
+    // Named, not counted: the failure tells you which field you forgot.
+    expect(unaccounted).toEqual([]);
+  });
+
+  it.each(CASES)('%s: neither list names a field the interface does not declare', (iface, key) => {
+    // The opposite drift: a list entry left behind after a field was renamed or removed, which
+    // would quietly excuse a real field from the check.
+    const declared = declaredFields(iface);
+    const listed = [...(MODEL_EMITTED[key] as readonly string[]), ...(SERVER_POPULATED[key] as readonly string[])];
+    expect(listed.filter((f) => !declared.includes(f))).toEqual([]);
   });
 });

@@ -190,7 +190,8 @@ async function main(): Promise<void> {
       status: 'build',
       project_class: 'sandbox',
       business_problem: 'Riders cannot see accurate arrival times, so they call the depot.',
-    });
+      // See seedFactoryDemoContract.ts for why a seed labels its lifecycle rather than skipping it.
+    }, { lifecycleEntryPoint: 'seed:devClientReviewer' } as any);
     console.log(`[seed] created DeliveryProject ${project.id}`);
   } else if (brand && !project.brand_id) {
     // Created by an earlier run, before the brand was resolved. Repair rather than
