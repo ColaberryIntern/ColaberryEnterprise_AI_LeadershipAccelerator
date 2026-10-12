@@ -139,8 +139,15 @@ describe('a scored person shows the numbers and how stale they are', () => {
   });
 
   it('the CONTROL for that test: a non-zero score still reads its own numbers', async () => {
-    // Without this, the assertion above would also pass if `.fs-4` matched
-    // nothing and `slice(0, 3)` compared two empty arrays.
+    // What this control actually does: it pins the SELECTOR AND THE ORDER, so
+    // the test above cannot pass because `.fs-4` happened to match different
+    // nodes or because Engagement/Intent/Fit were reordered.
+    //
+    // Its first stated rationale was wrong and a verifier caught it: I wrote
+    // that the assertion above "would also pass if `.fs-4` matched nothing and
+    // `slice(0, 3)` compared two empty arrays". It would not —
+    // `expect([]).toEqual(['0','0','0'])` fails. The control is worth keeping;
+    // the reason I gave for it was not true.
     await render(<ExplorerScoreTab panel={panel} />);
     const values = Array.from(container.querySelectorAll('.fs-4'))
       .map((n) => (n.textContent ?? '').trim());
@@ -148,12 +155,17 @@ describe('a scored person shows the numbers and how stale they are', () => {
   });
 });
 
-describe('the panel introduces no permission path of its own', () => {
-  it('renders whatever the server sent, consulting no role', async () => {
-    // There is no role, section or flag prop to pass: the component's entire
-    // input is the panel. The authority stays in
-    // personProfileService.mayReadPanel, and T212 adds no second answer.
-    await render(<ExplorerScoreTab panel={panel} />);
-    expect(container.textContent).toContain('42');
-  });
-});
+/**
+ * DELETED: `describe('the panel introduces no permission path of its own')`.
+ *
+ * It asserted that a scored panel renders its numbers, which a role gate does
+ * not prevent for an allowed role — so a verifier inserted a real
+ * `localStorage` role gate into this component and the test passed. It had no
+ * power to detect the thing its name promised.
+ *
+ * Attempt 2 added `adminOs/__tests__/noPermissionPath.test.ts` and described
+ * this one as "replaced", but left it in place. A second verifier called that
+ * out: anyone grepping the title still landed on a test with no detective
+ * power, which is worse than no test, because the name implies coverage. The
+ * claim is now true — it is gone, and the real guard lives in that file.
+ */
