@@ -24,8 +24,11 @@
  * until a logo has somewhere to live.
  */
 
-/** The token set a themed surface can rely on. Names mirror the design system's own. */
-export interface LandingPageTheme {
+/**
+ * The eight tokens a shared design system defines. Names mirror the design system's own, and
+ * this is the set the frontend registry copies - so it is the set the parity test compares.
+ */
+export interface BrandBaseTheme {
   '--bg': string;
   '--bg-elevated': string;
   '--fg': string;
@@ -34,6 +37,25 @@ export interface LandingPageTheme {
   '--accent-contrast': string;
   '--accent-soft': string;
   '--line': string;
+}
+
+/**
+ * The five a LANDING PAGE adds on top, and the reason they are declared here rather than in the
+ * registry.
+ *
+ * These were briefly added to `frontend/src/theme/deliveryBrandThemes.ts` and that was wrong.
+ * That file's entire job is to be a faithful copy of a vendored design system, and its test says
+ * so in as many words: "the CSS file is the source of truth and the TypeScript is the copy." The
+ * AI Flotation system defines eight tokens and no second brand colour, so satisfying a
+ * thirteen-token shape there meant inventing two hexes and putting them in a file that claims to
+ * contain nobody's inventions. The contract test caught it.
+ *
+ * A second accent is a LANDING PAGE need - the renderer wants a band ground, a quieter heading
+ * colour and a deeper accent for the closing band. So it lives in the landing page layer, where
+ * each brand's set is either sourced from that brand's own documented ramp or DERIVED from its
+ * eight. Nothing here is guessed.
+ */
+export interface ExtendedPalette {
   '--accent-2': string;
   '--accent-3': string;
   '--accent-deep': string;
@@ -41,11 +63,14 @@ export interface LandingPageTheme {
   '--bg-warm': string;
 }
 
+/** What the renderer actually paints with: the eight, plus the five. */
+export type LandingPageTheme = BrandBaseTheme & ExtendedPalette;
+
 /**
  * Keyed by `brands.default_theme_key`. Must stay byte-identical to the frontend registry's
  * `THEMES`; the parity test enforces that.
  */
-export const LANDING_PAGE_THEMES: Readonly<Record<string, LandingPageTheme>> = {
+export const LANDING_PAGE_THEMES: Readonly<Record<string, BrandBaseTheme>> = {
   'ai-flotation': {
     '--bg': '#F7F6F4',
     '--bg-elevated': '#FFFFFF',
@@ -55,11 +80,6 @@ export const LANDING_PAGE_THEMES: Readonly<Record<string, LandingPageTheme>> = {
     '--accent-contrast': '#FFFFFF',
     '--accent-soft': '#FBE4D5',
     '--line': '#DEDAD3',
-    '--accent-2': '#BA430E',
-    '--accent-3': '#56524B',
-    '--accent-deep': '#93350B',
-    '--bg-cool': '#F1EEE9',
-    '--bg-warm': '#F7F6F4',
   },
   'training': {
     '--bg': '#FFFFFF',
@@ -70,14 +90,50 @@ export const LANDING_PAGE_THEMES: Readonly<Record<string, LandingPageTheme>> = {
     '--accent-contrast': '#FFFFFF',
     '--accent-soft': '#FFF0F1',
     '--line': '#E4E4E3',
-    // Mirrors the frontend source of truth; the parity test enforces it.
-    '--accent-2': '#5BA63C',
-    '--accent-3': '#367895',
-    '--accent-deep': '#C20E1E',
-    '--bg-cool': '#EAF2F6',
-    '--bg-warm': '#F8F8F7',
   },
 };
+
+/**
+ * The extended palette for brands whose own style guide names one.
+ *
+ * Colaberry's does. Every value below is a named token in `frontend/src/colaberry/tokens/colors.css`,
+ * which is headed "Built from the Colaberry School Style Guide", and each is pinned to the ramp
+ * token it came from by test rather than to a bare hex - so a change to the style guide fails
+ * loudly instead of leaving landing pages on a stale green.
+ *
+ * A design brief on 2026-10-09 proposed #2B6A94, #C8102E and #EEF2F5 for three of these. They are
+ * near-misses of documented brand values, so the documented ones are used: the point of a style
+ * guide is that it decides, and three almost-right reds and blues across a site is how a brand
+ * stops looking like one.
+ */
+export const EXTENDED_PALETTES: Readonly<Record<string, ExtendedPalette>> = {
+  training: {
+    '--accent-2': '#5BA63C', // --green-600, the logo leaf mid
+    '--accent-3': '#367895', // --blue-500, brand berry
+    '--accent-deep': '#C20E1E', // --red-700, the logo core shadow
+    '--bg-cool': '#EAF2F6', // --blue-50
+    '--bg-warm': '#F8F8F7', // --neutral-50
+  },
+};
+
+/**
+ * The extended palette for a brand that has not agreed one, derived from the eight it has.
+ *
+ * AI Flotation is the case this exists for: its vendored system defines one accent and no second
+ * or third brand colour. Deriving means such a page renders SINGLE-ACCENT in the brand's own
+ * colours - quieter than the Colaberry pages, and honest - instead of wearing a green and a blue
+ * that nobody at that company chose. It is the same refusal-to-guess rule the neutral theme and
+ * the logo table already follow, applied one level down.
+ */
+export function deriveExtendedPalette(base: BrandBaseTheme): ExtendedPalette {
+  return {
+    '--accent-2': base['--accent'],
+    '--accent-3': base['--fg-muted'],
+    '--accent-deep': base['--accent'],
+    '--bg-cool': base['--bg-elevated'],
+    '--bg-warm': base['--bg'],
+  };
+}
 
 /**
  * What a brand with no agreed palette renders in. Not a guess at anyone's brand - a deliberately
@@ -101,48 +157,6 @@ export const NEUTRAL_THEME: LandingPageTheme = {
   '--bg-warm': '#F7F7F8',
 };
 
-/**
- * The brand lockup for the page header, keyed the same way the palette is.
- *
- * Same refusal-to-guess rule: a brand appears here only when a real asset exists for it in
- * `frontend/public/`, and anything absent renders its name as text instead. Putting one brand's
- * logo above another brand's page would be a worse failure than showing no logo at all.
- *
- * `/colaberry-horizontal.png` is the colour lockup, which is the one that works on the light
- * header band. The footer deliberately uses a text wordmark rather than `colaberry-logo-dark.png`,
- * because that file has an opaque black box baked into it.
- */
-export const LANDING_PAGE_LOGOS: Readonly<Record<string, { src: string; alt: string }>> = {
-  training: { src: '/colaberry-horizontal.png', alt: 'Colaberry' },
-};
-
-/**
- * The lockup for a DARK ground, where the normal one disappears.
- *
- * A real white asset exists - `/knowledge/assets/logo/colaberry-horizontal-white.png`, part of
- * the brand asset set already served from this host - so the footer uses it. The alternative
- * considered was matching the footer background to a logo's own baked-in box, which only works
- * until the footer colour changes and is a workaround for an asset that turned out to exist.
- */
-export const LANDING_PAGE_LOGOS_ON_DARK: Readonly<Record<string, { src: string; alt: string }>> = {
-  training: { src: '/knowledge/assets/logo/colaberry-horizontal-white.png', alt: 'Colaberry' },
-};
-
-/** The lockup for a brand's key, or null when the page should show the brand name as text. */
-export function logoForLandingPage(
-  themeKey: string | null | undefined,
-): { src: string; alt: string } | null {
-  return themeKey ? LANDING_PAGE_LOGOS[themeKey] ?? null : null;
-}
-
-/** The lockup to use on the dark footer. Falls back to the light one, then to text. */
-export function logoOnDarkForLandingPage(
-  themeKey: string | null | undefined,
-): { src: string; alt: string } | null {
-  if (!themeKey) return null;
-  return LANDING_PAGE_LOGOS_ON_DARK[themeKey] ?? LANDING_PAGE_LOGOS[themeKey] ?? null;
-}
-
 export interface ResolvedTheme {
   theme: LandingPageTheme;
   /** False when the brand has no agreed palette and is rendering neutral. */
@@ -154,8 +168,13 @@ export interface ResolvedTheme {
  * fail to paint because a palette has not been agreed yet.
  */
 export function themeForLandingPage(themeKey: string | null | undefined): ResolvedTheme {
-  const found = themeKey ? LANDING_PAGE_THEMES[themeKey] : undefined;
-  return found ? { theme: found, branded: true } : { theme: NEUTRAL_THEME, branded: false };
+  const base = themeKey ? LANDING_PAGE_THEMES[themeKey] : undefined;
+  if (!base) return { theme: NEUTRAL_THEME, branded: false };
+  // Sourced where the brand's style guide names one, derived from its own eight where it does
+  // not. Either way the renderer always receives all thirteen, so no stylesheet rule can fall
+  // back to an undefined custom property.
+  const extended = (themeKey && EXTENDED_PALETTES[themeKey]) || deriveExtendedPalette(base);
+  return { theme: { ...base, ...extended }, branded: true };
 }
 
 /**

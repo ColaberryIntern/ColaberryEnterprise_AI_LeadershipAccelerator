@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { LANDING_PAGE_THEMES, NEUTRAL_THEME, themeCssVars, themeForLandingPage } from '../landingPageTheme';
+import {
+  EXTENDED_PALETTES, LANDING_PAGE_THEMES, NEUTRAL_THEME, themeCssVars, themeForLandingPage,
+} from '../landingPageTheme';
 
 /**
  * The backend palette is a COPY. This is the test that keeps it honest.
@@ -46,13 +48,19 @@ describe('the frontend registry is readable, which this whole test depends on', 
   it('the parser actually finds themes - a silently empty parse would make every check below vacuous', () => {
     const parsed = parseFrontendThemes(fs.readFileSync(FRONTEND_THEME_FILE, 'utf8'));
     expect(Object.keys(parsed).length).toBeGreaterThan(0);
-    // Positive control: each parsed theme must have the full token set. 8 until 2026-10-09,
-    // then 13 - the renderer v2 work added the other two Colaberry logo colours
-    // (--accent-2 leaf green, --accent-3 berry blue), --accent-deep for the closing band,
-    // and --bg-cool / --bg-warm for the two extra band grounds. If the regex drifts and
-    // starts matching nothing, this fails instead of the comparison below passing on two empties.
+    // Positive control: each parsed theme must carry the full SHARED token set, which is eight.
+    //
+    // It was briefly 13 here. The renderer v2 work needed five more tokens and they were added
+    // to the frontend registry to get them - but that file is a copy of a vendored design system,
+    // and the AI Flotation system defines eight tokens and no second brand colour, so two of the
+    // five had to be invented to fill the shape. `deliveryBrandThemes.test.ts` rejected them,
+    // correctly. The extended five now live in `landingPageTheme.ts`, sourced or derived per
+    // brand; see the `the extended palette` block below.
+    //
+    // If the regex drifts and starts matching nothing, this fails instead of the comparison
+    // below passing on two empties.
     expect(Object.entries(parsed).map(([key, tokens]) => [key, Object.keys(tokens).length]))
-      .toEqual(Object.keys(parsed).map((key) => [key, 13]));
+      .toEqual(Object.keys(parsed).map((key) => [key, 8]));
   });
 });
 
@@ -69,8 +77,10 @@ describe('the backend copy matches the frontend source of truth', () => {
 });
 
 describe('resolution always yields something paintable', () => {
-  it.each(['ai-flotation', 'training'])('%s is branded', (key) => {
-    expect(themeForLandingPage(key)).toEqual({ theme: LANDING_PAGE_THEMES[key], branded: true });
+  it.each(['ai-flotation', 'training'])('%s is branded and carries its eight base tokens', (key) => {
+    const { theme, branded } = themeForLandingPage(key);
+    expect(branded).toBe(true);
+    expect(theme).toMatchObject(LANDING_PAGE_THEMES[key]);
   });
 
   it('training renders the Colaberry cherry red, not the neutral navy', () => {
@@ -92,6 +102,72 @@ describe('resolution always yields something paintable', () => {
   it.each([null, undefined, ''])('%p falls back to neutral instead of throwing', (key) => {
     expect(themeForLandingPage(key as string | null | undefined).branded).toBe(false);
   });
+});
+
+/**
+ * The extended five have a DIFFERENT source of truth from the eight, which is the whole reason
+ * they were moved out of the frontend registry - so they get their own pin rather than riding
+ * along on the parity check above.
+ */
+describe('the extended palette', () => {
+  const EXTENDED = ['--accent-2', '--accent-3', '--accent-deep', '--bg-cool', '--bg-warm'];
+  const COLABERRY_TOKENS = path.resolve(
+    __dirname, '..', '..', '..', '..', '..', 'frontend', 'src', 'colaberry', 'tokens', 'colors.css',
+  );
+
+  /** The `:root` ramp from the Colaberry style guide, by token name. */
+  function ramp(): Record<string, string> {
+    const css = fs.readFileSync(COLABERRY_TOKENS, 'utf8');
+    const root = /:root\s*\{([^}]*)\}/.exec(css);
+    if (!root) throw new Error('no :root block in the Colaberry tokens');
+    const out: Record<string, string> = {};
+    // `[a-z0-9-]`, not `[a-z-]`: the ramp is --red-500 / --neutral-900, and a name class
+    // without digits silently matches none of them.
+    for (const [, name, value] of root[1].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+      out[name] = value.trim();
+    }
+    return out;
+  }
+
+  it('the ramp parsed, otherwise every check below is vacuous', () => {
+    expect(ramp()['--red-500']).toBeDefined();
+    expect(Object.keys(ramp()).length).toBeGreaterThan(20);
+  });
+
+  it.each([
+    ['--accent-2', '--green-600'],
+    ['--accent-3', '--blue-500'],
+    ['--accent-deep', '--red-700'],
+    ['--bg-cool', '--blue-50'],
+    ['--bg-warm', '--neutral-50'],
+  ])('training\'s %s is the style guide\'s %s, not a near-miss of it', (token, rampToken) => {
+    expect(EXTENDED_PALETTES.training[token as keyof typeof EXTENDED_PALETTES.training].toUpperCase())
+      .toEqual(ramp()[rampToken].toUpperCase());
+  });
+
+  it('a brand with no agreed extended palette derives one from its own eight', () => {
+    // AI Flotation's vendored system has one accent and no second brand colour. Deriving keeps
+    // such a page single-accent in its OWN colours; the alternative that shipped briefly was two
+    // invented hexes in a file that claims to contain none.
+    const { theme } = themeForLandingPage('ai-flotation');
+    const base = LANDING_PAGE_THEMES['ai-flotation'];
+    expect(EXTENDED_PALETTES['ai-flotation']).toBeUndefined();
+    expect(theme['--accent-2']).toBe(base['--accent']);
+    expect(theme['--accent-3']).toBe(base['--fg-muted']);
+    expect(theme['--bg-warm']).toBe(base['--bg']);
+    // Colaberry's green and blue must not appear on a page for another brand.
+    expect([theme['--accent-2'], theme['--accent-3']]).not.toContain('#5BA63C');
+    expect([theme['--accent-2'], theme['--accent-3']]).not.toContain('#367895');
+  });
+
+  it.each(['ai-flotation', 'training'])(
+    '%s resolves all thirteen, so no stylesheet rule reads an undefined custom property',
+    (key) => {
+      const { theme } = themeForLandingPage(key);
+      EXTENDED.forEach((t) => expect(theme[t as keyof typeof theme]).toMatch(/^#[0-9A-Fa-f]{3,8}$/));
+      expect(Object.keys(theme)).toHaveLength(13);
+    },
+  );
 });
 
 describe('the CSS block', () => {

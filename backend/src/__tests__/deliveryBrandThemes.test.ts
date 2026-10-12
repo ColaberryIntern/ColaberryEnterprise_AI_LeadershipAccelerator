@@ -47,7 +47,12 @@ function registryTokens(ts: string, key: string): Record<string, string> {
   const block = new RegExp(`'${key}':\\s*\\{([^}]*)\\}`).exec(ts);
   if (!block) throw new Error(`no '${key}' entry in the theme registry`);
   const tokens: Record<string, string> = {};
-  for (const [, name, value] of block[1].matchAll(/'(--[a-z-]+)':\s*'([^']+)'/g)) {
+  // `[a-z0-9-]`, matching `forgeLightTokens` above, and for the same reason. A name class
+  // without digits SKIPS a token silently rather than failing: a `--accent-2` added to the
+  // registry would simply not be compared, and this test would keep passing while the copy
+  // drifted. No token here carries a digit today, so this changes nothing now - it removes
+  // the trap before someone falls into it.
+  for (const [, name, value] of block[1].matchAll(/'(--[a-z0-9-]+)':\s*'([^']+)'/g)) {
     tokens[name] = value;
   }
   return tokens;

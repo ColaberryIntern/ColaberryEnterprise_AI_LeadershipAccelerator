@@ -1,6 +1,7 @@
 import { esc } from '../classKit/kitRenderUtils';
 import { safeHttpUrl } from '../caseStudy/caseStudyPublicSections';
-import { themeCssVars, themeForLandingPage, logoForLandingPage, logoOnDarkForLandingPage } from './landingPageTheme';
+import { themeCssVars, themeForLandingPage } from './landingPageTheme';
+import { logoForLandingPage, logoOnDarkForLandingPage } from './landingPageLogos';
 import type { LandingPageContentShape, LandingPageSection } from '../../schemas/landingPageContentSchema';
 import { STYLES } from './landingPageStyles';
 import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
