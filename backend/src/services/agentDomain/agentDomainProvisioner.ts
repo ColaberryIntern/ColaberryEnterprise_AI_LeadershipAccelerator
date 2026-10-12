@@ -39,6 +39,7 @@
  * the cause and re-run, which is safe precisely because the operation is idempotent.
  */
 
+import { randomUUID } from 'crypto';
 import { QueryTypes, type Sequelize, type Transaction } from 'sequelize';
 import {
   FORBIDDEN_STAGES,
@@ -54,6 +55,8 @@ export interface ProvisionContext {
   readonly sequelize: Sequelize;
   /** Recorded on the anchor as `provisioned_by`. A real actor string, not a placeholder. */
   readonly provisionedBy: string;
+  /** Propagated to every log line so a partial run can be traced end to end. Minted if absent. */
+  readonly correlationId?: string;
 }
 
 export interface DomainProvisionResult {
@@ -246,12 +249,44 @@ export async function provisionAllDomains(ctx: ProvisionContext): Promise<Provis
   const provisioned: DomainProvisionResult[] = [];
   const failed: { domain_key: string; error_class: string; message: string }[] = [];
 
+  // One correlation id for the whole run, propagated to every per-domain line, per CLAUDE.md's
+  // Observability Framework. This writes roughly 450 rows across ten transactions and emitted
+  // nothing at all until now, so a partial run could not be traced from symptom to cause.
+  const correlation_id = ctx.correlationId ?? randomUUID();
+
   for (const plan of planAllProvisions()) {
     try {
+      const started = Date.now();
       // eslint-disable-next-line no-await-in-loop
-      provisioned.push(await ctx.sequelize.transaction((tx) => provisionOne(ctx, plan, tx)));
+      const result = await ctx.sequelize.transaction((tx) => provisionOne(ctx, plan, tx));
+      provisioned.push(result);
+      // eslint-disable-next-line no-console
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'agent_domain_provisioned',
+        correlation_id,
+        duration_ms: Date.now() - started,
+        outcome: result.already_present ? 'success' : 'success',
+        context: {
+          domain_key: plan.domain_key,
+          project_id: result.project_id,
+          already_present: result.already_present,
+          inserted: result.inserted,
+        },
+      }));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      // eslint-disable-next-line no-console
+      console.error(JSON.stringify({
+        level: 'error',
+        service: 'backend',
+        event: 'agent_domain_provision_failed',
+        correlation_id,
+        outcome: 'failure',
+        context: { domain_key: plan.domain_key },
+        message,
+      }));
       failed.push({
         domain_key: plan.domain_key,
         // The repo's convention: a stable class string, taken from the message prefix this module

@@ -373,3 +373,118 @@ describe('authorization state comes from the gate', () => {
     expect(res.body.disclosure).toMatch(/no human has approved a build/);
   });
 });
+
+
+/**
+ * The failure path, which did not exist.
+ *
+ * A verifier mocked the database to reject and this route returned NOTHING to the caller while
+ * raising an unhandled rejection: Express 4 does not route a rejected promise to the error
+ * handler, this repo has no `express-async-errors`, and `server.ts` installs no
+ * `unhandledRejection` handler. Every sibling router in this folder wraps its async handlers for
+ * exactly that reason -- `departmentIntelligenceRoutes` is 15 of 15, `coryRoutes` 19 of 19 -- and
+ * this one was 1 async handler and 0 try blocks.
+ */
+describe('a database outage returns a 500, not silence', () => {
+  afterEach(() => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValue([]);
+  });
+
+  it('answers 500 with an error_class when the query rejects', async () => {
+    mockQuery.mockReset();
+    class SequelizeConnectionRefusedError extends Error {}
+    mockQuery.mockRejectedValue(new SequelizeConnectionRefusedError('connect ECONNREFUSED'));
+
+    const res = await request(app())
+      .get('/api/admin/agent-domains-authorization')
+      .set('Authorization', `Bearer ${tokenFor('owner')}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Could not read agent-domain state.');
+    expect(res.body.error_class).toBe('SequelizeConnectionRefusedError');
+  });
+
+  it('does not leak the upstream message to the caller', async () => {
+    mockQuery.mockReset();
+    mockQuery.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432 password=hunter2'));
+    const res = await request(app())
+      .get('/api/admin/agent-domains-authorization')
+      .set('Authorization', `Bearer ${tokenFor('owner')}`);
+    expect(res.status).toBe(500);
+    // The class is useful for triage; the message can carry connection details and is logged, not sent.
+    expect(JSON.stringify(res.body)).not.toMatch(/ECONNREFUSED|10\.0\.0\.5|hunter2/);
+  });
+
+  it('the per-domain route is guarded too, not just the batch one', async () => {
+    mockQuery.mockReset();
+    mockQuery.mockRejectedValue(new Error('down'));
+    const res = await request(app())
+      .get('/api/admin/agent-domains/marketing/authorization')
+      .set('Authorization', `Bearer ${tokenFor('owner')}`);
+    expect(res.status).toBe(500);
+  });
+
+  it('EVERY async handler in the router is wrapped', () => {
+    // The structural check, so a future async route cannot be added unwrapped. Counts
+    // `async (` handlers against `guarded(async` wrappers in the source.
+    const src = fs.readFileSync(ROUTER_SRC, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    const asyncHandlers = [...src.matchAll(/async \(/g)].length;
+    const wrapped = [...src.matchAll(/guarded\(async \(/g)].length;
+    expect(asyncHandlers).toBeGreaterThan(0); // the count is real
+    expect(wrapped).toBe(asyncHandlers);
+  });
+});
+
+/**
+ * The single-domain authorization route.
+ *
+ * It exists because the batch rewrite of `/agent-domains-authorization` left
+ * `resolveAgentDomainBuildAuthorization` with no caller -- swapping WHICH function was dead rather
+ * than fixing the defect that failed T11 attempt 1.
+ */
+describe('one domain\'s authorization, through the single-domain resolver', () => {
+  it('reports not-authorized with the gate\'s own reason', async () => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValue([]);
+    const res = await request(app())
+      .get('/api/admin/agent-domains/marketing/authorization')
+      .set('Authorization', `Bearer ${tokenFor('owner')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.domain_key).toBe('marketing');
+    expect(res.body.authorized).toBe(false);
+    expect(res.body.reason).toBe('no_authorization');
+  });
+
+  it('queries ONE anchor id, that domain\'s derived one', async () => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValue([]);
+    await request(app())
+      .get('/api/admin/agent-domains/platform/authorization')
+      .set('Authorization', `Bearer ${tokenFor('owner')}`);
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [, opts] = mockQuery.mock.calls[0];
+    expect((opts as { bind: { id: string } }).bind.id).toBe(derivedAnchorId('platform'));
+  });
+
+  it('validates the domain key before touching the database', async () => {
+    mockQuery.mockReset();
+    mockQuery.mockResolvedValue([]);
+    const res = await request(app())
+      .get('/api/admin/agent-domains/not_a_domain/authorization')
+      .set('Authorization', `Bearer ${tokenFor('owner')}`);
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('BOTH resolvers now have a production caller, which is the point', () => {
+    const code = fs.readFileSync(ROUTER_SRC, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    expect(code).toMatch(/resolveAgentDomainBuildAuthorization\(/);
+    expect(code).toMatch(/resolveAllFromRows\(/);
+    expect(code).toMatch(/loadAgentDomainBuildAuthorizationsByDomain\(/);
+  });
+});

@@ -63,6 +63,7 @@ import {
 } from '../../services/agentDomain/agentDomainProvisionPlan';
 import {
   loadAgentDomainBuildAuthorizationsByDomain,
+  resolveAgentDomainBuildAuthorization,
   resolveAllFromRows,
 } from '../../services/agentDomain/agentDomainBuildAuthorization';
 
@@ -111,6 +112,40 @@ function publicDomainView(domainKey: string) {
     derived_project_id: derivedProjectId(domainKey),
     derived_anchor_id: derivedAnchorId(domainKey),
     counts,
+  };
+}
+
+/**
+ * Wraps an async handler so a rejection becomes a 500 instead of nothing at all.
+ *
+ * Express 4 does NOT route a rejected promise to the error handler, this repo has no
+ * `express-async-errors`, and `server.ts` installs no `unhandledRejection` handler. A verifier
+ * mocked the database to reject and this route returned NOTHING to the caller while raising an
+ * unhandled rejection. Every sibling router in this folder wraps its async handlers for the same
+ * reason; this one did not.
+ *
+ * The error body is deliberately generic -- the upstream message can carry connection details --
+ * while the full error is logged with its class, per the Observability Framework.
+ */
+function guarded(
+  handler: (req: Request, res: Response) => Promise<void>,
+): (req: Request, res: Response) => void {
+  return (req, res) => {
+    handler(req, res).catch((err: unknown) => {
+      const error_class = err instanceof Error ? err.constructor.name : 'UnknownError';
+      // eslint-disable-next-line no-console
+      console.error(JSON.stringify({
+        level: 'error',
+        service: 'backend',
+        event: 'agent_domain_read_surface_failed',
+        error_class,
+        outcome: 'failure',
+        context: { path: req.path },
+      }));
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Could not read agent-domain state.', error_class });
+      }
+    });
   };
 }
 
@@ -240,7 +275,7 @@ router.get(
 router.get(
   '/api/admin/agent-domains-authorization',
   requireSection('program'),
-  async (_req: Request, res: Response) => {
+  guarded(async (_req: Request, res: Response) => {
     // ONE query for all ten, then the pure resolver over the rows. This was ten queries for a
     // table keyed on `agent_domain_project_id` where every id is derived and known up front --
     // and `resolveAllFromRows` existed for exactly this and had no production caller.
@@ -258,7 +293,33 @@ router.get(
         + 'expected to report not authorized with reason no_authorization, because the '
         + 'authorization table is empty: no human has approved a build.',
     });
-  },
+  }),
+);
+
+/**
+ * One domain's authorization state, through the SINGLE-domain resolver.
+ *
+ * This route exists because the batch rewrite above left
+ * `resolveAgentDomainBuildAuthorization` with no caller -- which swapped WHICH function was dead
+ * rather than fixing the thing that failed T11 attempt 1. The detail view genuinely wants a
+ * per-domain answer, so wiring it beats deleting it.
+ */
+router.get(
+  '/api/admin/agent-domains/:domainKey/authorization',
+  requireSection('program'),
+  guarded(async (req: Request, res: Response) => {
+    const parsed = DomainParam.safeParse(req.params);
+    if (!parsed.success) return badRequest(res, parsed.error);
+    const key = parsed.data.domainKey;
+    const state = await resolveAgentDomainBuildAuthorization(derivedAnchorId(key), key);
+    res.json({
+      ...state,
+      disclosure:
+        'Resolved through assertBuildAuthorized, the same gate the delivery path uses. Expected to '
+        + 'report not authorized with reason no_authorization: the table is empty because no human '
+        + 'has approved a build.',
+    });
+  }),
 );
 
 export default router;
