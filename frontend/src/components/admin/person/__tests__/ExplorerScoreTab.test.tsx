@@ -115,9 +115,36 @@ describe('a scored person shows the numbers and how stale they are', () => {
     // The counterpart to the null tests. A person the engine DID read and
     // scored at zero must show zeros; suppressing them would be the same lie
     // in the other direction.
+    //
+    // THIS TEST USED `textContent).toContain('0')` AND COULD NOT FAIL. A
+    // verifier mutated all three stats to `value={panel.engagement || null}` —
+    // which renders "Not recorded" for a real zero, the exact defect — and the
+    // test still passed, because the rendered snapshot date "1 Oct 2026"
+    // already contains a '0'. The assertion matched the date, not the scores.
+    //
+    // So it now reads the stat VALUES. `Stat` renders its value in a `.fs-4`
+    // node and substitutes the `Unknown` element ("Not recorded") only for
+    // null/undefined, so the three leading values are exactly what the panel
+    // claims about the person.
     await render(<ExplorerScoreTab panel={{ ...panel, engagement: 0, intent: 0, fit: 0 }} />);
+
     expect(container.textContent).not.toContain('No Explorer score has been recorded');
-    expect(container.textContent).toContain('0');
+    // Not one "Not recorded" anywhere: a scored person has no unknown stat.
+    expect(container.textContent).not.toContain('Not recorded');
+
+    const values = Array.from(container.querySelectorAll('.fs-4'))
+      .map((n) => (n.textContent ?? '').trim());
+    // Engagement, Intent, Fit, then the primary state.
+    expect(values.slice(0, 3)).toEqual(['0', '0', '0']);
+  });
+
+  it('the CONTROL for that test: a non-zero score still reads its own numbers', async () => {
+    // Without this, the assertion above would also pass if `.fs-4` matched
+    // nothing and `slice(0, 3)` compared two empty arrays.
+    await render(<ExplorerScoreTab panel={panel} />);
+    const values = Array.from(container.querySelectorAll('.fs-4'))
+      .map((n) => (n.textContent ?? '').trim());
+    expect(values.slice(0, 3)).toEqual(['42', '17', '80']);
   });
 });
 

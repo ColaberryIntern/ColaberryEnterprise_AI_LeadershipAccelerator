@@ -43,8 +43,8 @@ comp-seat tests. **Nothing is deployed**, so in production today the answer is s
 
 **3 — Yes.** Pre-registration `page_events` are keyed to the stitched lead and ordered by time
 descending in the statement the service issues. Mutation-proved: removing the `lead_id` stitch key
-kills three named tests (T211 M7); commenting out the `ORDER BY`, or flipping `DESC` to `ASC`,
-kills named tests (M5, M6). Cross-brand history follows the stitch with **no brand filter
+kills named tests (T211 mutant **M8**, the stitch key); commenting out the `ORDER BY`, or flipping `DESC` to `ASC`,
+kills named tests (M7, and a DESC-to-ASC variant). Cross-brand history follows the stitch with **no brand filter
 applied** — filtering by brand would hide the very history the criterion exists to surface — and
 an unstitched person gets nothing, which is the control.
 
@@ -145,7 +145,7 @@ One screen changed: the admin person profile (`/admin/people/:ref`).
   fallback as the raw lowercase enum — on the profile **and** the roster. The map was duplicated
   across two pages, which is why neither was updated.
 - **The page was split**, because CLAUDE.md requires the next change to an oversize file to split
-  it first: 1,076 lines → **456** (hard ceiling 500), with eight panels extracted and the tab
+  it first: 1,076 lines → **470** (hard ceiling 500), with eight panels extracted and the tab
   registry moved to a pure, unit-testable function. The component function is still ~300 lines
   against a 100-line ceiling, which is disclosed in the file itself rather than left implied.
 

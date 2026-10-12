@@ -69,16 +69,12 @@ import SiteActivityTab from '../../components/admin/person/SiteActivityTab';
  * which also made the registry unit-testable without a DOM or a mocked client.
  *
  * STILL OVER THE FUNCTION CEILING, and said rather than implied: the component
- * is ~300 lines, not under 100. What remains is irreducibly page-level — the
+ * is 392 lines (79-470), not under 100. What remains is irreducibly page-level — the
  * fetch effects, the deep-link effect, the header, and the tab switch that
  * cannot be split without inventing a routing abstraction for one page. The
  * FILE is under its ceiling; the FUNCTION is not, and the next change here
  * should take the header and the fetches out.
  */
-
-
-
-
 
 export default function PersonProfilePage() {
   // A REF, not necessarily an email. Admin surfaces link with whatever they
@@ -161,7 +157,6 @@ export default function PersonProfilePage() {
     return () => { cancelled = true; };
   }, [leadId]);
 
-  // Only tabs whose panel the API actually sent.
   // Only tabs whose panel the API actually sent. The registry itself is a
   // pure function in `adminOs/personTabs` -- see its docblock for why it is
   // not inline any more, and for why the two kinds of absence differ.

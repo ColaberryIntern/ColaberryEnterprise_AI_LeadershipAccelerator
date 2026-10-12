@@ -100,21 +100,35 @@ const SCENARIOS: Scenario[] = [
     text: 'Pre-registration Visitor/PageEvent history appears after identity resolution.',
     suite: 'services/adminOs/__tests__/evidencePackage.test.ts',
     test: 'keys pre-registration page events',
-    provenBy: 'T211 mutant M7: removing the lead_id stitch key kills three named tests',
+    // Corrected: this was labelled M7. The session log records M7 as the
+    // ORDER BY mutant and M8 as the stitch key. A pointer that lands on the
+    // wrong mutant defeats the purpose of citing one.
+    provenBy: 'T211 mutant M8 (stitch key removed) kills this test by name',
   },
   {
     n: 8,
     text: 'Cross-brand history follows a stitched person.',
     suite: 'services/adminOs/__tests__/evidencePackage.test.ts',
-    test: 'shows no cross-brand history',
-    provenBy: 'T211; the unstitched person is the control, and no brand filter is applied',
+    // Corrected: this was pinned to the CONTROL ("shows no cross-brand history
+    // for an unstitched person"), which is the negative case. The scenario is
+    // that history DOES follow a stitched person, so it must pin the positive.
+    // A verifier proved the difference: renaming and skipping the positives
+    // left the registry green with S8 reported as covered.
+    test: 'scopes every acquisition row to the stitched lead ids',
+    provenBy: 'T211 mutant M8 (stitch key removed); the unstitched person is the sibling control',
   },
   {
     n: 9,
     text: 'Explorer E/I/F appears in Person 360.',
-    suite: 'services/adminOs/__tests__/evidencePackage.test.ts',
-    test: 'returns NULL for an unscored person',
-    provenBy: 'T211 mutants M1/M2; T212 renders it, mutant M2 proving null is not 0/0/0',
+    // Corrected, and this was the worst of the three. It pinned
+    // evidencePackage's loader null-boundary — coverage a previous verifier had
+    // ALREADY rejected as insufficient for this exact claim, because the suite
+    // exercises only the LOADER. The test below asserts the ASSEMBLER calls it,
+    // which is what "appears in Person 360" means; its own comment records the
+    // earlier mutant that commented the load out while every test stayed green.
+    suite: 'services/adminOs/__tests__/personProfileService.test.ts',
+    test: 'issues the explorer snapshot query for a caller who may see acquisition',
+    provenBy: 'T211 mutant M4 (explorer load removed); T212 mutant M2 proves null is not 0/0/0',
   },
   {
     n: 10,
@@ -128,7 +142,9 @@ const SCENARIOS: Scenario[] = [
     text: 'The GHL contact ID is included when present.',
     suite: 'services/adminOs/__tests__/evidencePackage.test.ts',
     test: 'selects the column and passes its value',
-    provenBy: 'T211 mutant M4: commenting the column out kills this test via sqlOf()',
+    // Corrected: this was labelled M4, which the session log records as the
+    // explorer-load mutant. M5 is the GHL column.
+    provenBy: 'T211 mutant M5 (ghl column removed) kills this test via sqlOf()',
   },
   {
     n: 12,
@@ -141,7 +157,12 @@ const SCENARIOS: Scenario[] = [
     n: 13,
     text: 'The nightly repair recovers a deliberately missed immediate bridge.',
     suite: 'services/explorerGrowth/__tests__/explorerIdentityBridge.test.ts',
-    test: 'returns the enrollment ids whose lead_id is still null',
+    // Corrected: this pinned DETECTION ("returns the enrollment ids whose
+    // lead_id is still null"), not recovery — and that test's body feeds the
+    // finder a mocked result, so it never asserts the filter in its own title.
+    // The scenario is that the repair RECOVERS a missed bridge, which is the
+    // write below.
+    test: 'persists the lead_id when an email match exists',
     provenBy: 'T205; reconciliation is RECOVERY only — registration is the primary path',
   },
   {
@@ -199,6 +220,47 @@ describe('T213 — each scenario resolves to a test that really exists', () => {
   );
 });
 
+describe('T213 — every covering test is LIVE, not skipped or commented out', () => {
+  /**
+   * The hole a verifier found, which I had not claimed and should have.
+   *
+   * Turning a covering test into `it.skip` left this registry 21/21 GREEN while
+   * the covering suite reported `1 skipped`. So the registry certified a test
+   * that no longer runs — which is precisely the failure mode the file's own
+   * docblock cites as its motivation (T202b's five tests that could not fail).
+   * Matching a title proves the words exist; it does not prove the test runs.
+   */
+  const DECLARES = /\b(?:it|test)\s*(?:\.each\s*\([^)]*\))?\s*\(/;
+  const DISABLED = /\b(?:it|test|describe)\s*\.\s*(?:skip|only|todo|failing)\b/;
+
+  it.each(SCENARIOS.map((s) => [s.n, s] as [number, Scenario]))(
+    'S%i is pinned to a test that actually runs',
+    (_n, s) => {
+      const line = read(s.suite)
+        .split('\n')
+        .find((l) => l.includes(s.test));
+      expect(line).toBeDefined();
+      // It must be a test DECLARATION, not prose that happens to quote the title.
+      expect(line!).toMatch(DECLARES);
+      // And it must not be disabled.
+      expect(line!).not.toMatch(DISABLED);
+      // And it must not be commented out.
+      expect(line!.trimStart().startsWith('//')).toBe(false);
+      expect(line!.trimStart().startsWith('*')).toBe(false);
+    },
+  );
+
+  it('the CONTROLS: the live/disabled patterns both fire on real shapes', () => {
+    // Without these the loop above passes whatever the suites contain.
+    expect("  it('a thing', () => {").toMatch(DECLARES);
+    expect("  it.skip('a thing', () => {").toMatch(DISABLED);
+    expect("  it.only('a thing', () => {").toMatch(DISABLED);
+    expect("  test.todo('a thing');").toMatch(DISABLED);
+    // And the live pattern must NOT call an ordinary live test disabled.
+    expect("  it('a thing', () => {").not.toMatch(DISABLED);
+  });
+});
+
 describe('T213 — the matcher can fail, so the fifteen above mean something', () => {
   it('does NOT find a title that was never written', () => {
     // The control. Without it, every assertion above would also pass if `read`
@@ -207,11 +269,16 @@ describe('T213 — the matcher can fail, so the fifteen above mean something', (
     expect(src.split('a test title nobody has ever written').length - 1).toBe(0);
   });
 
-  it('counts a title that appears twice as a failure, not a pass', () => {
-    // Proves the exactly-once rule is doing work: a doubled title is caught.
-    const doubled = 'xyzzy-marker';
-    const fake = `it('${doubled}')\nit('${doubled}')`;
-    expect(fake.split(doubled).length - 1).toBe(2);
+  it('counts a DOUBLED title in real file content as 2, not as 1', () => {
+    // Replaces a tautological version of this control that built its own string
+    // and asserted `String.split` against it — it never touched a suite, so it
+    // proved nothing about the rule it was named for. This doubles REAL file
+    // content and requires the count to move, which is what makes the
+    // exactly-once rule above load-bearing rather than decorative.
+    const s = SCENARIOS[0];
+    const once = read(s.suite);
+    expect(once.split(s.test).length - 1).toBe(1);
+    expect((once + once).split(s.test).length - 1).toBe(2);
   });
 
   it('reads real suite files, not empty strings', () => {
