@@ -78,7 +78,7 @@ console.log('\nbacklog-enforcer edge trigger');
 const src = fs.readFileSync(path.resolve(__dirname, '../backlog-enforcer.js'), 'utf8');
 
 ok('shouldTag is edge-triggered, not a level check', () => {
-  assert.ok(/const shouldTag = crossedOverdue \|\| crossedSingleOld \|\| is9amTick;/.test(src),
+  assert.ok(/const shouldTag = crossedOverdue \|\| crossedSingleOld \|\| isDailyTick;/.test(src),
     'shouldTag must be built from crossings');
   assert.ok(!/const shouldTag = overdue\.length >= OVERDUE_TRIGGER \|\| maxOverdueDays >= SINGLE_OLD_TRIGGER_DAYS/.test(src),
     'the old level check must be gone');
@@ -120,6 +120,37 @@ ok('the OLD code would have tagged all six ticks a day (regression guard)', () =
   const ticks = [false, false, false, false, false, true]; // 6 ticks, one of them 9am
   const oldTags = ticks.filter((is9am) => oldDecide(2, 12, is9am)).length;
   assert.strictEqual(oldTags, 6, 'old logic tagged every tick, which is the bug');
+});
+
+console.log('\nbacklog-enforcer daily tick');
+
+ok('the dead getUTCHours()===14 tick is gone', () => {
+  assert.ok(!/getUTCHours\(\) === 14/.test(src),
+    'cron runs 0 */4 (UTC 00/04/08/12/16/20) so hour 14 never occurs; that test never fired');
+});
+
+ok('the daily tick is keyed to the Central calendar date, not a UTC hour', () => {
+  assert.ok(/timeZone: 'America\/Chicago'/.test(src), 'must resolve Central via the IANA zone so DST is handled');
+  assert.ok(/state\.last_daily_ct_date !== ctDate/.test(src), 'must fire once per Central day');
+  assert.ok(/if \(isDailyTick\) state\.last_daily_ct_date = ctDate;/.test(src), 'must record the day it fired');
+});
+
+ok('no cron tick lands on 9am CT, so a >= hour test is required', () => {
+  // 0 */4 UTC maps to these Central hours under CDT (UTC-5)
+  const ctHoursCDT = [19, 23, 3, 7, 11, 15];
+  assert.strictEqual(ctHoursCDT.includes(9), false, 'nothing runs at exactly 9am CT');
+  assert.ok(ctHoursCDT.some((h) => h >= 8), 'but ticks do land at or after 8am CT');
+});
+
+ok('a standing backlog gets exactly one nudge per Central day', () => {
+  const HOUR = 8;
+  let last = null, fired = 0;
+  for (const day of ['2026-10-13', '2026-10-14', '2026-10-15']) {
+    for (const h of [3, 7, 11, 15, 19, 23]) {
+      if (h >= HOUR && last !== day) { fired++; last = day; }
+    }
+  }
+  assert.strictEqual(fired, 3, 'three days should produce three nudges, got ' + fired);
 });
 
 console.log(`\n${n} assertions passed`);
