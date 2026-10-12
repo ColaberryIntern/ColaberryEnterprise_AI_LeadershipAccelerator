@@ -38,6 +38,22 @@ const FILENAME_BEARING: Record<string, string> = {
 };
 
 /**
+ * Prefixes that need `^~` for exactly the same precedence reason as the media routes above,
+ * but which are NOT media.
+ *
+ * This bucket exists because the original two conflated two independent properties: "a regex
+ * location can steal this path" and "this path is seeked". `/lp/` has the first and not the
+ * second — a landing-page slug may contain a dot, so the static-file regex can claim it, but
+ * nothing under `/lp/` is ever range-requested, and `proxy_buffering off` on an HTML page
+ * would be a cost with no benefit. Filing it under EXTENSIONLESS instead would have been
+ * false (its slugs are precisely the ones that carry dots) and would have asserted only that
+ * SOME location exists, which is the weaker claim that let `/m/` 404 in production.
+ */
+const GUARDED_NON_STREAMING: Record<string, string> = {
+  '/lp/': 'publicLandingPageRoutes - /lp/:brand/:slug, where a slug may contain a dot',
+};
+
+/**
  * Prefixes whose segments are slugs, tags or codes and never carry an extension. They still
  * need a location so they reach the backend at all, but `^~` is not load-bearing for them.
  */
@@ -96,17 +112,19 @@ describe('the discovery itself is working', () => {
 describe('every public route prefix is classified', () => {
   it('leaves no prefix undecided — a new public file route must choose', () => {
     const undecided = discoveredPrefixes().filter(
-      (p) => !(p in FILENAME_BEARING) && !(p in EXTENSIONLESS),
+      (p) => !(p in FILENAME_BEARING) && !(p in GUARDED_NON_STREAMING) && !(p in EXTENSIONLESS),
     );
-    // If this fails, add the prefix to FILENAME_BEARING (and give it a `^~` nginx location)
-    // or to EXTENSIONLESS, with a one-line reason. Do not delete the assertion.
+    // If this fails, add the prefix to FILENAME_BEARING (media, needs `^~` AND streaming),
+    // GUARDED_NON_STREAMING (needs `^~`, never seeked) or EXTENSIONLESS, with a one-line
+    // reason. Do not delete the assertion.
     expect(undecided).toEqual([]);
   });
 
   it('classifies nothing that no longer exists', () => {
     const found = new Set(discoveredPrefixes());
-    const stale = [...Object.keys(FILENAME_BEARING), ...Object.keys(EXTENSIONLESS)]
-      .filter((p) => !found.has(p));
+    const stale = [
+      ...Object.keys(FILENAME_BEARING), ...Object.keys(GUARDED_NON_STREAMING), ...Object.keys(EXTENSIONLESS),
+    ].filter((p) => !found.has(p));
     expect(stale).toEqual([]);
   });
 });
@@ -131,6 +149,21 @@ describe('filename-bearing prefixes carry `^~`', () => {
       const block = new RegExp(`location\\s+\\^~\\s+${bare}/?\\s*\\{([^}]*)\\}`).exec(nginxConf);
       expect(block![1]).toMatch(/proxy_buffering\s+off\s*;/);
       expect(block![1]).toMatch(/proxy_max_temp_file_size\s+0\s*;/);
+    });
+  }
+});
+
+describe('guarded non-streaming prefixes carry `^~` and proxy', () => {
+  for (const [prefix, why] of Object.entries(GUARDED_NON_STREAMING)) {
+    it(`${prefix} has a \`^~\` location — ${why}`, () => {
+      expect(hasGuardedLocation(prefix)).toBe(true);
+    });
+
+    it(`${prefix} proxies to the backend`, () => {
+      const bare = prefix.replace(/\/$/, '');
+      const block = new RegExp(`location\\s+\\^~\\s+${bare}/?\\s*\\{([^}]*)\\}`).exec(nginxConf);
+      expect(block).not.toBeNull();
+      expect(block![1]).toMatch(/proxy_pass\s+http:\/\/accelerator-backend:3001\s*;/);
     });
   }
 });

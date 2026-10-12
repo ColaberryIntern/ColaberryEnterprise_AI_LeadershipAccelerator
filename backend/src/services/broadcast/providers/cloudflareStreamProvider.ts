@@ -280,7 +280,7 @@ function toLiveInput(raw: RawLiveInput): LiveInput {
 }
 
 export interface CreateLiveInputRequest {
-  /** Shown in the Cloudflare dashboard. `meta` is a free-form store; `name` is convention. */
+  /** Shown in the Cloudflare dashboard. `meta` is typed `unknown`; `name` is convention only. */
   name: string;
   /**
    * The occurrence this input belongs to. Used ONLY as the idempotency key, so a retried or
