@@ -48,6 +48,16 @@ export interface SessionView {
    */
   meetingReady: boolean;
   recordingPolicy: string | null;
+  /**
+   * The learner's own takes, in the order they happened, so the panel can offer a
+   * player. Ids only — the file is served by its own ownership-checked route and a
+   * URL is never put on this payload, for the same reason `meetingReady` is a flag
+   * rather than the meeting link.
+   *
+   * A split recording is genuinely several parts; offering only the first would
+   * silently hide the half of a rehearsal that came after the break.
+   */
+  recordings: Array<{ id: string; partNo: number }>;
 }
 
 export type SessionResult =
@@ -62,6 +72,8 @@ export type SessionResult =
 export function toSessionView(
   attempt: PresentationAttempt,
   booking: RoomBooking | null,
+  /** Empty for every caller that has not looked them up; never fabricated. */
+  recordings: Array<{ id: string; partNo: number }> = [],
 ): SessionView {
   return {
     attemptId: String(attempt.id),
@@ -79,7 +91,26 @@ export function toSessionView(
     // Presence of a link, never the link itself.
     meetingReady: Boolean(booking?.meeting_link),
     recordingPolicy: booking?.recording_policy ?? null,
+    recordings,
   };
+}
+
+/**
+ * The ingested takes for one attempt, earliest part first.
+ *
+ * `ingested` only: a recording parked in review belongs to nobody yet, and offering
+ * it for playback could hand a learner another cohort member's rehearsal.
+ */
+export async function recordingsForAttempt(attemptId: string): Promise<Array<{ id: string; partNo: number }>> {
+  // THE MODEL, NOT RAW SQL. Everything else in this module reads through models, and
+  // a raw query here opened a real connection in a suite that mocks only the models —
+  // which is both a broken test and the wrong shape for this file.
+  const { default: PresentationRecording } = await import('../../models/PresentationRecording');
+  const rows = await PresentationRecording.findAll({
+    where: { attempt_id: attemptId, ingest_status: 'ingested' },
+    order: [['part_no', 'ASC'], ['created_at', 'ASC']],
+  });
+  return (rows || []).map((r: any) => ({ id: String(r.id), partNo: Number(r.part_no) || 1 }));
 }
 
 /** The assignment row for a task the caller demonstrably owns, or null. */
@@ -130,7 +161,11 @@ export async function resolveSessionForAssignment(
     return { ok: true, session: toSessionView(booked, null) };
   }
 
-  return { ok: true, session: toSessionView(booked, booking) };
+  // Looked up only on the single-session read, which is the one the Practice panel
+  // calls. The list and the create paths deliberately leave it empty rather than
+  // issue a query per attempt for something those screens do not render.
+  const takes = await recordingsForAttempt(String(booked.id));
+  return { ok: true, session: toSessionView(booked, booking, takes) };
 }
 
 /**

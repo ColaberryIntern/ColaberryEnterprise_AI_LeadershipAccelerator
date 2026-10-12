@@ -47,10 +47,25 @@ function whoCanSee(mode: string): string {
   return 'Only you. Your practice room is private.';
 }
 
+/**
+ * What the learner is told about recording, before they go in.
+ *
+ * THE FALLBACK USED TO SAY THE OPPOSITE OF THE TRUTH. `recording_policy` is a
+ * RoomBooking column that nothing in the codebase ever sets, so every practice room
+ * carries its database default of 'ask' — and the panel read that as "someone has to
+ * start it". Meanwhile `zoomService.createMeeting` hardcodes `auto_recording: 'cloud'`
+ * for every meeting it creates, so recording begins the moment the host joins.
+ *
+ * Telling someone they will be asked and then recording them anyway is the wrong way
+ * round for a consent notice, which is why this is not merely a copy tweak. The
+ * deeper fix is for the column to carry the truth — that means threading a policy
+ * through `createBooking`, which is shared with every other room in the product and
+ * is a change of its own. Until then this says what actually happens.
+ */
 function recordingLine(policy: string | null): string {
-  if (policy === 'always') return 'This room records automatically, so you can watch yourself back.';
   if (policy === 'never') return 'This room does not record. Nothing will be saved to watch back.';
-  return 'Recording is not automatic here — someone has to start it.';
+  // 'always' and the unset default behave identically today: Zoom records on start.
+  return 'This room records automatically from the moment you join, so you can watch yourself back.';
 }
 
 export default function GetReadyPanel(props: GetReadyPanelProps) {
