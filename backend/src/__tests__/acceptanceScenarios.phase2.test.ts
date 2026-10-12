@@ -45,9 +45,18 @@ import * as path from 'path';
  *     declares itself, still runs, and still passes. A registry cannot see that;
  *     only mutation testing of the production code can, which is why `provenBy`
  *     names a mutation rather than asserting one.
- *   - A NESTED, INDENTED `describe.skip`. `enclosingBlock` walks back to the
- *     nearest COLUMN-0 `describe`, which is the convention in all nine covering
- *     suites. An indented block would be missed.
+ *   - A NESTED, INDENTED disabled block. `enclosingBlock` walks back to the
+ *     nearest COLUMN-0 `describe`/`xdescribe`/`fdescribe`, which is the
+ *     convention in all nine covering suites. An indented block would be missed.
+ *     The `x`/`f` ALIASES are now caught at column 0 — they were not in attempt
+ *     3, and a verifier used `xdescribe(` on the same block to take S6's and
+ *     S10's only proofs dark with the registry reporting 38/38 green. Closing
+ *     one spelling of a hole is not closing the hole, which is the third time
+ *     this phase a guard has been beaten by a variant of the shape it was
+ *     written for.
+ *   - A BLOCK DISABLED BY EXPRESSION, e.g.
+ *     `(cond ? describe.skip : describe)('…')`. Not matched, and not worth
+ *     matching with a regex; it would need a parser.
  *   - A WRONG `provenBy` LABEL. Two attempts shipped six of these — three
  *     transposed T211 mutant IDs, and three scenarios citing T206 for tests in a
  *     file T206 never touched (the real prover is T201, whose own mutations do
@@ -191,7 +200,16 @@ const SCENARIOS: Scenario[] = [
     // The scenario is that the repair RECOVERS a missed bridge, which is the
     // write below.
     test: 'persists the lead_id when an email match exists',
-    provenBy: 'T205; reconciliation is RECOVERY only — registration is the primary path',
+    // Corrected AGAIN, and this is the second wrong-task label on this entry.
+    // It said T205. A verifier showed `git log --no-merges` lists T203 and
+    // T202b ×2 on the covering suite and NO T205 commit; the production module
+    // `explorerIdentityBridge.ts` was touched by NO Phase 2 task at all; and
+    // the pinned test itself pre-dates the phase (merge b7f59e42, PR #1895).
+    // T205's recorded mutation — "remove the immediate call" — cannot reach it.
+    // So the honest label is that NO phase mutation proves this one.
+    provenBy: 'PRE-DATES this phase (b7f59e42); NO Phase 2 task mutated '
+      + 'explorerIdentityBridge.ts, so no phase mutation proves it. T202b and '
+      + 'T203 edited the suite only. See the stated-limits list: S13 is thin.',
   },
   {
     n: 14,
@@ -260,7 +278,18 @@ describe('T213 — every covering test is LIVE, not skipped or commented out', (
    */
   const DECLARES = /\b(?:it|test)\s*(?:\.each\s*\([^)]*\))?\s*\(/;
   const DISABLED = /\b(?:it|test)\s*\.\s*(?:skip|only|todo|failing)\b/;
-  const BLOCK_DISABLED = /^describe\s*\.\s*(?:skip|only)\b/;
+  /**
+   * `describe.skip` AND the `x`/`f` aliases.
+   *
+   * Attempt 3 closed one SPELLING of this hole, not the hole. A verifier then
+   * changed the same block on the same line to `xdescribe(` and the same six
+   * covering tests went dark — S6's and S10's only proofs — with the registry
+   * reporting 38/38 green. `enclosingBlock` matched `/^describe/`, so it walked
+   * straight PAST the `x`-prefixed line and asserted against an EARLIER block.
+   * `xit`/`fit` were already caught incidentally (they fail `DECLARES`), so the
+   * gap was specifically at block level.
+   */
+  const BLOCK_DISABLED = /^(?:x|f)describe\b|^describe\s*\.\s*(?:skip|only)\b/;
 
   /**
    * The ENCLOSING block, found by walking back to the nearest column-0
@@ -280,7 +309,10 @@ describe('T213 — every covering test is LIVE, not skipped or commented out', (
    */
   function enclosingBlock(lines: string[], at: number): string | null {
     for (let i = at; i >= 0; i -= 1) {
-      if (/^describe/.test(lines[i])) return lines[i];
+      // `[xf]?` is load-bearing: matching only /^describe/ walked past
+      // `xdescribe(` and returned an earlier block, which is how the alias
+      // bypass passed.
+      if (/^[xf]?describe/.test(lines[i])) return lines[i];
     }
     return null;
   }
@@ -318,6 +350,13 @@ describe('T213 — every covering test is LIVE, not skipped or commented out', (
     expect("describe.skip('a block', () => {").toMatch(BLOCK_DISABLED);
     expect("describe.only('a block', () => {").toMatch(BLOCK_DISABLED);
     expect("describe('a block', () => {").not.toMatch(BLOCK_DISABLED);
+    // The ALIASES, which bypassed attempt 3 entirely.
+    expect("xdescribe('a block', () => {").toMatch(BLOCK_DISABLED);
+    expect("fdescribe('a block', () => {").toMatch(BLOCK_DISABLED);
+    // And `enclosingBlock` must FIND an aliased block rather than walk past it,
+    // which is the actual bug — the pattern alone was never the problem.
+    const lines = ["describe('outer', () => {", "xdescribe('inner', () => {", "  it('x', () => {"];
+    expect(enclosingBlock(lines, 2)).toBe("xdescribe('inner', () => {");
   });
 
   it('finds the ENCLOSING block for a real pinned test, not just any line', () => {
