@@ -937,6 +937,18 @@ async function handleOpenEnded(ctx) {
     walkedContext = `## TASK\n${summarizeRecording(fb.recording)}\n\n## RECENT COMMENTS\n${summarizeComments(fb.comments, aliId) || '(none)'}\n(walker fallback: ${e.message})`;
   }
 
+  // The walk caps each document and each comment but never the total, so a thread that is
+  // posted to on a schedule grows without bound and the request is eventually rejected for
+  // length before the model ever runs. A rejected call is worse than a trimmed one: it
+  // returns no reply at all. Budget the block here, after both the walked and the fallback
+  // path, so the failure mode is a shorter answer rather than silence.
+  const { fitToBudget } = require('./cb-context-budget');
+  const fitted = fitToBudget(walkedContext, { budgetTokens: Number(process.env.CB_CONTEXT_BUDGET_TOKENS || 70000) });
+  if (fitted.trimmed) {
+    console.warn(`[cb-handler] context_trimmed_to_budget rec=${recId} ${fitted.originalTokens} -> ${fitted.finalTokens} tokens, ${fitted.droppedLines} lines dropped`);
+  }
+  walkedContext = fitted.text;
+
   const requesterContext = isAli
     ? 'The requester is Ali Muwwakkil (Managing Director, Executive Sponsor).'
     : `The requester is ${requesterName} (team member, not Ali). You can use basecamp_reply, queue_followup, create_pdf, create_xlsx, create_image, finish. Ali-only tools (email_ali, system mode toggles, gov-bid ops, exit_intern_preview, vip_list) are not available to non-Ali requesters.`;
