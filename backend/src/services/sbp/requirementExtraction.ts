@@ -193,8 +193,11 @@ function isRequirementsShaped(v: unknown): v is RefinedRequirements {
     // A response carrying stories is a CONTRACT VIOLATION, not something to quietly drop. The
     // schema already forbids it; this is the local check, for the case where the schema was not
     // applied because a caller passed its own client.
-    && !('stories' in (r as Record<string, unknown>))
-    && !('releases' in (r as Record<string, unknown>));
+    // Narrowed through `unknown`: `r` is typed as the thing being CHECKED FOR, so a direct
+    // cast to a record is a type error rather than a convenience. tsc caught this; the test
+    // suite could not, because ts-jest transpiles backend tests instead of typechecking them.
+    && !('stories' in (r as unknown as Record<string, unknown>))
+    && !('releases' in (r as unknown as Record<string, unknown>));
 }
 
 /**
