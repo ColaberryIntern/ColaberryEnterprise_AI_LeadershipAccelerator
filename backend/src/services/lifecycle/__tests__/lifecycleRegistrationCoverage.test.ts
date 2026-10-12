@@ -249,18 +249,33 @@ describe('LC-01 — registration coverage, split by what the row can supply', ()
     expect(wiring).toMatch(/hooks:\s*\{[^}]*afterCreate:\s*deliveryProjectLifecycleHook/s);
   });
 
-  it('leaves student-project sites UNCOVERED, with the reason recorded rather than hidden', () => {
-    // This is a real, open gap and the test says so out loud. `project_lifecycle_states.tenant_id`
-    // is NOT NULL REFERENCES tenants(id); `models/Project.ts` has no tenant column, and neither do
-    // Enrollment, Cohort, ProgramBlueprint, PlatformIdentity, UserCurriculumProfile or AdminUser.
-    // So there is no row-derivable tenant for a student project, and a model hook has no request
-    // context to resolve one from. Escalated and decided: add tenant_id to projects and backfill.
-    // Until that lands, Project is deliberately unwired — and this test fails if someone wires it
-    // without closing the tenancy gap first, because a lifecycle row needs a tenant it cannot get.
+  it('covers student-project sites TOO, now that the tenancy gap is closed', () => {
+    // THIS TEST USED TO ASSERT THE OPPOSITE, and its own comment specified the condition for
+    // flipping it: "Project is deliberately unwired -- and this test fails if someone wires it
+    // without closing the tenancy gap first, because a lifecycle row needs a tenant it cannot
+    // get." P6-T1b closed the gap first. This is that change arriving.
     expect(studentSites.length).toBeGreaterThan(0);
     const projectModel = readNormalised(path.join(MODELS, 'Project.ts'));
-    expect(projectModel).not.toMatch(/afterCreate/);
-    expect(projectModel).not.toMatch(/tenant/i);
+
+    // BOTH hooks. Wiring only `afterCreate` would register nothing on the paths that do not
+    // supply a tenant, because `tenant_id` would still be null at INSERT -- and it would do so
+    // silently, which is the failure this pair exists to prevent.
+    expect(projectModel).toMatch(/hooks:\s*\{[^}]*beforeCreate:\s*studentProjectTenantHook/s);
+    expect(projectModel).toMatch(/hooks:\s*\{[^}]*afterCreate:\s*studentProjectLifecycleHook/s);
+
+    // And the tenancy gap is genuinely CLOSED rather than stepped over: the column exists on
+    // the model, it is nullable because an unattributable project must still be creatable, and
+    // the resolver that fills it refuses rather than guessing once a second tenant owns
+    // student projects.
+    expect(projectModel).toMatch(/declare tenant_id: string \| null;/);
+    const resolver = readNormalised(path.join(SRC, 'services', 'lifecycle', 'studentTenant.ts'));
+    // The refusal it keeps, and the warning it uses instead of the one it dropped. The first
+    // version refused on any multi-tenant observation; running it showed that one project in a
+    // second tenant then disabled attribution for every project after it, so that became a
+    // warning. Both strings are asserted because dropping either would change the policy
+    // silently.
+    expect(resolver).toContain('configured_tenant_missing');
+    expect(resolver).toContain('student_tenant_multi_tenant_observed');
   });
 });
 

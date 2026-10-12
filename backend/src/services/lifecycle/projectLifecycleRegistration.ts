@@ -103,13 +103,29 @@ import { sequelize } from '../../config/database';
  *    ZERO occurrences on this table at `509335f5`, and the test suite carries a tripwire that
  *    fails by name if any of them appears, so the gap is monitored rather than merely disclosed.
  *
- * STUDENT PROJECTS ARE NOT REGISTERED HERE, and that is not an oversight. `project_lifecycle_states
- * .tenant_id` is `NOT NULL REFERENCES tenants(id)`, and `models/Project.ts` has no tenant column —
- * nor do `Enrollment`, `Cohort`, `ProgramBlueprint`, `PlatformIdentity`, `UserCurriculumProfile` or
- * `AdminUser`. There is no row-derivable tenant for a student project and a model hook has no
- * request context to resolve one from. That was escalated to the DRI, who chose to add `tenant_id`
- * to `projects` and backfill it; until that lands, `Project` is deliberately unwired. See
- * `docs/project-lifecycle/` and the run's P6-T1b.
+ * STUDENT PROJECTS ARE REGISTERED HERE SINCE 2026-10-12 (P6-T1b), and the two halves differ
+ * in one way that matters.
+ *
+ * `project_lifecycle_states.tenant_id` is `NOT NULL REFERENCES tenants(id)`, and `projects`
+ * had no tenant column -- nor did `Enrollment`, `Cohort`, `ProgramBlueprint`,
+ * `PlatformIdentity`, `UserCurriculumProfile` or `AdminUser`. 60 tables in this database carry
+ * `tenant_id` and `projects` was not among them, so there was no row-derivable tenant and a
+ * model hook has no request context to resolve one from. That was escalated to the DRI, who
+ * chose `colaberry` on 2026-10-12; `db/ensureProjectTenantSchema.ts` adds the column and
+ * backfills it, and `studentTenant.ts` resolves it going forward.
+ *
+ * SO THE STUDENT SIDE IS TWO HOOKS, NOT ONE. `beforeCreate` attributes the row when it
+ * arrives without a tenant; `afterCreate` registers the lifecycle. The delivery side needs
+ * only the second, because `delivery_projects.tenant_id` is already `NOT NULL`.
+ *
+ * AND THE STUDENT SIDE DOES NOT THROW when the tenant cannot be resolved. That is a
+ * deliberate difference from `deliveryProjectLifecycleHook`, which does. Setting a tenant is
+ * DATA; refusing to create a student's project is ENFORCEMENT, and throwing here would break
+ * a live creation path for a governance reason with the feature flag off. An unattributable
+ * project is created, left unregistered, and logged as a ContractViolation -- and
+ * `services/sbp/storyAuthorization.ts` then refuses it authorized stories, because a missing
+ * lifecycle row is absence of evidence rather than approval. The refusal happens where
+ * refusals belong.
  */
 
 /**
@@ -119,6 +135,13 @@ import { sequelize } from '../../config/database';
  * is just a sentence.
  */
 export const LIFECYCLE_REGISTRATION_LIVE_SINCE = new Date('2026-10-09T00:00:00.000Z');
+
+/**
+ * When the STUDENT side went live. Separate from the delivery marker because they shipped
+ * three days apart, and a single date would make the detector either miss delivery bypasses
+ * or report every pre-T1b student project as one.
+ */
+export const STUDENT_REGISTRATION_LIVE_SINCE = new Date('2026-10-12T00:00:00.000Z');
 
 /** The stage every project starts in. Matches the column default and `lifecycleStages`. */
 const INITIAL_STAGE = 'discovery';
@@ -187,6 +210,134 @@ export async function deliveryProjectLifecycleHook(
     // false means the row already had a lifecycle, which is a replay, not a problem.
     created: Boolean(inserted[0]?.id),
   });
+}
+
+/**
+ * The shape the student hooks need off the instance.
+ *
+ * Declared rather than importing `Project`, for the same reason the delivery shape is: a model
+ * import here would make this module depend on the thing that depends on it.
+ */
+export interface RegistrableStudentProject {
+  id: string;
+  /** Nullable, unlike the delivery side. `null` means not attributable -- see the header. */
+  tenant_id?: string | null;
+  set?: (key: string, value: unknown) => void;
+}
+
+/**
+ * `Project` model `beforeCreate` hook: attribute the row to a tenant.
+ *
+ * Runs BEFORE the insert so the row is correct when it lands, rather than being corrected by a
+ * second write afterwards. A caller that already supplied a tenant is never overridden: an
+ * explicit tenant is a decision, and resolution is only a fallback for the paths that have
+ * none.
+ *
+ * Never throws. An unresolvable tenant leaves `tenant_id` null and lets the insert proceed.
+ */
+export async function studentProjectTenantHook(
+  instance: RegistrableStudentProject,
+  options?: HookOptions,
+): Promise<void> {
+  if (instance.tenant_id) return;
+
+  const { resolveStudentTenantId } = await import('./studentTenant');
+  const resolution = await resolveStudentTenantId();
+  if (resolution.tenantId === null) {
+    // Logged by `resolveStudentTenantId` with its named reason. Nothing more to do: the row
+    // is created unattributed and `studentProjectLifecycleHook` reports it as unregistered.
+    return;
+  }
+
+  // `set` when Sequelize gave us an instance, direct assignment when a test passed a plain
+  // object. Both are real callers and neither should need to know about the other.
+  if (typeof instance.set === 'function') instance.set('tenant_id', resolution.tenantId);
+  else instance.tenant_id = resolution.tenantId;
+
+  log({
+    event: 'student_project_tenant_attributed',
+    outcome: 'success',
+    student_project_id: instance.id ?? null,
+    tenant_id: resolution.tenantId,
+    entry_point: options?.lifecycleEntryPoint ?? 'project.beforeCreate',
+  });
+}
+
+/**
+ * `Project` model `afterCreate` hook: register the lifecycle.
+ *
+ * Mirrors the delivery hook in every respect except the two the header explains: it reads a
+ * NULLABLE tenant, and it does not throw when there is none.
+ *
+ * `ON CONFLICT (student_project_id)` targets the partial unique index
+ * `ensureProjectLifecycleSchema` already creates, so a replay is a no-op rather than a
+ * duplicate. `findOrCreate` fires this hook only when it actually creates, which is why the
+ * second student creation site needs no special handling.
+ */
+export async function studentProjectLifecycleHook(
+  instance: RegistrableStudentProject,
+  options?: HookOptions,
+): Promise<void> {
+  const entryPoint = options?.lifecycleEntryPoint ?? 'project.afterCreate';
+
+  if (!instance.tenant_id) {
+    // NOT SILENT, and not a throw. This is the one state in which a project exists without a
+    // lifecycle by design rather than by bypass, and an operator has to be able to find it.
+    log({
+      event: 'student_project_lifecycle_unregistered',
+      outcome: 'failure',
+      error_class: 'ContractViolation',
+      student_project_id: instance.id,
+      reason: 'tenant_unresolved',
+      entry_point: entryPoint,
+      impact: 'This project has no lifecycle. Under ENABLE_PROJECT_LIFECYCLE it is refused '
+        + 'authorized stories, because a missing lifecycle row is absence of evidence.',
+    });
+    return;
+  }
+
+  const inserted = await sequelize.query<{ id: string }>(
+    `INSERT INTO project_lifecycle_states
+       (tenant_id, student_project_id, stage, entry_point)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (student_project_id) WHERE student_project_id IS NOT NULL DO NOTHING
+     RETURNING id`,
+    {
+      bind: [instance.tenant_id, instance.id, INITIAL_STAGE, entryPoint],
+      type: QueryTypes.SELECT,
+      transaction: (options?.transaction ?? undefined) as never,
+    },
+  );
+
+  log({
+    event: 'project_lifecycle_registered',
+    outcome: 'success',
+    student_project_id: instance.id,
+    tenant_id: instance.tenant_id,
+    entry_point: entryPoint,
+    created: Boolean(inserted[0]?.id),
+  });
+}
+
+/**
+ * Every `projects` row created since the student side went live that has NO lifecycle row.
+ *
+ * The student counterpart of the delivery detector below, and path-agnostic for the same
+ * reason: it asks LC-01's actual question rather than checking the paths somebody remembered
+ * to instrument. Returns rows so an operator can see WHICH projects, and `tenant_id` so they
+ * can tell an unattributable project from a bypass.
+ */
+export async function unregisteredStudentProjectsSince(
+  since: Date = STUDENT_REGISTRATION_LIVE_SINCE,
+): Promise<Array<{ id: string; tenant_id: string | null; created_at: Date }>> {
+  return sequelize.query<{ id: string; tenant_id: string | null; created_at: Date }>(
+    `SELECT p.id, p.tenant_id, p.created_at
+       FROM projects p
+       LEFT JOIN project_lifecycle_states pls ON pls.student_project_id = p.id
+      WHERE p.created_at >= $1 AND pls.id IS NULL
+      ORDER BY p.created_at`,
+    { bind: [since], type: QueryTypes.SELECT },
+  );
 }
 
 /**
