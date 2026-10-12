@@ -136,6 +136,31 @@ function BookedSlot(
           The room is being created. This usually takes a few seconds — reload the page to check.
         </p>
       )}
+      {/* THE PLAYER THE "available to watch back" LINE ALWAYS PROMISED.
+          Until 2026-10-12 that sentence appeared with nothing behind it: the file was
+          downloaded and stored, and no route could serve it. `preload="metadata"` so
+          opening the page does not pull several megabytes before anyone presses play;
+          the route honours Range requests, so the scrub bar works. */}
+      {!demo && (session.recordings || []).map((take) => (
+        <div key={take.id} className="ps-card" data-testid={`ps-practice-player-${take.partNo}`} style={{ marginTop: 12 }}>
+          {(session.recordings || []).length > 1 && (
+            <p className="ps-note ps-note--soft" style={{ margin: '0 0 6px' }}>
+              Part {take.partNo} of {(session.recordings || []).length} — Zoom split this rehearsal.
+            </p>
+          )}
+          <video
+            controls
+            preload="metadata"
+            style={{ width: '100%', borderRadius: 8, background: '#000' }}
+            src={`/api/portal/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(storyId)}/recordings/${encodeURIComponent(take.id)}/file`}
+          >
+            {/* Shown only where the element is unsupported; the route is the same. */}
+            <a href={`/api/portal/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(storyId)}/recordings/${encodeURIComponent(take.id)}/file`}>
+              Download this take
+            </a>
+          </video>
+        </div>
+      ))}
     </div>
     {/* The get-ready step only appears once there is actually a room to go into.
         Offering it earlier would be a consent screen for a door that is not there. */}

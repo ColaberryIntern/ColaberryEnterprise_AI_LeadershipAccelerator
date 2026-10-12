@@ -52,6 +52,12 @@ export interface IncomingRecording {
    * file list. `null`/absent means unknown — never guessed. See `recordingFacts`.
    */
   hasAudio?: boolean | null;
+  /**
+   * The `room_resources` row holding the downloaded file, when the caller stored one.
+   * Without it nothing can play the recording back — the row knows a file exists and
+   * not which one.
+   */
+  resourceId?: string | null;
   provenance: IngestProvenance;
 }
 
@@ -147,9 +153,9 @@ async function recordPart(
     `INSERT INTO presentation_recordings
        (attempt_id, occurrence_uuid, provider_file_id, recording_type,
         starts_at, ends_at, ingest_status, ingest_provenance, review_reason,
-        has_audio, has_shared_screen, duration_seconds)
+        has_audio, has_shared_screen, duration_seconds, resource_id)
      VALUES (:aid, :uuid, :fid, :rtype, :s, :e, :status, :prov, :reason,
-             :audio, :screen, :dur)
+             :audio, :screen, :dur, :resource)
      ON CONFLICT (occurrence_uuid, provider_file_id) DO NOTHING
      RETURNING id`,
     {
@@ -172,6 +178,7 @@ async function recordPart(
         audio: rec.hasAudio ?? null,
         screen: sharedScreenFromRecordingType(rec.recordingType),
         dur: durationSecondsFrom(rec.startedAt, rec.endedAt),
+        resource: rec.resourceId ?? null,
       },
     },
   ) as [Array<{ id: string }>, unknown];
