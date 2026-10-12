@@ -35,6 +35,34 @@ import * as path from 'path';
  * full titles contain the two column names this repo scans for in writer
  * tripwires, and a registry quoting them would trip guards it has nothing to do
  * with.
+ *
+ * ── WHAT THIS FILE STILL CANNOT DETECT, STATED NOT IMPLIED ──────────────────
+ *
+ * Found by verifiers across two attempts, and listed here because a guard's
+ * documentation is its test list:
+ *
+ *   - AN EMPTIED BODY. A covering test whose assertions are all deleted still
+ *     declares itself, still runs, and still passes. A registry cannot see that;
+ *     only mutation testing of the production code can, which is why `provenBy`
+ *     names a mutation rather than asserting one.
+ *   - A NESTED, INDENTED `describe.skip`. `enclosingBlock` walks back to the
+ *     nearest COLUMN-0 `describe`, which is the convention in all nine covering
+ *     suites. An indented block would be missed.
+ *   - A WRONG `provenBy` LABEL. Two attempts shipped six of these — three
+ *     transposed T211 mutant IDs, and three scenarios citing T206 for tests in a
+ *     file T206 never touched (the real prover is T201, whose own mutations do
+ *     kill them). The structural guard below checks only that `provenBy` matches
+ *     /T2\d\d/ and is longer than 20 characters. It cannot tell a right task
+ *     from a wrong one, and nothing mechanical here can; that is a human read.
+ *   - NINE OF FIFTEEN name a task and a rationale but NO specific mutation
+ *     (S2, S3, S5 partially, S6, S10, S12, S13, S14). The acceptance asks for
+ *     each to be mutation-proved, so this is an unmet part of the criterion
+ *     rather than a design choice.
+ *   - S13 IS THIN. It pins the lead_id write the nightly repair performs, which
+ *     `repairAllExplorerBridges` does call — but the same resolver is called by
+ *     the registration path, and no test exercises a DELIBERATELY missed bridge
+ *     end to end. S14 pins the backfill's decision; its live-write half is
+ *     uncited.
  */
 
 const SRC = path.join(__dirname, '..');
@@ -58,7 +86,7 @@ const SCENARIOS: Scenario[] = [
     text: 'A /enroll signup enters Explorer Growth immediately.',
     suite: 'services/__tests__/freeAccountRegistration.test.ts',
     test: 'learner gets BOTH columns',
-    provenBy: 'T206; mutation: writing one column without the other fails this test',
+    provenBy: 'T201 mutation: writing one column without the other in freeEnrollmentDefaults',
   },
   {
     n: 2,
@@ -86,7 +114,7 @@ const SCENARIOS: Scenario[] = [
     text: 'An existing paid learner is never downgraded.',
     suite: 'services/__tests__/freeAccountRegistration.test.ts',
     test: 'never upgrades a PAID row',
-    provenBy: 'T206, with T207 covering the backfill path (never demotes a paid row to guest)',
+    provenBy: 'T201 mutation: removing the paid guard from needsProgrammeUpgrade; T207 covers the backfill path',
   },
   {
     n: 6,
@@ -177,7 +205,7 @@ const SCENARIOS: Scenario[] = [
     text: 'A returning person whose only prior row is withdrawn becomes a visible Explorer.',
     suite: 'services/__tests__/freeAccountRegistration.test.ts',
     test: 'a returning person whose only row is WITHDRAWN',
-    provenBy: "T206; cycle 1's Hole 1, with a sibling test proving the status filter is load-bearing",
+    provenBy: "T201 mutation: dropping status:'active' from the lookup; cycle 1's Hole 1",
   },
 ];
 
@@ -231,22 +259,50 @@ describe('T213 — every covering test is LIVE, not skipped or commented out', (
    * Matching a title proves the words exist; it does not prove the test runs.
    */
   const DECLARES = /\b(?:it|test)\s*(?:\.each\s*\([^)]*\))?\s*\(/;
-  const DISABLED = /\b(?:it|test|describe)\s*\.\s*(?:skip|only|todo|failing)\b/;
+  const DISABLED = /\b(?:it|test)\s*\.\s*(?:skip|only|todo|failing)\b/;
+  const BLOCK_DISABLED = /^describe\s*\.\s*(?:skip|only)\b/;
+
+  /**
+   * The ENCLOSING block, found by walking back to the nearest column-0
+   * `describe(`.
+   *
+   * A verifier confirmed the hole this closes: the first version inspected only
+   * the matched `it(` line, so `describe.skip` on the surrounding block silently
+   * disabled SIX covering tests — including both S6's and S10's proofs — while
+   * the registry stayed green. Its `DISABLED` pattern even listed `describe`,
+   * which made that branch unreachable: a token in a pattern the code can never
+   * apply is a promise, not a check.
+   *
+   * Column-0 is the convention in every covering suite here (verified: each one
+   * declares its `describe(` blocks unindented), so the nearest preceding
+   * column-0 `describe` IS the enclosing block. A nested indented `describe`
+   * would not be found, and that limit is stated rather than papered over.
+   */
+  function enclosingBlock(lines: string[], at: number): string | null {
+    for (let i = at; i >= 0; i -= 1) {
+      if (/^describe/.test(lines[i])) return lines[i];
+    }
+    return null;
+  }
 
   it.each(SCENARIOS.map((s) => [s.n, s] as [number, Scenario]))(
     'S%i is pinned to a test that actually runs',
     (_n, s) => {
-      const line = read(s.suite)
-        .split('\n')
-        .find((l) => l.includes(s.test));
-      expect(line).toBeDefined();
+      const lines = read(s.suite).split('\n');
+      const at = lines.findIndex((l) => l.includes(s.test));
+      expect(at).toBeGreaterThan(-1);
+      const line = lines[at];
+
       // It must be a test DECLARATION, not prose that happens to quote the title.
-      expect(line!).toMatch(DECLARES);
-      // And it must not be disabled.
-      expect(line!).not.toMatch(DISABLED);
-      // And it must not be commented out.
-      expect(line!.trimStart().startsWith('//')).toBe(false);
-      expect(line!.trimStart().startsWith('*')).toBe(false);
+      expect(line).toMatch(DECLARES);
+      // It must not be disabled itself.
+      expect(line).not.toMatch(DISABLED);
+      // It must not be commented out.
+      expect(line.trimStart().startsWith('//')).toBe(false);
+      expect(line.trimStart().startsWith('*')).toBe(false);
+      // And its enclosing block must not be disabled either.
+      const block = enclosingBlock(lines, at);
+      if (block !== null) expect(block).not.toMatch(BLOCK_DISABLED);
     },
   );
 
@@ -258,6 +314,22 @@ describe('T213 — every covering test is LIVE, not skipped or commented out', (
     expect("  test.todo('a thing');").toMatch(DISABLED);
     // And the live pattern must NOT call an ordinary live test disabled.
     expect("  it('a thing', () => {").not.toMatch(DISABLED);
+    // The block pattern, which is the half that was unreachable before.
+    expect("describe.skip('a block', () => {").toMatch(BLOCK_DISABLED);
+    expect("describe.only('a block', () => {").toMatch(BLOCK_DISABLED);
+    expect("describe('a block', () => {").not.toMatch(BLOCK_DISABLED);
+  });
+
+  it('finds the ENCLOSING block for a real pinned test, not just any line', () => {
+    // The two-way control for `enclosingBlock`. If it returned null for real
+    // files, the block assertion above would be skipped for every scenario and
+    // the hole would be open again with the tests still green.
+    const s = SCENARIOS.find((x) => x.n === 6)!;
+    const lines = read(s.suite).split('\n');
+    const at = lines.findIndex((l) => l.includes(s.test));
+    const block = enclosingBlock(lines, at);
+    expect(block).not.toBeNull();
+    expect(block!).toMatch(/^describe\(/);
   });
 });
 
