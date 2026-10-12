@@ -30,7 +30,8 @@ export async function seedOrdinaryProjectDemo(): Promise<{ deliveryProjectId: st
       name: 'AI Ops Assistant (ordinary demo)', slug: DEMO_ORDINARY_SLUG,
       status: 'building', project_class: 'sandbox',
       business_problem: 'Ordinary (non-contract) AI project demo for the Phase 6 unassessed-migration path.',
-    });
+      // See seedFactoryDemoContract.ts for why a seed labels its lifecycle rather than skipping it.
+    }, { lifecycleEntryPoint: 'seed:ordinaryProjectDemo' } as any);
     created = true;
   }
 

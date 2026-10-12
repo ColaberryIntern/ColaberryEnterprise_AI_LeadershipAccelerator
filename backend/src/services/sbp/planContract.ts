@@ -73,6 +73,104 @@ export interface PlanRelease {
   week_end: number;
 }
 
+/**
+ * Whether a story reaches a human, and where.
+ *
+ * ## MODEL-EMITTED, unlike everything in `StoryReferences`
+ *
+ * P6-T3 put every lifecycle reference in the server-populated bucket on the grounds that none
+ * is model-knowable. That was right about a blueprint hash and WRONG about this one, and the
+ * distinction is worth stating because it is the whole reason this type exists separately:
+ *
+ *   - a blueprint `content_sha256` IDENTIFIES AN EXISTING ROW. A model asked for one returns a
+ *     plausible 64-character string with nothing behind it. That is fabrication.
+ *   - "does this story reach user-visible output, or is it background work?" is a CLASSIFICATION
+ *     OF THE STORY'S OWN CONTENT. The model wrote the story and is decomposing the product; it
+ *     knows whether the work yields a page. Nothing is being invented.
+ *
+ * ## Why it had to move
+ *
+ * `release_review` exists because of a measured production failure on a STUDENT build - 20 of 20
+ * stories finished and platform-verified, twelve of fourteen services unreachable, because the
+ * releases were layered by pipeline stage. Its rule reads this field.
+ *
+ * But a student build has no workspace model: `ManifestRefs.surfaces` is written by no adapter,
+ * and workspaces live on the Factory/delivery side where there are no stories at all
+ * (`build_plans.project_id` is a `projects` id). So as a server-populated field this was
+ * unfeedable on the one side the rule was built for, and `release_review` could only ever report
+ * "unassessed" - blocking every project forever. Decided 2026-10-10.
+ */
+export interface StoryWorkspace {
+  /**
+   * `headless` is a FIRST-CLASS answer, not a missing value.
+   *
+   * Background work is legitimate and common. If headless were not expressible the model would
+   * either invent a page or omit the field, and omission is what made this unmeasurable before.
+   */
+  kind: 'workspace' | 'headless';
+  /** The page or surface a user reaches, or the job/queue name when headless. */
+  ref: string;
+  /** The action within that surface, when the story is one action rather than the whole page. */
+  action?: string | null;
+}
+
+/**
+ * Where a story sits in the governed lifecycle — the references `request.md:245` requires every
+ * story to carry, for the ones it does not already have.
+ *
+ * ## NOT MODEL-EMITTED, and that is the whole design
+ *
+ * This interface is deliberately absent from `BUILD_PLAN_JSON_SCHEMA`, following `BuildPlan.agents`
+ * below, which is "populated by scopeAgents, never by the model". Two reasons, and the first is the
+ * serious one:
+ *
+ * 1. **Every field here identifies a record the model cannot know.** A blueprint revision and its
+ *    content hash, a business-task id, an approved design decision — these are
+ *    facts about rows that exist. A language model asked to emit a `content_sha256` would produce a
+ *    plausible hex string, which is fabrication of exactly the kind this programme keeps catching.
+ *    The server resolves them or they are absent.
+ * 2. The schema is OpenAI strict structured output, where every key in `properties` must also
+ *    appear in `required`. Adding six reference fields there would force the model to emit all of
+ *    them on every story of every plan, including plans generated before any blueprint exists.
+ *
+ * ## Absent means "not established", never "none"
+ *
+ * Legacy plans have no `references` at all, and plans generated before their project has an
+ * approved blueprint will not either. Nothing may read absence as a negative finding — the same
+ * rule `RenderContext.repoWriteAccess` already states for the same reason.
+ */
+export interface StoryReferences {
+  /**
+   * Business-task ids this story implements, from the approved process contract.
+   *
+   * Empty is meaningful and is not the same as absent: empty says the link was looked for and none
+   * was found, which is worth seeing on a story that claims to implement a business process.
+   */
+  business_task_ids: string[];
+  /**
+   * The approved blueprint this story was decomposed FROM, pinned by revision and content hash.
+   *
+   * Both, not either: the revision says which one, the hash says that it has not changed
+   * underneath. `blueprintApproval.manifestContentHash` is the producer.
+   */
+  blueprint: { revision: number; content_sha256: string };
+  /** Approved design decisions and policies this story must honour, by id. */
+  design_refs: string[];
+  /**
+   * The CODING agent that builds this story.
+   *
+   * SEPARATE FROM `owner_agent` ON PURPOSE. `owner_agent` names a `PlanAgent` — "one unit of
+   * autonomous work in the system the student is building", a runtime employee of the built
+   * system. The thing that writes the code is a different actor, and `request.md:245` forbids
+   * overloading one field with both. The manifest keyspace already separates these as
+   * `agents.runtime` and `agents.builder`; this follows that convention rather than inventing a
+   * second one for the same distinction.
+   */
+  builder_agent?: string | null;
+  /** What has to be true, and observable, before this story counts as delivered. */
+  acceptance_evidence: string[];
+}
+
 export interface PlanStory {
   /** STORY-001, … sequential. */
   id: string;
@@ -91,8 +189,23 @@ export interface PlanStory {
   task_guidance: string;
   /** Specific failure modes this story must handle. */
   failure_paths: string[];
+  /**
+   * Whether this story reaches a human, and where. See `StoryWorkspace`.
+   *
+   * REQUIRED in the JSON schema and OPTIONAL here, which is this file's existing house pattern
+   * (see `from_dimensions`): OpenAI strict output demands every property appear in `required`,
+   * so the model always emits it - while every plan generated before 2026-10-10 has none, and
+   * nothing re-validates a stored plan on read.
+   */
+  workspace?: StoryWorkspace;
   /** story_ids that must be complete first (release gating). */
   blocked_by?: string[];
+  /**
+   * Lifecycle references, when they have been resolved. ABSENT on every plan generated before
+   * 2026-10-09, and absent on any plan whose project has no approved blueprint — see
+   * `StoryReferences` for why absence is never read as a negative.
+   */
+  references?: StoryReferences;
 }
 
 /**
@@ -237,6 +350,7 @@ export const BUILD_PLAN_JSON_SCHEMA = {
         required: [
           'id', 'release', 'title', 'narrative', 'fulfills',
           'owner_agent', 'acceptance', 'task_guidance', 'failure_paths', 'blocked_by',
+          'workspace',
         ],
         properties: {
           id: { type: 'string', description: 'STORY-001, … sequential' },
@@ -276,6 +390,39 @@ export const BUILD_PLAN_JSON_SCHEMA = {
             description:
               'story_ids that must be complete before this one can start. Every story in release ' +
               'r(n) is blocked by the key (last) story of r(n-1). r0 stories emit [].',
+          },
+          // THE RELEASE-LEVEL SIGNAL. `release_review` asks whether a release demonstrates a
+          // business workflow a human can see; without this it had nothing to read and blocked
+          // every project. The model classifies its OWN story rather than resolving a foreign
+          // identifier - see `StoryWorkspace` for why that distinction makes this safe to emit.
+          workspace: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'ref', 'action'],
+            properties: {
+              kind: {
+                type: 'string',
+                enum: ['workspace', 'headless'],
+                description:
+                  "'workspace' when finishing this story gives a person something to open, " +
+                  "click or see. 'headless' when it is background work no page shows - a job, " +
+                  'a sync, a queue consumer. Headless is legitimate and must be used honestly: ' +
+                  'a release in which EVERY story is headless demonstrates nothing to a user, ' +
+                  'which is the failure this field exists to make visible.',
+              },
+              ref: {
+                type: 'string',
+                description:
+                  'The page or surface a user reaches, named as the product names it ' +
+                  '("Intake review", "Client dashboard"). When headless, the job or queue name.',
+              },
+              action: {
+                type: ['string', 'null'],
+                description:
+                  'The action within that surface when the story is one action rather than the ' +
+                  'whole page ("approve", "export"). Emit null when the story IS the page.',
+              },
+            },
           },
         },
       },

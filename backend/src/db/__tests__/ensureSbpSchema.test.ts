@@ -22,7 +22,7 @@ jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 
 import { sequelize } from '../../config/database';
 import {
-  ensureSbpSchema, assertSbpSchema, REQUIRED_TABLES, REQUIRED_COLUMNS,
+  ensureSbpSchema, assertSbpSchema, REQUIRED_TABLES, REQUIRED_COLUMNS, REQUIRED_INDEXES,
 } from '../ensureSbpSchema';
 
 const mockQuery = sequelize.query as unknown as jest.Mock;
@@ -30,7 +30,13 @@ const mockQuery = sequelize.query as unknown as jest.Mock;
 /** Every table/index/column assertSbpSchema demands, as a fully-migrated DB. */
 const FULL_CATALOG = {
   tables: ['build_intake', 'build_plans', 'github_webhook_deliveries'],
-  indexes: ['build_intake_unique_project', 'build_plans_unique_project_version'],
+  // DERIVED from the module rather than retyped. This list was hardcoded and went stale the
+  // moment P6-T5 added a required index: the fixture then described a database missing an index
+  // it was supposed to have, and two tests failed for a reason that had nothing to do with the
+  // comparison logic they exist to check. Deriving it means the positive case proves what it is
+  // for -- that a fully-migrated catalog yields no phantom missing entries -- while the CONTENT
+  // of the list is pinned by name in its own test below.
+  indexes: [...REQUIRED_INDEXES],
   columns: [
     { table_name: 'build_intake', column_name: 'answers' },
     // Missing ⇒ savePlanDraft's INSERT throws and no plan is ever saved.
@@ -173,6 +179,19 @@ describe('the column query covers every required table', () => {
 
     expect(result.missing).toEqual([]);
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('the required-index list says what it must contain', () => {
+  it('names all three indexes explicitly, so deriving the fixture cannot hide a deletion', () => {
+    // The fixture above is derived from this list, which means a REMOVED entry would make both
+    // sides agree and the deletion would pass unnoticed. This is the assertion that stops that:
+    // the content is stated here by name, once.
+    expect([...REQUIRED_INDEXES].sort()).toEqual([
+      'build_intake_unique_project',
+      'build_plans_one_published_per_project',
+      'build_plans_unique_project_version',
+    ]);
   });
 });
 

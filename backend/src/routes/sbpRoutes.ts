@@ -298,7 +298,10 @@ router.get('/api/portal/sbp/builds/:projectId', requireParticipant, async (req: 
 const publishSchema = z.object({
   // The hash the reviewer was shown. Optional, but supplying it is what makes
   // "the plan I approved is the plan that shipped" enforceable.
-  expected_sha256: z.string().length(64).optional(),
+  // REQUIRED since 2026-10-11. It was `.optional()`, so a client could publish with no revision
+  // check at all by omitting one field — defeating the parameter's whole purpose. See
+  // `planStore.publishPlan` for the incident it exists for and why the blast radius was safe.
+  expected_sha256: z.string().length(64),
 });
 
 router.post('/api/portal/sbp/builds/:projectId/publish', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {

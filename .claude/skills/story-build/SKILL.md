@@ -9,6 +9,21 @@ Turn any project (an RFP, a requirements doc, or a described idea) into a canoni
 Claude-Code-buildable, traceable Basecamp build plan, self-gated so nothing biased or
 incomplete ships. One project = one config = one command to generate + one to publish.
 
+## This skill is unchanged by the project-lifecycle work
+
+A governed front door for project creation now exists as **`project-lifecycle`**: one lifecycle
+record per project, registered at creation, with stage prerequisites that refuse rather than
+warn. It does **not** replace this skill and does not change what this skill produces.
+
+The split is clean: `project-lifecycle` owns GOVERNANCE (does this project exist legitimately,
+what stage is it in, what is blocking it, who acts next). This skill owns BASECAMP STRUCTURE
+(the story-driven to-do list, the AI/Human split, the milestone gates, the 5 Docs & Files). The
+Basecamp integration, the 4 publish gates and the assignment model below are untouched.
+
+If you are standing up a **delivery** project and want it governed, run `project-lifecycle`
+first and then story-build the structure onto it. Student capstones are **not governed yet**
+(P6-T1b, blocked), so nothing changes for them at all.
+
 ## What to say to run it
 
 Give me the five things below. Everything else has a sane default.
