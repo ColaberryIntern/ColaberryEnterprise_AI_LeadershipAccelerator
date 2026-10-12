@@ -440,15 +440,44 @@ classification is left alone rather than quietly edited.
 
 ## J · Exact next-phase proposal
 
-Phase 2 is **code-complete and unverified in production**. The remaining Phase 2 work, in order:
+**Phase 2 is COMPLETE: merged, deployed, production-verified, and handed off.** The four steps the
+pre-deploy version of this section listed have all been done — PR
+[#3062](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3062)
+merged, deployed in registry mode with a marker check against the running container, read-only
+verification recorded in §F, and `PHASE_2_HANDOFF.md` written with six numbered steps a
+non-developer can follow in a browser.
 
-1. Open the PR (draft until green), get Ali's review and **merge click**.
-2. Deploy via `DEPLOY_MODE=registry EXPECT_MARKER=… EXPECT_IN=… bash scripts/deploy-prod.sh` —
-   never `--build nginx`.
-3. **T216 production verification, read-only**: confirm the running release carries the commit;
-   measure the real row counts by tier and type; observe the two flag values that are currently
-   unknown; confirm an Explorer appears in the roster with a stage label rather than a raw enum.
-4. Update §F of this checkpoint with what was observed, and `handoff.md` with numbered steps.
+### Two decisions that belong to Ali, not to Phase 3
 
-Only then Phase 3, which should open by closing gaps 1, 2 and 5 rather than by building the Sales
-Readiness Score on an input that cannot yet be trusted.
+1. **Whether to run the coherence backfill.** It has only ever been dry-run. §F has the numbers:
+   56 writes planned of 376 incoherent rows, 86 accounts currently invisible to the engine, 37 of
+   those provable. **Until it runs, question 1 stays answered "yes, 86".**
+2. **The `enrollmentController` copy and the raw-email log.** A two-line change, deliberately left
+   out of this phase on scope-lock grounds and recorded in §I rather than hidden.
+
+### What Phase 3 should require before it starts
+
+Phase 3's purpose is the Sales Readiness Score, and §F now shows why it cannot simply begin:
+**the 86 invisible accounts are exactly the population an SRS would score.** Scoring a population
+the engine cannot see produces a confident number about the wrong people.
+
+So Phase 3 should open by closing, in this order:
+
+1. **The backfill decision above**, because it determines the input set.
+2. **Gap 1 and 2 of §H** — a registry test that fails when an evidence group loses its evidence,
+   and coverage for the evidence groups that have none. Without the first, Person 360 can silently
+   stop carrying what the score depends on.
+3. **Gap 5** — the two suites that pass in isolation and fail under parallel load. A gate that
+   produces false reds is a gate people learn to ignore, and it is the gate protecting the SRS
+   input.
+4. **`explorer_entered_at`**, which no task owns and which the backfill would leave NULL for 37
+   people. A journey score with no journey start date is a score with no denominator.
+
+Only then the score itself.
+
+### Honest note on this phase's own record
+
+Three of eight tasks failed independent verification and two were never re-graded after their
+final fixes (§B). The production behaviour is tested and live; what repeatedly failed was the
+evidence I wrote about it. Phase 3 should assume the same risk and budget verification rounds
+accordingly rather than treating a green suite as a finished task.
