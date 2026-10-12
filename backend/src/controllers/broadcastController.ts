@@ -8,7 +8,8 @@ import { loadViewerAccessFacts, broadcastAccessDeps } from '../services/broadcas
 import { projectDiscovery, DiscoveryEntry } from '../services/broadcast/broadcastDiscovery';
 import { ACTIVE_DISCOVERY_STATES, findActiveOccurrences } from '../services/broadcast/broadcastActiveQuery';
 import { resolvePollAfterMs } from '../services/broadcast/broadcastPollPolicy';
-import { signPlayback } from '../services/broadcast/broadcastPlaybackGrant';
+import { signPlayback, computeGrantExpiry } from '../services/broadcast/broadcastPlaybackGrant';
+import { signLivePlayback, CloudflareStreamError } from '../services/broadcast/providers/cloudflareStreamProvider';
 import BroadcastOccurrence from '../models/BroadcastOccurrence';
 
 /**
@@ -157,10 +158,62 @@ export async function postPlaybackGrant(req: Request, res: Response): Promise<vo
       return;
     }
 
+    const bound = {
+      contentStartedAtMs: occurrence.content_started_at?.getTime() ?? null,
+      previewSeconds: occurrence.preview_seconds,
+    };
+
+    // THE PROVIDER BRANCH. Replay serves our own bytes through `/bm/`; live never touches this
+    // server, so the url points at Cloudflare's edge instead. What does NOT change is WHEN
+    // access ends: both branches take their expiry from `computeGrantExpiry`, so the preview
+    // deadline is enforced by one piece of arithmetic rather than two that could drift.
+    //
+    // Every occurrence written before this commit has `provider` defaulted to 'zoom', so the
+    // branch below is unreachable for all of them and the replay path is byte-identical.
+    if (occurrence.provider === 'cloudflare') {
+      const expiresAt = computeGrantExpiry(decision, bound, Date.now());
+      if (expiresAt === null) {
+        res.status(403).json({ error: 'NotEntitled', reason: 'preview_expired', offer_upgrade: true });
+        return;
+      }
+      if (!occurrence.provider_session_id) {
+        // Configured for Cloudflare but no live input bound yet. 503, not 404: the occurrence
+        // exists and the viewer is entitled — the provider side is simply not ready, and
+        // saying "not found" would send a producer looking for the wrong fault.
+        res.status(503).json({ error: 'ProviderNotReady', reason: 'live_input_not_bound' });
+        return;
+      }
+      try {
+        const live = signLivePlayback(occurrence.provider_session_id, expiresAt);
+        res.json({
+          url: live.url,
+          expires_at: live.expiresAt,
+          ttl_seconds: live.ttlSeconds,
+          grant: decision.grant,
+          preview_seconds_remaining: decision.previewSecondsRemaining ?? null,
+        });
+      } catch (err) {
+        if (err instanceof CloudflareStreamError) {
+          // Fail closed and say so. There is deliberately no fallback to the replay path here:
+          // serving a different asset than the one asked for is how a viewer ends up watching
+          // last week's class and nobody notices.
+          console.error(JSON.stringify({
+            timestamp: new Date().toISOString(), level: 'error', service: 'broadcast',
+            event: 'broadcast_live_grant_failed', outcome: 'failure', error_class: err.error_class,
+            context: { occurrence_id: occurrence.id },
+          }));
+          res.status(503).json({ error: 'ProviderNotReady', reason: 'live_playback_unavailable' });
+          return;
+        }
+        throw err;
+      }
+      return;
+    }
+
     const signed = signPlayback(
       `broadcast/${occurrence.id}/${asset}`,
       decision,
-      { contentStartedAtMs: occurrence.content_started_at?.getTime() ?? null, previewSeconds: occurrence.preview_seconds },
+      bound,
       // Empty base => a RELATIVE url (`/bm/...`). Deliberate: the player runs in the portal
       // on the same origin as this API, so a relative url is correct and cannot drift out of
       // sync with host config. `env.publicAppUrl` exists if an absolute one is ever needed,

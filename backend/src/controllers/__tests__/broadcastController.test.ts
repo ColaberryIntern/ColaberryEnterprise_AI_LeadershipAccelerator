@@ -424,3 +424,75 @@ describe('getActiveBroadcasts', () => {
     }
   });
 });
+
+/**
+ * THE PROVIDER BRANCH (L5.1).
+ *
+ * What is worth asserting here is not that Cloudflare works — the adapter suite covers that
+ * against a mocked API — but that the branch cannot hand out a url it should not, and that
+ * every occurrence written before it existed still takes the replay path untouched.
+ *
+ * The provider is deliberately left UNCONFIGURED in these tests. That is the state production
+ * is in right now, and it is the state in which a fallback would be most tempting and most
+ * damaging.
+ */
+describe('postPlaybackGrant — the Cloudflare provider branch', () => {
+  const cfEnvKeys = [
+    'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_STREAM_SUBDOMAIN', 'CLOUDFLARE_STREAM_TOKEN',
+    'CLOUDFLARE_STREAM_SIGNING_KEY_ID', 'CLOUDFLARE_STREAM_SIGNING_KEY_PEM',
+  ];
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    cfEnvKeys.forEach((k) => { saved[k] = process.env[k]; delete process.env[k]; });
+  });
+  afterEach(() => {
+    cfEnvKeys.forEach((k) => { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; });
+  });
+
+  const liveCf = (over: any = {}) => ({
+    id: OCC, access_mode: 'preview', editorial_state: 'live',
+    preview_seconds: 900, content_started_at: new Date(Date.now() - 60_000),
+    provider: 'cloudflare', provider_session_id: 'f256e6ea9341d51eea64c9454659e576', ...over,
+  });
+
+  it('fails CLOSED with no url when the provider is not configured', async () => {
+    findByPk.mockResolvedValue(liveCf());
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toMatchObject({ error: 'ProviderNotReady', reason: 'live_playback_unavailable' });
+    // The property that matters: no url at all. Not a /bm/ url, not an unsigned one.
+    expect(body).not.toHaveProperty('url');
+  });
+
+  it('says the live input is not bound yet, rather than 404ing an occurrence that exists', async () => {
+    findByPk.mockResolvedValue(liveCf({ provider_session_id: null }));
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ reason: 'live_input_not_bound' });
+  });
+
+  it('still denies a spent preview window BEFORE it ever reaches the provider', async () => {
+    findByPk.mockResolvedValue(liveCf({ content_started_at: new Date(Date.now() - 901_000) }));
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toMatchObject({ error: 'NotEntitled', reason: 'preview_expired' });
+    expect(body).not.toHaveProperty('url');
+  });
+
+  it('leaves every pre-existing occurrence on the replay path, byte for byte', async () => {
+    // `provider` defaults to 'zoom' on the model, so nothing written before this commit can
+    // take the branch above.
+    findByPk.mockResolvedValue({
+      id: OCC, access_mode: 'preview', editorial_state: 'live', preview_seconds: 900,
+      content_started_at: new Date(Date.now() - 60_000), provider: 'zoom',
+    });
+    const res = mockRes();
+    await postPlaybackGrant(req({ body: { asset: 'master.m3u8' } }), res);
+    expect(res.json.mock.calls[0][0].url).toMatch(/^\/bm\/broadcast\//);
+  });
+});
