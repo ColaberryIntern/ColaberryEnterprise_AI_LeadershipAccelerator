@@ -4,6 +4,11 @@ import { AppError } from '../utils/AppError';
 import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 import { pickBestEnrollment } from './participantService';
+import { bridgeExplorerProfileAtRegistration } from './explorerGrowth/explorerProfileAtRegistration';
+import {
+  enrollInPaymentCampaignIfUnpaid,
+  exitPaymentCampaign,
+} from './readinessCampaignService';
 import { redactForLogs } from '../utils/piiRedaction';
 
 // Lazy import (the convention ghlService itself uses for aiEventService): a
@@ -115,6 +120,19 @@ export async function markEnrollmentPaid(
   if (enrollment.payment_status === 'paid') return enrollment;
 
   enrollment.payment_status = 'paid';
+  // T206: THE PAIR, written with the paid flag. This is the plan's "legacy webhook" path -
+  // `webhookController` calls it on a PaySimple payment_created - and it is the one writer
+  // the first pass of T206 MISSED, because it writes by PROPERTY ASSIGNMENT followed by
+  // `.save()` rather than through an object literal or raw SQL. Two syntaxes were considered
+  // and there are three.
+  //
+  // Latent rather than live today: this matches on `paysimple_external_id`, which only
+  // `createPendingEnrollment` writes, and those rows inherit the column default
+  // `tier: 'member'`. So no paid-but-guest row can exist through here right now. It is fixed
+  // for the same reason `convertExplorerToStandard` was - a latent trap is still a trap, and
+  // the coherence must not depend on a column default nobody states at the call site.
+  enrollment.tier = 'member';
+  enrollment.enrollment_type = 'standard';
   // Confirmed payment is the self-serve grant condition — without this, requestMagicLink
   // (participantService) keeps rejecting the paid student with "pending admin approval"
   // forever, since it gates strictly on portal_enabled, not payment_status.
@@ -171,7 +189,7 @@ export async function retireRedundantExplorerAccounts(email: string, paidEnrollm
       status: 'withdrawn',
       notes: `${stray.notes ? stray.notes + ' | ' : ''}Retired ${today}: superseded by paid enrollment ${paidEnrollmentId}`,
     });
-    console.log(`[Enrollment] Retired redundant Explorer ${stray.id} (${email}) — now a paid student`);
+    console.log(`[Enrollment] Retired redundant Explorer ${stray.id} (${redactForLogs(email)}) — now a paid student`);
   }
 }
 
@@ -320,6 +338,18 @@ export async function createExplorerEnrollment(input: {
     phone: input.phone || undefined,
     cohort_id: cohort.id,
     enrollment_type: 'explorer',
+    // `tier: 'guest'` — the other half of what describes a free account, and it
+    // was missing here. `enrollment_type` is the PROGRAMME (the free AI course);
+    // `tier` is the ACCESS LEVEL. Leaving `tier` at its 'member' default meant a
+    // free Explorer read as a paid-access member to everything that keys on
+    // access rather than programme, and two of those are user-visible:
+    // `v1EnrollmentLookupController` reports them ENROLLED to the partner app,
+    // and `reeseWelcomeService` greets them with the student intro rather than
+    // the account intro. See docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md.
+    tier: 'guest',
+    // T205: the moment this person entered the Explorer journey. Set once here, at
+    // registration; nothing rewrites it later.
+    explorer_entered_at: new Date(),
     payment_status: 'pending',
     payment_method: 'credit_card',
     status: 'active',
@@ -364,6 +394,12 @@ export async function createExplorerEnrollment(input: {
     console.error('[OpenHouse] Lead capture failed (non-fatal):', err.message);
   }
 
+  // T205: the Explorer journey profile, at registration rather than overnight. After
+  // lead capture, because the bridge resolves `lead_id` by normalized email. Never
+  // throws — a bridge failure must not fail an enrollment, and the nightly repair
+  // remains the recovery path for whatever this misses.
+  await bridgeExplorerProfileAtRegistration(enrollment.id, 'enroll_explorer');
+
   // Send the branded welcome with a one-click portal magic link, targeting THIS
   // specific new enrollment. We generate the token on `enrollment` directly rather
   // than doing an email-keyed lookup, which previously (via requestMagicLink) could
@@ -397,7 +433,7 @@ export async function createExplorerEnrollment(input: {
       errorMessage = err?.message || 'unknown error';
     }
     if (!sent) {
-      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${email}): ${errorMessage}`);
+      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${redactForLogs(email)}): ${errorMessage}`);
     }
     try {
       const { logCommunication } = await import('./communicationLogService');
@@ -423,106 +459,36 @@ export async function createExplorerEnrollment(input: {
   return { enrollment, created: true, cohort_id: cohort.id };
 }
 
-// Admin "Convert to enrolled": flip an Explorer into a standard enrollment. Seat
-// reservation + payment follow the normal enrollment path, not this flag flip.
+/**
+ * Admin "Convert to enrolled": move an Explorer onto a standard enrollment. Seat
+ * reservation and payment follow the normal enrollment path, not this flag flip.
+ *
+ * WRITES BOTH SEMANTIC COLUMNS, Phase 2 T206, and the reason is the whole task.
+ *
+ * This used to write `enrollment_type: 'standard'` alone. Once T202 gave `/enroll`
+ * Explorers `tier: 'guest'`, that produced **`standard` + `guest`**: a non-learner
+ * programme with free access. Invisible to Explorer Growth because the row is no longer
+ * `'explorer'`, and gated out of nothing because the legacy entitlement branch only gates
+ * explorers. Crucially the row is **never paid**, so a `payment_status: 'paid'` +
+ * `tier: 'guest'` tripwire cannot see it either — which is exactly why T206 has two
+ * tripwires rather than one.
+ *
+ * It was latent rather than live: this function has no callers (`grep -rn
+ * convertExplorerToStandard backend/src --include=*.ts` finds only its own definition).
+ * Fixed here so it is not a trap for whoever wires the admin button.
+ *
+ * `grantMembership` (`subscriptionService.ts:525`) is the reference implementation — its
+ * own comment says it is "kept in one place so the two callers can never drift apart" —
+ * and this function now agrees with it rather than offering a second opinion.
+ */
 export async function convertExplorerToStandard(enrollmentId: string): Promise<Enrollment> {
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) throw new AppError('Enrollment not found', 404);
   if (enrollment.enrollment_type === 'explorer') {
-    await enrollment.update({ enrollment_type: 'standard' });
+    // The PAIR, written together. `tier` is the access level and `enrollment_type` the
+    // programme; converting the programme without granting the access leaves the row in a
+    // state no consumer reads correctly.
+    await enrollment.update({ enrollment_type: 'standard', tier: 'member' });
   }
   return enrollment;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Payment Readiness Campaign Helpers                                 */
-/* ------------------------------------------------------------------ */
-
-const PAYMENT_READINESS_CAMPAIGN_NAME = 'Payment Readiness Campaign';
-
-async function enrollInPaymentCampaignIfUnpaid(enrollment: Enrollment): Promise<void> {
-  if (enrollment.payment_status === 'paid') return;
-
-  const campaign = await Campaign.findOne({
-    where: { name: PAYMENT_READINESS_CAMPAIGN_NAME, status: 'active' },
-  });
-  if (!campaign) {
-    console.log('[Payment Campaign] No active payment readiness campaign found — skipping');
-    return;
-  }
-
-  // Find or create a Lead record for this enrollee
-  const [lead] = await Lead.findOrCreate({
-    where: { email: enrollment.email.toLowerCase().trim() },
-    defaults: {
-      name: enrollment.full_name,
-      email: enrollment.email.toLowerCase().trim(),
-      company: enrollment.company || '',
-      title: enrollment.title || '',
-      phone: enrollment.phone || '',
-      source: 'enrollment',
-      status: 'engaged',
-    } as any,
-  });
-
-  const { enrollLeadsInCampaign } = await import('./campaignService');
-  const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Class Readiness Campaign                                           */
-/* ------------------------------------------------------------------ */
-
-const CLASS_READINESS_CAMPAIGN_NAME = 'Class Readiness Campaign';
-
-export async function enrollInClassReadinessCampaign(enrollment: Enrollment): Promise<void> {
-  if (enrollment.payment_status !== 'paid') return;
-
-  const campaign = await Campaign.findOne({
-    where: { name: CLASS_READINESS_CAMPAIGN_NAME, status: 'active' },
-  });
-  if (!campaign) {
-    console.log('[Class Readiness] No active campaign found — skipping');
-    return;
-  }
-
-  const [lead] = await Lead.findOrCreate({
-    where: { email: enrollment.email.toLowerCase().trim() },
-    defaults: {
-      name: enrollment.full_name,
-      email: enrollment.email.toLowerCase().trim(),
-      company: enrollment.company || '',
-      title: enrollment.title || '',
-      phone: enrollment.phone || '',
-      source: 'enrollment',
-      status: 'engaged',
-    } as any,
-  });
-
-  const { enrollLeadsInCampaign } = await import('./campaignService');
-  const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
-}
-
-async function exitPaymentCampaign(email: string): Promise<void> {
-  const campaign = await Campaign.findOne({
-    where: { name: PAYMENT_READINESS_CAMPAIGN_NAME },
-  });
-  if (!campaign) return;
-
-  const lead = await Lead.findOne({
-    where: { email: email.toLowerCase().trim() },
-  });
-  if (!lead) return;
-
-  try {
-    const { removeLeadFromCampaign } = await import('./campaignService');
-    await removeLeadFromCampaign(campaign.id, lead.id);
-    console.log(`[Payment Campaign] Exited lead ${lead.id} (${email}) — payment confirmed`);
-  } catch (err: any) {
-    // Lead may not be enrolled (e.g., admin-created enrollment that was always paid)
-    if (err.message?.includes('not enrolled')) return;
-    throw err;
-  }
 }

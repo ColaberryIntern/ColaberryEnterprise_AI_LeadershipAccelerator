@@ -3,6 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import { fromDrilldownUrl } from '../../adminOs/drilldown';
+// T212: this page used to carry its own nine-key STAGE_LABEL, identical in
+// content to PersonProfilePage's. Neither was updated when T209 added the
+// `explorer` stage, so the roster rendered the one stage this phase exists to
+// make visible as the raw lowercase enum through its `?? s` fallback. Two
+// copies of a map do not drift together; they drift apart.
+import { STAGE_LABEL } from '../../adminOs/personStages';
 
 /**
  * People — one row per person, not per record.
@@ -34,18 +40,6 @@ interface Roster {
   limit: number;
   offset: number;
 }
-
-const STAGE_LABEL: Record<string, string> = {
-  anonymous_visitor: 'Anonymous visitor',
-  identified_visitor: 'Identified visitor',
-  lead: 'Lead',
-  applicant: 'Applicant',
-  enrolled_student: 'Enrolled',
-  active_learner: 'Active learner',
-  graduate: 'Graduate',
-  lapsed: 'Lapsed',
-  returning_customer: 'Returning customer',
-};
 
 export default function PeoplePage() {
   const location = useLocation();

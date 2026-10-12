@@ -38,6 +38,11 @@ const SECTION_STAGES: Record<string, readonly LifecycleStage[]> = {
   // admissions one.
   lead_ingestion: [
     'anonymous_visitor', 'identified_visitor', 'lead', 'applicant',
+    // T209: 'explorer' sits between applicant and enrolled_student, so omitting it
+    // here would put a GAP in Admissions' range and fail the contiguity test. It is
+    // also the right answer on its own terms — a free account is acquisition, which
+    // is precisely what this section follows.
+    'explorer',
     'enrolled_student', 'active_learner', 'graduate', 'lapsed',
   ],
   // Revenue sees anyone who has or could have a billing relationship.
@@ -47,7 +52,12 @@ const SECTION_STAGES: Record<string, readonly LifecycleStage[]> = {
   // the stage between them, so a person currently mid-programme would vanish from
   // a revenue roster and reappear on graduation. A stage set must be contiguous
   // in LIFECYCLE_ORDER for exactly this reason, and a test enforces it.
-  revenue: ['lead', 'applicant', 'enrolled_student', 'active_learner', 'graduate', 'lapsed', 'returning_customer'],
+  // T209 adds 'explorer' for the same contiguity reason, and Revenue is the
+  // section that most needs it: a free account is the top of the paid funnel.
+  revenue: [
+    'lead', 'applicant', 'explorer', 'enrolled_student', 'active_learner',
+    'graduate', 'lapsed', 'returning_customer',
+  ],
   // The Support student-story surface: enrolled people only, never prospects.
   // 'lapsed' included: someone who withdrew is still a person Support deals with,
   // and excluding them would hide churn from the people closest to it.

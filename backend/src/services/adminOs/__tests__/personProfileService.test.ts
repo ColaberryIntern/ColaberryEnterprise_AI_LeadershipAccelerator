@@ -97,7 +97,13 @@ describe('person profile', () => {
       sections: sectionsFor('mentor'),
       visibleEnrollmentIds: ['enr-1', 'enr-2'],
     });
-    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('enrollment_type'));
+    // T210 made this selector AMBIGUOUS: the identity query now also contains
+    // `enrollment_type`, via bool_or(e.enrollment_type = 'explorer') in the shared
+    // fact aggregate. Select on the learning query's own camelCase alias instead.
+    // Left as `enrollment_type` this found the identity query, which has no
+    // `IN (:ids)` at all — so one of these two tests was about to pass for the
+    // wrong reason rather than fail.
+    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('"enrollmentType"'));
     expect(String(learningCall![0])).toContain('AND id IN (:ids)');
     expect((learningCall![1] as { replacements: { ids: string[] } }).replacements.ids)
       .toEqual(['enr-1', 'enr-2']);
@@ -122,7 +128,13 @@ describe('person profile', () => {
       sections: sectionsFor('owner'),
       visibleEnrollmentIds: null,
     });
-    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('enrollment_type'));
+    // T210 made this selector AMBIGUOUS: the identity query now also contains
+    // `enrollment_type`, via bool_or(e.enrollment_type = 'explorer') in the shared
+    // fact aggregate. Select on the learning query's own camelCase alias instead.
+    // Left as `enrollment_type` this found the identity query, which has no
+    // `IN (:ids)` at all — so one of these two tests was about to pass for the
+    // wrong reason rather than fail.
+    const learningCall = query.mock.calls.find((c) => String(c[0]).includes('"enrollmentType"'));
     expect(String(learningCall![0])).not.toContain('IN (:ids)');
   });
 
@@ -326,5 +338,48 @@ describe('person profile', () => {
     });
     expect(String(query.mock.calls[0][0])).not.toContain("OR '1'='1");
     expect(String(query.mock.calls[0][0])).toContain(':email');
+  });
+});
+
+// ── T211: the Explorer E/I/F panel is actually assembled ────────────────────
+
+describe('T211 — Explorer E/I/F is loaded by the assembler, not merely available', () => {
+  it('issues the explorer snapshot query for a caller who may see acquisition', async () => {
+    // A verifier's mutant commented the load out and every test stayed green,
+    // because the suite only exercised the LOADER. This asserts the CALL.
+    //
+    // The enrolment-id read has to return something: `loadExplorerScore` returns
+    // early for an empty id list (so an idless person issues no query at all),
+    // which means the default all-empty priming cannot exercise this path.
+    query.mockReset();
+    query.mockImplementation((sql: string) => {
+      if (String(sql).includes('COALESCE(l.email, e.email)')) return Promise.resolve([IDENTITY]);
+      if (/SELECT id FROM enrollments/i.test(String(sql))) return Promise.resolve([{ id: 'enr-1' }]);
+      return Promise.resolve([]);
+    });
+    await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('revenue'),
+      visibleEnrollmentIds: null,
+    });
+    const explorerCalls = query.mock.calls
+      .map((c) => String(c[0]))
+      .filter((sql) => sql.includes('explorer_score_snapshots'));
+    expect(explorerCalls).toHaveLength(1);
+    // and it asked for THIS person's enrolment, not everyone's
+    const call = query.mock.calls.find((c) => String(c[0]).includes('explorer_score_snapshots'))!;
+    expect((call[1] as { replacements: { enrollmentIds: string[] } }).replacements.enrollmentIds)
+      .toEqual(['enr-1']);
+  });
+
+  it('NAMES explorerScore as withheld for a caller who may not, rather than omitting it', async () => {
+    primeIdentity();
+    const profile = await getPersonProfile({
+      email: 'someone@example.com',
+      sections: sectionsFor('support'),
+      visibleEnrollmentIds: null,
+    });
+    expect(profile!.withheldPanels).toContain('explorerScore');
+    expect(panelSql().some((sql) => sql.includes('explorer_score_snapshots'))).toBe(false);
   });
 });

@@ -52,7 +52,7 @@ A file named in prose without a line number is **not** evidence. Only the cited 
 The evidence, one citation per line:
 
 - Claim 1 — `backend/src/models/Lead.ts:102` → "declare ghl_contact_id: string | null;"
-- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:85` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
+- Claim 2 — `backend/src/services/leads/ghlAccountRouting.ts:132` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
 - Claim 3 — `backend/src/services/ghlService.ts:54` → "const GHL_BASE = 'https://rest.gohighlevel.com/v1';"
 - Claim 4 — `backend/src/routes/calendarRoutes.ts:6` → "router.get('/api/calendar/availability', handleGetAvailability);"
 - Claim 4 — `backend/src/services/calendarService.ts:225` → "export async function createBooking(data: BookingInput): Promise<BookingResult> {"
@@ -83,7 +83,7 @@ constraints require. But "supports different sub-accounts" overstates what is li
 Fail-closed is confirmed at the deciding line — a lead routed to a non-default account
 with no key returns this rather than the default account's credential:
 
-`backend/src/services/leads/ghlAccountRouting.ts:95` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:142` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 The type-level guarantee is stronger than the runtime one: the result union only carries an
 `apiKey` on the ready branch, so a caller cannot reach a credential on the unconfigured
@@ -130,13 +130,19 @@ Treated in full in `EXPLORER_ENTRY_SEMANTICS.md`. The headline for this inventor
 **no single Explorer entry event**, and the two flags that could define one are written by
 disjoint code paths that never read each other.
 
+> **Dated, as of Phase 1 — what follows is the defect, not current behaviour.** It was true at
+> `origin/main @ 541305a6`. **Phase 2 T202b closed it:** both public paths now write both columns
+> through one canonical service, which is why a citation below points into
+> `freeAccountRegistration.ts` rather than the file Phase 1 read it from. The finding stands because
+> this inventory records what was wrong; for what is true now see `FREE_ACCOUNT_CONSUMERS.md`.
+
 The `/enroll` free-account path sets one flag and leaves the other at its default:
 
-`backend/src/services/enrollmentService.ts:322` → "    enrollment_type: 'explorer',"
+`backend/src/services/enrollmentService.ts:340` → "    enrollment_type: 'explorer',"
 
 The portal free-signup path sets the *other* flag and leaves the first at its default:
 
-`backend/src/services/freeSignupService.ts:30` → "tier: 'guest' as const,"
+`backend/src/services/freeAccountRegistration.ts:80` → "tier: 'guest' as const," (moved there by Phase 2 T202b, which made the portal signup path delegate; Phase 1 recorded this literal in freeSignupService at line 30, where it no longer exists)
 
 The Explorer OS gates on the first flag only:
 
@@ -325,7 +331,11 @@ So whichever he picks is already enforceable.
    derived from the mere existence of an enrollment row by email, with no check of
    `enrollment_type`, `tier` or `payment_status`:
 
-`backend/src/services/adminOs/personProfileService.ts:229` → "WHEN e.email IS NOT NULL THEN 'enrolled_student'"
+**CLOSED by T210, 2026-10-08.** Staging now requires authoritative paid state, so an
+   unpaid Explorer is no longer post-conversion and its temperature and lead score are no
+   longer nulled:
+
+`backend/src/services/adminOs/conversionState.ts:110` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
    and that stage is treated as post-conversion, which nulls temperature and lead score
    **on the server**, not merely hiding them in the UI:
@@ -334,7 +344,7 @@ So whichever he picks is already enforceable.
 
    with this explanation attached to the suppression:
 
-`backend/src/services/adminOs/panels/acquisitionPanels.ts:92` → "+ 'someone is to convert, and this person already has.';"
+`backend/src/services/adminOs/panels/acquisitionPanels.ts:100` → "+ 'someone is to convert, and this person already has.';"
 
    For an unpaid Explorer that sentence is false, and the suppressed population is exactly
    the one whose intent score is the point.

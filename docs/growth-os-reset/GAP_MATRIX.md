@@ -53,7 +53,7 @@ agree. **Not BUILD**: adding a sixth regime is exactly what §5 forbids.
 **Intent:** the model comment says `tier` is authoritative for access level.
 **Current:** the paywall reads payment status, comp, staff and cohort type, never `tier`.
 
-`backend/src/models/Enrollment.ts:211` → "// self-serve preview account (0 points, no cohort). Source of truth for"
+`backend/src/models/Enrollment.ts:224` → "// self-serve preview account (0 points, no cohort). Source of truth for"
 
 **Disposition: FIX — Phase 2**, by correcting the comment or the code. Today a guest row is
 gated because it is unpaid, not because it is a guest; had anything ever marked a guest paid,
@@ -68,7 +68,10 @@ the "source of truth" would have been bypassed silently.
 **Current:** stage is derived from the existence of an enrollment row by email, with no check
 of type, tier or payment, and post-conversion stages null the score on the server.
 
-`backend/src/services/adminOs/personProfileService.ts:229` → "WHEN e.email IS NOT NULL THEN 'enrolled_student'"
+**CLOSED by T210, 2026-10-08** — one shared derivation requiring authoritative paid state,
+plus a new `explorer` lifecycle stage (T209) so the population has a name:
+
+`backend/src/services/adminOs/conversionState.ts:110` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
 **Disposition: FIX — Phase 2.** The narrowest correct change is to the stage derivation, not
 to the suppression rule: suppressing intent for someone who really has converted is right.
@@ -246,12 +249,18 @@ external boundary.
 **Current:** both routed source groups resolve to `unconfigured` and are withheld.
 **Disposition: CONFIGURE — Phase 4**, and **KEEP fail-closed**:
 
-`backend/src/services/leads/ghlAccountRouting.ts:95` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:142` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 ### F5 — A corrupt route map fails open to the default account
-**Current:** a deliberate choice with a test asserting it.
-**Disposition: FIX — Phase 4.** A fail-open path inside a fail-closed design contradicts the
-standing constraint, and the standing constraint should win.
+**CLOSED by T214, 2026-10-08** — brought forward from Phase 4 because T214 was already in the
+file. `parseRoutes` now returns `null` for a map that is present but unreadable (and `{}` only
+for a genuinely absent one), and `resolveGhlAccountForSource` returns a `routes_unreadable`
+outcome that callers withhold on. The test that asserted the fail-open was rewritten, and a
+control test asserts an ABSENT map still routes to the default so the fix did not become
+"withhold everything". The withheld activity row that justifies failing closed now has its own
+test. See Part 8.3 of `GHL_CALENDAR_BOUNDARY.md`.
+
+`backend/src/services/leads/ghlAccountRouting.ts:141` → "if (accountKey !== DEFAULT_ACCOUNT) {"
 
 ### F6 — The internal appointment table has no provider id
 **Intent:** §12 requires a mirror carrying external ids for audit and reconciliation.

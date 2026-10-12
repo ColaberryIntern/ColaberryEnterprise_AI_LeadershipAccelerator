@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 const leadFindByPk = jest.fn();
 const leadCreate = jest.fn();
 const leadUpdate = jest.fn();
@@ -519,6 +520,29 @@ describe('T407: the lead -> enrolment walk, and what a customer is', () => {
   });
 
   describe('customer is a PAID relationship, never "an enrolment exists"', () => {
+    /**
+     * T206 NOTE. Three `it.each` cases were added here in T206 attempt 1 and deleted in a
+     * post-cap correction. They were assertion-for-assertion identical to this test - same
+     * fixture, same expectations - differing only in their names, one per paid-marking writer,
+     * and in an `enrollment_type` field this resolver never reads. Because the `it.each` `%s`
+     * parameter was never consumed in the body, all three were byte-identical executions. No
+     * mutation-detection power, three names claiming per-writer coverage: worse than having no
+     * test, because a reader counts three and gets one.
+     *
+     * **WORTH RECORDING WHERE THE REAL FAILURE WAS.** Attempt 2 wrote the sentence saying they
+     * were deleted, in four places including this docblock, and the deletion never landed - the
+     * script edit that removed a vacuous replacement also removed the line that performed the
+     * splice. Attempt 3 then re-ran the suite, measured 924, and corrected the log's "921" as
+     * stale. But **924 - 3 = 921**: the number being retracted was the one that would have been
+     * right if the deletion had happened. Re-running a command proves a count; it does not
+     * prove a deletion. T206 was disclosed NO PASS for this.
+     *
+     * What T206 changes is upstream of here. The customer fact was never computed wrongly -
+     * paid-marking writers produced `tier: 'guest'` rows that this fact CORRECTLY rejected (see
+     * the test below). That those writers now produce paid + member is proved in
+     * `services/__tests__/writerPairCoherence.test.ts` by capturing each real write. The link
+     * between the two suites is DOCUMENTATION, not an assertion: no end-to-end test joins them.
+     */
     it('a paid, member-tier enrolment: paid, basis payment_status', async () => {
       enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'paid', tier: 'member' });
       const r = await resolveSubject({ enrollmentId: 'enr-1' });
@@ -546,9 +570,44 @@ describe('T407: the lead -> enrolment walk, and what a customer is', () => {
       const r = await resolveSubject({ enrollmentId: 'enr-1' });
       if (r.status !== 'resolved') throw new Error(r.status);
       expect(r.subject.customer).toEqual({ paid: true, basis: 'subscription' });
-      expect(subscriptionFindOne).toHaveBeenCalledWith({ where: { enrollment_id: 'enr-1', status: 'active' }, attributes: ['id'] });
+      // T210 added the plan term: a `comp` subscription is an admin-granted $0 seat
+      // ("Free Access, full program access at $0, never billed"), so it is program
+      // ACCESS but not a conversion. Before T210 this lookup had no plan term at all
+      // and a comped person read as a paying customer.
+      expect(subscriptionFindOne).toHaveBeenCalledWith({
+        where: { enrollment_id: 'enr-1', status: 'active', plan: { [Op.ne]: 'comp' } },
+        attributes: ['id'],
+      });
     });
 
+    it('does NOT count an admin-granted comp seat as a customer', async () => {
+      // The comp term is expressed in the QUERY, so the proof is that the query
+      // excludes it: a comp row cannot come back, and the fact falls through to NONE.
+      enrollmentFindByPk.mockResolvedValue({ id: 'enr-1', email: 'a@example.test', payment_status: 'pending', tier: 'guest' });
+      subscriptionFindOne.mockResolvedValue(null);
+      const r = await resolveSubject({ enrollmentId: 'enr-1' });
+      if (r.status !== 'resolved') throw new Error(r.status);
+      expect(r.subject.customer).toEqual(NONE);
+      const where = subscriptionFindOne.mock.calls[0][0].where;
+      expect(where.plan).toEqual({ [Op.ne]: 'comp' });
+    });
+
+    /**
+     * T206 (AC5): the row shape each paid-marking writer now produces IS a customer.
+     *
+     * Each of these is the state a writer leaves behind after T206 made it write the pair.
+     * Before T206, `reconcilePayment`, `paymentSyncService` and `appPaymentReconcileService`
+     * left `tier: 'guest'` on a row they had just marked paid - the case the test directly
+     * above proves is NOT a customer. So the defect was not that the fact was computed
+     * wrongly; it was that three writers produced a row the fact correctly rejected.
+     *
+     * STATED PLAINLY: the link between 'a writer produces this shape' and 'this shape is a
+     * customer' spans two suites. That the writers produce it is proved in
+     * `services/__tests__/writerPairCoherence.test.ts` by capturing each real patch; that the
+     * shape reads as a customer is proved here against the real resolver. The connection
+     * between the two is DOCUMENTATION, not an assertion - worth saying rather than implying
+     * a single end-to-end test exists when it does not.
+     */
     it('no enrolment at all: not a customer, and nothing is asked', async () => {
       const r = await resolveSubject({ visitorId: 'vis-1' });
       if (r.status !== 'resolved') throw new Error(r.status);

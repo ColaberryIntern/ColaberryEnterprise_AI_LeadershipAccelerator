@@ -159,7 +159,7 @@ the browser receives results.
 
 **DECISION 8 — fail-closed is preserved exactly as it is**, and extended to the new calls:
 
-`backend/src/services/leads/ghlAccountRouting.ts:95` → "return { status: 'unconfigured', accountKey, settingKey };"
+`backend/src/services/leads/ghlAccountRouting.ts:142` → "return { status: 'unconfigured', accountKey, settingKey };"
 
 A rep whose GHL configuration is incomplete gets a refusal naming what is missing — never a
 call against another brand's account. **And the one existing fail-open sub-case is closed
@@ -200,3 +200,67 @@ taking down contact sync.
 - **No scope names are asserted.** A plausible-looking scope string would be the exact kind of
   remembered detail §10 forbids.
 - **Nothing here is implemented.** Every DECISION is intent for Phase 4.
+
+---
+
+## Part 8 — T214: the first rep's configuration, and a fail-open hole closed
+
+Added 2026-10-08, session `CC-20261005-r6h2`. Derived from configuration and seeds only: no
+credential read, no live call, no production read. **No calendar or appointment code was written.**
+
+### 8.1 The discovery result is a DOCUMENTED ABSENCE
+
+The first rep's GHL **user id and calendar id are not present anywhere in configuration or in
+seeds.** Stated as an absence because that is the finding, and Phase 4 needs to know it rather
+than discover it on the box:
+
+- The only location identifier in configuration is the `ghl_location_id` default in
+  `settingsService.ts`. It is **dead** — `ghlAccountRouting.ts`'s header already records that it
+  "was written but read by nothing", and this task re-confirmed no reader exists.
+- There is **no per-rep GHL user id and no calendar id** in any setting, seed or migration.
+- There is **no `process.env.GHL_*` path at all**: every GHL value is read through
+  `getSetting`, i.e. the `system_settings` table. If a reader expected environment variables, the
+  honest answer is that this integration does not use them.
+- Credential setting KEYS only, no values: `ghl_enabled`, `ghl_api_key`, `ghl_location_id`,
+  `ghl_account_routes`, `ghl_api_key_school_of_data_analytics`, `executive_ghl_contact_id`. The
+  two api-key defaults ship as empty strings, so there is nothing in the repo to leak.
+
+**Consequence for Phase 4:** capability 1 of Part 4 stays "buildable — the rep's location id is
+new config", and the user/calendar ids are new config too. Nothing can be wired from what exists.
+
+### 8.2 The owner is configuration, and Rose is a value
+
+`growthJourney/handoffs/assignment.ts` resolves the owner from a `GrowthJourneyPolicy` row keyed
+`(brand_id, policy_type: 'queue_assignee', owner_queue, status: 'active')`. No person name appears
+in that file's code. When the mapping is absent it calls `block(row, 'no_assignee_policy')`, which
+writes `assignment_blocked_reason` and returns `{ status: 'queued' }` — **unactivated, never a
+throw, and nothing notifies anyone.**
+
+`OWNER_QUEUES` is `['admissions','sales','solution_architect','support','ali','human_review']`.
+`'ali'` is a QUEUE, not a person-branch — worth stating because a naive "no person names" scan
+flags it and then gets loosened until it protects nothing. The shipped tripwire asserts branch
+structure and carries a positive control that plants `'rose'` into the source and proves the scan
+catches it.
+
+### 8.3 A FAIL-OPEN sub-case, closed rather than extended
+
+`parseRoutes` returned `{}` for a route map that was **present but unreadable**, after which
+`resolveGhlAccountForSource`'s `routes[group] || DEFAULT_ACCOUNT` sent every lead to the default
+account — Agent Cory AI, the wrong CRM, in front of an outbound dialer. The function's own comment
+said "a malformed map must not silently route everything to the default account" while the code did
+exactly that, and a passing test pinned the behaviour as intended. Part 7 of this document had
+already flagged that the new adapter must not inherit it.
+
+**Now:** `parseRoutes` returns `null` for present-but-unreadable and `{}` only for genuinely
+absent, and `resolveGhlAccountForSource` returns a new `'routes_unreadable'` outcome. Callers
+branch on `status !== 'ready'` and therefore withhold automatically.
+
+The old test's argument — that a broken map must not withhold every lead — was answered rather than
+dismissed: a corrupt map means the destination is **unknown**, choosing the dialer account on no
+evidence is not a safe default, and the withholding is logged per lead and writes a
+`status: 'withheld'` activity row, so a typo surfaces instead of silently stopping every sync. An
+added control test asserts that an ABSENT map still routes to the default, so the fix did not
+become "withhold everything".
+
+**This is a behaviour change in existing code, disclosed rather than folded into the acceptance
+wording.** It is the only GHL code change in T214; no new call site, no new endpoint, no new host.

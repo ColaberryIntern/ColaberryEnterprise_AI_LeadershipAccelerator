@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import { audioFromFileList, timingFromFileList } from '../services/presentation/recordingFacts';
 import { verifyWebhookSignature, getPayment } from '../services/paysimpleService';
-import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaign } from '../services/enrollmentService';
+import { markEnrollmentPaid, markEnrollmentFailed } from '../services/enrollmentService';
+import { enrollInClassReadinessCampaign } from '../services/readinessCampaignService';
 import { Cohort, EnrollmentLead } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
 import { activateByRef, isSubscriptionRef } from '../services/subscriptionService';

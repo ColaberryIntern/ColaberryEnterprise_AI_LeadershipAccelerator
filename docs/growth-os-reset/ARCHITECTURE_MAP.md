@@ -40,10 +40,17 @@ decisions. Nothing today preserves that order across the brand boundary.
 
 **Intended:** the canonical Explorer entry event (§1).
 **Owned by:** two paths, writing contradictory labels.
-`backend/src/services/enrollmentService.ts:322` → "    enrollment_type: 'explorer',"
-`backend/src/services/freeSignupService.ts:30` → "tier: 'guest' as const,"
+`backend/src/services/enrollmentService.ts:340` → "    enrollment_type: 'explorer',"
+`backend/src/services/freeAccountRegistration.ts:80` → "tier: 'guest' as const," (moved there by Phase 2 T202b, which made the portal signup path delegate; Phase 1 recorded this literal in freeSignupService at line 30, where it no longer exists)
 **Missing:** a single canonical entry event. Treated in full in `EXPLORER_ENTRY_SEMANTICS.md`.
 This is the most consequential seam in the map, because §1 of the build prompt rests on it.
+
+> **Dated, as of Phase 1 — this row is the defect, not current behaviour.** "Two paths, writing
+> contradictory labels" was true at `origin/main @ 541305a6`. **Phase 2 T202b closed it:** both
+> public paths now go through one canonical service that writes **both** columns, which is why the
+> second citation above points into `freeAccountRegistration.ts` rather than the file Phase 1 read
+> it from. The row stands because the map records what was wrong; for what is true now, and for the
+> 28 consumers the fix moves, see `FREE_ACCOUNT_CONSUMERS.md`.
 
 ### 3 · Explorer profile
 
@@ -66,7 +73,11 @@ Explorer E/I/F and the readiness score.
   reach the page whose stated purpose is everything known about one human being.
 - **It actively suppresses the score §6 needs**, for exactly the population §6 is about:
 
-`backend/src/services/adminOs/personProfileService.ts:229` → "WHEN e.email IS NOT NULL THEN 'enrolled_student'"
+**CLOSED by T210, 2026-10-08.** The derivation moved into one shared definition that
+requires authoritative paid/subscription state, and the row-existence literal is gone from
+both consumers:
+
+`backend/src/services/adminOs/conversionState.ts:110` → "WHEN e.email IS NOT NULL AND e.has_explorer THEN 'explorer'"
 
   derives the stage from the mere existence of an enrollment row by email, with no check of
   `enrollment_type`, `tier` or `payment_status`, and that stage is post-conversion, so:
@@ -132,7 +143,7 @@ open handoff's value; and the human's own moves are not race-safe.
 **Intended (§10):** a bounded modern adapter for calendars, users and appointments, leaving
 the stable contact sync alone.
 **Owned by:** `backend/src/services/ghlService.ts:54` → "const GHL_BASE = 'https://rest.gohighlevel.com/v1';"
-**Routing:** `backend/src/services/leads/ghlAccountRouting.ts:85` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
+**Routing:** `backend/src/services/leads/ghlAccountRouting.ts:132` → "const accountKey = routes[group] || DEFAULT_ACCOUNT;"
 **Missing:** everything §10 asks for. No calendar, user-listing, free-slot or appointment
 code exists — `ABSENT` for all four. Six contact endpoints, one static key per sub-account,
 no retry.
