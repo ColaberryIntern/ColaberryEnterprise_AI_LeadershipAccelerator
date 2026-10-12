@@ -1,0 +1,229 @@
+/**
+ * broadcastStateMachine — producer commands and provider health for one occurrence.
+ *
+ * PURE and deterministic, like roomStateMachine.ts, so every service that mutates an
+ * occurrence shares one definition and the whole thing is trivially unit-testable.
+ *
+ * Four guarantees live here rather than in a service, because a service can be bypassed:
+ *
+ *  1. GOING LIVE TAKES TWO KEYS. Request §4.1: "A producer's Go Live command and verified
+ *     provider readiness are both needed. A scheduled start time or arbitrary webhook must
+ *     not publish backstage content." So go_live is refused unless provider_health is
+ *     'ready', and NO transition here is driven by the clock. Time cannot publish anything.
+ *
+ *  2. RECONNECT IS NOT A RESTART. live -> reconnecting -> live preserves occurrence
+ *     identity and, critically, content_started_at — so a viewer's 15-minute preview is not
+ *     silently refilled by a provider blip, and no launch campaign is re-sent.
+ *
+ *  3. CONCURRENCY IS OPTIMISTIC, NOT HOPEFUL. Every command carries the version it believes
+ *     it is acting on. Two producers clicking Go Live resolve to one winner and one 409,
+ *     never to an impossible state.
+ *
+ *  4. OUT-OF-ORDER PROVIDER EVENTS ARE DROPPED. Webhooks arrive late, duplicated and
+ *     reordered. An event older than the last one applied is ignored rather than allowed to
+ *     drag a live broadcast backwards.
+ *
+ * Re-asserting the current state is a no-op rather than an error, matching
+ * roomStateMachine.canTransition's `from === to` rule — that is what makes a duplicate
+ * Go Live click, or a redelivered webhook, harmless.
+ */
+
+export const EDITORIAL_STATES = [
+  'scheduled', 'backstage', 'live', 'reconnecting', 'ended', 'processing', 'replay_ready', 'cancelled',
+] as const;
+export type EditorialState = (typeof EDITORIAL_STATES)[number];
+
+export const PROVIDER_HEALTH = ['unknown', 'ready', 'degraded', 'down'] as const;
+export type ProviderHealth = (typeof PROVIDER_HEALTH)[number];
+
+const TRANSITIONS: Record<EditorialState, EditorialState[]> = {
+  scheduled: ['backstage', 'live', 'cancelled'],
+  backstage: ['live', 'scheduled', 'cancelled'],
+  live: ['reconnecting', 'ended', 'cancelled'],
+  reconnecting: ['live', 'ended', 'cancelled'],
+  ended: ['processing'],
+  // Processing can fail: falling back to 'ended' means "aired, no replay", which is a real
+  // outcome and must not be dressed up as replay_ready.
+  processing: ['replay_ready', 'ended'],
+  replay_ready: [],
+  cancelled: [],
+};
+
+export const TERMINAL_STATES: EditorialState[] = ['replay_ready', 'cancelled'];
+
+export function isTerminalState(state: EditorialState): boolean {
+  return TERMINAL_STATES.includes(state);
+}
+
+export function canTransition(from: EditorialState, to: EditorialState): boolean {
+  if (from === to) return true; // idempotent re-assert — a duplicate command is a no-op
+  return (TRANSITIONS[from] || []).includes(to);
+}
+
+export function assertTransition(from: EditorialState, to: EditorialState): void {
+  if (!canTransition(from, to)) {
+    throw Object.assign(new Error(`Illegal broadcast transition ${from} → ${to}`), {
+      error_class: 'InvalidStateTransition',
+      status: 409,
+    });
+  }
+}
+
+export function nextStates(from: EditorialState): EditorialState[] {
+  return [...(TRANSITIONS[from] || [])];
+}
+
+/** The states in which a broadcast is on air or immediately pre-air. */
+export function isOnAir(state: EditorialState): boolean {
+  return state === 'live' || state === 'reconnecting';
+}
+
+export type ProducerCommand =
+  | 'enter_backstage' | 'return_to_scheduled' | 'mark_content_started'
+  | 'go_live' | 'end' | 'cancel';
+
+export interface OccurrenceState {
+  editorial_state: EditorialState;
+  provider_health: ProviderHealth;
+  version: number;
+  content_started_at: Date | null;
+}
+
+export interface CommandContext {
+  /** The version the caller believes it is acting on. Mismatch is a conflict, not a retry. */
+  expectedVersion: number;
+  /** Server clock. Injected so tests never depend on the wall clock. */
+  nowMs: number;
+  /** Whether the caller is permitted to produce this occurrence. Decided upstream. */
+  isProducer: boolean;
+}
+
+export interface CommandOutcome {
+  ok: boolean;
+  /** Fields to persist. Absent when the command was a no-op or was refused. */
+  patch?: Partial<OccurrenceState>;
+  /** True when the command was legal but changed nothing — a duplicate click. */
+  noop?: boolean;
+  error_class?: 'Forbidden' | 'VersionConflict' | 'InvalidStateTransition' | 'ProviderNotReady' | 'ContentNotStarted';
+  status?: number;
+  reason?: string;
+}
+
+const COMMAND_TARGET: Record<ProducerCommand, EditorialState | null> = {
+  enter_backstage: 'backstage',
+  return_to_scheduled: 'scheduled',
+  go_live: 'live',
+  end: 'ended',
+  cancel: 'cancelled',
+  mark_content_started: null, // does not move state; sets the preview anchor
+};
+
+/**
+ * Evaluate a producer command against the current state. Pure: returns what to persist,
+ * never persists anything itself.
+ */
+export function applyProducerCommand(
+  current: OccurrenceState,
+  command: ProducerCommand,
+  ctx: CommandContext,
+): CommandOutcome {
+  if (!ctx.isProducer) {
+    return { ok: false, error_class: 'Forbidden', status: 403, reason: 'not_a_producer' };
+  }
+  // Version is checked BEFORE legality, so a loser in a race gets "someone else moved this"
+  // rather than a confusing illegal-transition message about a state it never saw.
+  if (ctx.expectedVersion !== current.version) {
+    return {
+      ok: false, error_class: 'VersionConflict', status: 409,
+      reason: `expected version ${ctx.expectedVersion}, found ${current.version}`,
+    };
+  }
+
+  if (command === 'mark_content_started') {
+    if (!isOnAir(current.editorial_state) && current.editorial_state !== 'backstage') {
+      return { ok: false, error_class: 'InvalidStateTransition', status: 409, reason: 'content_start_requires_backstage_or_live' };
+    }
+    // Idempotent: the anchor is set once. Re-marking must not refill anyone's preview.
+    if (current.content_started_at) return { ok: true, noop: true };
+    return { ok: true, patch: { content_started_at: new Date(ctx.nowMs), version: current.version + 1 } };
+  }
+
+  const target = COMMAND_TARGET[command] as EditorialState;
+
+  if (command === 'go_live') {
+    // Guarantee 1: two keys. Editorial intent alone does not publish.
+    if (current.provider_health !== 'ready') {
+      return {
+        ok: false, error_class: 'ProviderNotReady', status: 409,
+        reason: `provider_health is ${current.provider_health}, expected ready`,
+      };
+    }
+    // Going live without a content anchor would leave the preview clock undefined, and the
+    // first viewer would get an unbounded free window.
+    if (!current.content_started_at) {
+      return { ok: false, error_class: 'ContentNotStarted', status: 409, reason: 'mark_content_started_first' };
+    }
+  }
+
+  if (current.editorial_state === target) return { ok: true, noop: true };
+
+  if (!canTransition(current.editorial_state, target)) {
+    return {
+      ok: false, error_class: 'InvalidStateTransition', status: 409,
+      reason: `${current.editorial_state} → ${target}`,
+    };
+  }
+
+  return { ok: true, patch: { editorial_state: target, version: current.version + 1 } };
+}
+
+export interface ProviderEvent {
+  health: ProviderHealth;
+  /** Provider-side event time. Used only to reject stale deliveries. */
+  occurredAtMs: number;
+  /** True when the provider reports the stream has stopped. */
+  streamStopped?: boolean;
+}
+
+export interface ProviderOutcome extends CommandOutcome {
+  ignored?: 'stale' | 'terminal';
+}
+
+/**
+ * Fold a provider health event into the occurrence.
+ *
+ * A provider event may change HEALTH freely, but it may only move EDITORIAL state in one
+ * direction: live <-> reconnecting. It can never publish (scheduled/backstage -> live) and
+ * can never end a broadcast on its own, because §4.1 forbids an arbitrary webhook doing
+ * either. Ending stays a producer decision.
+ */
+export function applyProviderEvent(
+  current: OccurrenceState,
+  event: ProviderEvent,
+  lastAppliedMs: number,
+): ProviderOutcome {
+  // Guarantee 4: late and duplicate deliveries must not drag state backwards.
+  if (event.occurredAtMs <= lastAppliedMs) {
+    return { ok: true, noop: true, ignored: 'stale' };
+  }
+  if (isTerminalState(current.editorial_state)) {
+    return { ok: true, noop: true, ignored: 'terminal' };
+  }
+
+  const patch: Partial<OccurrenceState> = {};
+  if (current.provider_health !== event.health) patch.provider_health = event.health;
+
+  // Health only moves editorial state within the on-air pair.
+  if (current.editorial_state === 'live' && (event.health === 'down' || event.health === 'degraded')) {
+    patch.editorial_state = 'reconnecting';
+  } else if (current.editorial_state === 'reconnecting' && event.health === 'ready' && !event.streamStopped) {
+    patch.editorial_state = 'live';
+  }
+
+  if (Object.keys(patch).length === 0) return { ok: true, noop: true };
+
+  // Guarantee 2: content_started_at is never in the patch. Reconnecting cannot refill a
+  // viewer's preview window, and the occurrence keeps its identity across the blip.
+  patch.version = current.version + 1;
+  return { ok: true, patch };
+}
