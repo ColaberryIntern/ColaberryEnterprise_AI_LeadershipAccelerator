@@ -135,7 +135,24 @@ async function ensureMetaTodo() {
 
     const maxOverdueDays = overdue.length ? Math.max(...overdue.map(t => Math.floor((Date.now() - new Date(t.due_on).getTime()) / 86400000))) : 0;
     const is9amTick = today.getUTCHours() === 14; // 9am CT = 14 UTC (CST) / 13 UTC (CDT)
-    const shouldTag = overdue.length >= OVERDUE_TRIGGER || maxOverdueDays >= SINGLE_OLD_TRIGGER_DAYS || is9amTick;
+
+    // Tag on the EDGE, not the level. These thresholds describe a backlog *crossing* a line
+    // (see this file's header and the meta todo description); reading them as "is above the
+    // line" tags Ali on every 4-hourly tick for as long as the condition holds, which is
+    // forever once a single todo ages past SINGLE_OLD_TRIGGER_DAYS and never gets older than
+    // it already is. That shipped: one todo sat 12 days overdue against a 7 day trigger and
+    // mentioned Ali 6 times a day, and because each mention is a comment on the same tracking
+    // thread it also grew that thread until the handler's context walk blew the model's
+    // 128k limit. The 9am tick is the floor that still guarantees one daily nudge.
+    const prevCounts = (state.ticks && state.ticks.length) ? (state.ticks[state.ticks.length - 1].counts || {}) : {};
+    // No prior tick (first run after this change, or a wiped state file) means no edge can be
+    // observed, so bias to silence and let the 9am tick carry it rather than invent a crossing.
+    const prevOverdue = Number.isFinite(prevCounts.overdue) ? prevCounts.overdue : overdue.length;
+    const prevMaxOverdueDays = Number.isFinite(prevCounts.maxOverdueDays) ? prevCounts.maxOverdueDays : maxOverdueDays;
+
+    const crossedOverdue = overdue.length >= OVERDUE_TRIGGER && prevOverdue < OVERDUE_TRIGGER;
+    const crossedSingleOld = maxOverdueDays >= SINGLE_OLD_TRIGGER_DAYS && prevMaxOverdueDays < SINGLE_OLD_TRIGGER_DAYS;
+    const shouldTag = crossedOverdue || crossedSingleOld || is9amTick;
 
     console.log(`Ali open todos: total=${all.length}, overdue=${overdue.length} (max ${maxOverdueDays}d), due-today=${dueToday.length}, due-this-week=${dueWeek.length}, no-due-stale=${stale.length}`);
     console.log(`  tag Ali? ${shouldTag}`);
@@ -152,7 +169,7 @@ async function ensureMetaTodo() {
 <div><strong>Top 5 to look at first</strong></div>
 ${top5Html}
 <div><br></div>
-<div><em>${shouldTag ? 'Tagged because: ' + (overdue.length >= OVERDUE_TRIGGER ? `${overdue.length} overdue >= ${OVERDUE_TRIGGER} threshold. ` : '') + (maxOverdueDays >= SINGLE_OLD_TRIGGER_DAYS ? `Most overdue is ${maxOverdueDays}d late >= ${SINGLE_OLD_TRIGGER_DAYS}d threshold. ` : '') + (is9amTick ? '9am CT daily tick.' : '') : 'Silent tick. Backlog below all tagging thresholds.'}</em></div>`;
+<div><em>${shouldTag ? 'Tagged because: ' + (crossedOverdue ? `overdue just crossed ${OVERDUE_TRIGGER} (${prevOverdue} -> ${overdue.length}). ` : '') + (crossedSingleOld ? `oldest overdue just crossed ${SINGLE_OLD_TRIGGER_DAYS}d (${prevMaxOverdueDays}d -> ${maxOverdueDays}d). ` : '') + (is9amTick ? '9am CT daily tick.' : '') : 'Silent tick. No threshold crossed since the last tick.'}</em></div>`;
 
     const metaId = await ensureMetaTodo();
     if (shouldTag || all.length === 0) {
@@ -160,7 +177,7 @@ ${top5Html}
       state.last_tagged = today.toISOString();
     }
 
-    state.ticks.push({ at: today.toISOString(), counts: { all: all.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, stale: stale.length }, tagged: shouldTag });
+    state.ticks.push({ at: today.toISOString(), counts: { all: all.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, stale: stale.length, maxOverdueDays }, tagged: shouldTag });
     if (state.ticks.length > 100) state.ticks = state.ticks.slice(-100);
     if (!DRY) saveState(state);
   } catch (e) {
