@@ -1,7 +1,7 @@
 # Phase 2 Checkpoint — Canonical Free AI Entry and a Person 360 That Can Be Trusted
 
-**Session** `CC-20261005-r6h2` · recorded 2026-10-11 (Central) · **Phase 2 of 6**
-**Branch** `workstream/growth-os-reset-phase2` · **not merged, not deployed** — see §F.
+**Session** `CC-20261005-r6h2` · recorded 2026-10-11, §F updated 2026-10-12 post-deploy (Central) · **Phase 2 of 6**
+**Branch** `workstream/growth-os-reset-phase2` · **MERGED 2026-10-12 and DEPLOYED** — running commit `12c1e5fc`; see §F.
 
 > Every number in this document was pasted from a command's output. Where a figure could not
 > be produced by a command, the document says it is unknown rather than estimating it.
@@ -12,34 +12,42 @@
 
 | # | Question | Answer |
 |---|---|---|
-| 1 | Can a Free AI account still exist without an Explorer Growth profile? | **No for new accounts. UNKNOWN for existing ones.** |
-| 2 | Can an unpaid Explorer still be mistaken for converted? | **No — in code. Not yet deployed.** |
+| 1 | Can a Free AI account still exist without an Explorer Growth profile? | **No for new accounts. YES for 86 existing ones** — measured, see §F |
+| 2 | Can an unpaid Explorer still be mistaken for converted? | **No — live in production** |
 | 3 | Can I look at one person and see the website journey that led to their signup? | **Yes.** |
 | 4 | Can I see what they have done since registering? | **Yes, with named gaps.** |
-| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet.** |
+| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet** — three reasons left, down from four |
 
 **The answers are not yes/yes/no/no/no, and they are also not five clean yeses.** Two carry real
 qualifications and the fifth is a no. In detail:
 
-**1 — No for new accounts; UNKNOWN for existing ones.** Both public signup implementations now
-establish the Explorer identity *at registration*: `freeAccountRegistration` writes both semantic
-columns together (`freeAccountRegistration.test.ts` → *"learner gets BOTH columns"*) and
+**1 — No for new accounts. YES for 86 existing ones, and that number is now measured.** Both
+public signup implementations establish the Explorer identity *at registration*:
+`freeAccountRegistration` writes both semantic columns together
+(`freeAccountRegistration.test.ts` → *"learner gets BOTH columns"*) and
 `explorerProfileAtRegistration` creates the profile row keyed on the enrollment, including when no
 lead matches, in which case it reports the person as unresolved rather than skipping them. A
 registration-time write failure is logged by error class and recovered by the nightly repair, so a
-transient failure leaves a gap **until the next night** rather than forever. For accounts that
-already exist, the honest answer is unknown: `backfillFreeAccountCoherence` is dry-run by default
-and **has never been run against production**, so the number of incoherent legacy rows is not
-measured. T216 is where that becomes observed.
+transient failure leaves a gap **until the next night** rather than forever.
 
-**2 — No, in code; not yet deployed.** Conversion now derives from authoritative paid and
+For accounts that already existed, the pre-deploy version of this document said the answer was
+unknown. **It is no longer.** §F records the measurement: **86 active `standard` + `guest` rows
+are invisible to Explorer Growth**, because the running population filter is
+`enrollment_type: 'explorer'` AND `status: 'active'` and never consults `tier`. The backfill's dry
+run can prove free-signup provenance for **37** of them; the other **49** it cannot prove either
+way and reports for human decision rather than guessing. **The backfill has still not been run for
+real** — that is a decision, not an oversight.
+
+**2 — No. Live in production as of 2026-10-12.** Conversion now derives from authoritative paid and
 subscription state in one place (`adminOs/conversionState.ts`), and both stage derivations import
 the same constant. Before this, `WHEN e.email IS NOT NULL THEN 'enrolled_student'` meant the mere
 existence of an enrollments row staged a person as converted — and worse, suppressed their intent
 and temperature as post-conversion noise, for exactly the population whose intent matters most.
 Proved by `conversionState.test.ts` → *"does not treat an unpaid Explorer as converted"*, paired
 with *"does treat a paid learner as converted"* so the fix did not disable the feature, plus
-comp-seat tests. **Nothing is deployed**, so in production today the answer is still yes.
+comp-seat tests. **Deployed 2026-10-12 and verified in the running container** by the deploy's
+marker check against the compiled SQL, so this is now true of production and not only of the
+branch.
 
 **3 — Yes.** Pre-registration `page_events` are keyed to the stitched lead and ordered by time
 descending in the statement the service issues. Mutation-proved: removing the `lead_id` stitch key
@@ -53,13 +61,14 @@ the existing panels all render on one screen (§D). The gaps are real and listed
 twenty evidence groups the spec names, several have no test, and **there is no registry test that
 would fail if a group silently lost its evidence.**
 
-**5 — Not yet, and this is the answer I would most like to be different.** Four things stand
-between Person 360 and being a trustworthy SRS input: (a) nothing is deployed or
-production-verified; (b) several evidence groups have no test, and no guard detects a group losing
-its evidence; (c) `trustPanel`'s `matchMethod` has a surviving mutant, pre-existing and inherited
-by a verbatim move; (d) two suites pass in isolation and fail under heavy parallel load, which
-will keep producing false reds in the gate that is supposed to protect this. **(a) is Phase 2's
-own remaining work; (b) and (d) are what Phase 3 should require before trusting this input.**
+**5 — Not yet, though one of the four reasons is now gone.** It is deployed and
+production-verified, which was reason (a). Three remain: (b) several evidence groups have no
+test, and no guard detects a group losing its evidence; (c) `trustPanel`'s `matchMethod` has a
+surviving mutant, pre-existing and inherited by a verbatim move; (d) two suites pass in
+isolation and fail under heavy parallel load, which will keep producing false reds in the gate
+that is supposed to protect this. **(b) and (d) are what Phase 3 should require before trusting
+this input.** A fourth item is now visible that was not before: the 86 incoherent rows in §F
+are exactly the population an SRS would score, and they are invisible to the engine today.
 
 ---
 
@@ -189,8 +198,11 @@ One screen changed: the admin person profile (`/admin/people/:ref`).
   registry moved to a pure, unit-testable function. The component function is still ~300 lines
   against a 100-line ceiling, which is disclosed in the file itself rather than left implied.
 
-**Not verified in a browser.** No screenshots: nothing is deployed, and the CRA production build
-needs Docker on this machine.
+**Not verified in a browser, and that is now the only thing missing from §D.** No screenshots were
+taken. Both of the reasons the pre-deploy version gave have since been disproved: it IS deployed,
+and the CRA production build runs locally **without Docker** — a verifier confirmed
+`CI=true react-scripts build` compiling successfully, twice. So the absence of screenshots is a gap
+I did not close, not a constraint that prevented it.
 
 ---
 
@@ -235,21 +247,108 @@ a population nobody can reconstruct.
 
 ---
 
-## F · Production state
+## F · Production state — DEPLOYED AND VERIFIED 2026-10-12
 
-**NOTHING IS DEPLOYED. NOTHING HAS BEEN READ FROM PRODUCTION.**
+**Merged, deployed, and read. This section replaces the pre-deploy version, which said
+"NOTHING IS DEPLOYED. NOTHING HAS BEEN READ FROM PRODUCTION."**
 
-- The branch is local and **not pushed**; the PR is not open.
-- **Merge is Ali's click.** The classifier refuses `gh pr merge`, and this phase changes a public
-  signup path.
-- No production write, no production read, and the backfill has never run. So: current row counts
-  by tier and type are **unknown**; whether Open-House deposit rows exist is **unknown**; the
-  production values of `CONTENT_PAID_GATE_ENABLED` and `EXPLORER_WEEK0_ONLY` are **unknown**.
-- `GROWTH_JOURNEY_EXECUTION_ENABLED` remains Ali's to set. **Nothing in this phase sends.** A
-  verifier independently confirmed it: a syscall-level tripwire patching `net.connect`,
-  `tls.connect` and `dns.lookup`, with controls proving it blocks, recorded **zero vendor-host
-  contact attempts across all 31,042 tests** — and still zero with the withholding logic mutated
-  out, so the stub rather than the business logic is what enforces it.
+- PR [#3062](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3062)
+  merged `2026-10-12T14:18:52Z`, merge commit `0ba1eaf1`. All nine CI jobs passed — **including
+  Backend unit tests**, which independently confirms the 7 local failures were Windows-only.
+- Deployed via `DEPLOY_MODE=registry bash scripts/deploy-prod.sh` **on the prod host** (the script
+  needs `flock` to serialise deploys, which Git Bash on Windows does not have).
+- **The deployed commit is `12c1e5fc`, not `0ba1eaf1`.** `main` advanced while the deploy was
+  running — PR #3065 (cb-daily-tick) merged in between — and the script pulls `origin/main`.
+  `12c1e5fc` contains this phase's merge, verified with `git merge-base --is-ancestor`, so Phase 2
+  shipped together with that unrelated change.
+- **The first deploy attempt correctly REFUSED.** Registry mode compares the digest behind `:main`
+  against `sha-<HEAD>` and found no image for `12c1e5fc`, because CI published it at
+  `14:43:09Z` — after the attempt began. The guard exists so that pulling a moving `:main` tag
+  cannot silently deploy an older build while every other check passes.
+- **Marker proof, which is the only thing that shows the RUNNING container carries the change:**
+
+```
+[deploy] marker 'has_paid_subscription' present in backend:/app/dist/services/adminOs/conversionState.js
+[deploy] backend answering after 5s
+```
+
+  `has_paid_subscription` is a string literal inside T210's conversion SQL and did not exist in
+  `main` before this merge, so it cannot be satisfied by an older image.
+
+### The two flag values that were UNKNOWN are now observed
+
+```
+$ docker exec accelerator-backend printenv CONTENT_PAID_GATE_ENABLED EXPLORER_WEEK0_ONLY
+  true
+  true
+$ ... GROWTH_JOURNEY_EXECUTION_ENABLED   -> unset
+```
+
+So the paid-content gate is ON and Explorers are confined to Week 0 **in production**, which is
+the entitlement consequence the pre-deploy checkpoint could only assert from `.env.example`.
+`GROWTH_JOURNEY_EXECUTION_ENABLED` is unset: **nothing sends, confirmed in production** and not
+only in tests. It was confirmed independently in tests too: a verifier built a syscall-level
+tripwire patching `net.connect`, `tls.connect` and `dns.lookup`, with controls proving it blocks,
+and recorded **zero vendor-host contact attempts across all 31,042 tests** — still zero with the
+withholding logic mutated out, so the stub rather than the business logic is what enforces it.
+
+### The row counts that were UNKNOWN are now measured
+
+One `GROUP BY` over `enrollments`, no PII:
+
+| programme | access | status | count |
+|---|---|---|---|
+| explorer | member | active | 270 |
+| standard | member | active | 211 |
+| standard | guest | active | 86 |
+| standard | member | withdrawn | 43 |
+| explorer | member | withdrawn | 20 |
+
+**There are ZERO `explorer` + `guest` rows**, and that pair is what DECISION 1 defines a Free AI
+learner to be. Both incoherent shapes are real, and the backfill's own dry run names them:
+
+```
+after:  shape_a(explorer+non-guest)=290  shape_b(standard+guest)=86
+        coherent(explorer+guest)=0       total=630
+```
+
+- **86 active `standard` + `guest`** carry the wrong `enrollment_type`. The running container's
+  population filter is `enrollment_type: 'explorer'` AND `status: 'active'` and never consults
+  `tier` — verified by grep inside the container — so **these 86 are invisible to Explorer
+  Growth today.**
+- **290 `explorer` + `member`** carry the wrong `tier`. They ARE visible to Explorer Growth, but
+  their access level says member.
+
+### What the backfill would do, from its own dry run (NOT run for real)
+
+```
+== 56 write(s) planned ==
+  37  enrollment_type   standard -> explorer
+  19  tier              member   -> guest
+DRY RUN — nothing written. Re-run with --confirm-production to commit.
+
+DISCLOSURE: 37 row(s) would join the Explorer programme with explorer_entered_at still
+NULL. This script writes exactly two columns by design, and NO TASK CURRENTLY OWNS
+backfilling that column.
+```
+
+It plans **56 writes out of 376 incoherent rows**, because it requires POSITIVE free-signup
+provenance and excludes org members, AI Flotation prospect accounts, staff by the union of all
+three disagreeing predicates, agent identities, paid rows and anything undeclared. The rest it
+**reports for human decision rather than guessing** — which is the behaviour the task was
+written for, now shown against real data.
+
+**So the honest answer to question 1, for EXISTING accounts, is measured rather than unknown:
+yes, Free AI accounts exist today that Explorer Growth cannot see — 86 of them — and 37 have
+provable free-signup provenance. The remaining 49 cannot be proven either way from the data.**
+
+### Still not done
+
+- **The backfill has NOT been run for real.** Only the dry run. That is Ali's decision, and the
+  numbers above are what it should be made on.
+- `explorer_entered_at` would be left NULL for all 37 joiners, and **no task owns that column.**
+- Whether Open-House deposit rows exist is still **unknown**; nothing in this phase measured it.
+- No browser verification and no screenshots.
 
 ---
 
@@ -341,15 +440,44 @@ classification is left alone rather than quietly edited.
 
 ## J · Exact next-phase proposal
 
-Phase 2 is **code-complete and unverified in production**. The remaining Phase 2 work, in order:
+**Phase 2 is COMPLETE: merged, deployed, production-verified, and handed off.** The four steps the
+pre-deploy version of this section listed have all been done — PR
+[#3062](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3062)
+merged, deployed in registry mode with a marker check against the running container, read-only
+verification recorded in §F, and `PHASE_2_HANDOFF.md` written with six numbered steps a
+non-developer can follow in a browser.
 
-1. Open the PR (draft until green), get Ali's review and **merge click**.
-2. Deploy via `DEPLOY_MODE=registry EXPECT_MARKER=… EXPECT_IN=… bash scripts/deploy-prod.sh` —
-   never `--build nginx`.
-3. **T216 production verification, read-only**: confirm the running release carries the commit;
-   measure the real row counts by tier and type; observe the two flag values that are currently
-   unknown; confirm an Explorer appears in the roster with a stage label rather than a raw enum.
-4. Update §F of this checkpoint with what was observed, and `handoff.md` with numbered steps.
+### Two decisions that belong to Ali, not to Phase 3
 
-Only then Phase 3, which should open by closing gaps 1, 2 and 5 rather than by building the Sales
-Readiness Score on an input that cannot yet be trusted.
+1. **Whether to run the coherence backfill.** It has only ever been dry-run. §F has the numbers:
+   56 writes planned of 376 incoherent rows, 86 accounts currently invisible to the engine, 37 of
+   those provable. **Until it runs, question 1 stays answered "yes, 86".**
+2. **The `enrollmentController` copy and the raw-email log.** A two-line change, deliberately left
+   out of this phase on scope-lock grounds and recorded in §I rather than hidden.
+
+### What Phase 3 should require before it starts
+
+Phase 3's purpose is the Sales Readiness Score, and §F now shows why it cannot simply begin:
+**the 86 invisible accounts are exactly the population an SRS would score.** Scoring a population
+the engine cannot see produces a confident number about the wrong people.
+
+So Phase 3 should open by closing, in this order:
+
+1. **The backfill decision above**, because it determines the input set.
+2. **Gap 1 and 2 of §H** — a registry test that fails when an evidence group loses its evidence,
+   and coverage for the evidence groups that have none. Without the first, Person 360 can silently
+   stop carrying what the score depends on.
+3. **Gap 5** — the two suites that pass in isolation and fail under parallel load. A gate that
+   produces false reds is a gate people learn to ignore, and it is the gate protecting the SRS
+   input.
+4. **`explorer_entered_at`**, which no task owns and which the backfill would leave NULL for 37
+   people. A journey score with no journey start date is a score with no denominator.
+
+Only then the score itself.
+
+### Honest note on this phase's own record
+
+Three of eight tasks failed independent verification and two were never re-graded after their
+final fixes (§B). The production behaviour is tested and live; what repeatedly failed was the
+evidence I wrote about it. Phase 3 should assume the same risk and budget verification rounds
+accordingly rather than treating a green suite as a finished task.
