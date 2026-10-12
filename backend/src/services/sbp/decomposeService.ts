@@ -19,6 +19,14 @@ import {
   buildDecomposeUserPrompt,
   sourceOverflows,
 } from './decomposePrompt';
+import {
+  type RefinedRequirements,
+  approvedRequirementsPromptBlock,
+} from './requirementExtraction';
+import {
+  storyAuthorizationFor,
+  StoryNotAuthorizedError,
+} from './storyAuthorization';
 
 /** Bounded per CLAUDE.md: no unbounded external call. Decomposition is a big completion. */
 const REQUEST_TIMEOUT_MS = 240_000;
@@ -45,6 +53,25 @@ export interface DecomposeOptions extends DecomposeInputs {
   correlationId?: string;
   /** Injected in tests. Production resolves the shared bounded client. */
   client?: Pick<OpenAI['chat']['completions'], 'create'>;
+  /**
+   * A requirement set a human has already refined (P6-T2 stage A).
+   *
+   * When supplied it is AUTHORITATIVE: it is sent to the model as the requirement set to
+   * build from, and it is written back over whatever the model echoed. The model is asked to
+   * organise releases and stories, not to re-derive requirements, and a model that quietly
+   * dropped three of them would otherwise discard a human’s review silently.
+   *
+   * Absent means today’s behaviour: one call that derives requirements and stories together.
+   */
+  requirements?: RefinedRequirements;
+  /**
+   * The project these stories are for. When supplied, story authorization is CONSULTED.
+   *
+   * Optional because the gate is about a project, and this function is also called with no
+   * project in hand (a dry run, a fixture, a test). A caller that has a project id and omits
+   * it is skipping the gate, which is why the orchestrator passes it.
+   */
+  projectId?: string;
 }
 
 export interface DecomposeResult {
@@ -105,7 +132,20 @@ function isPlanShaped(v: unknown): v is BuildPlan {
 export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeResult> {
   const model = opts.model || process.env.SBP_DECOMPOSE_MODEL || 'gpt-4o';
   const client = opts.client ?? defaultClient();
-  const userPrompt = buildDecomposeUserPrompt(opts);
+
+  // STORY AUTHORIZATION (P6-T2). Generating stories is the step that needs an approved
+  // blueprint; refining requirements is not, which is why `extractRequirements` has no such
+  // check. Consulted BEFORE the model call, so a refusal costs nothing and cannot half-produce
+  // a plan. A no-op while `ENABLE_PROJECT_LIFECYCLE` is off, like every other gate this
+  // programme has shipped.
+  if (opts.projectId) {
+    const verdict = await storyAuthorizationFor(opts.projectId);
+    if (!verdict.authorized) throw new StoryNotAuthorizedError(verdict);
+  }
+
+  const userPrompt = opts.requirements
+    ? `${approvedRequirementsPromptBlock(opts.requirements)}\n\n${buildDecomposeUserPrompt(opts)}`
+    : buildDecomposeUserPrompt(opts);
 
   // SOURCE THAT NEVER REACHES THE MODEL, said out loud.
   //
@@ -195,7 +235,14 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
       releases: parsed.releases.length,
       stories: parsed.stories.length,
     });
-    return { plan: parsed, attempts: attempt, model, client };
+    // THE REFINED SET WINS. Substituted rather than compared, because a mismatch is not a
+    // reason to fail a student’s build: the requirements a human approved are the
+    // requirements, and the model’s echo of them is not an independent source. Logged above
+    // as `requirements`, which now reports the authoritative count.
+    const plan = opts.requirements
+      ? { ...parsed, requirements: opts.requirements.requirements }
+      : parsed;
+    return { plan, attempts: attempt, model, client };
   }
 
   /* istanbul ignore next -- the loop always returns or throws; this satisfies the compiler. */
