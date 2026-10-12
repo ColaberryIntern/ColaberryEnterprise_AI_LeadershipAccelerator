@@ -30,6 +30,7 @@ const AI_PRODUCTS_LIST = 9939449052;
 
 const OVERDUE_TRIGGER = 3;        // tag Ali when >3 overdue
 const SINGLE_OLD_TRIGGER_DAYS = 7;// tag Ali when any todo >7d overdue
+const DAILY_TICK_HOUR_CT = 8;     // first tick at or after 8am CT carries the daily nudge
 const DRY = process.argv.includes('--dry');
 
 function getToken() {
@@ -134,7 +135,21 @@ async function ensureMetaTodo() {
     const stale = noDue.filter(t => daysAgo(t.created_at) > 14);
 
     const maxOverdueDays = overdue.length ? Math.max(...overdue.map(t => Math.floor((Date.now() - new Date(t.due_on).getTime()) / 86400000))) : 0;
-    const is9amTick = today.getUTCHours() === 14; // 9am CT = 14 UTC (CST) / 13 UTC (CDT)
+    // Daily nudge, once per Central day. This previously tested the UTC hour against 14, which never
+    // fired: cron runs this job at `0 */4`, so it only ever sees UTC hours 00/04/08/12/16/20
+    // and 14 is not among them. Across the 100 ticks in the state file it was true zero times.
+    // The hour was wrong independently of that, and in the opposite direction to its comment:
+    // 9am CST is 15 UTC and 9am CDT is 14 UTC. Keying off the Central calendar date is correct
+    // under both offsets and does not care how the cron happens to be spaced.
+    const ctParts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Chicago',
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false,
+      }).formatToParts(today).filter((p) => p.type !== 'literal').map((p) => [p.type, p.value])
+    );
+    const ctDate = `${ctParts.year}-${ctParts.month}-${ctParts.day}`;
+    const ctHour = Number(ctParts.hour) % 24; // some ICU builds render midnight as 24
+    const isDailyTick = ctHour >= DAILY_TICK_HOUR_CT && state.last_daily_ct_date !== ctDate;
 
     // Tag on the EDGE, not the level. These thresholds describe a backlog *crossing* a line
     // (see this file's header and the meta todo description); reading them as "is above the
@@ -152,7 +167,7 @@ async function ensureMetaTodo() {
 
     const crossedOverdue = overdue.length >= OVERDUE_TRIGGER && prevOverdue < OVERDUE_TRIGGER;
     const crossedSingleOld = maxOverdueDays >= SINGLE_OLD_TRIGGER_DAYS && prevMaxOverdueDays < SINGLE_OLD_TRIGGER_DAYS;
-    const shouldTag = crossedOverdue || crossedSingleOld || is9amTick;
+    const shouldTag = crossedOverdue || crossedSingleOld || isDailyTick;
 
     console.log(`Ali open todos: total=${all.length}, overdue=${overdue.length} (max ${maxOverdueDays}d), due-today=${dueToday.length}, due-this-week=${dueWeek.length}, no-due-stale=${stale.length}`);
     console.log(`  tag Ali? ${shouldTag}`);
@@ -169,12 +184,13 @@ async function ensureMetaTodo() {
 <div><strong>Top 5 to look at first</strong></div>
 ${top5Html}
 <div><br></div>
-<div><em>${shouldTag ? 'Tagged because: ' + (crossedOverdue ? `overdue just crossed ${OVERDUE_TRIGGER} (${prevOverdue} -> ${overdue.length}). ` : '') + (crossedSingleOld ? `oldest overdue just crossed ${SINGLE_OLD_TRIGGER_DAYS}d (${prevMaxOverdueDays}d -> ${maxOverdueDays}d). ` : '') + (is9amTick ? '9am CT daily tick.' : '') : 'Silent tick. No threshold crossed since the last tick.'}</em></div>`;
+<div><em>${shouldTag ? 'Tagged because: ' + (crossedOverdue ? `overdue just crossed ${OVERDUE_TRIGGER} (${prevOverdue} -> ${overdue.length}). ` : '') + (crossedSingleOld ? `oldest overdue just crossed ${SINGLE_OLD_TRIGGER_DAYS}d (${prevMaxOverdueDays}d -> ${maxOverdueDays}d). ` : '') + (isDailyTick ? `daily tick (first run after ${DAILY_TICK_HOUR_CT}:00 CT).` : '') : 'Silent tick. No threshold crossed since the last tick.'}</em></div>`;
 
     const metaId = await ensureMetaTodo();
     if (shouldTag || all.length === 0) {
       await bcPost(`/buckets/${ALI_PERSONAL}/recordings/${metaId}/comments.json`, { content: body });
       state.last_tagged = today.toISOString();
+      if (isDailyTick) state.last_daily_ct_date = ctDate;
     }
 
     state.ticks.push({ at: today.toISOString(), counts: { all: all.length, overdue: overdue.length, dueToday: dueToday.length, dueWeek: dueWeek.length, stale: stale.length, maxOverdueDays }, tagged: shouldTag });
