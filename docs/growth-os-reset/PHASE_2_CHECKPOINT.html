@@ -134,11 +134,25 @@
       <tr><td>T208</td><td>One subject-key builder, pure, importing nothing</td><td><strong>PASS</strong></td></tr>
       <tr><td>T209 + T210</td><td>The <code>explorer</code> stage; conversion derived from paid state</td><td><strong>PASS 12/12</strong> (after FAIL 10/12)</td></tr>
       <tr><td>T211</td><td>Person 360 evidence package; one declared canonical view</td><td><strong>FAIL 8/12 → FAIL 10/12 → attempt 3</strong></td></tr>
-      <tr><td>T212</td><td>The operator "Who is this?" read view</td><td>Built, 8/8 mutants killed; <strong>not independently verified</strong></td></tr>
-      <tr><td>T213</td><td>The fifteen acceptance scenarios as a reconstructible set</td><td>Built, mutation-proved; <strong>not independently verified</strong></td></tr>
+      <tr><td>T212</td><td>The operator "Who is this?" read view</td><td><strong>FAIL 7/12, criterion 6 = 0</strong> → attempt 2, re-verification outstanding</td></tr>
+      <tr><td>T213</td><td>The fifteen acceptance scenarios as a reconstructible set</td><td><strong>FAIL 10/12</strong> → attempt 2, re-verification outstanding</td></tr>
       <tr><td>T214</td><td>GHL discovery, configurable owner, fail-closed routing</td><td><strong>PASS 12/12</strong></td></tr>
     </tbody>
   </table>
+  </div>
+
+  <div class="warn">
+    <p style="margin:0 0 8px"><strong>Three of the eight tasks failed independent verification, and
+    two are still unverified.</strong></p>
+    <p style="margin:0">T212 scored <strong>zero on criterion 6 for a false claim of mine</strong>:
+    I wrote that the duplicated stage map was fixed "on the profile AND the roster", and the roster
+    was untouched — still rendering the raw lowercase enum for the one stage this phase exists to
+    make visible. Two of its tests also could not fail: one asserted a scored panel renders its
+    numbers while being <em>named</em> for permission isolation, so an inserted role gate passed it;
+    the other matched a '0' in the rendered date "1 Oct 2026" rather than in the score. T213 pinned
+    three of fifteen scenarios to a control instead of a proof and certified a <em>skipped</em> test
+    as coverage. All fixed and re-proved by mutation — but a grader has not yet re-scored them, so
+    nothing here claims they passed.</p>
   </div>
 
   <div class="warn">

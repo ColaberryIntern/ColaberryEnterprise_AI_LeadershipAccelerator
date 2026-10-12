@@ -84,9 +84,36 @@ ownership.**
 | T208 | `identifierPrecedence` — one subject-key builder, pure, importing nothing | **PASS** |
 | T209 + T210 | The `explorer` lifecycle stage; conversion derived from paid state | **PASS 12/12** (after FAIL 10/12) |
 | T211 | Person 360 evidence package, one declared canonical view | **FAIL 8/12 → FAIL 10/12 → attempt 3 (below)** |
-| T212 | The operator "Who is this?" read view | Built and mutation-proved; **not independently verified** |
-| T213 | The fifteen acceptance scenarios as a reconstructible set | Built and mutation-proved; **not independently verified** |
+| T212 | The operator "Who is this?" read view | **FAIL 7/12, criterion 6 = 0** → attempt 2, re-verification outstanding |
+| T213 | The fifteen acceptance scenarios as a reconstructible set | **FAIL 10/12** → attempt 2, re-verification outstanding |
 | T214 | GHL discovery, configurable owner, fail-closed routing | **PASS 12/12** |
+
+**THREE OF THE EIGHT TASKS FAILED INDEPENDENT VERIFICATION, AND TWO ARE STILL
+UNVERIFIED AS OF THIS CHECKPOINT.** T212 and T213 have had every finding fixed and
+re-proved by mutation, but a *grader* has not yet re-scored them, so nothing here
+claims they passed.
+
+**T212 scored ZERO on criterion 6 for a false claim of mine**, and that is the
+most important thing in this document about how to read the rest of it. I wrote
+that the duplicated lifecycle stage map was fixed "on the profile AND the
+roster". `PeoplePage.tsx` was untouched and still carried its own nine-key copy
+with no `explorer` key, so **the roster was still rendering the raw lowercase
+enum for the one stage this phase exists to make visible** — while the module I
+had just written carried a docblock headed "WHY THIS IS ONE FILE AND NOT TWO
+COPIES". Fixed by doing the work; now asserted by a test rather than described in
+prose.
+
+**Two T212 tests could not fail.** One was named *"introduces no permission path
+of its own"* and asserted only that a scored panel renders its numbers — so a
+real `localStorage` role gate inserted into the component passed it. The other
+asserted `textContent.toContain('0')` for a 0/0/0 score, and the rendered date
+"1 Oct 2026" already contains a `0`, so suppressing a genuine zero passed too.
+Both now assert the behaviour they are named for.
+
+**T213 pinned three of fifteen scenarios to a control or a boundary instead of
+the proof**, transposed three mutation IDs, and — worst — certified a *skipped*
+test as coverage: turning a covering test into `it.skip` left the registry green.
+All closed, with the live-test check carrying its own controls.
 
 **T211 failed twice, and both verdicts were right.** Attempt 1 asserted source text, and five of
 eight mutants survived. Attempt 2 was rewritten behaviourally and still failed, for a subtler
