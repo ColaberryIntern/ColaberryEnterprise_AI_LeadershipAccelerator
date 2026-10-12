@@ -250,6 +250,16 @@ describe('T208 — the tripwire: every file that builds a subject key is account
   const NOT_SUBJECT_KEYS = [
     'backend/src/services/reese/reeseAutonomousOutreachService.ts',
     'backend/src/services/reese/reeseWelcomeService.ts',
+    // `uuid5('org_member:<org>:<email>')` -- a UUID-v5 DERIVATION NAME, not a subject key. The
+    // string exists only to be hashed into a deterministic id and is never stored, looked up or
+    // compared as a reference; it is the same compound shape as the two entries above, sharing the
+    // prefix and nothing else.
+    //
+    // CLASSIFIED rather than dodged, per this block's own rule: narrowing the pattern to miss a
+    // v5 derivation name would also stop the scan seeing the next genuine constructor that happens
+    // to look like one. Added by the Agent Factory run (CC-20261006-a4k7), whose author did not
+    // know this tripwire existed until it fired -- which is the tripwire working.
+    'backend/src/scripts/seedAgentDomainIdentityPrereqs.js',
   ];
 
   it('names every non-test file that constructs a subject key', () => {
