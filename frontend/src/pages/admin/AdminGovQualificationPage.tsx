@@ -1062,7 +1062,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
               establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
               decision: record ? record.decision : null,
-              proposalReady: !!(ws.submissionReadiness && ws.submissionReadiness.ready),
+              proposalContentReady: (ws.responseSlots?.length ?? 0) > 0 && (ws.responseSlots ?? []).every((s) => s.status === 'approved'),
               hasBuild: !!(ws.build && (ws.build.deliveryProjectId || (ws.build.buildStoryCount ?? 0) > 0)),
               submissionStatus: ws.submission ? ws.submission.status : null,
               outcome: ws.submission ? ws.submission.outcome : null,
