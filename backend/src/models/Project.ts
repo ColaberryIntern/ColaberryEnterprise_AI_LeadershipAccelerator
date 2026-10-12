@@ -20,6 +20,11 @@ export type ProjectApprovalState = 'pending_approval' | 'approved' | 'changes_re
 
 export interface ProjectAttributes {
   id?: string;
+  /**
+   * Optional, because a project created before P6-T1b has none and because an unattributable
+   * one is still created. `null` means NOT ATTRIBUTABLE, never no tenant.
+   */
+  tenant_id?: string | null;
   enrollment_id: string;
   program_id: string;
   name?: string; // project display name, derived from the idea
