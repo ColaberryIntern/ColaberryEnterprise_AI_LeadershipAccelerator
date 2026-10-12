@@ -136,14 +136,14 @@ export function visibleText(content: LandingPageContentShape): string {
  */
 const SECTION_GUIDE = `Each section is an object with a "type". The allowed types, and their fields:
 
-- {"type":"hero","eyebrow":str?,"tone":str?,"headline":str,"headlineAccent":str?,"subhead":str?,"audience":str?,"cta":{"label":str,"href":str}?,"panel":{"title":str,"items":[{"label":str,"note":str?}],"footnote":str?}?}
-- {"type":"text","eyebrow":str?,"tone":str?,"heading":str?,"paragraphs":[str,...],"kicker":str?}
-- {"type":"bullets","eyebrow":str?,"tone":str?,"heading":str?,"intro":str?,"variant":"cards"|"checks"|"steps"?,"items":[{"label":str,"detail":str?},...]}
+- {"type":"hero","eyebrow":str?,"tone":str?,"headline":str,"headlineAccent":str?,"subhead":str?,"body":str?,"kicker":str?,"audience":str?,"cta":{"label":str,"href":str}?,"ctaNote":str?,"panel":{"eyebrow":str?,"title":str,"badge":str?,"items":[{"label":str,"note":str?}],"footnote":str?}?}
+- {"type":"text","eyebrow":str?,"tone":str?,"heading":str?,"headingAccent":str?,"paragraphs":[str,...],"emphasis":[str,...]?,"kicker":str?,"cta":{"label":str,"href":str}?,"callout":{...}?,"aside":{"title":str,"items":[str,...]}?,"contrast":{"title":str,"chips":[str,...],"caption":str?,"resultEyebrow":str?,"resultLine":str}?}
+- {"type":"bullets","eyebrow":str?,"tone":str?,"heading":str?,"headingAccent":str?,"intro":str?,"paragraphs":[str,...]?,"kicker":str?,"itemsLabel":str?,"variant":"cards"|"checks"|"steps"|"grid"?,"items":[{"label":str,"detail":str?,"icon":str?},...],"cta":{"label":str,"href":str}?,"callout":{...}?}
 - {"type":"stats","eyebrow":str?,"tone":str?,"heading":str?,"items":[{"value":str,"label":str,"source":str},...]}
 - {"type":"quote","eyebrow":str?,"tone":str?,"heading":str?,"items":[{"quote":str,"attribution":str,"role":str?},...]}
 - {"type":"details","eyebrow":str?,"tone":str?,"heading":str?,"rows":[{"label":str,"value":str},...]}
 - {"type":"faq","eyebrow":str?,"tone":str?,"heading":str?,"items":[{"question":str,"answer":str},...]}
-- {"type":"cta","eyebrow":str?,"tone":str?,"headline":str,"body":str?,"cta":{"label":str,"href":str}}
+- {"type":"cta","eyebrow":str?,"tone":str?,"headline":str,"subhead":str?,"body":str?,"cta":{"label":str,"href":str},"ctaNote":str?}
 
 HOW TO USE THE FIELDS THAT CONTROL HOW THE PAGE LOOKS. A page that sets none of these renders as
 a stack of grey and white bands with every list as identical cards, which reads as a document
@@ -176,7 +176,34 @@ rather than as a page somebody designed. Use them.
 "kicker" on text - one short emphasised line after the paragraphs, in the brand colour. The beat
   a section lands on: "You just need a place to start."
 
-"panel" on hero - a contents card beside the headline. See the panel rule below.
+"panel" on hero - a contents card beside the headline. See the panel rule below. Give it an
+  "eyebrow" ("Your learning path") and a "badge" ONLY when the brief states one.
+
+"body" and "kicker" on hero - "subhead" is the one-line lead; "body" is the paragraph under it;
+  "kicker" is the short emphasised beat before the button ("No pressure. Just start learning.").
+
+"ctaNote" - the quiet line under a button saying what pressing it does ("Create your account and
+  begin today."). Never a new claim, and never a price or date the brief did not give.
+
+"contrast" on text - what people do today, then what becomes possible. Chips are 2 to 6 short
+  phrases, "resultLine" is the payoff. Use it ONLY when the brief actually draws that contrast:
+  it asserts what most people do, which is a claim.
+
+"callout" - a one-line takeaway after a list, when the brief states one. "highlights" paints up
+  to 3 exact substrings of "text" in "accent", "accent-2" or "accent-3". tone "success" is the
+  green reassurance strip ("You do not have to wait for an Open House to begin.").
+
+"aside" on text - a short supporting list beside the prose ("In the full program, learners...").
+
+"emphasis" on text - phrases inside the paragraphs to set bold. Exact substrings.
+
+"itemsLabel" on bullets - the small bold line directly above the items ("This platform is for
+  you if:", "Our approach is simple:").
+
+"paragraphs" on bullets - prose beside the heading when a section argues before it lists.
+
+"icon" on a cards item - one of: bulb, chat, briefcase, search, document, flow, wrench, trend,
+  check, clock, layers, rocket. Choose by meaning. Any other value is rejected.
 
 No other type exists. No HTML in any string. Links must be an absolute https URL or a path
 starting with "/".
@@ -187,7 +214,8 @@ A human adds images afterwards. Omit any field not listed above rather than send
 
 const SYSTEM = `You turn a marketing brief into the structure of a landing page for a company that teaches AI and data skills to working adults. You return JSON only.
 
-Return an object: {"title":str?,"description":str?,"sections":[...]}
+Return an object: {"title":str?,"description":str?,"footerNote":str?,"sections":[...]}
+"footerNote" is the line beside the logo in the footer, when the brief has a tagline.
 "title" is the browser and link-preview title. "description" is the link-preview description, one sentence.
 
 ${SECTION_GUIDE}
@@ -212,6 +240,18 @@ RULES, in order of importance:
    it, and the page must not imply otherwise. If the brief lists nothing, omit "panel" entirely
    rather than inventing rows to fill the space - an invented curriculum is the worst thing on
    this page, because it reads as a promise.
+
+6c. SENTENCE CASE. Headlines and headings capitalise only the first word and proper nouns:
+   "AI is no longer just a future skill", not "AI Is No Longer Just A Future Skill". Title Case
+   reads as a press release and is the single most common way a generated page looks generated.
+
+6d. NEVER REPEAT A LIST. If the hero panel and a later section would carry the same items, the
+   panel takes the first 4 to 6 as a path and the later section carries the full set. Two
+   identical lists on one page reads as a mistake, because it is one.
+
+6e. VARY THE LIST SHAPE. A page with three bullets sections should not draw all three as cards.
+   "grid" for 6 or more ordered items, "steps" for 3 to 5 in a real sequence, "checks" for a
+   qualifying list, "cards" for topics with no order.
 
 7. THE HEADLINE CARRIES A CONCRETE DETAIL FROM THE BRIEF. A hero headline that would fit any
    course on any subject is a failed headline. Take the most specific thing the brief actually
@@ -287,7 +327,7 @@ export async function draftLandingPage(input: LandingPageDraftRequest): Promise<
   if (!brand) throw new WorkflowError('Brand not found', 404, 'NotFound');
 
   const client = getInstrumentedOpenAI(
-    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v4' },
+    { workflow_id: 'landing_page_draft', prompt_version: 'landing-page-draft-v6' },
     { timeout: TIMEOUT_MS, maxRetries: 1 },
   );
 
