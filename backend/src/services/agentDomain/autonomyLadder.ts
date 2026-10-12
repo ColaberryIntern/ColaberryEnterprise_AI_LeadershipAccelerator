@@ -82,6 +82,48 @@ export const RISK_TIER_BEARING_MODELS: ReadonlyArray<string> = [
   'WorkLedgerEvent',
 ];
 
+/** The column name the six models above carry, and the one an autonomy value must never reach. */
+export const RISK_TIER_COLUMN = 'risk_tier';
+
+/**
+ * Error thrown when an autonomy value is routed at a risk-tier column.
+ *
+ * A stable `error_class` string, per CLAUDE.md's Error classification rule, because a generic
+ * `Error` in the logs would be indistinguishable from anything else going wrong.
+ */
+export class AutonomyInRiskTierColumnError extends Error {
+  readonly error_class = 'AutonomyInRiskTierColumnError';
+
+  constructor(model: string, column: string, value: unknown) {
+    super(
+      `AutonomyInRiskTierColumnError: refusing to write '${String(value)}' to ${model}.${column}. `
+      + 'That column carries the platform RISK ladder (deliveryRiskLevels.ts), where R0-R5 mean '
+      + 'something else entirely. Both risk sinks fail OPEN on a value they do not recognise: '
+      + 'agentAutonomy.isHighRiskTier() returns false, so the approval is skipped, and '
+      + 'workGraph/capabilityRouter.riskTierIndex() returns 0, so every maxRiskTier ceiling is '
+      + 'cleared. An autonomy value here removes two guards silently.',
+    );
+    this.name = 'AutonomyInRiskTierColumnError';
+  }
+}
+
+/**
+ * Refuses an autonomy value destined for a risk-tier column. THE enforcement point for
+ * `RISK_TIER_BEARING_MODELS`, which was previously a list nothing consulted.
+ *
+ * Deliberately refuses BOTH the namespaced form (`autonomy:R7`) and the bare one (`R7`). The bare
+ * form is the dangerous one, because it is lexically valid in the risk vocabulary for R0-R5 and
+ * would be accepted without complaint.
+ */
+export function assertNoAutonomyInRiskTierColumn(
+  model: string, column: string, value: unknown,
+): void {
+  if (column !== RISK_TIER_COLUMN) return;
+  if (isAutonomyStage(value) || isBareAutonomyLevel(value)) {
+    throw new AutonomyInRiskTierColumnError(model, column, value);
+  }
+}
+
 export function isAutonomyStage(value: unknown): value is AutonomyStage {
   return typeof value === 'string'
     && (AUTONOMY_STAGES as ReadonlyArray<string>).includes(value);
@@ -103,8 +145,12 @@ export type CapabilityAutonomy = AutonomyStage | NotApplicable;
 /** `not_applicable` is permitted ONLY with a recorded reason. A reasonless one is invalid. */
 export function isValidCapabilityAutonomy(v: unknown): boolean {
   if (isAutonomyStage(v)) return true;
-  if (v && typeof v === 'object' && (v as any).not_applicable === true) {
-    return typeof (v as any).reason === 'string' && (v as any).reason.trim().length > 0;
+  // Narrowed through a structural type rather than `as any`. The three casts that were here were
+  // undocumented, which CLAUDE.md forbids, and unnecessary: this is exactly what `unknown` plus a
+  // shape is for.
+  const o = v as { not_applicable?: unknown; reason?: unknown } | null | undefined;
+  if (o && typeof o === 'object' && o.not_applicable === true) {
+    return typeof o.reason === 'string' && o.reason.trim().length > 0;
   }
   return false;
 }

@@ -1,0 +1,181 @@
+{
+  "bucket": "unresolved",
+  "_comment": "The legacy agent rows that belong to no domain. Tracked HERE rather than in the gitignored run directory, because 'no legacy functionality is silently lost' cannot rest on a file that is not in the repository. Each row carries disposition 'unresolved' and the measured reason it is undomained. Five of these are live production rows, which is why an owner decision is needed rather than a default.",
+  "legacy_row_count": 21,
+  "kind_breakdown": {
+    "behavior": 8,
+    "retire": 8,
+    "unresolved": 5
+  },
+  "needs_owner_decision": true,
+  "rows": [
+    {
+      "agent_name": "BehavioralSignalDetector",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron */10 * * * * wired at backend/src/services/schedulerService.ts:2286 (backend/src/services/agentRegistrySeed.ts:102); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+    },
+    {
+      "agent_name": "BehavioralTriggerEvaluator",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron 5,15,25,35,45,55 * * * * wired at backend/src/services/schedulerService.ts:2312 (backend/src/services/agentRegistrySeed.ts:124); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+    },
+    {
+      "agent_name": "ICPInsightComputer",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron 0 2 * * * wired at backend/src/services/schedulerService.ts:2260 (backend/src/services/agentRegistrySeed.ts:91); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+    },
+    {
+      "agent_name": "IntentScoreRecomputer",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron 7,22,37,52 * * * * wired at backend/src/services/schedulerService.ts:2299 (backend/src/services/agentRegistrySeed.ts:113); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+    },
+    {
+      "agent_name": "OpportunityScoreRecomputer",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron 3,23,43 * * * * wired at backend/src/services/schedulerService.ts:2410 (backend/src/services/agentRegistrySeed.ts:201); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+    },
+    {
+      "agent_name": "PortfolioGitHubSyncAgent",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron 15 2 * * * wired at backend/src/services/schedulerService.ts:3430 (backend/src/services/agentRegistrySeed.ts:2184); domain: no rule matched category=accelerator"
+    },
+    {
+      "agent_name": "SessionLifecycle",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron */5 * * * * wired at backend/src/services/schedulerService.ts:2665 (backend/src/services/agentRegistrySeed.ts:293); domain: no rule matched category=accelerator"
+    },
+    {
+      "agent_name": "SessionReminders",
+      "proposed_kind": "behavior",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "cron */30 * * * * wired at backend/src/services/schedulerService.ts:2588 (backend/src/services/agentRegistrySeed.ts:282); domain: no rule matched category=accelerator"
+    },
+    {
+      "agent_name": "Alumni_Outreach_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/alumni/alumniOutreachAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1205); domain: category=alumni has no matching target domain"
+    },
+    {
+      "agent_name": "Alumni_Reengagement_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/alumni/alumniReengagementAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1215); domain: category=alumni has no matching target domain"
+    },
+    {
+      "agent_name": "Alumni_Referral_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/alumni/alumniReferralAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1225); domain: category=alumni has no matching target domain"
+    },
+    {
+      "agent_name": "Corporate_Training_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/partnerships/corporateTrainingAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1247); domain: category=partnerships has no matching target domain"
+    },
+    {
+      "agent_name": "Employer_Relationship_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/partnerships/employerRelationshipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1257); domain: category=partnerships has no matching target domain"
+    },
+    {
+      "agent_name": "Enterprise_Partnership_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/partnerships/enterprisePartnershipAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1237); domain: category=partnerships has no matching target domain"
+    },
+    {
+      "agent_name": "Opportunity_Detection_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/intelligence/opportunityDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1331); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+    },
+    {
+      "agent_name": "Trend_Detection_Agent",
+      "proposed_kind": "retire",
+      "source": "registry",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "source_file backend/src/services/agents/intelligence/trendDetectionAgent.ts does not exist on disk and has no git history; backend/src/services/agentRegistryAuditClassification.ts:23 NO_SOURCE_FILE (confirmed_dead) (backend/src/services/agentRegistrySeed.ts:1311); domain: category=behavioral (visitor intent scoring serves both marketing and sales; not assigned)"
+    },
+    {
+      "agent_name": "calendar_intent_booster",
+      "proposed_kind": "unresolved",
+      "source": "production_only",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "production row (2026-03-11) from the March governance seed (governanceService.ts ensureGovernanceAgents, zero callers today); enabled; no registry entry; verify whether anything still runs it"
+    },
+    {
+      "agent_name": "forecast_engine",
+      "proposed_kind": "unresolved",
+      "source": "production_only",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+    },
+    {
+      "agent_name": "intent_scorer",
+      "proposed_kind": "unresolved",
+      "source": "production_only",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+    },
+    {
+      "agent_name": "revenue_aggregator",
+      "proposed_kind": "unresolved",
+      "source": "production_only",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+    },
+    {
+      "agent_name": "visitor_tracker",
+      "proposed_kind": "unresolved",
+      "source": "production_only",
+      "disposition": "unresolved",
+      "capability_id": null,
+      "reason": "production row (2026-03-11) from the March governance seed; enabled; no registry entry; verify whether anything still runs it"
+    }
+  ]
+}

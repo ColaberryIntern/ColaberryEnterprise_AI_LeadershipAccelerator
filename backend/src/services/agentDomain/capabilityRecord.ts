@@ -104,17 +104,15 @@ export interface DomainCapabilityMatrix {
   readonly [extra: string]: unknown;
 }
 
-/** The eight capabilities `executionPolicy.ts:33` denies by default. A matrix may never REQUEST one. */
-export const DENIED_CAPABILITIES: ReadonlyArray<string> = [
-  'production_deploy',
-  'production_database',
-  'dns',
-  'live_email',
-  'cloud_resource_deletion',
-  'push_to_protected_main',
-  'unbounded_network',
-  'secret_exfiltration',
-];
+/**
+ * The capabilities the execution policy denies by default, RE-EXPORTED from the policy itself.
+ *
+ * This was a hardcoded copy of the eight values. The two lists were byte-identical, so nothing was
+ * wrong today -- but the test asserting `length === 8` was validating the local literal, which
+ * means a ninth denial added to the real policy would never have been observed here. A second copy
+ * of a security list is a second thing to keep true.
+ */
+export { DENIED_CAPABILITIES } from '../delivery/execution/executionPolicy';
 
 const DIR = path.join(__dirname, 'capabilities');
 
@@ -138,10 +136,114 @@ export function loadAllMatrices(): Map<string, DomainCapabilityMatrix> {
     if (parsed.domain_key !== key) {
       throw new Error(`Matrix at ${key}.json declares domain_key '${parsed.domain_key}'`);
     }
+    assertRecordContract(key, parsed);
     out.set(key, parsed);
   }
   cache = out;
   return out;
+}
+
+/**
+ * The fields every capability record MUST carry, as the amendment specifies them.
+ *
+ * `implementation_state` and `requirement_validation_state` are listed separately and deliberately:
+ * the amendment asks for them as two distinct fields, because what exists and what a human has
+ * agreed to are different questions and collapsing them is how shipped behaviour gets read as
+ * validation.
+ */
+export const REQUIRED_CAPABILITY_FIELDS: ReadonlyArray<string> = Object.freeze([
+  'capability_id', 'name', 'business_outcome', 'intended_users', 'classification', 'source',
+  'supporting_evidence', 'implementation_state', 'requirement_validation_state',
+  'validation_dependency', 'inputs', 'outputs', 'workflow', 'exceptions', 'required_tools',
+  'human_decision', 'starting_autonomy', 'max_permitted_autonomy', 'release_behaviour',
+]);
+
+const IMPLEMENTATION_STATES = ['absent', 'partial', 'implemented', 'unknown'];
+const VALIDATION_STATES = ['draft', 'confirmed', 'rejected'];
+
+/**
+ * Enforces the record contract at LOAD time, so the loader's docblock is true.
+ *
+ * It was not. `JSON.parse(...) as DomainCapabilityMatrix` is an unchecked cast, and a verifier
+ * proved the consequence by deleting `implementation_state` from one record: all 256 tests passed,
+ * exit 0. A cast is a promise to the compiler, not a check on the data.
+ */
+export function assertRecordContract(key: string, m: DomainCapabilityMatrix): void {
+  const problems: string[] = [];
+  if (!Array.isArray(m.capabilities)) problems.push(`${key}: capabilities is not an array`);
+  if (m.capabilities && m.capabilities.length === 0) {
+    // An empty bucket does not mean an empty job -- the amendment says so outright -- so an empty
+    // domain is a loading error rather than a finding.
+    problems.push(`${key}: zero capabilities`);
+  }
+  for (const c of m.capabilities ?? []) {
+    const id = c?.capability_id ?? '<no capability_id>';
+    for (const f of REQUIRED_CAPABILITY_FIELDS) {
+      if (!(f in (c as object))) problems.push(`${key}/${id}: missing '${f}'`);
+    }
+    if (c && !IMPLEMENTATION_STATES.includes(c.implementation_state)) {
+      problems.push(`${key}/${id}: implementation_state '${c.implementation_state}' is not one of ${IMPLEMENTATION_STATES.join('|')}`);
+    }
+    if (c && !VALIDATION_STATES.includes(c.requirement_validation_state)) {
+      problems.push(`${key}/${id}: requirement_validation_state '${c.requirement_validation_state}' is not one of ${VALIDATION_STATES.join('|')}`);
+    }
+  }
+  if (problems.length > 0) {
+    // Named, not counted: a count tells nobody which record to go and fix.
+    throw new Error(`CapabilityContractViolation: ${problems.slice(0, 10).join('; ')}`
+      + (problems.length > 10 ? ` (and ${problems.length - 10} more)` : ''));
+  }
+}
+
+export interface UnresolvedLegacyRow {
+  readonly agent_name: string;
+  readonly proposed_kind: string | null;
+  readonly source: string | null;
+  readonly disposition: 'unresolved';
+  readonly capability_id: null;
+  readonly reason: string;
+}
+
+export interface UnresolvedBucket {
+  readonly bucket: 'unresolved';
+  readonly legacy_row_count: number;
+  readonly needs_owner_decision: boolean;
+  readonly rows: ReadonlyArray<UnresolvedLegacyRow>;
+}
+
+/**
+ * The legacy rows that belong to no domain.
+ *
+ * They were only ever in the gitignored run directory, so "all 246 legacy rows are accounted for"
+ * was unmet in anything that ships, and none of them carried a `disposition`. A run directory is
+ * scratch; the claim that no legacy functionality is silently lost cannot rest on a file that is
+ * not in the repository.
+ *
+ * The filename is underscore-prefixed because this is NOT a domain. `loadAllMatrices` reads by
+ * explicit domain key, so it can never pick this up by accident.
+ */
+export function loadUnresolvedBucket(): UnresolvedBucket {
+  const p = path.join(DIR, '_unresolved.json');
+  if (!fs.existsSync(p)) throw new Error(`Unresolved legacy bucket missing at ${p}`);
+  const parsed = JSON.parse(fs.readFileSync(p, 'utf8')) as UnresolvedBucket;
+  const problems: string[] = [];
+  if (parsed.bucket !== 'unresolved') problems.push(`bucket is '${parsed.bucket}'`);
+  if (parsed.rows.length !== parsed.legacy_row_count) {
+    problems.push(`legacy_row_count ${parsed.legacy_row_count} but ${parsed.rows.length} rows`);
+  }
+  for (const r of parsed.rows) {
+    if (r.disposition !== 'unresolved') problems.push(`${r.agent_name}: disposition '${r.disposition}'`);
+    if (!r.reason || r.reason.trim().length === 0) problems.push(`${r.agent_name}: no reason`);
+  }
+  if (problems.length > 0) throw new Error(`UnresolvedBucketViolation: ${problems.join('; ')}`);
+  return parsed;
+}
+
+/** Every legacy agent name this phase accounts for: domained dispositions plus the bucket. */
+export function allAccountedLegacyNames(): string[] {
+  const domained = [...loadAllMatrices().values()]
+    .flatMap((m) => m.legacy_dispositions.map((d) => d.agent_name));
+  return [...domained, ...loadUnresolvedBucket().rows.map((r) => r.agent_name)];
 }
 
 export function allCapabilities(): CapabilityRecord[] {

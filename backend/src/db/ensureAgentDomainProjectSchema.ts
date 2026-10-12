@@ -52,6 +52,9 @@ export const REQUIRED_COLUMNS: ReadonlyArray<{ table: string; column: string }> 
   { table: 'agent_domain_projects', column: 'agent_id' },
   { table: 'agent_domain_projects', column: 'manager_identity_id' },
   { table: 'agent_domain_projects', column: 'manager_can_reach' },
+  // Created by the DDL and missing from this list until the verifier noticed. A column the
+  // assert does not know about is a column a partial table can be missing.
+  { table: 'agent_domain_projects', column: 'manager_blocker' },
   { table: 'agent_domain_projects', column: 'intended_builder' },
   { table: 'agent_domain_projects', column: 'intended_builder_state' },
   { table: 'agent_domain_projects', column: 'provisioned_by' },
@@ -179,6 +182,22 @@ export async function assertAgentDomainProjectSchema(): Promise<void> {
   );
   for (const t of REQUIRED_TABLES) {
     if (!tables.includes(t)) problems.push(`missing table public.${t}`);
+  }
+
+  // Columns, schema-qualified like everything else here.
+  //
+  // This check did not exist. `REQUIRED_COLUMNS` was exported and then never read -- by the assert
+  // or by anything else in the repository. It matters because every CREATE in `STATEMENTS` is
+  // `IF NOT EXISTS`, so a table left behind by an earlier partial run is adopted as-is: the
+  // post-condition saw the table name, reported success, and never looked inside it. In production
+  // that is the likely shape of a failure, not a hypothetical one.
+  const columns = await readNames(
+    `SELECT table_name || '.' || column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = ANY($names)`,
+    REQUIRED_TABLES,
+  );
+  for (const { table, column } of REQUIRED_COLUMNS) {
+    if (!columns.includes(`${table}.${column}`)) problems.push(`missing column public.${table}.${column}`);
   }
 
   const indexes = await readNames(

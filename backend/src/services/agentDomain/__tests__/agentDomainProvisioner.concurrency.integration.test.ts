@@ -344,6 +344,81 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
 
   // ─────────────────────────── the forbidden writes ───────────────────────────
 
+  // ─────────────────────── the assert, exercised for real ───────────────────────
+
+  /**
+   * T08's post-condition had no behavioural coverage until here.
+   *
+   * It was verified by reading its own source with a regex, which cannot catch a semantic
+   * regression -- and in fact did not catch a real one: `readNames` destructured `[rows]` off
+   * Sequelize's `[results, metadata]` tuple while this driver returns a single-column select as
+   * raw arrays, so the assert saw only the FIRST row and reported every required table after the
+   * first as missing. That defect was found by running this suite, not by reading the file.
+   */
+  describe('assertAgentDomainProjectSchema, against a real database', () => {
+    let assertSchema: typeof import('../../../db/ensureAgentDomainProjectSchema').assertAgentDomainProjectSchema;
+
+    beforeAll(async () => {
+      ({ assertAgentDomainProjectSchema: assertSchema } =
+        await import('../../../db/ensureAgentDomainProjectSchema'));
+    });
+
+    it('passes on the healthy schema this suite stood up', async () => {
+      await expect(assertSchema()).resolves.toBeUndefined();
+    });
+
+    it('FIXTURE: a PARTIAL pre-existing table is reported, column by column', async () => {
+      // The `IF NOT EXISTS` adoption scenario. In production this is the likely shape of a
+      // failure: a table left behind by an earlier partial run, adopted as-is, with the
+      // post-condition seeing only its name.
+      await sequelize.query('ALTER TABLE agent_domain_projects DROP COLUMN manager_blocker');
+      try {
+        await expect(assertSchema()).rejects.toThrow(
+          /missing column public\.agent_domain_projects\.manager_blocker/,
+        );
+      } finally {
+        await sequelize.query('ALTER TABLE agent_domain_projects ADD COLUMN manager_blocker TEXT');
+      }
+      // And it passes again once the column is back, so the check is not permanently tripped.
+      await expect(assertSchema()).resolves.toBeUndefined();
+    });
+
+    it('FIXTURE: a table present ONLY in a snapshot schema is still missing from public', async () => {
+      // This repo really has three schemas, and `student_tasks` is in all three. An unqualified
+      // assert would find the snapshot copy and report success for `public`.
+      await sequelize.query('CREATE SCHEMA IF NOT EXISTS snap_quincy_20260819');
+      await sequelize.query(
+        'CREATE TABLE IF NOT EXISTS snap_quincy_20260819.agent_domain_projects (id UUID PRIMARY KEY)',
+      );
+      await sequelize.query('DROP TABLE IF EXISTS public.agent_domain_build_authorizations CASCADE');
+      try {
+        // The snapshot copy exists; the public one does not. The assert must say so.
+        await expect(assertSchema()).rejects.toThrow(
+          /missing table public\.agent_domain_build_authorizations/,
+        );
+      } finally {
+        const { ensureAgentDomainProjectSchema } =
+          await import('../../../db/ensureAgentDomainProjectSchema');
+        await ensureAgentDomainProjectSchema();
+        await sequelize.query('DROP SCHEMA IF EXISTS snap_quincy_20260819 CASCADE');
+      }
+      await expect(assertSchema()).resolves.toBeUndefined();
+    });
+
+    it('a missing INDEX is reported too, not only tables and columns', async () => {
+      await sequelize.query('DROP INDEX IF EXISTS idx_agent_domain_build_auth');
+      try {
+        await expect(assertSchema()).rejects.toThrow(/missing index public\.idx_agent_domain_build_auth/);
+      } finally {
+        await sequelize.query(
+          `CREATE INDEX IF NOT EXISTS idx_agent_domain_build_auth
+             ON agent_domain_build_authorizations (agent_domain_project_id)`,
+        );
+      }
+      await expect(assertSchema()).resolves.toBeUndefined();
+    });
+  });
+
   it('never touches enrollments, and never writes ai_agents', async () => {
     const before = await sequelize.query<{ h: string }>(
       `SELECT md5(string_agg(e.id::text || coalesce(e.email,''), '|' ORDER BY e.id)) AS h FROM enrollments e`,
