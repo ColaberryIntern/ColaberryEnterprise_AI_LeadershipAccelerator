@@ -57,6 +57,18 @@ export interface EnrollmentAttributes {
    *  payment_status='paid'; free-tier/Explorer portal access is unaffected. See
    *  contentEntitlement.ts. Format: 'YYYY-MM-DD'. */
   access_starts_at?: string | null;
+  /**
+   * Phase 2 T205. When this person ENTERED the Explorer journey — set once, at
+   * registration, and never rewritten. NULL on every row that predates the column
+   * and on every non-Explorer.
+   *
+   * It is deliberately not `created_at` and not `enrolled_at`. `created_at` is when
+   * the ROW appeared, which for an org teammate who later joins the free AI course is
+   * months before they entered the journey — the upgrade path sets this at the moment
+   * the programme is actually joined. Nor is it the Explorer profile’s `created_at`,
+   * because until T205 that was the night the reconciliation job happened to run.
+   */
+  explorer_entered_at?: Date | string | null;
   /** Nullable per-student notification pause. NULL (the default for every
    *  pre-existing row) = notifiable, unchanged behavior. Set = the Accelerator
    *  senders keyed on this enrollment (session reminders, missed-session mail)
@@ -106,6 +118,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare enrollment_type: 'standard' | 'explorer';
   declare avatar_data_url: string | null;
   declare access_starts_at: string | null;
+  declare explorer_entered_at: Date | string | null;
   declare notifications_paused_at: Date | string | null;
   declare notifications_paused_reason: string | null;
   declare created_at: Date;
@@ -286,6 +299,15 @@ Enrollment.init(
       // (see contentEntitlement.ts hasFullCurriculumAccess). Free-tier access is
       // never affected by this field.
       type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    explorer_entered_at: {
+      // Set once, when the Explorer journey is joined. Nullable so every pre-existing
+      // row is untouched and a non-Explorer has no entry time rather than a misleading
+      // one. Deployed by the drift-guard list in server.ts (`ensureEnrollmentColumns`),
+      // which is how this database actually acquires columns — a model-only column is a
+      // 500 on the live registration path.
+      type: DataTypes.DATE,
       allowNull: true,
     },
     notifications_paused_at: {

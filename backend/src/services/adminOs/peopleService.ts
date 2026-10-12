@@ -2,6 +2,11 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { LifecycleStage } from './lifecycle';
 import { visibleStagesForSections } from './personScope';
+import {
+  ENROLLMENT_FACTS_JOIN,
+  ENROLLMENT_FACTS_SQL,
+  STAGE_CASE_SQL,
+} from './conversionState';
 
 /**
  * The People roster — one row per person, not per record.
@@ -100,19 +105,17 @@ const MAX_LIMIT = 200;
  * Order matters: the most advanced evidence wins, so someone who is both a lead
  * and an enrolment reads as enrolled_student rather than as a lead.
  */
-const STAGE_SQL = `
-  CASE
-    WHEN e.status = 'withdrawn' THEN 'lapsed'
-    WHEN e.email IS NOT NULL THEN 'enrolled_student'
-    WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
-    ELSE 'lead'
-  END`;
-// Only three stages are reachable from leads and enrolments, and that is the
-// honest set. 'identified_visitor' belongs to a VISITOR resolved to a lead — a
-// different record entirely — and assigning it here would put people in a stage
-// this query has no evidence for. 'graduate' and 'active_learner' cannot be
-// computed at all (no completion status; attendance unreliable), and
-// 'returning_customer' has no payment source, so none of them are guessed at.
+// T210: the derivation is no longer written here. It lives in `conversionState`
+// and the profile service imports the SAME constant, because two copies of this
+// CASE drifting apart surfaces as a row an operator can see but cannot open.
+const STAGE_SQL = STAGE_CASE_SQL;
+// FOUR stages are reachable from leads and enrolments, and that is the honest
+// set: lead, applicant, explorer and enrolled_student (plus lapsed).
+// 'identified_visitor' belongs to a VISITOR resolved to a lead — a different
+// record entirely — and assigning it here would put people in a stage this query
+// has no evidence for. 'graduate' and 'active_learner' cannot be computed at all
+// (no completion status; attendance unreliable), and 'returning_customer' has no
+// payment source, so none of them are guessed at.
 
 /**
  * Read a page of the roster.
@@ -163,8 +166,10 @@ export async function getPeopleRoster(query: PeopleQuery): Promise<PeopleRoster>
                ELSE 'withdrawn'
              END AS status,
              min(e.created_at) AS first_seen,
-             max(e.created_at) AS last_seen
+             max(e.created_at) AS last_seen,
+             ${ENROLLMENT_FACTS_SQL}
       FROM enrollments e
+      ${ENROLLMENT_FACTS_JOIN}
       WHERE e.email IS NOT NULL AND btrim(e.email) <> '' AND position('@' in e.email) > 0
       GROUP BY lower(btrim(e.email))
     ) e ON e.email = l.email

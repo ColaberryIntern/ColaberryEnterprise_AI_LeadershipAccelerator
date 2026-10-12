@@ -278,7 +278,11 @@ export async function syncLeadToGhl(
     const reason =
       route.status === 'unconfigured'
         ? `routed to "${route.accountKey}" but ${route.settingKey} is not set`
-        : 'no GHL API key configured';
+        : route.status === 'routes_unreadable'
+          // T214: a corrupt route map used to fall back to the default account -
+          // the dialer CRM - on no evidence. It now withholds, and says why.
+          ? `${route.settingKey} is set but unreadable, so the destination is unknown`
+          : 'no GHL API key configured';
     console.warn(`[GHL] Lead ${lead.id} not synced: ${reason}`);
     await logActivity({
       lead_id: lead.id,

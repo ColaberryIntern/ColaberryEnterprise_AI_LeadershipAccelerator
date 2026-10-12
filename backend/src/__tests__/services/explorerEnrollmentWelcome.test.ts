@@ -23,7 +23,15 @@ jest.mock('../../config/env', () => ({ env: mockEnv }));
 jest.mock('../../models', () => ({
   __esModule: true,
   Cohort: {},
-  Enrollment: { findOne: jest.fn(), create: jest.fn() },
+  // `findAll` was missing, so all four tests failed with "Enrollment.findAll is
+  // not a function" at `enrollmentService.ts:307` — the explorer path's own
+  // idempotency lookup, which predates Phase 2. That is why this suite sits on
+  // `jest.ci.config.ts`'s ignore list: it was dead, not passing. Repaired here
+  // because T202b changes this exact path (`createExplorerEnrollment` now also
+  // writes `tier: 'guest'`), and a dead suite over the path you are editing is
+  // worse than no suite — it reads like coverage. Defaults to an empty list so
+  // the existing tests take the new-signup branch they were written for.
+  Enrollment: { findAll: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn() },
   Lead: { findOrCreate: jest.fn() },
   Campaign: {},
 }));
@@ -41,6 +49,7 @@ import { Enrollment, Lead } from '../../models';
 import { createExplorerEnrollment } from '../../services/enrollmentService';
 
 const findOne = Enrollment.findOne as jest.Mock;
+const findAll = Enrollment.findAll as jest.Mock;
 const create = Enrollment.create as jest.Mock;
 const findOrCreate = Lead.findOrCreate as jest.Mock;
 
@@ -63,6 +72,32 @@ beforeEach(() => {
 afterAll(() => jest.restoreAllMocks());
 
 describe('createExplorerEnrollment — new signup', () => {
+  /**
+   * Growth OS Reset Phase 2 T202b. The two columns that describe a free account
+   * must BOTH be written here. `enrollment_type` is the PROGRAMME, `tier` is the
+   * ACCESS LEVEL, and this path wrote only the first — leaving `tier` at its
+   * 'member' default, so a free Explorer read as a paid-access member to
+   * everything keyed on access rather than programme. Two of those are
+   * user-visible: `isEnrolledMember` reports them ENROLLED to the partner app,
+   * and `reeseWelcomeService` greets them with the student intro.
+   */
+  it('writes BOTH semantic columns: enrollment_type explorer AND tier guest', async () => {
+    findAll.mockResolvedValue([]);
+    create.mockResolvedValue(fakeEnrollment());
+    mockSendTrainingWelcome.mockResolvedValue({ sent: true, messageId: 'm1' });
+
+    await createExplorerEnrollment({ name: 'Jane Doe', email: 'jane@acme.com' });
+
+    const attrs = create.mock.calls[0][0];
+    expect(attrs.enrollment_type).toBe('explorer');
+    expect(attrs.tier).toBe('guest');
+    // And the rest of what makes it free, so a future edit cannot quietly make
+    // this account look paid.
+    expect(attrs.payment_status).toBe('pending');
+    expect(attrs.status).toBe('active');
+    expect(attrs.portal_enabled).toBe(true);
+  });
+
   it('sets a token on the new enrollment, sends the branded welcome, logs it sent', async () => {
     findOne.mockResolvedValue(null);
     const enrollment = fakeEnrollment();
@@ -121,7 +156,11 @@ describe('createExplorerEnrollment — new signup', () => {
 
 describe('createExplorerEnrollment — idempotency', () => {
   it('returns the existing enrollment without creating or emailing', async () => {
-    findOne.mockResolvedValue({ id: 'existing' });
+    // Primes `findAll`, because the idempotency lookup canonicalises through
+    // `pickBestEnrollment` over ACTIVE rows. Priming `findOne` left the service
+    // taking the create-a-new-account branch, so this test was asserting against
+    // the wrong half of the function.
+    findAll.mockResolvedValue([{ id: 'existing', enrollment_type: 'explorer', status: 'active' }]);
 
     const res = await createExplorerEnrollment({ name: 'Jane Doe', email: 'jane@acme.com' });
 

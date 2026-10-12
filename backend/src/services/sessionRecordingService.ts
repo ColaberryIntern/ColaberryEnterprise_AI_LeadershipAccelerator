@@ -437,6 +437,16 @@ export async function ingestRecordingForBooking(
    * change removes.
    */
   preResolvedUuid?: string,
+  /**
+   * Start/end for a webhook-supplied match.
+   *
+   * The polling path gets these from `instanceTiming`; this path hardcoded nulls,
+   * so a webhook-delivered recording had no computable duration and every take was
+   * offered to the learner with no length. Same drift as the provider file id, one
+   * field over. The caller derives them with `recordingFacts.timingFromFileList`,
+   * which applies the polling path's rule to the payload the webhook already has.
+   */
+  preResolvedTiming?: { startedAt: Date | null; endedAt: Date | null },
 ): Promise<IngestResult> {
   if (booking.meeting_provider !== 'zoom') return { status: 'not_found' };
   if (booking.related_live_session_id) return { status: 'not_found' };
@@ -451,7 +461,12 @@ export async function ingestRecordingForBooking(
   // A webhook-supplied match is already one specific occurrence, so it is used as
   // given rather than re-fetched.
   const instances: Array<{ uuid: string; match: ZoomRecordingMatch; startedAt?: Date | null; endedAt?: Date | null }> = preResolvedMatch
-    ? [{ uuid: preResolvedUuid || '', match: preResolvedMatch, startedAt: null, endedAt: null }]
+    ? [{
+      uuid: preResolvedUuid || '',
+      match: preResolvedMatch,
+      startedAt: preResolvedTiming?.startedAt ?? null,
+      endedAt: preResolvedTiming?.endedAt ?? null,
+    }]
     : await findRecordingInstancesByMeetingId(
       booking.google_event_id,
       dateHint,
@@ -539,6 +554,9 @@ export async function ingestRecordingForBooking(
         startedAt: inst.startedAt ?? null,
         endedAt: inst.endedAt ?? null,
         recordingType: inst.match.recordingType ?? null,
+        // Only the webhook sees the file list, so only it can say. The sweep leaves
+        // this undefined, which correlation stores as null — unknown, not false.
+        hasAudio: (inst.match as { hasAudio?: boolean | null }).hasAudio ?? null,
         // A webhook supplied the match directly; anything else came from the sweep.
         provenance: preResolvedMatch ? 'webhook' : 'cron_sweep',
       });

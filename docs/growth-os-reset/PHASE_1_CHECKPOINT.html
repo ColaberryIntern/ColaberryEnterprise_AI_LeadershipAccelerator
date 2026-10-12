@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth OS Reset — Phase 1 Checkpoint</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --leaf:#77BB4A; --amber:#B7791F; --amber-bg:#FFFBEB;
+    --ink:#2d3748; --ink-soft:#718096; --rule:#e2e8f0;
+    --bg:#ffffff; --bg-alt:#f7fafc; --panel:#ffffff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e8edf4; --ink-soft:#a0aec0; --rule:#2d3748;
+      --bg:#131720; --bg-alt:#1a202c; --panel:#1a202c; --cherry-bg:#2d1518; --amber-bg:#2a2314;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e8edf4; --ink-soft:#a0aec0; --rule:#2d3748;
+    --bg:#131720; --bg-alt:#1a202c; --panel:#1a202c; --cherry-bg:#2d1518; --amber-bg:#2a2314;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.6 'Segoe UI',system-ui,-apple-system,sans-serif;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+  header{background:var(--bg-alt);border-bottom:3px solid var(--cherry);padding:36px 0 28px}
+  h1{margin:0 0 6px;font-size:1.9rem;line-height:1.2;color:var(--cherry);font-weight:700;text-wrap:balance}
+  .sub{color:var(--ink-soft);font-size:.95rem;margin:0}
+  .eyebrow{text-transform:uppercase;letter-spacing:.08em;font-size:.72rem;font-weight:700;
+           color:var(--ink-soft);margin:0 0 10px}
+  section{padding:34px 0;border-bottom:1px solid var(--rule)}
+  h2{font-size:1.25rem;margin:0 0 4px;color:var(--cherry);font-weight:700}
+  .lede{color:var(--ink-soft);margin:0 0 20px;font-size:.95rem}
+  .scorewrap{display:flex;gap:28px;align-items:center;flex-wrap:wrap}
+  .ring{width:150px;height:150px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+        background:conic-gradient(var(--leaf) 0 90%, var(--rule) 90% 100%)}
+  .ring div{width:116px;height:116px;border-radius:50%;background:var(--panel);display:grid;
+            place-items:center;text-align:center}
+  .ring b{display:block;font-size:2.1rem;line-height:1;color:var(--ink)}
+  .ring span{font-size:.7rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+  .rub{flex:1 1 440px;min-width:300px}
+  .row{display:grid;grid-template-columns:1fr 54px;gap:10px;align-items:center;margin-bottom:7px}
+  .row p{margin:0;font-size:.86rem}
+  .bar{height:7px;border-radius:4px;background:var(--rule);overflow:hidden;margin-top:4px}
+  .bar i{display:block;height:100%;background:var(--leaf)}
+  .bar i.part{background:var(--amber)}
+  .num{font-variant-numeric:tabular-nums;font-size:.82rem;color:var(--ink-soft);text-align:right}
+  .grid{display:grid;gap:12px}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+  .g4{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--rule);border-radius:9px;padding:14px 15px}
+  .card.warn{border-color:var(--amber);background:var(--amber-bg)}
+  .card.bad{border-color:var(--cherry);background:var(--cherry-bg)}
+  .card h3{margin:0 0 5px;font-size:.92rem;font-weight:700}
+  .card p{margin:0;font-size:.84rem;color:var(--ink-soft)}
+  .kpi{font-size:1.55rem;font-weight:700;line-height:1.1;display:block;margin-bottom:2px}
+  .ok{color:var(--leaf)} .mid{color:var(--amber)} .no{color:var(--cherry)}
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft)}
+  td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .pill{display:inline-block;padding:1px 8px;border-radius:11px;font-size:.72rem;font-weight:700}
+  .p-ok{background:var(--leaf);color:#fff}
+  .p-mid{background:var(--amber);color:#fff}
+  .p-no{background:var(--cherry);color:#fff}
+  .note{background:var(--bg-alt);border-left:3px solid var(--cherry);padding:12px 15px;
+        border-radius:0 7px 7px 0;font-size:.88rem}
+  .note.amber{border-left-color:var(--amber)}
+  .stop{background:var(--cherry-bg);border:1px solid var(--cherry);border-radius:9px;padding:16px 18px}
+  .stop h3{margin:0 0 6px;color:var(--cherry-deep);font-size:1rem}
+  .flow{display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:.82rem;color:var(--ink-soft)}
+  .flow b{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:5px 9px;
+          color:var(--ink);font-weight:600}
+  footer{padding:26px 0 44px;color:var(--ink-soft);font-size:.8rem}
+  .ph{display:grid;grid-template-columns:150px 1fr 38px;gap:9px;align-items:center;
+      margin-bottom:6px;font-size:.85rem}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <p class="eyebrow">Growth OS Reset &middot; Session CC-20261005-r6h2</p>
+  <h1>Phase 1 &mdash; Reconciliation and North Star Lock</h1>
+  <p class="sub">Ten documents, read against <code>origin/main</code>. No runtime behaviour changed, nothing deployed, no feature flag moved.</p>
+</div></header>
+
+<div class="wrap">
+
+<section>
+  <h2>Where the phase landed</h2>
+  <p class="lede">Scored against a published rubric, so the arithmetic is checkable rather than asserted.</p>
+  <div class="scorewrap">
+    <div class="ring"><div><b>90</b><span>of 100</span></div></div>
+    <div class="rub">
+      <div class="row"><p>Prompt tasks delivered with cited artifacts<span class="bar"><i style="width:100%"></i></span></p><span class="num">15 / 15</span></div>
+      <div class="row"><p>The ten unverified &ldquo;facts&rdquo; adjudicated<span class="bar"><i style="width:100%"></i></span></p><span class="num">10 / 10</span></div>
+      <div class="row"><p>Semantic conflict resolved by decision<span class="bar"><i style="width:100%"></i></span></p><span class="num">15 / 15</span></div>
+      <div class="row"><p>Every gap owned by a phase<span class="bar"><i style="width:100%"></i></span></p><span class="num">10 / 10</span></div>
+      <div class="row"><p>Contracts without false calibration<span class="bar"><i style="width:100%"></i></span></p><span class="num">10 / 10</span></div>
+      <div class="row"><p>Journeys with assertions, nothing dropped<span class="bar"><i style="width:100%"></i></span></p><span class="num">15 / 15</span></div>
+      <div class="row"><p>Evidence mechanically checkable<span class="bar"><i class="part" style="width:70%"></i></span></p><span class="num">7 / 10</span></div>
+      <div class="row"><p>No runtime behaviour changed<span class="bar"><i style="width:100%"></i></span></p><span class="num">5 / 5</span></div>
+      <div class="row"><p>Independently verified<span class="bar"><i class="part" style="width:30%"></i></span></p><span class="num">3 / 10</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The two deductions</h2>
+  <p class="lede">Both are mine, and both are stated rather than smoothed.</p>
+  <div class="grid g3">
+    <div class="card warn">
+      <h3>The gate cannot catch a fabricated count &nbsp;<span class="pill p-mid">&minus;3</span></h3>
+      <p>The citation gate proves a quoted literal is real, findable and unique. It says nothing about a <em>number</em> written in prose &mdash; and I published three invented counts during this phase, each corrected in the record afterwards. The working rule now: a number reaches prose by being pasted from a command&rsquo;s output, never retyped from memory of it.</p>
+    </div>
+    <div class="card warn">
+      <h3>Most artifacts are not independently graded &nbsp;<span class="pill p-mid">&minus;7</span></h3>
+      <p>Two tasks were graded by a verifier that did not write them. The remaining nine are committed but ungraded, because I batched verification to keep the phase to one sitting. Batching is a trade, not a free action. Recoverable without rework.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The headline findings</h2>
+  <p class="lede">Three things change how the next phases should be planned.</p>
+  <div class="grid g3">
+    <div class="card bad">
+      <h3>Free accounts do not reliably enter Explorer</h3>
+      <p>Two anonymous-reachable public paths write <em>opposite</em> labels, and the Explorer OS gates on only one. A whole population is invisible to it &mdash; no profile, no scores, no state, no decisions. For anyone who used both paths, the row chosen at login is the one Explorer cannot see.</p>
+    </div>
+    <div class="card bad">
+      <h3>Person 360 hides the score the system exists to produce</h3>
+      <p>A person&rsquo;s stage is derived from the mere existence of an enrollment row by email &mdash; no check of type, tier or payment &mdash; and that stage nulls their temperature and lead score on the server, explaining that the person &ldquo;already has&rdquo; converted. For an unpaid Explorer that is false.</p>
+    </div>
+    <div class="card ok-card">
+      <h3>The ownership pause is already the strong part</h3>
+      <p>Enforced at three independent points, including immediately before the send on freshly resolved evidence. Anyone planning from the prompt alone would assume it needed building. The weakness is the <em>claim</em>, not the stand-down.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Nothing needs deleting</h2>
+  <p class="lede">36 gaps, every one with a disposition and an owning phase. The zero is the useful number.</p>
+  <div class="grid g4">
+    <div class="card"><span class="kpi mid">18</span><p>FIX &mdash; correct existing behaviour</p></div>
+    <div class="card"><span class="kpi mid">14</span><p>BUILD &mdash; new, in a named phase</p></div>
+    <div class="card"><span class="kpi ok">3</span><p>KEEP &mdash; protect what is already right</p></div>
+    <div class="card"><span class="kpi ok">0</span><p>REMOVE &mdash; nothing is wrong enough to delete</p></div>
+  </div>
+  <p class="note" style="margin-top:16px">A matrix full of REMOVE rows would have meant the prior Explorer and Growth Journey work was wrong. It was not. It was unfinished at the seams, which is a different job and much better news. Three behaviours are marked KEEP, meaning a later phase must actively protect them &mdash; notably the content layer&rsquo;s refusal to substitute when no authoritative source exists, and the rule never to read missing attendance data as a no-show.</p>
+</section>
+
+<section>
+  <h2>Which phase owns what</h2>
+  <p class="lede">No gap is unowned. The sales phase carries the most, which matches the plan&rsquo;s shape.</p>
+  <div class="ph"><span>2 &middot; Entry + Person 360</span><span class="bar"><i style="width:56%"></i></span><span class="num">9</span></div>
+  <div class="ph"><span>3 &middot; Readiness score</span><span class="bar"><i style="width:25%"></i></span><span class="num">4</span></div>
+  <div class="ph"><span>4 &middot; Command Center, GHL</span><span class="bar"><i style="width:100%"></i></span><span class="num">16</span></div>
+  <div class="ph"><span>5 &middot; Experience library</span><span class="bar"><i style="width:31%"></i></span><span class="num">5</span></div>
+  <div class="ph"><span>6 &middot; Shadow validation</span><span class="bar"><i style="width:6%"></i></span><span class="num">1</span></div>
+</section>
+
+<section>
+  <h2>The twelve-node map</h2>
+  <p class="lede">Every node has code that owns it. None is missing. The drift is in the seams.</p>
+  <table>
+    <thead><tr><th>Node</th><th>Owner</th><th>What is missing</th></tr></thead>
+    <tbody>
+      <tr><td>Pre-registration prospect</td><td><span class="pill p-mid">partial</span></td><td>ordered cross-brand sequence, not just counts</td></tr>
+      <tr><td>Free-account registration</td><td><span class="pill p-no">conflicting</span></td><td>one canonical entry event; two paths write opposite labels</td></tr>
+      <tr><td>Explorer profile</td><td><span class="pill p-ok">owned</span></td><td>nothing structural &mdash; starved upstream</td></tr>
+      <tr><td>Person 360</td><td><span class="pill p-no">two of them</span></td><td>Explorer intelligence; and it suppresses the readiness score</td></tr>
+      <tr><td>Growth Journey relationship</td><td><span class="pill p-ok">owned</span></td><td>nothing &mdash; healthiest node on the map</td></tr>
+      <tr><td>Governor</td><td><span class="pill p-ok">owned</span></td><td>nothing in the mechanism; its menu is the problem</td></tr>
+      <tr><td>Content / experiences</td><td><span class="pill p-no">1 of 21</span></td><td>twenty of twenty-one declared asset types resolve nothing</td></tr>
+      <tr><td>Campaign execution</td><td><span class="pill p-mid">partial</span></td><td>selected assets are never passed to the send</td></tr>
+      <tr><td>Human sales escalation</td><td><span class="pill p-mid">partial</span></td><td>stable ordering, re-scoring, race-safe claim</td></tr>
+      <tr><td>GHL</td><td><span class="pill p-mid">contacts only</span></td><td>calendar, users, slots, appointments &mdash; all absent</td></tr>
+      <tr><td>Calendar</td><td><span class="pill p-mid">wrong one</span></td><td>the rep-facing calendar; provider ids on the mirror</td></tr>
+      <tr><td>Outcomes</td><td><span class="pill p-ok">owned</span></td><td>cancelled unmapped; rescheduled is not a value</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>The acceptance harness</h2>
+  <p class="lede">19 journeys, each with the assertion that would prove it &mdash; not a description.</p>
+  <div class="grid g4">
+    <div class="card"><span class="kpi">19</span><p>journeys specified</p></div>
+    <div class="card"><span class="kpi no">7</span><p>have no equivalent coverage today</p></div>
+    <div class="card"><span class="kpi mid">9</span><p>original scenarios with no home in the new list</p></div>
+    <div class="card"><span class="kpi ok">6</span><p>original personas, all mapped</p></div>
+  </div>
+  <p class="note amber" style="margin-top:16px">Reconciling the three overlapping journey sets found nine scenarios from the original design with no home in the current list. Seven are send-path safety invariants &mdash; per-channel suppression, single-winner execution, idempotency, send-time content re-resolution, fallback safety, shadow-mode silence &mdash; which get lost precisely when nobody writes down that they were dropped. One is moot while voice is disabled. And one is a real journey the newer list simply omits: high intent plus payment friction, where recovery must outrank selling. It is added back.</p>
+</section>
+
+<section>
+  <h2>The target loop this phase locks</h2>
+  <div class="flow">
+    <b>Brand website</b> &rarr; <b>Free account</b> &rarr; <b>Who is this?</b> &rarr;
+    <b>Intelligence</b> &rarr; <b>Governor</b> &rarr; <b>AI path</b> <em>or</em> <b>Human path</b>
+    &rarr; <b>Outcome</b> &rarr; <b>Feedback</b>
+  </div>
+  <p class="note" style="margin-top:16px">The canonical entry event is a person successfully creating a free AI account from one of our brand websites. Behaviour before that is acquisition evidence; behaviour after it is journey evidence. A page view is never the start of the lifecycle. That is the sentence the whole reset turns on, and today it is not true in code.</p>
+</section>
+
+<section>
+  <h2>Production state</h2>
+  <div class="grid g3">
+    <div class="card"><h3>Deployed</h3><p>Nothing. This phase changed no runtime behaviour.</p></div>
+    <div class="card"><h3>Live</h3><p>Nothing new. One added CI check, which runs on pull requests.</p></div>
+    <div class="card"><h3>Feature flags</h3><p>Unchanged. No default moved.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="stop">
+    <h3>Stopped for your review</h3>
+    <p style="margin:0;font-size:.9rem">Phase 2 does not start without your word. Three questions genuinely need you &mdash; which brands the first rep owns, which GHL sub-account she uses, and whether she already has an authoritative GHL user and calendar. A fourth has shrunk from an open question to a choice among four already-legal paid offers, because the learner brand&rsquo;s offer policy enumerates exactly five learner families of which four are paid, and a deny in that policy is unconditional.</p>
+  </div>
+</section>
+
+<footer>
+  Phase 1 of 6 &middot; every figure on this page is traceable to a document in
+  <code>docs/growth-os-reset/</code>, and a repository check enforces that.
+</footer>
+
+</div>
+</body>
+</html>

@@ -444,11 +444,25 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
       // this candidate out of the next run, so if anything above throws the whole
       // candidate is still picked up and retried rather than half-finished.
       await sequelize.query(
+        // T206: THE PAIR, written alongside the paid flag. A FIFTH paid-status writer, found
+        // by deriving the writer set from source rather than from the plan, which named three.
+        // In the happy path `activateByRef` has already granted membership before this runs
+        // (its own comment above says so), so this is usually a no-op re-assertion. It matters
+        // on the ERROR path: if activation threw or was skipped, this statement would
+        // otherwise mark a row paid while leaving `tier: 'guest'` - paid-but-guest, the exact
+        // state T206 exists to make unreachable. Unconditional because `payment_status` here
+        // is unconditional too. A $50 deposit holder cannot be promoted here because of
+        // `MEMBERSHIP_MIN_CENTS` (line 98, "skip the $50 deposit"), enforced on both
+        // membership-selection paths. NOT because of `paysimple_customer_id IS NOT NULL`,
+        // which an earlier version of this comment cited: `loadCandidates` is a DISJUNCTION
+        // and its other branch needs no customer id. Right conclusion, wrong mechanism.
         `UPDATE enrollments
             SET payment_status = 'paid',
                 amount_paid = :amt,
                 paysimple_payment_id = COALESCE(paysimple_payment_id, :pid),
-                enrolled_at = COALESCE(enrolled_at, NOW())
+                enrolled_at = COALESCE(enrolled_at, NOW()),
+                tier = 'member',
+                enrollment_type = 'standard'
           WHERE id = :id`,
         { replacements: { amt: membership.amountCents / 100, pid: membership.pid, id: c.id }, type: QueryTypes.UPDATE }
       );

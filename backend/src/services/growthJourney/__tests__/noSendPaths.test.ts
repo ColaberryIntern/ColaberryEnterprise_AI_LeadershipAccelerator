@@ -29,6 +29,12 @@ const FORBIDDEN_MODULES = [
   'leadService',
   'orgService',
   'freeSignupService',
+  // Growth OS Reset Phase 2 T201: the canonical free-account service the two
+  // public signup paths now share. Listed the moment it was created, because
+  // this list matches by BASENAME — a new module carrying a banned capability
+  // under a new name is an unlisted synonym for it, and the contract would have
+  // read green while the capability was reachable again.
+  'freeAccountRegistration',
   'prospectAccount',
   'aliPersonalOutreachService',
   'unsubscribeEnforcementService',
@@ -52,6 +58,8 @@ const FORBIDDEN_CALLS = [
   'OrgMember.create',
   'registerManager',
   'createFreeAccount',
+  // T201: the same discipline for the CALL, under its new name, beside the old.
+  'resolveFreeAccount',
   'ensureProspectAccount',
   'requestInstantCallback',
   'sendNewLeadAlert',
@@ -113,6 +121,32 @@ describe('the scanner itself', () => {
     ].join('\n');
     const imports = importsOf(fixture).map(basename);
     expect(imports).toEqual(expect.arrayContaining(['emailService', 'nodemailer']));
+    expect(FORBIDDEN_MODULES.some((m) => imports.includes(m))).toBe(true);
+    expect(FORBIDDEN_CALLS.some((c) => fixture.includes(c))).toBe(true);
+  });
+
+  /**
+   * Growth OS Reset Phase 2 T201. The ban is by basename, so the canonical
+   * free-account service had to be listed the moment it existed: otherwise a
+   * Growth Journey module could import `freeAccountRegistration` and call
+   * `resolveFreeAccount` — creating an account, which is what this contract
+   * forbids — and the suite would still read green, because only the service's
+   * previous name was listed.
+   *
+   * Both halves are asserted, and both are asserted to be ABSENT from the
+   * pre-existing lists in a way that would have failed before the entries were
+   * added, so this is a check and not a restatement.
+   */
+  it('T201 control: the canonical free-account module and call are both caught under their NEW names', () => {
+    const fixture = [
+      "import { resolveFreeAccount } from '../../freeAccountRegistration';",
+      "await resolveFreeAccount({ full_name: 'x', email: 'x@y.z', programme: 'learner' });",
+    ].join('\n');
+
+    const imports = importsOf(fixture).map(basename);
+    expect(imports).toContain('freeAccountRegistration');
+    expect(FORBIDDEN_MODULES).toContain('freeAccountRegistration');
+    expect(FORBIDDEN_CALLS).toContain('resolveFreeAccount');
     expect(FORBIDDEN_MODULES.some((m) => imports.includes(m))).toBe(true);
     expect(FORBIDDEN_CALLS.some((c) => fixture.includes(c))).toBe(true);
   });

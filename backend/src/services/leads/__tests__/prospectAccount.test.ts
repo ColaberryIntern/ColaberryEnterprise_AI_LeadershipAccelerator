@@ -67,9 +67,15 @@ describe('ensureProspectAccount', () => {
     });
 
     expect(result).toEqual({ created: true, cohort_assigned: true });
+    // `programme: 'standard'` is asserted, not merely tolerated. A prospect
+    // account exists so an inbound enquiry has somewhere to land; the person did
+    // not enrol in the free AI course. Passing 'learner' here would put every
+    // inbound enquiry onto learner rosters and into the Explorer nurture — the
+    // AI Flotation mistake, which this test's own source slug is named after.
     expect(mockCreateFreeAccount).toHaveBeenCalledWith({
       full_name: 'Marta',
       email: 'someone@northside.test',
+      programme: 'standard',
     });
   });
 
