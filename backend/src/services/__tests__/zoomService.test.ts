@@ -416,26 +416,96 @@ describe('streamZoomFile', () => {
 });
 
 describe('verifyZoomWebhookSignature', () => {
+  // A FIXED, FRESH timestamp paired with an injected clock. These tests previously used a
+  // hardcoded '1700000000' (Nov 2023) and asserted acceptance, which is exactly what made
+  // the missing replay window invisible: the suite codified that an arbitrarily old
+  // request verifies. The signature math is unchanged; only the age of the fixture is.
+  const TS = '1800000000';                 // the request's own timestamp, in seconds
+  const NOW = Number(TS) * 1000 + 1_000;   // one second later
+  const sign = (body: string, ts: string = TS) =>
+    'v0=' + crypto.createHmac('sha256', 'webhook-secret').update(`v0:${ts}:${body}`).digest('hex');
+
   it('accepts a correctly computed v0=<hex> signature', () => {
     const { verifyZoomWebhookSignature } = loadZoomService();
     const rawBody = '{"event":"recording.completed"}';
-    const timestamp = '1700000000';
-    const expected = 'v0=' + crypto.createHmac('sha256', 'webhook-secret').update(`v0:${timestamp}:${rawBody}`).digest('hex');
-
-    expect(verifyZoomWebhookSignature(rawBody, timestamp, expected)).toBe(true);
+    expect(verifyZoomWebhookSignature(rawBody, TS, sign(rawBody), NOW)).toBe(true);
   });
 
   it('rejects a tampered body (signature no longer matches)', () => {
     const { verifyZoomWebhookSignature } = loadZoomService();
-    const timestamp = '1700000000';
-    const expected = 'v0=' + crypto.createHmac('sha256', 'webhook-secret').update(`v0:${timestamp}:{"event":"a"}`).digest('hex');
-
-    expect(verifyZoomWebhookSignature('{"event":"b"}', timestamp, expected)).toBe(false);
+    expect(verifyZoomWebhookSignature('{"event":"b"}', TS, sign('{"event":"a"}'), NOW)).toBe(false);
   });
 
   it('rejects when the secret is configured but the signature header is missing (reject, not warn-and-accept)', () => {
     const { verifyZoomWebhookSignature } = loadZoomService();
-    expect(verifyZoomWebhookSignature('{}', '1700000000', undefined)).toBe(false);
+    expect(verifyZoomWebhookSignature('{}', TS, undefined, NOW)).toBe(false);
+  });
+
+  // ---- Replay protection (added 2026-10-01) ----
+
+  it('REJECTS a captured request replayed outside the window', () => {
+    // The whole point. A validly signed request is not a permanent credential; without
+    // this, one captured POST replays successfully forever.
+    const { verifyZoomWebhookSignature, ZOOM_WEBHOOK_MAX_AGE_MS } = loadZoomService();
+    const body = '{"event":"recording.completed"}';
+    const tooOld = Number(TS) * 1000 + ZOOM_WEBHOOK_MAX_AGE_MS + 1_000;
+    expect(verifyZoomWebhookSignature(body, TS, sign(body), tooOld)).toBe(false);
+  });
+
+  it('accepts a request at the edge of the window and rejects just past it', () => {
+    const { verifyZoomWebhookSignature, ZOOM_WEBHOOK_MAX_AGE_MS } = loadZoomService();
+    const body = '{"event":"recording.completed"}';
+    const base = Number(TS) * 1000;
+    expect(verifyZoomWebhookSignature(body, TS, sign(body), base + ZOOM_WEBHOOK_MAX_AGE_MS)).toBe(true);
+    expect(verifyZoomWebhookSignature(body, TS, sign(body), base + ZOOM_WEBHOOK_MAX_AGE_MS + 1)).toBe(false);
+  });
+
+  it('tolerates small clock skew but rejects a far-future timestamp', () => {
+    const { verifyZoomWebhookSignature, ZOOM_WEBHOOK_MAX_AGE_MS } = loadZoomService();
+    const body = '{"event":"recording.completed"}';
+    const base = Number(TS) * 1000;
+    expect(verifyZoomWebhookSignature(body, TS, sign(body), base - 2_000)).toBe(true);
+    expect(verifyZoomWebhookSignature(body, TS, sign(body), base - ZOOM_WEBHOOK_MAX_AGE_MS - 1)).toBe(false);
+  });
+
+  it('checks the signature BEFORE freshness, so a stale request cannot be distinguished from a forged one', () => {
+    // Both must be false. If age were checked first, an attacker probing with a guessed
+    // signature could tell "stale but validly signed" from "bad signature" by the order of
+    // the warnings, which leaks whether a captured timestamp was ever real.
+    const { verifyZoomWebhookSignature } = loadZoomService();
+    const body = '{"event":"recording.completed"}';
+    const ancient = Number(TS) * 1000 + 99_999_999;
+    expect(verifyZoomWebhookSignature(body, TS, sign(body), ancient)).toBe(false);   // stale, valid sig
+    expect(verifyZoomWebhookSignature(body, TS, 'v0=' + 'a'.repeat(64), ancient)).toBe(false); // forged
+  });
+
+  it('rejects a non-numeric timestamp rather than treating it as epoch 0', () => {
+    const { verifyZoomWebhookSignature } = loadZoomService();
+    const body = '{}';
+    expect(verifyZoomWebhookSignature(body, 'not-a-number', sign(body, 'not-a-number'), NOW)).toBe(false);
+  });
+
+  // ---- Fail-closed on a missing secret (added 2026-10-01) ----
+
+  it('FAILS CLOSED when no webhook secret is configured', () => {
+    // Previously this returned TRUE with a warning, so a misconfigured deploy silently
+    // accepted every unsigned request to an endpoint that mutates recording state.
+    const WITH_SECRET = {
+      zoomAccountId: 'acct-1', zoomClientId: 'client-1', zoomClientSecret: 'secret-1',
+      zoomWebhookSecretToken: 'webhook-secret', zoomHostEmail: 'ali@refactored.ai',
+    };
+    try {
+      jest.resetModules();
+      jest.doMock('../../config/env', () => ({ env: { ...WITH_SECRET, zoomWebhookSecretToken: undefined } }));
+      const { verifyZoomWebhookSignature } = require('../zoomService') as typeof import('../zoomService');
+      expect(verifyZoomWebhookSignature('{}', TS, sign('{}'), NOW)).toBe(false);
+    } finally {
+      // Restore by re-mocking, NOT with dontMock: dontMock drops the override without
+      // re-establishing the top-of-file factory, so the next test to call loadZoomService
+      // gets a module with no secret and fails for an unrelated reason. (It did.)
+      jest.resetModules();
+      jest.doMock('../../config/env', () => ({ env: WITH_SECRET }));
+    }
   });
 });
 

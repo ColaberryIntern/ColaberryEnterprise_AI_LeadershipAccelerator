@@ -71,6 +71,9 @@
   /* Z-index */
   --z-base: 0;     /* @kind other */
   --z-sticky: 100; /* @kind other */
+  /* The persistent broadcast mini-player. Above sticky chrome so it is never buried,
+     and BELOW every overlay, modal and toast: a player that covers a dialog is a bug. */
+  --z-player: 110;  /* @kind other */
   --z-overlay: 1000; /* @kind other */
   --z-modal: 1100;   /* @kind other */
   --z-toast: 1200;   /* @kind other */

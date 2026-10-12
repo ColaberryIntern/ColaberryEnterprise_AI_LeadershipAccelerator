@@ -8,6 +8,7 @@ import {
 import RoomFilesPanel, { ACCEPT, ALLOWED_MIMES, ALLOWED_EXT, MAX_SIZE, extOf } from './RoomFilesPanel';
 import { fetchClassSessionDetail, ClassSessionInfo, joinSession } from '../../../services/onboardingApi';
 import { emitPointsEarned } from '../../../services/pointsFx';
+import BroadcastWatchButton from '../../../components/portal/BroadcastWatchButton';
 import { useCountdown } from '../../../hooks/useCountdown';
 import { parseSessionTimeToHHMM, formatSessionTimeRange } from '../../../utils/sessionTime';
 import RoomRecordingsPanel from './RoomRecordingsPanel';
@@ -84,7 +85,9 @@ const InviteModal: React.FC<{ roomId: string; onClose: () => void; onDone: () =>
 //   live      → real "Join Class" button (session.meeting_link) +
 //     attendance recording, same pattern as NextLiveClassCard.handleJoin
 //   completed → recap/recording link if one was generated
-const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
+const ClassSessionBanner: React.FC<{ sessionId: string; roomId: string }> = ({
+  sessionId, roomId,
+}) => {
   const [session, setSession] = useState<ClassSessionInfo | null>(null);
   useEffect(() => {
     let alive = true;
@@ -152,6 +155,13 @@ const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
         <>
           <div className="rm-classbanner-live"><span className="te-livedot" aria-hidden="true" /> Live now</div>
           <button type="button" className="te-btn cherry sm" onClick={handleJoin}>📹 Join Class</button>
+          {/*
+            BESIDE the join button, not instead of it. A broadcast is one-way and the meeting
+            link is two-way, so replacing the join escape would take participation away from
+            everyone to give watching to some. Renders nothing unless a broadcast is actually
+            airing for THIS room and this viewer may watch it.
+          */}
+          <BroadcastWatchButton roomId={roomId} />
         </>
       ) : (
         cd && (
@@ -389,7 +399,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       </div>
 
       {room.linked_live_session_id
-        ? <ClassSessionBanner sessionId={room.linked_live_session_id} />
+        ? <ClassSessionBanner sessionId={room.linked_live_session_id} roomId={roomId} />
         : room.is_video && <AlwaysOpenVideoBanner onJoin={doJoinVideo} />}
 
       <div className="rm-tabs" role="tablist" aria-label="Room sections">

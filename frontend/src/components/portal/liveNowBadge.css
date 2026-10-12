@@ -1,0 +1,185 @@
+/*
+ * "Live now" badge. Sits above the mini-player in the same bottom-right column.
+ *
+ * LAYER-A TOKENS ONLY, for the reason liveMiniPlayer.css records: this renders outside
+ * `.te-shell`, so TodayShell's `[data-theme="dark"] .te-shell` palette never reaches it, and
+ * using those names would mean light-mode fallbacks surviving into dark mode.
+ *
+ * It shares `--z-player` with the player rather than claiming its own band: the two are one
+ * stack in the viewer's eye, and giving the badge a different number is how they end up
+ * sandwiching something.
+ */
+
+.lnb {
+  position: fixed;
+  right: 332px;
+  /* Above the mini-player's own 16px bottom plus its height, so the two stack rather than
+     overlap. The player is 320px wide at 16:9 plus chrome; 260px clears it without needing
+     either element to measure the other. */
+  bottom: 276px;
+  z-index: var(--z-player, 110);
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: var(--surface-card);
+  color: var(--text-body);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.18));
+  overflow: hidden;
+}
+
+.lnb-stale,
+.lnb-count {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lnb-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lnb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lnb-item:last-child {
+  border-bottom: none;
+}
+
+.lnb-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface-brand);
+}
+
+/* Reconnecting is a different fact from live, and the colour says so without relying on the
+   label alone — but the label is there too, because colour is never the only signal. */
+.lnb-dot-reconnecting {
+  background: var(--text-muted);
+}
+
+.lnb-mode {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.lnb-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lnb-watch {
+  flex: none;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.lnb-dismiss {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 3px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.lnb-watch:focus-visible,
+.lnb-dismiss:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 820px) {
+  .lnb {
+    right: 16px;
+    left: 16px;
+    width: auto;
+    /* Clear of the tab bar AND of the mini-player sitting above it. */
+    bottom: calc(324px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/*
+ * The launch flourish. Brief, once per occurrence, and guarded in BOTH places: the component
+ * does not apply `.is-new` when reduced motion is asked for, and the media query below means
+ * a browser that reports the preference only to CSS is still respected.
+ */
+@keyframes lnb-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.lnb-item.is-new {
+  animation: lnb-arrive 320ms ease-out;
+}
+
+.lnb-sound {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lnb-soundbtn {
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.lnb-soundbtn[aria-pressed='true'] {
+  background: var(--surface-brand-subtle);
+  border-color: var(--border-brand);
+}
+
+.lnb-soundbtn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lnb-item.is-new {
+    animation: none;
+  }
+}
