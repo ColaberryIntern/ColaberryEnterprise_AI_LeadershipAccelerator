@@ -1049,6 +1049,12 @@ async function ensureEnrollmentColumns() {
     // interim. NULL (the default) means no gate — behavior for every existing
     // enrollment is unchanged. See contentEntitlement.ts.
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS access_starts_at DATE`,
+    // Phase 2 T205: when this person entered the Explorer journey. Set once at
+    // registration, never rewritten. Nullable, so every pre-existing row keeps NULL
+    // and nothing reads a value that was never measured. THIS ENTRY IS THE DEPLOYMENT
+    // MECHANISM — the model attribute on its own would 500 the live registration path
+    // against a database that has not been altered.
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS explorer_entered_at TIMESTAMPTZ`,
   ];
   for (const sql of statements) {
     try {

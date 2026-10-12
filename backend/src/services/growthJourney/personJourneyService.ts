@@ -1,6 +1,7 @@
 import { GrowthJourneyClassification, GrowthJourneyConversationOwnership, GrowthJourneyDecision, GrowthJourneyHandoff, GrowthJourneyOutcome, GrowthJourneyTransition, Lead } from '../../models';
 import { getAuthorizedLeadContexts } from '../../modules/tenancy/leadContextService';
 import { tenantScopeWhere, type PlatformRequestContext } from '../../modules/tenancy/tenantAuthorization';
+import { subjectRefFrom } from '../identity/identifierPrecedence';
 
 /**
  * Person 360 (Phase 4 T410): one lead's journey across every brand the CALLER
@@ -98,6 +99,13 @@ function pick<K extends readonly string[]>(row: Record<string, unknown>, keys: K
   return out;
 }
 
+/**
+ * T211: NOT a competing person profile. This answers what the growth journey
+ * has DECIDED for a lead — classifications, decisions and handoffs keyed on
+ * lead_id. `adminOs/personProfileService` is the canonical assembler.
+ */
+export const PERSON_VIEW_ROLE = 'answers' as const;
+
 /** A row against the clause the queries carry - equality or membership per key - so the in-memory filter IS the query's scope. */
 export function matchesScope(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
   return Object.entries(where).every(([k, v]) => (Array.isArray(v) ? v.includes(row[k]) : row[k] === v));
@@ -135,7 +143,14 @@ export async function loadPersonJourney(args: PersonJourneyArgs): Promise<Person
 
   const enrollment_ids = [...new Set([...classifications, ...handoffs].map((r) => r.enrollment_id).filter((id): id is string => typeof id === 'string' && id.length > 0))];
   const person: PersonJourney = {
-    subject: { lead_id: leadId, subject_ref: `lead:${leadId}`, enrollment_ids },
+    // T211 attempt 3: was an inline `` `lead:${leadId}` `` — the FIFTH copy of
+    // the spelling, found by the tripwire in `personViewRoles.test.ts` on its
+    // first run. `subjectRefFrom` is the one definition; for a lead anchor it
+    // returns exactly `lead:<id>`, so this is spelling-identical and now
+    // cannot drift from what the other views emit. The anchor carries only
+    // `leadId` on purpose: this view is keyed on lead_id, and passing an
+    // enrollment id would change the ref by precedence.
+    subject: { lead_id: leadId, subject_ref: subjectRefFrom({ leadId }) ?? '', enrollment_ids },
     scope: { tenant_id: ctx.tenantId, brand_id: ctx.brandId, brand_restricted: ctx.authorizedBrandIds !== null },
     relationships,
     classifications: classifications.map((r) => pick(r as unknown as Record<string, unknown>, PERSON_CLASSIFICATION_ATTRIBUTES)),

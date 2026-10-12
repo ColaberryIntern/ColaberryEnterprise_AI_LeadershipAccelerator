@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growth OS Reset — Phase 2 Checkpoint</title>
+<style>
+  :root{
+    --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-bg:#FFF0F1;
+    --leaf:#77BB4A; --amber:#B7791F; --amber-bg:#FFFBEB;
+    --ink:#2d3748; --ink-soft:#718096; --rule:#e2e8f0;
+    --bg:#ffffff; --bg-alt:#f7fafc; --panel:#ffffff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e8edf4; --ink-soft:#a0aec0; --rule:#2d3748;
+      --bg:#131720; --bg-alt:#1a202c; --panel:#1a202c; --cherry-bg:#2d1518; --amber-bg:#2a2314;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e8edf4; --ink-soft:#a0aec0; --rule:#2d3748;
+    --bg:#131720; --bg-alt:#1a202c; --panel:#1a202c; --cherry-bg:#2d1518; --amber-bg:#2a2314;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.6 'Segoe UI',system-ui,-apple-system,sans-serif;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+  header{background:var(--bg-alt);border-bottom:3px solid var(--cherry);padding:36px 0 28px}
+  h1{margin:0 0 6px;font-size:1.9rem;line-height:1.2;color:var(--cherry);font-weight:700;text-wrap:balance}
+  .sub{color:var(--ink-soft);font-size:.95rem;margin:0}
+  h2{margin:40px 0 14px;font-size:1.3rem;color:var(--cherry);font-weight:700;
+     padding-bottom:8px;border-bottom:2px solid var(--rule);text-wrap:balance}
+  h3{margin:26px 0 8px;font-size:1.02rem;font-weight:600}
+  p{margin:0 0 12px}
+  .lede{background:var(--cherry-bg);border-left:4px solid var(--cherry);
+        padding:14px 18px;border-radius:0 8px 8px 0;margin:22px 0}
+  .warn{background:var(--amber-bg);border-left:4px solid var(--amber);
+        padding:14px 18px;border-radius:0 8px 8px 0;margin:22px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:.93rem}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{background:var(--bg-alt);font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft)}
+  .tbl-wrap{overflow-x:auto}
+  code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.88em;
+       background:var(--bg-alt);padding:1px 5px;border-radius:4px}
+  pre{background:var(--bg-alt);border:1px solid var(--rule);border-radius:8px;
+      padding:14px 16px;overflow-x:auto;font-size:.84rem;line-height:1.5}
+  pre code{background:none;padding:0}
+  .pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.76rem;
+        font-weight:600;white-space:nowrap}
+  .no{background:#E6F4EA;color:#1E6B34}
+  .yes{background:#E6F4EA;color:#1E6B34}
+  .notyet{background:var(--amber-bg);color:var(--amber)}
+  .unk{background:var(--cherry-bg);color:var(--cherry-deep)}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .no,:root:not([data-theme="light"]) .yes{background:#13351F;color:#8FD9A8}
+  }
+  ol,ul{margin:0 0 12px;padding-left:22px}
+  li{margin-bottom:7px}
+  footer{margin:56px 0 30px;padding-top:18px;border-top:1px solid var(--rule);
+         color:var(--ink-soft);font-size:.86rem}
+  .q{font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Phase 2 — Canonical Free AI Entry, and a Person 360 That Can Be Trusted</h1>
+    <p class="sub">Session <code>CC-20261005-r6h2</code> · 2026-10-11 Central · Phase 2 of 6 ·
+    branch <code>workstream/growth-os-reset-phase2</code> — <strong>MERGED and DEPLOYED 2026-10-12</strong>, running commit <code>12c1e5fc</code></p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="lede">
+    <p style="margin:0">Every figure on this page was pasted from a command's output. Where a
+    number could not be produced by a command, it says <strong>unknown</strong> rather than
+    estimating it.</p>
+  </div>
+
+  <h2>Your five questions</h2>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th style="width:52%">Question</th><th style="width:22%">Answer</th><th>The short why</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="q">Can a Free AI account still exist without an Explorer Growth profile?</td>
+        <td><span class="pill no">No for new</span> <span class="pill unk">Yes for 86 existing</span></td>
+        <td>Both signup paths establish the identity at registration. For legacy rows the answer
+            is now <strong>measured, not unknown</strong>: 86 active accounts are invisible to
+            Explorer Growth. The backfill still has not been run for real.</td>
+      </tr>
+      <tr>
+        <td class="q">Can an unpaid Explorer still be mistaken for converted?</td>
+        <td><span class="pill no">No — live</span></td>
+        <td>Conversion derives from authoritative paid and subscription state, in one place.
+            <strong>Deployed and verified in the running container</strong> by the deploy's marker
+            check against the compiled SQL.</td>
+      </tr>
+      <tr>
+        <td class="q">Can I look at one person and see the website journey that led to their signup?</td>
+        <td><span class="pill yes">Yes</span></td>
+        <td>Pre-registration page events keyed to the stitched lead, ordered by time in the
+            statement itself. Removing the stitch key or the ordering fails named tests.</td>
+      </tr>
+      <tr>
+        <td class="q">Can I see what they have done since registering?</td>
+        <td><span class="pill yes">Yes, with named gaps</span></td>
+        <td>Timeline, Explorer score, GHL id and the existing panels on one screen. Several
+            evidence groups still have no test.</td>
+      </tr>
+      <tr>
+        <td class="q">Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3?</td>
+        <td><span class="pill notyet">Not yet</span></td>
+        <td>Deployment is no longer a reason — that one is resolved. Still: some evidence groups
+            are untested, no guard detects a group losing its evidence, two suites flake under
+            parallel load, and the 86 incoherent rows are the very population an SRS would score.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p><strong>The answers are not yes/yes/no/no/no — and they are not five clean yeses either.</strong>
+  Two carry real qualifications and the fifth is a no. Question 5 is the one I would most like to be
+  different, and §H of the Markdown checkpoint lists exactly what would change it.</p>
+
+  <h2>What shipped, and what the verifiers said</h2>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Task</th><th>What it did</th><th style="width:30%">Verifier</th></tr></thead>
+    <tbody>
+      <tr><td>T201–T206</td><td>One canonical free-account service; both public paths write both semantic columns; Explorer profile at registration</td><td>PASS; T205 and T206 each needed 3 attempts</td></tr>
+      <tr><td>T207</td><td>Coherence backfill — pure predicate plus a dry-run CLI</td><td><strong>PASS 12/12</strong> (after FAIL 8/12)</td></tr>
+      <tr><td>T208</td><td>One subject-key builder, pure, importing nothing</td><td><strong>PASS</strong></td></tr>
+      <tr><td>T209 + T210</td><td>The <code>explorer</code> stage; conversion derived from paid state</td><td><strong>PASS 12/12</strong> (after FAIL 10/12)</td></tr>
+      <tr><td>T211</td><td>Person 360 evidence package; one declared canonical view</td><td><strong>FAIL 8/12 → FAIL 10/12</strong>; attempt 3 mutation-proved but <strong>unverified by a grader</strong></td></tr>
+      <tr><td>T212</td><td>The operator "Who is this?" read view</td><td>FAIL 7/12 → FAIL 9/12 → <strong>PASS 11/12</strong></td></tr>
+      <tr><td>T213</td><td>The fifteen acceptance scenarios as a reconstructible set</td><td><strong>FAIL 10/12 → 10/12 → 9/12</strong>, graded DISCLOSABLE; residue unverified</td></tr>
+      <tr><td>T214</td><td>GHL discovery, configurable owner, fail-closed routing</td><td><strong>PASS 12/12</strong></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="warn">
+    <p style="margin:0 0 8px"><strong>Three of the eight tasks failed independent verification, and
+    two are still unverified.</strong></p>
+    <p style="margin:0">T212 scored <strong>zero on criterion 6 for a false claim of mine</strong>:
+    I wrote that the duplicated stage map was fixed "on the profile AND the roster", and the roster
+    was untouched — still rendering the raw lowercase enum for the one stage this phase exists to
+    make visible. Two of its tests also could not fail: one asserted a scored panel renders its
+    numbers while being <em>named</em> for permission isolation, so an inserted role gate passed it;
+    the other matched a '0' in the rendered date "1 Oct 2026" rather than in the score. T213 pinned
+    three of fifteen scenarios to a control instead of a proof and certified a <em>skipped</em> test
+    as coverage. All fixed and re-proved by mutation — but a grader has not yet re-scored them, so
+    nothing here claims they passed.</p>
+  </div>
+
+  <div class="warn">
+    <p style="margin:0 0 8px"><strong>T211 failed verification twice, and both verdicts were right.</strong></p>
+    <p style="margin:0">Attempt 1 asserted source text; five of eight mutants survived. Attempt 2
+    was behavioural and still failed, for a subtler reason: the criterion <em>"the same person
+    resolves to the same identity through all three views"</em> was tested by asserting three
+    <strong>ID builders</strong> agree — while none of the three views called any of them. Attempt 3
+    fixed the code instead of the test, and <strong>immediately found a fifth copy of the
+    spelling</strong>: one view built its subject ref inline, and renaming every person in the
+    system would have left every suite in the repo green.</p>
+  </div>
+
+  <h2>Evidence</h2>
+
+<pre><code>backend CI, full:   7 failed, 8 skipped, 1890 passed, 1897 of 1905 suites
+                    7 failed, 162 skipped, 30879 passed, 31048 tests
+T211 evidence set:  5 suites, 110 tests, EXIT=0
+adminOs + growthJourney + identity:  80 suites, 1866 tests, EXIT=0
+T213 registry:      21 tests, EXIT=0
+frontend (new):     2 suites, 26 tests, EXIT=0
+citation gate:      EXIT=0, 0 drift warnings
+guards:             secret-scan, route-auth, explorer-copy, banned-word — all EXIT=0</code></pre>
+
+  <p>The 7 backend failures are <strong>not from this phase</strong>, and that was tested rather
+  than asserted: an import-closure walk from each failing suite — with a control suite that
+  correctly shows reachability — proves four cannot reach any file this phase changed. The other
+  three are a CRLF byte-compare on a file absent from the diff, and 5000 ms jest timeouts on
+  harnesses that boot 818- and 1070-file import closures on this Windows box. <code>main</code>'s
+  own CI is green at this branch's merge parent.</p>
+
+  <h3>Mutation testing — two witnesses required per kill</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Sweep</th><th>Mutants</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>T211 attempt 3</td><td>3</td><td>all killed — chain view, journey view, dropped import</td></tr>
+      <tr><td>T212</td><td>8</td><td>all killed</td></tr>
+      <tr><td>T213</td><td>1</td><td>killed — renaming a covering test fails by the scenario's own name</td></tr>
+      <tr><td>T214 follow-up</td><td>1</td><td>killed by 2 named tests</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Deployed, and what production actually shows</h2>
+
+  <p>PR #3062 merged at <code>14:18:52Z</code> and Phase 2 is live. All nine CI jobs passed,
+  <strong>including Backend unit tests</strong> — which independently confirms the 7 local failures
+  were Windows-only. The running container carries the change, proved by the deploy's own marker
+  check against the compiled output:</p>
+
+<pre><code>[deploy] marker 'has_paid_subscription' present in backend:/app/dist/services/adminOs/conversionState.js
+[deploy] backend answering after 5s</code></pre>
+
+  <p>The deployed commit is <code>12c1e5fc</code>, not the merge commit: <code>main</code> advanced
+  while the deploy ran (PR #3065 merged in between) and the script pulls <code>origin/main</code>.
+  Phase 2 is inside it, verified with <code>git merge-base</code>. The first attempt correctly
+  <strong>refused</strong> — registry mode would not pull a moving <code>:main</code> tag whose
+  digest did not match an image for that exact commit, and CI had not published it yet.</p>
+
+  <h3>Three things that were UNKNOWN are now measured</h3>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th style="width:34%">Was unknown</th><th>Now observed</th></tr></thead>
+    <tbody>
+      <tr><td><code>CONTENT_PAID_GATE_ENABLED</code><br><code>EXPLORER_WEEK0_ONLY</code></td>
+          <td>Both <strong>true</strong>. So the paid-content gate is on and Explorers are confined
+              to Week 0 <em>in production</em> — the entitlement consequence the pre-deploy
+              checkpoint could only assert from a sample env file.</td></tr>
+      <tr><td>Row counts by tier and type</td>
+          <td><strong>630 enrollments.</strong> 290 <code>explorer</code>+<code>member</code> (wrong
+              tier), 86 active <code>standard</code>+<code>guest</code> (wrong programme), and
+              <strong>zero coherent <code>explorer</code>+<code>guest</code></strong> — which is
+              what a Free AI learner is defined to be.</td></tr>
+      <tr><td>Whether the legacy population is reachable</td>
+          <td>The running population filter is <code>enrollment_type: 'explorer'</code> and
+              <code>status: 'active'</code>, never <code>tier</code> — grepped inside the
+              container. <strong>So the 86 are invisible to Explorer Growth today.</strong></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="warn">
+    <p style="margin:0 0 8px"><strong>Question 1, answered with a number instead of "unknown".</strong></p>
+    <p style="margin:0">Yes — Free AI accounts exist right now that Explorer Growth cannot see.
+    <strong>86 of them.</strong> The backfill's dry run plans <strong>56 writes</strong> (37
+    programme, 19 tier) and reports the rest for human decision rather than guessing, because it
+    demands positive free-signup provenance and excludes org members, prospect accounts, staff,
+    agent identities and paid rows. <strong>It has not been run for real — that is your call.</strong>
+    It also discloses that 37 joiners would have <code>explorer_entered_at</code> left NULL, and no
+    task owns that column.</p>
+  </div>
+
+  <p><strong>Nothing sends, now confirmed in production as well as in tests.</strong>
+  <code>GROWTH_JOURNEY_EXECUTION_ENABLED</code> is <strong>unset</strong> on the running container.
+  In tests, a verifier built a syscall-level tripwire patching <code>net.connect</code>,
+  <code>tls.connect</code> and <code>dns.lookup</code>, with controls proving it blocks, and
+  recorded <strong>zero vendor-host contact attempts across all 31,042 tests</strong> — still zero
+  with the withholding logic mutated out, so the stub rather than the business logic is what
+  enforces it.</p>
+
+  <h2>Two things that need your decision</h2>
+  <ol>
+    <li><strong>An open TWC breach on the surface this phase calls first priority, which I did not
+      fix.</strong> The repo's own banned-word gate records that the signup response says
+      <em>"Your free account is ready…"</em> <strong>to a person</strong>, and the line above it logs
+      a <strong>raw email address</strong>. Both breach standing constraints. I left it alone because
+      the file is not in this phase's diff, the gate assigns it to another component, and it is
+      concurrently modified in another working tree. <strong>It is a two-line copy change plus a
+      redaction whenever you say so.</strong></li>
+    <li><strong>Whether to run the coherence backfill</strong>, and on what population. It is
+      dry-run by default and reports rows it cannot prove either way for a human decision rather
+      than guessing.</li>
+  </ol>
+
+  <h2>What happens next</h2>
+  <ol>
+    <li>Open the PR (draft until green) → your review → <strong>your merge click</strong>.</li>
+    <li>Deploy via <code>scripts/deploy-prod.sh</code> in registry mode — never <code>--build nginx</code>.</li>
+    <li>Read-only production verification: real row counts by tier and type, the two flag values
+      that are currently unknown, and an Explorer appearing in the roster with a stage label rather
+      than a raw enum.</li>
+    <li>Update §F of the Markdown checkpoint with what was observed.</li>
+  </ol>
+
+  <footer>
+    Full detail, all ten sections, and the sixteen-item behaviour-change disclosure list derived by
+    command from T202's enumeration: <code>docs/growth-os-reset/PHASE_2_CHECKPOINT.md</code>.
+  </footer>
+
+</div>
+</body>
+</html>

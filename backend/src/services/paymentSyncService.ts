@@ -187,12 +187,25 @@ export async function syncPaySimplePayments(opts?: { dryRun?: boolean }): Promis
 
     if (!dryRun) {
       try {
+        // T206: THE PAIR, kept coherent with the payment, WRITTEN IN SQL because this
+        // writer does not go through the model. That is the point worth noting: a tripwire
+        // that scans for `.create`/`.update` calls cannot see this site at all, which is
+        // why T206's guards are derived over both syntaxes and proved with a planted
+        // violation in each.
+        //
+        // Conditional on 'paid', following the `enrolled_at` CASE idiom already in this
+        // statement: this sweep also writes 'failed', and a failed payment must move
+        // neither column. Deposit holders cannot reach here — `gatherKnownPayments` only
+        // selects enrollments that already carry a `paysimple_payment_id` or have a
+        // subscription, and an Open House deposit row has neither.
         await sequelize.query(
           `UPDATE enrollments SET
              payment_status = :status,
              amount_paid = COALESCE(:amount, amount_paid),
              paysimple_payment_id = COALESCE(:pid, paysimple_payment_id),
-             enrolled_at = CASE WHEN :status = 'paid' AND enrolled_at IS NULL THEN NOW() ELSE enrolled_at END
+             enrolled_at = CASE WHEN :status = 'paid' AND enrolled_at IS NULL THEN NOW() ELSE enrolled_at END,
+             tier = CASE WHEN :status = 'paid' THEN 'member' ELSE tier END,
+             enrollment_type = CASE WHEN :status = 'paid' THEN 'standard' ELSE enrollment_type END
            WHERE id = :id`,
           {
             replacements: {

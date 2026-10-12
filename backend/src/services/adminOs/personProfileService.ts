@@ -3,6 +3,11 @@ import { sequelize } from '../../config/database';
 import { LifecycleStage } from './lifecycle';
 import { normalizeEmail } from './identityResolution';
 import { visibleStagesForSections } from './personScope';
+import {
+  ENROLLMENT_FACTS_JOIN,
+  ENROLLMENT_FACTS_SQL,
+  STAGE_CASE_SQL,
+} from './conversionState';
 import { EventDomain, TimelineEvent, domainsForSections, getPersonTimeline } from './personTimelineService';
 import {
   AcquisitionPanel, AppointmentRow, AutomationRow,
@@ -10,6 +15,8 @@ import {
   loadAcquisition, loadAppointments, loadAutomation,
 } from './panels/acquisitionPanels';
 import { JourneySummary, buildJourney } from './panels/journeyPanel';
+import { ExplorerScorePanel, loadExplorerScore } from './panels/explorerPanel';
+import { TrustPanel, buildTrust } from './panels/trustPanel';
 import { ClassActivityPanel, CurriculumPanel, loadClassActivity, loadCurriculum } from './panels/classPanels';
 import { WorkPanel, loadWork } from './panels/workPanels';
 import { AccountPanel, BillingDetailPanel, loadAccount, loadBillingDetail } from './panels/accountPanels';
@@ -56,6 +63,8 @@ export type {
   AcquisitionPanel, AppointmentRow, AutomationRow,
 } from './panels/acquisitionPanels';
 export type { JourneySummary } from './panels/journeyPanel';
+export type { TrustPanel } from './panels/trustPanel';
+export type { ExplorerScorePanel } from './panels/explorerPanel';
 export type { ClassActivityPanel, CurriculumPanel } from './panels/classPanels';
 export type { WorkPanel, ProjectRow, CaseStudyRow, CapstoneRow, CertPrepPanel } from './panels/workPanels';
 export type { AccountPanel, BillingDetailPanel, SubscriptionRow } from './panels/accountPanels';
@@ -67,25 +76,6 @@ export type {
   SkillsPanel, MentorPanel, ContentPanel, CommunityPanel, ProfileContextPanel,
 } from './panels/growthPanels';
 
-/**
- * Data & trust — the brief's last profile section, and the one this whole
- * workstream has been arguing for.
- *
- * It answers "how much of this should you believe": which source records
- * resolve to this person, how they were matched, whether consent was recorded,
- * how fresh the data is, and — most usefully — what CANNOT be computed for them
- * and why. A gap stated is a gap a reader can act on; a gap left blank reads as
- * a zero.
- */
-export interface TrustPanel {
-  leadIds: number[];
-  enrollmentIds: string[];
-  matchMethod: 'exact_email' | 'none';
-  tracedToLead: boolean;
-  consentRecorded: boolean | null;
-  lastActivity: string | null;
-  gaps: Array<{ field: string; reason: string }>;
-}
 
 export interface LearningPanel {
   enrollmentId: string;
@@ -147,6 +137,11 @@ export interface PersonProfile {
    * answered has already been answered by the enrolment.
    */
   intentSuppressedReason?: string;
+  /**
+   * T211: Engagement / Intent / Fit as the growth engine sees them. Null when
+   * no snapshot exists — which is most non-Explorers — rather than 0/0/0.
+   */
+  explorerScore?: ExplorerScorePanel | null;
   trust?: TrustPanel;
   journey?: JourneySummary;
   timeline?: TimelineEvent[];
@@ -187,6 +182,13 @@ function may(panel: string, sections: readonly string[]): boolean {
   return (PANEL_SECTIONS[panel] ?? []).some((s) => sections.includes(s));
 }
 
+/**
+ * T211: this is the CANONICAL person assembler. The other two read-side views
+ * declare 'answers' and say which different question they answer; a tripwire
+ * asserts exactly one module claims this.
+ */
+export const PERSON_VIEW_ROLE = 'canonical' as const;
+
 /** Whether a caller with these sections may read a named panel. The one rule, exported for per-panel endpoints. */
 export function mayReadPanel(panel: string, sections: readonly string[]): boolean {
   return may(panel, sections);
@@ -224,12 +226,7 @@ export async function resolvePersonIdentity(
             COALESCE(e.name, l.name) AS name,
             COALESCE(e.company, l.company) AS company,
             COALESCE(e.title, l.title) AS title,
-            (CASE
-               WHEN e.status = 'withdrawn' THEN 'lapsed'
-               WHEN e.email IS NOT NULL THEN 'enrolled_student'
-               WHEN l.pipeline_stage IS NOT NULL AND l.pipeline_stage <> 'new_lead' THEN 'applicant'
-               ELSE 'lead'
-             END) AS stage,
+            (${STAGE_CASE_SQL}) AS stage,
             (l.email IS NOT NULL) AS traced
      FROM (
        SELECT lower(btrim(email)) AS email, max(name) AS name, max(company) AS company,
@@ -237,8 +234,8 @@ export async function resolvePersonIdentity(
        FROM leads WHERE lower(btrim(email)) = :email GROUP BY lower(btrim(email))
      ) l
      FULL OUTER JOIN (
-       SELECT lower(btrim(email)) AS email, max(full_name) AS name, max(company) AS company,
-              max(title) AS title,
+       SELECT lower(btrim(e.email)) AS email, max(e.full_name) AS name, max(e.company) AS company,
+              max(e.title) AS title,
               -- Any CURRENT enrolment outranks a withdrawn one: someone who left
               -- a cohort and re-enrolled is active, not lapsed.
               --
@@ -247,11 +244,14 @@ export async function resolvePersonIdentity(
               -- had ever re-enrolled — shipped 2026-09-08, caught 2026-09-09 by
               -- a profile that read "lapsed" over a live enrolment.
               CASE
-                WHEN bool_or(status::text = 'active') THEN 'active'
-                WHEN bool_or(status::text = 'completed') THEN 'completed'
+                WHEN bool_or(e.status::text = 'active') THEN 'active'
+                WHEN bool_or(e.status::text = 'completed') THEN 'completed'
                 ELSE 'withdrawn'
-              END AS status
-       FROM enrollments WHERE lower(btrim(email)) = :email GROUP BY lower(btrim(email))
+              END AS status,
+              ${ENROLLMENT_FACTS_SQL}
+       FROM enrollments e
+       ${ENROLLMENT_FACTS_JOIN}
+       WHERE lower(btrim(e.email)) = :email GROUP BY lower(btrim(e.email))
      ) e ON e.email = l.email`,
     { type: QueryTypes.SELECT, replacements: { email } },
   );
@@ -463,6 +463,19 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   profile.timeline = await getPersonTimeline({ leadIds, enrollmentIds, domains, limit: 150 });
   profile.journey = await buildJourney(leadIds, enrollmentIds, query.sections, profile.timeline);
 
+  // T211: Explorer E/I/F, gated on the same sections as acquisition because it
+  // is a conversion signal. Null for anyone the scorer has not assessed, which
+  // is the honest answer and not 0/0/0.
+  if (may('acquisition', query.sections)) {
+    profile.explorerScore = await loadExplorerScore(enrollmentIds);
+  } else {
+    // NAMED when withheld, never silently omitted - this module's own contract,
+    // and an existing test holds every other panel to it. The first version of
+    // this block omitted the push, which would have made E/I/F the one panel
+    // that disappears without saying so.
+    profile.withheldPanels.push('explorerScore');
+  }
+
   profile.trust = buildTrust(profile, leadIds, enrollmentIds);
 
   // The KPI has to obey the same rule as the field, or the header contradicts
@@ -474,68 +487,3 @@ export async function getPersonProfile(query: ProfileQuery): Promise<PersonProfi
   return profile;
 }
 
-/**
- * What we cannot say about this person, and why.
- *
- * Derived from what the lifecycle contract records as unjoinable plus what is
- * genuinely absent for THIS person, so the list is specific rather than a
- * generic disclaimer nobody reads.
- */
-function buildTrust(
-  profile: PersonProfile,
-  leadIds: number[],
-  enrollmentIds: string[],
-): TrustPanel {
-  const gaps: Array<{ field: string; reason: string }> = [];
-
-  if (leadIds.length === 0) {
-    gaps.push({
-      field: 'Acquisition history',
-      reason: 'No lead record. This person enrolled without ever being captured as a lead, '
-        + 'so there is nothing recorded about how they found us.',
-    });
-  }
-  if (profile.acquisition && profile.acquisition.consentContact === null) {
-    gaps.push({
-      field: 'Contact consent',
-      reason: 'Never recorded. This is not the same as consent being refused.',
-    });
-  }
-  gaps.push({
-    field: 'Graduation',
-    reason: 'Computable but never set. enrollments.status supports "completed", and this profile '
-      + 'reads it, but no enrolment has ever carried it (464 active, 24 lapsed, 0 completed as '
-      + 'of 2026-09-09). Nothing marks a student complete when their cohort ends, so an empty '
-      + 'graduate count means "not recorded", not "did not graduate".',
-  });
-  gaps.push({
-    field: 'Placement and employment',
-    reason: 'Not tracked anywhere in this database, so outcomes beyond graduation cannot be '
-      + 'reported at all.',
-  });
-  if (enrollmentIds.length > 0) {
-    gaps.push({
-      field: 'Payment transactions',
-      reason: 'Subscription STATE is local and shown above, but the individual charges live in '
-        + 'PaySimple and are not joined. A failed subscription row proves a collection failed; '
-        + 'it does not tell you the amount actually collected to date.',
-    });
-    if (profile.classActivity && profile.classActivity.attendanceTotal === 0) {
-      gaps.push({
-        field: 'Attendance',
-        reason: 'No register was taken for this person\'s sessions. Content consumption and '
-          + 'curriculum progress are the reliable engagement signals here, not attendance.',
-      });
-    }
-  }
-
-  return {
-    leadIds,
-    enrollmentIds,
-    matchMethod: leadIds.length > 0 && enrollmentIds.length > 0 ? 'exact_email' : 'none',
-    tracedToLead: profile.tracedToLead,
-    consentRecorded: profile.acquisition?.consentContact ?? null,
-    lastActivity: profile.journey?.lastActivity ?? null,
-    gaps,
-  };
-}

@@ -38,6 +38,16 @@ describe('openHouseCreditService', () => {
       expect(created.email).toBe('payer@example.com');
       expect(created.cohort_id).toBe('c-july');
       expect(created.enrollment_type).toBe('explorer');
+      // Growth OS Reset Phase 2 T203. BOTH columns, not just the programme.
+      // `enrollment_type` is what Explorer Growth selects on; `tier` is the access
+      // level. This path is the one writer outside the canonical service that sets
+      // them together, and the programme half was asserted here already while the
+      // access half was asserted NOWHERE in the repository — so a change dropping
+      // `tier: 'guest'` from the deposit payload would have been caught by nothing.
+      expect(created.tier).toBe('guest');
+      // And it stays unpaid: a $50 seat deposit is not a subscription, which is the
+      // reason this row is an Explorer at all rather than a member.
+      expect(created.payment_status).toBe('pending');
       expect((grantCredit as jest.Mock).mock.calls[0][0]).toMatchObject({ enrollmentId: 'e-new', amountCents: 5000, sourceEventId: 'OH716-1' });
     });
 

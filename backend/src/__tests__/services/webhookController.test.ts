@@ -15,6 +15,13 @@ jest.mock('../../services/paysimpleService', () => ({
 jest.mock('../../services/enrollmentService', () => ({
   markEnrollmentPaid: jest.fn(),
   markEnrollmentFailed: jest.fn(),
+}));
+
+// `enrollInClassReadinessCampaign` moved to its own module when `enrollmentService`
+// was split at the 500-line ceiling (T206). The mock has to follow it: this suite mocks
+// `../../models` with only `Cohort` and `EnrollmentLead`, so an unmocked call would reach
+// a real `Campaign.findOne` on an undefined model.
+jest.mock('../../services/readinessCampaignService', () => ({
   enrollInClassReadinessCampaign: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -602,7 +609,7 @@ describe('handleZoomWebhook', () => {
     // This fixture carries no uuid, so the occurrence is passed as empty and the
     // ingest falls back to its booking-wide check. The next test covers the case
     // that matters.
-    }), '');
+    }), '', expect.any(Object));
     expect(ingestRecordingForSession).not.toHaveBeenCalled();
   });
 
@@ -630,7 +637,7 @@ describe('handleZoomWebhook', () => {
 
     await handleZoomWebhook(req as Request, res as Response);
 
-    expect(ingestRecordingForBooking).toHaveBeenCalledWith(booking, expect.any(Object), 'OCCURRENCE==');
+    expect(ingestRecordingForBooking).toHaveBeenCalledWith(booking, expect.any(Object), 'OCCURRENCE==', expect.any(Object));
   });
 
   it('does not look up a RoomBooking at all when a LiveSession already matched (avoids a redundant query)', async () => {
@@ -684,7 +691,108 @@ describe('handleZoomWebhook', () => {
       mimeType: 'video/mp4',
       sizeBytes: 900,
       recordingType: null, // fixture carries no recording_type, so size decides and nothing is recorded
+      // These fixture files carry no `id` either, so null is correct here — but the
+      // field must be PRESENT, because correlation distinguishes "no id supplied"
+      // from "field never mapped" and only the first is a real Zoom condition.
+      providerFileId: null,
+      // Derived from the file list. This fixture has no audio rendering and no
+      // transcript, and `null` is the honest answer: absence is not silence.
+      hasAudio: null,
     });
+  });
+
+  /**
+   * THE REGRESSION THIS SUITE DID NOT CATCH.
+   *
+   * Until 2026-10-09 the handler built its match object without `providerFileId`,
+   * so every webhook-delivered recording reached correlation with a null file id
+   * and parked in review owned by nobody — while the cron sweep, which did carry
+   * it, would have attributed the same recording correctly. The webhook always
+   * wins that race, so in practice nothing was ever attributed.
+   *
+   * The fixtures above all omit `id`, which is why the gap survived: null was the
+   * right answer for them whether the field was mapped or not. This one supplies
+   * ids, as Zoom actually does — all six files in the production rehearsal had one.
+   */
+  it('carries the per-file id of the file it CHOSE, so correlation can identify it', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    const session = { id: 'session-1', title: 'Week 7 · Build Day', zoom_meeting_id: '123' };
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(session);
+    (ingestRecordingForSession as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r1' });
+
+    const event = {
+      event: 'recording.completed',
+      download_token: 'short-lived-token',
+      payload: {
+        object: {
+          id: 123, // the MEETING id — must NOT end up in providerFileId
+          topic: 'Week 7 Build Day',
+          recording_files: [
+            { id: 'file-webcam', file_type: 'MP4', file_size: 99_000_000, recording_type: 'active_speaker', download_url: 'https://zoom.us/rec/webcam' },
+            { id: 'file-screen', file_type: 'MP4', file_size: 14_000_000, recording_type: 'shared_screen_with_speaker_view', download_url: 'https://zoom.us/rec/screen' },
+          ],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    const match = (ingestRecordingForSession as jest.Mock).mock.calls[0][1];
+    // The id of the file the SELECTOR picked, not the larger one and not the meeting.
+    expect(match.providerFileId).toBe('file-screen');
+    expect(match.downloadUrl).toBe('https://zoom.us/rec/screen');
+    // A meeting id here would be a plausible-looking wrong value that never reaches
+    // the review queue, and would give every part of one meeting the same "file" id.
+    expect(match.providerFileId).not.toBe('123');
+    expect(match.providerFileId).not.toBe(123);
+  });
+
+  /**
+   * THE SECOND FIELD THIS PATH DROPPED, found the same way as the first.
+   *
+   * `ingestRecordingForBooking` hardcoded `startedAt: null, endedAt: null` for a
+   * webhook-supplied match while the polling path filled them from `instanceTiming`.
+   * With both null the recording's duration could never be computed, so every take
+   * was offered to the learner with no length beside it — and `duration_seconds`
+   * was one of three columns nothing in the backend wrote at all.
+   */
+  it('derives the real start and end from the payload instead of passing nulls', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+    const booking = { id: 'booking-9', google_event_id: '456', title: 'Study Group' };
+    (RoomBooking.findOne as jest.Mock).mockResolvedValue(booking);
+    (ingestRecordingForBooking as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r1' });
+
+    const event = {
+      event: 'recording.completed',
+      payload: {
+        object: {
+          id: 456,
+          uuid: 'OCCURRENCE==',
+          topic: 'Study Group',
+          recording_files: [
+            { id: 'f1', file_type: 'MP4', recording_type: 'shared_screen_with_speaker_view', file_size: 500, download_url: 'https://zoom.us/rec/a', recording_start: '2026-10-11T18:46:00Z', recording_end: '2026-10-11T18:49:00Z' },
+            { id: 'f2', file_type: 'M4A', recording_type: 'audio_only', file_size: 20, download_url: 'https://zoom.us/rec/b', recording_start: '2026-10-11T18:46:00Z', recording_end: '2026-10-11T18:49:00Z' },
+          ],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': freshZoomTimestamp() });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    const [, match, , timing] = (ingestRecordingForBooking as jest.Mock).mock.calls[0];
+    expect(timing.startedAt).toBeInstanceOf(Date);
+    expect(timing.endedAt).toBeInstanceOf(Date);
+    expect(timing.startedAt.toISOString()).toBe('2026-10-11T18:46:00.000Z');
+    expect(timing.endedAt.toISOString()).toBe('2026-10-11T18:49:00.000Z');
+    // Three minutes. Without this the picker shows a take with no length.
+    expect((timing.endedAt.getTime() - timing.startedAt.getTime()) / 1000).toBe(180);
+    // And the audio rendering in the same delivery is what makes hasAudio true.
+    expect(match.hasAudio).toBe(true);
   });
 
   it('prefers the shared-screen composition over a larger webcam-only file, and records which one it chose', async () => {
