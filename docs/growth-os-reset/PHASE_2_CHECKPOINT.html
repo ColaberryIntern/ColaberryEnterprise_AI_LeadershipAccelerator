@@ -67,7 +67,7 @@
   <div class="wrap">
     <h1>Phase 2 — Canonical Free AI Entry, and a Person 360 That Can Be Trusted</h1>
     <p class="sub">Session <code>CC-20261005-r6h2</code> · 2026-10-11 Central · Phase 2 of 6 ·
-    branch <code>workstream/growth-os-reset-phase2</code> — <strong>not merged, not deployed</strong></p>
+    branch <code>workstream/growth-os-reset-phase2</code> — <strong>MERGED and DEPLOYED 2026-10-12</strong>, running commit <code>12c1e5fc</code></p>
   </div>
 </header>
 
@@ -87,15 +87,17 @@
     <tbody>
       <tr>
         <td class="q">Can a Free AI account still exist without an Explorer Growth profile?</td>
-        <td><span class="pill no">No for new</span> <span class="pill unk">Unknown for existing</span></td>
-        <td>Both signup paths establish the identity at registration. The backfill for legacy rows
-            is dry-run and <strong>has never run</strong>, so the legacy population is unmeasured.</td>
+        <td><span class="pill no">No for new</span> <span class="pill unk">Yes for 86 existing</span></td>
+        <td>Both signup paths establish the identity at registration. For legacy rows the answer
+            is now <strong>measured, not unknown</strong>: 86 active accounts are invisible to
+            Explorer Growth. The backfill still has not been run for real.</td>
       </tr>
       <tr>
         <td class="q">Can an unpaid Explorer still be mistaken for converted?</td>
-        <td><span class="pill no">No — in code</span></td>
+        <td><span class="pill no">No — live</span></td>
         <td>Conversion derives from authoritative paid and subscription state, in one place.
-            <strong>Not deployed</strong>, so in production today the answer is still yes.</td>
+            <strong>Deployed and verified in the running container</strong> by the deploy's marker
+            check against the compiled SQL.</td>
       </tr>
       <tr>
         <td class="q">Can I look at one person and see the website journey that led to their signup?</td>
@@ -112,8 +114,9 @@
       <tr>
         <td class="q">Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3?</td>
         <td><span class="pill notyet">Not yet</span></td>
-        <td>Nothing is deployed; some evidence groups are untested; no guard detects a group
-            losing its evidence; two suites flake under parallel load.</td>
+        <td>Deployment is no longer a reason — that one is resolved. Still: some evidence groups
+            are untested, no guard detects a group losing its evidence, two suites flake under
+            parallel load, and the 86 incoherent rows are the very population an SRS would score.</td>
       </tr>
     </tbody>
   </table>
@@ -197,13 +200,63 @@ guards:             secret-scan, route-auth, explorer-copy, banned-word — all 
   </table>
   </div>
 
-  <h2>Nothing sends. Nothing is deployed.</h2>
-  <p>No production write, no production read, and the backfill has never run. A verifier confirmed
-  the sending constraint independently: a syscall-level tripwire patching <code>net.connect</code>,
-  <code>tls.connect</code> and <code>dns.lookup</code>, with controls proving it blocks, recorded
-  <strong>zero vendor-host contact attempts across all 31,042 tests</strong> — and still zero with
-  the withholding logic mutated out, so the stub rather than the business logic is what enforces it.
-  <code>GROWTH_JOURNEY_EXECUTION_ENABLED</code> remains yours to set, and the merge is your click.</p>
+  <h2>Deployed, and what production actually shows</h2>
+
+  <p>PR #3062 merged at <code>14:18:52Z</code> and Phase 2 is live. All nine CI jobs passed,
+  <strong>including Backend unit tests</strong> — which independently confirms the 7 local failures
+  were Windows-only. The running container carries the change, proved by the deploy's own marker
+  check against the compiled output:</p>
+
+<pre><code>[deploy] marker 'has_paid_subscription' present in backend:/app/dist/services/adminOs/conversionState.js
+[deploy] backend answering after 5s</code></pre>
+
+  <p>The deployed commit is <code>12c1e5fc</code>, not the merge commit: <code>main</code> advanced
+  while the deploy ran (PR #3065 merged in between) and the script pulls <code>origin/main</code>.
+  Phase 2 is inside it, verified with <code>git merge-base</code>. The first attempt correctly
+  <strong>refused</strong> — registry mode would not pull a moving <code>:main</code> tag whose
+  digest did not match an image for that exact commit, and CI had not published it yet.</p>
+
+  <h3>Three things that were UNKNOWN are now measured</h3>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th style="width:34%">Was unknown</th><th>Now observed</th></tr></thead>
+    <tbody>
+      <tr><td><code>CONTENT_PAID_GATE_ENABLED</code><br><code>EXPLORER_WEEK0_ONLY</code></td>
+          <td>Both <strong>true</strong>. So the paid-content gate is on and Explorers are confined
+              to Week 0 <em>in production</em> — the entitlement consequence the pre-deploy
+              checkpoint could only assert from a sample env file.</td></tr>
+      <tr><td>Row counts by tier and type</td>
+          <td><strong>630 enrollments.</strong> 290 <code>explorer</code>+<code>member</code> (wrong
+              tier), 86 active <code>standard</code>+<code>guest</code> (wrong programme), and
+              <strong>zero coherent <code>explorer</code>+<code>guest</code></strong> — which is
+              what a Free AI learner is defined to be.</td></tr>
+      <tr><td>Whether the legacy population is reachable</td>
+          <td>The running population filter is <code>enrollment_type: 'explorer'</code> and
+              <code>status: 'active'</code>, never <code>tier</code> — grepped inside the
+              container. <strong>So the 86 are invisible to Explorer Growth today.</strong></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="warn">
+    <p style="margin:0 0 8px"><strong>Question 1, answered with a number instead of "unknown".</strong></p>
+    <p style="margin:0">Yes — Free AI accounts exist right now that Explorer Growth cannot see.
+    <strong>86 of them.</strong> The backfill's dry run plans <strong>56 writes</strong> (37
+    programme, 19 tier) and reports the rest for human decision rather than guessing, because it
+    demands positive free-signup provenance and excludes org members, prospect accounts, staff,
+    agent identities and paid rows. <strong>It has not been run for real — that is your call.</strong>
+    It also discloses that 37 joiners would have <code>explorer_entered_at</code> left NULL, and no
+    task owns that column.</p>
+  </div>
+
+  <p><strong>Nothing sends, now confirmed in production as well as in tests.</strong>
+  <code>GROWTH_JOURNEY_EXECUTION_ENABLED</code> is <strong>unset</strong> on the running container.
+  In tests, a verifier built a syscall-level tripwire patching <code>net.connect</code>,
+  <code>tls.connect</code> and <code>dns.lookup</code>, with controls proving it blocks, and
+  recorded <strong>zero vendor-host contact attempts across all 31,042 tests</strong> — still zero
+  with the withholding logic mutated out, so the stub rather than the business logic is what
+  enforces it.</p>
 
   <h2>Two things that need your decision</h2>
   <ol>
