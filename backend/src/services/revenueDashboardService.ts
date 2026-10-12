@@ -236,7 +236,14 @@ export interface LeadAttribution {
   lead_name: string;
   pipeline_stage: string;
   total_touchpoints: number;
-  total_revenue: number;
+  /**
+   * NULL, always, on this surface. The figure this used to carry was `enrollments x 4500` -- a
+   * hardcoded price multiplied by a count, reported as revenue. Removing the fabrication meant the
+   * value became null, and the DECLARATION has to carry that meaning or the next reader assumes a
+   * number is available. `campaignLinkService.ts:63` declares the same field the same way, for the
+   * same reason.
+   */
+  total_revenue: number | null;
   touchpoints: TouchpointAttribution[];
   first_touch: TouchpointAttribution | null;
   last_touch: TouchpointAttribution | null;

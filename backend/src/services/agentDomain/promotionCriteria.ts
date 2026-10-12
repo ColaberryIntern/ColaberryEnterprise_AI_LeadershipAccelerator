@@ -430,7 +430,10 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
  * an internship agent may eventually send approved routine document reminders, while internship
  * acceptance remains a human decision.
  */
-export const INTERNSHIP_REMINDER_EXAMPLE: PromotionCriteria = Object.freeze({
+// `Object.freeze<PromotionCriteria>` rather than a bare `Object.freeze`: the call breaks the
+// contextual type from the annotation, so `state: 'proposed'` inside the thresholds array widens
+// to `string` and stops being a `ThresholdState`. The type argument puts the contextual type back.
+export const INTERNSHIP_REMINDER_EXAMPLE: PromotionCriteria = Object.freeze<PromotionCriteria>({
   capability_id: 'internship.routine_document_reminder',
   from_autonomy: 'autonomy:R6',
   to_autonomy: 'autonomy:R7',
