@@ -113,13 +113,18 @@ describe('story 4 creates project work and sends nothing', () => {
       // Check IMPORT STATEMENTS, not the whole file. An earlier version swept the text for
       // /calendar/i and failed on this module's own prose ("no calendar invite") -- a sweep that
       // flags a file for DESCRIBING a thing it refuses to do is measuring the wrong object.
-      const importLines = src
-        .split('\n')
-        .filter((l: string) => /^\s*import\b|require\(/.test(l))
-        .join('\n');
-      expect(importLines).not.toMatch(/emailService|nodemailer|mandrill/i);
-      expect(importLines).not.toMatch(/basecamp/i);
-      expect(importLines).not.toMatch(/googleapis|calendar|synthflow|twilio/i);
+      // Match module SPECIFIERS, not statement LINES. The line filter this replaced only ever
+      // saw the FIRST PHYSICAL LINE of an import, and every import in this directory is
+      // multi-line -- so its whole view of this module was ["import {", "import {"], and a
+      // verifier slipped a multi-line `from '../emailService'` past all 40 tests. The specifier
+      // is the fact the rule is about, and no formatting can hide it.
+      // The full sweep with its positive controls lives in agentDomainStoryIntegrity.test.ts.
+      const specifiers = [...src.matchAll(/(?:from|require\s*\(|import\s*\()\s*['"]([^'"]+)['"]/g)]
+        .map((m) => m[1])
+        .join(' ');
+      expect(specifiers).not.toMatch(/emailService|nodemailer|mandrill/i);
+      expect(specifiers).not.toMatch(/basecamp/i);
+      expect(specifiers).not.toMatch(/googleapis|calendar|synthflow|twilio/i);
     }
   });
 });

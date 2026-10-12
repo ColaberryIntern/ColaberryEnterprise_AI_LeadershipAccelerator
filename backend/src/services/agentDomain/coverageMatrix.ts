@@ -304,8 +304,11 @@ export function reviseCapability(
   const diff: string[] = [];
 
   for (const k of keys) {
-    const a = stable((previous as any)[k]);
-    const b = stable((next as any)[k]);
+    // No cast needed: `CapabilityRecord` declares `readonly [extra: string]: unknown`
+    // (capabilityRecord.ts), so indexing by a string key is already typed. The two `as any`
+    // casts that were here were both avoidable and undocumented.
+    const a = stable(previous[k]);
+    const b = stable(next[k]);
     if (a !== b) {
       changed.push(k);
       diff.push(`${k}: ${a.slice(0, 120)} -> ${b.slice(0, 120)}`);
