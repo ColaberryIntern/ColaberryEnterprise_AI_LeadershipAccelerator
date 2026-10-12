@@ -48,6 +48,7 @@ a{color:inherit}
 .brand img{height:30px;width:auto}
 .site-foot{background:#1A1A1A;color:#FFFFFF;padding-block:2.5rem}
 .site-foot .inner{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:center;justify-content:space-between}
+.foot-logo{height:26px;width:auto}
 .foot-mark{font-weight:700;font-size:1.1rem;letter-spacing:-.01em}
 .foot-note{color:#B4B4B4;font-size:.85rem;margin:0}
 

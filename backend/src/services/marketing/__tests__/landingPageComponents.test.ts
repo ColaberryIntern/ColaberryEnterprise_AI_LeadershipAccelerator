@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { renderLandingPage } from '../landingPageRenderer';
+import { STYLES } from '../landingPageStyles';
 import { parseLandingPageContent, type LandingPageContentShape } from '../../../schemas/landingPageContentSchema';
 
 /**
@@ -156,6 +157,28 @@ describe('nothing an operator types becomes markup', () => {
   it('footerNote is escaped', () => {
     const out = render(content({ footerNote: EVIL, sections: [{ type: 'hero', headline: 'H' }] }));
     expect(out).not.toContain(EVIL);
+  });
+});
+
+describe('every image is sized by the stylesheet', () => {
+  /**
+   * A class name in the markup is not a component. `.foot-logo` was emitted, asserted above,
+   * and had NO rule behind it - so the white Colaberry wordmark rendered at its intrinsic
+   * 1200px and filled the bottom of the page. The class-name assertion passed the whole time.
+   * An unsized <img> is the one case where that gap is always a visible defect, so it gets a
+   * check that reads the stylesheet rather than the markup.
+   */
+  it('each <img> carrying a class has a height or width rule for it', () => {
+    const classes = [...html.matchAll(/<img[^>]*class="([^"]+)"/g)].map((m) => m[1].trim());
+    expect(classes.length).toBeGreaterThan(0);
+    classes.forEach((cls) => {
+      expect(STYLES).toMatch(new RegExp(`\\.${cls}\\{[^}]*(height|width):`));
+    });
+  });
+
+  it('the header logo, which carries no class, is sized through its parent', () => {
+    // Named separately because the test above cannot see it - it is `.brand img`, not a class.
+    expect(STYLES).toMatch(/\.brand img\{[^}]*height:/);
   });
 });
 
