@@ -44,17 +44,40 @@ const CHECKPOINT = path.join(DOCS, 'PHASE_2_CHECKPOINT.md');
  */
 const DELIBERATE_ADDITIONS = ['services/portalSettingsService.ts'];
 
-/** Files the enumeration's scan marks as CHANGING behaviour. */
+/** Every line the enumeration marks as CHANGING behaviour, parsed or not. */
+export function changesLines(doc: string): string[] {
+  return doc.split('\n').filter((l) => l.startsWith('|') && l.includes('**CHANGES**'));
+}
+
+/**
+ * Files the enumeration's scan marks as CHANGING behaviour.
+ *
+ * The path cell is matched with an optional `**` on either side. A verifier beat
+ * the first version of this function with a single bolded cell —
+ * `| 33 | **\`services/plantedBold.ts\`** | … | **CHANGES** |` — which the regex
+ * missed, `.filter(Boolean)` then dropped, and the count check waved through
+ * because 16 + 1 still equalled 17 by coincidence. A seventeenth consumer was
+ * therefore undisclosed with this suite reporting 8/8 green: the exact scenario
+ * the docblock above says it exists to prevent.
+ *
+ * Rows 29, 30 and 32 of the enumeration were hand-appended, so a hand-formatted
+ * row is the realistic path to this, not a contrived one. `parsesEveryRow` below
+ * is the assertion that makes a future formatting variant fail loudly instead of
+ * silently shrinking the set.
+ */
 export function changesRows(doc: string): string[] {
-  return doc
-    .split('\n')
-    .filter((l) => l.startsWith('|') && l.includes('**CHANGES**'))
+  return changesLines(doc)
     .map((l) => {
-      const m = l.match(/^\|\s*\d+\s*\|\s*`([^`]+)`/);
+      const m = l.match(/^\|\s*\d+\s*\|\s*\*{0,2}`([^`]+)`\*{0,2}\s*\|/);
       return m ? m[1] : '';
     })
     .filter(Boolean)
     .sort();
+}
+
+/** True when every CHANGES line yielded a path — i.e. the parser saw them all. */
+export function parsesEveryRow(doc: string): boolean {
+  return changesRows(doc).length === changesLines(doc).length;
 }
 
 /** Files §G of the checkpoint discloses, from its numbered list. */
@@ -110,6 +133,32 @@ describe('T217 — the extractors can fail, so the comparisons above mean someth
     // pass if either parser silently matched nothing.
     expect(changesRows(enumeration).length).toBeGreaterThan(10);
     expect(disclosedFiles(checkpoint).length).toBeGreaterThan(10);
+  });
+
+  it('PARSES EVERY CHANGES ROW — a row it cannot read is not a row it may skip', () => {
+    // The hole a verifier drove a planted consumer through. Dropping an
+    // unparseable row shrinks the set being compared, so the comparison passes
+    // while the thing it is comparing has grown.
+    expect(changesRows(enumeration)).toHaveLength(changesLines(enumeration).length);
+    expect(parsesEveryRow(enumeration)).toBe(true);
+  });
+
+  it('CATCHES a BOLDED path cell, which is how it was beaten', () => {
+    // The verifier's exact mutation. It must now either parse (and be compared)
+    // or fail the completeness check — never be silently dropped.
+    const planted = `${enumeration}\n| 33 | **\`services/plantedBold.ts\`** | x | **CHANGES** | — | planted |`;
+    expect(parsesEveryRow(planted)).toBe(true);
+    expect(changesRows(planted)).toContain('services/plantedBold.ts');
+    const missing = changesRows(planted)
+      .filter((f) => !disclosedFiles(checkpoint).includes(f));
+    expect(missing).toEqual(['services/plantedBold.ts']);
+  });
+
+  it('FAILS LOUDLY on a row shape it genuinely cannot parse', () => {
+    // The other half: if a future row defeats the regex entirely, the
+    // completeness assertion must go false rather than the row vanishing.
+    const unparseable = `${enumeration}\n| 34 | services/noBackticks.ts | x | **CHANGES** | — | planted |`;
+    expect(parsesEveryRow(unparseable)).toBe(false);
   });
 
   it('CATCHES a planted enumeration row the checkpoint does not disclose', () => {
