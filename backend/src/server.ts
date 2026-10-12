@@ -14,6 +14,8 @@ import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
 import unsubscribeRoutes from './routes/unsubscribeRoutes';
+import broadcastRoutes from './routes/broadcastRoutes';
+import broadcastMediaRoutes from './routes/broadcastMediaRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
@@ -87,6 +89,8 @@ import { ensureGovProposalAmendmentSchema } from './db/ensureGovProposalAmendmen
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
+import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
+import { ensureBroadcastTelemetrySchema } from './db/ensureBroadcastTelemetrySchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
 import { ensureEmailSendLedgerSchema } from './db/ensureEmailSendLedgerSchema';
 import { ensureInternshipSchema } from './db/ensureInternshipSchema';
@@ -218,6 +222,16 @@ app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
+// Colaberry Live — broadcast surface (flag-gated inside the router; 404s when
+// BROADCAST_ENABLED is off). Mounted here, beside Community Rooms and well ABOVE
+// adminRoutes: anything below that guard answers 401 to an ordinary participant, which is
+// the bug /r/ and /i/ each hit in production.
+app.use(broadcastRoutes);
+// Colaberry Live — signed inline replay playback (/bm/broadcast/...). A <video src> cannot
+// send a Bearer header, so this route authenticates from the HMAC in the URL. Same rule as
+// /r/, /i/ and /m/: above adminRoutes or the unscoped guard 401s every viewer. Pinned by
+// broadcastMediaRoutes.test.ts, which builds both mount orders.
+app.use(broadcastMediaRoutes);
 app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(buildLogDraftRoutes);
@@ -2925,6 +2939,15 @@ async function start(): Promise<void> {
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
   // env.communityRoomsEnabled at the route/worker/linkage layers.
   await ensureCommunityRoomsSchema();
+  // Colaberry Live — canonical broadcast occurrence model (idempotent, additive, new tables only).
+  // Deliberately AFTER ensureCommunityRoomsSchema: broadcast_occurrences.room_id points at a community
+  // room, and although it carries no FK (cross-epic house style), ordering keeps the two readable as a
+  // pair. Created unconditionally like its neighbours; the feature stays dark behind its own settings
+  // flags at the route/player layers, not by withholding the tables.
+  await ensureBroadcastSchema();
+  // After ensureBroadcastSchema, not before: the telemetry tables foreign-key into
+  // broadcast_occurrences, so the parent has to exist first.
+  await ensureBroadcastTelemetrySchema();
   // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
   await ensureFriendshipSchema();
   // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
