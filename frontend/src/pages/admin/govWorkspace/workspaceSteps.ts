@@ -70,7 +70,8 @@ export interface StepStateInput {
   zipAttested: boolean;        // ws.zipAttestation?.sha256 present — the solicitation ZIP is attested
   establishedCount: number;    // ws.evaluation.evals.length — established requirements
   decision: string | null;     // record.decision — a terminal pursuit decision means Go/No-go is settled
-  proposalReady: boolean;      // ws.submissionReadiness.ready — every response approved + covered
+  proposalContentReady: boolean; // the proposal WORK is done — every response slot approved (decoupled from the
+                                 // build delivery project; the submission/export gate keeps its stricter checks)
   hasBuild: boolean;           // a delivery project / build stories exist
   submissionStatus: string | null; // ws.submission.status
   outcome: string | null;      // ws.submission.outcome
@@ -88,7 +89,7 @@ export function deriveStepState(
     solicitation: input.zipAttested,
     requirements: input.establishedCount > 0,
     gono: !!input.decision && TERMINAL_DECISIONS.has(input.decision),
-    proposal: input.proposalReady,
+    proposal: input.proposalContentReady,
     build: input.hasBuild,
     submit: !!input.submissionStatus && SUBMITTED_STATUSES.has(input.submissionStatus),
     outcome: !!input.outcome && input.outcome !== 'pending' && input.outcome !== 'unknown',
