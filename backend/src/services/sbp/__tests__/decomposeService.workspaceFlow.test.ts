@@ -70,7 +70,7 @@ function releaseReviewFor(plan: unknown) {
   const e = applyMeasurements(
     completeEvidence() as LifecycleEvidence,
     EVIDENCE_MEASUREMENTS,
-    { row, refs: null, plan: plan as never },
+    { row, refs: null, published: { plan: plan as never, publishedCount: 1, hashIntact: true } },
   );
   return { e, gaps: prerequisiteGaps('release_review' as never, e) };
 }

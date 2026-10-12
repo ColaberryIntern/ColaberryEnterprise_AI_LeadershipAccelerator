@@ -36,9 +36,23 @@ const ROW = {
 
 const base = (): LifecycleEvidence => completeEvidence();
 
+/**
+ * The publication state a context carries.
+ *
+ * `null` means THE READ FAILED OR NOTHING IS PUBLISHED, which is what `gapsFor(null)` below
+ * exercises. A real plan is wrapped as the HEALTHY publication — exactly one row, hash intact —
+ * because this file is about the plan's SHAPE: leaving the integrity facts unmeasured here
+ * would mix two unrelated verdicts into every assertion.
+ */
+const published = (plan: PlanLike | null) => (
+  plan === null ? null : { plan, publishedCount: 1, hashIntact: true }
+);
+
 /** Drive the real map with a plan, then ask the real rule. */
 function gapsFor(plan: PlanLike | null, stage = 'release_review') {
-  const e = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, { row: ROW, refs: null, plan });
+  const e = applyMeasurements(base(), EVIDENCE_MEASUREMENTS, {
+    row: ROW, refs: null, published: published(plan),
+  });
   return { e, gaps: prerequisiteGaps(stage as never, e) };
 }
 

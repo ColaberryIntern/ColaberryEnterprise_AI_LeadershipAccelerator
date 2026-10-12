@@ -9,18 +9,20 @@ import { QueryTypes, type Sequelize } from 'sequelize';
  * others. The plan's acceptance asks for "the mandatory positive control: drop the constraint that
  * makes it impossible and show the race then produces the duplicate."
  *
- * THERE WAS NO CONSTRAINT TO DROP. `(project_id, version)` is unique, so one row per version — but
- * nothing prevented two rows for the same project both carrying `status = 'published'`. So the
- * control is stronger than the one the plan imagined: the failing state is reachable against the
- * schema AS IT SHIPS, and this file demonstrates it directly rather than by disabling a guard.
+ * THERE WAS NO CONSTRAINT TO DROP WHEN THIS FILE WAS WRITTEN. `(project_id, version)` is
+ * unique, so one row per version — but nothing prevented two rows for the same project both
+ * carrying `status = 'published'`, and this file originally demonstrated the failing state
+ * directly rather than by disabling a guard.
  *
- * The interleaving, with A publishing v1 and B publishing v2:
+ * P6-T5 then added the guard: `build_plans_one_published_per_project`, a partial unique index.
+ * So the control the plan asked for is now performable, and the test below performs it in both
+ * directions — drop the index and the duplicate returns, restore it and the database refuses
+ * the second publish outright.
  *
- *     A: publish v1 | B: publish v2 | A: supersede != v1 | B: supersede != v2
- *
- * After the first two statements TWO rows are published — the duplicate. After all four, ZERO are
- * — the erase, and the worse of the two, because every reader treats absence as "not published
- * yet". `getPublishedPlan` returns null and the project reads as never having published at all.
+ * TWO HALVES, BOTH NEEDED. The index makes the state impossible; `publishPlan`'s row lock makes
+ * the LOSER return the winner's row instead of an error, so a student sees a published plan
+ * rather than a 500. Each is tested separately below, because either alone would look like a
+ * fix in a test that only counted rows.
  *
  * ## Running it
  *
@@ -46,7 +48,7 @@ const PROJECT = '99999999-9999-4999-8999-999999999999';
 
 describeIfDb('P6-T5 — publishPlan under concurrency', () => {
   let sequelize: Sequelize;
-  let publishPlan: (p: string, v: number, sha?: string) => Promise<unknown>;
+  let publishPlan: (p: string, v: number, expected: string) => Promise<unknown>;
   let getPublishedPlan: (p: string) => Promise<unknown | null>;
 
   async function statuses(): Promise<Array<{ version: number; status: string }>> {
@@ -64,6 +66,18 @@ describeIfDb('P6-T5 — publishPlan under concurrency', () => {
     return Number(r[0].n);
   }
 
+  /**
+   * The reviewed hash of version `v`, as `seedTwoDrafts` stores it.
+   *
+   * EVERY `publishPlan` CALL BELOW MUST SUPPLY IT. `expectedSha` became a required argument
+   * later in this same task, and this suite was not re-run in between — so every call here was
+   * throwing `HashMismatch`, the `.catch(() => undefined)` in the race loop was swallowing it,
+   * and the "10 of 10 rounds" result I had recorded was measuring nothing at all. The evidence
+   * was true when taken and stale when quoted, which is the whole argument for re-running a
+   * suite after the last edit rather than after the edit that motivated it.
+   */
+  const sha = (v: number) => `${v}`.repeat(64).slice(0, 64);
+
   /** Two draft versions, both gate-clean, nothing published. */
   async function seedTwoDrafts(): Promise<void> {
     await sequelize.query('DELETE FROM build_plans WHERE project_id = $1', { bind: [PROJECT] });
@@ -71,7 +85,7 @@ describeIfDb('P6-T5 — publishPlan under concurrency', () => {
       await sequelize.query(
         `INSERT INTO build_plans (project_id, version, status, plan_json, plan_sha256, gate_ok)
          VALUES ($1, $2, 'draft', '{}'::jsonb, $3, TRUE)`,
-        { bind: [PROJECT, v, `${v}`.repeat(64).slice(0, 64)] },
+        { bind: [PROJECT, v, sha(v)] },
       );
     }
   }
@@ -94,29 +108,64 @@ describeIfDb('P6-T5 — publishPlan under concurrency', () => {
     await sequelize.close();
   });
 
-  it('the apparatus is real: build_plans exists and has no published-uniqueness constraint', async () => {
-    // Both halves matter. If the table were missing, every assertion below would fail for the wrong
-    // reason; and if a uniqueness constraint already existed, the hazard demonstration would be
-    // testing a guard rather than its absence.
-    await seedTwoDrafts();
-    expect((await statuses()).map((r) => r.version)).toEqual([1, 2]);
+  const PARTIAL_UNIQUE = 'build_plans_one_published_per_project';
 
+  /** Every index definition on `build_plans`, one entry each. */
+  async function indexDefs(): Promise<string[]> {
     const idx = await sequelize.query<{ indexdef: string }>(
       "SELECT indexdef FROM pg_indexes WHERE tablename = 'build_plans'",
       { type: QueryTypes.SELECT },
     );
-    const defs = idx.map((i) => i.indexdef).join('\n');
-    expect(defs).toContain('build_plans_unique_project_version');
-    // The gap this task closes: nothing makes a second `published` row impossible.
-    expect(defs).not.toMatch(/UNIQUE[\s\S]*status = 'published'/);
+    return idx.map((i) => i.indexdef);
+  }
+
+  /** The partial index's own definition, or undefined when it is not there. */
+  async function partialDef(): Promise<string | undefined> {
+    return (await indexDefs()).find((d) => d.includes(PARTIAL_UNIQUE));
+  }
+
+  it('the apparatus is real: build_plans exists and NOW carries published-uniqueness', async () => {
+    // THIS ASSERTION USED TO BE ITS OWN OPPOSITE. It read "...and has no published-uniqueness
+    // constraint", with a comment recording that the plan's "mandatory positive control: drop
+    // the constraint that makes it impossible" had nothing to drop. P6-T5 added the constraint,
+    // so the control is now possible — and the test below performs it in both directions.
+    await seedTwoDrafts();
+    expect((await statuses()).map((r) => r.version)).toEqual([1, 2]);
+
+    const defs = await indexDefs();
+    expect(defs.some((d) => d.includes('build_plans_unique_project_version'))).toBe(true);
+
+    // PARTIAL, not total: many drafts per project are legitimate and a plain unique index on
+    // project_id would refuse the second one. Both halves of ITS OWN definition are asserted,
+    // because a name match alone would pass for either kind of index.
+    const partial = await partialDef();
+    expect(partial).toContain('UNIQUE INDEX');
+    // As Postgres RENDERS it, which is not as it was written: `WHERE ((status)::text =
+    // 'published'::text)`. Asserting the source text would have failed against a correct index.
+    expect(partial).toContain('WHERE (');
+    expect(partial).toContain("'published'");
+    expect(partial).toContain('(project_id)');
+
+    // And `ensureSbpSchema` KNOWS it is required, so a database missing it reports a
+    // SchemaInvariantViolation rather than silently permitting the duplicate again.
+    const { REQUIRED_INDEXES } = await import('../../../db/ensureSbpSchema');
+    expect([...REQUIRED_INDEXES]).toContain(PARTIAL_UNIQUE);
   });
 
-  it('THE HAZARD, demonstrated against the shipped statement sequence', async () => {
-    // Deliberately NOT calling publishPlan: this reproduces the interleaving its two former
-    // autocommitting statements admitted, to show the end state was reachable. The statements are
-    // the ones the fix moved inside a transaction, which is why the assertion below is about the
-    // SEQUENCE rather than about the function.
-    await seedTwoDrafts();
+  it('THE POSITIVE CONTROL, BOTH WAYS: drop the index and the hazard returns; restore it and the database refuses', async () => {
+    // The interleaving the two former autocommitting statements admitted, with A publishing v1
+    // and B publishing v2:
+    //
+    //     A: publish v1 | B: publish v2 | A: supersede != v1 | B: supersede != v2
+    //
+    // After the first two statements TWO rows are published - the duplicate. After all four,
+    // ZERO are - the erase, and the worse of the two, because every reader treats absence as
+    // "not published yet": `getPublishedPlan` returns null and the project reads as never
+    // having published at all.
+    //
+    // Deliberately NOT calling `publishPlan`: this drives the raw statements, so it measures
+    // what the DATABASE permits rather than what the service does. That is what makes it a
+    // control for the index specifically, independent of the row lock.
     const pub = (v: number) => sequelize.query(
       "UPDATE build_plans SET status = 'published', published_at = NOW() WHERE project_id = $1 AND version = $2",
       { bind: [PROJECT, v] },
@@ -126,16 +175,40 @@ describeIfDb('P6-T5 — publishPlan under concurrency', () => {
       { bind: [PROJECT, v] },
     );
 
-    await pub(1);
-    await pub(2);
-    // The DUPLICATE, transiently visible to any reader between the two halves.
-    expect(await publishedCount()).toBe(2);
+    // ── DIRECTION 1: without the index, the end state is reachable ──────────────────────
+    await sequelize.query(`DROP INDEX ${PARTIAL_UNIQUE}`);
+    try {
+      expect(await partialDef()).toBeUndefined();                // the drop actually happened
+      await seedTwoDrafts();
+      await pub(1);
+      await pub(2);
+      expect(await publishedCount()).toBe(2);                    // the DUPLICATE
+      await sup(1);
+      await sup(2);
+      expect(await publishedCount()).toBe(0);                    // the ERASE, and durable
+    } finally {
+      // Restored in `finally` so a failure above cannot leave the rest of this suite running
+      // against an unconstrained table and reporting green for the wrong reason.
+      await seedTwoDrafts();
+      await sequelize.query(
+        `CREATE UNIQUE INDEX ${PARTIAL_UNIQUE} ON build_plans (project_id) WHERE status = 'published'`,
+      );
+    }
 
-    await sup(1);
-    await sup(2);
-    // The ERASE, and the durable end state. A project that published reads as never having done so.
-    expect(await publishedCount()).toBe(0);
-  });
+    // ── DIRECTION 2: with the index, the same sequence cannot complete ──────────────────
+    expect(await partialDef()).toBeDefined();
+    await seedTwoDrafts();
+    await pub(1);
+    // The second publish is REFUSED BY THE DATABASE, not by application code. This is the
+    // assertion the plan asked for and the one that could not exist before T5.
+    // Sequelize re-wraps the Postgres error, and its `message` is the unhelpful "Validation
+    // error" — matching on that text would pass for any validation failure at all. The NAME and
+    // the ORIGINAL message are what identify this as our index refusing the write.
+    await expect(pub(2)).rejects.toMatchObject({ name: 'SequelizeUniqueConstraintError' });
+    const err = await pub(2).catch((e: { parent?: { message?: string } }) => e);
+    expect((err as { parent?: { message?: string } }).parent?.message).toContain(PARTIAL_UNIQUE);
+    expect(await publishedCount()).toBe(1);
+  }, 60_000);
 
   it('THE FIX: two concurrent publishes leave exactly one published, every time', async () => {
     // Ten rounds, because one round can serialise by luck and prove nothing. Each round races a
@@ -143,8 +216,8 @@ describeIfDb('P6-T5 — publishPlan under concurrency', () => {
     for (let round = 0; round < 10; round += 1) {
       await seedTwoDrafts();
       await Promise.all([
-        publishPlan(PROJECT, 1).catch(() => undefined),
-        publishPlan(PROJECT, 2).catch(() => undefined),
+        publishPlan(PROJECT, 1, sha(1)).catch(() => undefined),
+        publishPlan(PROJECT, 2, sha(2)).catch(() => undefined),
       ]);
 
       const n = await publishedCount();
@@ -161,12 +234,12 @@ describeIfDb('P6-T5 — publishPlan under concurrency', () => {
     // The retry case LC-13 names alongside concurrency. Two calls for the same version must leave
     // one published row and must not move `published_at`.
     await seedTwoDrafts();
-    await publishPlan(PROJECT, 1);
+    await publishPlan(PROJECT, 1, sha(1));
     const first = await sequelize.query<{ published_at: string }>(
       'SELECT published_at FROM build_plans WHERE project_id = $1 AND version = 1',
       { bind: [PROJECT], type: QueryTypes.SELECT },
     );
-    await publishPlan(PROJECT, 1);
+    await publishPlan(PROJECT, 1, sha(1));
     const second = await sequelize.query<{ published_at: string }>(
       'SELECT published_at FROM build_plans WHERE project_id = $1 AND version = 1',
       { bind: [PROJECT], type: QueryTypes.SELECT },

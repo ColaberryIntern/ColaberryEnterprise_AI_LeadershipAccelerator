@@ -48,24 +48,17 @@ const ROW = {
 };
 
 /**
- * The two stages whose predicate is `() => []` and therefore permits unconditionally.
- *
- * Named rather than skipped. This is a real pre-existing hole — `lifecyclePrerequisites.ts` says
- * so in its own comment, and a peer session traced a production failure to it on 2026-10-02. It
- * is NOT closed by this task (Phase 6 owns it), but it is pinned here so that closing it, or
- * widening it, changes a test rather than passing unnoticed.
- */
-/**
  * Stages that still permit unconditionally on a stub.
  *
- * `release_review` LEFT THIS SET on 2026-10-09 (P6-T4), which is the deliberate change the test
- * below was written to force. It now reads `releasesWithoutUserVisibleWorkflow` and reports
- * `not_assessed` on a stub rather than passing. `launch_ready` is still here and is P6-T5's.
+ * **EMPTY since 2026-10-12 (P6-T5), and that is the point of this set existing.** It held two
+ * entries when this file was written; `release_review` left it in P6-T4 and `launch_ready` has
+ * now left it too. Every stage with a predicate now refuses a stub.
+ *
+ * Kept rather than deleted, because the loops below read it and because an empty set is the
+ * assertion: a future stage added without a predicate, or an existing one whose rule is
+ * weakened back to `() => []`, has to re-add itself HERE and justify it.
  */
-const GAPLESS_TARGETS: ReadonlySet<string> = new Set(['launch_ready']);
-
-/** Everything measured, derived from the snapshot's own keys. The positive-control snapshot. */
-
+const GAPLESS_TARGETS: ReadonlySet<string> = new Set<string>();
 
 /** Stages that actually have a next stage to advance into. */
 function advanceable(): LifecycleStage[] {
@@ -100,25 +93,48 @@ describe('THE GATE IS NOT LOOSENED: unassessed evidence still refuses a transiti
     expect(refused).toEqual([]);
   });
 
-  it('PINS THE REMAINING HOLE: launch_ready permits unconditionally, release_review no longer does', async () => {
+  it('THE HOLE IS CLOSED: nothing permits a stub unconditionally any more', async () => {
     const stub = await readLifecycleEvidence(ROW);
 
-    // Not an endorsement. The test exists so that closing a hole is a deliberate change to this
-    // assertion rather than a silent one — and P6-T4 is that change arriving for one of the two.
-    for (const to of GAPLESS_TARGETS) {
-      expect(prerequisiteGaps(to as LifecycleStage, stub)).toEqual([]);
-    }
-    expect([...GAPLESS_TARGETS]).toEqual(['launch_ready']);
+    // THIS TEST USED TO ASSERT THE OPPOSITE, and that was its job. It read "PINS THE REMAINING
+    // HOLE: launch_ready permits unconditionally", with a comment saying the test existed "so
+    // that closing a hole is a deliberate change to this assertion rather than a silent one".
+    // This is that change arriving for the last of the two.
+    expect([...GAPLESS_TARGETS]).toEqual([]);
 
-    // release_review now REFUSES a stub, and refuses it as not-assessed rather than as a
-    // measured failure: nothing in a stub declares a workspace, so nobody has looked.
+    // Every stage, not only the advanceable ones the loops above walk: a stage reachable by a
+    // non-ADVANCE route (a correction, a re-entry) would otherwise be unguarded here.
+    //
+    // `discovery` is the one stage a stub satisfies, and it does so for a MEASURED reason
+    // rather than an unconditional one: its single requirement is that the project is
+    // registered against a tenant, and `tenant_id` comes off the row itself, so it is known
+    // without assessment. Listing it here rather than filtering it out is the point — if it
+    // ever stopped being the only one, this assertion names the newcomer.
+    const permitting = LIFECYCLE_STAGES
+      .filter((s) => blockingGaps(prerequisiteGaps(s, stub)).length === 0);
+    expect(permitting).toEqual(['discovery']);
+
+    // And it is not a rubber stamp: withhold the tenant and it refuses. Without this, a
+    // `discovery: () => []` would read identically above.
+    expect(prerequisiteGaps('discovery', { ...stub, tenantId: '' }).map((g) => g.rule))
+      .toEqual(['no_tenant']);
+
+    // And both former members refuse for the RIGHT reason: nobody has looked. A measured
+    // failure on a stub would mean the predicate invented a finding from placeholders.
     const released = prerequisiteGaps('release_review' as LifecycleStage, stub);
     expect(released.map((g) => g.rule)).toEqual(['release_workflow_unassessed']);
     expect(released.map((g) => g.kind)).toEqual(['not_assessed']);
-    // And it BLOCKS rather than riding along: nobody has looked, so the stage is not
-    // satisfied. The measured-failure rule is the advisory one; ignorance is not waivable.
     expect(blockingGaps(released)).toHaveLength(1);
     expect(satisfied(released)).toBe(false);
+
+    const launch = prerequisiteGaps('launch_ready' as LifecycleStage, stub);
+    expect(launch.map((g) => g.rule))
+      .toEqual(['publish_not_exactly_one', 'publish_hash_mismatch']);
+    expect(launch.map((g) => g.kind)).toEqual(['not_assessed', 'not_assessed']);
+    // BLOCKING, unlike release_review's measured half. Neither of these is in ADVISORY_RULES:
+    // a project with no published plan is not launch-ready under any reading.
+    expect(blockingGaps(launch)).toHaveLength(2);
+    expect(satisfied(launch)).toBe(false);
   });
 });
 

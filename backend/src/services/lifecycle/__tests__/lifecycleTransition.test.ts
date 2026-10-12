@@ -60,6 +60,8 @@ function clean(): LifecycleEvidence {
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
     releasesWithoutUserVisibleWorkflow: [],
+    publishedPlanIsSingular: true,
+    publishedPlanHashIntact: true,
   };
   return { ...measured, assessedFields: allAssessed(measured) };
 }

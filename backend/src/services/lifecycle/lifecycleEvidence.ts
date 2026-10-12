@@ -14,10 +14,14 @@ import type { LifecycleEvidence, EvidenceField } from './lifecyclePrerequisites'
 import type { ManifestRefs } from './adapters/manifestRefs';
 import { requirementsNeedingCoverage } from './adapters/sbpAdapter';
 import {
+  publishedPlanState,
+  type PlanLike,
+  type PublishedPlanState,
+} from './lifecyclePlanReads';
+import {
   requirementsWithoutStory,
   storiesWithoutTraceability as storiesMissingCitations,
   releasesWithoutUserVisibleWorkflow,
-  type StoryLike,
 } from './storyTraceability';
 
 export interface LifecycleRow {
@@ -52,31 +56,29 @@ export interface EvidenceContext {
   /** `null` when no manifest exists yet, or its refs could not be read. NOT an empty refs. */
   refs: ManifestRefs | null;
   /**
-   * The project's PUBLISHED build plan, or `null`.
+   * What `build_plans` says about this project's publication, or `null`.
    *
-   * `null` is load-bearing and means the same three things `refs: null` means: no plan exists,
-   * the project is not a student build at all, or the read failed. It NEVER means an empty
-   * plan. Every measurement that reads this returns NOT_MEASURED on `null`, so a project whose
-   * plan could not be read blocks on `not_assessed` rather than passing with no gaps found.
+   * `null` is load-bearing and means the same three things `refs: null` means: nothing is
+   * published, the project is not a student build at all, or the read failed. It NEVER means an
+   * empty plan. Every measurement that reads this returns NOT_MEASURED on `null`, so a project
+   * whose plan could not be read blocks on `not_assessed` rather than passing with no gaps.
    *
-   * It is resolved BEFORE `applyMeasurements` because `Measurement` is synchronous and pure —
-   * the same reason `refs` is resolved here rather than inside a measurement.
+   * ONE FIELD, not a `plan` beside two integrity facts. Those three answers come from a single
+   * query precisely so they cannot disagree, and splitting them across the context would put
+   * the disagreement back — a context carrying a plan body from one read and a publication
+   * count from another is a state the database was never in.
+   *
+   * Resolved BEFORE `applyMeasurements` because `Measurement` is synchronous and pure — the
+   * same reason `refs` is resolved here rather than inside a measurement.
    */
-  plan: PlanLike | null;
+  published: PublishedPlanState | null;
 }
 
 /**
- * The part of a build plan these measurements read.
- *
- * Structural, not imported from `services/sbp`: the lifecycle coordinator stays ignorant of
- * SBP's plan model, which is the same reason `adapters/sbpAdapter.ts` declares its own `*Like`
- * shapes. SBP's `BuildPlan` satisfies this.
+ * `PlanLike` moved to `lifecyclePlanReads.ts` with the reader that produces it (P6-T5).
+ * Re-exported so every consumer keeps its import path.
  */
-export interface PlanLike {
-  requirements?: ReadonlyArray<{ id: string; kind?: string | null; priority?: string | null }> | null;
-  releases?: ReadonlyArray<{ key: string }> | null;
-  stories?: ReadonlyArray<StoryLike> | null;
-}
+export type { PlanLike } from './lifecyclePlanReads';
 
 /**
  * What a measurement returns when it cannot measure THIS TIME.
@@ -120,6 +122,18 @@ function readableSources(ctx: EvidenceContext): ReadonlyArray<SourceLike> | null
     && typeof (x as { id?: unknown }).id === 'string');
   return readable ? (list as ReadonlyArray<SourceLike>) : null;
 }
+/**
+ * The published plan body, or `null`.
+ *
+ * Deliberately NOT `ctx.published?.plan`. Optional chaining would turn a context that forgot
+ * the field entirely into a silent NOT_MEASURED, and this programme has already shipped one
+ * absence test that passed because `undefined` was indistinguishable from "not supplied". A
+ * missing field throws here, loudly, on the first measurement that reads it.
+ */
+function publishedPlan(ctx: EvidenceContext): PlanLike | null {
+  return ctx.published === null ? null : ctx.published.plan;
+}
+
 export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> = {
   /**
    * Must-have requirements no story fulfils.
@@ -131,7 +145,7 @@ export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> 
    * place to get it wrong, and the coverage predicate has already been wrong once.
    */
   mustHaveRequirementsWithoutStory: (ctx) => {
-    const plan = ctx.plan;
+    const plan = publishedPlan(ctx);
     if (!plan || !Array.isArray(plan.requirements) || !Array.isArray(plan.stories)) return NOT_MEASURED;
     return requirementsWithoutStory(requirementsNeedingCoverage(plan.requirements), plan.stories);
   },
@@ -144,7 +158,7 @@ export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> 
    * pre-2026-10-09 project for a gap it does not have.
    */
   storiesWithoutTraceability: (ctx) => {
-    const plan = ctx.plan;
+    const plan = publishedPlan(ctx);
     if (!plan || !Array.isArray(plan.stories)) return NOT_MEASURED;
     return storiesMissingCitations(plan.stories);
   },
@@ -160,7 +174,7 @@ export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> 
    * twelve unreachable services.
    */
   releasesWithoutUserVisibleWorkflow: (ctx) => {
-    const plan = ctx.plan;
+    const plan = publishedPlan(ctx);
     if (!plan || !Array.isArray(plan.releases) || !Array.isArray(plan.stories)) return NOT_MEASURED;
     const failing = releasesWithoutUserVisibleWorkflow(plan.releases.map((r) => r.key), plan.stories);
     return failing === null ? NOT_MEASURED : failing;
@@ -195,6 +209,32 @@ export const EVIDENCE_MEASUREMENTS: Partial<Record<EvidenceField, Measurement>> 
     if (sources === null) return NOT_MEASURED;
     return sources.filter((s) => s.state === 'open').map((s) => s.id);
   },
+
+  /**
+   * Exactly one plan is published.
+   *
+   * `publishedCount === 1`, written as an equality rather than `> 0` on purpose: TWO published
+   * rows is the failure `planStore.publishConcurrency.integration` demonstrates against the
+   * shipped schema, and a `> 0` check would call that healthy. Zero is also a failure, and the
+   * worse-reading one, because every consumer treats absence as "has not published yet".
+   */
+  publishedPlanIsSingular: (ctx) => (
+    ctx.published === null ? NOT_MEASURED : ctx.published.publishedCount === 1
+  ),
+
+  /**
+   * The published plan's stored hash still describes its stored content.
+   *
+   * NOT_MEASURED when nothing is published — `hashIntact` is `null` there, and the alternative
+   * (reporting `true`) would launder "no plan" into "an intact plan", which is the exact
+   * direction of bypass this gatherer exists to refuse. The zero case is already reported by
+   * `publishedPlanIsSingular`, so nothing goes unsaid.
+   */
+  publishedPlanHashIntact: (ctx) => (
+    ctx.published === null || ctx.published.hashIntact === null
+      ? NOT_MEASURED
+      : ctx.published.hashIntact
+  ),
 
   // DELIBERATELY NOT `requirementCount: refs.sources.length`. `SourceRef` is documented as "a
   // requirement OR OTHER CAPTURED STATEMENT", so sources is a superset of requirements and
@@ -247,64 +287,6 @@ export function applyMeasurements(
   }
   out.assessedFields = assessed;
   return out as unknown as LifecycleEvidence;
-}
-
-/**
- * The project's published build plan, or `null`.
- *
- * Mirrors `latestManifestRefs` below: module-private, dynamic import so nothing connects at
- * module load, raw SQL rather than importing SBP's `planStore` (which would couple the
- * coordinator to SBP's service layer), and `null` on ANY failure.
- *
- * STUDENT PROJECTS ONLY, and that is a fact about the product rather than a shortcut:
- * `build_plans.project_id` is a `projects` id. A delivery project has no SBP build plan to
- * read, so it returns `null` and every plan-derived measurement reports NOT_MEASURED for it.
- * That is the honest answer — the traceability of a delivery project is the Factory's contract,
- * not an SBP plan — and it must not be confused with "measured, no gaps".
- *
- * Reads the PUBLISHED plan, not the latest draft. A draft is a proposal nobody authorized, and
- * judging a stage's prerequisites against one would let an unapproved edit satisfy a gate.
- */
-async function latestPublishedPlan(row: LifecycleRow): Promise<PlanLike | null> {
-  if (row.student_project_id === null) return null;
-  try {
-    const { sequelize } = await import('../../config/database');
-    const rows = await sequelize.query<{ plan_json: unknown }>(
-      `SELECT plan_json
-         FROM build_plans
-        WHERE project_id = $1 AND status = 'published'
-        ORDER BY version DESC
-        LIMIT 1`,
-      {
-        bind: [row.student_project_id],
-        type: (await import('sequelize')).QueryTypes.SELECT,
-      },
-    );
-    const raw = rows[0]?.plan_json ?? null;
-    // `plan_json` is JSONB and arrives parsed, but a string is possible if a writer ever stored
-    // text. Parse defensively and fall back to null rather than throwing inside a gatherer whose
-    // whole contract is that an unreadable input yields NOT_MEASURED.
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (parsed === null || typeof parsed !== 'object') return null;
-    return parsed as PlanLike;
-  } catch (err: unknown) {
-    // LOGGED, not swallowed. The docblock on the sibling reader states the rule this
-    // violated for one commit: "CLAUDE.md forbids the silent catch." A wrong column name
-    // here would be permanently invisible AND would silently block every project, because
-    // an unreadable plan becomes NOT_MEASURED on three fields at once.
-    const e = err as { name?: string; message?: string };
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      service: 'backend',
-      event: 'lifecycle_evidence_plan_unavailable',
-      outcome: 'partial',
-      error_class: e?.name ?? 'UnclassifiedError',
-      context: { lifecycle_id: row.id, measured: false },
-    }));
-    return null;
-  }
 }
 
 /**
@@ -397,11 +379,16 @@ export async function readLifecycleEvidence(row: LifecycleRow): Promise<Lifecycl
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
     releasesWithoutUserVisibleWorkflow: [],
+    // Placeholders that BLOCK if they are ever trusted: `false` for both, so a measurement
+    // that failed to run leaves `launch_ready` refusing rather than permitting. `assessedFields`
+    // is the authority either way — this is the second line of defence, not the first.
+    publishedPlanIsSingular: false,
+    publishedPlanHashIntact: false,
   };
 
   return applyMeasurements(base, EVIDENCE_MEASUREMENTS, {
     row,
     refs: await latestManifestRefs(row),
-    plan: await latestPublishedPlan(row),
+    published: await publishedPlanState(row),
   });
 }

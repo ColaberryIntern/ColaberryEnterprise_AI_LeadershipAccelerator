@@ -61,6 +61,8 @@ function clean(): LifecycleEvidence {
     mustHaveRequirementsWithoutStory: [],
     storiesWithoutTraceability: [],
     releasesWithoutUserVisibleWorkflow: [],
+    publishedPlanIsSingular: true,
+    publishedPlanHashIntact: true,
   };
   const assessedFields = new Set(
     Object.keys(measured).filter((k) => k !== 'tenantId'),
