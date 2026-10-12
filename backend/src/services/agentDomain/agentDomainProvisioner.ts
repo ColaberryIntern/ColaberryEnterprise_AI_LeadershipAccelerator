@@ -262,12 +262,17 @@ export async function provisionAllDomains(ctx: ProvisionContext): Promise<Provis
       provisioned.push(result);
       // eslint-disable-next-line no-console
       console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
         level: 'info',
         service: 'backend',
         event: 'agent_domain_provisioned',
         correlation_id,
         duration_ms: Date.now() - started,
-        outcome: result.already_present ? 'success' : 'success',
+        // `already_present` is a re-run that wrote nothing, which is a DIFFERENT outcome
+        // from a run that created the project. This was `? 'success' : 'success'` -- a
+        // conditional that could not condition, shipped as a placeholder for a distinction
+        // never made, in the one field CLAUDE.md constrains to success|failure|partial.
+        outcome: result.already_present ? 'partial' : 'success',
         context: {
           domain_key: plan.domain_key,
           project_id: result.project_id,
@@ -277,9 +282,16 @@ export async function provisionAllDomains(ctx: ProvisionContext): Promise<Provis
       }));
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      // Derived BEFORE the log line, so the line and the `failed` record cannot disagree
+      // about what failed. `error_class` is required when outcome is failure, and the line
+      // a responder greps for triage carried it nowhere.
+      const error_class = /^([A-Z][A-Za-z]*Error):/.exec(message)?.[1]
+        ?? (e instanceof Error ? e.constructor.name : 'UnknownError');
       // eslint-disable-next-line no-console
       console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
         level: 'error',
+        error_class,
         service: 'backend',
         event: 'agent_domain_provision_failed',
         correlation_id,
@@ -287,14 +299,7 @@ export async function provisionAllDomains(ctx: ProvisionContext): Promise<Provis
         context: { domain_key: plan.domain_key },
         message,
       }));
-      failed.push({
-        domain_key: plan.domain_key,
-        // The repo's convention: a stable class string, taken from the message prefix this module
-        // sets, falling back to the constructor name rather than to a generic `Error`.
-        error_class: /^([A-Z][A-Za-z]*Error):/.exec(message)?.[1]
-          ?? (e instanceof Error ? e.constructor.name : 'UnknownError'),
-        message,
-      });
+      failed.push({ domain_key: plan.domain_key, error_class, message });
     }
   }
 

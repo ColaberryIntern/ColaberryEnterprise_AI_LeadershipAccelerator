@@ -274,7 +274,10 @@ export function normalizeNameRows(rows: unknown): string[] {
  * ambiguity rather than compensating for it.
  */
 async function readNames(sql: string, names: ReadonlyArray<string>): Promise<string[]> {
-  // No cast: nine sibling `ensure*.ts` files pass an object `bind` uncast (for example
+  // No cast. `ensureFactoryTaskSchema.ts:58` passes an object `bind` uncast, as do seven
+  // other files under `backend/src/db` -- MEASURED at 8 files and 14 occurrences. An earlier
+  // version of this comment said "nine siblings", which reproduces under no denominator; it
+  // is the same count-without-measuring reflex this run already corrected once. (for example
   // `ensureFactoryTaskSchema.ts:58`), so the `as any` that was here was both undocumented --
   // which CLAUDE.md forbids -- and unnecessary.
   const rows = await sequelize.query(sql, {

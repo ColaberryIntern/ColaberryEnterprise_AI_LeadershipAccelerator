@@ -3054,9 +3054,21 @@ async function start(): Promise<void> {
   try {
     await ensureAgentDomainProjectSchema();
   } catch (err: any) {
-    console.warn('[boot] ensureAgentDomainProjectSchema failed; the ten agent-domain projects '
-      + 'cannot be provisioned until it is fixed. Continuing to bind the port. '
-      + `error_class=SchemaInvariantViolation message=${err?.message ?? String(err)}`);
+    // DERIVED, not asserted. This logged a literal `SchemaInvariantViolation` for any caught
+    // error, so a connection failure inside the introspection query -- a likelier boot failure
+    // than a DDL problem -- would have been labelled as a schema violation it is not.
+    const error_class = err instanceof Error ? err.constructor.name : 'UnknownError';
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'agent_domain_schema_boot_failed',
+      error_class,
+      outcome: 'failure',
+      message: err?.message ?? String(err),
+      impact: 'The ten agent-domain projects cannot be provisioned until this is fixed.',
+      remedy: 'Read the agent_domain_schema_statement_failed warnings above for the first DDL error.',
+    }));
   }
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.

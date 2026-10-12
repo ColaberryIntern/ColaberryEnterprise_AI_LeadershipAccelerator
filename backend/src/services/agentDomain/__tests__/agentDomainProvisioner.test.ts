@@ -320,3 +320,101 @@ describe('the plan covers all ten domains completely', () => {
     expect(JSON.stringify(planAllProvisions())).toBe(JSON.stringify(planAllProvisions()));
   });
 });
+
+
+/**
+ * The structured logging, which had ZERO coverage.
+ *
+ * That is why two defects in thirty lines went unnoticed: the failure line carried `outcome:
+ * "failure"` and no `error_class` while the very next statement computed one, and the success line
+ * read `outcome: result.already_present ? 'success' : 'success'` -- a conditional that could not
+ * condition, shipped as a placeholder for a distinction never made.
+ */
+describe('the provisioner logs what a responder needs', () => {
+  const logs: string[] = [];
+  const errs: string[] = [];
+  let logSpy: jest.SpyInstance;
+  let errSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    logs.length = 0;
+    errs.length = 0;
+    logSpy = jest.spyOn(console, 'log').mockImplementation((s: unknown) => { logs.push(String(s)); });
+    errSpy = jest.spyOn(console, 'error').mockImplementation((s: unknown) => { errs.push(String(s)); });
+  });
+  afterEach(() => {
+    logSpy.mockRestore();
+    errSpy.mockRestore();
+  });
+
+  /** A sequelize stand-in whose transaction either succeeds trivially or throws. */
+  function fakeSequelize(mode: 'ok' | 'throw') {
+    return {
+      transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+        if (mode === 'throw') throw new TypeError('probe boom');
+        // Resolve the three lookups and every insert as "one row", so provisionOne completes.
+        return fn({});
+      },
+      query: async () => [{ id: '00000000-0000-0000-0000-000000000001' }],
+    } as never;
+  }
+
+  it('one structured success line per domain, all sharing ONE correlation id', async () => {
+    const { provisionAllDomains } = await import('../agentDomainProvisioner');
+    await provisionAllDomains({ sequelize: fakeSequelize('ok'), provisionedBy: 'test' });
+
+    const parsed = logs
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+      .filter((o): o is Record<string, unknown> => !!o && o.event === 'agent_domain_provisioned');
+    expect(parsed).toHaveLength(10);
+    expect(new Set(parsed.map((p) => p.correlation_id)).size).toBe(1);
+    for (const p of parsed) {
+      // The schema CLAUDE.md's Observability Framework requires.
+      expect(Object.keys(p)).toEqual(expect.arrayContaining([
+        'timestamp', 'level', 'service', 'event', 'correlation_id', 'duration_ms', 'outcome', 'context',
+      ]));
+      expect(typeof p.timestamp).toBe('string');
+      expect(['success', 'partial']).toContain(p.outcome);
+    }
+  });
+
+  it('the failure line carries the error_class it computes, and a timestamp', async () => {
+    const { provisionAllDomains } = await import('../agentDomainProvisioner');
+    const r = await provisionAllDomains({ sequelize: fakeSequelize('throw'), provisionedBy: 'test' });
+
+    const parsed = errs
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+      .filter((o): o is Record<string, unknown> => !!o && o.event === 'agent_domain_provision_failed');
+    expect(parsed).toHaveLength(10);
+    for (const p of parsed) {
+      expect(p.outcome).toBe('failure');
+      // THE FIX. This key was absent while `failed` carried it one statement later.
+      expect(p.error_class).toBe('TypeError');
+      expect(typeof p.timestamp).toBe('string');
+    }
+    // And the log line agrees with the returned record, which is why it is computed once.
+    expect(r.failed.every((f) => f.error_class === 'TypeError')).toBe(true);
+  });
+
+  it('a correlation id can be SUPPLIED, so a run joins an existing trace', async () => {
+    const { provisionAllDomains } = await import('../agentDomainProvisioner');
+    await provisionAllDomains({
+      sequelize: fakeSequelize('ok'), provisionedBy: 'test', correlationId: 'trace-123',
+    });
+    const parsed = logs.map((l) => JSON.parse(l));
+    expect(parsed.every((p) => p.correlation_id === 'trace-123')).toBe(true);
+  });
+
+  it('POSITIVE CONTROL: the dead ternary is gone from the source', () => {
+    // `? 'success' : 'success'` could not condition. A grep, because the two branches were
+    // behaviourally identical and no test could have told them apart.
+    // CODE, not prose. The executor's own comment explains the defect and therefore CONTAINS
+    // the dead ternary -- so the first version of this check matched the explanation of the thing
+    // it was looking for, which is the same false positive this run has now hit five times.
+    const code = codeOf(EXECUTOR);
+    expect(code).not.toMatch(/\?\s*'success'\s*:\s*'success'/);
+    expect(code).toMatch(/already_present \? 'partial' : 'success'/);
+    // And the explanation is still there, in the comments, where it belongs.
+    expect(fs.readFileSync(EXECUTOR, 'utf8')).toMatch(/could not condition/);
+  });
+});

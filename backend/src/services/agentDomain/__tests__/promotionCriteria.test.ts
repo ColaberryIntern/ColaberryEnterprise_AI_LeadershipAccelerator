@@ -581,3 +581,95 @@ describe('the channels attempt 2 left open', () => {
     expect(src).toMatch(/does not pretend to/);
   });
 });
+
+
+/**
+ * THE SEVENTH CHANNEL, and the one that most deserved finding.
+ *
+ * `isThresholdAccepted` checked only that `accepted_by` was a non-blank string, so a verifier made
+ * `system:auto_approve_timeout` the acceptor of a quality threshold and reached `promoted: true`.
+ * That is the 4.25-hour timer which wrote all 106 `approval_requests` rows -- the single identity
+ * this module's own header is written about. The docstring said "only usable once a NAMED HUMAN has
+ * accepted it" and the human half was unenforced; the machine check existed and was applied to the
+ * approver and the evaluator, never here.
+ *
+ * The test that was supposed to guard it was named `acceptance requires a NAMED human and a
+ * timestamp, not just the word` while asserting only the null, blank and state-word cases. A test
+ * name that claims more than its assertions is worse than no test, because it answers the question
+ * for the next reader.
+ */
+describe('a threshold cannot be accepted by a machine', () => {
+  it('REFUSES the four-hour timer as a threshold acceptor', () => {
+    const byTimer: QualityThreshold = {
+      metric: 'duplicates', measured_by: 'ledger count', target: '= 0',
+      state: 'accepted',
+      accepted_by: 'system:auto_approve_timeout',
+      accepted_at: '2026-10-09T00:00:00Z',
+    };
+    expect(isThresholdAccepted(byTimer)).toBe(false);
+  });
+
+  it('REFUSES every machine identity as an acceptor, not just the timer', () => {
+    for (const machine of ['claude', 'agent:self', 'automation', 'Autonomous Agent',
+      'cron:nightly', 'bot:reese', 'approval_timeout']) {
+      expect(isThresholdAccepted({
+        metric: 'm', measured_by: 'x', target: '= 0', state: 'accepted',
+        accepted_by: machine, accepted_at: '2026-10-09T00:00:00Z',
+      })).toBe(false);
+    }
+  });
+
+  it('and the whole promotion is refused when a threshold was machine-accepted', () => {
+    // The end-to-end consequence, not just the predicate. The verifier's probe reached
+    // promoted: true through exactly this.
+    const d = evaluatePromotion(attempt({
+      criteria: criteria({
+        thresholds: [{
+          metric: 'duplicates', measured_by: 'ledger count', target: '= 0', state: 'accepted',
+          accepted_by: 'system:auto_approve_timeout', accepted_at: '2026-10-09T00:00:00Z',
+        }],
+      }),
+    }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('threshold_not_accepted');
+  });
+
+  it('POSITIVE CONTROL: a real person still accepts a threshold', () => {
+    expect(isThresholdAccepted(ACCEPTED)).toBe(true);
+    expect(ACCEPTED.accepted_by).toBe('Dhee');
+  });
+
+  it('a zero-width space can no longer defeat self-approval', () => {
+    // `norm()` trimmed `\s`, which does not match U+200B, so an invisible character made two
+    // identical names compare unequal and `self_evaluated` never fired.
+    const zwsp = String.fromCharCode(0x200B);
+    const d = evaluatePromotion(attempt({
+      proposed_by: `D${zwsp}hee`,
+      human_approval: { approver: 'Dhee', approved_at: '2026-10-09T00:00:00Z' },
+    }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('self_evaluated');
+  });
+
+  it('REFUSES the evaluator names a denylist alone would pass', () => {
+    // The allowlist reasoning applied to the approver was not applied to the evidence evaluator,
+    // so 'agent self', 'robot' and 'the-agent' passed as human evaluators.
+    for (const machine of ['agent self', 'timeout handler', 'robot', 'the-agent', 'system automation']) {
+      const d = evaluatePromotion(attempt({
+        evidence: [{
+          kind: 'pilot_ledger', source: 'email_send_ledger', observed_at: '2026-10-09',
+          evaluated_by: machine, summary: 'send ledger shows no duplicates',
+        }],
+      }));
+      expect(d.refusals).toContain('evaluator_is_not_human');
+    }
+  });
+
+  it('but the criteria ROLE description is still allowed, because it is a role not an identity', () => {
+    // `criteria.evaluated_by` holds "the accountable human" in the shipped data. Running an
+    // identity allowlist over a role description is a category error, and the first version of
+    // this fix did exactly that and refused the legitimate fixture.
+    expect(evaluatePromotion(attempt()).refusals).toEqual([]);
+    expect(criteria().evaluated_by).toBe('the accountable human');
+  });
+});

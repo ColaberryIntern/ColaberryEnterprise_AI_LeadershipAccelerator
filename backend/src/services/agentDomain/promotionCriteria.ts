@@ -74,9 +74,19 @@ export const PROMOTING_SIGNALS = Object.freeze([
   'rollback_exercised',
 ]);
 
-/** Normalise for comparison: a trailing space is not a different signal. */
+/**
+ * Normalise for comparison: a trailing space is not a different signal.
+ *
+ * Zero-width characters are stripped FIRST, because `\s` does not match them and a verifier
+ * defeated `self_evaluated` with a U+200B inside an otherwise-identical name. An invisible
+ * character is the cheapest way to make two equal strings compare unequal.
+ */
 function norm(v: unknown): string {
-  return String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return String(v ?? '')
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 /** True when this identity cannot stand as a human approval, whatever channel it arrived by. */
@@ -212,11 +222,21 @@ export interface PromotionAttempt {
   readonly recorded_human_approvers?: ReadonlyArray<string>;
 }
 
-/** A threshold is only usable once a named human has accepted it. */
+/**
+ * A threshold is only usable once a NAMED HUMAN has accepted it.
+ *
+ * The human half of that sentence was unenforced. This checked only that `accepted_by` was a
+ * non-blank string, so a verifier made `system:auto_approve_timeout` the acceptor of a quality
+ * threshold and reached `promoted: true` -- the 4.25-hour timer that wrote all 106
+ * `approval_requests` rows, and the identity this module's own header is written about. The
+ * machine check existed and was applied to the approver and to the evaluator; it was never applied
+ * here, which made this the seventh channel to the same destination.
+ */
 export function isThresholdAccepted(t: QualityThreshold): boolean {
   return t.state === 'accepted'
     && typeof t.accepted_by === 'string' && t.accepted_by.trim().length > 0
-    && typeof t.accepted_at === 'string' && t.accepted_at.trim().length > 0;
+    && typeof t.accepted_at === 'string' && t.accepted_at.trim().length > 0
+    && !isNonHumanIdentity(t.accepted_by);
 }
 
 /**
@@ -376,8 +396,22 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
   // The evaluator is held to the same standard as the approver. `EvidenceRecord.evaluated_by`'s
   // own doc comment promises "Never the agent, and never the proposer" -- an unenforced documented
   // contract until now, and `criteria.evaluated_by` was never checked at all.
+  // The evaluator is held to the SAME standard as the approver: a denylist cannot establish that
+  // an identity is a person, so where a recorded set is supplied the evaluator must be in it.
+  // Applying the denylist here and the allowlist only to the approver was the inconsistency a
+  // verifier used to pass 'agent self', 'timeout handler', 'robot' and 'the-agent' as evaluators.
+  const recordedHumans = (attempt.recorded_human_approvers ?? []).map(norm);
+  const notHuman = (identity: unknown): boolean => {
+    if (isNonHumanIdentity(identity)) return true;
+    return recordedHumans.length > 0 && !recordedHumans.includes(norm(identity));
+  };
+  // `evidence[].evaluated_by` is a PERSON who looked at a specific piece of evidence, so the
+  // recorded-human allowlist applies. `criteria.evaluated_by` holds a ROLE in the shipped data
+  // ("the accountable human"), so only the machine denylist applies there -- running an identity
+  // allowlist over a role description is a category error, and the first version of this did
+  // exactly that and refused the legitimate fixture.
   const machineEvaluators = [
-    ...attempt.evidence.filter((e) => isNonHumanIdentity(e.evaluated_by)).map((e) => e.kind),
+    ...attempt.evidence.filter((e) => notHuman(e.evaluated_by)).map((e) => e.kind),
     ...(isNonHumanIdentity(c.evaluated_by) ? ['criteria'] : []),
   ];
   if (machineEvaluators.length > 0) refusals.push('evaluator_is_not_human');
