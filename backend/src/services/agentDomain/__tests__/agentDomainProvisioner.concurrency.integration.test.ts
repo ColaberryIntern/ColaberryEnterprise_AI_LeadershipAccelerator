@@ -384,18 +384,29 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
     });
 
     it('FIXTURE: a table present ONLY in a snapshot schema is still missing from public', async () => {
-      // This repo really has three schemas, and `student_tasks` is in all three. An unqualified
-      // assert would find the snapshot copy and report success for `public`.
+      // THIS FIXTURE HAD TO BE REBUILT. The first version created `agent_domain_projects` in the
+      // snapshot schema but dropped `public.agent_domain_build_authorizations` -- a table with NO
+      // snapshot copy. So the assert reported it missing whether or not the query was
+      // schema-qualified, and the fixture proved nothing about qualification while its name said
+      // it did. A verifier ran both variants and got an identical verdict.
+      //
+      // The discriminating shape is to drop the table that DOES have a snapshot copy: an
+      // unqualified assert finds the snapshot row and reports success for `public`, a qualified one
+      // reports it missing. That is the difference this fixture exists to detect, and the mutation
+      // recorded below confirms it now does.
       await sequelize.query('CREATE SCHEMA IF NOT EXISTS snap_quincy_20260819');
       await sequelize.query(
-        'CREATE TABLE IF NOT EXISTS snap_quincy_20260819.agent_domain_projects (id UUID PRIMARY KEY)',
+        `CREATE TABLE IF NOT EXISTS snap_quincy_20260819.agent_domain_projects (
+           id UUID PRIMARY KEY, tenant_id UUID, student_project_id UUID, domain_key TEXT,
+           agent_id UUID, manager_identity_id TEXT, manager_can_reach BOOLEAN,
+           manager_blocker TEXT, intended_builder TEXT, intended_builder_state TEXT,
+           provisioned_by TEXT)`,
       );
-      await sequelize.query('DROP TABLE IF EXISTS public.agent_domain_build_authorizations CASCADE');
+      await sequelize.query('DROP TABLE IF EXISTS public.agent_domain_projects CASCADE');
       try {
-        // The snapshot copy exists; the public one does not. The assert must say so.
-        await expect(assertSchema()).rejects.toThrow(
-          /missing table public\.agent_domain_build_authorizations/,
-        );
+        // The snapshot copy exists and is complete; the public one is gone. Only a
+        // schema-qualified assert can tell.
+        await expect(assertSchema()).rejects.toThrow(/missing table public\.agent_domain_projects/);
       } finally {
         const { ensureAgentDomainProjectSchema } =
           await import('../../../db/ensureAgentDomainProjectSchema');
@@ -403,6 +414,38 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
         await sequelize.query('DROP SCHEMA IF EXISTS snap_quincy_20260819 CASCADE');
       }
       await expect(assertSchema()).resolves.toBeUndefined();
+    });
+
+    it('POSITIVE CONTROL: the snapshot copy really is complete, so an unqualified assert WOULD pass', async () => {
+      // Proves the fixture above discriminates, without needing to mutate the source: if the
+      // snapshot table were incomplete, an unqualified assert would fail for a different reason
+      // and the fixture would be detecting the wrong thing.
+      await sequelize.query('CREATE SCHEMA IF NOT EXISTS snap_quincy_20260819');
+      await sequelize.query(
+        `CREATE TABLE IF NOT EXISTS snap_quincy_20260819.agent_domain_projects (
+           id UUID PRIMARY KEY, tenant_id UUID, student_project_id UUID, domain_key TEXT,
+           agent_id UUID, manager_identity_id TEXT, manager_can_reach BOOLEAN,
+           manager_blocker TEXT, intended_builder TEXT, intended_builder_state TEXT,
+           provisioned_by TEXT)`,
+      );
+      try {
+        const unqualified = await sequelize.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM information_schema.tables
+            WHERE table_name = 'agent_domain_projects'`,
+          { type: QueryTypes.SELECT },
+        );
+        // Two copies: public and the snapshot. An unqualified lookup cannot distinguish them.
+        expect(Number(unqualified[0].n)).toBe(2);
+
+        const qualified = await sequelize.query<{ n: string }>(
+          `SELECT count(*)::text AS n FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'agent_domain_projects'`,
+          { type: QueryTypes.SELECT },
+        );
+        expect(Number(qualified[0].n)).toBe(1);
+      } finally {
+        await sequelize.query('DROP SCHEMA IF EXISTS snap_quincy_20260819 CASCADE');
+      }
     });
 
     it('a missing INDEX is reported too, not only tables and columns', async () => {

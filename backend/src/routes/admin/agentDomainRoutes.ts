@@ -61,7 +61,10 @@ import {
   derivedProjectId,
   planProvision,
 } from '../../services/agentDomain/agentDomainProvisionPlan';
-import { resolveAgentDomainBuildAuthorization } from '../../services/agentDomain/agentDomainBuildAuthorization';
+import {
+  loadAgentDomainBuildAuthorizationsByDomain,
+  resolveAllFromRows,
+} from '../../services/agentDomain/agentDomainBuildAuthorization';
 
 const router = Router();
 
@@ -238,14 +241,20 @@ router.get(
   '/api/admin/agent-domains-authorization',
   requireSection('program'),
   async (_req: Request, res: Response) => {
-    const states = await Promise.all(
-      AGENT_DOMAIN_KEYS.map((k) => resolveAgentDomainBuildAuthorization(derivedAnchorId(k), k)),
+    // ONE query for all ten, then the pure resolver over the rows. This was ten queries for a
+    // table keyed on `agent_domain_project_id` where every id is derived and known up front --
+    // and `resolveAllFromRows` existed for exactly this and had no production caller.
+    const anchorIdByDomain = Object.fromEntries(
+      AGENT_DOMAIN_KEYS.map((k) => [k, derivedAnchorId(k)]),
     );
+    const rowsByDomain = await loadAgentDomainBuildAuthorizationsByDomain(anchorIdByDomain);
+    const states = resolveAllFromRows(rowsByDomain);
     res.json({
       states,
       authorized_count: states.filter((s) => s.authorized).length,
       disclosure:
-        'Resolved through assertBuildAuthorized, the same gate the delivery path uses. All ten are '
+        'Resolved through assertBuildAuthorized, the same gate the delivery path uses, over one '
+        + 'query rather than ten. All ten are '
         + 'expected to report not authorized with reason no_authorization, because the '
         + 'authorization table is empty: no human has approved a build.',
     });

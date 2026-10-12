@@ -7,6 +7,8 @@ import {
   isNonPromotingSignal,
   isNonHumanIdentity,
   isNonPromotingEvidence,
+  isPromotingSignal,
+  PROMOTING_SIGNALS,
   isThresholdAccepted,
   recordEvidence,
   renderThreshold,
@@ -58,6 +60,10 @@ const attempt = (over: Partial<PromotionAttempt> = {}): PromotionAttempt => ({
   human_approval: { approver: 'Dhee', approved_at: '2026-10-09T00:00:00Z' },
   proposed_by: 'claude',
   human_decision: false,
+  // The approver must be ON RECORD, not merely absent from a denylist. A verifier approved a
+  // promotion as 'claude', as 'Autonomous Agent' and as 'automation', all of which a denylist
+  // reads as human -- there is no pattern separating a person's name from a model's.
+  recorded_human_approvers: ['Dhee', 'Ali Muwwakkil', 'Swati Raman'],
   ...over,
 });
 
@@ -412,5 +418,166 @@ describe('the channels that previously promoted without an approval', () => {
       kind: 'pilot_ledger', source: 'email_send_ledger', observed_at: '2026-10-09',
       evaluated_by: 'Dhee', summary: 'no duplicates',
     })).toBe(false);
+  });
+});
+
+
+/**
+ * Attempt 3. Six more channels, every one found by a verifier probing this module directly, and
+ * every one of them returning `promoted: true` with ZERO refusals before these fixes.
+ *
+ * The first is the one that matters most, and it is mine twice over: I closed "absence switches
+ * the defence off" for an empty `signals` array and for an empty `thresholds` list IN THE SAME
+ * COMMIT, and left the third instance. `proposed_by` was optional and `self_evaluated` was gated
+ * on its presence, so omitting it turned the self-approval defence off and an agent approved its
+ * own promotion.
+ */
+describe('the channels attempt 2 left open', () => {
+  it('REFUSES a promotion whose proposer is not recorded', () => {
+    // The verifier's probe 1, verbatim: proposed_by omitted, approver 'claude'. It returned
+    // promoted: true with refusals: [].
+    const d = evaluatePromotion(attempt({
+      proposed_by: undefined,
+      human_approval: { approver: 'claude', approved_at: '2026-10-09T00:00:00Z' },
+    }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('proposer_not_recorded');
+    expect(d.refusals).toContain('approver_is_not_human');
+    expect(d.refusals).toContain('approver_not_a_recorded_human');
+  });
+
+  it('REFUSES a blank proposer as well as a missing one', () => {
+    expect(evaluatePromotion(attempt({ proposed_by: '   ' })).refusals)
+      .toContain('proposer_not_recorded');
+  });
+
+  it('REFUSES an approver who is not on the recorded-human list', () => {
+    // A denylist cannot establish humanity, so membership is required. 'Mallory' is not a machine
+    // name and is still refused, which is the point: unrecorded is unrecorded.
+    const d = evaluatePromotion(attempt({
+      human_approval: { approver: 'Mallory', approved_at: '2026-10-09T00:00:00Z' },
+    }));
+    expect(d.refusals).toContain('approver_not_a_recorded_human');
+    expect(d.refusals).not.toContain('approver_is_not_human'); // not a machine, just not on record
+  });
+
+  it('REFUSES when the recorded list is absent or empty: absence is not approval', () => {
+    expect(evaluatePromotion(attempt({ recorded_human_approvers: undefined })).refusals)
+      .toContain('approver_not_a_recorded_human');
+    expect(evaluatePromotion(attempt({ recorded_human_approvers: [] })).refusals)
+      .toContain('approver_not_a_recorded_human');
+  });
+
+  it('REFUSES the model names a denylist used to read as human', () => {
+    for (const machine of ['claude', 'Claude', 'gpt-5', 'Autonomous Agent', 'automation',
+      'the agent', 'auto-approve', 'assistant', 'copilot']) {
+      expect(isNonHumanIdentity(machine)).toBe(true);
+    }
+  });
+
+  it('still clears the real people it must', () => {
+    for (const person of ['Dhee', 'Ali Muwwakkil', 'Swati Raman', 'Taiwo Oludimimu',
+      'swati@colaberry.com', 'Mohammed Abdul Aleem']) {
+      expect(isNonHumanIdentity(person)).toBe(false);
+    }
+  });
+
+  it('REFUSES an automating level bought by turning the human gate off', () => {
+    // The verifier's probe 3: human_approval_required false, R6 -> R7, no approval at all.
+    const d = evaluatePromotion(attempt({
+      criteria: criteria({
+        human_approval_required: false,
+        from_autonomy: 'autonomy:R6',
+        to_autonomy: 'autonomy:R7',
+      }),
+      human_approval: null,
+    }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('automating_level_without_human_approval');
+  });
+
+  it('allows human_approval_required false BELOW the automating line, which is legitimate', () => {
+    // The control that keeps the rule a rule rather than a blanket refusal.
+    const d = evaluatePromotion(attempt({
+      criteria: criteria({
+        human_approval_required: false,
+        from_autonomy: 'autonomy:R1',
+        to_autonomy: 'autonomy:R2',
+      }),
+      human_approval: null,
+    }));
+    expect(d.refusals).not.toContain('automating_level_without_human_approval');
+  });
+
+  it('REFUSES the near-miss signals that used to promote', () => {
+    // The gate was exact-match and case-sensitive while its sibling evidence gate was
+    // case-insensitive substring, so it failed OPEN on anything unrecognised.
+    for (const nearMiss of ['Elapsed_Time', 'elapsed_time_2', ' elapsed_time ', 'ELAPSED_TIME']) {
+      const d = evaluatePromotion(attempt({ signals: [nearMiss] }));
+      expect(d.promoted).toBe(false);
+      expect(d.refusals).toContain('non_promoting_signal_only');
+    }
+  });
+
+  it('NAMES an unrecognised signal rather than silently ignoring it', () => {
+    const d = evaluatePromotion(attempt({ signals: ['pilot_outcomes_reviewed', 'something_new'] }));
+    expect(d.refusals).toContain('signal_not_recognised');
+  });
+
+  it('the promoting set is an ALLOWLIST, so an unknown value supports nothing', () => {
+    expect(isPromotingSignal('pilot_outcomes_reviewed')).toBe(true);
+    expect(isPromotingSignal('PILOT_OUTCOMES_REVIEWED')).toBe(true); // normalised
+    expect(isPromotingSignal(' pilot_outcomes_reviewed ')).toBe(true);
+    expect(isPromotingSignal('anything_else')).toBe(false);
+    expect(isPromotingSignal('elapsed_time')).toBe(false);
+    expect(PROMOTING_SIGNALS.length).toBeGreaterThan(0);
+  });
+
+  it('REFUSES a prohibited action with a trailing space', () => {
+    // Exact lowercased equality with no trim let 'accept an application ' through.
+    const d = evaluatePromotion(attempt({ requested_actions: ['accept an application '] }));
+    expect(d.refusals).toContain('prohibited_action_requested');
+    const d2 = evaluatePromotion(attempt({ requested_actions: ['ACCEPT  AN   APPLICATION'] }));
+    expect(d2.refusals).toContain('prohibited_action_requested');
+  });
+
+  it('REFUSES a machine evaluator on the evidence, which the doc comment always promised', () => {
+    // `EvidenceRecord.evaluated_by` says "Never the agent, and never the proposer" and nothing
+    // enforced it.
+    const d = evaluatePromotion(attempt({
+      evidence: [{
+        kind: 'pilot_ledger', source: 'email_send_ledger', observed_at: '2026-10-09',
+        evaluated_by: 'agent:self', summary: 'send ledger shows no duplicates',
+      }],
+    }));
+    expect(d.promoted).toBe(false);
+    expect(d.refusals).toContain('evaluator_is_not_human');
+  });
+
+  it('REFUSES a machine evaluator on the CRITERIA, which was never checked at all', () => {
+    const d = evaluatePromotion(attempt({
+      criteria: criteria({ evaluated_by: 'system:auto_approve_timeout' }),
+    }));
+    expect(d.refusals).toContain('evaluator_is_not_human');
+  });
+
+  it('POSITIVE CONTROL: the complete attempt still promotes, so none of this is a blanket refusal', () => {
+    const d = evaluatePromotion(attempt());
+    expect(d.refusals).toEqual([]);
+    expect(d.promoted).toBe(true);
+  });
+
+  it('the paraphrase limit is STATED, not pretended away', () => {
+    // String matching cannot catch a paraphrase of a prohibition. Asserting the limit beats
+    // claiming a guarantee the implementation does not have.
+    const d = evaluatePromotion(attempt({ requested_actions: ['accept application'] }));
+    expect(d.refusals).not.toContain('prohibited_action_requested');
+    const src = require('fs').readFileSync(
+      require('path').join(__dirname, '..', 'promotionCriteria.ts'), 'utf8',
+    );
+    // The phrase spans a line break in the source comment, so match the words, not the
+    // sentence -- the first version of this assertion failed on its own line wrapping.
+    expect(src).toMatch(/PARAPHRASE/);
+    expect(src).toMatch(/does not pretend to/);
   });
 });

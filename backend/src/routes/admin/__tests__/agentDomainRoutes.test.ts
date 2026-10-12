@@ -33,6 +33,7 @@ jest.mock('../../../config/database', () => ({
 
 import agentDomainRoutes from '../agentDomainRoutes';
 import { AGENT_DOMAIN_KEYS, AGENT_DOMAINS } from '../../../services/agentDomain/agentDomainRegistry';
+import { derivedAnchorId } from '../../../services/agentDomain/agentDomainProvisionPlan';
 import { env } from '../../../config/env';
 
 const ROUTER_SRC = path.join(__dirname, '..', 'agentDomainRoutes.ts');
@@ -336,7 +337,8 @@ describe('authorization state comes from the gate', () => {
     const src = fs.readFileSync(ROUTER_SRC, 'utf8');
     expect(src).toMatch(/from '\.\.\/\.\.\/services\/agentDomain\/agentDomainBuildAuthorization'/);
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    expect(code).toMatch(/resolveAgentDomainBuildAuthorization\(/);
+    expect(code).toMatch(/resolveAllFromRows\(/);
+    expect(code).toMatch(/loadAgentDomainBuildAuthorizationsByDomain\(/);
   });
 
   it('the gate really queried the database, so this is its own answer and not a stub', async () => {
@@ -344,11 +346,17 @@ describe('authorization state comes from the gate', () => {
     await request(app())
       .get('/api/admin/agent-domains-authorization')
       .set('Authorization', `Bearer ${tokenFor('owner')}`);
-    // One query per domain, each binding that domain's anchor id.
-    expect(mockQuery).toHaveBeenCalledTimes(AGENT_DOMAIN_KEYS.length);
-    const sql = String(mockQuery.mock.calls[0][0]);
-    expect(sql).toMatch(/agent_domain_build_authorizations/);
-    expect(sql).toMatch(/agent_domain_project_id/);
+    // ONE query for all ten, binding every derived anchor id. It used to be ten queries; the
+    // table is keyed on `agent_domain_project_id` and all ten ids are derived, so one suffices.
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, opts] = mockQuery.mock.calls[0];
+    expect(String(sql)).toMatch(/agent_domain_build_authorizations/);
+    expect(String(sql)).toMatch(/agent_domain_project_id = ANY/);
+    const bound = (opts as { bind: { ids: string[] } }).bind.ids;
+    expect(bound).toHaveLength(AGENT_DOMAIN_KEYS.length);
+    // Every bound id is the DERIVED anchor id, so the query asks about the rows real projects
+    // will carry rather than about ids invented for the read.
+    for (const k of AGENT_DOMAIN_KEYS) expect(bound).toContain(derivedAnchorId(k));
   });
 
   it('all ten report not-authorized, and the route says why', async () => {

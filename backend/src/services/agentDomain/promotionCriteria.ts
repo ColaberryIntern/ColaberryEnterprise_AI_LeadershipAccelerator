@@ -54,7 +54,30 @@ export type NonPromotingSignal = typeof NON_PROMOTING_SIGNALS[number];
  * `human_approval.approver = 'system:auto_approve_timeout'` and promoted, because the only
  * elapsed-time refusal was gated on the `signals` array and this arrived by a different route.
  */
-export const NON_HUMAN_APPROVER = /^(system|agent|bot|cron|scheduler|service):|auto_approve|timeout$/i;
+export const NON_HUMAN_APPROVER =
+  /^(system|agent|bot|cron|scheduler|service|automation|ai|llm):|auto[_ -]?approve|timeout$|^(claude|gpt|gemini|copilot|assistant|autonomous|the agent|automation)\b/i;
+
+/**
+ * Signals that CAN support a promotion. An allowlist, deliberately.
+ *
+ * The previous check was `signals.filter((s) => !isNonPromotingSignal(s))`, which treats anything
+ * not on the four-item denylist as promoting. So it failed OPEN on every unrecognised value: a
+ * verifier promoted a capability whose only signal was `Elapsed_Time`, `elapsed_time_2` or
+ * ` elapsed_time ` -- three near-misses of the one signal the owner named. Fail-open on an
+ * unrecognised value is the exact failure `autonomyLadder.ts` documents in the risk sinks.
+ */
+export const PROMOTING_SIGNALS = Object.freeze([
+  'pilot_outcomes_reviewed',
+  'manager_review_completed',
+  'scenario_suite_passed_against_real_systems',
+  'refusal_log_reviewed',
+  'rollback_exercised',
+]);
+
+/** Normalise for comparison: a trailing space is not a different signal. */
+function norm(v: unknown): string {
+  return String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 /** True when this identity cannot stand as a human approval, whatever channel it arrived by. */
 export function isNonHumanIdentity(identity: unknown): boolean {
@@ -70,8 +93,13 @@ export function isNonHumanIdentity(identity: unknown): boolean {
  * `{kind: 'elapsed_time', source: 'system:auto_approve_timeout'}` previously promoted.
  */
 export function isNonPromotingEvidence(e: EvidenceRecord): boolean {
-  const fields = [e.kind, e.source, e.evaluated_by].map((x) => String(x ?? '').toLowerCase());
+  const fields = [e.kind, e.source, e.evaluated_by].map(norm);
   return NON_PROMOTING_SIGNALS.some((sig) => fields.some((f) => f.includes(sig)));
+}
+
+/** True when a signal is on the promoting allowlist. Anything else supports nothing. */
+export function isPromotingSignal(signal: unknown): boolean {
+  return PROMOTING_SIGNALS.includes(norm(signal));
 }
 
 /** Scenario classes every applicable capability/release pair must define. */
@@ -141,7 +169,12 @@ export type PromotionRefusal =
   | 'approver_is_not_human'
   | 'no_thresholds_defined'
   | 'required_evidence_not_supplied'
-  | 'prohibited_action_requested';
+  | 'prohibited_action_requested'
+  | 'proposer_not_recorded'
+  | 'approver_not_a_recorded_human'
+  | 'evaluator_is_not_human'
+  | 'automating_level_without_human_approval'
+  | 'signal_not_recognised';
 
 export interface PromotionDecision {
   readonly capability_id: string;
@@ -166,6 +199,17 @@ export interface PromotionAttempt {
    * between a rule and a hope.
    */
   readonly requested_actions?: ReadonlyArray<string>;
+  /**
+   * The human identities on record who may approve. REQUIRED when `human_approval_required`.
+   *
+   * A denylist cannot establish that an approver is a person: there is no pattern separating a
+   * name from a model's name, and a verifier proved it by approving a promotion as `claude`, as
+   * `Autonomous Agent` and as `automation`, all of which the denylist read as human. So the
+   * approver must be PRESENT in a set the caller supplies from its own records. Absent or empty,
+   * the promotion is refused -- absence is not approval, which is the mistake this module has now
+   * made three times in three different fields.
+   */
+  readonly recorded_human_approvers?: ReadonlyArray<string>;
 }
 
 /** A threshold is only usable once a named human has accepted it. */
@@ -260,10 +304,15 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
   // The `signals` array was the only channel checked, and the check was gated on the array being
   // non-empty -- so an attempt offering no signals at all switched the whole defence off, and the
   // same four signals routed through `evidence[].kind` were never examined. Both are closed here.
-  const promoting = attempt.signals.filter((s) => !isNonPromotingSignal(s));
+  const promoting = attempt.signals.filter((s) => isPromotingSignal(s));
   if (promoting.length === 0) {
     refusals.push('non_promoting_signal_only');
   }
+  // A signal nobody recognises supports nothing, and is NAMED rather than silently ignored.
+  const unrecognised = attempt.signals.filter(
+    (s) => !isPromotingSignal(s) && !isNonPromotingSignal(s),
+  );
+  if (unrecognised.length > 0) refusals.push('signal_not_recognised');
   if (attempt.evidence.length > 0 && attempt.evidence.every(isNonPromotingEvidence)) {
     refusals.push('non_promoting_evidence_only');
   }
@@ -280,10 +329,21 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
 
   // A prohibited action is REFUSED, not merely absent from the permitted list.
   if (attempt.requested_actions && attempt.requested_actions.length > 0) {
+    // Normalised, so a trailing space is not a different action. String matching cannot catch a
+    // PARAPHRASE of a prohibition, and this does not pretend to: that limit is real and is stated
+    // rather than papered over. A prohibition list is a floor, not a semantic guarantee.
     const prohibited = attempt.requested_actions.filter(
-      (a) => c.prohibited_actions.some((p) => String(p).toLowerCase() === String(a).toLowerCase()),
+      (a) => c.prohibited_actions.some((p) => norm(p) === norm(a)),
     );
     if (prohibited.length > 0) refusals.push('prohibited_action_requested');
+  }
+
+  // `human_approval_required: false` cannot buy an automating level. A verifier promoted R6 -> R7
+  // with no human approval at all by setting that flag, which turns the entire human gate into an
+  // opt-out. Above R5 the flag is a contradiction, and the contradiction is refused.
+  if (!c.human_approval_required && isAutonomyStage(c.to_autonomy)
+      && autonomyIndex(c.to_autonomy) > autonomyIndex('autonomy:R5')) {
+    refusals.push('automating_level_without_human_approval');
   }
 
   if (c.human_approval_required) {
@@ -291,7 +351,13 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
     if (!a || !a.approver || !a.approved_at) {
       refusals.push('human_approval_missing');
     } else {
-      if (attempt.proposed_by && a.approver === attempt.proposed_by) {
+      // THE PROPOSER MUST BE RECORDED. `proposed_by` was optional, so omitting it switched the
+      // self-approval defence off entirely and an agent approved its own promotion with zero
+      // refusals. This is the same "absence is not approval" mistake as the empty `signals` array
+      // and the empty `thresholds` list -- the third instance of it in this module.
+      if (!attempt.proposed_by || String(attempt.proposed_by).trim().length === 0) {
+        refusals.push('proposer_not_recorded');
+      } else if (norm(a.approver) === norm(attempt.proposed_by)) {
         // approver != proposer, per the ADR and govQualification's SelfApprovalError pattern.
         refusals.push('self_evaluated');
       }
@@ -299,8 +365,22 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
       if (isNonHumanIdentity(a.approver)) {
         refusals.push('approver_is_not_human');
       }
+      // And a denylist cannot establish humanity, so the approver must be ON RECORD.
+      const recorded = (attempt.recorded_human_approvers ?? []).map(norm);
+      if (recorded.length === 0 || !recorded.includes(norm(a.approver))) {
+        refusals.push('approver_not_a_recorded_human');
+      }
     }
   }
+
+  // The evaluator is held to the same standard as the approver. `EvidenceRecord.evaluated_by`'s
+  // own doc comment promises "Never the agent, and never the proposer" -- an unenforced documented
+  // contract until now, and `criteria.evaluated_by` was never checked at all.
+  const machineEvaluators = [
+    ...attempt.evidence.filter((e) => isNonHumanIdentity(e.evaluated_by)).map((e) => e.kind),
+    ...(isNonHumanIdentity(c.evaluated_by) ? ['criteria'] : []),
+  ];
+  if (machineEvaluators.length > 0) refusals.push('evaluator_is_not_human');
 
   // A human-required decision is never automated, so it can never promote INTO an automating level.
   if (attempt.human_decision && isAutonomyStage(c.to_autonomy)

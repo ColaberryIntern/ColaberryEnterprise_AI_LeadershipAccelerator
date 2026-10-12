@@ -274,10 +274,13 @@ export function normalizeNameRows(rows: unknown): string[] {
  * ambiguity rather than compensating for it.
  */
 async function readNames(sql: string, names: ReadonlyArray<string>): Promise<string[]> {
+  // No cast: nine sibling `ensure*.ts` files pass an object `bind` uncast (for example
+  // `ensureFactoryTaskSchema.ts:58`), so the `as any` that was here was both undocumented --
+  // which CLAUDE.md forbids -- and unnecessary.
   const rows = await sequelize.query(sql, {
     bind: { names: names as string[] },
     type: QueryTypes.SELECT,
-  } as any);
+  });
   return normalizeNameRows(rows);
 }
 

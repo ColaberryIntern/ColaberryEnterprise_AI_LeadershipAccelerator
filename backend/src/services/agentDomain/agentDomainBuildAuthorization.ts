@@ -38,6 +38,7 @@ import {
   type BuildAuthReason,
 } from '../factory/buildAuthorization';
 import { AGENT_DOMAINS, type AgentDomainKey } from './agentDomainRegistry';
+import { QueryTypes } from 'sequelize';
 
 /** Re-exported so callers and tests reference ONE gate, not a copy of its vocabulary. */
 export { assertBuildAuthorized, BuildNotAuthorizedError };
@@ -51,16 +52,60 @@ export async function loadAgentDomainBuildAuthorization(
   agentDomainProjectId: string,
 ): Promise<BuildAuthorizationLike | null> {
   const { sequelize } = await import('../../config/database');
-  const [rows] = await sequelize.query(
+  const rows = await sequelize.query(
     `SELECT approver_identity_id, scope, resource_limit, revoked_at
        FROM public.agent_domain_build_authorizations
       WHERE agent_domain_project_id = $id AND revoked_at IS NULL
       ORDER BY created_at DESC
       LIMIT 1`,
-    { bind: { id: agentDomainProjectId } } as any,
+    // No cast. Nine sibling `ensure*.ts` files pass an object `bind` uncast (for example
+    // `backend/src/db/ensureFactoryTaskSchema.ts:58`), so the `as any` that was here was
+    // undocumented -- which CLAUDE.md's Contract Enforcement Layer forbids -- and unnecessary.
+    { bind: { id: agentDomainProjectId }, type: QueryTypes.SELECT },
   );
   const row = Array.isArray(rows) ? (rows[0] as BuildAuthorizationLike | undefined) : undefined;
   return row ?? null;
+}
+
+/**
+ * Every live authorization for a set of anchor ids, in ONE query, keyed by domain.
+ *
+ * The read surface was issuing ten queries, one per domain, for a table keyed on
+ * `agent_domain_project_id` where all ten ids are derived and known up front. This is the shape
+ * `resolveAllFromRows` was written for, and the reason it previously had no production caller.
+ *
+ * A domain with no row maps to `null`, which `assertBuildAuthorized` refuses as
+ * `no_authorization` -- so an absent row and an absent domain are the same answer, which is the
+ * fail-closed direction.
+ */
+export async function loadAgentDomainBuildAuthorizationsByDomain(
+  anchorIdByDomain: Readonly<Record<string, string>>,
+): Promise<Record<string, BuildAuthorizationLike | null>> {
+  const { sequelize } = await import('../../config/database');
+  const ids = Object.values(anchorIdByDomain);
+  const out: Record<string, BuildAuthorizationLike | null> = {};
+  for (const k of Object.keys(anchorIdByDomain)) out[k] = null;
+  if (ids.length === 0) return out;
+
+  const rows = await sequelize.query(
+    `SELECT agent_domain_project_id, approver_identity_id, scope, resource_limit, revoked_at
+       FROM public.agent_domain_build_authorizations
+      WHERE agent_domain_project_id = ANY($ids) AND revoked_at IS NULL
+      ORDER BY created_at DESC`,
+    { bind: { ids }, type: QueryTypes.SELECT },
+  );
+
+  const byAnchor = new Map<string, BuildAuthorizationLike>();
+  for (const r of (Array.isArray(rows) ? rows : []) as Array<Record<string, unknown>>) {
+    const anchorId = String(r.agent_domain_project_id);
+    // ORDER BY created_at DESC, so the first row seen for an anchor is the newest. Later ones are
+    // superseded and are deliberately not overwritten.
+    if (!byAnchor.has(anchorId)) byAnchor.set(anchorId, r as unknown as BuildAuthorizationLike);
+  }
+  for (const [domainKey, anchorId] of Object.entries(anchorIdByDomain)) {
+    out[domainKey] = byAnchor.get(anchorId) ?? null;
+  }
+  return out;
 }
 
 /** Throws `BuildNotAuthorizedError` unless a live authorization exists. Delegates to the ONE gate. */

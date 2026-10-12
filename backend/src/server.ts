@@ -3043,7 +3043,21 @@ async function start(): Promise<void> {
   await ensureAiAgentDepartmentScopeSchema();
   // Agent Factory - which AI employee domain a project belongs to, plus build authorizations for
   // one. Two tables, zero ALTERs, additive and idempotent; its assert is deliberately not optional.
-  await ensureAgentDomainProjectSchema();
+  // Guarded, because this is the ONLY one of 106 `ensure*` files whose post-condition throws, and
+  // it is awaited before `app.listen`. `start()` is called bare with no process-level rejection
+  // handler, so an uncontained throw here would stop the backend binding its port -- the rule this
+  // file states twice within 250 lines of here, and wraps two neighbouring calls for. A backend
+  // that will not boot is worse than one that boots carrying a named schema problem, and the
+  // problem IS named: the module logs a structured SchemaInvariantViolation with its own remedy
+  // before throwing, and the integration suite still proves the assert fails loudly when the
+  // schema is actually wrong.
+  try {
+    await ensureAgentDomainProjectSchema();
+  } catch (err: any) {
+    console.warn('[boot] ensureAgentDomainProjectSchema failed; the ten agent-domain projects '
+      + 'cannot be provisioned until it is fixed. Continuing to bind the port. '
+      + `error_class=SchemaInvariantViolation message=${err?.message ?? String(err)}`);
+  }
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {
