@@ -1,14 +1,16 @@
 import {
   runCorpusCase,
   partitionIsTotal,
+  type CorpusFixture,
+  type CorpusRun,
+} from './corpusRunner';
+import {
   CORPUS_STAGES,
   DB_BACKED_STAGES,
   SHORT_CIRCUIT_STAGES,
   SURFACE_CHECK_STAGES,
   TERMINAL_STAGE,
-  type CorpusFixture,
-  type CorpusRun,
-} from './corpusRunner';
+} from './corpusStages';
 import { GENERATION_STAGES } from '../../generation/blueprintGeneration';
 import { LIFECYCLE_STAGES } from '../../lifecycleStages';
 import { factoryValidate } from '../../../factory/factoryValidate';
@@ -356,6 +358,23 @@ describe('THE COVERAGE CONTROL: the traceability rule must be able to report a G
     expect(shipped.map((i) => i.message)).toEqual(['requirement block blk-uncited is cited by no task']);
     expect(factoryValidate(CASE_A.build().project as FactoryProject)
       .filter((i) => i.code === 'SOURCE_COVERAGE')).toEqual([]);
+  });
+
+  it('the parse of the shipped rule is EXHAUSTIVE over the issues it emits', () => {
+    // What `unparsedCoverageIssues` can honestly prove. Every `SOURCE_COVERAGE` issue the
+    // shipped validator produced yielded a block id, so `uncovered` is the WHOLE finding and
+    // not a silently filtered subset of it. Non-vacuous because the issue list is asserted
+    // non-empty first.
+    //
+    // What it cannot prove is that it catches message-format drift: a verifier deleted the
+    // push into it and the suite stayed GREEN, because the shipped rule has one call site and
+    // one format, so no real input can land in that list. Breaking the regex is caught by the
+    // `covered`/`uncovered` assertions above instead.
+    const project = CASE_A_UNCITED.build().project as FactoryProject;
+    const issues = factoryValidate(project).filter((i) => i.code === 'SOURCE_COVERAGE');
+    expect(issues.length).toBeGreaterThan(0);
+    expect(uncited.traceability.uncovered).toHaveLength(issues.length);
+    expect(uncited.traceability.unparsedCoverageIssues).toEqual([]);
   });
 
   it('an uncited requirement block is a REAL pipeline refusal, not a corpus-only notion', () => {

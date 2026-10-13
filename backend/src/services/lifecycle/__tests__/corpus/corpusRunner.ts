@@ -74,71 +74,16 @@ import {
   type ComposedBlueprint,
 } from '../../generation/blueprintComposition';
 import { GENERATION_STAGES, type GenerationStage } from '../../generation/blueprintGeneration';
-import { LIFECYCLE_STAGES, type LifecycleStage } from '../../lifecycleStages';
+import {
+  CORPUS_STAGES,
+  DB_BACKED_STAGES,
+  SHORT_CIRCUIT_STAGES,
+  SURFACE_CHECK_STAGES,
+  TERMINAL_STAGE,
+  type CorpusStage,
+} from './corpusStages';
 import { factoryValidate } from '../../../factory/factoryValidate';
 import type { FactoryProject } from '../../../factory/contracts/factoryContract';
-
-/**
- * The generation stages that SHORT-CIRCUIT, in execution order.
- *
- * SLICED from `GENERATION_STAGES`, never retyped. Measured: `generateBlueprintOnce` returns a
- * `stage` of only `handoff`, `process`, `allocation`, `agents`, `effort` (and `complete` on
- * success) — enumerated with
- * `sed -n '147,300p' blueprintGeneration.ts | grep -oE "stage: '[a-z_]+'" | sort -u`.
- */
-export const SHORT_CIRCUIT_STAGES: ReadonlyArray<GenerationStage> =
-  GENERATION_STAGES.slice(0, GENERATION_STAGES.indexOf('effort') + 1);
-
-/**
- * The surface checks, which run whatever generation did.
- *
- * Also sliced. `GENERATION_STAGES`' own comment records why these four live in the generation
- * vocabulary at all: P5-T1.4 added them "for the four checks the generation input could not
- * reach", deliberately in the one stage list rather than a private one inside
- * `blueprintComposition.ts`.
- */
-export const SURFACE_CHECK_STAGES: ReadonlyArray<GenerationStage> = GENERATION_STAGES.slice(
-  GENERATION_STAGES.indexOf('workspaces'),
-  GENERATION_STAGES.indexOf('design') + 1,
-);
-
-/** Generation's terminal success marker. Reached only when no generation stage refused. */
-export const TERMINAL_STAGE: GenerationStage = 'complete';
-
-/**
- * The stages that need a database, named from the REAL lifecycle vocabulary.
- *
- * Attempt 1 appended `'approval'`, `'planning'` and `'verification'` — a THIRD stage vocabulary,
- * invented. Two of those three strings exist nowhere in the system. The plan's prose names the
- * journey as "approval → planning → verification"; `LIFECYCLE_STAGES` names the actual stages.
- * The mapping, stated rather than assumed:
- *
- * | The plan's word | The real stage(s)                                   |
- * |-----------------|-----------------------------------------------------|
- * | approval        | `awaiting_blueprint_approval`, `blueprint_approved` |
- * | planning        | `planning`, `plan_ready`                            |
- * | verification    | `release_review`                                    |
- *
- * `LifecycleStage` would make a misspelling a compile error — except **nothing typechecks this
- * file**: `backend/tsconfig.json` excludes every `__tests__` directory, and ts-jest transpiles with
- * `isolatedModules`. So the annotation documents intent and `corpusRunner.test.ts` asserts
- * membership in `LIFECYCLE_STAGES` at RUNTIME, which is the control that actually fires.
- */
-export const DB_BACKED_STAGES: ReadonlyArray<LifecycleStage> = [
-  'awaiting_blueprint_approval',
-  'blueprint_approved',
-  'planning',
-  'plan_ready',
-  'release_review',
-];
-
-/** Every stage a corpus case can be driven through. */
-export const CORPUS_STAGES: ReadonlyArray<CorpusStage> = [
-  ...GENERATION_STAGES,
-  ...DB_BACKED_STAGES,
-];
-
-export type CorpusStage = GenerationStage | LifecycleStage;
 
 /**
  * The fields a fixture must supply, taken by indexed access from the real input type.
@@ -182,10 +127,12 @@ export interface TraceabilityReport {
    *
    * Not the `understanding` items. Attempt 1 used those and matched them to task titles by
    * their first six significant words, which was crude, and worse, DEAD: it read
-   * `composed.draft.tasks`, and `BlueprintDraft` has no `tasks` field at all — only `ok`,
-   * `stage`, `advanced`, `refusals`, `handoff`, `measures`, `idsByLocator`. `covered` was
-   * therefore `[]` for every input, which is why a mutant replacing the whole computation with
-   * `const covered: string[] = []` changed nothing and stayed green.
+   * `composed.draft.tasks`, and `BlueprintDraft` HAS NO `tasks` FIELD. Its fields are `ok`,
+   * `stage`, `advanced`, `refusals`, `handoff`, `measures`, `idsByLocator`, `attempt` and
+   * `producedOnAttempt` — the first version of this comment said "only" and listed seven of
+   * those nine, which is the kind of exhaustive claim that should not be made in passing.
+   * `covered` was therefore `[]` for every input, which is why a mutant replacing the whole
+   * computation with `const covered: string[] = []` changed nothing and stayed green.
    */
   requirementBlocks: string[];
   /** Blocks cited by at least one task. The denominator minus `uncovered`. */
@@ -196,13 +143,22 @@ export interface TraceabilityReport {
    */
   uncovered: string[];
   /**
-   * `SOURCE_COVERAGE` messages whose block id would not parse. MUST be empty.
+   * `SOURCE_COVERAGE` messages whose block id would not parse. A REPORTED DIAGNOSTIC, not a
+   * control — and it cannot currently be non-empty.
    *
    * The id is read out of the message because `err('SOURCE_COVERAGE', …)` is called without a
-   * `stepId`, so the issue carries no subject field. A parse is fragile, so its failure is
-   * REPORTED rather than swallowed: an unparsed message lands here and the test asserts this
-   * list is empty, which makes a message-format change loud instead of silently emptying
-   * `uncovered`.
+   * `stepId`, so the issue carries no subject field. An unparsed message lands here rather
+   * than being swallowed, so that if the shipped message format ever changes, the run says so
+   * instead of reporting an empty `uncovered`.
+   *
+   * WHAT IT IS NOT. An earlier version of this comment claimed it "makes a message-format
+   * change loud". It does not, and a verifier proved it: deleting the push below leaves the
+   * suite GREEN, because `factoryValidate` has exactly one `SOURCE_COVERAGE` call site with
+   * one message format, so no real input reaches this list. The control that actually catches
+   * format drift is the `covered`/`uncovered` assertions — breaking the regex turns them RED.
+   * Kept because a future second call site would surface here instead of vanishing, and
+   * `corpusRunner.test.ts` asserts the parse is EXHAUSTIVE over the issues the rule emits,
+   * which is the strongest thing that can honestly be said about it.
    */
   unparsedCoverageIssues: string[];
   /**
@@ -272,6 +228,29 @@ const PRE_HANDOFF_REFUSAL = 'DECLARATION_SELF_SUPPLIED';
  *
  * This is the function attempt 1 did not have. Each stage's outcome is derived from the
  * composition result; nothing is fanned out from a single boolean.
+ *
+ * ## WHAT `driven` MEANS FOR THE REFUSING STAGE ITSELF
+ *
+ * `driven` means **the pipeline did work attributed to that stage and produced a judgement**.
+ * It does NOT mean every validator named for that stage executed. The distinction only shows
+ * up on the refusing stage, and it shows up three ways, all measured by the attempt-2 verifier
+ * by mocking the eight stage validators and comparing real execution against this output:
+ *
+ * | Case                          | Reported | The named validator that did NOT run |
+ * |-------------------------------|----------|--------------------------------------|
+ * | `DECLARATION_SELF_SUPPLIED`   | `agents` | `validateAgentScoping`               |
+ * | `EFFORT_TASK_UNACCOUNTED`     | `effort` | `measureAutomation`                  |
+ * | `EFFORT_TASK_UNKNOWN`         | `effort` | `measureAutomation`                  |
+ *
+ * In all three the stage is reported DRIVEN, because real work ran and refused: the
+ * declaration-provenance guard for `agents`, and the reconciliation loop for `effort` — and
+ * the reconciliation IS effort-stage work, sitting before `measureAutomation` in the same
+ * stage. The alternative, reporting the refusing stage as not-driven, would mean a refusal
+ * nobody could attribute to anything.
+ *
+ * This is the production module's own `stage` attribution reported faithfully rather than
+ * second-guessed. The verifier's other seven cases matched execution exactly, and in no case
+ * is a stage AFTER a short-circuit reported driven, nor an executed stage reported not-driven.
  */
 function composedOutcomes(composed: ComposedBlueprint): {
   outcomes: StageOutcome[];
