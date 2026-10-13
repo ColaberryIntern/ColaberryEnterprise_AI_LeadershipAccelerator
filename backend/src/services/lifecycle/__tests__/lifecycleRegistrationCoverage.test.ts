@@ -234,7 +234,7 @@ describe('LC-01 — the set of project-creation sites is derived, not listed', (
       // the parallel path this whole module exists to eliminate -- and the raw-insert tripwire
       // above is what caught it. It now goes through the model inside its own transaction and
       // passes `lifecycleEntryPoint: 'agent_domain_factory_provisioner'`.
-      'services/agentDomain/agentDomainProvisioner.ts:183 Project.findOrCreate(',
+      'services/agentDomain/agentDomainProvisioner.ts:209 Project.findOrCreate(',
       'services/businessProcessSeedService.ts:135 Project.findOrCreate(',
       'services/delivery/leadConversion.ts:175 DeliveryProject.create(',
       'services/factory/govDeliveryProject.ts:134 DeliveryProject.create(',
