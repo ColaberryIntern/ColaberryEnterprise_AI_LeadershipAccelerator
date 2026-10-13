@@ -1129,3 +1129,81 @@ but took several steps and an argument.
 
 Adding the label to the image build makes that one command. **Owner: whoever maintains the image
 build.** Small change, and it removes reasoning from a path that should be a measurement.
+
+---
+
+## Phase 6 open items, and one obligation that got SHARPER rather than closed
+
+Phase 6 is deployed and NOT activated (merge `42a2e22a`, deployed 2026-10-12). Full report:
+[phase6-handoff.md](phase6-handoff.md). Five items go forward.
+
+### 1. The `workspace` prompt instruction is soft, and only partly guarded
+
+`BUILD_PLAN_JSON_SCHEMA` makes the field mandatory under `strict: true`, so a compliant model
+cannot omit it. Only the PROMPT explains what an honest answer is, and **gutting that
+paragraph leaves every test green.** A model could satisfy the schema by labelling every story
+a workspace, which would make `release_review` pass on exactly the plans it was built to catch.
+
+**Owner: Phase 7.** Either add a check that can detect the all-workspace answer, or record in
+writing why it cannot be detected. Do not describe the rule as closed while this stands.
+
+### 2. Source overflow is DETECT-ONLY, and the decision rests on an unmeasured distribution
+
+`request.md:243` asks for chunking or a visible blocking overflow. What shipped is visible but
+neither chunked nor blocking. Ruled acceptable twice, and both rulings rest on not knowing how
+many production builds exceed the budget.
+
+**Owner: Phase 7.** Measure the real distribution of brief and document sizes first. Refusing
+on an unmeasured assumption is how a gate hurts the people it was built for.
+
+### 3. A second tenant running cohorts would be MIS-ATTRIBUTED, and a refusal is not the fix
+
+New `projects` rows with no explicit tenant default to `colaberry` (DRI decision, 2026-10-12).
+Correct while one tenant runs cohorts.
+
+**This was tried as a refusal first, and running it showed why that is worse.** The resolver
+originally declined to attribute anything once a second tenant owned a project. One deliberate
+cross-tenant placement then disabled attribution for every project created afterwards, leaving
+them with no lifecycle at all. A refusal does not prevent the harm it was aimed at: it converts
+"possibly wrong tenant" into "no governance". It is now a loud warning
+(`student_tenant_multi_tenant_observed`) carrying both tenants.
+
+**Owner: Phase 7.** The real fix is deriving the tenant per project from its programme, and no
+table on that path carries a tenant. It cannot be substituted with a refusal, and the attempt
+is recorded here so nobody retries it as an improvement.
+
+### 4. A delivery project moved between tenants leaves its lifecycle behind
+
+The hook records the tenant at registration, so a direct `UPDATE` to
+`delivery_projects.tenant_id` drifts from its lifecycle row. Nothing in the product reassigns a
+delivery project’s tenant today, so the blast radius is zero, and inventing a trigger for an
+unobserved operation is how a gate acquires behaviour nobody asked for.
+
+Pinned by a test in `lifecycleRegistration.tenancy.integration.test.ts`. **Owner: whoever adds
+tenant reassignment**, if anybody ever does. Closing it or accepting it is then a deliberate
+change to that assertion rather than a discovery.
+
+### 5. Phase 4 never had a PR of its own
+
+Verified, not suspected: there is no phase-4 merge commit on `main`, and the Phase 4 commits
+are ancestors of the PR #3048 merge, which is the *Phase 5* PR. Two design tables and the whole
+allocation model were reviewed as part of a different phase.
+
+A review-coverage gap, not a defect. **Owner: Ali** — accept it, or re-review the Phase 4 diff
+in isolation.
+
+### THE 409 OBLIGATION GOT SHARPER, and it is still open
+
+The entry above says the authenticated 409 `lifecycleDisabled` refusal has never been observed
+and that the window closes at activation. Both still true. Phase 6 added the measurement that
+explains WHY it has not been observed, which changes what is needed from "someone should try"
+to one specific thing:
+
+```
+GET /api/admin/project-lifecycle/status/<id>   ->  401 {"error":"Authentication required"}
+```
+
+Taken against production after the Phase 6 deploy. **The 409 sits behind authentication**, so
+the observation requires a program-section admin token, which cannot be minted from a Claude
+session. One authenticated `curl` before the flag flips is the whole task. After activation the
+evidence is unobtainable forever.
