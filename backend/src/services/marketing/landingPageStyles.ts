@@ -37,6 +37,20 @@ a{color:inherit}
 .band--accent{background:var(--accent-deep);color:var(--accent-contrast)}
 .band--cool{background:var(--bg-cool)}
 .band--cool h2{color:var(--accent-3)}
+
+/* A COMPONENT THAT PAINTS ITS OWN LIGHT SURFACE MUST ALSO SET ITS OWN FOREGROUND.
+ *
+ * Inheriting the colour reads fine on a light band and goes INVISIBLE on band--inverse,
+ * which sets color:#FFFFFF for the band. That shipped: the live page rendered a contrast
+ * card inside the dark band with four blank chips - white text on a near-white chip - and
+ * every unit test passed, because the fixture only ever placed contrast on a light section.
+ * The older components (panel, cards, steps, tiles) each have their own band--inverse
+ * override; the ones added in renderer v2 had none.
+ *
+ * Setting colour beside background is the rule that makes a component safe in ANY band,
+ * rather than one more override to remember for each new one. landingPageStyles.test.ts
+ * enforces it. */
+.contrast-card,.chips li,.callout,.gridlist,.sidecard,.stat,blockquote{color:var(--fg)}
 .band--hero{padding-block:clamp(3rem,8vw,6rem)}
 .band--joined{padding-top:0}
 .inner{max-width:68rem;margin:0 auto;padding-inline:1.25rem}
