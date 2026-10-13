@@ -23,7 +23,9 @@ const close = jest.fn();
 jest.mock('../../config/database', () => ({ sequelize: { query, close } }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires -- after jest.mock
-const { runForward, runInverse, parseLedger } = require('../backfillFreeAccountCoherence');
+const {
+  runForward, runInverse, parseLedger, rowsAffected,
+} = require('../backfillFreeAccountCoherence');
 
 const COUNTS = { shape_a: '2', shape_b: '1', coherent_free: '0', total: '3' };
 
@@ -49,7 +51,13 @@ beforeEach(() => {
   query.mockReset();
   close.mockReset();
   query.mockImplementation((sql: string, opts?: { type?: unknown }) => {
-    if (/^\s*UPDATE/i.test(sql)) return Promise.resolve([[], 1]);
+    // THE DRIVER'S REAL SHAPE. This used to resolve `[[], 1]` — second element a
+    // NUMBER — which is not what node-postgres returns for an UPDATE. It returns
+    // the Result OBJECT. That difference is the whole reason the 2026-10-13
+    // production run printed `committed NaN of 56`: `Number({})` is NaN, while
+    // `Number(1)` under this mock was 1, so every test passed. A mock that is
+    // kinder than the driver hides exactly the bug it is standing in for.
+    if (/^\s*UPDATE/i.test(sql)) return Promise.resolve([[], { rowCount: 1 }]);
     if (sql.includes('FILTER (WHERE')) return Promise.resolve([COUNTS]);
     if (opts?.type === QueryTypes.SELECT) return Promise.resolve(ROWS);
     return Promise.resolve([[], 0]);
@@ -216,5 +224,75 @@ describe('T207 — the ledger is untrusted input on a path that writes to produc
     // parseLedger rejected everything.
     const good = [{ id: 'row-a', column: 'tier' as const, from: 'member', to: 'guest' }];
     expect(parseLedger(JSON.stringify(good))).toEqual(good);
+  });
+});
+
+/**
+ * THE `committed NaN of 56` DEFECT, found by running this script against
+ * production on 2026-10-13. All 56 rows were written; the script could not say
+ * so. On a production data-repair tool, "what did you just change" is most of
+ * the value, and a count of `NaN` is indistinguishable from a count of nothing.
+ *
+ * Nothing here would have caught it before, for two separate reasons, and both
+ * are worth stating because either alone was sufficient: the mock resolved
+ * UPDATEs with a NUMBER where the driver returns an OBJECT, and no test
+ * asserted the reported count in the first place.
+ */
+describe('the committed count is readable, which it was not in production', () => {
+  it('reads node-postgres result objects', () => {
+    expect(rowsAffected({ rowCount: 1 })).toBe(1);
+    expect(rowsAffected({ rowCount: 56 })).toBe(56);
+    // A genuine zero is a real answer and must not be confused with "unknown".
+    expect(rowsAffected({ rowCount: 0 })).toBe(0);
+  });
+
+  it('REPRODUCES the production shape that produced NaN, and refuses to guess', () => {
+    // The exact value the old code did `Number(...)` on: a Result object with no
+    // rowCount. `Number({})` is NaN; null means "could not tell", which the
+    // caller reports out loud instead of printing a number.
+    expect(rowsAffected({})).toBeNull();
+    expect(rowsAffected(undefined)).toBeNull();
+    expect(rowsAffected(null)).toBeNull();
+    expect(rowsAffected({ rowCount: 'four' })).toBeNull();
+    expect(rowsAffected({ rowCount: NaN })).toBeNull();
+  });
+
+  it('still accepts a bare number, so a dialect that returns one is not lost', () => {
+    expect(rowsAffected(3)).toBe(3);
+  });
+
+  it('reports the real count on a committing run', async () => {
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await runForward({ confirm: true });
+      const out = log.mock.calls.map((c) => c.join(' ')).join('\n');
+      expect(out).toContain('committed 1 of 1');
+      // The regression itself. Without this the suite would pass again the day
+      // somebody reintroduces Number() on the metadata object.
+      expect(out).not.toContain('NaN');
+      expect(out).not.toContain('WARNING');
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('says so LOUDLY when the driver returns no readable count', async () => {
+    query.mockImplementation((sql: string, opts?: { type?: unknown }) => {
+      if (/^\s*UPDATE/i.test(sql)) return Promise.resolve([[], {}]);
+      if (sql.includes('FILTER (WHERE')) return Promise.resolve([COUNTS]);
+      if (opts?.type === QueryTypes.SELECT) return Promise.resolve(ROWS);
+      return Promise.resolve([[], 0]);
+    });
+    const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await runForward({ confirm: true });
+      const out = log.mock.calls.map((c) => c.join(' ')).join('\n');
+      // Under-reporting is the failure mode here, so it must not be silent.
+      expect(out).toContain('committed 0 of 1');
+      expect(out).toContain('UNDERSTATES');
+      expect(out).not.toContain('NaN');
+    } finally {
+      log.mockRestore();
+    }
   });
 });

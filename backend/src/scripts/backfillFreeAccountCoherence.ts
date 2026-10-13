@@ -155,19 +155,74 @@ export function parseLedger(raw: string): LedgerEntry[] {
   });
 }
 
-async function commitLedger(ledger: LedgerEntry[]): Promise<number> {
+/**
+ * Read the affected-row count out of `sequelize.query`'s metadata, or report that
+ * it could not be read.
+ *
+ * WHY THIS EXISTS. The 2026-10-13 production run wrote all 56 rows and printed
+ * `committed NaN of 56 planned write(s)`. The old code did
+ * `Number(affected ?? 0)` on the second element of the returned tuple, which for
+ * a Postgres UPDATE is the pg Result OBJECT, not a number — and `Number({})` is
+ * `NaN`. The write was fine; the only thing broken was the script's ability to
+ * say what it had done, which on a production data-repair tool is most of the
+ * point.
+ *
+ * THE TEST MOCK IS WHY THIS SHIPPED. It resolved UPDATEs as `[[], 1]` — second
+ * element a NUMBER — so `Number(affected)` was 1 under test and `NaN` in
+ * production. The mock was more convenient than the driver's real contract, and
+ * no test asserted the reported count at all. The mock now returns
+ * `[[], { rowCount: n }]`, and a control case pins the old shape so this cannot
+ * silently regress.
+ *
+ * RETURNS NULL RATHER THAN 0 for an unreadable count, deliberately. Counting an
+ * unknown as zero would under-report a write that happened, which is the same
+ * class of lie as `NaN` but harder to notice.
+ */
+export function rowsAffected(meta: unknown): number | null {
+  const n = (meta as { rowCount?: unknown } | null | undefined)?.rowCount;
+  if (typeof n === 'number' && Number.isFinite(n)) return n;
+  return typeof meta === 'number' && Number.isFinite(meta) ? meta : null;
+}
+
+interface CommitOutcome {
+  /** Rows the driver confirmed were written. */
+  applied: number;
+  /** Statements that ran but returned no readable row count. */
+  unverified: number;
+}
+
+async function commitLedger(ledger: LedgerEntry[]): Promise<CommitOutcome> {
   let applied = 0;
+  let unverified = 0;
   for (const entry of ledger) {
     // One statement per row, each pinned to the value we read, so a row somebody
     // changed between the plan and the commit is left alone instead of being
     // overwritten with a decision made about a different value.
-    const [, affected] = await sequelize.query(
+    const [, meta] = await sequelize.query(
       `UPDATE enrollments SET ${entry.column} = :to WHERE id = :id AND ${entry.column} = :from`,
       { replacements: { to: entry.to, from: entry.from, id: entry.id } },
     );
-    applied += Number(affected ?? 0);
+    const n = rowsAffected(meta);
+    if (n === null) unverified += 1;
+    else applied += n;
   }
-  return applied;
+  return { applied, unverified };
+}
+
+/**
+ * One line an operator can act on. A bare count is not enough when some
+ * statements returned nothing readable: the number would understate the write.
+ */
+function reportCommit(outcome: CommitOutcome, planned: number, what: string): void {
+  console.log(`\n${what} ${outcome.applied} of ${planned}`);
+  if (outcome.unverified > 0) {
+    console.log(
+      `WARNING: ${outcome.unverified} statement(s) ran but returned no readable row count,`
+      + ' so the number above UNDERSTATES what was written. Verify with the before/after'
+      + ' shape counts below, which are queried from the table rather than reported by this'
+      + ' script.',
+    );
+  }
 }
 
 export async function runInverse(path: string, opts: RunOptions): Promise<LedgerEntry[]> {
@@ -186,8 +241,7 @@ export async function runInverse(path: string, opts: RunOptions): Promise<Ledger
     return inverse;
   }
 
-  const applied = await commitLedger(inverse);
-  console.log(`\nreverted ${applied} of ${inverse.length} row(s)`);
+  reportCommit(await commitLedger(inverse), inverse.length, 'reverted');
   printCounts('after: ', await shapeCounts());
   return inverse;
 }
@@ -240,8 +294,7 @@ export async function runForward(opts: RunOptions): Promise<LedgerEntry[]> {
     return plan.ledger;
   }
 
-  const applied = await commitLedger(plan.ledger);
-  console.log(`\ncommitted ${applied} of ${plan.ledger.length} planned write(s)`);
+  reportCommit(await commitLedger(plan.ledger), plan.ledger.length, 'committed');
   printCounts('after: ', await shapeCounts());
   return plan.ledger;
 }
