@@ -43,6 +43,8 @@ import { randomUUID } from 'crypto';
 import { QueryTypes, type Sequelize, type Transaction } from 'sequelize';
 import Project from '../../models/Project';
 import {
+  AGENT_DOMAIN_PROGRAM_BLUEPRINT_ID,
+  AGENT_DOMAIN_PROGRAM_BLUEPRINT_NAME,
   FORBIDDEN_STAGES,
   PERMITTED_BUILDER_STATES,
   PROVISION_STAGE,
@@ -115,16 +117,40 @@ async function resolveAiStaffEnrollment(sequelize: Sequelize, tx: Transaction): 
   return rows[0].id;
 }
 
+/**
+ * The blueprint these projects belong to, resolved BY ID and verified by name.
+ *
+ * This used to be `ORDER BY created_at ASC LIMIT 1`. Measured against production before the first
+ * provisioning run, that returns "Enterprise AI Leadership Accelerator" -- the customer programme.
+ * Ten internal AI-employee projects would have been created against it and nothing would have
+ * failed; the only trace would have been a `program_id` nobody reads.
+ *
+ * The name is checked as well as the id, so a recycled id cannot pass silently, and absence is a
+ * named refusal rather than a fallback to whatever happens to be oldest.
+ */
 async function resolveProgramId(sequelize: Sequelize, tx: Transaction): Promise<string> {
-  // `projects.program_id` is NOT NULL and references program_blueprints. T02 pre-approved the
-  // blueprint row this uses; it is resolved rather than hardcoded so a missing prerequisite is a
-  // named refusal instead of a foreign-key violation.
-  const rows = await sequelize.query<{ id: string }>(
-    `SELECT id FROM program_blueprints ORDER BY created_at ASC LIMIT 1`,
-    { type: QueryTypes.SELECT, transaction: tx },
+  const rows = await sequelize.query<{ id: string; name: string }>(
+    `SELECT id, name FROM program_blueprints WHERE id = $1`,
+    {
+      bind: [AGENT_DOMAIN_PROGRAM_BLUEPRINT_ID],
+      type: QueryTypes.SELECT,
+      transaction: tx,
+    },
   );
   if (rows.length !== 1) {
-    throw new Error('ProgramBlueprintError: no program_blueprints row exists; run T02\'s prerequisite seed first');
+    throw new Error(
+      `ProgramBlueprintError: no program_blueprints row with id ${AGENT_DOMAIN_PROGRAM_BLUEPRINT_ID}. `
+      + 'That is the blueprint T02 seeded for internal AI-employee work. Run '
+      + 'seedAgentDomainIdentityPrereqs.js first. Refusing rather than falling back to another '
+      + 'blueprint: the fallback this replaced resolved to the customer-facing accelerator.',
+    );
+  }
+  if (rows[0].name !== AGENT_DOMAIN_PROGRAM_BLUEPRINT_NAME) {
+    throw new Error(
+      `ProgramBlueprintError: ${AGENT_DOMAIN_PROGRAM_BLUEPRINT_ID} is named '${rows[0].name}', `
+      + `expected '${AGENT_DOMAIN_PROGRAM_BLUEPRINT_NAME}'. The id has been reused for something `
+      + 'else; refusing rather than attaching ten projects to it.',
+    );
   }
   return rows[0].id;
 }
