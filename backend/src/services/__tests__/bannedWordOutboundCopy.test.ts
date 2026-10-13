@@ -85,7 +85,6 @@ const SRC = path.resolve(__dirname, '../..');
  */
 const BASELINE = {
   // ── ADVERTISING, still open. Outside this component's ownership (see ADVERTISING_STILL_OPEN).
-  'controllers/enrollmentController.ts': [4, 'ADVERTISING: two signup-response messages say "your free account"; plus a lead-source label and a log line'],
   'controllers/salesHubCoryController.ts': [1, 'ADVERTISING: "free Open House" in the fact sheet Cory writes sales replies from'],
   'data/announcementWeek0.ts': [5, 'ADVERTISING: the Week 0 lead-magnet card, including the chip "100% Free"'],
   'data/claudeStudios/weeks00to04.ts': [2, 'ADVERTISING: week_theme "Free AI Preview" and "the free-preview week"'],
@@ -136,6 +135,14 @@ const BASELINE = {
   'scripts/session-decks/week23-notes.js': [2, 'PRESENTER NOTE: "free at the point of use" - the first-cost beat'],
 
   // ── Internal: reports, briefs and tickets addressed to staff, never to a prospect.
+  //
+  // enrollmentController DROPPED FROM 4 TO 2 on 2026-10-12 and moved out of the ADVERTISING
+  // block: the two signup-response messages that said "your free account" to the person who
+  // had just signed up are gone. What remains is not advertising and must NOT be "fixed":
+  // the lead-source label is a stored data value that `freeAccountCoherenceBackfill`s
+  // provenance predicate matches on, and renaming it would silently shrink the population
+  // that backfill can prove. The log line is internal and reaches no prospect.
+  'controllers/enrollmentController.ts': [2, 'INTERNAL: the "Free signup (/enroll)" lead-source label, which the T207 backfill provenance predicate matches on, plus one internal log line. The two advertising response messages were removed 2026-10-12.'],
   'scripts/addMissingUpstreamTasks.js': [1, 'INTERNAL: memo objective about Anthropic-supplied CCA-F vouchers'],
   'scripts/backfillMissedBcAttachments.js': [1, 'INTERNAL: free-text widget in a review-tool description'],
   'scripts/buildAliPersonalSalesRepLists.js': [4, 'INTERNAL: the advertorial NRECA gives Colaberry, in Basecamp todo copy'],
@@ -208,6 +215,13 @@ const REMOVED_ADVERTISING = [
   'Free to attend',
   'Activate My Free Account',
   'free builder account',
+  // Removed 2026-10-12 from the POST /api/create-free-account response body — the only two
+  // strings on this list that were returned straight to the person who had just signed up,
+  // rather than sitting in a seed, a prompt or a page. The baseline alone would not stop
+  // their return: it is now 2 for that file, and reinstating one message while deleting the
+  // internal log line would net to the same 2.
+  'Your free account is ready',
+  'You already have a free account',
 ];
 
 /**
@@ -216,7 +230,9 @@ const REMOVED_ADVERTISING = [
  * report nobody opens, and asserted to still be in the baseline so it cannot be lost quietly.
  */
 const ADVERTISING_STILL_OPEN = [
-  'controllers/enrollmentController.ts',
+  // 'controllers/enrollmentController.ts' was here until 2026-10-12. Its two advertising
+  // response messages were removed; the two occurrences left are INTERNAL, so the path
+  // belongs in the baseline but no longer on this list.
   'controllers/salesHubCoryController.ts',
   'data/announcementWeek0.ts',
   'data/claudeStudios/weeks00to04.ts',
