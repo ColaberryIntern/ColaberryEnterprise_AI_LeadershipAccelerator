@@ -48,6 +48,29 @@ import { loadDomainMatrix } from './capabilityRecord';
 export const TENANT_SLUG = 'colaberry';
 
 /**
+ * The program blueprint these ten projects belong to, pinned by id.
+ *
+ * `projects.program_id` is NOT NULL and references `program_blueprints`. T02 seeded one row for
+ * exactly this purpose -- "Internal AI Employee Operations", at the derived id
+ * `uuid5('program_blueprint:internal_ai_employee_operations')` -- so that internal AI-employee
+ * work does not hang off a customer programme.
+ *
+ * IT IS PINNED BECAUSE THE ALTERNATIVE WAS MEASURED WRONG. The resolver used to take
+ * `ORDER BY created_at ASC LIMIT 1`, and in production that returns
+ * `b6de87b3-e116-4bbd-a109-52ede7785ff1` -- "Enterprise AI Leadership Accelerator", created
+ * 2026-03-08, the real student programme. Nothing would have failed: ten internal projects would
+ * have been created against the customer accelerator, and the only trace would have been a
+ * `program_id` nobody reads.
+ *
+ * Absence is a named refusal, not a fallback. A fallback is what turned a missing prerequisite
+ * into a confidently wrong answer.
+ */
+export const AGENT_DOMAIN_PROGRAM_BLUEPRINT_ID = '8660090e-1f6f-51cf-ae46-483bfa8903c5';
+
+/** The name that id carries, asserted at resolve time so a reused id cannot pass silently. */
+export const AGENT_DOMAIN_PROGRAM_BLUEPRINT_NAME = 'Internal AI Employee Operations';
+
+/**
  * Every table this provisioner is permitted to write. Exported so the test and the execution
  * contract cannot drift: the test extracts the tables named in the executor's SQL and compares.
  */

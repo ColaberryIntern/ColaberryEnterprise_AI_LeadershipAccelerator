@@ -62,7 +62,11 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
 
   const TENANT = '33333333-3333-3333-3333-333333333333';
   const ENROLLMENT = '44444444-4444-4444-4444-444444444444';
-  const PROGRAM = '55555555-5555-5555-5555-555555555555';
+  // The PINNED blueprint, not a synthetic id: the provisioner resolves this exact row and
+  // verifies its name, after the previous `ORDER BY created_at ASC LIMIT 1` was measured in
+  // production to resolve the customer-facing accelerator instead.
+  const PROGRAM = '8660090e-1f6f-51cf-ae46-483bfa8903c5';
+  const PROGRAM_NAME = 'Internal AI Employee Operations';
   const DOMAIN = 'marketing';
   const PROVISIONED_BY = 'CC-20261006-a4k7/T14-integration';
 
@@ -120,7 +124,7 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
     await sequelize.query(`CREATE TABLE IF NOT EXISTS delivery_projects (id UUID PRIMARY KEY)`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS ai_agents (id UUID PRIMARY KEY)`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS program_blueprints (
-      id UUID PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+      id UUID PRIMARY KEY, name TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS enrollments (
       id UUID PRIMARY KEY, email TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS admin_users (
@@ -146,7 +150,15 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
     await sequelize.query(
       `INSERT INTO tenants (id, slug) VALUES ($1, 'colaberry') ON CONFLICT DO NOTHING`, { bind: [TENANT] });
     await sequelize.query(
-      `INSERT INTO program_blueprints (id) VALUES ($1) ON CONFLICT DO NOTHING`, { bind: [PROGRAM] });
+      `INSERT INTO program_blueprints (id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      { bind: [PROGRAM, PROGRAM_NAME] });
+    // A SECOND, OLDER blueprint, so the suite reproduces the production shape that caused the
+    // defect: the resolver must pick the pinned one, not the oldest.
+    await sequelize.query(
+      `INSERT INTO program_blueprints (id, name, created_at)
+       VALUES ('11111111-aaaa-bbbb-cccc-000000000001', 'Enterprise AI Leadership Accelerator',
+               now() - interval '200 days')
+       ON CONFLICT DO NOTHING`);
     await sequelize.query(
       `INSERT INTO enrollments (id, email) VALUES ($1, 'ai-staff@example.test') ON CONFLICT DO NOTHING`,
       { bind: [ENROLLMENT] });
@@ -577,5 +589,67 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
     );
     expect(after[0].h).toBe(before[0].h);
     expect(await count(`SELECT count(*)::text AS n FROM ai_agents`)).toBe(0);
+  });
+/**
+   * The blueprint the ten projects belong to.
+   *
+   * Found by querying production BEFORE the first provisioning run, which is the only place it could
+   * have been found. The resolver took `ORDER BY created_at ASC LIMIT 1`, and in production that
+   * returns "Enterprise AI Leadership Accelerator" -- the customer programme. Ten internal
+   * AI-employee projects would have been created against it, nothing would have failed, and the only
+   * trace would have been a `program_id` nobody reads.
+   */
+  describe('the program blueprint is the pinned one, not the oldest', () => {
+    const plan = () => planProvision(DOMAIN);
+
+    beforeEach(async () => { await wipe(plan().project_id); });
+
+    it('an OLDER blueprint exists, so picking the oldest would pick the wrong one', async () => {
+      const rows = await sequelize.query<{ id: string; name: string }>(
+        `SELECT id, name FROM program_blueprints ORDER BY created_at ASC LIMIT 1`,
+        { type: QueryTypes.SELECT },
+      );
+      // The fixture reproduces the production shape. Without this the test below could pass over a
+      // single-blueprint table, where both strategies agree.
+      expect(rows[0].name).toBe('Enterprise AI Leadership Accelerator');
+      expect(rows[0].id).not.toBe(PROGRAM);
+    });
+
+    it('the project is attached to the PINNED blueprint', async () => {
+      const r = await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      const rows = await sequelize.query<{ program_id: string }>(
+        `SELECT program_id FROM projects WHERE id = $1`,
+        { bind: [r.project_id], type: QueryTypes.SELECT },
+      );
+      expect(rows[0].program_id).toBe(PROGRAM);
+    });
+
+    it('REFUSES when the pinned blueprint is absent, rather than falling back', async () => {
+      await sequelize.query(`DELETE FROM program_blueprints WHERE id = $1`, { bind: [PROGRAM] });
+      try {
+        await expect(provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN))
+          .rejects.toThrow(/ProgramBlueprintError: no program_blueprints row with id/);
+        // And it did NOT quietly use the older one.
+        expect(await count(
+          `SELECT count(*)::text AS n FROM projects WHERE id = $1`, [plan().project_id],
+        )).toBe(0);
+      } finally {
+        await sequelize.query(
+          `INSERT INTO program_blueprints (id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          { bind: [PROGRAM, PROGRAM_NAME] });
+      }
+    });
+
+    it('REFUSES when the id has been reused for a different programme', async () => {
+      await sequelize.query(`UPDATE program_blueprints SET name = $2 WHERE id = $1`,
+        { bind: [PROGRAM, 'Something Else Entirely'] });
+      try {
+        await expect(provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN))
+          .rejects.toThrow(/is named 'Something Else Entirely', expected/);
+      } finally {
+        await sequelize.query(`UPDATE program_blueprints SET name = $2 WHERE id = $1`,
+          { bind: [PROGRAM, PROGRAM_NAME] });
+      }
+    });
   });
 });
