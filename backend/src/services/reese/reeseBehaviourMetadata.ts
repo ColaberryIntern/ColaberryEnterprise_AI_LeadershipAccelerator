@@ -15,7 +15,10 @@ export type ReeseBehaviourKey =
   | 'welcome_dms'
   | 'student_support_supersession_resolver'
   | 'presence_heartbeat'
-  | 'health_assessment';
+  | 'health_assessment'
+  // Eighth, added 2026-10-09. See reeseBehaviourInventory.ts's header: this cron
+  // was live and DMing students while absent from every switch map.
+  | 'ticket_follow_up';
 
 export const BEHAVIOUR_KEY_BY_NAME: Record<string, ReeseBehaviourKey> = {
   'Reactive DM reply': 'reactive_dm_reply',
@@ -25,6 +28,7 @@ export const BEHAVIOUR_KEY_BY_NAME: Record<string, ReeseBehaviourKey> = {
   'Student support supersession resolver': 'student_support_supersession_resolver',
   'Presence heartbeat': 'presence_heartbeat',
   'Health assessment': 'health_assessment',
+  'Ticket follow-up': 'ticket_follow_up',
 };
 
 // R9 — Ali, live, on the Employee facts card: "I feel like the Employee
@@ -42,6 +46,12 @@ export const BEHAVIOUR_TOOLS: Record<ReeseBehaviourKey, string[]> = {
   welcome_dms: ['Welcome DM send'],
   student_support_supersession_resolver: ['Student-support ticket auto-close'],
   presence_heartbeat: [],
+  // `[]` means TOOL_INVENTORY.md has no entry for it yet, per this map's own
+  // convention -- NOT that the behaviour touches nothing. It demonstrably calls
+  // initiateDm(). Inventing a tool name here to look complete is exactly what
+  // the "never invented" rule above forbids; the honest state is that the tool
+  // inventory has not caught up with the 2026-10-02 ship.
+  ticket_follow_up: [],
 };
 
 export const CRON_REGISTRY_NAMES: Record<string, string> = {
@@ -49,6 +59,7 @@ export const CRON_REGISTRY_NAMES: Record<string, string> = {
   'Outreach follow-ups': 'ReeseOutreachFollowUps',
   'Presence heartbeat': 'ReesePresenceHeartbeat',
   'Student support supersession resolver': 'ReeseStudentSupportSupersessionResolver',
+  'Ticket follow-up': 'ReeseTicketFollowUpSweep',
 };
 
 /** R9 follow-up (2026-09-18) — reverse of CRON_REGISTRY_NAMES, keyed by the

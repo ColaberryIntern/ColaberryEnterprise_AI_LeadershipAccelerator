@@ -166,6 +166,7 @@ import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValu
 import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
 import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
+import { ensureAgentDomainProjectSchema } from './db/ensureAgentDomainProjectSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3067,6 +3068,35 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
+  // Agent Factory - which AI employee domain a project belongs to, plus build authorizations for
+  // one. Two tables, zero ALTERs, additive and idempotent; its assert is deliberately not optional.
+  // Guarded, because this is the ONLY one of 106 `ensure*` files whose post-condition throws, and
+  // it is awaited before `app.listen`. `start()` is called bare with no process-level rejection
+  // handler, so an uncontained throw here would stop the backend binding its port -- the rule this
+  // file states twice within 250 lines of here, and wraps two neighbouring calls for. A backend
+  // that will not boot is worse than one that boots carrying a named schema problem, and the
+  // problem IS named: the module logs a structured SchemaInvariantViolation with its own remedy
+  // before throwing, and the integration suite still proves the assert fails loudly when the
+  // schema is actually wrong.
+  try {
+    await ensureAgentDomainProjectSchema();
+  } catch (err: any) {
+    // DERIVED, not asserted. This logged a literal `SchemaInvariantViolation` for any caught
+    // error, so a connection failure inside the introspection query -- a likelier boot failure
+    // than a DDL problem -- would have been labelled as a schema violation it is not.
+    const error_class = err instanceof Error ? err.constructor.name : 'UnknownError';
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'agent_domain_schema_boot_failed',
+      error_class,
+      outcome: 'failure',
+      message: err?.message ?? String(err),
+      impact: 'The ten agent-domain projects cannot be provisioned until this is fixed.',
+      remedy: 'Read the agent_domain_schema_statement_failed warnings above for the first DDL error.',
+    }));
+  }
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

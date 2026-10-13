@@ -5,9 +5,26 @@
  * hand-edited, so the doc cannot silently drift from what the code actually
  * does — the R2 verification test diffs the two.
  *
- * The 7 behaviours are exactly plan.md's own R2 spec: reactive reply,
+ * The original 7 behaviours are exactly plan.md's own R2 spec: reactive reply,
  * outreach sweep, follow-ups, welcome DMs, supersession resolver, presence
  * heartbeat, health assessment.
+ *
+ * AN EIGHTH WAS ADDED 2026-10-09, and the reason matters more than the entry.
+ * `ReeseTicketFollowUpSweep` shipped 2026-10-02 as a live, `enabled: true`,
+ * daily cron that calls `initiateDm()` against real students -- and it was
+ * absent from this inventory, from `REESE_BEHAVIOUR_KEYS` and from
+ * `SIBLING_REGISTRY_NAME`. Its individual sends ARE authorization-gated
+ * (`authorizeTicketDispatch`, with a real `held_for_approval` branch), so it
+ * was never unguarded. What it had no path to was a MANAGER KILL SWITCH: the
+ * Employee facts card exists so a manager can turn a behaviour off, and this
+ * behaviour could not be turned off from it. `ROLE_CHARTER_v2.md:35` ("no
+ * behaviour outside the 7") was true of the charter and false of production.
+ *
+ * Found by the Agent Factory capability discovery (run
+ * 20261007-school-agent-factory), which is the first sweep that enumerated
+ * Reese's live crons rather than reading this list. A guard test now asserts
+ * every enabled Reese cron that can DM a student has a switch key, so a ninth
+ * cannot appear silently.
  */
 export interface ReeseBehaviourRow {
   name: string;
@@ -80,5 +97,28 @@ export const REESE_BEHAVIOURS: ReeseBehaviourRow[] = [
     killSwitch: 'No independent switch: it only ever fires after a reply is sent, so it inherits the reactive-reply switch above.',
     population: 'The student who just received a reply, and only when their last assessment is missing or past its own reassessment_date.',
     note: 'Below evidenceAssembly.ts:13 MINIMUM_KNOWN_CATEGORIES (3), it returns insufficient_evidence with no LLM call rather than guessing.',
+  },
+  {
+    name: 'Ticket follow-up',
+    controller:
+      'reeseTicketFollowUpService.ts processDueReeseTicketFollowUps(), registered as '
+      + "'ReeseTicketFollowUpSweep' (agentRegistrySeed.ts:2712-2726), cron 0 18 * * *, wired at "
+      + 'schedulerService.ts:2017.',
+    killSwitch:
+      "That registry row's enabled flag via schedulerService.ts's instrumentCronJob() "
+      + '(schedulerService.ts:2017) -- and, since 2026-10-09, writable by a manager through the '
+      + "`ticket_follow_up` behaviour switch. Before that it had no manager-facing kill switch at "
+      + 'all.',
+    population:
+      'Open `student_support` tickets (reactive DM conversations) where Reese spoke last and the '
+      + 'student has been quiet for QUIET_THRESHOLD_DAYS (3) or more days, computed fresh from the '
+      + "conversation rather than from the ticket's never-updated due_date. MAX_ATTEMPTS is 3, "
+      + 'after which it escalates to human review and never sends a 4th message. Its own '
+      + 'DAILY_SEND_CAP of 10 is deliberately disjoint from the autonomous-outreach cap.',
+    note:
+      'Added to this inventory 2026-10-09. Shipped 2026-10-02 enabled and sending, but absent from '
+      + 'the documented 7 and from both switch maps, so no manager could disable it. Individual '
+      + 'sends were always authorization-gated and could be held; the missing control was the kill '
+      + 'switch, not the authorization.',
   },
 ];
