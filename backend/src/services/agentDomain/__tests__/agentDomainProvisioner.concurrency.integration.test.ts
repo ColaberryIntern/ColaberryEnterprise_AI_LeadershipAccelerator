@@ -91,8 +91,20 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
   }
 
   async function wipe(projectId: string): Promise<void> {
-    // Children cascade on projects(id); the delete is scoped to the one derived id this suite owns.
-    await sequelize.query('DELETE FROM projects WHERE id = $1', { bind: [projectId] });
+    // Children are deleted EXPLICITLY, in dependency order, because the tables now come from
+    // their models and the models' foreign keys do not declare ON DELETE CASCADE -- the
+    // hand-rolled stand-ins they replaced did, so a bare `DELETE FROM projects` used to work and
+    // now trips the constraint. Scoped to the one derived id this suite owns.
+    for (const sql of [
+      'DELETE FROM student_tasks WHERE project_id = $1',
+      'DELETE FROM student_task_lists WHERE project_id = $1',
+      'DELETE FROM agent_domain_projects WHERE student_project_id = $1',
+      'DELETE FROM project_lifecycle_states WHERE student_project_id = $1',
+      'DELETE FROM projects WHERE id = $1',
+    ]) {
+      // eslint-disable-next-line no-await-in-loop
+      await sequelize.query(sql, { bind: [projectId] });
+    }
   }
 
   beforeAll(async () => {
@@ -113,27 +125,23 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
       id UUID PRIMARY KEY, email TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS admin_users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email TEXT UNIQUE, role TEXT)`);
-    await sequelize.query(`CREATE TABLE IF NOT EXISTS projects (
-      id UUID PRIMARY KEY,
-      enrollment_id UUID NOT NULL REFERENCES enrollments(id),
-      program_id UUID NOT NULL REFERENCES program_blueprints(id),
-      name TEXT, project_stage TEXT NOT NULL DEFAULT 'discovery',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
-    await sequelize.query(`CREATE TABLE IF NOT EXISTS student_task_lists (
-      id UUID PRIMARY KEY,
-      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      enrollment_id UUID NOT NULL REFERENCES enrollments(id),
-      cluster VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL,
-      status TEXT NOT NULL DEFAULT 'not_started', position INTEGER NOT NULL DEFAULT 0,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
-    await sequelize.query(`CREATE TABLE IF NOT EXISTS student_tasks (
-      id UUID PRIMARY KEY,
-      task_list_id UUID NOT NULL REFERENCES student_task_lists(id) ON DELETE CASCADE,
-      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      title VARCHAR(500) NOT NULL, description TEXT, narrative TEXT, build TEXT,
-      status TEXT NOT NULL DEFAULT 'not_started', position INTEGER NOT NULL DEFAULT 0,
-      story_id VARCHAR(60), release_key VARCHAR(60),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+    // `projects`, `student_task_lists` and `student_tasks` are created FROM THEIR MODELS.
+    //
+    // They used to be hand-rolled CREATE TABLEs here, which was fine while the provisioner wrote
+    // them with raw SQL naming its own columns. It now goes through `Project.findOrCreate`, whose
+    // SELECT lists every attribute the model declares -- so a six-column stand-in cannot serve it,
+    // and a hand-written table would drift from the model silently. `sync()` makes the table BE
+    // the model's table.
+    // `student_tasks.requirement_map_id` references this; it is not a table this feature owns, so
+    // it is a stand-in like the others rather than a model sync.
+    await sequelize.query(`CREATE TABLE IF NOT EXISTS requirements_maps (id UUID PRIMARY KEY)`);
+
+    const { default: ProjectModel } = await import('../../../models/Project');
+    const { default: StudentTaskListModel } = await import('../../../models/StudentTaskList');
+    const { default: StudentTaskModel } = await import('../../../models/StudentTask');
+    await ProjectModel.sync();
+    await StudentTaskListModel.sync();
+    await StudentTaskModel.sync();
 
     await sequelize.query(
       `INSERT INTO tenants (id, slug) VALUES ($1, 'colaberry') ON CONFLICT DO NOTHING`, { bind: [TENANT] });
@@ -245,17 +253,21 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
       // Proves the idempotency above comes from the derived primary key, not from the code's shape.
       const p = plan();
       await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
-      const randomId = await sequelize.query<{ id: string }>(
-        `INSERT INTO projects (id, enrollment_id, program_id, name)
-         VALUES (gen_random_uuid(), $1, $2, $3) RETURNING id`,
-        { bind: [ENROLLMENT, PROGRAM, DOMAIN], type: QueryTypes.SELECT },
-      );
-      expect(randomId).toHaveLength(1);
-      expect(randomId[0].id).not.toBe(p.project_id);
+      // Through the MODEL, like the code under test. A raw insert here used to work against the
+      // hand-rolled stand-in and does not against the model's own table -- and a control that
+      // takes a different path from the thing it controls for is weaker anyway.
+      const { default: ProjectModel } = await import('../../../models/Project');
+      const random = await ProjectModel.create({
+        enrollment_id: ENROLLMENT, program_id: PROGRAM, name: DOMAIN,
+      } as never, { lifecycleEntryPoint: 'test.non_derived_control' } as never);
+      const randomId = String((random as unknown as { id: string }).id);
+      expect(randomId).not.toBe(p.project_id);
       const total = await count(
         `SELECT count(*)::text AS n FROM projects WHERE name = $1`, [DOMAIN]);
       expect(total).toBe(2); // the derived one plus the random one
-      await sequelize.query(`DELETE FROM projects WHERE id = $1`, { bind: [randomId[0].id] });
+      await sequelize.query(`DELETE FROM project_lifecycle_states WHERE student_project_id = $1`,
+      { bind: [randomId] });
+    await sequelize.query(`DELETE FROM projects WHERE id = $1`, { bind: [randomId] });
     });
   });
 
@@ -307,12 +319,11 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
         // violates THAT index instead of the one under test. The first attempt at this control did
         // exactly that: it failed for the wrong reason, which would have read as "the index works"
         // while proving nothing at all about `uq_agent_domain_key`.
-        const second = await sequelize.query<{ id: string }>(
-          `INSERT INTO projects (id, enrollment_id, program_id, name)
-           VALUES (gen_random_uuid(), $1, $2, 'control-second') RETURNING id`,
-          { bind: [ENROLLMENT, PROGRAM], type: QueryTypes.SELECT },
-        );
-        secondProject = second[0].id;
+        const { default: ProjectModel } = await import('../../../models/Project');
+        const second = await ProjectModel.create({
+          enrollment_id: ENROLLMENT, program_id: PROGRAM, name: 'control-second',
+        } as never, { lifecycleEntryPoint: 'test.index_control' } as never);
+        secondProject = String((second as unknown as { id: string }).id);
 
         await sequelize.query(
           `INSERT INTO agent_domain_projects
@@ -326,6 +337,8 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
       } finally {
         await sequelize.query(`DELETE FROM agent_domain_projects WHERE provisioned_by = 'control'`);
         if (secondProject) {
+          await sequelize.query(`DELETE FROM project_lifecycle_states WHERE student_project_id = $1`,
+            { bind: [secondProject] });
           await sequelize.query(`DELETE FROM projects WHERE id = $1`, { bind: [secondProject] });
         }
         await sequelize.query(
@@ -459,6 +472,96 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
         );
       }
       await expect(assertSchema()).resolves.toBeUndefined();
+    });
+  });
+
+  // ─────────────────────── the hook, and the logging ───────────────────────
+
+  /**
+   * The lifecycle row is written by the MODEL HOOK, not by the provisioner.
+   *
+   * The provisioner used to write `project_lifecycle_states` by hand after a raw
+   * `INSERT INTO projects`. That fired neither of `Project`'s hooks and built the parallel path
+   * upstream's LC-01 work exists to eliminate — a hand-maintained list of creation sites was
+   * measured wrong within a week, and this repo had already lost ledger events on ~90% of 16,070
+   * production tickets to the same bypass.
+   *
+   * These tests prove the hook actually fires, which no mock can.
+   */
+  describe('the lifecycle hook, firing for real', () => {
+    const plan = () => planProvision(DOMAIN);
+
+    beforeEach(async () => { await wipe(plan().project_id); });
+
+    it('writes the lifecycle row ITSELF, at discovery, with this provisioner as the entry point', async () => {
+      const r = await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      const rows = await sequelize.query<{ stage: string; entry_point: string; tenant_id: string }>(
+        `SELECT stage, entry_point, tenant_id FROM project_lifecycle_states
+          WHERE student_project_id = $1`,
+        { bind: [r.project_id], type: QueryTypes.SELECT },
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].stage).toBe('discovery');
+      expect(rows[0].entry_point).toBe('agent_domain_factory_provisioner');
+      expect(rows[0].tenant_id).toBe(TENANT);
+      // Counted, not assumed: the provisioner reads the row back rather than claiming the hook ran.
+      expect(r.inserted.project_lifecycle_states).toBe(1);
+    });
+
+    it('exactly ONE lifecycle row, even though two paths could have written it', async () => {
+      await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      const n = await count(
+        `SELECT count(*)::text AS n FROM project_lifecycle_states WHERE student_project_id = $1`,
+        [plan().project_id],
+      );
+      expect(n).toBe(1);
+    });
+
+    it('a re-run does not fire the hook again', async () => {
+      await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      const second = await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      // `findOrCreate` fires afterCreate only when it creates, so the second run inserts nothing.
+      expect(second.inserted.projects).toBe(0);
+      expect(await count(
+        `SELECT count(*)::text AS n FROM project_lifecycle_states WHERE student_project_id = $1`,
+        [plan().project_id],
+      )).toBe(1);
+    });
+
+    it('emits a structured log line carrying every field the schema requires', async () => {
+      const lines: string[] = [];
+      const spy = jest.spyOn(console, 'log').mockImplementation((s: unknown) => { lines.push(String(s)); });
+      try {
+        await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY, correlationId: 'trace-xyz' }, DOMAIN);
+      } finally {
+        spy.mockRestore();
+      }
+      const mine = lines
+        .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+        .filter((o): o is Record<string, unknown> => !!o && o.event === 'agent_domain_provisioned');
+      expect(mine).toHaveLength(1);
+      expect(Object.keys(mine[0])).toEqual(expect.arrayContaining([
+        'timestamp', 'level', 'service', 'event', 'correlation_id', 'duration_ms', 'outcome', 'context',
+      ]));
+      expect(mine[0].correlation_id).toBe('trace-xyz');
+      expect(mine[0].outcome).toBe('success');
+    });
+
+    it('a re-run reports `partial`, not `success`, because it wrote nothing', async () => {
+      // The distinction the dead `? 'success' : 'success'` ternary was standing in for.
+      await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      const lines: string[] = [];
+      const spy = jest.spyOn(console, 'log').mockImplementation((s: unknown) => { lines.push(String(s)); });
+      try {
+        await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      } finally {
+        spy.mockRestore();
+      }
+      const mine = lines
+        .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+        .filter((o): o is Record<string, unknown> => !!o && o.event === 'agent_domain_provisioned');
+      expect(mine).toHaveLength(1);
+      expect(mine[0].outcome).toBe('partial');
     });
   });
 

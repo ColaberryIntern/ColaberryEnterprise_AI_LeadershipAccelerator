@@ -60,7 +60,17 @@ export const PROVISIONER_WRITE_SET: ReadonlyArray<string> = Object.freeze([
   'student_tasks',
 ]);
 
-/** Of the declared six, the five this phase actually writes — and why the sixth is empty. */
+/**
+ * Of the declared six, the five this phase actually writes — and why the sixth is empty.
+ *
+ * `project_lifecycle_states` is in this list, but the provisioner does NOT write it directly: it
+ * is written by `studentProjectLifecycleHook` inside the provisioner's own transaction, when
+ * `Project.findOrCreate` creates the project. Upstream's LC-01 tripwire forbids a raw insert into
+ * `projects` for exactly that reason — a raw insert fires neither the tenant hook nor the
+ * lifecycle hook, and a parallel hand-written lifecycle row is the bypass the hook exists to stop.
+ * The table stays in the list because a row lands in it as a direct consequence of this
+ * transaction, and the integration suite reads it back rather than assuming the hook ran.
+ */
 export const TABLES_WRITTEN_THIS_PHASE: ReadonlyArray<string> = Object.freeze([
   'projects',
   'agent_domain_projects',

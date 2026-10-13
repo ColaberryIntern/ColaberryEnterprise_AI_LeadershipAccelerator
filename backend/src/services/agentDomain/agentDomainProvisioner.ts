@@ -41,6 +41,7 @@
 
 import { randomUUID } from 'crypto';
 import { QueryTypes, type Sequelize, type Transaction } from 'sequelize';
+import Project from '../../models/Project';
 import {
   FORBIDDEN_STAGES,
   PERMITTED_BUILDER_STATES,
@@ -128,6 +129,14 @@ async function resolveProgramId(sequelize: Sequelize, tx: Transaction): Promise<
   return rows[0].id;
 }
 
+/** A scalar count, for reading back what a hook wrote rather than assuming it. */
+async function countRows(
+  sequelize: Sequelize, tx: Transaction, sql: string, bind: unknown[],
+): Promise<number> {
+  const rows = await sequelize.query<{ n: string }>(sql, { bind, type: QueryTypes.SELECT, transaction: tx });
+  return Number(rows[0]?.n ?? 0);
+}
+
 /** Rows actually inserted by one statement, counted from RETURNING. */
 async function insertedCount(
   sequelize: Sequelize, tx: Transaction, sql: string, bind: unknown[],
@@ -137,9 +146,10 @@ async function insertedCount(
 }
 
 async function provisionOne(
-  ctx: ProvisionContext, plan: ProvisionPlan, tx: Transaction,
+  ctx: ProvisionContext, plan: ProvisionPlan, tx: Transaction, correlationId: string,
 ): Promise<DomainProvisionResult> {
   const { sequelize } = ctx;
+  const started = Date.now();
 
   // Runtime guard, not only a test: a stage outside the permitted one never reaches the database.
   if (plan.stage !== PROVISION_STAGE || FORBIDDEN_STAGES.has(plan.stage)) {
@@ -157,13 +167,36 @@ async function provisionOne(
 
   const inserted: Record<string, number> = {};
 
-  inserted.projects = await insertedCount(sequelize, tx,
-    `INSERT INTO projects (id, enrollment_id, program_id, name, project_stage, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, 'discovery', now(), now())
-     ON CONFLICT (id) DO NOTHING
-     RETURNING id`,
-    [plan.project_id, enrollmentId, programId, plan.domain_key],
-  );
+  // THROUGH THE MODEL, not raw SQL. `Project` carries two hooks that a raw INSERT fires neither
+  // of: `beforeCreate` resolves the tenant, `afterCreate` registers the lifecycle. Upstream's
+  // LC-01 work added a tripwire forbidding a raw insert here, and the reasoning is not a nit -- a
+  // hand-maintained list of creation chokepoints was measured wrong within a week, and this repo
+  // had already lost ledger events on ~90% of 16,070 production tickets to the same bypass.
+  //
+  // `findOrCreate` rather than `create`: the id is derived, so a re-run would otherwise raise a
+  // unique violation. It fires `afterCreate` ONLY when it actually creates, which is what keeps
+  // the second run a no-op -- `studentProjectLifecycleHook`'s own docblock says so.
+  //
+  // `tenant_id` is passed explicitly even though `beforeCreate` would resolve it: this function
+  // already resolved the tenant by slug and refuses when it is ambiguous, and the hook honours an
+  // id that is already set (`if (instance.tenant_id) return`).
+  const [, projectCreated] = await Project.findOrCreate({
+    where: { id: plan.project_id },
+    defaults: {
+      id: plan.project_id,
+      enrollment_id: enrollmentId,
+      program_id: programId,
+      name: plan.domain_key,
+      project_stage: PROVISION_STAGE,
+      tenant_id: tenantId,
+    } as never,
+    transaction: tx,
+    // The hook reads this and records it as the lifecycle's `entry_point`, which is how
+    // `discovery`'s own prerequisite ("project registered against a tenant; entry point
+    // recorded") is satisfied. Cast because the option is an extension Sequelize does not type.
+    lifecycleEntryPoint: plan.entry_point,
+  } as never);
+  inserted.projects = projectCreated ? 1 : 0;
 
   inserted.agent_domain_projects = await insertedCount(sequelize, tx,
     `INSERT INTO agent_domain_projects
@@ -176,14 +209,23 @@ async function provisionOne(
       plan.manager_identity_id, plan.intended_builder, plan.intended_builder_state, ctx.provisionedBy],
   );
 
-  inserted.project_lifecycle_states = await insertedCount(sequelize, tx,
-    `INSERT INTO project_lifecycle_states
-       (tenant_id, student_project_id, stage, entry_point, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, now(), now())
-     ON CONFLICT DO NOTHING
-     RETURNING id`,
-    [tenantId, plan.project_id, plan.stage, plan.entry_point],
+  // NOT written here. `studentProjectLifecycleHook` wrote this row inside this transaction when
+  // `findOrCreate` created the project above, at `INITIAL_STAGE` ('discovery' -- the same stage
+  // this provisioner declares) with `entry_point` set to what was passed. Writing it by hand as
+  // well would be the parallel path the hook exists to eliminate, and would double-count.
+  //
+  // The count is READ BACK rather than assumed, because "the hook did it" is exactly the kind of
+  // claim this run has been caught making without evidence.
+  // READ BACK, then scoped to THIS run. The count query proves the hook actually wrote a row --
+  // a silent hook failure shows up as 0 rather than as an assumption -- but `inserted` means
+  // "written by this run" for every other table, and reporting an existing row as an insert broke
+  // `already_present` on a re-run. So the read-back is the evidence and `projectCreated` is the
+  // scope.
+  const lifecycleRows = await countRows(sequelize, tx,
+    `SELECT count(*)::text AS n FROM project_lifecycle_states WHERE student_project_id = $1`,
+    [plan.project_id],
   );
+  inserted.project_lifecycle_states = projectCreated ? lifecycleRows : 0;
 
   let releases = 0;
   for (const r of plan.releases) {
@@ -223,13 +265,39 @@ async function provisionOne(
   inserted.agent_domain_build_authorizations = 0;
 
   const total = Object.values(inserted).reduce((a, b) => a + b, 0);
-  return {
+  const result: DomainProvisionResult = {
     domain_key: plan.domain_key,
     project_id: plan.project_id,
     anchor_id: plan.anchor_id,
     inserted,
     already_present: total === 0,
   };
+
+  // Logged HERE, not in the loop that calls this. It used to live in `provisionAllDomains`, so a
+  // single-domain `provisionDomain` call wrote roughly 45 rows and emitted nothing -- the same
+  // observability gap one level down, attached to the loop instead of to the unit of work.
+  //
+  // `already_present` is a re-run that wrote nothing, which is a DIFFERENT outcome from a run that
+  // created the project. This was `? 'success' : 'success'` -- a conditional that could not
+  // condition, in the one field CLAUDE.md constrains to success|failure|partial.
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    service: 'backend',
+    event: 'agent_domain_provisioned',
+    correlation_id: correlationId,
+    duration_ms: Date.now() - started,
+    outcome: result.already_present ? 'partial' : 'success',
+    context: {
+      domain_key: plan.domain_key,
+      project_id: result.project_id,
+      already_present: result.already_present,
+      inserted,
+    },
+  }));
+
+  return result;
 }
 
 /** One domain, one transaction. A failure rolls that domain back whole. */
@@ -237,7 +305,8 @@ export async function provisionDomain(
   ctx: ProvisionContext, domainKey: string,
 ): Promise<DomainProvisionResult> {
   const plan = planProvision(domainKey);
-  return ctx.sequelize.transaction((tx) => provisionOne(ctx, plan, tx));
+  const correlationId = ctx.correlationId ?? randomUUID();
+  return ctx.sequelize.transaction((tx) => provisionOne(ctx, plan, tx, correlationId));
 }
 
 /**
@@ -256,30 +325,10 @@ export async function provisionAllDomains(ctx: ProvisionContext): Promise<Provis
 
   for (const plan of planAllProvisions()) {
     try {
-      const started = Date.now();
       // eslint-disable-next-line no-await-in-loop
-      const result = await ctx.sequelize.transaction((tx) => provisionOne(ctx, plan, tx));
-      provisioned.push(result);
-      // eslint-disable-next-line no-console
-      console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        service: 'backend',
-        event: 'agent_domain_provisioned',
-        correlation_id,
-        duration_ms: Date.now() - started,
-        // `already_present` is a re-run that wrote nothing, which is a DIFFERENT outcome
-        // from a run that created the project. This was `? 'success' : 'success'` -- a
-        // conditional that could not condition, shipped as a placeholder for a distinction
-        // never made, in the one field CLAUDE.md constrains to success|failure|partial.
-        outcome: result.already_present ? 'partial' : 'success',
-        context: {
-          domain_key: plan.domain_key,
-          project_id: result.project_id,
-          already_present: result.already_present,
-          inserted: result.inserted,
-        },
-      }));
+      provisioned.push(
+        await ctx.sequelize.transaction((tx) => provisionOne(ctx, plan, tx, correlation_id)),
+      );
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       // Derived BEFORE the log line, so the line and the `failed` record cannot disagree

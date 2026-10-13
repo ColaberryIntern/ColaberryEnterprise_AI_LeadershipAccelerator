@@ -64,8 +64,22 @@ describe('the provisioner writes only the declared tables', () => {
     expect(undeclared).toEqual([]);
   });
 
-  it('it writes exactly the five tables this phase declares, and no more', () => {
-    expect(tablesWritten(code)).toEqual([...TABLES_WRITTEN_THIS_PHASE].sort());
+  it('every table it writes with SQL is declared, and the two it does not are explained', () => {
+    // THREE of the five declared tables are written with SQL here. The other two are not written
+    // by this module at all:
+    //   - `projects` goes through `Project.findOrCreate`, because a raw insert fires neither of
+    //     the model's hooks and upstream's LC-01 tripwire forbids it.
+    //   - `project_lifecycle_states` is written by `studentProjectLifecycleHook` INSIDE this
+    //     transaction, as a consequence of that create. The provisioner reads the row back rather
+    //     than claiming the hook ran.
+    const written = tablesWritten(code);
+    expect(written).toEqual(['agent_domain_projects', 'student_task_lists', 'student_tasks']);
+    for (const t of written) expect(TABLES_WRITTEN_THIS_PHASE).toContain(t);
+    // The model path is asserted, so "it writes projects somehow" cannot silently become a raw
+    // insert again -- which is the regression the tripwire upstream would also catch.
+    expect(code).toMatch(/Project\.findOrCreate\(/);
+    expect(code).not.toMatch(/INSERT INTO projects/i);
+    expect(code).not.toMatch(/INSERT INTO project_lifecycle_states/i);
   });
 
   it('POSITIVE CONTROL: an INSERT into a seventh table is detected', () => {
@@ -211,10 +225,14 @@ describe('every id is derived, so a re-run cannot duplicate anything', () => {
     }
   });
 
-  it('every insert carries ON CONFLICT DO NOTHING and RETURNING', () => {
+  it('every raw insert carries ON CONFLICT DO NOTHING and RETURNING', () => {
+    // THREE now, not five: `projects` moved to `Project.findOrCreate` and
+    // `project_lifecycle_states` moved to the model hook. `findOrCreate` supplies the same
+    // property by a different mechanism -- it does not insert when the row is already there --
+    // and the real-Postgres suite proves the re-run writes nothing either way.
     const code = codeOf(EXECUTOR);
     const inserts = [...code.matchAll(/INSERT INTO[\s\S]*?RETURNING id/gi)].map((m) => m[0]);
-    expect(inserts.length).toBe(5);
+    expect(inserts.length).toBe(3);
     for (const i of inserts) expect(i).toMatch(/ON CONFLICT[\s\S]*?DO NOTHING/i);
   });
 
@@ -323,98 +341,42 @@ describe('the plan covers all ten domains completely', () => {
 
 
 /**
- * The structured logging, which had ZERO coverage.
+ * The structured logging. The behavioural assertions for it live in the REAL-POSTGRES suite
+ * (`agentDomainProvisioner.concurrency.integration.test.ts`), not here.
  *
- * That is why two defects in thirty lines went unnoticed: the failure line carried `outcome:
- * "failure"` and no `error_class` while the very next statement computed one, and the success line
- * read `outcome: result.already_present ? 'success' : 'success'` -- a conditional that could not
- * condition, shipped as a placeholder for a distinction never made.
+ * They were originally here, driven by a stubbed `sequelize` whose `transaction` simply called the
+ * callback. That worked while the provisioner used raw SQL. It cannot work now that projects are
+ * created through `Project.findOrCreate`, which needs a real model and a real connection — and
+ * mocking the model to make them pass again would prove less than they did, because the thing
+ * worth proving is that the lifecycle HOOK fires and writes its row, which only a database shows.
+ *
+ * What stays here is the one check that needs no database.
  */
 describe('the provisioner logs what a responder needs', () => {
-  const logs: string[] = [];
-  const errs: string[] = [];
-  let logSpy: jest.SpyInstance;
-  let errSpy: jest.SpyInstance;
-
-  beforeEach(() => {
-    logs.length = 0;
-    errs.length = 0;
-    logSpy = jest.spyOn(console, 'log').mockImplementation((s: unknown) => { logs.push(String(s)); });
-    errSpy = jest.spyOn(console, 'error').mockImplementation((s: unknown) => { errs.push(String(s)); });
-  });
-  afterEach(() => {
-    logSpy.mockRestore();
-    errSpy.mockRestore();
-  });
-
-  /** A sequelize stand-in whose transaction either succeeds trivially or throws. */
-  function fakeSequelize(mode: 'ok' | 'throw') {
-    return {
-      transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
-        if (mode === 'throw') throw new TypeError('probe boom');
-        // Resolve the three lookups and every insert as "one row", so provisionOne completes.
-        return fn({});
-      },
-      query: async () => [{ id: '00000000-0000-0000-0000-000000000001' }],
-    } as never;
-  }
-
-  it('one structured success line per domain, all sharing ONE correlation id', async () => {
-    const { provisionAllDomains } = await import('../agentDomainProvisioner');
-    await provisionAllDomains({ sequelize: fakeSequelize('ok'), provisionedBy: 'test' });
-
-    const parsed = logs
-      .map((l) => { try { return JSON.parse(l); } catch { return null; } })
-      .filter((o): o is Record<string, unknown> => !!o && o.event === 'agent_domain_provisioned');
-    expect(parsed).toHaveLength(10);
-    expect(new Set(parsed.map((p) => p.correlation_id)).size).toBe(1);
-    for (const p of parsed) {
-      // The schema CLAUDE.md's Observability Framework requires.
-      expect(Object.keys(p)).toEqual(expect.arrayContaining([
-        'timestamp', 'level', 'service', 'event', 'correlation_id', 'duration_ms', 'outcome', 'context',
-      ]));
-      expect(typeof p.timestamp).toBe('string');
-      expect(['success', 'partial']).toContain(p.outcome);
-    }
-  });
-
-  it('the failure line carries the error_class it computes, and a timestamp', async () => {
-    const { provisionAllDomains } = await import('../agentDomainProvisioner');
-    const r = await provisionAllDomains({ sequelize: fakeSequelize('throw'), provisionedBy: 'test' });
-
-    const parsed = errs
-      .map((l) => { try { return JSON.parse(l); } catch { return null; } })
-      .filter((o): o is Record<string, unknown> => !!o && o.event === 'agent_domain_provision_failed');
-    expect(parsed).toHaveLength(10);
-    for (const p of parsed) {
-      expect(p.outcome).toBe('failure');
-      // THE FIX. This key was absent while `failed` carried it one statement later.
-      expect(p.error_class).toBe('TypeError');
-      expect(typeof p.timestamp).toBe('string');
-    }
-    // And the log line agrees with the returned record, which is why it is computed once.
-    expect(r.failed.every((f) => f.error_class === 'TypeError')).toBe(true);
-  });
-
-  it('a correlation id can be SUPPLIED, so a run joins an existing trace', async () => {
-    const { provisionAllDomains } = await import('../agentDomainProvisioner');
-    await provisionAllDomains({
-      sequelize: fakeSequelize('ok'), provisionedBy: 'test', correlationId: 'trace-123',
-    });
-    const parsed = logs.map((l) => JSON.parse(l));
-    expect(parsed.every((p) => p.correlation_id === 'trace-123')).toBe(true);
-  });
-
   it('POSITIVE CONTROL: the dead ternary is gone from the source', () => {
-    // `? 'success' : 'success'` could not condition. A grep, because the two branches were
+    // `? 'success' : 'success'` could not condition. A source check, because the two branches were
     // behaviourally identical and no test could have told them apart.
-    // CODE, not prose. The executor's own comment explains the defect and therefore CONTAINS
-    // the dead ternary -- so the first version of this check matched the explanation of the thing
-    // it was looking for, which is the same false positive this run has now hit five times.
+    //
+    // CODE, not prose: the executor's own comment explains the defect and therefore CONTAINS the
+    // dead ternary, so the first version of this matched the explanation of the thing it was
+    // looking for.
     const code = codeOf(EXECUTOR);
     expect(code).not.toMatch(/\?\s*'success'\s*:\s*'success'/);
     expect(code).toMatch(/already_present \? 'partial' : 'success'/);
-    // And the explanation is still there, in the comments, where it belongs.
-    expect(fs.readFileSync(EXECUTOR, 'utf8')).toMatch(/could not condition/);
+    // The explanation lives wherever the emitting code lives -- it moved into `provisionOne`
+    // when the logging did. Asserted on the whole file rather than on a region, because
+    // pinning a region is how this assertion broke.
+    expect(fs.readFileSync(EXECUTOR, 'utf8')).toMatch(/could not\s+\*?\s*\/?\/?\s*condition/);
+  });
+
+  it('the log lines carry the required schema fields, asserted at the source', () => {
+    // A structural companion to the behavioural assertions in the integration suite: the fields
+    // the Observability Framework requires are present in the code that emits them.
+    const code = codeOf(EXECUTOR);
+    for (const field of ['timestamp:', 'correlation_id,', 'duration_ms:', 'outcome:', 'error_class,']) {
+      expect(code).toContain(field);
+    }
+    // And `error_class` is computed BEFORE the line that logs it, so the two cannot disagree.
+    expect(code.indexOf('const error_class')).toBeLessThan(code.indexOf("event: 'agent_domain_provision_failed'"));
   });
 });
