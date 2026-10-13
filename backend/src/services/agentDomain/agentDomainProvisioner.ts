@@ -224,15 +224,20 @@ async function provisionOne(
   } as never);
   inserted.projects = projectCreated ? 1 : 0;
 
+  // `manager_can_reach` and `manager_blocker` were MISSING from this list, so all ten anchors
+  // landed in production with NULL in both. The schema declares them and the plan says the anchor
+  // records them; a column that is always NULL is a column the next person deletes.
   inserted.agent_domain_projects = await insertedCount(sequelize, tx,
     `INSERT INTO agent_domain_projects
        (id, tenant_id, student_project_id, domain_key, agent_id, manager_identity_id,
+        manager_can_reach, manager_blocker,
         intended_builder, intended_builder_state, provisioned_by, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), now())
      ON CONFLICT DO NOTHING
      RETURNING id`,
     [plan.anchor_id, tenantId, plan.project_id, plan.domain_key, plan.agent_id,
-      plan.manager_identity_id, plan.intended_builder, plan.intended_builder_state, ctx.provisionedBy],
+      plan.manager_identity_id, plan.manager_can_reach, plan.manager_blocker,
+      plan.intended_builder, plan.intended_builder_state, ctx.provisionedBy],
   );
 
   // NOT written here. `studentProjectLifecycleHook` wrote this row inside this transaction when
@@ -324,6 +329,52 @@ async function provisionOne(
   }));
 
   return result;
+}
+
+export interface AnchorReconcileResult {
+  readonly domain_key: string;
+  readonly changed: boolean;
+  readonly manager_can_reach: boolean;
+  readonly manager_blocker: string | null;
+}
+
+/**
+ * Bring existing anchor rows in line with the registry's MEASURED reachability.
+ *
+ * An INSERT cannot fix rows that already exist, and folding this into `ON CONFLICT DO UPDATE` is
+ * not an option: the conflict would then RETURN a row, `insertedCount` would report a re-run as an
+ * insert, and `already_present` -- the signal the idempotency tests check -- would stop being true.
+ *
+ * Idempotent by construction: the UPDATE is scoped `WHERE ... IS DISTINCT FROM`, so a second run
+ * changes nothing and says so. `IS DISTINCT FROM` rather than `<>` because the columns are
+ * nullable and `NULL <> false` is NULL, which would match nothing and silently do no work -- the
+ * exact failure this function exists to repair.
+ */
+export async function reconcileAnchorMetadata(
+  ctx: ProvisionContext,
+): Promise<AnchorReconcileResult[]> {
+  const out: AnchorReconcileResult[] = [];
+  for (const plan of planAllProvisions()) {
+    // eslint-disable-next-line no-await-in-loop
+    const rows = await ctx.sequelize.query<{ id: string }>(
+      `UPDATE agent_domain_projects
+          SET manager_can_reach = $2, manager_blocker = $3, updated_at = now()
+        WHERE domain_key = $1
+          AND (manager_can_reach IS DISTINCT FROM $2 OR manager_blocker IS DISTINCT FROM $3)
+        RETURNING id`,
+      {
+        bind: [plan.domain_key, plan.manager_can_reach, plan.manager_blocker],
+        type: QueryTypes.SELECT,
+      },
+    );
+    out.push({
+      domain_key: plan.domain_key,
+      changed: rows.length > 0,
+      manager_can_reach: plan.manager_can_reach,
+      manager_blocker: plan.manager_blocker,
+    });
+  }
+  return out;
 }
 
 /** One domain, one transaction. A failure rolls that domain back whole. */
