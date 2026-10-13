@@ -23,10 +23,7 @@ html{-webkit-text-size-adjust:100%}
    copy to a public path rather than a new dependency. font-display swap keeps the page
    the font arrives; the old stack stays as the fallback and is still what renders if the
    request fails. */
-@font-face{font-family:'Roboto';font-style:normal;font-weight:400 700;font-display:swap;
-  src:url('/fonts/roboto-latin.woff2') format('woff2');
-  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 Roboto,"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 var(--font-body)}
 img{max-width:100%;height:auto;display:block}
 a{color:inherit}
 
@@ -36,7 +33,7 @@ a{color:inherit}
 .band--inverse{background:#1A1A1A;color:#FFFFFF}
 .band--accent{background:var(--accent-deep);color:var(--accent-contrast)}
 .band--cool{background:var(--bg-cool)}
-.band--cool h2{color:var(--accent-3)}
+.band--cool h2{color:var(--accent-3);font-family:var(--font-heading)}
 
 /* A COMPONENT THAT PAINTS ITS OWN LIGHT SURFACE MUST ALSO SET ITS OWN FOREGROUND.
  *
@@ -67,7 +64,7 @@ a{color:inherit}
 .foot-note{color:#B4B4B4;font-size:.85rem;margin:0}
 
 /* ---- type -------------------------------------------------------------- */
-h1{font-size:clamp(2.1rem,5.4vw,3.5rem);line-height:1.07;letter-spacing:-.025em;margin:0 0 1.1rem;text-wrap:balance;font-weight:800}
+h1{font-size:clamp(2.1rem,5.4vw,3.5rem);line-height:1.07;letter-spacing:-.025em;margin:0 0 1.1rem;text-wrap:balance;font-weight:800;font-family:var(--font-heading)}
 h2{font-size:clamp(1.6rem,3.4vw,2.35rem);line-height:1.14;letter-spacing:-.02em;margin:0 0 1rem;text-wrap:balance;font-weight:800}
 p{margin:0 0 1rem}
 /* Small text in the brand colour is darkened toward black for contrast. Colaberry cherry
