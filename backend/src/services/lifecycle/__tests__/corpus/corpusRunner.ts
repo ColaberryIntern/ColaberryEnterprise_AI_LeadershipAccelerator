@@ -18,47 +18,138 @@
  * stage it could not reach would be the same defect wearing a bigger coat — the suite would
  * report a pass over a journey that never happened.
  *
- * So `stagesDriven.length + stagesNotReached.length === CORPUS_STAGES.length` is an invariant a
- * caller asserts, and a stage nobody accounted for is a FAILURE rather than an absence.
+ * ## ATTEMPT 1 SHIPPED THAT EXACT DEFECT, AND THIS IS THE CORRECTION
+ *
+ * The partition above was real, and it was not enough, because `driven` was a CONSTANT. One
+ * boolean — `compositionError === null` — was fanned across all ten composed stages. The
+ * verifier probed it with `declaration.origin: 'model_turn'`, which refuses at `agents` before
+ * the handoff has run, and the runner still reported `effort`, `design` and `complete` as
+ * driven, with `partitionIsTotal` returning **true**. Three mutants — deleting the coverage
+ * rule, nulling `composed`, emptying `effortBases` — all stayed green at 12 of 12.
+ *
+ * So the partition was total over a vocabulary while being false about every member of it. The
+ * correction is to derive each stage's outcome from the composition result rather than to
+ * assert around a constant.
+ *
+ * ## How `driven` is now MEASURED, per stage
+ *
+ * The pipeline has two halves with genuinely different rules, which is why one boolean could
+ * not express either. Both halves are read off `blueprintComposition.ts`:
+ *
+ * 1. **Generation** (`handoff` → `effort`) SHORT-CIRCUITS. `generateBlueprintOnce` returns early
+ *    at the first refusing stage, so stages after it never execute. The refusing stage is named
+ *    in `refusals[].stage`.
+ * 2. **The surface checks** (`workspaces`, `workspace_states`, `controls`, `design`) run
+ *    UNCONDITIONALLY. `composeBlueprint` says so in its own comment — "GENERATION FIRST, AND ITS
+ *    REFUSALS ARE NOT FATAL TO THE SWEEP" — and `surfaceChecks` builds a `StageResult` for all
+ *    four whatever generation did. A reviewer fixing a blueprint gets every blocker at once.
+ *
+ * So a generation stage refusing does NOT make `design` unreached, and reporting it that way
+ * would be a second false claim in the opposite direction. The verifier's probe is itself the
+ * evidence: its output carried refusals at `workspaces` AND `design` while generation had
+ * stopped at `agents`. Those checks ran.
+ *
+ * ## Why `refusals[].stage` and not `draft.stage`
+ *
+ * `draft.stage` is the better-documented signal — "on failure this is the stage that refused,
+ * NOT the next one" — but it is UNREADABLE in exactly the cases that matter:
+ * `composeBlueprint` returns `draft: draft.refusals.length === 0 ? draft : null`. The draft is
+ * nulled on any refusal, so every short-circuit case arrives with `draft === null`.
+ * `refusals[].stage` survives, carries the same fact, and is what the composition result
+ * actually hands a caller.
  *
  * ## What it drives today, and what it does not
  *
- * `composeBlueprint` already orchestrates the generation half (`handoff` through `design`), so
- * this runner calls it rather than re-implementing the pipeline — a second orchestrator would be
- * a second place for the stage vocabulary to drift, which is the duplicate-truth failure this
- * phase has corrected twice already.
+ * `composeBlueprint` already orchestrates the generation half, so this runner calls it rather
+ * than re-implementing the pipeline — a second orchestrator would be a second place for the
+ * stage vocabulary to drift, which is the duplicate-truth failure this phase has corrected
+ * twice already.
  *
- * `approval`, `planning` and `verification` need a database. They are reported as NOT REACHED
- * with that as the stated reason, which is honest and checkable. P7-T1.2 supplies them.
+ * The five `DB_BACKED_STAGES` are reported NOT REACHED with the reason naming the two functions
+ * that genuinely need a database. P7-T1.2 supplies them.
  */
 import {
   composeBlueprint,
   type BlueprintCompositionInput,
   type ComposedBlueprint,
 } from '../../generation/blueprintComposition';
-import { GENERATION_STAGES } from '../../generation/blueprintGeneration';
+import { GENERATION_STAGES, type GenerationStage } from '../../generation/blueprintGeneration';
+import { LIFECYCLE_STAGES, type LifecycleStage } from '../../lifecycleStages';
+import { factoryValidate } from '../../../factory/factoryValidate';
+import type { FactoryProject } from '../../../factory/contracts/factoryContract';
 
 /**
- * Every stage a corpus case can be driven through.
+ * The generation stages that SHORT-CIRCUIT, in execution order.
  *
- * The generation stages are SPREAD from `GENERATION_STAGES` rather than retyped, so this list
- * follows that vocabulary instead of drifting from it. The three appended stages are the ones
- * that live outside the generation module.
+ * SLICED from `GENERATION_STAGES`, never retyped. Measured: `generateBlueprintOnce` returns a
+ * `stage` of only `handoff`, `process`, `allocation`, `agents`, `effort` (and `complete` on
+ * success) — enumerated with
+ * `sed -n '147,300p' blueprintGeneration.ts | grep -oE "stage: '[a-z_]+'" | sort -u`.
  */
-export const CORPUS_STAGES = [
-  ...GENERATION_STAGES,
-  'approval',
-  'planning',
-  'verification',
-] as const;
+export const SHORT_CIRCUIT_STAGES: ReadonlyArray<GenerationStage> =
+  GENERATION_STAGES.slice(0, GENERATION_STAGES.indexOf('effort') + 1);
 
-export type CorpusStage = (typeof CORPUS_STAGES)[number];
+/**
+ * The surface checks, which run whatever generation did.
+ *
+ * Also sliced. `GENERATION_STAGES`' own comment records why these four live in the generation
+ * vocabulary at all: P5-T1.4 added them "for the four checks the generation input could not
+ * reach", deliberately in the one stage list rather than a private one inside
+ * `blueprintComposition.ts`.
+ */
+export const SURFACE_CHECK_STAGES: ReadonlyArray<GenerationStage> = GENERATION_STAGES.slice(
+  GENERATION_STAGES.indexOf('workspaces'),
+  GENERATION_STAGES.indexOf('design') + 1,
+);
+
+/** Generation's terminal success marker. Reached only when no generation stage refused. */
+export const TERMINAL_STAGE: GenerationStage = 'complete';
+
+/**
+ * The stages that need a database, named from the REAL lifecycle vocabulary.
+ *
+ * Attempt 1 appended `'approval'`, `'planning'` and `'verification'` — a THIRD stage vocabulary,
+ * invented. Two of those three strings exist nowhere in the system. The plan's prose names the
+ * journey as "approval → planning → verification"; `LIFECYCLE_STAGES` names the actual stages.
+ * The mapping, stated rather than assumed:
+ *
+ * | The plan's word | The real stage(s)                                   |
+ * |-----------------|-----------------------------------------------------|
+ * | approval        | `awaiting_blueprint_approval`, `blueprint_approved` |
+ * | planning        | `planning`, `plan_ready`                            |
+ * | verification    | `release_review`                                    |
+ *
+ * `LifecycleStage` would make a misspelling a compile error — except **nothing typechecks this
+ * file**: `backend/tsconfig.json` excludes every `__tests__` directory, and ts-jest transpiles with
+ * `isolatedModules`. So the annotation documents intent and `corpusRunner.test.ts` asserts
+ * membership in `LIFECYCLE_STAGES` at RUNTIME, which is the control that actually fires.
+ */
+export const DB_BACKED_STAGES: ReadonlyArray<LifecycleStage> = [
+  'awaiting_blueprint_approval',
+  'blueprint_approved',
+  'planning',
+  'plan_ready',
+  'release_review',
+];
+
+/** Every stage a corpus case can be driven through. */
+export const CORPUS_STAGES: ReadonlyArray<CorpusStage> = [
+  ...GENERATION_STAGES,
+  ...DB_BACKED_STAGES,
+];
+
+export type CorpusStage = GenerationStage | LifecycleStage;
 
 /**
  * The fields a fixture must supply, taken by indexed access from the real input type.
  *
- * `Pick` rather than a hand-written interface: a field added to `BlueprintCompositionInput` that
- * a fixture must provide becomes a compile error here, instead of a fixture silently missing it.
+ * `Pick` rather than a hand-written interface, so the field list cannot drift from
+ * `BlueprintCompositionInput`'s. Attempt 1 claimed a missing field "becomes a compile error
+ * here"; that claim was INERT for the reason given on `DB_BACKED_STAGES` — nothing typechecks
+ * this file. Measured:
+ * `node ../node_modules/typescript/bin/tsc --noEmit --listFilesOnly | grep -ci "lifecycle/__tests__"`
+ * returned **0**. The `Pick` is still right, because it keeps one definition instead of two; it
+ * is simply not a gate.
  */
 export type FixtureFields = Pick<
   BlueprintCompositionInput,
@@ -86,12 +177,61 @@ export interface StageOutcome {
 }
 
 export interface TraceabilityReport {
-  /** Requirement-bearing understanding items, by their stated value. */
-  mustHave: string[];
-  /** Those that reached a task in the composed draft. */
+  /**
+   * Requirement-bearing SOURCE BLOCKS the project declares, by id. The denominator.
+   *
+   * Not the `understanding` items. Attempt 1 used those and matched them to task titles by
+   * their first six significant words, which was crude, and worse, DEAD: it read
+   * `composed.draft.tasks`, and `BlueprintDraft` has no `tasks` field at all — only `ok`,
+   * `stage`, `advanced`, `refusals`, `handoff`, `measures`, `idsByLocator`. `covered` was
+   * therefore `[]` for every input, which is why a mutant replacing the whole computation with
+   * `const covered: string[] = []` changed nothing and stayed green.
+   */
+  requirementBlocks: string[];
+  /** Blocks cited by at least one task. The denominator minus `uncovered`. */
   covered: string[];
-  /** Those that did not. The list that matters. */
+  /**
+   * Blocks no task cites, from the SHIPPED rule — `factoryValidate`'s `SOURCE_COVERAGE`,
+   * documented on `FactoryTask.source_evidence` as "the SOURCE_COVERAGE anchor".
+   */
   uncovered: string[];
+  /**
+   * `SOURCE_COVERAGE` messages whose block id would not parse. MUST be empty.
+   *
+   * The id is read out of the message because `err('SOURCE_COVERAGE', …)` is called without a
+   * `stepId`, so the issue carries no subject field. A parse is fragile, so its failure is
+   * REPORTED rather than swallowed: an unparsed message lands here and the test asserts this
+   * list is empty, which makes a message-format change loud instead of silently emptying
+   * `uncovered`.
+   */
+  unparsedCoverageIssues: string[];
+  /**
+   * What the customer STATED, by dimension. Recorded, NOT joined to the blocks.
+   *
+   * Keyed on `dimension`, measured. The first version filtered on
+   * `classification === 'REQUIREMENT'` and returned ZERO, because that value does not exist: the
+   * only classifications in the fixture tree are `FACT` and `DECISION`, and `req()` builds
+   * `{ dimension: 'requirements', classification: 'FACT' }`. I was filtering on a vocabulary I
+   * had invented.
+   */
+  statedRequirements: string[];
+  /**
+   * Requirement→story coverage: `null`, because it is NOT ASSESSABLE at generation.
+   *
+   * **`null`, never `[]`.** `storyTraceability.ts`'s header states the rule this follows:
+   * returning `[]` "would report 'measured, no gaps' for data nobody measured, which is the gate
+   * bypass `lifecycleEvidence.applyMeasurements` was rewritten to prevent." Stories do not exist
+   * until the planning stage is driven, and planning is DB-backed.
+   *
+   * There is also no id-level path from a stated requirement to a task at this stage, measured:
+   * the handoff mints locators as `` `${dimension}#${ordinal}` `` (`requirements#1`), while
+   * `source_blocks[].locator` is a document locator (`'1.0'`), and the reference fixtures carry
+   * `provenance` as the STRING `'source_document'`, so `provenance?.locator` is undefined.
+   * Different schemes, no join.
+   */
+  storyCoverage: string[] | null;
+  /** Why `storyCoverage` is null. Non-null exactly when `storyCoverage` is null. */
+  storyCoverageReason: string | null;
 }
 
 export interface CorpusRun {
@@ -100,8 +240,10 @@ export interface CorpusRun {
   outcomes: StageOutcome[];
   stagesDriven: CorpusStage[];
   stagesNotReached: Array<{ stage: CorpusStage; reason: string }>;
-  /** `null` when composition refused before producing a draft. */
+  /** `null` when composition refused, per `ComposedBlueprint.draft`'s own contract. */
   composed: ComposedBlueprint | null;
+  /** The generation stage that refused, or `null` when generation ran to `complete`. */
+  generationStoppedAt: GenerationStage | null;
   traceability: TraceabilityReport;
   /** Recorded per fixture, as `reference-fixtures.md` requires. Not summarised. */
   workspaceCount: number;
@@ -109,26 +251,85 @@ export interface CorpusRun {
   effortBases: string[];
 }
 
-/** Which stages `composeBlueprint` is responsible for. Everything else is appended above. */
-const COMPOSED_STAGES: ReadonlySet<string> = new Set(GENERATION_STAGES);
+/**
+ * The reason a `DB_BACKED_STAGES` entry is not reached.
+ *
+ * Attempt 1 said "needs a database", which OVERSTATED the blocker and the verifier caught it:
+ * `prerequisiteGaps`, `evaluateTransition` and `storyTraceability`'s three functions are pure and
+ * DB-free. Only the two named here actually need one.
+ */
+const DB_REASON =
+  'needs a database: `approveBlueprint` writes the approval row and `publishedPlanState` reads '
+  + 'the published plan. The pure parts of this half — `prerequisiteGaps`, `evaluateTransition` '
+  + 'and `storyTraceability` — do NOT need one. P7-T1.2 supplies the DB-backed half; this is not '
+  + 'a silent skip.';
+
+/** The pre-check that refuses BEFORE the handoff runs, so it reaches no earlier stage. */
+const PRE_HANDOFF_REFUSAL = 'DECLARATION_SELF_SUPPLIED';
 
 /**
- * Requirement-bearing understanding items.
+ * Per-stage outcomes for the two composed halves.
  *
- * Keyed on `dimension`, MEASURED rather than assumed. The first version filtered on
- * `classification === 'REQUIREMENT'` and returned ZERO, because that value does not exist:
- * the only classifications in the fixture tree are `FACT` (3 occurrences) and `DECISION` (3),
- * and `req()` builds `{ dimension: 'requirements', classification: 'FACT' }`. I was filtering
- * on a vocabulary I had invented.
- *
- * It was caught because the test asserts `mustHave.length > 0` instead of only checking the
- * partition. An empty requirement list reports "nothing uncovered", which is the shape of
- * bypass this programme keeps finding: absence read as a clean result.
- *
- * Not a keyword rule over the text, deliberately. A keyword rule would classify by vocabulary,
- * and the standing finding is that a keyword rule cannot do a semantic job.
+ * This is the function attempt 1 did not have. Each stage's outcome is derived from the
+ * composition result; nothing is fanned out from a single boolean.
  */
-function mustHaveOf(fields: FixtureFields): string[] {
+function composedOutcomes(composed: ComposedBlueprint): {
+  outcomes: StageOutcome[];
+  stoppedAt: GenerationStage | null;
+} {
+  const refusedStages = new Set(composed.refusals.map((r) => r.stage));
+  // The pre-check lives at `agents` but fires before the handoff, so the stages BEFORE it never
+  // ran either. Detected by its code, which is the only thing that distinguishes it: a normal
+  // `agents` refusal means handoff, process and allocation all passed first.
+  const preHandoff = composed.refusals.some((r) => r.code === PRE_HANDOFF_REFUSAL);
+
+  // Generation short-circuits at the FIRST refusing stage in execution order.
+  const stopIdx = SHORT_CIRCUIT_STAGES.findIndex((s) => refusedStages.has(s));
+  const stoppedAt = stopIdx === -1 ? null : SHORT_CIRCUIT_STAGES[stopIdx];
+
+  const outcomes: StageOutcome[] = [];
+
+  SHORT_CIRCUIT_STAGES.forEach((stage, idx) => {
+    if (preHandoff) {
+      // Only the refusing stage produced a judgement. Everything else is genuinely unreached.
+      outcomes.push(refusedStages.has(stage)
+        ? { stage, driven: true }
+        : {
+          stage,
+          driven: false,
+          reason: `the ${PRE_HANDOFF_REFUSAL} pre-check refused before the handoff ran, so this `
+            + 'stage never executed',
+        });
+      return;
+    }
+    if (stopIdx === -1 || idx <= stopIdx) {
+      // Ran: either generation completed, or this stage is at/before the one that refused.
+      outcomes.push({ stage, driven: true });
+      return;
+    }
+    outcomes.push({
+      stage,
+      driven: false,
+      reason: `generation stopped at '${stoppedAt}', so this stage never executed`,
+    });
+  });
+
+  // The surface checks ran — `composeBlueprint` calls `surfaceChecks` unconditionally.
+  for (const stage of SURFACE_CHECK_STAGES) outcomes.push({ stage, driven: true });
+
+  outcomes.push(stoppedAt === null && !preHandoff
+    ? { stage: TERMINAL_STAGE, driven: true }
+    : {
+      stage: TERMINAL_STAGE,
+      driven: false,
+      reason: `generation refused at '${stoppedAt}', so it never reached its terminal marker`,
+    });
+
+  return { outcomes, stoppedAt };
+}
+
+/** What the customer stated, in the `requirements` dimension. Recorded, not joined. */
+function statedRequirementsOf(fields: FixtureFields): string[] {
   const items = fields.understanding as ReadonlyArray<{ dimension?: string; value?: string }>;
   return items
     .filter((i) => i.dimension === 'requirements')
@@ -136,23 +337,52 @@ function mustHaveOf(fields: FixtureFields): string[] {
     .filter((v) => v.length > 0);
 }
 
-/** Task titles in the composed draft, which is what a requirement has to reach. */
-function taskTitles(composed: ComposedBlueprint | null): string[] {
-  const draft = composed?.draft as { tasks?: ReadonlyArray<{ title?: string }> } | null | undefined;
-  return (draft?.tasks ?? []).map((t) => String(t.title ?? ''));
+/** Strict on purpose: a message that does not match is reported, not dropped. */
+const SOURCE_COVERAGE_MESSAGE = /^requirement block (\S+) is cited by no task$/;
+
+/**
+ * Requirement-block coverage, measured with the SHIPPED rule.
+ *
+ * `factoryValidate` is the instrument, not a reimplementation of it. Its `SOURCE_COVERAGE` loop
+ * is the one place that decides whether a requirement block is cited, and `processValidation.ts`
+ * already spreads `factoryValidate(project)` at the `process` stage — so an uncited requirement
+ * block is a real refusal in the real pipeline, not a corpus-only notion.
+ */
+function requirementCoverage(project: FactoryProject): Pick<
+  TraceabilityReport, 'requirementBlocks' | 'covered' | 'uncovered' | 'unparsedCoverageIssues'
+> {
+  const requirementBlocks = project.source_blocks
+    .filter((b) => b.kind === 'requirement')
+    .map((b) => b.id);
+
+  const uncovered: string[] = [];
+  const unparsedCoverageIssues: string[] = [];
+  for (const issue of factoryValidate(project)) {
+    if (issue.code !== 'SOURCE_COVERAGE') continue;
+    const match = SOURCE_COVERAGE_MESSAGE.exec(issue.message);
+    if (match === null) unparsedCoverageIssues.push(issue.message);
+    else uncovered.push(match[1]);
+  }
+
+  const uncoveredSet = new Set(uncovered);
+  return {
+    requirementBlocks,
+    covered: requirementBlocks.filter((id) => !uncoveredSet.has(id)),
+    uncovered,
+    unparsedCoverageIssues,
+  };
 }
 
 /**
  * Drive one fixture as far as it can go, and report exactly how far that was.
  *
  * NEVER THROWS for a refusal. A composition that refuses is a RESULT — several corpus cases exist
- * precisely to be refused — so the refusal lands in `composed.refusals` and the stage still counts
- * as driven. It throws only if the apparatus itself is broken, which is a different thing and
- * must not be confusable with a case failing.
+ * precisely to be refused — so the refusal lands in `composed.refusals` and the stages that ran
+ * still count as driven. It throws only if the apparatus itself is broken, which is a different
+ * thing and must not be confusable with a case failing.
  */
 export function runCorpusCase(fixture: CorpusFixture): CorpusRun {
   const fields = fixture.build();
-  const outcomes: StageOutcome[] = [];
 
   let composed: ComposedBlueprint | null = null;
   let compositionError: string | null = null;
@@ -171,31 +401,21 @@ export function runCorpusCase(fixture: CorpusFixture): CorpusRun {
     compositionError = `composeBlueprint threw: ${(err as { message?: string })?.message ?? String(err)}`;
   }
 
-  for (const stage of CORPUS_STAGES) {
-    if (COMPOSED_STAGES.has(stage)) {
-      outcomes.push(compositionError === null
-        ? { stage, driven: true }
-        : { stage, driven: false, reason: compositionError });
-      continue;
+  const composedHalf = composed === null
+    ? {
+      outcomes: [...GENERATION_STAGES].map((stage) => ({
+        stage,
+        driven: false,
+        reason: compositionError ?? 'composition did not run',
+      })),
+      stoppedAt: null,
     }
-    // The three stages outside the generation module. P7-T1.2 supplies them; until then the
-    // reason is stated rather than the stage being omitted.
-    outcomes.push({
-      stage,
-      driven: false,
-      reason: 'needs a database; supplied by P7-T1.2, not silently skipped',
-    });
-  }
+    : composedOutcomes(composed);
 
-  const mustHave = mustHaveOf(fields);
-  const titles = taskTitles(composed).join('   ').toLowerCase();
-  // A requirement counts as covered when a task title carries its first six significant words.
-  // Crude on purpose and stated as such: T1.2 replaces it with the real `fulfills` linkage once
-  // the planning stage is driven. Recorded here so the limit is visible rather than implied.
-  const covered = mustHave.filter((r) => {
-    const probe = r.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 6);
-    return probe.length > 0 && probe.every((w) => titles.includes(w));
-  });
+  const outcomes: StageOutcome[] = [
+    ...composedHalf.outcomes,
+    ...DB_BACKED_STAGES.map((stage) => ({ stage, driven: false, reason: DB_REASON })),
+  ];
 
   const bases = (fields.effort as ReadonlyArray<{ basis?: string }> | undefined) ?? [];
 
@@ -207,10 +427,16 @@ export function runCorpusCase(fixture: CorpusFixture): CorpusRun {
       .filter((o) => !o.driven)
       .map((o) => ({ stage: o.stage, reason: o.reason ?? 'NO REASON RECORDED' })),
     composed,
+    generationStoppedAt: composedHalf.stoppedAt,
     traceability: {
-      mustHave,
-      covered,
-      uncovered: mustHave.filter((r) => !covered.includes(r)),
+      ...requirementCoverage(fields.project as FactoryProject),
+      statedRequirements: statedRequirementsOf(fields),
+      storyCoverage: null,
+      storyCoverageReason:
+        'NOT ASSESSABLE at generation: no stories exist until the planning stage is driven, and '
+        + 'planning is DB-backed. `storyTraceability.requirementsWithoutStory` is the instrument '
+        + 'once P7-T1.2 drives it. Null rather than an empty list, because an empty list would '
+        + 'report "measured, no gaps" for data nobody measured.',
     },
     workspaceCount: ((fixture.composition?.workspaceStates ?? []) as ReadonlyArray<unknown>).length,
     effortBases: [...new Set(bases.map((e) => String(e.basis ?? 'UNRECORDED')))].sort(),
@@ -222,6 +448,11 @@ export function runCorpusCase(fixture: CorpusFixture): CorpusRun {
  *
  * Exported as a function rather than left to each test, because a test that forgot to check it
  * would be the exact hole the partition exists to close.
+ *
+ * NOTE what this does and does not prove. It proves every stage is ACCOUNTED FOR. It says
+ * nothing about whether each `driven` flag is CORRECT — attempt 1 passed this check while
+ * reporting three stages driven that never executed. The per-stage truth is asserted separately,
+ * against a fixture that short-circuits.
  */
 export function partitionIsTotal(run: CorpusRun): boolean {
   const accounted = new Set([
