@@ -94,6 +94,32 @@ const CASE_A_UNCITED: CorpusFixture = {
 };
 
 /**
+ * Fixture A plus an uncited requirement block whose id contains WHITESPACE.
+ *
+ * Not a hypothetical. The attempt-3 verifier constructed this input to disprove a comment of
+ * mine claiming `unparsedCoverageIssues` could never be non-empty: under the old `(\S+)`
+ * capture the id failed to parse, so the `SOURCE_COVERAGE` finding was diverted out of
+ * `uncovered` and into a list nothing asserts on. A real gap, silently relocated.
+ *
+ * `SourceBlock.id` is an unconstrained `string` in both `factoryContract.ts` and
+ * `factoryContractSchema.ts`, and P7-T1.2 hand-writes eight fixtures, which is exactly when a
+ * typed id acquires a space.
+ */
+const CASE_A_SPACED_ID: CorpusFixture = {
+  id: 'A-uncited-block-spaced-id',
+  proves: 'a block id containing whitespace is still NAMED, not diverted into a list nobody gates on',
+  build: () => {
+    const fields = baseFields('approved_blueprint');
+    const project = fields.project as FactoryProject;
+    project.source_blocks = [
+      ...project.source_blocks,
+      { id: 'blk uncited with spaces', locator: '4.0', text: 'stated', kind: 'requirement' },
+    ];
+    return fields;
+  },
+};
+
+/**
  * Fixture A with two workspace-state declarations supplied.
  *
  * Exists so `workspaceCount` is MEASURED against two different inputs rather than asserted
@@ -358,6 +384,17 @@ describe('THE COVERAGE CONTROL: the traceability rule must be able to report a G
     expect(shipped.map((i) => i.message)).toEqual(['requirement block blk-uncited is cited by no task']);
     expect(factoryValidate(CASE_A.build().project as FactoryProject)
       .filter((i) => i.code === 'SOURCE_COVERAGE')).toEqual([]);
+  });
+
+  it('NAMES a block id containing whitespace, instead of diverting the gap', () => {
+    // The counterexample that cost attempt 3 a point, now a permanent control. The old
+    // `(\S+)` capture dropped this id, which emptied `uncovered` while reporting the message
+    // in a list no assertion reads — a gap that exists and is not counted anywhere.
+    const run = runCorpusCase(CASE_A_SPACED_ID);
+    expect(run.traceability.uncovered).toEqual(['blk uncited with spaces']);
+    expect(run.traceability.unparsedCoverageIssues).toEqual([]);
+    // And the gap still stops generation, so it is not merely reported.
+    expect(run.generationStoppedAt).toBe('process');
   });
 
   it('the parse of the shipped rule is EXHAUSTIVE over the issues it emits', () => {

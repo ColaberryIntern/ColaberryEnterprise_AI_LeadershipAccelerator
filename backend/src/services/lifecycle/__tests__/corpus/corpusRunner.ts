@@ -316,8 +316,21 @@ function statedRequirementsOf(fields: FixtureFields): string[] {
     .filter((v) => v.length > 0);
 }
 
-/** Strict on purpose: a message that does not match is reported, not dropped. */
-const SOURCE_COVERAGE_MESSAGE = /^requirement block (\S+) is cited by no task$/;
+/**
+ * Captures ANY id, including one containing whitespace. A message that still does not match is
+ * reported rather than dropped.
+ *
+ * `(\S+)` was wrong, and an attempt-3 verifier built the counterexample rather than arguing it: a
+ * `SourceBlock.id` containing a space failed the capture, so the message landed in
+ * `unparsedCoverageIssues` AND THE REAL GAP WAS DIVERTED OUT OF `uncovered`, where nothing gates
+ * on it. `SourceBlock.id` is an unconstrained `string` in both `factoryContract.ts` and
+ * `factoryContractSchema.ts`, so that input is constructible — and P7-T1.2 hand-writes eight
+ * fixtures, which is precisely when a hand-typed id acquires a space.
+ *
+ * The anchors still carry the shape, so a genuinely different message is caught. This is the
+ * difference between a strict parse that loses data and a tolerant one that cannot.
+ */
+const SOURCE_COVERAGE_MESSAGE = /^requirement block (.+) is cited by no task$/;
 
 /**
  * Requirement-block coverage, measured with the SHIPPED rule.
