@@ -226,7 +226,9 @@ describe('the preview is the real page', () => {
 
   it('reports false for a brand whose palette has not been agreed', async () => {
     // The flag has to be able to say "no", or it is not reporting anything.
-    brandsById[BRAND].default_theme_key = 'enterprise';
+    // Not a real brand key: `enterprise` used to serve here and is now themed, which made this
+    // assert the opposite of the truth. The flag's job is to be able to say "no" at all.
+    brandsById[BRAND].default_theme_key = 'no-such-system';
     const res = await request(app).get(`/api/admin/landing-pages/${PAGE}/preview`);
     expect(res.headers['x-landing-page-branded']).toBe('false');
   });

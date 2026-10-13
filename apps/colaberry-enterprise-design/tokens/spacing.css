@@ -1,0 +1,13 @@
+/* Spacing — 4px base scale. Touch targets ≥ 44px. Fluid page padding; grids use minmax(min(Npx,100%),1fr). */
+:root{
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px; --space-8:32px; --space-12:48px; --space-16:64px;
+  --touch-target:44px;
+  --page-padding:clamp(16px, 4vw, 32px);
+  --bp-sm:640px; --bp-md:768px; --bp-lg:1024px; --bp-xl:1280px;
+}
+
+/* Elevation — one radius (8px; cards use radius+4), one dual-layer soft shadow. */
+:root{
+  --radius:8px;
+  --shadow:0 3px 8px rgba(26,26,26,0.06), 0 1px 3px rgba(26,26,26,0.04);
+}

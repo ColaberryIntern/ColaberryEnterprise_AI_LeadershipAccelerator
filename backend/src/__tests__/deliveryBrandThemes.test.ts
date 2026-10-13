@@ -82,19 +82,36 @@ describe('the client surface theme matches the vendored design system', () => {
   });
 
   it('themes only the brands whose palette was actually agreed', () => {
-    // Five theme keys are seeded - enterprise, training, cpn, ai-flotation, refactored - and
-    // three now have a documented design system. A guessed palette in front of a real client is
-    // worse than the neutral surface, so a key appears here only once its tokens are SOURCED.
+    // ALL FIVE are wired as of 2026-10-13, which is the point of this assertion now: the rule
+    // was never "do not theme brands", it was "do not INVENT a palette". Every one of these is
+    // copied from that brand's own design system at github.com/aleemcolaberry.
     //
-    // `cpn` joined on 2026-10-13. Its system had been vendored at apps/cpn-public the whole time
-    // and was never read, so CPN pages rendered navy - the exact outcome this rule exists to
-    // prevent, reached by not looking rather than by guessing.
+    // Three joined that day, and each had been available the whole time. `cpn` was vendored at
+    // apps/cpn-public and never read. `enterprise` was never vendored at all - the sync registry
+    // carried `target: null` - and FOUR brands resolve to it, so it was the largest single
+    // source of navy pages. `refactored` needed the renderer's hardcoded light surfaces
+    // tokenised first, because it is the only dark-first system.
     //
-    // `enterprise` genuinely has no design system anywhere in the repo, and `refactored` has one
-    // that is DARK-first (#0C141B ground); the landing renderer's bands assume a light ground, so
-    // wiring it needs a design decision rather than a copy. Both stay out until then.
+    // A new key must still arrive with a sourced palette, not a guessed one. That rule stands;
+    // what changed is that nothing is left unsourced.
     const keys = [...ts.matchAll(/^\s{2}'([a-z-]+)':\s*\{/gm)].map((m) => m[1]);
-    expect(keys.sort()).toEqual(['ai-flotation', 'cpn', 'training']);
+    expect(keys.sort()).toEqual(['ai-flotation', 'cpn', 'enterprise', 'refactored', 'training']);
+  });
+
+  it('every Colaberry Enterprise token equals its value in the vendored system', () => {
+    // Four brands resolve to this key - advisor, colaberry-enterprise, trustbeforeintelligence,
+    // worldoftaxonomy - so it was the largest single source of unbranded surfaces. Its system
+    // was never vendored here at all until 2026-10-13; the sync registry carried target: null.
+    const css = fs.readFileSync(path.join(
+      REPO_ROOT, 'apps', 'colaberry-enterprise-design', 'tokens', 'colors.css',
+    ), 'utf8');
+    const source = forgeLightTokens(css);
+    const copy = registryTokens(ts, 'enterprise');
+
+    expect(Object.keys(copy).length).toBeGreaterThan(0);
+    for (const [name, value] of Object.entries(copy)) {
+      expect(`${name}=${value.toUpperCase()}`).toEqual(`${name}=${(source[name] ?? '').toUpperCase()}`);
+    }
   });
 
   it('every CPN token equals its value in the vendored cpn design system', () => {
@@ -111,6 +128,24 @@ describe('the client surface theme matches the vendored design system', () => {
       expect(`${name}=${value.toUpperCase()}`).toEqual(`${name}=${(source[name] ?? '').toUpperCase()}`);
     }
   });
+
+  it('every Refactored token equals its value in the vendored system', () => {
+    // The only dark-first system: ground #0C141B, text #E8F0F6. Pinned like the rest - being a
+    // dark brand is not an excuse for an unpinned copy.
+    const refCss = fs.readFileSync(path.join(
+      REPO_ROOT, 'apps', 'refactored-public', 'src', 'assets', 'design', 'tokens', 'colors.css',
+    ), 'utf8');
+    const source = forgeLightTokens(refCss);
+    const copy = registryTokens(ts, 'refactored');
+
+    expect(Object.keys(copy).length).toBeGreaterThan(0);
+    for (const [name, value] of Object.entries(copy)) {
+      expect(`${name}=${value.toUpperCase()}`).toEqual(`${name}=${(source[name] ?? '').toUpperCase()}`);
+    }
+    // Its ground really is darker than its text, which is what makes it the awkward one.
+    expect(copy['--bg'].toUpperCase()).toEqual('#0C141B');
+  });
+
 
   it('CPN carries its own green, and not another brand\'s accent', () => {
     // Named explicitly, so a parser that silently matched nothing cannot pass this.
