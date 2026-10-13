@@ -331,9 +331,17 @@ after:  shape_a(explorer+non-guest)=290  shape_b(standard+guest)=86
   population filter is `enrollment_type: 'explorer'` AND `status: 'active'` and never consults
   `tier` — verified by grep inside the container — so **these 86 are invisible to Explorer
   Growth today.**
-- **290 `explorer` + `member`** carry the wrong `tier`. **270 of them are visible** to Explorer
-  Growth; the other 20 are `withdrawn`, and the filter quoted above requires `status='active'`.
-  Their access level says member either way.
+- **288 of the 290 `explorer` + `member`** rows carry the wrong `tier`. **270 are visible** to
+  Explorer Growth; the other 20 are `withdrawn`, and the filter quoted above requires
+  `status='active'`.
+- **The remaining 2 are CORRECTLY shaped and were miscounted here at first.** Both have
+  `amount_paid = 250.00`, `payment_status = paid`, `status = active` and no subscription, so they
+  are people who entered at $0 and then paid. Per DECISION 1 `tier: member` is the RIGHT access
+  level for a paid student, so `explorer` + `member` is coherent for a converted Explorer: the
+  programme records where they came from, the tier records what they may now see. They display as
+  **Enrolled**, which is correct, and an earlier version of this line folded them into the
+  incoherent population. Of the 288 genuinely wrong, the backfill plans only **19** tier writes,
+  because it moves nothing it cannot prove.
 
 ### What the backfill would do, from its own dry run (NOT run for real)
 
