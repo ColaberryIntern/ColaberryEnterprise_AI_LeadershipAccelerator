@@ -51,6 +51,15 @@ COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
 # trustInpactGoalsService.ts reads this at runtime. Copied straight from the build
 # context (not --from=builder) since it needs no build step.
 COPY docs/ai-governance/ai-systems-registry.csv ./docs/ai-governance/ai-systems-registry.csv
+# The ten agent-domain capability matrices plus the undomained-legacy bucket, read off disk at
+# runtime by capabilityRecord.ts the same way the CSV above is. `tsc` compiles .ts and does not
+# copy .json, so without this the files are simply absent from the image -- which is how the first
+# production provisioning run failed, with "Capability matrix missing for 'learner_success' at
+# /app/dist/services/agentDomain/capabilities/learner_success.json".
+#
+# Copied --from=builder rather than from the build context, because the loader resolves them
+# relative to its own __dirname inside dist.
+COPY --from=builder /app/backend/src/services/agentDomain/capabilities ./dist/services/agentDomain/capabilities
 RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
 
 ENV NODE_ENV=production
