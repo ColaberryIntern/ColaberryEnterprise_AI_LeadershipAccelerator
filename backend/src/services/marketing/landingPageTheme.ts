@@ -91,6 +91,23 @@ export const LANDING_PAGE_THEMES: Readonly<Record<string, BrandBaseTheme>> = {
     '--accent-soft': '#FFF0F1',
     '--line': '#E4E4E3',
   },
+  /**
+   * CPN, copied from apps/cpn-public/src/assets/design/tokens/colors.css.
+   *
+   * This system has existed in the repo the whole time and was simply never wired, so a CPN
+   * page rendered in the navy neutral - which is nobody's brand. Pinned to its source by
+   * `deliveryBrandThemes`-style test, same as AI Flotation.
+   */
+  'cpn': {
+    '--bg': '#FFFDF8',
+    '--bg-elevated': '#FFFFFF',
+    '--fg': '#1C1B18',
+    '--fg-muted': '#4E4B42',
+    '--accent': '#1D6A4C',
+    '--accent-contrast': '#FFFFFF',
+    '--accent-soft': '#DFF0E6',
+    '--line': '#DDD8CB',
+  },
 };
 
 /**

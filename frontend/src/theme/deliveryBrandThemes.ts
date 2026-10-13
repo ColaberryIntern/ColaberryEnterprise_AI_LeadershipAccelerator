@@ -82,6 +82,24 @@ const THEMES: Readonly<Record<string, BrandTheme>> = {
     '--accent-soft': '#FFF0F1',
     '--line': '#E4E4E3',
   },
+  /**
+   * CPN, copied from `apps/cpn-public/src/assets/design/tokens/colors.css`.
+   *
+   * Wired 2026-10-13. This design system had been vendored in the repo the whole time and was
+   * simply never read, so a CPN surface rendered in the navy neutral - which is nobody's brand,
+   * and is exactly the outcome the rule above exists to prevent. Not a guess: pinned to its
+   * source by the same test that pins AI Flotation.
+   */
+  'cpn': {
+    '--bg': '#FFFDF8',
+    '--bg-elevated': '#FFFFFF',
+    '--fg': '#1C1B18',
+    '--fg-muted': '#4E4B42',
+    '--accent': '#1D6A4C',
+    '--accent-contrast': '#FFFFFF',
+    '--accent-soft': '#DFF0E6',
+    '--line': '#DDD8CB',
+  },
 };
 
 /** The theme for a brand's key, or null when the surface should stay neutral. */

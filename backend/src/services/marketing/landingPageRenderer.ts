@@ -2,6 +2,7 @@ import { esc } from '../classKit/kitRenderUtils';
 import { safeHttpUrl } from '../caseStudy/caseStudyPublicSections';
 import { themeCssVars, themeForLandingPage } from './landingPageTheme';
 import { logoForLandingPage, logoOnDarkForLandingPage } from './landingPageLogos';
+import { fontCssFor } from './landingPageFonts';
 import type { LandingPageContentShape, LandingPageSection } from '../../schemas/landingPageContentSchema';
 import { STYLES } from './landingPageStyles';
 import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
@@ -180,6 +181,7 @@ ${ogImage && content.socialImage ? `<meta property="og:image:alt" content="${esc
 <meta property="og:site_name" content="${esc(brand.name)}">
 <meta name="twitter:card" content="${ogImage ? 'summary_large_image' : 'summary'}">
 <style>
+${fontCssFor(brand.default_theme_key)}
 :root{
 ${themeCssVars(theme)}
   color-scheme: light;
