@@ -104,6 +104,56 @@ the routes."* Phase 5 is that phase, and this row records only the part it actua
 
 ---
 
+## Row written 2026-10-14 for backbone task B6
+
+### LC-01 — No new-project path can bypass lifecycle registration or plan authorization
+
+| | |
+|---|---|
+| **Status** | **Partial, and the partial half is named.** Registration cannot be bypassed on either consumer, and that is proven. *Enforcement* — something refusing work when the lifecycle says no — exists on the student path only. |
+| **Why it is written now** | B6 in `backbone-adoption.md`. LC-01 was satisfied by the student path alone, and both of this programme's real consumers needed naming with their own evidence. Both builds were paused waiting on this one, so "which of my two pipelines is actually on the backbone" is a question the table has to answer rather than imply. |
+
+#### The two consumers, and what is true of each
+
+| Consumer | Registration wired | Registration **proven in production** | Authorization enforced |
+|---|---|---|---|
+| 🏭 **Project Factory** — 10 agent domains, student projects | ✅ `Project` model `afterCreate` | ✅ all ten hold exactly one `project_lifecycle_states` row, stage `discovery`, created 2026-10-13 14:03Z, 0 duplicates / 0 orphans / 0 tenant mismatches | ✅ `services/sbp/storyAuthorization.ts` refuses story work, with a `legacy_compatibility` branch for pre-hook projects |
+| 🏛️ **Gov contracts** — delivery projects | ✅ `models/DeliveryProject.ts:174` `afterCreate: deliveryProjectLifecycleHook`; `services/factory/govDeliveryProject.ts:134` creates through that model | ❌ **never fired.** Zero delivery projects created since the hook shipped 2026-10-09. The path is real and has no production evidence | ❌ **no delivery-side equivalent of `storyAuthorizationFor` exists.** Nothing in the gov build path refuses work because a lifecycle row is missing |
+
+**That last cell is the honest cost of this row.** A delivery project registers and then nothing
+consults the registration. The forward obligation is recorded in
+`carried-forward-obligations.md`: when a delivery-side enforcement gate is built it must apply
+`LIFECYCLE_REGISTRATION_LIVE_SINCE` the way `storyAuthorization.ts` applies
+`STUDENT_REGISTRATION_LIVE_SINCE`, or its first deploy refuses all four legacy delivery projects,
+two of which are live government work.
+
+#### Evidence for the bypass claim
+
+| Claim | How it is established |
+|---|---|
+| The creation-site set is **derived, not listed** | `__tests__/lifecycleRegistrationCoverage.test.ts` reads the source tree on every run and fails when a site appears that is not accounted for. It exists because a hand-written list *was* wrong within a week: the three "natural chokepoints" named in the discovery record covered 5 of 7 sites as enumerated, and the one they missed — `govDeliveryProject.ts` — landed three days after the inventory and was live in production creating ungoverned projects |
+| It reads files rather than shelling out to grep | Three `.ts` files under `backend/src` carry deliberate, load-bearing NUL bytes, including `factory/factoryApproval.ts`. Plain `grep -r` reports them binary and **skips the matching lines**, so a sweep using it reports completeness it does not have |
+| Every creation path goes through a hook-carrying model | Enumerating sweep, 2026-10-14 (B5): **4 student sites** (`agentDomainProvisioner.ts:209`, `businessProcessSeedService.ts:135`, `projectService.ts:67`, all via `Project`) and **5 delivery sites** (`delivery/leadConversion.ts:175`, `factory/govDeliveryProject.ts:134`, three seed scripts, all via `DeliveryProject`). `ops/bcSyncService.ts:288` looked like a fifth student site and is not — `OpsBcProject` maps to `ops_bc_projects`, a different table |
+| The mechanisms a model hook **cannot** see are tripwired | Asserted across all of `backend/src`: no `bulkCreate` or `upsert` on either identity model (`bulkCreate` does not fire per-row `afterCreate`), no raw `INSERT` into either identity table, no `queryInterface.bulkInsert`, and no `hooks: false` anywhere — which would disable registration one site at a time |
+| Exactly one model owns each table | Both declare the hook. Two models over one table would make the hook a convention rather than a chokepoint |
+| The detector has a production caller | `systemHealthService.checkLifecycleRegistration`, registered in `runFullSystemHealthCheck`, so both bypass detectors run whenever anyone opens `/health/full`. Before 2026-10-14 they were called from **tests only** — a detector nobody runs cannot detect anything. 6 tests, 5 mutations each RED including an **unwired-from-the-orchestrator** mutation, which is the one that counts because being unwired is the defect it closes |
+| The cutoff protecting the 66 legacy rows is itself tested | `__tests__/registrationCutoff.test.ts`, 6 tests, 5 mutations each RED. The pre-existing assertion was `LIVE_SINCE instanceof Date` — a **type** check that a constant pointing at 1970 would have passed. Both dates are now pinned to literals, asserted as lower bounds, and asserted overridable |
+
+#### What this row deliberately does not claim
+
+- **Not that the lifecycle gate turns.** Registration is not movement. Stage 2 of 13 became
+  passable on 2026-10-14 and no project has moved, because nothing writes the manifest its
+  prerequisites read. See B3 in `backbone-adoption.md`.
+- **Not that the 14 entry points in `entry-point-matrix.md` are each individually exercised.**
+  The derived sweep covers the nine paths that *create a project row*. The matrix's fourteen are
+  entry points that could *publish an authorized plan*, which is the clause LC-14's row records
+  as owned by P6-T1.
+- **Not that the legacy rows are governed.** 4 delivery and 62 student projects predate their
+  hooks and hold no lifecycle row. The DRI decided on 2026-10-14 not to backfill them; they are
+  legacy and out of scope, which is a decision recorded in B2, not a gap this row closes.
+
+---
+
 ## Rows owed by other phases
 
 LC-01 … LC-07, LC-10 … LC-13 and LC-15 … LC-18 are not written here. **LC-01 to LC-07 and LC-13

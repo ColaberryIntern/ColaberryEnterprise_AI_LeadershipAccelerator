@@ -169,13 +169,34 @@ without the sweep noticing.
 
 ---
 
-### B6 — Record both consumers against LC-01 ✅
+### B6 — Record both consumers against LC-01 ✅  ✅ **PASSED 2026-10-14**
 
 **Why:** LC-01 is the acceptance ID that says a new-project path cannot bypass plan
 authorization. Today it is satisfied by the student path alone.
 
 **Pass condition.** `acceptance-evidence.md` carries an LC-01 row naming **both** consumers, with
 the production evidence for each, and states plainly which paths are proven versus merely wired.
+
+**Met.** The row is in `acceptance-evidence.md`, marked **Partial with the partial half named**,
+and it separates three things the old wording ran together:
+
+| | Factory (10 domains) | Gov contracts |
+|---|---|---|
+| Registration wired | ✅ | ✅ |
+| Registration **proven in production** | ✅ ten rows, 2026-10-13 14:03Z | ❌ never fired |
+| Authorization **enforced** | ✅ `storyAuthorization.ts` | ❌ no delivery-side gate exists |
+
+**The bottom-right cell is what this row bought.** A delivery project registers and then nothing
+consults the registration — there is no delivery-side equivalent of `storyAuthorizationFor`. That
+was true before B6 and was not written down anywhere, which is the only reason LC-01 looked
+satisfied. The row also records what it does *not* claim: not that the gate turns, not that the
+fourteen entry points in `entry-point-matrix.md` are each exercised, and not that the 66 legacy
+rows are governed.
+
+Evidence carried into the row is all measurement, none of it new work: the derived creation-site
+sweep (`lifecycleRegistrationCoverage.test.ts`, which reads files because plain `grep -r` skips
+three NUL-byte `.ts` files as binary), B5's nine enumerated sites, the four tripwires for what a
+model hook cannot see, B4's production caller, and B2's cutoff tests.
 
 ---
 
@@ -185,8 +206,8 @@ A row moves to ✅ only on evidence that was produced and pasted, never on a rea
 That standard is not pedantry: every failure in this programme's eight phases was a claim that
 did not survive measurement, and not one was a broken behaviour the tests passed over.
 
-**Current score: 4 of 6, with B3 half closed.** B2, B4 and B5 closed on 2026-10-14. Outstanding:
-B1 (gov registration has never fired), B3, B6 (LC-01 row naming both consumers).
+**Current score: 5 of 6, with B3 half closed.** B2, B4, B5 and B6 all closed on 2026-10-14.
+Outstanding: **B1** (gov registration has never fired, handed to the Gov tab) and **B3**.
 
 **B3 stays open deliberately rather than being scored on the half that is done.** The gate it was
 blocked on is now measurable and mutation-tested, which is a real defect closed — the first stage
