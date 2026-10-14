@@ -31,6 +31,7 @@ import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
 import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
+import publicTrackingConfigRoutes from './routes/publicTrackingConfigRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
@@ -263,6 +264,9 @@ app.use(mediaFetchRoutes);
 // session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
 // publicLandingPageRoutes.test.ts, which builds both orders and asserts 200 above / 404 below.
 app.use(publicLandingPageRoutes);
+// Same reason, same position: the portal asks this before a visitor has signed in, so it has
+// to answer above adminRoutes or a logged-out page gets a 401 for public information.
+app.use(publicTrackingConfigRoutes);
 // LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
 app.use(linkedInCallbackRoutes);
 // Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).
