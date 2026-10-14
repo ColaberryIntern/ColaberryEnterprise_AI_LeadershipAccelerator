@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, October 14, 2026 at 8:25 AM</div>
-    <div><span class="sid">CC-20261006-a4k7</span><span class="count">15 changes</span></div>
+    <div class="meta">Generated Wednesday, October 14, 2026 at 8:45 AM</div>
+    <div><span class="sid">CC-20261006-a4k7</span><span class="count">21 changes</span></div>
   </header>
   <main>
     
@@ -282,6 +282,96 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**idempotency proven by running it twice**, not by reading it - the second `--apply`</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">row 1 is pre-approved verbatim at `HUMAN_OWNERSHIP_MAP.md:52` (&quot;one additive org_members</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>Agent Factory T02 fix: the test two acceptance criteria had only named</h2>
+          <span class="badge">2026-10-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/scripts/__tests__/seedAgentDomainIdentityPrereqs.test.ts`</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**19 tests, 1 suite, 2.78s**, in four groups each carrying a positive control.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the verifier was right and the fix was to write the test, **not to soften the criteria**.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>Reese: the eighth student-contacting behaviour had no manager kill switch</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commit `7f28d720`. `ReeseTicketFollowUpSweep` shipped 2026-10-02 as a live,</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**438 tests across 30 Reese suites**, all passing. `BEHAVIOUR_INVENTORY.md`</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">be precise about what was wrong, because the overstatement is tempting. Its individual</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>Revenue dashboard: the third service computing revenue as enrollments x 4500</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commit `dc0e3afe` implements **ESCALATION-002 decision 1**, which Ali took on</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**15 tests.** Mutation-proven by restoring the original defect, which killed</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the same defect had already been found and removed twice**, from `campaignLinkService.ts`</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>Authorization gate: a keyword classifier was being honoured as a deliberate human choice</h2>
+          <span class="badge">2026-10-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commits `04530e7e` and `afc8cc57`. (1) `agentAuthorizationService.resolveLevel`</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**13 tests in 1 suite** for the gate; **118 tests across 5 agentDomain suites** for</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**my own suggested fix was wrong, and measuring is what showed it.** I proposed making the</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>Autonomy: the one field that could tell human from machine was written exclusively by the machine</h2>
+          <span class="badge">2026-10-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commits `896aca6b` and `49c3877a`. Ali approved recording a human decision for the</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**27 tests across 2 suites.** The production write ran in **one transaction** with</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the root cause is the more useful half. `agentReactivationService.reactivateAgent` - the</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>Agent Factory T19/T20/T21: ten domain projects provisioned in production, verified against the live database, and handed off</h2>
+          <span class="badge">2026-10-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed `fa7f636bc` (PR #3084, merged **8:08 AM CDT on 2026-10-14**) with</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">production **read back from the database**, not from any script&#39;s return value.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the defect worth the whole phase was found by querying production before writing to it.**</span></div>
           
         </div>
       </article>

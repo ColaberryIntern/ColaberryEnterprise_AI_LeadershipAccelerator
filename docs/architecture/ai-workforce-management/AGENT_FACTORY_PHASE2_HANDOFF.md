@@ -2,7 +2,7 @@
 
 **Run** `20261007-school-agent-factory` · **Session** `CC-20261006-a4k7`
 
-**Deployed commit** `fa7f636bc` (PR #3084, merged 2026-10-14 13:08 UTC) · **Production verified** 2026-10-14, by querying the live database rather than by reading the deploy's exit code.
+**Deployed commit** `fa7f636bc` (PR #3084, merged 8:08 AM CDT on 2026-10-14) · **Production verified** 2026-10-14, by querying the live database rather than by reading the deploy's exit code.
 
 Ten AI employee domain projects exist in production as **plans**. Nothing is activated.
 
@@ -62,7 +62,7 @@ Both existing agents (Reese, Dara) pre-date this work and were neither created n
 1. **21 legacy agent rows belong to no domain.** Five are live production rows. They are tracked in `backend/src/services/agentDomain/capabilities/_unresolved.json`, each with a disposition of `unresolved` and a measured reason. They need an owner decision.
 2. **Four managers cannot reach the admin surface.** Admissions needs *two* fixes together: Taiwo Oludimimu has no `admin_users` row, **and** no `/api/admin/admissions` prefix is mapped in `mgmtSectionGate`, which is deny-by-default — so a scoped login alone would still 403 him on all nine of his own routes.
 3. **No capability is confirmed.** Every one of the 443 is `draft`. Promotion out of draft is a manager decision, and nothing in the system can make it on their behalf.
-4. **Ruth Kumera is `onboarding_pending`.** Production shows `signed_documents_uploaded`, `updated_at` 2026-10-07 21:19:23 — her own timestamp. She is not assignable and her onboarding has not been routed around.
+4. **Ruth Kumera is `onboarding_pending`.** Production shows `signed_documents_uploaded`, `updated_at` 4:19 PM CDT on 2026-10-07 — her own timestamp. She is not assignable and her onboarding has not been routed around.
 
 ---
 
