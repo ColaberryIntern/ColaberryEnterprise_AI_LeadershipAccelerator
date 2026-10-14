@@ -11,10 +11,13 @@
 Open this, logged in with program permission:
 
 ```
-https://enterprise.colaberry.ai/admin/project-lifecycle/831c87ab-243b-52cc-9456-901d504a1db1?kind=delivery
+https://enterprise.colaberry.ai/admin/project-lifecycle/831c87ab-243b-52cc-9456-901d504a1db1?kind=student
 ```
 
-That id is one of the ten pilot projects, so it has a real lifecycle record to show. The host was
+That id is one of the ten pilot projects, so it has a real lifecycle record to show. **`kind=student`
+matters**: the ten pilot projects are STUDENT projects. Asking with `kind=delivery` makes the server
+look for a delivery lifecycle for that id and correctly answer *"No lifecycle is registered for that
+project."* — which is a right answer to the wrong question, and cost one round trip on 2026-10-14. The host was
 identified by an independent verifier (it is the accelerator's `default_server` block); note that
 `app.colaberry.com` is a DIFFERENT system and 404s every `/api/*` path.
 

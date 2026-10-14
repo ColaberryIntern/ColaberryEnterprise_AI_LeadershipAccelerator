@@ -14,7 +14,8 @@ Phase 5 shipped the review surface to production on 2026-10-09 at release `a1196
 workspace lives at:
 
 ```
-/admin/project-lifecycle/<the project's id>?kind=delivery
+/admin/project-lifecycle/<the project's id>?kind=student    # a student build
+/admin/project-lifecycle/<the project's id>?kind=delivery   # a client engagement
 ```
 
 **It is switched ON.** `ENABLE_PROJECT_LIFECYCLE=true` was set on 2026-10-14 on release
@@ -199,7 +200,11 @@ _Phase 8 fills in: exact navigation path, screenshot of the impact list._
 
 ## The Phase 8 answers
 
-**The path to the workspace** is `/admin/project-lifecycle/<the project's id>?kind=delivery` on
+**The path to the workspace** is `/admin/project-lifecycle/<the project's id>?kind=student` for a
+student build, or `?kind=delivery` for a client engagement. **Getting that wrong does not look like
+an error in the feature**: the server answers "No lifecycle is registered for that project", which is
+correct for the kind you asked about and misleading if you meant the other one. Every project in
+production today is a student project. The path is on
 the normal application host. The host is deliberately not written into this file, because the
 repository is public.
 
