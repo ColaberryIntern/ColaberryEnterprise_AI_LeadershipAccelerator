@@ -88,7 +88,8 @@ then wire the gate. Say when and I will do it as its own change with its own rol
 | Database protections | ✅ | `build_plans_one_published_per_project` present by name; `projects` 72 rows, **0 unattributed** |
 | Boot clean | ✅ | 467 log lines, **0 fatal**; **2** structured errors in that window, both pre-existing `intel-card-content` noise (I first said 10 — a loose `grep -ci rror` that also matched "0 errors") |
 | Workspace shipped and routed live | ✅ | SPA route and API base present in the live production JS bundle; `GET /admin/project-lifecycle/<id>` returns 200 HTML |
-| **Rendered workspace with real data seen** | ❌ | Needs an authenticated program-section session. **Your checklist item 1.** |
+| **Activation proven AT THE SURFACE** | ✅ | **2026-10-14, authenticated session.** The page rendered and the API answered with a domain error (*"No lifecycle is registered for that project"*). With the flag OFF the handler returns `disabled()` and the UI shows the yellow "enforcement is not enabled" box. **That box was absent.** A different, domain-specific answer is only reachable past the flag check, so this is the discrimination no unauthenticated probe could make |
+| Workspace populated with a real lifecycle record | ❌ | Not yet seen. The first attempt used `?kind=delivery` on a STUDENT project, which correctly found no delivery lifecycle. Retry with `?kind=student` |
 | Enforcement actually refusing | ❌ | By design today. The gate is unreachable from **all three** `decomposeBuild` call sites, none of which passes `projectId`. **P8-T4 is PARTIAL**, not complete |
 
 ## Limitations, stated plainly
