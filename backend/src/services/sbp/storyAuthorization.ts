@@ -25,14 +25,25 @@
  * -- LC-01 requires that a new-project path "cannot bypass plan authorization", and a missing
  * lifecycle row is the absence of evidence, not evidence of approval.
  *
- * It also means something concrete and sharp: **student `projects` rows do not register
- * lifecycles yet** (P6-T1b, ticket L6.2, blocked). So flipping `ENABLE_PROJECT_LIFECYCLE` before
- * that lands would not merely under-enforce the gate. It would REFUSE EVERY STUDENT BUILD.
+ * It also meant something concrete and sharp, and the prediction was correct. This header used
+ * to say student `projects` rows do not register lifecycles yet (P6-T1b, blocked), so flipping
+ * the flag would REFUSE EVERY STUDENT BUILD. P6-T1b has since landed: the hook is on the model
+ * and, measured in production on 2026-10-14, ten of ten projects created after it shipped hold
+ * exactly one lifecycle row each.
  *
- * That is a change of kind from how this risk was previously written down, which said
- * enforcement would "cover delivery projects only". With this gate in place the failure
- * direction inverts from permissive to total refusal, and P6-T1b stops being work that should
- * land before activation and becomes work that MUST.
+ * BUT 62 PROJECTS PREDATE IT AND HOLD NO ROW. Refusing those would break every legacy build for
+ * a rule that did not exist when they were created, which is why this gate stayed unwired from
+ * the generator even after the flag went on. So `no_lifecycle` is no longer one verdict:
+ *
+ *   created BEFORE `STUDENT_REGISTRATION_LIVE_SINCE` -> `legacy_compatibility`, PERMITTED
+ *   created ON OR AFTER                              -> `no_lifecycle`, REFUSED
+ *
+ * The second is not leniency lost. The hook sits on the MODEL, so after the cutoff a missing row
+ * means a project was created outside the model entirely — the bypass LC-01 forbids. The cutoff
+ * is the same constant `unregisteredStudentProjectsSince` uses to hunt those bypasses, so the
+ * gate and the detector agree by construction rather than by coincidence.
+ *
+ * This is P8-T4's own clause: "old projects retain compatibility mode".
  *
  * The flag default is off and `enforcementDisabled` is reported rather than silently assumed, so
  * the dark period is visible in logs instead of being inferred from the absence of refusals.
@@ -40,13 +51,26 @@
 import { FLAGS } from '../../config/featureFlags';
 import { readLifecycleEvidence, type LifecycleRow } from '../lifecycle/lifecycleEvidence';
 import { prerequisiteGaps, blockingGaps } from '../lifecycle/lifecyclePrerequisites';
+import { STUDENT_REGISTRATION_LIVE_SINCE } from '../lifecycle/projectLifecycleRegistration';
 
 export type StoryAuthorizationReason =
   /** The flag is off. Every prior phase shipped behind it; nothing is enforced yet. */
   | 'enforcement_disabled'
   /** Measured: the `planning` stage has no blocking prerequisite gap. */
   | 'blueprint_approved'
-  /** No lifecycle row for this project. See the header: this is a refusal, and why. */
+  /**
+   * No lifecycle row AND the project predates the registration hook. PERMITTED.
+   *
+   * P8-T4's compatibility clause. Distinct from `enforcement_disabled`, which is global and
+   * temporary; this is per project and permanent for that project.
+   */
+  | 'legacy_compatibility'
+  /**
+   * No lifecycle row on a project created AFTER the hook shipped. REFUSED.
+   *
+   * Narrower than it was: this now means a project was created outside the model the hook sits
+   * on, which is the bypass LC-01 forbids — not merely that registration had not shipped.
+   */
   | 'no_lifecycle'
   /** Measured: at least one blocking gap. `gaps` names them. */
   | 'blueprint_not_approved';
@@ -96,8 +120,36 @@ export async function storyAuthorizationFor(studentProjectId: string): Promise<S
   const { default: ProjectLifecycleState } = await import('../../models/ProjectLifecycleState');
   const row = await ProjectLifecycleState.findOne({ where: { student_project_id: studentProjectId } });
   if (!row) {
+    // COMPATIBILITY MODE. A missing row means two different things either side of the cutoff, so
+    // the project's own creation date decides, not a global switch. See the header.
+    const { default: Project } = await import('../../models/Project');
+    const project = await Project.findByPk(studentProjectId);
+
+    if (!project) {
+      // Absence of a project is absence of evidence. Permitting here would make the gate
+      // bypassable by passing an id that does not exist.
+      log('sbp_story_authorization_refused', 'failure', {
+        project_id: studentProjectId, reason: 'no_lifecycle', error_class: 'ContractViolation',
+        detail: 'project_not_found',
+      });
+      return { authorized: false, reason: 'no_lifecycle', gaps: ['project_not_found'] };
+    }
+
+    // `< cutoff`, never `<=`: the cutoff is the instant the hook went live, so a project created
+    // AT it is covered by the hook and a missing row is already a bypass.
+    if (project.created_at && project.created_at < STUDENT_REGISTRATION_LIVE_SINCE) {
+      log('sbp_story_authorization_granted', 'success', {
+        project_id: studentProjectId, reason: 'legacy_compatibility',
+        project_created_at: project.created_at.toISOString(),
+        cutoff: STUDENT_REGISTRATION_LIVE_SINCE.toISOString(),
+      });
+      return { authorized: true, reason: 'legacy_compatibility', gaps: [] };
+    }
+
     log('sbp_story_authorization_refused', 'failure', {
       project_id: studentProjectId, reason: 'no_lifecycle', error_class: 'ContractViolation',
+      project_created_at: project.created_at ? project.created_at.toISOString() : null,
+      cutoff: STUDENT_REGISTRATION_LIVE_SINCE.toISOString(),
     });
     return { authorized: false, reason: 'no_lifecycle', gaps: ['lifecycle_unregistered'] };
   }

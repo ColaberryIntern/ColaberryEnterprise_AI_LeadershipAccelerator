@@ -51,6 +51,12 @@ async function loadGate(opts: {
   enforcement: boolean;
   row: unknown;
   evidence?: LifecycleEvidence;
+  /**
+   * What `Project.findByPk` returns when there is no lifecycle row. Only the compatibility
+   * branch reads it. Defaults to a project created AFTER the cutoff, so a `row: null` case
+   * keeps meaning "a modern project with no row", which is a bypass and still refuses.
+   */
+  project?: unknown;
 }) {
   jest.resetModules();
   process.env.ENABLE_PROJECT_LIFECYCLE = opts.enforcement ? 'true' : 'false';
@@ -60,6 +66,13 @@ async function loadGate(opts: {
     __esModule: true,
     default: { findOne },
   }));
+  const findByPk = jest.fn(async () => (
+    'project' in opts ? opts.project : { id: PROJECT, created_at: AFTER_CUTOFF }
+  ));
+  jest.doMock('../../../models/Project', () => ({
+    __esModule: true,
+    default: { findByPk },
+  }));
   const readLifecycleEvidence = jest.fn(async () => opts.evidence ?? completeEvidence());
   jest.doMock('../../lifecycle/lifecycleEvidence', () => ({
     __esModule: true,
@@ -67,8 +80,18 @@ async function loadGate(opts: {
   }));
 
   const mod = await import('../storyAuthorization');
-  return { ...mod, findOne, readLifecycleEvidence };
+  return { ...mod, findOne, readLifecycleEvidence, findByPk };
 }
+
+// The cutoff `STUDENT_REGISTRATION_LIVE_SINCE` is 2026-10-12T00:00:00.000Z. These three dates
+// straddle it, and two of them are REAL production values rather than invented ones.
+
+/** The newest student project that genuinely holds no lifecycle row, measured 2026-10-14. */
+const BEFORE_CUTOFF = new Date('2026-10-05T06:02:41.455Z');
+/** One of the ten pilot projects created after the hook shipped. */
+const AFTER_CUTOFF = new Date('2026-10-13T14:03:48.285Z');
+/** The cutoff instant itself. The hook was live AT it, so this must NOT be treated as legacy. */
+const AT_CUTOFF = new Date('2026-10-12T00:00:00.000Z');
 
 /** A client that returns exactly what it is given. */
 const clientReturning = (payload: unknown) => ({
@@ -237,14 +260,92 @@ describe('THE NEGATIVE CONTROL: a refined but unapproved requirement set authori
     // LC-01: a new-project path "cannot bypass plan authorization". A missing lifecycle row is
     // the absence of evidence, not evidence of approval.
     //
-    // THIS IS ALSO THE COUPLING THAT MAKES P6-T1b A PRECONDITION OF ACTIVATION. Student
-    // `projects` rows do not register lifecycles yet, so flipping the flag before that lands
-    // would refuse every student build rather than merely under-enforcing the gate.
-    const { storyAuthorizationFor } = await loadGate({ enforcement: true, row: null });
+    // The comment here used to say P6-T1b was a precondition because student `projects` rows did
+    // not register lifecycles. P6-T1b LANDED, and this case is now narrower: a missing row on a
+    // project created AFTER the cutoff means something created it outside the model the hook sits
+    // on, which is the bypass LC-01 forbids. Projects predating the cutoff are permitted instead,
+    // which the compatibility block below proves.
+    const { storyAuthorizationFor } = await loadGate({
+      enforcement: true, row: null, project: { id: PROJECT, created_at: AFTER_CUTOFF },
+    });
 
     expect(await storyAuthorizationFor(PROJECT)).toEqual({
       authorized: false, reason: 'no_lifecycle', gaps: ['lifecycle_unregistered'],
     });
+  });
+
+  it('PERMITS a project that predates the registration hook (compatibility mode)', async () => {
+    // P8-T4's own clause: "old projects retain compatibility mode". 62 real projects are in this
+    // cohort; refusing them would break every legacy build for a rule that did not exist when
+    // they were created, which is the reason the gate stayed unwired after the flag went on.
+    const { storyAuthorizationFor, readLifecycleEvidence } = await loadGate({
+      enforcement: true, row: null, project: { id: PROJECT, created_at: BEFORE_CUTOFF },
+    });
+
+    expect(await storyAuthorizationFor(PROJECT)).toEqual({
+      authorized: true, reason: 'legacy_compatibility', gaps: [],
+    });
+    // And it short-circuits: there is no lifecycle row to read evidence from, so asking the
+    // predicate layer would be a query against nothing.
+    expect(readLifecycleEvidence).not.toHaveBeenCalled();
+  });
+
+  it('BOUNDARY: a project created AT the cutoff is a bypass, not legacy', async () => {
+    // The off-by-one that decides whether the first governed project is governed. The hook was
+    // live at that instant, so a missing row is already a bypass. `<`, never `<=`.
+    const { storyAuthorizationFor } = await loadGate({
+      enforcement: true, row: null, project: { id: PROJECT, created_at: AT_CUTOFF },
+    });
+
+    const verdict = await storyAuthorizationFor(PROJECT);
+    expect(verdict.authorized).toBe(false);
+    expect(verdict.reason).toBe('no_lifecycle');
+  });
+
+  it('REFUSES an id with no project at all, so a nonexistent id is not a way in', async () => {
+    // Absence of a project is absence of evidence. If this permitted, the gate would be
+    // bypassable by passing any id that does not exist.
+    const { storyAuthorizationFor } = await loadGate({
+      enforcement: true, row: null, project: null,
+    });
+
+    expect(await storyAuthorizationFor(PROJECT)).toEqual({
+      authorized: false, reason: 'no_lifecycle', gaps: ['project_not_found'],
+    });
+  });
+
+  it('compatibility mode is PER PROJECT, not a second global switch', async () => {
+    // The distinction that matters for reading the logs later: `enforcement_disabled` is global
+    // and temporary, `legacy_compatibility` is per project and permanent for that project. Two
+    // projects, one flag state, two different verdicts.
+    //
+    // ASSERTED IMMEDIATELY AFTER EACH LOAD, not both at the end. `storyAuthorization` imports
+    // `Project` with a dynamic `await import()` inside the function, so it resolves against the
+    // module registry AT CALL TIME -- and `loadGate` calls `jest.resetModules()`. Loading both
+    // first made the second mock answer for the first gate, which is how this test failed on its
+    // first run. The same pattern IS safe for `readLifecycleEvidence`, imported statically.
+    const legacy = await loadGate({
+      enforcement: true, row: null, project: { id: PROJECT, created_at: BEFORE_CUTOFF },
+    });
+    expect((await legacy.storyAuthorizationFor(PROJECT)).reason).toBe('legacy_compatibility');
+
+    const modern = await loadGate({
+      enforcement: true, row: null, project: { id: PROJECT, created_at: AFTER_CUTOFF },
+    });
+    expect((await modern.storyAuthorizationFor(PROJECT)).reason).toBe('no_lifecycle');
+  });
+
+  it('a project WITH a lifecycle row never consults the compatibility path', async () => {
+    // Otherwise a registered project could be permitted by its creation date instead of by its
+    // approval state, which would be the gate answering the wrong question.
+    const { storyAuthorizationFor, findByPk } = await loadGate({
+      enforcement: true, row: { student_project_id: PROJECT }, evidence: refinedButUnapproved(),
+    });
+
+    const verdict = await storyAuthorizationFor(PROJECT);
+    expect(verdict.authorized).toBe(false);
+    expect(verdict.reason).toBe('blueprint_not_approved');
+    expect(findByPk).not.toHaveBeenCalled();
   });
 
   it('the refusal carries a throwable error that states the reason', async () => {
