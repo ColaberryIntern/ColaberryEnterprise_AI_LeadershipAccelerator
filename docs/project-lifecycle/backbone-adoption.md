@@ -71,7 +71,7 @@ evidence gets exercised**, because the approval path sits six stages in.
 
 ---
 
-### B4 — Give the bypass detectors a caller ⚠️
+### B4 — Give the bypass detectors a caller ⚠️  ✅ **PASSED 2026-10-14**
 
 **Why, measured:** `unregisteredDeliveryProjectsSince` and `unregisteredStudentProjectsSince` are
 called from **tests only**. There is no production caller. A detector nobody runs cannot detect
@@ -84,7 +84,7 @@ see it. Proven by a deliberately unregistered row appearing in that output, then
 
 ---
 
-### B5 — Prove NO creation path bypasses the hook 🔍
+### B5 — Prove NO creation path bypasses the hook 🔍  ✅ **PASSED 2026-10-14**
 
 **Why:** the chokepoint inventory for this programme was wrong within a week once already —
 `govDeliveryProject.ts` landed three days after the inventory was taken and was live in
@@ -115,5 +115,43 @@ A row moves to ✅ only on evidence that was produced and pasted, never on a rea
 That standard is not pedantry: every failure in this programme's eight phases was a claim that
 did not survive measurement, and not one was a broken behaviour the tests passed over.
 
-**Current score: 1 of 6.** The Factory's registration is proven. Everything else on this page is
-outstanding.
+**Current score: 3 of 6.** B4 and B5 passed on 2026-10-14. Outstanding: B1 (gov registration has
+never fired), B2 (the four legacy delivery projects need a decision), B3 (no domain has moved off
+`discovery`), B6 (LC-01 row naming both consumers).
+
+### B5 evidence — the sweep, with its commands
+
+```
+grep -rn "Project\.create(\|Project\.bulkCreate(\|Project\.findOrCreate(" services routes jobs scripts models --include=*.ts | grep -vE "__tests__|DeliveryProject|LifecycleState|AgentDomainProject"
+  -> agentDomain/agentDomainProvisioner.ts:209   Project.findOrCreate
+  -> businessProcessSeedService.ts:135           Project.findOrCreate
+  -> ops/bcSyncService.ts:288                    OpsBcProject.create  (table ops_bc_projects - NOT a project row)
+  -> projectService.ts:67                        Project.create
+
+grep -rn "DeliveryProject\.create(\|DeliveryProject\.bulkCreate(\|DeliveryProject\.findOrCreate(" services routes jobs scripts --include=*.ts
+  -> delivery/leadConversion.ts:175              factory/govDeliveryProject.ts:134
+  -> scripts/seedDevClientReviewer.ts:183        scripts/seedFactoryDemoContract.ts:31
+  -> scripts/seedOrdinaryProjectDemo.ts:27
+
+grep -rniE "insert into (public\.)?(projects|delivery_projects)" services routes jobs scripts db --include=*.ts
+  -> NO HITS. No raw-SQL bypass.
+
+grep -rn "tableName: 'projects'|tableName: 'delivery_projects'" models/*.ts
+  -> exactly ONE model per table: Project.ts:321, DeliveryProject.ts:163
+  -> BOTH declare afterCreate with the lifecycle hook (Project.ts:339, DeliveryProject.ts:175)
+```
+
+No `bulkCreate` anywhere, which matters: it does not fire per-row `afterCreate` hooks.
+
+### B4 evidence
+
+`checkLifecycleRegistration` now runs inside `runFullSystemHealthCheck`, so both detectors are
+called every time anyone opens `/health/full`. Six tests, five mutations, all RED:
+bypass-reported-as-ok fails 2, ids-dropped 1, failure-reads-as-pass 1, **unwired-from-report 1**,
+student-side-skipped 4. File restored byte-identically, sha256 `c46350d3a2518c41`.
+
+**One mutation initially gave a FALSE NEGATIVE and the fix is a rule.** The first
+bypass-reported-as-ok run came back all-green, because its anchor `severity: 'warning',` occurs
+**14 times** in that file and the replacement hit a different check. A mutation anchor must be
+asserted UNIQUE, not merely present - the re-run asserted exactly one match and killed 2 tests.
+A mutation that lands on the wrong line is indistinguishable from a robust test.
