@@ -40,7 +40,8 @@ with real data in it, which is why item 1 is still yours.
 
 ### 2. Two PRs are waiting for your merge
 
-Nothing is blocked on them; they are records and tests, not production code.
+Nothing is blocked on them, and nothing in them changes production behaviour today — but one part
+IS production code, so this is not a "docs only" merge. Read the three parts below before clicking.
 
 - **PR #3086** — https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3086
 
