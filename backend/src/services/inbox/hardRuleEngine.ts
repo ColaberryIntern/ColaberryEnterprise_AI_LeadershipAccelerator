@@ -143,6 +143,61 @@ export function hasOperationalAlertHeader(headers: any): boolean {
 }
 
 /**
+ * True when a THIRD-PARTY service is telling us one of our own systems is
+ * degraded, suspended or erroring.
+ *
+ * WHY. Rule 00 above already protects operational alerts, but only ours: it
+ * matches the X-Cora-Alert header we set on mail we generate. Nothing we send
+ * can protect a vendor's alert about our production, and vendors are where the
+ * first warning actually comes from. On 2026-10-06 Twilio sent "Action
+ * Required: Your Twilio account is suspended" to ali@colaberry.com and to
+ * techadmin, plus fifteen "[Twilio Alarm] Error alarm triggered" messages. All
+ * of them were archived unread by section 4 and section 5 below, for the only
+ * two reasons every machine-sent alert in existence will always match: a
+ * noreply From and a List-Unsubscribe header. Nobody saw any of it. The account
+ * stayed suspended for six days, every outbound AI call stopped, and the outage
+ * was found by a person noticing calls were missing rather than by the fifteen
+ * emails that said so.
+ *
+ * MATCHED ON SHAPE, NOT ON A SENDER LIST. A list of vendor domains is the
+ * sender-by-sender patching that let the account-security defect recur four
+ * times before rule 0g matched on shape instead; it would also be wrong the
+ * first time we add a service nobody remembered to list. Machine-generated
+ * alerts share a shape that marketing does not: a bracketed severity token the
+ * sending system stamps on, or a stated service condition.
+ *
+ * NARROWED BY MEASUREMENT, NOT BY INSTINCT. The first draft also matched
+ * bracketed severity tags ("[Warning]", "[Twilio Alarm]") and measured events
+ * ("error spike", "alarm triggered"). Backtested against the 26,776 subjects
+ * this engine archived in the 60 days to 2026-10-14, those two would have moved
+ * 3,180 emails into the inbox, 12% of everything archived and ~53 a day,
+ * including 584 copies of one "[Twilio Alarm] Error alarm triggered by 16
+ * errors". Surfacing the same alarm 584 times is not better than archiving it;
+ * it just moves where the signal drowns. Those tags belong in a digest, not an
+ * inbox rule.
+ *
+ * What is left matched TWO emails in the same 60 days, and both were the Twilio
+ * suspension that caused the outage. That is the trade this rule exists to
+ * make: it is allowed to miss a leading indicator, because the inbox only stays
+ * readable if archiving mostly works, and a condition that actually stops a
+ * service always sends something that says so.
+ */
+export function isVendorOperationalAlert(subject?: string | null): boolean {
+  const s = (subject || '').trim();
+  if (!s) return false;
+
+  // (a) A service we depend on has STOPPED, or is about to. Someone has to act
+  //     and no amount of waiting fixes it.
+  if (/\b(account|service|subscription|plan|number|domain)\b[^.]{0,40}\b(is |has been |was )?(suspend|deactivat|terminat|disabl|revok|past due|unpaid)/i.test(s)) return true;
+
+  // (b) A credential is expiring or has been revoked. Same shape: silent until
+  //     the day it breaks something.
+  if (/\b(certificate|api key|access token|personal access token|credential|licen[cs]e)\b[^.]{0,30}\b(expir|revok)/i.test(s)) return true;
+
+  return false;
+}
+
+/**
  * True when a financial or insurance provider is asking the recipient to finish
  * something they already started: an application, an enrolment, a signature.
  *
@@ -278,6 +333,18 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     const reason = 'Operational health alert (X-Cora-Alert) - never archive';
     console.log(`${LOG_PREFIX} Health alert: ${reason}`);
     return { matched: true, state: 'INBOX', rule_id: 'operational_alert_00', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
+  }
+
+  // --- 00b. A VENDOR saying one of our systems is broken → INBOX ---
+  // Immediately after 00 and for the same reason, except 00 only covers alerts
+  // we send ourselves: it matches a header we stamp on. A vendor cannot stamp
+  // our header, so Twilio's "account is suspended" and its fifteen error alarms
+  // fell to sections 4 and 5 and were archived unread for six days while every
+  // outbound call failed. See isVendorOperationalAlert for that incident.
+  if (isVendorOperationalAlert(email.subject)) {
+    const reason = 'Vendor operational alert (service degraded/suspended) - never archive';
+    console.log(`${LOG_PREFIX} Vendor alert: ${reason}`);
+    return { matched: true, state: 'INBOX', rule_id: 'vendor_operational_alert_00b', reason: reason + fwdSuffix, classified_by: 'hard_rule', forwarded_from_hotmail: forwardedFromHotmail };
   }
 
   // --- 0i. A financial/insurance application waiting on Ali → INBOX ---
