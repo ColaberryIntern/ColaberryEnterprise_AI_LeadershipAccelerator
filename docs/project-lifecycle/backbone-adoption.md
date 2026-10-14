@@ -19,7 +19,7 @@ proven for each consumer rather than assumed.
 |---|---|---|---|
 | 🏭 **Project Factory** (10 agent domains) | ✅ | ✅ | All ten domains hold exactly one `project_lifecycle_states` row each, stage `discovery`, created 2026-10-13 14:03Z. 0 duplicates, 0 orphans, 0 tenant mismatches |
 | 🏛️ **Gov contracts** (delivery projects) | ✅ | ✅ **proven 2026-10-14** | The delivery hook fired in production for the first time. A sandbox project created through the real `DeliveryProject` model — the exact hook-carrying path `govDeliveryProject.ts:134` uses — left **exactly one** `project_lifecycle_states` row: stage `discovery`, `tenant_id` matching, `entry_point` `delivery_project.afterCreate`. Created, verified, then removed; baseline restored to 4 projects / 0 delivery lifecycle rows. Full query + output in **B1** below |
-| Legacy delivery projects | — | n/a | 4 rows, 2 of them `government_public_sector`, created 2026-09-21 → 2026-09-28. All predate the hook (2026-10-09). None has a lifecycle row. **Measured 2026-10-14: all four are at delivery status `building`, not `discovery`** — see **B2** |
+| Legacy delivery projects | — | n/a | 4 rows, 2 of them `government_public_sector`, created 2026-09-21 → 2026-09-28. All predate the hook (2026-10-09). None has a lifecycle row. Measured 2026-10-14: all four at delivery status `building`, not `discovery`. **DRI decision 2026-10-14: declared legacy, out of scope (option b)** — see **B2** |
 | Legacy student projects | — | n/a | 62 rows predating the student hook (2026-10-12). None has a lifecycle row. Covered by `legacy_compatibility` in the story gate |
 
 **The difference that matters:** "wired" means the code path exists. "Proven" means it ran in
@@ -105,7 +105,7 @@ at its pre-test baseline.
 
 ---
 
-### B2 — Decide the four legacy delivery projects 🗂️  ⏳ RECOMMENDATION DELIVERED — DRI DECISION PENDING
+### B2 — Decide the four legacy delivery projects 🗂️  ✅ DECISION RECORDED (2026-10-14): legacy, out of scope
 
 **Why:** two of them are `government_public_sector`. Today they are invisible to the lifecycle,
 and nobody has decided whether that is correct.
@@ -145,8 +145,15 @@ has not started.
    branch covers students only). That is a single, reviewable change, versus four hand-assigned
    stages that each assert something about work the register cannot verify.
 
-**Not implemented.** Per instruction, neither option is built until the DRI chooses. This row moves
-to ✅ only when that decision is recorded here.
+**DECISION (DRI, 2026-10-14): option (b) — leave the four legacy delivery projects alone, declared
+legacy and out of scope.** They predate the hook and are treated exactly like the 62 legacy
+student projects: not backfilled, not expected to carry a lifecycle row.
+
+**Spawned follow-up (not part of this PR):** the delivery side needs its own `legacy_compatibility`
+treatment, because the story gate's branch covers STUDENT projects only. Until that lands, these
+four rows will read as "unregistered" to any delivery-side bypass detector (see B4) — so the
+detector must exclude projects created before the hook go-live (2026-10-09), the same cut-off the
+student side uses, before B4's detector is wired to anything that alerts.
 
 ---
 
@@ -259,9 +266,28 @@ did not survive measurement, and not one was a broken behaviour the tests passed
 **Current score (2026-10-14):**
 - **B1 ✅ proven** — gov delivery path fires the hook in production, evidence pasted above.
 - **B5 ✅ (delivery/gov half) proven** — five chokepoint call sites, zero bypasses; student-`projects` half outstanding.
-- **B2 ⏳ recommendation delivered, DRI decision pending** — recommended option (b), legacy + out of scope.
-- **B3 / B4 / B6 — outstanding** (not part of the gov-pipeline verification).
+- **B2 ✅ decided** — DRI chose option (b) on 2026-10-14: the four legacy delivery projects are declared legacy and out of scope. Spawns one follow-up — a delivery-side `legacy_compatibility` treatment so the pre-go-live rows are excluded, not flagged (needed before B4's detector alerts).
+- **B3 / B4 / B6 — outstanding** (broader programme; see "What is left for Gov" below).
 
 The Project Factory's registration remains proven. **The gov contracts pipeline is now proven to
 sit on the Unified Project Lifecycle backbone** (B1), through a chokepoint shown to have no bypass
-(B5, delivery half). What is left is a decision (B2) and the broader-programme tasks (B3/B4/B6).
+(B5, delivery half), with the legacy question decided (B2).
+
+---
+
+## What is left for the Gov contracts pipeline to be "done" on the backbone
+
+The gov pipeline's own backbone adoption (B1, B2, B5-delivery) is **complete**. These remaining
+items are what close the loop so it stays proven, each small and independently shippable:
+
+1. **Delivery-side `legacy_compatibility` treatment** (spawned by B2). Exclude delivery projects
+   created before 2026-10-09 from the "unregistered" definition, mirroring the student cut-off, so
+   the four legacy rows are formally out of scope rather than silently flagged.
+2. **B4 — wire the delivery bypass detector to something that alerts.** `unregisteredDeliveryProjectsSince`
+   has no production caller today. Give it one (ops digest / health surface / scheduled job) so a
+   future gov path that somehow bypasses the hook is caught automatically, not only by a manual sweep.
+3. **B6 — record the gov consumer against LC-01** in `acceptance-evidence.md`, citing B1's production
+   evidence, stating plainly that the gov delivery path is proven (not merely wired).
+
+Out of this pipeline's scope: B3 (a Project Factory domain advancing stages) and the student-`projects`
+half of B5 are programme-wide, not gov-specific.
