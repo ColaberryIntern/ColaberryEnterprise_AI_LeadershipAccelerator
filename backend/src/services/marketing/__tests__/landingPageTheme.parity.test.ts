@@ -161,7 +161,7 @@ describe('the extended palette', () => {
     // sourced rather than derived. Pinned to the vendored file: a near-miss of a brand colour
     // across four brands' pages is exactly the drift this suite exists to catch.
     const css = fs.readFileSync(path.resolve(
-      __dirname, '..', '..', '..', '..', '..', 'apps', 'colaberry-enterprise-design', 'tokens', 'colors.css',
+      __dirname, '..', '..', '..', '..', '..', 'apps', 'colaberry-enterprise-design', 'src', 'assets', 'design', 'tokens', 'colors.css',
     ), 'utf8');
     const root = /:root\s*\{([^}]*)\}/.exec(css);
     expect(root).not.toBeNull();

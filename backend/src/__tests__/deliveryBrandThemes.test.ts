@@ -103,7 +103,7 @@ describe('the client surface theme matches the vendored design system', () => {
     // worldoftaxonomy - so it was the largest single source of unbranded surfaces. Its system
     // was never vendored here at all until 2026-10-13; the sync registry carried target: null.
     const css = fs.readFileSync(path.join(
-      REPO_ROOT, 'apps', 'colaberry-enterprise-design', 'tokens', 'colors.css',
+      REPO_ROOT, 'apps', 'colaberry-enterprise-design', 'src', 'assets', 'design', 'tokens', 'colors.css',
     ), 'utf8');
     const source = forgeLightTokens(css);
     const copy = registryTokens(ts, 'enterprise');

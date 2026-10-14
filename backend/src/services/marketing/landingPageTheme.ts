@@ -161,7 +161,7 @@ export const LANDING_PAGE_THEMES: Readonly<Record<string, BrandBaseTheme>> = {
     '--line': '#263743',
   },
   /**
-   * Colaberry Enterprise, copied from apps/colaberry-enterprise-design/tokens/colors.css.
+   * Colaberry Enterprise, copied from apps/colaberry-enterprise-design/src/assets/design/tokens/colors.css.
    *
    * FOUR brands resolve to this theme key - advisor, colaberry-enterprise,
    * trustbeforeintelligence and worldoftaxonomy - so it was the single largest source of

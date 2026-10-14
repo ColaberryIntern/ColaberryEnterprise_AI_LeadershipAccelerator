@@ -118,7 +118,7 @@ const THEMES: Readonly<Record<string, BrandTheme>> = {
     '--line': '#263743',
   },
   /**
-   * Colaberry Enterprise, copied from `apps/colaberry-enterprise-design/tokens/colors.css`,
+   * Colaberry Enterprise, copied from `apps/colaberry-enterprise-design/src/assets/design/tokens/colors.css`,
    * vendored 2026-10-13. Four brands resolve to this key - advisor, colaberry-enterprise,
    * trustbeforeintelligence, worldoftaxonomy - so it was the largest single source of
    * unbranded surfaces. The system existed at github.com/aleemcolaberry the whole time and
