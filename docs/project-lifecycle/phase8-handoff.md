@@ -72,8 +72,14 @@ It must not be done yet. `operating_blueprint_manifests` holds **zero rows** —
 ever been approved, because the approval screen was itself behind this flag. Wiring the
 requirement before anyone approves a blueprint would refuse **every** student build.
 
-The sequence is: approve one blueprint through the now-reachable screen, confirm the flow works,
-then wire the gate. Say when and I will do it as its own change with its own rollback.
+**The sequence is longer than "approve one blueprint", and the live screen is what corrected me.**
+Blueprint approval is stage SIX. A project reaches it by walking `discovery` ->
+`requirements_ready` -> `process_ready` -> `allocation_ready` -> `design_ready` ->
+`awaiting_blueprint_approval` -> `blueprint_approved`. The pilot projects sit at `discovery` with
+four unassessed prerequisites and `requirement.approve` as the next actor, so enforcement is not
+one click away - it needs one project driven through the machine. Say when, and I will do the
+wiring as its own change with its own rollback once a project actually reaches
+`blueprint_approved`.
 
 ---
 
@@ -89,7 +95,7 @@ then wire the gate. Say when and I will do it as its own change with its own rol
 | Boot clean | ✅ | 467 log lines, **0 fatal**; **2** structured errors in that window, both pre-existing `intel-card-content` noise (I first said 10 — a loose `grep -ci rror` that also matched "0 errors") |
 | Workspace shipped and routed live | ✅ | SPA route and API base present in the live production JS bundle; `GET /admin/project-lifecycle/<id>` returns 200 HTML |
 | **Activation proven AT THE SURFACE** | ✅ | **2026-10-14, authenticated session.** The page rendered and the API answered with a domain error (*"No lifecycle is registered for that project"*). With the flag OFF the handler returns `disabled()` and the UI shows the yellow "enforcement is not enabled" box. **That box was absent.** A different, domain-specific answer is only reachable past the flag check, so this is the discrimination no unauthenticated probe could make |
-| Workspace populated with a real lifecycle record | ❌ | Not yet seen. The first attempt used `?kind=delivery` on a STUDENT project, which correctly found no delivery lifecycle. Retry with `?kind=student` |
+| **Workspace rendered with real data** | ✅ | **2026-10-14, authenticated.** The full 13-stage rail renders and matches `LIFECYCLE_STAGES` exactly; stage `discovery` is current, matching the database; the four `discovery` prerequisites are reported as **"Not assessed — nobody has looked at these yet"** rather than as passes; next actor `requirement.approve`. **P8-T4 surface half CLOSED** |
 | Enforcement actually refusing | ❌ | By design today. The gate is unreachable from **all three** `decomposeBuild` call sites, none of which passes `projectId`. **P8-T4 is PARTIAL**, not complete |
 
 ## Limitations, stated plainly
