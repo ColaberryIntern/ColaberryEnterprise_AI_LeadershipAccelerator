@@ -43,7 +43,18 @@ with real data in it, which is why item 1 is still yours.
 Nothing is blocked on them; they are records and tests, not production code.
 
 - **PR #3086** — https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3086
-  — these Phase 8 documents and the PROGRESS entry. Documentation only.
+
+  It grew twice overnight, so what it contains is NOT what its first description said. Three parts:
+
+  1. **These Phase 8 documents** and the PROGRESS entries. Documentation.
+  2. **Legacy compatibility mode** for the story gate — one production file,
+     `storyAuthorization.ts`. Safe to merge because the gate it modifies is still unreachable
+     from every caller, so behaviour is unchanged. It is what makes enforcement switchable at
+     all: without it, arming the gate would refuse all 62 legacy student builds.
+  3. **The corpus baseline and five positive controls** (P7-T1.2, partial). Tests and fixtures.
+
+  The PR body and a follow-up comment describe each part. Nothing in it changes production
+  behaviour today.
 - No other lifecycle PR is outstanding. #3085 is already merged and deployed.
 
 ### 3. One decision, when you have a moment
