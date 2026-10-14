@@ -8,8 +8,15 @@
 
 ### 1. The two-minute check that only you can do
 
-Open `/admin/project-lifecycle/<any project id>?kind=delivery` on the normal application host,
-logged in with program permission.
+Open this, logged in with program permission:
+
+```
+https://enterprise.colaberry.ai/admin/project-lifecycle/831c87ab-243b-52cc-9456-901d504a1db1?kind=delivery
+```
+
+That id is one of the ten pilot projects, so it has a real lifecycle record to show. The host was
+identified by an independent verifier (it is the accelerator's `default_server` block); note that
+`app.colaberry.com` is a DIFFERENT system and 404s every `/api/*` path.
 
 - **Expected:** the lifecycle workspace renders. It will look EARLY — every project sits at stage
   `discovery` and no blueprint exists yet. That is the correct starting state.
@@ -18,17 +25,25 @@ logged in with program permission.
   is one line either way.
 - **If you see a blank page**, that is a different defect and also worth telling me.
 
-This is the one claim I could not verify myself. Every route is `requireSection('program')` and
-the "not enabled" response sits behind that middleware, so an unauthenticated request returns 401
-whether the feature is on or off. I tried an unauthenticated probe and **its own control proved it
-uninformative** — a deliberately nonexistent route and `/api/health` returned the same 401, so a
-global guard answers before routing.
+This is the one claim that still needs a logged-in session. Every route is
+`requireSection('program')`, so an unauthenticated request returns 401 either way.
+
+**A correction worth your attention.** I first reported that a global guard answers before routing,
+reasoning from `/api/health` also returning 401. An independent verifier disproved it: `/api/health`
+is not a route at all, so that was a second nonexistent-path observation rather than evidence, and
+the real `/health` answers **200 unauthenticated**.
+
+Activation itself IS independently proven — the feature flag was evaluated from the shipped
+compiled module inside the live container and returns `true`, and the review workspace route is
+present in the live production JavaScript bundle. What remains unobserved is only the rendered page
+with real data in it, which is why item 1 is still yours.
 
 ### 2. Two PRs are waiting for your merge
 
 Nothing is blocked on them; they are records and tests, not production code.
 
-- Whatever I open tonight for the Phase 8 documents (link in chat).
+- **PR #3086** — https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3086
+  — these Phase 8 documents and the PROGRESS entry. Documentation only.
 - No other lifecycle PR is outstanding. #3085 is already merged and deployed.
 
 ### 3. One decision, when you have a moment
@@ -56,9 +71,10 @@ then wire the gate. Say when and I will do it as its own change with its own rol
 | **Activated** | ✅ | `printenv ENABLE_PROJECT_LIFECYCLE` **inside the running container** returns `true` |
 | Registration working on real traffic | ✅ | 10 projects created 2026-10-13, **10 of 10** got exactly one lifecycle row, 0 orphans, 0 duplicates |
 | Database protections | ✅ | `build_plans_one_published_per_project` present by name; `projects` 72 rows, **0 unattributed** |
-| Boot clean | ✅ | 467 log lines, **0 fatal**; 10 errors all pre-existing `intel-card-content` / `aiNews` noise |
-| **Review surface seen rendering** | ❌ | Needs an authenticated session. **Your checklist item 1.** |
-| Enforcement actually refusing | ❌ | By design today — the gate is unreachable from the live generator |
+| Boot clean | ✅ | 467 log lines, **0 fatal**; **2** structured errors in that window, both pre-existing `intel-card-content` noise (I first said 10 — a loose `grep -ci rror` that also matched "0 errors") |
+| Workspace shipped and routed live | ✅ | SPA route and API base present in the live production JS bundle; `GET /admin/project-lifecycle/<id>` returns 200 HTML |
+| **Rendered workspace with real data seen** | ❌ | Needs an authenticated program-section session. **Your checklist item 1.** |
+| Enforcement actually refusing | ❌ | By design today. The gate is unreachable from **all three** `decomposeBuild` call sites, none of which passes `projectId`. **P8-T4 is PARTIAL**, not complete |
 
 ## Limitations, stated plainly
 
@@ -73,7 +89,15 @@ then wire the gate. Say when and I will do it as its own change with its own rol
    activation: T1.2, T1.3, T2 through T6 and T8. The live gates carry Phase 6's verification, not
    Phase 7's. T7 stays held until it rehearses its own rollback.
 5. **62 pre-hook projects have no lifecycle record.** Expected; they are untouched and nothing
-   blocks them.
+   blocks them. This is also why enforcement must not be wired yet: arming the gate while 62
+   projects hold no lifecycle row would refuse every legacy student build on the next deploy.
+6. **P8-T4 is PARTIAL.** Its acceptance is "server behavior confirms all entry points enforced",
+   and the story-generation entry point is provably not enforced — zero `sbp_story_authorization_*`
+   events of any variant since the restart, not even `_skipped`.
+7. **A content fingerprint of this release is impossible in principle.** The whole diff is test
+   files that `tsconfig.json` excludes from the build, so the compiled output is byte-identical to
+   the rollback SHA's. Release identity rests on checkout, build mode and build timestamp, all of
+   which were verified end to end.
 
 ## Rollback
 
