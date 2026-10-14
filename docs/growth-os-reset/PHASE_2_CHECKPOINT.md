@@ -31,14 +31,39 @@ registration-time write failure is logged by error class and recovered by the ni
 transient failure leaves a gap **until the next night** rather than forever.
 
 For accounts that already existed, the pre-deploy version of this document said the answer was
-unknown. **It is no longer.** §F records the measurement: **86 active `standard` + `guest` rows
-are invisible to Explorer Growth**, because the running population filter is
-`enrollment_type: 'explorer'` AND `status: 'active'` and never consults `tier`. The backfill's dry
-run can prove free-signup provenance for **37** of them. Of the remaining 49 it reports **37 as
-ambiguous** for human decision and **excludes 12** as provably NOT free-signup — which is the
-opposite of unprovable, and an earlier version of this line wrongly folded both into "cannot
-prove either way". **The backfill has still not been run for real** — that is a decision, not
-an oversight.
+unknown. **It is no longer**, and as of **2026-10-13 it is also largely repaired.** The measured
+starting state was **86 active `standard` + `guest` rows invisible to Explorer Growth**, because
+the running population filter is `enrollment_type: 'explorer'` AND `status: 'active'` and never
+consults `tier`.
+
+**ALI AUTHORISED THE BACKFILL AND IT HAS NOW RUN** (2026-10-13, 56 writes: 37 programme, 19 tier).
+Measured straight from the table, before and after:
+
+| Shape | Before | After |
+|---|---|---|
+| `explorer` + `guest` — coherent, visible | 0 | **56** |
+| `standard` + `guest` — invisible | 86 | **49** |
+| `explorer` + non-`guest` | 290 | **271** |
+| total rows | 630 | **630** |
+
+So **49 rows remain in that shape, not 86** — and of those, the script **excludes 12** as provably
+NOT free-signup, which is the opposite of unprovable. The genuine residual is therefore the **37
+it reports as ambiguous** and refuses to guess about. An earlier version of this line wrongly
+folded the excluded and the ambiguous together, and an earlier version said the backfill had not
+been run.
+
+**Two disclosures belong with that result.** The script warns that the 37 rows joining the Explorer
+programme would carry `explorer_entered_at` NULL; measured afterwards, **all 56 coherent rows have
+it NULL** — the 37 joiners *and* the 19 whose tier was corrected — because the column has never
+been populated for anybody and no task owns backfilling it:
+
+```
+coherent_free_total | entered_at_null | entered_at_set
+                 56 |              56 |              0
+```
+
+And the script's own success line printed `committed NaN of 56 planned write(s)`; the write is
+evidenced by the before/after counts above and a 56-entry rollback ledger, not by that line. See §F.
 
 **2 — No. Live in production as of 2026-10-12.** Conversion now derives from authoritative paid and
 subscription state in one place (`adminOs/conversionState.ts`), and both stage derivations import
@@ -319,18 +344,23 @@ One `GROUP BY` over `enrollments`, no PII:
 | standard | member | withdrawn | 43 |
 | explorer | member | withdrawn | 20 |
 
-**There are ZERO `explorer` + `guest` rows**, and that pair is what DECISION 1 defines a Free AI
-learner to be. Both incoherent shapes are real, and the backfill's own dry run names them:
+**THE STARTING STATE HAD ZERO `explorer` + `guest` ROWS**, and that pair is what DECISION 1
+defines a Free AI learner to be. Both incoherent shapes were real, and the backfill's own dry run
+named them:
 
 ```
-after:  shape_a(explorer+non-guest)=290  shape_b(standard+guest)=86
+before: shape_a(explorer+non-guest)=290  shape_b(standard+guest)=86
         coherent(explorer+guest)=0       total=630
 ```
 
+**That zero is now 56.** Ali authorised the backfill on 2026-10-13 and it ran; the result is at the
+end of this section. The three bullets below describe the population as it was **before** that run,
+because they are what justified running it:
+
 - **86 active `standard` + `guest`** carry the wrong `enrollment_type`. The running container's
   population filter is `enrollment_type: 'explorer'` AND `status: 'active'` and never consults
-  `tier` — verified by grep inside the container — so **these 86 are invisible to Explorer
-  Growth today.**
+  `tier` — verified by grep inside the container — so **these 86 were invisible to Explorer
+  Growth.** 37 of them have since been written into the programme; **49 remain**.
 - **288 of the 290 `explorer` + `member`** rows carry the wrong `tier`. **270 are visible** to
   Explorer Growth; the other 20 are `withdrawn`, and the filter quoted above requires
   `status='active'`.
@@ -343,7 +373,7 @@ after:  shape_a(explorer+non-guest)=290  shape_b(standard+guest)=86
   incoherent population. Of the 288 genuinely wrong, the backfill plans only **19** tier writes,
   because it moves nothing it cannot prove.
 
-### What the backfill would do, from its own dry run (NOT run for real)
+### What the backfill planned, from its own dry run
 
 ```
 == 56 write(s) planned ==
@@ -364,14 +394,59 @@ buckets, which sum to 630 exactly: **254 already coherent, 37 programme writes, 
 be wrong — **37 are reported and 283 are excluded**, and the distinction matters because
 excluded means proven not to belong, not unproven.
 
-**So the honest answer to question 1, for EXISTING accounts, is measured rather than unknown:
-yes, Free AI accounts exist today that Explorer Growth cannot see — 86 of them — and 37 have
-provable free-signup provenance. The remaining 49 cannot be proven either way from the data.**
+### What the backfill ACTUALLY DID, run 2026-10-13 on Ali's authorisation
+
+```
+$ docker exec accelerator-backend node dist/scripts/backfillFreeAccountCoherence.js \
+    --confirm-production --ledger /tmp/t207-ledger.json
+
+  before:  shape_a(explorer+non-guest)=290  shape_b(standard+guest)=86
+           coherent(explorer+guest)=0       total=630
+  committed NaN of 56 planned write(s)
+  after:   shape_a(explorer+non-guest)=271  shape_b(standard+guest)=49
+           coherent(explorer+guest)=56      total=630
+```
+
+Confirmed by an independent query rather than by the script reporting on itself:
+
+```
+$ docker exec accelerator-db psql -U accelerator -d accelerator_prod -P pager=off -c "..."
+  coherent_free | still_invisible | explorer_nonguest | total
+             56 |              49 |               271 |   630
+```
+
+Every delta closes against the plan: **290 − 19 = 271**, **86 − 37 = 49**, **0 + 56 = 56**, and the
+**630 total is unchanged**, so nothing was created or destroyed. The rollback ledger holds **56
+entries** and was copied off the container to `/root/t207-ledger-20261013.json`, because a deploy
+empties the container's `/tmp` and a rollback file that vanished is not a rollback plan.
+
+**The two genuinely paid Explorers were NOT touched** — still `member` / `paid` / `250.00`, count
+2 — which is the paid exclusions behaving as designed. Their stage still reads **Enrolled**, which
+is correct.
+
+**`committed NaN of 56` IS A REAL DEFECT IN THE SCRIPT, not a cosmetic one.** `commitLedger`
+destructures `const [, affected] = await sequelize.query(...)`; for a Postgres `UPDATE` without
+`type: QueryTypes.UPDATE` the second element is a result object, not a row count, so
+`Number(affected)` is `NaN`. The consequence is that **the script cannot tell an operator whether
+it wrote 56 rows or 3.** The write here is evidenced by the before/after shape counts and the
+independent query above, both of which are derived from the table rather than from the script's
+own bookkeeping. Fixed in the same commit as this disclosure, with a test that pins the count.
+
+**So the honest answer to question 1, for EXISTING accounts: mostly repaired, and the remainder is
+measured rather than unknown.** 56 rows are now coherent and visible where none were. **49 rows
+remain `standard` + `guest`**; of those the script **excludes 12** as provably NOT free-signup, so
+the genuine residual is the **37 it reports as ambiguous** and refuses to guess about. An earlier
+version of this paragraph said all 49 "cannot be proven either way", which was wrong in both
+directions.
 
 ### Still not done
 
-- **The backfill has NOT been run for real.** Only the dry run. That is Ali's decision, and the
-  numbers above are what it should be made on.
+- **All 56 now-coherent rows carry `explorer_entered_at` NULL**, and no task owns backfilling that
+  column. The script's disclosure names only the 37 it wrote into the programme, which understates
+  it: the 19 tier-corrected rows are NULL too, because the column has never been populated for
+  anybody. Measured after the run — `entered_at_null = 56`, `entered_at_set = 0`.
+- **37 ambiguous rows are still reported rather than decided.** The script will not guess at
+  programme membership from shape alone, which is the behaviour it was written for.
 - `explorer_entered_at` would be left NULL for all 37 joiners, and **no task owns that column.**
 - Whether Open-House deposit rows exist is still **unknown**; nothing in this phase measured it.
 - No browser verification and no screenshots.
@@ -440,7 +515,12 @@ it, where a reader scanning sixteen numbered lines would have missed it.
 7. **The `'delegates'` predicate is defeatable** by a dead literal or a type-only import. No view
    claims it today.
 8. **`reconcileAppPayments` is ~213 lines** over the function ceiling, untouched by this phase.
-9. **The backfill has never run.** The legacy incoherent population is unmeasured.
+9. **The backfill HAS now run** (2026-10-13, 56 writes, §F) — an earlier version of this line said
+   it never had, and said the legacy population was unmeasured. Both are superseded. What remains:
+   **49 rows** are still `standard` + `guest` (12 provably not free-signup, 37 reported as
+   ambiguous and deliberately not guessed at), the **37 rows written into the programme carry
+   `explorer_entered_at` NULL** with no task owning that column, and the script's success line
+   reports `NaN` rather than a row count.
 10. **T213's acceptance registry has named limits**, written into the file rather than left to be
     found: nine of fifteen entries name no specific mutation, which is an unmet part of the
     acceptance; S1 pins the canonical decision point rather than the `/enroll` route wiring (the

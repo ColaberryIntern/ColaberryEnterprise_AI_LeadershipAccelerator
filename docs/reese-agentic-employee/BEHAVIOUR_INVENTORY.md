@@ -49,3 +49,11 @@ Two Reese-only switch gaps closed this phase (R2): the reactive reply path and t
 - Population: The student who just received a reply, and only when their last assessment is missing or past its own reassessment_date.
 
   Note: Below evidenceAssembly.ts:13 MINIMUM_KNOWN_CATEGORIES (3), it returns insufficient_evidence with no LLM call rather than guessing.
+
+### Ticket follow-up
+
+- Controller: reeseTicketFollowUpService.ts processDueReeseTicketFollowUps(), registered as 'ReeseTicketFollowUpSweep' (agentRegistrySeed.ts:2712-2726), cron 0 18 * * *, wired at schedulerService.ts:2017.
+- Kill switch: That registry row's enabled flag via schedulerService.ts's instrumentCronJob() (schedulerService.ts:2017) -- and, since 2026-10-09, writable by a manager through the `ticket_follow_up` behaviour switch. Before that it had no manager-facing kill switch at all.
+- Population: Open `student_support` tickets (reactive DM conversations) where Reese spoke last and the student has been quiet for QUIET_THRESHOLD_DAYS (3) or more days, computed fresh from the conversation rather than from the ticket's never-updated due_date. MAX_ATTEMPTS is 3, after which it escalates to human review and never sends a 4th message. Its own DAILY_SEND_CAP of 10 is deliberately disjoint from the autonomous-outreach cap.
+
+  Note: Added to this inventory 2026-10-09. Shipped 2026-10-02 enabled and sending, but absent from the documented 7 and from both switch maps, so no manager could disable it. Individual sends were always authorization-gated and could be held; the missing control was the kill switch, not the authorization.

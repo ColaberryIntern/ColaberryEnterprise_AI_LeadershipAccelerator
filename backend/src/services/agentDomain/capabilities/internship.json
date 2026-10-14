@@ -1,0 +1,3774 @@
+{
+  "domain_key": "internship",
+  "accountable_human": "Dhee",
+  "manager_identity_id": "bbf01827-c005-5cb2-8a96-903fe8ddadac",
+  "researched_at": "2026-10-09",
+  "low_inheritance": true,
+  "counts": {
+    "legacy_rows_analyzed": 1,
+    "distinct_capabilities": 35,
+    "unique_tools_required": 29,
+    "by_classification": {
+      "inherited": 1,
+      "existing_application": 26,
+      "manager_defined": 5,
+      "proposed_new": 3
+    }
+  },
+  "capabilities": [
+    {
+      "capability_id": "internship.application_intake_and_state_transitions",
+      "name": "Internship application intake and single-writer state transitions",
+      "business_outcome": "Every applicant has exactly one live application whose state moves only through one audited, lock-protected writer, so no two reviewers and no retry can produce divergent records.",
+      "intended_users": [
+        "applicant",
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipApplicationService.ts plus the pure state machine",
+      "supporting_evidence": [
+        "internshipApplicationService.ts:23-34 (the ONLY writer of internship_applications.state)",
+        "internshipApplicationService.ts:55 transition(), :63-66 SELECT FOR UPDATE, :79 assertTransition, :81-95 state write and audit event in one transaction",
+        "internshipStateMachine.ts:33-63 (22 states), :77 actor union applicant|reviewer|system, :266-279 canTransition has no force/isAdmin/override parameter",
+        "internshipApplicationService.ts:140 startApplication (idempotent), :194 saveAdministrativeIntake, :245 selectInterviewChannel, :312 getStatus",
+        "ensureInternshipSchema.ts:107 uq_internship_applications_open (one live application per person), :427 names it load-bearing",
+        "tables: internship_applications, internship_status_events, internship_administrative_intakes, internship_card_dismissals"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "cohort id",
+        "administrative intake fields",
+        "interview channel choice",
+        "target state",
+        "actor and actor id"
+      ],
+      "outputs": [
+        "internship_applications row",
+        "internship_status_events audit row",
+        "InternshipStatusView for the Today card"
+      ],
+      "workflow": [
+        "Applicant starts an application; the open-application unique index makes a second start idempotent",
+        "Administrative intake (Group A) is upserted against the application",
+        "Applicant selects form or phone interview channel",
+        "Any state change calls transition(), which locks the row, asserts the move for that actor, and writes state plus audit event in one transaction",
+        "Terminal states (completed, withdrawn, removed, rejected) have empty outbound rows and refuse all further moves"
+      ],
+      "exceptions": [
+        "Concurrent reviewers: the row lock serialises them; the second write is an idempotent no-op or an InvalidInternshipTransitionError",
+        "Illegal transition raises InvalidInternshipTransitionError with error_class ContractViolation (internshipStateMachine.ts:245)",
+        "Terminal record: the console route pre-checks isTerminal() and returns 409 (internshipRoutes.ts:213-221)",
+        "A system actor may never create approval; it can only move an already-approved application (internshipStateMachine.ts:177-178)",
+        "Ruth Kumera sits at signed_documents_uploaded and must not be advanced by anything in this programme"
+      ],
+      "dependencies": [
+        "enrollments",
+        "cohort_memberships",
+        "internshipStateMachine (pure)",
+        "internshipAnalytics event emitter"
+      ],
+      "application_pages": [
+        "student Today card",
+        "admin internship review queue",
+        "admin Intern Console Manage drawer"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/transition"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipApplicationService.ts",
+        "backend/src/services/internship/internshipStateMachine.ts",
+        "backend/src/models/InternshipApplication.ts",
+        "backend/src/models/InternshipStatusEvent.ts",
+        "backend/src/db/ensureInternshipSchema.ts"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "sandbox_database_write",
+        "internship_admin_api_read",
+        "audit_event_write"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "fixture_fork_write"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "The writer is the gate for every admission outcome. An agent may exercise it against sandbox fixtures, but production writes to internship_applications.state would let an agent move a real applicant, so no level above R4 is proposed.",
+      "blocked_by": [
+        "Dhee has not validated scope",
+        "no sandbox fixture set covering the 22 states exists yet"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers which states an application can legally reach next, and for which actor, citing the state machine",
+          "acceptance_criteria": "Named scenarios across all 22 states answered with zero illegal transitions asserted as legal; evaluator is a human reviewer against internshipStateMachine.ts"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Drives a multi-step application lifecycle end to end against sandbox fixtures",
+          "acceptance_criteria": "A seeded fixture walks started to active with an audit event per hop and no state written outside transition(); mutation-proven by a test that dies when the lock or assertTransition is removed"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.two_channel_structured_interview",
+      "name": "Two-channel structured interview over one versioned question bank",
+      "business_outcome": "Form and phone applicants answer the same canonical questions under the same keys, so a reviewer compares like with like and no channel collects less than the other.",
+      "intended_users": [
+        "applicant",
+        "Dhee"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipQuestionBank.ts and internshipInterviewService.ts",
+      "supporting_evidence": [
+        "internshipQuestionBank.ts:41 ACTIVE_QUESTION_SET_VERSION, :99 QUESTION_BANK_V1, :311 questionBank(version), :358 isValidAnswer",
+        "internshipInterviewService.ts:132 openSession, :160 saveAnswers, :220 markInterviewStarted, :250 completeInterviewIfDone, :295 buildSummary",
+        "ensureInternshipSchema.ts:260 uq_internship_response_per_question, named at :425 as the ask-once guarantee",
+        "AI_INTERNSHIP_DISCOVERY.md risk R7: one versioned question bank; both channels write the same question_key",
+        "tables: internship_interview_question_sets, internship_interview_questions, internship_interview_sessions, internship_interview_responses"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "question set version",
+        "answers keyed by question_key"
+      ],
+      "outputs": [
+        "internship_interview_responses rows",
+        "InterviewProgress",
+        "reviewer-facing SummaryLine list"
+      ],
+      "workflow": [
+        "Resolve the active question set version for the application",
+        "Serve ordered questions by section; remainingQuestions and nextQuestion drive the form",
+        "Validate each answer against its declared answer type before persisting",
+        "Persist one response per question_key, enforced by a unique index",
+        "completeInterviewIfDone advances the application when the required set is answered"
+      ],
+      "exceptions": [
+        "Re-answering the same question must update, never duplicate (unique index)",
+        "An invalid answer type is rejected before persistence rather than stored and re-interpreted later",
+        "A question set version change must not retroactively invalidate answers stored under the prior version",
+        "Phone and form key sets must stay equal; divergence is a contract violation, not a cosmetic difference"
+      ],
+      "dependencies": [
+        "internship_applications",
+        "internshipAnalytics"
+      ],
+      "application_pages": [
+        "student internship interview form",
+        "admin application detail interview section"
+      ],
+      "apis": [
+        "unknown (participant-facing interview routes not enumerated in this pass)"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipQuestionBank.ts",
+        "backend/src/services/internship/internshipInterviewService.ts",
+        "backend/src/models/InternshipInterviewSession.ts",
+        "backend/src/models/InternshipInterviewResponse.ts"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "sandbox_database_write",
+        "structured_output_validation"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "fixture_fork_write"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship",
+            "applicant own session"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Authoring and validating question sets is sandbox-safe work. Writing an applicant's own answers in production is the applicant's act, not the agent's, so R4 is the ceiling.",
+      "blocked_by": [
+        "Dhee has not validated the question bank scope"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers which questions exist, in which section order, and which keys are required for completion",
+          "acceptance_criteria": "Answers match activeQuestionKeys() exactly for ten sampled questions; evaluator is a diff against the module"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Proposes a versioned question-set revision in sandbox with a key-set equality test across both channels",
+          "acceptance_criteria": "A test asserts form and phone key sets are equal and fails when one key is dropped"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.ai_voice_interview_and_transcript_capture",
+      "name": "AI voice interview with dual consent, transcript capture and answer extraction",
+      "business_outcome": "An applicant who prefers to talk completes the same interview by phone, with permission to call and permission to record held as separate consents, and the transcript converted into the same keyed answers a form would produce.",
+      "intended_users": [
+        "applicant",
+        "Dhee"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipCallService.ts and internshipTranscriptExtraction.ts",
+      "supporting_evidence": [
+        "internshipCallService.ts:19 (no permission to call means no call), :74 permission_to_call guard, :113 recording_consented, :127 triggerVoiceCall",
+        "internshipCallService.ts:26 SYNTHFLOW_INTERNSHIP_AGENT_ID unset means triggerVoiceCall skips rather than borrowing another agent script",
+        "internshipCallService.ts:62 callNow, :234 scheduleCall, :279 cancelScheduledCall",
+        "internshipCallCompletion.ts:48 handleInternshipCallCompleted; internshipCallReconcile.ts:35 reconcileInternshipCall",
+        "internshipTranscriptExtraction.ts:50 parseTurns, :172 extractAnswersFromTranscript",
+        "internshipCallPrompt.ts:60 buildInternshipCallPrompt",
+        "InternshipInterviewSession.ts:53 transcript TEXT column",
+        "internshipReviewQueue.ts:378 consent gate, :428-429 transcript withheld when consent_recording is false",
+        "AI_INTERNSHIP_DISCOVERY.md risk R4: dedicated env agent slot; unset means skip the call, never fall back"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "intake phone",
+        "permission_to_call",
+        "consent_recording",
+        "question bank facts"
+      ],
+      "outputs": [
+        "internship_interview_sessions row with outcome and transcript",
+        "extracted keyed answers",
+        "call failure bucket in the review queue"
+      ],
+      "workflow": [
+        "Check permission_to_call; refuse with a student-safe message if absent",
+        "Build the call prompt from the active question bank",
+        "Trigger the voice call through the dedicated internship agent slot, or skip if the slot is unset",
+        "On completion, store outcome and transcript and run reconcile for calls that never reported back",
+        "Extract answers from the transcript into the same question_key shape the form writes"
+      ],
+      "exceptions": [
+        "No permission to call: skip with reason no_permission_to_call, never dial",
+        "Recording not consented: the transcript is withheld at read time, not just at storage",
+        "Agent slot unset: skip the call rather than dialling through an agent carrying a conflicting saved script",
+        "Call never reports completion: reconcile resolves it into a failed bucket instead of leaving the application stuck",
+        "Extraction ambiguity must leave the answer unset rather than guess a requirement answer"
+      ],
+      "dependencies": [
+        "synthflowService",
+        "internship_interview_sessions",
+        "internshipQuestionBank",
+        "SYNTHFLOW_INTERNSHIP_AGENT_ID"
+      ],
+      "application_pages": [
+        "admin application detail call panel",
+        "review queue calls_failed bucket"
+      ],
+      "apis": [
+        "unknown (call trigger and webhook routes not enumerated in this pass)"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipCallService.ts",
+        "backend/src/services/internship/internshipCallPrompt.ts",
+        "backend/src/services/internship/internshipCallCompletion.ts",
+        "backend/src/services/internship/internshipCallReconcile.ts",
+        "backend/src/services/internship/internshipTranscriptExtraction.ts"
+      ],
+      "required_tools": [
+        "voice_call_trigger_sandbox",
+        "transcript_extraction",
+        "sandbox_database_read",
+        "sandbox_database_write",
+        "structured_output_validation"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "voice_call_trigger_sandbox",
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Placing a real call to a real applicant is an external side effect on a person holding two separate consents. Sandbox exercise is legitimate; production dialling is not proposed at any level in this task.",
+      "blocked_by": [
+        "Dhee has not validated scope",
+        "no sandbox voice endpoint identified",
+        "SYNTHFLOW_INTERNSHIP_AGENT_ID provisioning state unknown"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains the consent model and why an unset agent slot results in no call",
+          "acceptance_criteria": "Explanation matches internshipCallService.ts:19-26 with no claim that a fallback agent exists"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Runs the full call lifecycle against sandbox fixtures including the reconcile path",
+          "acceptance_criteria": "A fixture with no completion callback resolves to the calls_failed bucket; a fixture with permission_to_call false records zero dial attempts"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.deterministic_requirement_checks",
+      "name": "Deterministic eligibility and commitment requirement checks",
+      "business_outcome": "The eight hard requirements a reviewer trusts are computed by arithmetic over the applicant's own quoted answers, never by a model, so the green and red a reviewer acts on cannot be hallucinated.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipRequirementChecks.ts",
+      "supporting_evidence": [
+        "internshipRequirementChecks.ts:5-11 (no model, no interpretation)",
+        "internshipRequirementChecks.ts:68 checkRequirements, :90 requirementTally, :13 RequirementStatus met|not_met|unclear",
+        "the eight rules at :70-85: not_employed_fulltime, weekly_hours (25+), attend_meetings, will_notify_absence, has_tools, understands_costs, protects_secrets, agrees_expectations",
+        "each check carries the applicant quoted answer as evidence (:21, :60)",
+        "AI_INTERNSHIP_SPEC.md: eligibility gate is not currently employed full-time; the attestation and the commitment are the two things the email intake collects",
+        "InternshipApplication.ts:69 attests_not_employed_fulltime, :70 commitment_acknowledged_at"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "answer map keyed by question_key"
+      ],
+      "outputs": [
+        "RequirementCheck list with status and quoted evidence",
+        "requirement tally"
+      ],
+      "workflow": [
+        "Load the applicant answer map",
+        "Evaluate each of the eight rules as a yes/no or choice comparison",
+        "Attach the applicant quoted answer to each result as evidence",
+        "Return a tally the reviewer panel and the AI assessment fallback both consume"
+      ],
+      "exceptions": [
+        "A missing or unparseable answer yields unclear, never not_met; an applicant is not failed for a question we failed to collect",
+        "employment_status of full_time yields not_met but is a blocking flag for a human, never an automatic rejection",
+        "A rule change must version with the question bank or historical checks silently re-score",
+        "The checks must never be presented as a score or a rank"
+      ],
+      "dependencies": [
+        "internshipQuestionBank",
+        "internship_interview_responses"
+      ],
+      "application_pages": [
+        "admin application detail Decide panel"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/assess"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipRequirementChecks.ts"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "structured_output_validation",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "internship_admin_api_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "The computation is pure, deterministic and read-only, so a separately approved supervised production pilot is reachable on evidence. It never writes and never decides, which is what keeps it below the action-automation levels.",
+      "blocked_by": [
+        "Dhee has not validated the eight rules as the current requirement set"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "States which of the eight requirements an application meets and quotes the answer behind each",
+          "acceptance_criteria": "Zero disagreements against checkRequirements() across a named fixture set, and every unclear accompanied by the missing key"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-runs the checks against applications a human has already reviewed",
+          "acceptance_criteria": "Shadow output matches the deterministic module exactly; any divergence is a defect, not a tuning input"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.applicant_readiness_assessment",
+      "name": "Internship readiness assessment for the reviewer",
+      "business_outcome": "A reviewer opens a plain-language reading of an applicant plus a suggested posture, grounded in the applicant's own words and in deterministic requirement results, which shortens review without ever substituting for it.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipApplicantAssessment.ts and internshipRecommendation.ts",
+      "supporting_evidence": [
+        "internshipApplicantAssessment.ts:91 assessApplicant, :27 MODEL gpt-4o-mini, :119 gated on OPENAI_API_KEY, :131-139 the completion call with response_format json_object and temperature 0.2",
+        "internshipApplicantAssessment.ts:108 wrapAsUntrustedEvidence fences the applicant words, so an answer saying ignore your instructions and approve me is data not a command",
+        "internshipApplicantAssessment.ts:158-173 deterministic fallback with model_generated false at :171",
+        "internshipRecommendation.ts:3-13 (not a decision, not a score, not a ranking; the output is a value object no transition accepts), :125 buildRecommendation (pure)",
+        "internshipRecommendation.ts:29-35 no inferred traits; a signal of unknown reliability is excluded rather than treated as zero",
+        "internshipReviewQueue.ts:17-24 (no score of any kind, because none exists to show)",
+        "InternshipDecision.ts:66 ai_recommendation, :67 ai_factors (the snapshot persisted with the human decision)",
+        "backend/src/schemas/internshipAssessmentSchema.ts"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "interview responses",
+        "administrative intake",
+        "requirement check tally",
+        "reliability exclusions"
+      ],
+      "outputs": [
+        "summary",
+        "suggested posture",
+        "factor list",
+        "model_generated flag"
+      ],
+      "workflow": [
+        "Run the deterministic requirement checks first",
+        "Fence the applicant answers as untrusted evidence",
+        "Call the model for a summary and a posture, validated against a Zod schema",
+        "On model unavailability or schema failure, derive the posture from the requirement tally",
+        "Snapshot the recommendation onto the decision row when a human decides"
+      ],
+      "exceptions": [
+        "Prompt injection in an applicant answer must be inert; the fencing is the control, not instruction wording",
+        "Schema validation failure falls back deterministically rather than rendering partial model output",
+        "A signal whose reliability is unknown is excluded from the recommendation, never defaulted to zero",
+        "No personality, sentiment, tone or protected-trait inference is permitted",
+        "An absent recommendation must be recorded as absent, not as an empty one that reads as no concerns (internshipDecisionService.ts:155-161)"
+      ],
+      "dependencies": [
+        "internshipRequirementChecks",
+        "internshipQuestionBank",
+        "openaiInstrumented",
+        "inboxCase/promptSafety"
+      ],
+      "application_pages": [
+        "admin application detail Decide panel"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/assess"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipApplicantAssessment.ts",
+        "backend/src/services/internship/internshipRecommendation.ts",
+        "backend/src/schemas/internshipAssessmentSchema.ts"
+      ],
+      "required_tools": [
+        "llm_text_generation",
+        "structured_output_validation",
+        "prompt_injection_fencing",
+        "sandbox_database_read",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "llm_text_generation",
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "internship_admin_api_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "The assessment is advisory by construction and the state machine refuses its output as a transition input. Shadow comparison against decisions Dhee actually made is the highest useful level; anything above it would imply the assessment acts, which the design forbids.",
+      "blocked_by": [
+        "Dhee has not validated what a useful posture looks like",
+        "no measured agreement rate against human decisions exists"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Summarises an application from approved stored answers with every claim traceable to a quoted answer",
+          "acceptance_criteria": "Zero unsourced claims across a named sample reviewed by Dhee; any invented fact fails the release"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-produces a posture alongside applications Dhee has already decided, with the comparison recorded and never shown as a verdict",
+          "acceptance_criteria": "Agreement rate measured and reported as proposed until Dhee accepts a threshold; a prompt-injection fixture produces no posture change"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.review_queue_triage_and_profile_signals",
+      "name": "Review queue triage with reliability-labelled profile signals",
+      "business_outcome": "Applications are bucketed so the reviewer sees what is actually waiting on them, with each supporting signal labelled reliable or unknown rather than silently defaulted.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipReviewQueue.ts",
+      "supporting_evidence": [
+        "internshipReviewQueue.ts:89-99 ten QueueBuckets, :105-114 BUCKET_STATES, :125 queueCounts, :153 queue, :338 applicationDetail",
+        "internshipReviewQueue.ts:239 buildProfileSignals with reliability reliable|unknown at :228; attendance_rate hard-coded unknown at :282-290",
+        "internshipReviewQueue.ts:361-376 unknowns passed as exclusions to the recommendation, never as zeros",
+        "internshipReviewQueue.ts:190 Enrollment attributes full_name and email; :399-415 intake projection including phone at :404 and work_auth_category at :410",
+        "internshipReviewQueue.ts:378 and :428-429 transcript consent gate",
+        "mgmtRoles.ts:18-27 internship is its own section key because the queue carries an applicant resume, phone number and interview transcript",
+        "internshipRoutes.ts:311 GET /queue, :335 GET /applications/:id, both requireSection('internship')"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "bucket",
+        "limit",
+        "offset"
+      ],
+      "outputs": [
+        "QueueRow list",
+        "bucket counts",
+        "ApplicationDetail with person, intake, decisions, timeline, reason options"
+      ],
+      "workflow": [
+        "Partition open applications into state-derived buckets",
+        "Add the two cross-cutting buckets: calls_failed from failed phone sessions, converted from the conversion flag",
+        "Join name and email from enrollments at read time",
+        "Build profile signals with explicit reliability labels",
+        "Withhold the call transcript unless recording consent is present"
+      ],
+      "exceptions": [
+        "Unknown-reliability signals must be excluded from downstream recommendation, not coerced to zero",
+        "Transcript without consent is withheld at read time, so a new read surface cannot leak it by omission",
+        "reviewer_notes appear in the detail projection and are staff-only; they must never reach applicant-facing text",
+        "No score, rank or inferred trait may be added to the row shape",
+        "A single coarse internship section grant means every holder can reach every endpoint, including decide, verify, activate and the raw signed-document download; the only per-human control today is the audit trail"
+      ],
+      "dependencies": [
+        "internship_applications",
+        "enrollments",
+        "internship_administrative_intakes",
+        "internship_interview_sessions",
+        "internshipRecommendation"
+      ],
+      "application_pages": [
+        "admin internship review queue",
+        "admin application detail"
+      ],
+      "apis": [
+        "GET /api/admin/internship/queue",
+        "GET /api/admin/internship/applications/:id",
+        "GET /api/admin/internship/applications/:id/activity"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipReviewQueue.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "The queue is the widest applicant-PII read surface in the domain and mgmtRoles.ts calls it a materially wider grant than editing curriculum. Production agent access is not proposed and the ceiling stays at sandbox stateful work.",
+      "blocked_by": [
+        "Dhee has not validated what the agent may read",
+        "no PII-minimised agent projection of QueueRow exists"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains bucket membership and which signals are unknown, from approved documentation rather than live rows",
+          "acceptance_criteria": "Bucket explanations match BUCKET_STATES exactly and no applicant identity is quoted"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Triages a sandbox queue of synthetic applications and reports what is waiting on a human",
+          "acceptance_criteria": "Counts match queueCounts() on the fixture set; a synthetic record with no recording consent yields transcript_withheld"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.admission_decision_recording",
+      "name": "Admission decision recording with a mandatory student-safe reason",
+      "business_outcome": "Acceptance, rejection, waitlist and information requests are recorded by a named human with a reason code the applicant can be told, so no one is declined without an explanation and no decision is anonymous.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipDecisionService.ts and internshipReasonCodes.ts",
+      "supporting_evidence": [
+        "internshipDecisionService.ts:96 decide(), :166-171 transitions with actor reviewer, :173-186 appends the InternshipDecision row, :265 decisionHistory",
+        "internshipStateMachine.ts:155-161 and :170-175: approved, rejected and waitlisted are reachable only by the reviewer actor",
+        "internshipStateMachine.ts:67-76: the system actor is deliberately the weakest and may never decide admission",
+        "InternshipDecision.ts:59 reason_code STRING(60) allowNull false (the student-safe-reason rule enforced at the database)",
+        "internshipReasonCodes.ts:30-43 ten codes, :210-212 requiresCustomMessage only for other_see_message, :229 reapplyDate, :245 buildStudentFacingReason which does not take reviewer_notes as a parameter",
+        "internshipRoutes.ts:650 POST /decide requireSection('internship'); :660-662 decided_by derived from the verified JWT, never the body",
+        "internshipRoutes.ts:51-55: a generic PATCH state endpoint was deliberately not built",
+        "AI_INTERNSHIP_SPEC.md flow decision 1: Dhee approves first; a human checks the not-employed-full-time attestation"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "decision verb",
+        "reason code",
+        "optional student message",
+        "optional reviewer notes",
+        "optional conditions",
+        "decider identity from the session"
+      ],
+      "outputs": [
+        "internship_decisions append-only row",
+        "state transition with audit event",
+        "decision email",
+        "ai_recommendation and ai_factors snapshot"
+      ],
+      "workflow": [
+        "Validate the reason code against the decision scope; a reject or waitlist without a valid code is refused",
+        "Snapshot the AI recommendation as it stood at decision time",
+        "Transition the application as the reviewer actor",
+        "Append the immutable decision row with decided_by taken from the verified session",
+        "Send the decision email last; a send failure is recorded and never rolls back the decision"
+      ],
+      "exceptions": [
+        "AN AGENT MAY NEVER RECORD AN ADMISSION DECISION. Internship acceptance is always a human decision and the state machine enforces it by actor, not by convention",
+        "other_see_message requires a non-empty custom message, so Other cannot become the default rejection",
+        "reviewer_notes must never reach applicant-facing text; buildStudentFacingReason cannot accept them",
+        "Email failure after a recorded decision is swallowed and logged; the decision stands and the send outcome is recorded",
+        "Two reviewers deciding at once are serialised by the row lock in transition()",
+        "A terminal application refuses a second decision"
+      ],
+      "dependencies": [
+        "internshipApplicationService.transition",
+        "internshipReasonCodes",
+        "internshipEmails",
+        "internshipRecommendation",
+        "email_send_ledger"
+      ],
+      "application_pages": [
+        "admin application detail Decide panel"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/decide"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipDecisionService.ts",
+        "backend/src/services/internship/internshipReasonCodes.ts",
+        "backend/src/models/InternshipDecision.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read",
+        "reason_code_catalog_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "reason_code_catalog_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Internship acceptance is always a human decision. The agent may reach shadow mode, producing a would-be posture compared against the human outcome, and no further: R6 and above would imply a pilot in which the agent acts, and there is no action here it is permitted to take.",
+      "blocked_by": [
+        "human-decision invariant; no path to agent decisioning exists in this or any later task",
+        "Dhee has not validated the shadow comparison design"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains the ten reason codes, their scopes and their reapply windows, and refuses to suggest a decision",
+          "acceptance_criteria": "Explanations match REASON_DEFINITIONS; any output phrased as a decision fails the release"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Records a shadow posture beside decisions Dhee has already made, never visible to the applicant and never written to internship_decisions",
+          "acceptance_criteria": "Zero writes to internship_decisions attributable to the agent, proven by actor_id and decided_by audit; agreement reported as proposed until Dhee accepts it"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.offer_document_package_generation",
+      "name": "Offer and onboarding document package generation",
+      "business_outcome": "An approved applicant receives the correct document package with the right rolling start date, and every signed upload is stored as a new revision so a submitted file is never overwritten.",
+      "intended_users": [
+        "applicant",
+        "Dhee"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipDocumentService.ts and internshipDocumentTemplates.ts",
+      "supporting_evidence": [
+        "internshipDocumentService.ts:38 nextMonday (rolling weekly start computed per applicant), :101 generatePackage, :214 readGeneratedDocument, :260 recordSignedUpload, :471 documentsFor",
+        "ensureInternshipSchema.ts:348 uq_internship_document_revision, named at :426 as never overwrite a signed file",
+        "InternshipDocument.ts:70 storage_key (opaque UUID filename, not a path), :71 original_filename, :74 checksum_sha256, :76 status",
+        "config/upload.ts per-surface multer instances with MIME allowlist and opaque filenames; AI_INTERNSHIP_DISCOVERY.md records the warning against widening a shared allowlist",
+        "AI_INTERNSHIP_SPEC.md: rolling weekly start targets the Monday following the application, computed per applicant, and a UI must not render ends for an open-ended apprenticeship",
+        "internshipPdf.ts (render path)"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "template keys",
+        "desired start date",
+        "uploaded signed file"
+      ],
+      "outputs": [
+        "internship_documents rows",
+        "rendered PDF",
+        "document revision history"
+      ],
+      "workflow": [
+        "Resolve the template set and compute the rolling start Monday",
+        "Render each document and persist a row with an opaque storage key and checksum",
+        "Serve the generated document to the applicant",
+        "Record the signed upload as a new revision under the uniqueness index",
+        "Expose the document set to the reviewer for verification"
+      ],
+      "exceptions": [
+        "A second upload for the same document type creates a revision; overwriting is impossible by index",
+        "The upload allowlist for signed documents must stay its own multer instance; widening a shared allowlist is explicitly warned against",
+        "A render failure must not leave a half-created package; the package is regenerated rather than patched",
+        "The document is never described as a dated or ending programme; this internship is open-ended"
+      ],
+      "dependencies": [
+        "config/upload.ts",
+        "internshipPdf",
+        "internship_document_templates",
+        "internship_documents"
+      ],
+      "application_pages": [
+        "student internship documents page",
+        "admin application detail documents panel"
+      ],
+      "apis": [
+        "GET /api/admin/internship/applications/:id/documents",
+        "GET /api/admin/internship/documents/:documentId/file"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipDocumentService.ts",
+        "backend/src/services/internship/internshipDocumentTemplates.ts",
+        "backend/src/services/internship/internshipPdf.ts",
+        "backend/src/models/InternshipDocument.ts"
+      ],
+      "required_tools": [
+        "document_template_render",
+        "sandbox_file_write",
+        "sandbox_database_read",
+        "sandbox_database_write"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "document_template_render",
+            "sandbox_file_write"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Rendering a package in sandbox is safe and testable. Generating a real document attaches a legal-looking artifact to a named person, so production generation is not proposed here.",
+      "blocked_by": [
+        "Dhee has not validated the template set or the start-date rule"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains which documents a given state requires and how the rolling start Monday is derived",
+          "acceptance_criteria": "nextMonday outputs reproduced exactly for a fixed set of input dates including a Sunday and a Monday boundary"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Generates and re-generates a package against sandbox fixtures and proves the revision index holds",
+          "acceptance_criteria": "A duplicate signed upload creates a revision rather than replacing a file; the test dies if the unique index is dropped"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.signed_document_verification",
+      "name": "Signed document verification by a human reviewer",
+      "business_outcome": "Documents an applicant has already submitted are checked by a named person before any entitlement moves, so onboarding cannot be completed by a system that only saw a file arrive.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipDocumentService.ts verifyDocument and the state machine",
+      "supporting_evidence": [
+        "internshipDocumentService.ts:405 verifyDocument, :349 outstandingRequirements, :332 RequirementStatus",
+        "internshipStateMachine.ts:191-199: every outbound edge of signed_documents_uploaded is reviewer-only; no system actor appears on any of them",
+        "internshipStateMachine.ts:192 to documents_verified reviewer only, :196 back to offer_letter_ready for a correction loop, reviewer only",
+        "InternshipDocument.ts:78 verified_by, :79 verified_at, :80 rejection_reason",
+        "internshipRoutes.ts:780 POST /documents/:documentId/verify requireSection('internship')",
+        "INTENDED_INTERN_ROSTER_2026-10-07.md: Ruth Kumera is at signed_documents_uploaded, documents submitted and awaiting staff verification, and must not be advanced"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "document id",
+        "verify or reject",
+        "rejection reason",
+        "verifier identity from the session"
+      ],
+      "outputs": [
+        "document status with verified_by and verified_at",
+        "outstanding requirement list",
+        "state transition to documents_verified or back to offer_letter_ready"
+      ],
+      "workflow": [
+        "Open the submitted document from the internship document route",
+        "Verify or reject it, recording the verifier and the reason",
+        "Recompute outstanding requirements",
+        "When all documents are verified, the reviewer moves the application to documents_verified",
+        "A rejected document returns the application to offer_letter_ready for re-upload"
+      ],
+      "exceptions": [
+        "DOCUMENT VERIFICATION IS UNCONDITIONALLY HUMAN: no system actor edge exists out of signed_documents_uploaded",
+        "A rejection must carry a reason; a silent rejection leaves the applicant unable to act",
+        "Re-upload after rejection creates a revision; the rejected file is retained for audit",
+        "Ruth Kumera must not be touched or advanced by this programme",
+        "An agent must never mark a requirement verified or granted for any applicant"
+      ],
+      "dependencies": [
+        "internship_documents",
+        "internshipApplicationService.transition",
+        "internshipOnboarding checklist"
+      ],
+      "application_pages": [
+        "admin application detail documents panel"
+      ],
+      "apis": [
+        "POST /api/admin/internship/documents/:documentId/verify",
+        "GET /api/admin/internship/documents/:documentId/file"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipDocumentService.ts",
+        "backend/src/services/internship/internshipStateMachine.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "document_metadata_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "document_metadata_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Verification is the gate between a submitted file and a granted entitlement, and the state machine admits no automated actor. Shadow completeness checks are the highest useful level; the verification act is reserved to a human permanently.",
+      "blocked_by": [
+        "human-decision invariant",
+        "Dhee has not validated what a completeness pre-check may surface"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Lists which document types are outstanding for an application without opening any file content",
+          "acceptance_criteria": "Outstanding list matches outstandingRequirements(); no document bytes are read"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow pre-checks completeness beside verifications a human performed, flagging only presence and revision structure",
+          "acceptance_criteria": "Zero writes to internship_documents status attributable to the agent; verified_by never contains an agent identity"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.onboarding_checklist_tracking",
+      "name": "Document and onboarding checklist tracking",
+      "business_outcome": "Both the intern and the manager see exactly which onboarding step is outstanding and whose move it is, so waiting on Colaberry never reads as the intern being late.",
+      "intended_users": [
+        "intern",
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipOnboarding.ts and internshipActivationService.ts",
+      "supporting_evidence": [
+        "internshipOnboarding.ts:34 ChecklistActor student|colaberry, :58 CHECKLIST, :175 resolveChecklist, :224 activationBlockers, :235 nextStudentAction, :239 checklistProgress",
+        "internshipActivationService.ts:265 buildChecklist, :339 recordAcknowledgement, :387 ActiveInternView, :407 activeInternView",
+        "internshipStudentDashboard.ts:58 deriveAttentionQueue, :66 internDashboard",
+        "internshipEligibility.ts:76 cardStateFor, :100 isStudentActionable, :105 cardCopy, :156 shouldRenderCard (feature-flag gated at :162)",
+        "internshipWeek3Handoff.ts:11-18: two phases are Colaberry's to move and carry owner colaberry with actionable false, because waiting on an assignment must not count as student lateness",
+        "internshipRoutes.ts:823 GET /applications/:id/onboarding",
+        "table: internship_requirement_acknowledgements (ensureInternshipSchema.ts:289)"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "checklist evidence (documents, acknowledgements, membership, payment)"
+      ],
+      "outputs": [
+        "ChecklistStepStatus list with actor and completion",
+        "activation blockers",
+        "next student action",
+        "attention queue"
+      ],
+      "workflow": [
+        "Gather evidence for each checklist step from documents, acknowledgements and membership",
+        "Resolve each step to done or outstanding with its owning actor",
+        "Compute activation blockers and the single next student action",
+        "Render the student Today card copy for the resolved state",
+        "Surface the same checklist to the manager on the application detail"
+      ],
+      "exceptions": [
+        "Steps owned by Colaberry must render as ours and must never be shown as student lateness",
+        "An unknown intern week yields an honest unknown phase rather than a late reading",
+        "The Today card is feature-flag gated; with the flag off nothing renders",
+        "Only the eligible card state is dismissible; a blocking state cannot be dismissed away",
+        "An agent must never mark a checklist step done on a real applicant's behalf"
+      ],
+      "dependencies": [
+        "internship_documents",
+        "internship_requirement_acknowledgements",
+        "cohort_memberships",
+        "internshipEligibility"
+      ],
+      "application_pages": [
+        "student Today card",
+        "student internship dashboard",
+        "admin application detail onboarding panel"
+      ],
+      "apis": [
+        "GET /api/admin/internship/applications/:id/onboarding"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipOnboarding.ts",
+        "backend/src/services/internship/internshipActivationService.ts",
+        "backend/src/services/internship/internshipStudentDashboard.ts",
+        "backend/src/services/internship/internshipEligibility.ts",
+        "backend/src/services/internship/internshipWeek3Handoff.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "internship_admin_api_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "The checklist is a pure read-and-resolve over evidence another capability writes. It changes nothing, so a separately approved supervised production pilot of the reporting view is reachable on measured evidence.",
+      "blocked_by": [
+        "Dhee has not validated the checklist step set or the actor split"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "States which onboarding step is outstanding and whose move it is, for a named application",
+          "acceptance_criteria": "Matches resolveChecklist() and nextStudentAction() on every fixture; a Colaberry-owned step is never reported as the intern being late"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: produces a daily read-only outstanding-steps view for Dhee",
+          "acceptance_criteria": "Separately approved; zero writes; Dhee confirms the view matches the console for a measured period"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.routine_document_reminder_sending",
+      "name": "Approved routine document and activity reminder sending",
+      "business_outcome": "An intern who has gone quiet or has an outstanding document gets a timely reminder from an approved template, exactly once per day per template, without a human having to notice first.",
+      "intended_users": [
+        "intern",
+        "Dhee"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipNudge.ts (the owner's worked example for this domain)",
+      "supporting_evidence": [
+        "internshipNudge.ts:5-16: the caller chooses a template and never the words; there is no parameter for a subject, body, HTML or custom message",
+        "internshipNudge.ts:18-30: every send goes through sendOnce, whose claim is enforced by unique indexes on email_send_ledger, with business event internship-nudge-<template>-<applicationId>-<day>",
+        "internshipNudge.ts:31: the global kill switch is checked first, because a stop that does not stop outbound mail is a flag, not a stop",
+        "internshipNudge.ts:33 NudgeTemplate (quiet_check_in, weeks_1_3_reminder, project_start), :52 NUDGE_TEMPLATES, :90 renderNudge with a 400-character escaped note cap",
+        "internshipRoutes.ts:273 POST /applications/:id/nudge requireSection('internship'), :263-266 the caller can never supply the words",
+        "db/ensureEmailSendLedgerSchema.ts implements the (recipient, subject, business_event_id) key with two unique indexes",
+        "services/launchSafety.ts isKillSwitchActive",
+        "backend/src/scripts/dailyInternNudges.js plus reportingRegistry.js:120-132 (a separate Basecamp-sourced daily nudge digest at 17:00 UTC with a GREEN to BLACK escalation ladder)"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "template key from a fixed allowlist",
+        "optional short note",
+        "sender identity from the session"
+      ],
+      "outputs": [
+        "one sent email",
+        "email_send_ledger claim row",
+        "send outcome recorded against the application"
+      ],
+      "workflow": [
+        "Check the global kill switch; if active, send nothing",
+        "Resolve the template from the fixed allowlist; reject any unknown key",
+        "Claim the idempotency key (template, application, day) in email_send_ledger",
+        "Render the approved copy plus the escaped, length-capped manager note",
+        "Send and record the outcome; a failed send does not consume the claim silently"
+      ],
+      "exceptions": [
+        "DUPLICATE PREVENTION: the business event is template plus application plus day. A double-clicked button or a retried request is the same nudge; tomorrow's is genuinely a different one. Without the day an intern could be nudged once ever; with a timestamp the ledger would protect nobody",
+        "INCORRECT RECORDS: an application whose state does not match the template precondition must not be nudged. A weeks_1_3_reminder to an intern who has cleared the gate is a wrong statement to a real person and must be refused at precondition, not apologised for afterwards",
+        "MISSING RECORDS: no enrollment email, no intake first name, or no application row means skip with a recorded reason, never send to a guessed address and never substitute a placeholder into the greeting",
+        "CONTACT RESTRICTIONS: the kill switch halts all sends; a withdrawn, removed, rejected or completed application is never nudged; students are never bulk-emailed; the caller may supply only a template key and a short escaped note, so no request can place unreviewed text in front of a student",
+        "ESCALATION: a send failure, a template precondition mismatch, a kill switch encountered mid-batch, or any ledger-claim conflict that is not an exact replay escalates to Dhee with the application id and the reason, and the agent stops rather than retrying unboundedly",
+        "AN AGENT MAY NEVER SELF-APPROVE AN APPLICANT. Sending a reminder is an authorized routine action class; moving an application toward approval, verifying a document, or recording a decision is not, and no reminder path may be used to advance state. Internship acceptance remains a human decision"
+      ],
+      "dependencies": [
+        "email_send_ledger",
+        "email/idempotentSend sendOnce",
+        "emailService guardedSendMail",
+        "launchSafety kill switch",
+        "internship_applications state"
+      ],
+      "application_pages": [
+        "admin Intern Console Manage drawer nudge action"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/nudge"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipNudge.ts",
+        "backend/src/services/email/idempotentSend.ts",
+        "backend/src/db/ensureEmailSendLedgerSchema.ts",
+        "backend/src/scripts/dailyInternNudges.js"
+      ],
+      "required_tools": [
+        "approved_template_notification_send",
+        "email_send_ledger_idempotency_claim",
+        "internship_admin_api_read",
+        "kill_switch_read",
+        "sandbox_email_sink"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_email_sink",
+            "email_send_ledger_idempotency_claim",
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": [
+            "kill_switch_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R7",
+      "max_autonomy_rationale": "This is the owner's worked example: an internship agent may eventually send approved routine document reminders while internship acceptance remains a human decision. R7 automates only that explicitly authorized action class, bounded to the fixed template allowlist and the day-scoped idempotency key. R8 and R9 are not proposed, because a handoff or an ownership claim would widen the action class beyond reminders.",
+      "blocked_by": [
+        "live email is a default-denied capability (executionPolicy.ts:33), so production sending requires a separately approved action class and a named approver, not this matrix",
+        "no cron wires internshipNudge today; sending is manager-triggered from the console, so the scheduled path does not exist yet",
+        "Dhee has not validated which templates may ever fire without a human click"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains which template applies to an intern's current state and why, and sends nothing",
+          "acceptance_criteria": "Template selection matches the precondition table for every fixture; zero send attempts recorded"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow mode: proposes the day's reminder list beside what a human actually sent, into a sink rather than to a person",
+          "acceptance_criteria": "Zero email_send_ledger rows for real recipients; the proposed list is compared against Dhee's actual sends and the agreement reported as proposed until she accepts a threshold"
+        },
+        {
+          "autonomy": "autonomy:R7",
+          "behaviour": "Separately approved: sends only the explicitly authorized reminder templates, once per application per day, kill-switch first",
+          "acceptance_criteria": "A replay test produces exactly one send; a kill-switch-active test produces zero sends; a precondition-mismatch test produces zero sends and one escalation; a mutation test that removes the day from the business event fails the suite"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.payment_gate_monitoring",
+      "name": "Payment gate and unpaid-limbo monitoring",
+      "business_outcome": "An accepted applicant who has not paid does not silently stall forever, and document verification never grants paid training for free.",
+      "intended_users": [
+        "Dhee",
+        "intern"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipStateMachine.ts payment states and internshipCohortService settings",
+      "supporting_evidence": [
+        "internshipStateMachine.ts:55 payment_pending state, :345 stateAfterDocumentsVerified, :352-355 returns activation_pending when a subscription is not required or an active subscription or comp exists, else payment_pending",
+        "internshipStateMachine.ts:209 payment_pending to activation_pending (system or reviewer), :211 payment_pending to withdrawn by expiry",
+        "internshipCohortService.ts:94 DEFAULT_INTERNSHIP_SETTINGS, :183 internshipRequiresSubscription",
+        "AI_INTERNSHIP_DISCOVERY.md risk R1: activation grants paid training free; mitigation is payment_pending plus requires_subscription defaulting true",
+        "AI_INTERNSHIP_SPEC.md flow decision 2: payment on acceptance before access, needing a nudge and an expiry for accepted people who never pay"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "cohort requires_subscription setting",
+        "subscription status",
+        "comp status"
+      ],
+      "outputs": [
+        "resolved post-verification state",
+        "unpaid-limbo list",
+        "expiry outcome"
+      ],
+      "workflow": [
+        "After documents are verified, resolve the next state from subscription and comp status",
+        "Hold unpaid applications at payment_pending",
+        "Surface the payment_pending set to the manager in the onboarding bucket",
+        "On expiry, move the application to withdrawn rather than leaving it indefinitely open"
+      ],
+      "exceptions": [
+        "requires_subscription defaults true; flipping it to false must be a deliberate cohort-setting change, not an accident of code",
+        "A comped applicant must not be held at payment_pending",
+        "Expiry must be idempotent; running it twice must not double-withdraw or double-notify",
+        "The expiry timer and the payment reminder are not wired to any scheduler today, so the limbo list is manager-reviewed, not automatic"
+      ],
+      "dependencies": [
+        "internshipCohortService",
+        "enrollments payment status",
+        "activeCompEnrollmentIds",
+        "internshipApplicationService.transition"
+      ],
+      "application_pages": [
+        "admin review queue onboarding bucket"
+      ],
+      "apis": [
+        "GET /api/admin/internship/queue"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipStateMachine.ts",
+        "backend/src/services/internship/internshipCohortService.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read",
+        "subscription_status_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "subscription_status_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "internship_admin_api_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Reading and reporting the unpaid set is safe. Expiring an application withdraws a real person's place, so the ceiling is shadow mode and the expiry act stays with the reviewer or the existing system edge.",
+      "blocked_by": [
+        "no scheduler wires the expiry or the payment reminder today",
+        "Dhee has not set the expiry window"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains why a given application resolved to payment_pending rather than activation_pending",
+          "acceptance_criteria": "Matches stateAfterDocumentsVerified() for all four input combinations"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-reports the unpaid-limbo list and proposed expiry dates beside what the manager acted on",
+          "acceptance_criteria": "Zero state writes attributable to the agent; the proposed list reconciles against the onboarding bucket with no false entries"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.comp_expiry_advance_warning",
+      "name": "Comped-access expiry advance warning to the manager",
+      "business_outcome": "Dhee is warned before a comped intern's free access lapses, so a past student is never dropped to a paywall without anyone intending it.",
+      "intended_users": [
+        "Dhee"
+      ],
+      "classification": "manager_defined",
+      "source": "AI_INTERNSHIP_SPEC.md flow decision 4 (2026-08-18), a stated manager responsibility with no implementation found",
+      "supporting_evidence": [
+        "AI_INTERNSHIP_SPEC.md flow decision 4: Dhee can grant free access with an end date she sets; on lapse access converts to requiring a subscription, and she is warned before it expires; comp is time-boxed per person",
+        "AI_INTERNSHIP_SPEC.md revised build order item 5: comp expiry, with the advance warning to Dhee",
+        "AI_INTERNSHIP_DISCOVERY.md: activeCompEnrollmentIds() exists and the entitlement layer already distinguishes comp from paid",
+        "internshipStateMachine.ts:354 hasActiveComp is read at the payment gate, so comp state is already an input to the lifecycle",
+        "no advance-warning job, cron or service was found under backend/src/services/internship/ or in aiOpsScheduler.ts in this pass"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "comped enrollment ids",
+        "comp expiry date per person",
+        "warning lead time (unknown; Dhee must set it)"
+      ],
+      "outputs": [
+        "advance warning to the manager",
+        "list of comps expiring in the window"
+      ],
+      "workflow": [
+        "Read the comped set and each person's expiry date",
+        "Select the comps falling inside the warning lead time",
+        "Warn the manager with the person, the date and what the lapse will change",
+        "Record that the warning fired so it is not repeated for the same comp and window"
+      ],
+      "exceptions": [
+        "The warning goes to the manager, never to the intern, until Dhee decides otherwise",
+        "A warning must fire once per comp per window, idempotently; a daily re-run must not re-warn",
+        "A comp with no expiry date is a data gap to surface, not a comp to treat as permanent",
+        "An agent must never extend, shorten or revoke a comp; granting free access is the manager's act"
+      ],
+      "dependencies": [
+        "activeCompEnrollmentIds",
+        "contentEntitlement",
+        "email_send_ledger",
+        "unknown comp expiry storage location"
+      ],
+      "application_pages": [
+        "unknown (no surface exists today)"
+      ],
+      "apis": [
+        "unknown (no endpoint exists today)"
+      ],
+      "source_modules": [
+        "unknown (not implemented)"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "approved_template_notification_send",
+        "email_send_ledger_idempotency_claim",
+        "sandbox_email_sink"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "sandbox_email_sink"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Nothing is built, so no evidence exists for any level. A manager-facing warning is low blast radius, but the comp data model location is unknown and the lead time is unset, so shadow mode is the honest ceiling until both are resolved.",
+      "blocked_by": [
+        "not implemented",
+        "comp expiry storage location unknown",
+        "Dhee has not set the warning lead time or the recipient"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines the workflow, the risks and the human decisions for comp expiry warning",
+          "acceptance_criteria": "Dhee accepts the lead time, the recipient and the once-per-window rule in writing"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-produces the expiring-comp list into a sink",
+          "acceptance_criteria": "The list reconciles against the comped set with zero false expiries and zero sends to interns"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.activation_and_entitlement_grant",
+      "name": "Internship activation and curriculum entitlement grant",
+      "business_outcome": "An intern gains full training access only when every blocker is cleared, and activation is an explicit human act rather than a side effect of a file arriving.",
+      "intended_users": [
+        "Dhee",
+        "intern"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipActivationService.ts",
+      "supporting_evidence": [
+        "internshipActivationService.ts:135 activate(), :88 advanceAfterDocumentsVerified, :57 checkMembership, :265 buildChecklist, :120 ActivationResult",
+        "internshipStateMachine.ts:216 activation_pending to active, :218 activation_pending to removed (reviewer only)",
+        "internshipRoutes.ts:847 POST /applications/:id/activate requireSection('internship')",
+        "AI_INTERNSHIP_DISCOVERY.md risk R1: built literally, document verification would grant hasFullCurriculumAccess(), meaning full paid training free forever",
+        "internshipCohortService.ts:31 INTERNSHIP_COHORT_TYPE ai_internship, :129 ensureInternshipCohort",
+        "internshipMeetingRooms.ts:130 ensureInternInStandupRoom",
+        "cohort_memberships DDL at ensureInternshipSchema.ts:51; AI_INTERNSHIP_DISCOVERY.md risk R3 requires a DB-enforced unique partial index on active membership"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "checklist blockers",
+        "cohort membership state",
+        "activator identity from the session"
+      ],
+      "outputs": [
+        "active application",
+        "cohort_memberships row",
+        "standup room membership",
+        "ActiveInternView"
+      ],
+      "workflow": [
+        "Build the activation checklist and compute blockers",
+        "Refuse activation while any blocker remains",
+        "Create or confirm the internship cohort membership",
+        "Transition the application to active and record the activation timestamp",
+        "Add the intern to the standup meeting room"
+      ],
+      "exceptions": [
+        "ACTIVATION GRANTS PAID TRAINING. It must not be reachable by any automated path that has not cleared the payment or comp gate",
+        "Membership creation must be idempotent at the database; a retry must not create a second active cohort_memberships row",
+        "A blocker present means refuse, not warn and proceed",
+        "Ruth Kumera must not be activated and her onboarding requirements must not be bypassed",
+        "An agent must never activate an intern"
+      ],
+      "dependencies": [
+        "internshipOnboarding",
+        "cohort_memberships",
+        "internshipCohortService",
+        "internshipMeetingRooms",
+        "contentEntitlement"
+      ],
+      "application_pages": [
+        "admin application detail activation panel"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/activate",
+        "GET /api/admin/internship/applications/:id/onboarding"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipActivationService.ts",
+        "backend/src/services/internship/internshipCohortService.ts",
+        "backend/src/services/internship/internshipMeetingRooms.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read",
+        "sandbox_database_write"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "fixture_fork_write"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "Activation grants paid curriculum entitlement to a named person and is the most expensive act in this domain. The agent is capped at answering questions about blockers from approved knowledge; even shadow mode is not proposed, because a shadow activation list invites a one-click bulk apply.",
+      "blocked_by": [
+        "human-decision invariant",
+        "Dhee has not validated what the agent may surface about activation readiness"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers which blockers stand between an application and activation, citing the checklist",
+          "acceptance_criteria": "Blocker list matches activationBlockers() exactly; the output never contains an activation instruction or a ready-to-activate verdict"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.class_internship_movement",
+      "name": "Moving a person between class and internship without losing history",
+      "business_outcome": "A student can join the internship, or an intern can drop into a live class, with their progress, cohort and history intact and no second divergent record of who they are.",
+      "intended_users": [
+        "Dhee",
+        "intern",
+        "student"
+      ],
+      "classification": "manager_defined",
+      "source": "AI_INTERNSHIP_SPEC.md flow decision 3 (2026-08-18); implemented in part as cohort_memberships",
+      "supporting_evidence": [
+        "AI_INTERNSHIP_SPEC.md flow decision 3: moving from a class keeps the class enrollment and adds the internship on top; progress, cohort and history survive untouched",
+        "AI_INTERNSHIP_SPEC.md: Dhee needs to review, accept, and move a student between class and internship, and this is the piece with no analogue today",
+        "AI_INTERNSHIP_DISCOVERY.md 3.2: cohort_memberships delivers the stated outcome while keeping one enrollment per person, retiring the duplicate-sweep, comp-entitlement and pickBestEnrollment failures the audit ranked highest",
+        "AI_INTERNSHIP_DISCOVERY.md cites duplicateAccountSweepService.ts:237 destroying a legitimate enrollment under the two-enrollment mechanism, and participantService.ts:67 pickBestEnrollment with 29 references",
+        "internshipActivationService.ts:57 checkMembership, :43 MembershipCheck",
+        "ensureInternshipSchema.ts:51 cohort_memberships DDL"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "source cohort",
+        "target membership type",
+        "manager identity"
+      ],
+      "outputs": [
+        "cohort_memberships row",
+        "preserved enrollment and progress",
+        "audit record of the move"
+      ],
+      "workflow": [
+        "Identify the person's single enrollment",
+        "Add or deactivate an internship cohort membership rather than creating a second enrollment",
+        "Confirm progress, points and history are unchanged",
+        "Record the move and the manager who made it"
+      ],
+      "exceptions": [
+        "Never create a second active enrollment for one person; the duplicate sweep would destroy one of them",
+        "A comped person must not resolve to the wrong enrollment and receive a paywall",
+        "A move must be idempotent at the database, not checked in application code",
+        "Reversing a move must not delete history; deactivate rather than destroy",
+        "An agent must never move a person between class and internship; this is the manager's act"
+      ],
+      "dependencies": [
+        "cohort_memberships",
+        "enrollments",
+        "participantService.pickBestEnrollment call sites",
+        "contentEntitlement"
+      ],
+      "application_pages": [
+        "admin Intern Console Manage drawer",
+        "admin application detail"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/transition",
+        "unknown (no dedicated move endpoint identified)"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipActivationService.ts",
+        "backend/src/db/ensureInternshipSchema.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "The move touches entitlement and the enrollment identity that roughly twenty route files read. A wrong move shows a student a complete, coherent, wrong portal with nothing logged, which is why the agent is capped at explaining the model rather than operating it.",
+      "blocked_by": [
+        "no dedicated move endpoint was identified in this pass",
+        "Dhee has not validated the move workflow"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains why the internship is a membership on one enrollment rather than a second enrollment, and what breaks under the alternative",
+          "acceptance_criteria": "Explanation names the duplicate-sweep, comp-entitlement and pickBestEnrollment failures with their citations and claims no capability that does not exist"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.generated_build_project_authoring",
+      "name": "Generated build-project authoring and reviewer assignment",
+      "business_outcome": "An intern's project is generated by the Student Build Pipeline rather than typed story by story, rests at drafted for review, and ships only when the reviewer approves the exact plan they read.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff",
+        "intern"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipProjectGeneration.ts and internshipProjectAuthoring.ts",
+      "supporting_evidence": [
+        "internshipProjectGeneration.ts:42-51 THE REVIEW HOLD IS THE POINT: reviewer-initiated builds pass holdForReview, rest at drafted, and assignGeneratedProject is the reviewer saying yes, carrying the reviewed plan hash so the plan read is the plan that shipped",
+        "internshipProjectGeneration.ts:94 internProjectQuestions, :137 startInternProjectBuild, :206 internProjectBuild, :273 assignGeneratedProject, :304 assertNotGeneratedProject",
+        "internshipProjectGeneration.ts:26-30: a project is a projects row, a release a student_task_lists row, a story a student_tasks row, so this is not a second persistence path",
+        "internshipProjectAuthoring.ts:57 authoredToImportLists, :82 authorAndAssignInternshipProject",
+        "internshipRoutes.ts:440 author-project, :525 project/questions, :540 project/generate, :557 project build view, :571 project/assign, :611 projects/:projectId/assign",
+        "internshipProjectGeneration.ts:9 imports blockingViolations and advisoryViolations from sbp/planGate",
+        "execution-contract.md:177 cites this file as the repo's converged rule that staff-initiated builds are held while self-serve builds publish"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application id",
+        "enrollment id",
+        "project size tier",
+        "intake answers",
+        "reviewed plan hash"
+      ],
+      "outputs": [
+        "drafted build plan",
+        "projects, student_task_lists and student_tasks rows on publish",
+        "gate violation list"
+      ],
+      "workflow": [
+        "Generate intake questions for the intern's project",
+        "Start the build with holdForReview so it rests at drafted",
+        "Present the plan, its gate violations and its coverage to the reviewer",
+        "The reviewer assigns, publishing the plan under its reviewed hash",
+        "Task materialisation and active-project pointing follow the pipeline's own order"
+      ],
+      "exceptions": [
+        "Blocking gate violations must prevent publication; advisory ones are shown and may be accepted",
+        "A plan whose hash changed since review must not publish under the reviewer's approval",
+        "assertNotGeneratedProject prevents a second generated project colliding with an existing one",
+        "A model or tool failure may preserve a draft but must never advance an approved stage",
+        "PUBLICATION IS THE REVIEWER'S ACT. An agent may generate and may propose, but assignment is a human click"
+      ],
+      "dependencies": [
+        "sbp/sbpOrchestrator",
+        "sbp/intakeQuestionsService",
+        "sbp/planGate",
+        "projects",
+        "student_task_lists",
+        "student_tasks"
+      ],
+      "application_pages": [
+        "admin application detail project panel",
+        "admin Intern Console project tab",
+        "student Projects page"
+      ],
+      "apis": [
+        "POST /api/admin/internship/applications/:id/author-project",
+        "POST /api/admin/internship/applications/:id/project/questions",
+        "POST /api/admin/internship/applications/:id/project/generate",
+        "GET /api/admin/internship/applications/:id/project/:projectId/build",
+        "POST /api/admin/internship/applications/:id/project/assign",
+        "POST /api/admin/internship/projects/:projectId/assign"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipProjectGeneration.ts",
+        "backend/src/services/internship/internshipProjectAuthoring.ts",
+        "backend/src/services/sbp/sbpOrchestrator.ts",
+        "backend/src/services/sbp/planGate.ts"
+      ],
+      "required_tools": [
+        "sbp_build_pipeline_invoke",
+        "llm_text_generation",
+        "structured_output_validation",
+        "sandbox_database_read",
+        "sandbox_database_write"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sbp_build_pipeline_invoke",
+            "llm_text_generation",
+            "fixture_fork_write"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Generation is stateful multi-step sandbox work the pipeline already supports, so R4 fits the drafting half. Publication puts a plan in front of a named intern and is reserved to the reviewer, so no level above R4 is proposed.",
+      "blocked_by": [
+        "Dhee has not validated the project tiers or the review hold",
+        "no sandbox SBP fixture set for intern projects identified"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains the three size tiers, the gate violation classes and why staff-initiated builds hold for review",
+          "acceptance_criteria": "Matches normalizeSize() and the planGate violation split; never claims a plan is ready to assign"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Generates a complete drafted plan in sandbox and reports blocking violations",
+          "acceptance_criteria": "The plan rests at drafted with zero publish calls; a seeded blocking violation prevents publication and a mutation test that removes holdForReview fails"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.project_assignment_readiness_gating",
+      "name": "Project assignment readiness gating on the weeks 1 to 3 training gate",
+      "business_outcome": "Projects are assigned to interns who have cleared the training gate, and an intern waiting on Colaberry to assign is shown as waiting on us rather than as behind.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff",
+        "intern"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipProjectReadiness.ts and internshipWeek3Handoff.ts",
+      "supporting_evidence": [
+        "internshipProjectReadiness.ts:16 ProjectReadinessRow, :32 readyForProject, :36 internshipProjectReadiness",
+        "internshipWeek3Handoff.ts:24 HANDOFF_WEEK 3, :26-32 five phases (unknown, before_week_3, awaiting_assignment, access_pending, in_progress), :11-18 two phases carry owner colaberry with actionable false",
+        "internshipActivityService.ts:28 WeekProgress, :36 InternActivity, :62 internActivity",
+        "internConsoleRoster.ts:229 weeksCompletedFrom, :247 paceFor, :264 dayOfInternship, :53 ConsoleTraining",
+        "internshipRoutes.ts:402 GET /project-readiness",
+        "internshipNudge.ts:52 weeks_1_3_reminder template exists for this gate"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "weekly curriculum progress",
+        "active project state"
+      ],
+      "outputs": [
+        "readiness row per intern",
+        "handoff phase with owner",
+        "ready-for-project list"
+      ],
+      "workflow": [
+        "Compute weeks completed from the intern's curriculum rows",
+        "Decide readiness against the weeks 1 to 3 gate",
+        "Derive the handoff phase and its owner from readiness plus project state",
+        "List ready interns for the reviewer to assign"
+      ],
+      "exceptions": [
+        "An unknown week is reported as unknown, never as before the gate and never as late",
+        "awaiting_assignment and access_pending are Colaberry's phases and must never read as intern lateness",
+        "Readiness is a gate, not a recommendation of which project to assign",
+        "A readiness list is per intern and therefore identifiable; it is not aggregate reporting"
+      ],
+      "dependencies": [
+        "student curriculum week rows",
+        "projects",
+        "internshipActivityService"
+      ],
+      "application_pages": [
+        "admin internship project readiness view",
+        "student Today card handoff card"
+      ],
+      "apis": [
+        "GET /api/admin/internship/project-readiness"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipProjectReadiness.ts",
+        "backend/src/services/internship/internshipWeek3Handoff.ts",
+        "backend/src/services/internship/internshipActivityService.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read",
+        "project_readiness_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "project_readiness_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "Pure read-and-derive with no writes and no external side effects, so a separately approved supervised production pilot of the readiness report is reachable on measured evidence.",
+      "blocked_by": [
+        "Dhee has not validated the weeks 1 to 3 gate as the current rule"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "States whether an intern has cleared the training gate and whose move the handoff is",
+          "acceptance_criteria": "Matches readyForProject() and the handoff phase table; an unknown week never yields a late reading"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: produces the ready-for-project list for Dhee on a cadence",
+          "acceptance_criteria": "Separately approved; zero writes; the list reconciles against the endpoint for a measured period with no false readies"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.intern_project_to_catalog_matching",
+      "name": "Project matching recommendation against a project catalog",
+      "business_outcome": "An intern is matched to the project that best fits their skills, interests and the organisation's needs, instead of having a project generated from scratch every time.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "proposed_new",
+      "source": "owner discovery candidate 2026-10-09, investigated against the application and NOT found",
+      "supporting_evidence": [],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "unknown"
+      ],
+      "outputs": [
+        "unknown"
+      ],
+      "workflow": [
+        "unknown until Dhee defines whether a project catalog should exist at all"
+      ],
+      "exceptions": [
+        "A match is a recommendation to a human, never an assignment; assignment is already the reviewer's act",
+        "Matching must not rank interns against each other or produce a score on a person",
+        "No catalog of assignable projects was found, so any matching claim today would be invented"
+      ],
+      "dependencies": [
+        "unknown (no project catalog exists)"
+      ],
+      "application_pages": [
+        "unknown (no surface exists today)"
+      ],
+      "apis": [
+        "unknown (no endpoint exists today)"
+      ],
+      "source_modules": [
+        "unknown (not implemented)"
+      ],
+      "required_tools": [
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "Nothing exists. The owner's candidate named project matching recommendations, and what the application actually has is project GENERATION plus a readiness gate, which is a different capability. Until Dhee says a catalog should exist, R0 definition work and at most R2 question-answering is all that can be justified.",
+      "blocked_by": [
+        "no project catalog exists in the application",
+        "Dhee has not said whether matching is wanted instead of generation"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines whether matching is wanted, what a catalog would contain, and which human decides a match",
+          "acceptance_criteria": "Dhee states in writing whether a catalog should exist; until then this capability stays absent and no evidence is claimed"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.build_progress_and_pace_monitoring",
+      "name": "Project progress, pace and deadline monitoring",
+      "business_outcome": "A manager sees where each intern is against their build, how fast they are moving and when they are projected to finish, from deterministic arithmetic rather than a model's impression.",
+      "intended_users": [
+        "Dhee",
+        "Ali",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "internConsoleRoster.ts, internshipProjectReview.ts and the Basecamp-sourced intern delivery scripts",
+      "supporting_evidence": [
+        "internConsoleRoster.ts:247 paceFor, :264 dayOfInternship, :229 weeksCompletedFrom, :280 getConsoleRoster, :386 consoleCounts, :46 ConsolePace, :65 ConsoleProject",
+        "internshipProjectReview.ts:64 deterministicStanding, :74 internshipProjectReview, :7-16 (hard facts are deterministic, the model only writes the narrative standing and answers the manager's question; falls back to a deterministic standing when unavailable)",
+        "backend/src/scripts/lib/internActivityTracker.js:1-22 per-intern activity snapshot with level thresholds GREEN today, YELLOW 1-3 days, ORANGE 4-6, RED 7-9, BLACK 10+ (Ali policy 2026-05-30)",
+        "backend/src/scripts/lib/internDeliveryCoachNote.js:9-30 computes completion percentage and a projected completion date, DETERMINISTIC ON PURPOSE because a model that nudges a date by a week is not an acceptable failure mode",
+        "backend/src/scripts/lib/internDeliveryMetrics.js, internDeliveryData.js, internDeliveryScope.js, internDeliveryNarrative.js",
+        "internshipRoutes.ts:102 GET /console, :131 GET /console/:enrollmentId, :378 POST /applications/:id/project-review",
+        "backend/src/services/internship/internConsoleDetail.ts getInternConsoleDetail"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "student_tasks completion state",
+        "Basecamp todo and comment activity",
+        "join date",
+        "optional manager question"
+      ],
+      "outputs": [
+        "ConsoleRosterRow with pace and day N",
+        "deterministic standing",
+        "completion percentage and projected completion date",
+        "narrative answer to a manager question"
+      ],
+      "workflow": [
+        "Harvest task state and Basecamp activity per intern",
+        "Compute day of internship, weeks completed, pace and escalation level by arithmetic",
+        "Derive a deterministic standing from verified versus self-reported stories",
+        "Call the model only for the narrative and the manager's question, grounded in those facts",
+        "Fall back to the deterministic standing when the model is unavailable"
+      ],
+      "exceptions": [
+        "Dates and percentages must never come from a model; a projected completion date a person is held to cannot be rounded by a language model",
+        "Task titles and notes enter the prompt as fenced untrusted evidence",
+        "An intern with no activity data is UNKNOWN, not BLACK; internActivityTracker.js:196 records that the nudge job skips UNKNOWN after a null-days bug produced false BLACK levels",
+        "A model outage must yield a deterministic standing, never a blank or a guess",
+        "Project review is generated on manager demand so no LLM cost is paid per page load"
+      ],
+      "dependencies": [
+        "student_tasks",
+        "projects",
+        "Basecamp project 24865175",
+        "runtime/runtimeAi chatJson",
+        "inboxCase/promptSafety"
+      ],
+      "application_pages": [
+        "admin Intern Console",
+        "admin Intern Console detail",
+        "intern delivery dashboard HTML"
+      ],
+      "apis": [
+        "GET /api/admin/internship/console",
+        "GET /api/admin/internship/console/:enrollmentId",
+        "POST /api/admin/internship/applications/:id/project-review"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internConsoleRoster.ts",
+        "backend/src/services/internship/internConsoleDetail.ts",
+        "backend/src/services/internship/internshipProjectReview.ts",
+        "backend/src/scripts/lib/internActivityTracker.js",
+        "backend/src/scripts/lib/internDeliveryMetrics.js"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read",
+        "basecamp_read",
+        "llm_text_generation",
+        "structured_output_validation",
+        "prompt_injection_fencing"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "llm_text_generation"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "internship_admin_api_read",
+            "basecamp_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "Monitoring reads and reports and writes nothing to a person's record, so a separately approved supervised production pilot is reachable. It stays below action automation because the actions that follow a bad pace reading, nudging and exiting, are separate capabilities with their own ceilings.",
+      "blocked_by": [
+        "Dhee has not validated the pace thresholds",
+        "the escalation ladder is Ali policy from 2026-05-30 and has not been re-validated for the internship cohort"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Reports an intern's day N, weeks completed, pace and standing from stored facts",
+          "acceptance_criteria": "Figures match paceFor(), dayOfInternship() and deterministicStanding() exactly; zero dates or percentages originate from the model"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: produces the console roster summary for Dhee on a cadence",
+          "acceptance_criteria": "Separately approved; zero writes; an intern with missing activity data reports UNKNOWN rather than the worst level, proven by a fixture"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.active_project_drift_detection",
+      "name": "Active project drift detection",
+      "business_outcome": "An intern whose portal points at one project while their work is in another is found before they lose a day wondering why verified work shows zero.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff",
+        "platform staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/sbp/activeProjectDrift.ts",
+      "supporting_evidence": [
+        "activeProjectDrift.ts:1-23 the failure it exists to catch, found on a named student on 2026-09-05 and repaired by hand once before on 2026-08-25, so twice is a pattern",
+        "activeProjectDrift.ts:25-33 WHY THIS ONLY REPORTS AND NEVER CORRECTS: point them at their newest project is wrong, and the live data says so",
+        "activeProjectDrift.ts:63 DriftCode, :71 DriftFinding, :100 detectActiveProjectDrift (pure)",
+        "activeProjectDriftService.ts:57 driftForEnrollment",
+        "INTENDED_INTERN_ROSTER_2026-10-07.md records Ruth Kumera with enrollments.active_project_id NULL, so the null case is live"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "active_project_id",
+        "per-project activity"
+      ],
+      "outputs": [
+        "DriftFinding with a drift code, or null"
+      ],
+      "workflow": [
+        "Read the enrollment's active project pointer and every project's activity",
+        "Detect the drift codes the module defines",
+        "Report the finding to a human",
+        "Take no corrective action"
+      ],
+      "exceptions": [
+        "IT ONLY REPORTS. Auto-correcting to the newest project is demonstrably wrong against live data and must not be added",
+        "A null active_project_id is a distinct finding, not an error to swallow",
+        "A finished newer project must not displace an in-progress older one",
+        "An agent must never write enrollments.active_project_id"
+      ],
+      "dependencies": [
+        "enrollments",
+        "projects",
+        "student_tasks"
+      ],
+      "application_pages": [
+        "unknown (no dedicated admin surface identified in this pass)"
+      ],
+      "apis": [
+        "unknown (no endpoint identified in this pass)"
+      ],
+      "source_modules": [
+        "backend/src/services/sbp/activeProjectDrift.ts",
+        "backend/src/services/sbp/activeProjectDriftService.ts"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship",
+            "requireSection:program"
+          ],
+          "agent": [
+            "internship_admin_api_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "The module is pure and report-only by deliberate design. A supervised production pilot of the report is reachable; raising the agent to an action level would mean writing the pointer, which the module's own header forbids.",
+      "blocked_by": [
+        "Dhee has not validated who receives a drift finding"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains the drift codes and why auto-correction is refused",
+          "acceptance_criteria": "Matches DriftCode and the module header; never proposes a correction"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: reports drift findings across the intern cohort on a cadence",
+          "acceptance_criteria": "Separately approved; zero writes to enrollments; findings match detectActiveProjectDrift() on every fixture including the null-pointer case"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.inactivity_escalation_and_exit_recommendation",
+      "name": "Inactivity escalation ladder and exit recommendation",
+      "business_outcome": "An intern who has gone silent is escalated on a known ladder and, at the exit cliff, surfaced to a human with the exact next step rather than quietly dropped or quietly kept.",
+      "intended_users": [
+        "Dhee",
+        "Ali"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/scripts/lib/internActivityTracker.js and the exit tooling",
+      "supporting_evidence": [
+        "internActivityTracker.js:11-17 the five levels and their day thresholds, BLACK at 10+ days being the exit cliff",
+        "internActivityTracker.js:196 a dark intern with no comments is UNKNOWN, not BLACK, and the nudge job skips UNKNOWN",
+        "backend/src/scripts/dailyInternNudges.js:1-9 for BLACK it emails Ali a consolidated digest of who hit the exit cliff today plus the exact CLI commands to process them out",
+        "backend/src/scripts/lib/internExit.js executeExit, backend/src/scripts/confirmInternExit.js (the human confirmation step), internReinstate.js and reinstateInternFalseBlack.js",
+        "backend/src/scripts/reinstateInternFalseBlack.js:3 records a real false BLACK caused by a null-days bug, and reinstateIsaac.js:6 records another on a named person",
+        "backend/src/scripts/weeklyInternReport.js:5-8 leads the report with BLACK and inlines the confirmInternExit CLI for each",
+        "backend/src/scripts/lib/internNudgeMode.js, a mode file that is the source of truth and can suppress sends"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "Basecamp activity per intern",
+        "days since last activity",
+        "nudge mode file",
+        "prior nudge state"
+      ],
+      "outputs": [
+        "escalation level per intern",
+        "per-level reminder",
+        "exit-cliff digest with the exact CLI per person",
+        "exit or reinstatement record"
+      ],
+      "workflow": [
+        "Compute days since last activity per intern from their own comments",
+        "Assign an escalation level on the fixed ladder",
+        "Nudge at YELLOW or worse, honouring the mode file and the per-day state",
+        "At BLACK, send a human the exit-cliff digest with the exact command for each person",
+        "A human confirms the exit; a wrongly flagged intern is reinstated"
+      ],
+      "exceptions": [
+        "EXIT IS A HUMAN DECISION. The job produces a digest and a command; a person runs the confirmation step",
+        "An intern with no activity data must be UNKNOWN, never BLACK; this exact bug produced false BLACK flags on named people and cost reinstatements",
+        "The nudge state file prevents re-nudging the same intern twice in a day; the mode file can suppress sends entirely",
+        "Reinstatement must restore the intern without erasing the history of the false flag",
+        "An agent must never execute an exit"
+      ],
+      "dependencies": [
+        "Basecamp project 24865175",
+        "internExit.js",
+        "internNudgeMode.js",
+        "reportRunRecorder",
+        "Mandrill preflight"
+      ],
+      "application_pages": [
+        "intern delivery dashboard HTML",
+        "Basecamp intern project comments"
+      ],
+      "apis": [
+        "Basecamp API (external)"
+      ],
+      "source_modules": [
+        "backend/src/scripts/lib/internActivityTracker.js",
+        "backend/src/scripts/dailyInternNudges.js",
+        "backend/src/scripts/lib/internExit.js",
+        "backend/src/scripts/confirmInternExit.js",
+        "backend/src/scripts/lib/internReinstate.js"
+      ],
+      "required_tools": [
+        "basecamp_read",
+        "basecamp_comment_write",
+        "approved_template_notification_send",
+        "sandbox_email_sink",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "basecamp_read",
+            "sandbox_email_sink"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": [
+            "basecamp_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Removing a person from the programme is irreversible in practice and the repo already carries two documented false positives on named interns. The agent may reach shadow mode on the escalation list; the exit act stays with a human permanently.",
+      "blocked_by": [
+        "human-decision invariant for exit",
+        "Dhee has not validated the ladder thresholds for the internship cohort",
+        "Basecamp token acts as Ali, so an agent write would be attributed to him"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains the ladder, the UNKNOWN exemption and why exit requires a human confirmation step",
+          "acceptance_criteria": "Thresholds match internActivityTracker.js:11-17 and the UNKNOWN rule is stated, not omitted"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-produces the day's escalation list and the exit-cliff set beside what a human acted on",
+          "acceptance_criteria": "Zero exits executed by the agent; a null-activity fixture reports UNKNOWN and appears in no exit set"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.manager_check_in_brief_and_follow_up",
+      "name": "Manager check-in preparation and follow-up note",
+      "business_outcome": "Before a check-in, the manager has the intern's real position, what they are working on and the projected completion date, and afterwards a supportive accountability note the manager can post as their own words.",
+      "intended_users": [
+        "Dhee",
+        "Ali"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/scripts/lib/internDeliveryCoachNote.js and the Intern Console detail surface",
+      "supporting_evidence": [
+        "internDeliveryCoachNote.js:1-12 composes the Basecamp comment Ali posts on an intern's project list, asked for on 2026-08-25 to support but also outline if things are running behind, naming the part they are working on, where it sits against completion, and the projected completion date",
+        "internDeliveryCoachNote.js:13-30 three reasons it stays deterministic, including that the same snapshot in gives the same note out so the manager can reread and paste it an hour later without the wording shifting",
+        "internDeliveryCoachNote.js:31-37 house style enforced rather than requested, no em dashes",
+        "internConsoleDetail.ts getInternConsoleDetail (one intern in depth: roster row, per-section training breakdown, cert attempt series, readiness and claim pair, activity feed)",
+        "internshipProjectReview.ts:74 answers the manager's own question grounded in deterministic facts",
+        "backend/src/scripts/lib/internDeliveryNarrative.js, renderInternDeliveryEmail.js, internDeliveryEmailSend.js",
+        "no 1:1 or check-in record table was found in this pass, so the follow-up is a composed artifact rather than a tracked meeting"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "intern delivery snapshot",
+        "task completion state",
+        "projected completion arithmetic",
+        "optional manager question"
+      ],
+      "outputs": [
+        "check-in brief",
+        "composed Basecamp comment for the manager to post",
+        "narrative standing"
+      ],
+      "workflow": [
+        "Harvest the intern's delivery snapshot",
+        "Compute completion percentage and projected completion date by arithmetic",
+        "Compose the note with tone branching on the computed status",
+        "Present it to the manager, who posts it as their own",
+        "Record nothing about the meeting itself, because no check-in record exists today"
+      ],
+      "exceptions": [
+        "The projected date and the percentage must stay deterministic; the person is held to them",
+        "The note is the manager's to post; an agent posting it would speak as a named human",
+        "The Basecamp token on the production host acts as Ali, so any automated comment would be attributed to him rather than to an agent",
+        "No check-in or 1:1 record exists, so follow-up completion cannot be claimed as tracked",
+        "House copy rules apply: no em dashes and no double sign-off"
+      ],
+      "dependencies": [
+        "internDeliveryData",
+        "internDeliveryMetrics",
+        "Basecamp",
+        "internConsoleDetail"
+      ],
+      "application_pages": [
+        "intern delivery dashboard HTML",
+        "admin Intern Console detail"
+      ],
+      "apis": [
+        "GET /api/admin/internship/console/:enrollmentId",
+        "POST /api/admin/internship/applications/:id/project-review"
+      ],
+      "source_modules": [
+        "backend/src/scripts/lib/internDeliveryCoachNote.js",
+        "backend/src/scripts/lib/internDeliveryNarrative.js",
+        "backend/src/services/internship/internConsoleDetail.ts",
+        "backend/src/services/internship/internshipProjectReview.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "basecamp_read",
+        "llm_text_generation",
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "llm_text_generation"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "internship_admin_api_read",
+            "basecamp_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Preparing a brief is safe and already deterministic. Posting the note speaks in a named human's voice through a token that acts as Ali, so shadow mode is the ceiling until an agent-attributed write path exists.",
+      "blocked_by": [
+        "no check-in record model exists",
+        "the Basecamp token acts as Ali, so agent attribution is impossible today",
+        "Dhee has not validated the check-in cadence"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Produces a check-in brief for one intern from stored facts, with every figure traceable",
+          "acceptance_criteria": "Percentages and dates match internDeliveryCoachNote.js arithmetic exactly; zero figures originate from the model"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-drafts the follow-up note beside the one the manager actually posted",
+          "acceptance_criteria": "Zero Basecamp writes attributable to the agent; the drafted note contains no em dash and no second sign-off"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.skill_gap_identification_for_interns",
+      "name": "Skill-gap identification for interns",
+      "business_outcome": "An intern and their manager see which skills are demonstrated, which are decaying and which are missing for the work ahead, so coaching targets a gap rather than a guess.",
+      "intended_users": [
+        "Dhee",
+        "intern"
+      ],
+      "classification": "manager_defined",
+      "source": "owner discovery candidate 2026-10-09; a platform primitive exists but no internship wiring was found",
+      "supporting_evidence": [
+        "backend/src/services/skillGenomeService.ts:1-3 reads SkillMastery plus ontology.json and lessonSkillMap.json, :5 DECAY_DAYS 30 (one proficiency level lost per 30 days of inactivity), :31 SkillGenome with overall_proficiency, skills_started and skills_mastered",
+        "backend/src/services/cape/capeLearningValueScorer.ts and backend/src/services/learnerContextService.ts reference skill gap concepts",
+        "backend/src/services/internship/internshipRequirementChecks.ts identifies REQUIREMENT gaps, not skill gaps, and is a different thing",
+        "no import of skillGenomeService, SkillMastery or lessonSkillMap was found anywhere under backend/src/services/internship/ in this pass, so the internship domain does not consume it today"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "SkillMastery rows",
+        "skill ontology",
+        "unknown: the target skill profile for internship work"
+      ],
+      "outputs": [
+        "skill genome with effective levels after decay",
+        "unknown: a gap list against a target profile"
+      ],
+      "workflow": [
+        "Read the intern's demonstrated skills and evidence counts",
+        "Apply the decay rule to get effective levels",
+        "Compare against a target profile for the internship (does not exist today)",
+        "Report gaps to the intern and the manager as coaching input"
+      ],
+      "exceptions": [
+        "A gap is coaching input, never an admission or retention criterion",
+        "Decay must be shown as decay, not as a skill never held, or the intern reads it as being graded down",
+        "An intern with no evidence has an unknown profile, not a zero profile",
+        "No target skill profile for internship work exists, so any gap percentage produced today would be invented",
+        "Skill data must never be presented as a ranking of interns against each other"
+      ],
+      "dependencies": [
+        "SkillMastery",
+        "ontology.json",
+        "lessonSkillMap.json",
+        "unknown target profile"
+      ],
+      "application_pages": [
+        "unknown (no internship skill-gap surface exists)"
+      ],
+      "apis": [
+        "unknown (no internship endpoint exposes the skill genome)"
+      ],
+      "source_modules": [
+        "backend/src/services/skillGenomeService.ts"
+      ],
+      "required_tools": [
+        "skill_genome_read",
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "skill_genome_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "The underlying genome exists and can be read in sandbox, so R4 analysis work is justifiable. Production use is not, because the target profile the gap is measured against does not exist and a gap reported without it would be a number about a person with no referent.",
+      "blocked_by": [
+        "no target skill profile for internship work exists",
+        "skillGenomeService is not wired into the internship domain",
+        "Dhee has not defined what a gap means here"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines what skills internship work requires and who owns the target profile",
+          "acceptance_criteria": "Dhee accepts a target profile definition in writing; until then the gap output stays unavailable"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Computes a demonstrated-skill profile with decay against sandbox fixtures",
+          "acceptance_criteria": "Effective levels match skillGenomeService decay arithmetic; an evidence-free fixture reports unknown rather than zero"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.portfolio_publication_readiness",
+      "name": "Portfolio and demonstration publication readiness",
+      "business_outcome": "An intern's portfolio is scored for whether it has enough substance to be worth a human review, and publication happens only after a reviewer approves it.",
+      "intended_users": [
+        "Dhee",
+        "career reviewers",
+        "mentors",
+        "intern"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/career/careerReadiness.ts and careerPortfolioPageWriteService.ts",
+      "supporting_evidence": [
+        "careerReadiness.ts:2 Portfolio Publication Readiness, :6-9 it is a POLICY not a hardcoded threshold with DEFAULT_POLICY at :44, :73 computeReadiness, :17-19 deterministic and pure, no AI",
+        "careerReadiness.ts:11-15 IT IS NOT JOB READINESS: nothing in this file and nothing that renders it may describe a person as employable",
+        "careerPortfolioPageWriteService.ts:156 requestPortfolioReview, :195 PortfolioDecision approved|changes_requested, :208 decidePortfolioReview, :293 listPortfolioReviewQueue, :141 setPortfolioVisibility",
+        "backend/src/middlewares/requireCareerReviewer.ts:8-22 the gate on the portfolio review surface, wider than requireAdmin so mentors get in, with careerMentorScopeService deciding WHOSE portfolios per query; clients and employers never reach it and see only the public frozen snapshot at /api/public/talent/:slug",
+        "mgmtRoles.ts career_review section key (portfolio publication review queue, admins plus mentors)",
+        "backend/src/services/career/careerPortfolioPublicProjection.ts, portfolioEvidence.ts, portfolioNarrativeService.ts"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "portfolio projection",
+        "readiness policy",
+        "reviewer decision"
+      ],
+      "outputs": [
+        "readiness score and unmet requirements",
+        "review queue item",
+        "approved or changes-requested decision",
+        "public frozen snapshot on approval"
+      ],
+      "workflow": [
+        "Build the portfolio projection from project and case-study evidence",
+        "Compute readiness against the configurable policy",
+        "The intern requests review once readiness allows it",
+        "A career reviewer approves or requests changes",
+        "On approval the public snapshot becomes reachable at the talent slug"
+      ],
+      "exceptions": [
+        "PUBLICATION IS A HUMAN DECISION. decidePortfolioReview is a reviewer act and the public snapshot follows it",
+        "Portfolio readiness must never be relabelled job readiness or employability; the module forbids it explicitly",
+        "The reviewer gate decides who may enter, not whose portfolios they see; scope is applied per query",
+        "The readiness bar is a policy argument so it can move without a code change; a hardcoded threshold would be a regression",
+        "An agent must never set portfolio visibility or approve a review"
+      ],
+      "dependencies": [
+        "careerPortfolioPageService",
+        "careerMentorScopeService",
+        "portfolioEvidence",
+        "career_review section"
+      ],
+      "application_pages": [
+        "student portfolio page",
+        "admin portfolio review queue",
+        "public talent page"
+      ],
+      "apis": [
+        "GET /api/public/talent/:slug",
+        "unknown (career review routes not enumerated in this pass)"
+      ],
+      "source_modules": [
+        "backend/src/services/career/careerReadiness.ts",
+        "backend/src/services/career/careerPortfolioPageWriteService.ts",
+        "backend/src/middlewares/requireCareerReviewer.ts",
+        "backend/src/services/career/careerPortfolioPublicProjection.ts"
+      ],
+      "required_tools": [
+        "portfolio_projection_read",
+        "sandbox_database_read",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireCareerReviewer",
+            "requireSection:career_review"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "portfolio_projection_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireCareerReviewer (admins and mentors, scoped per query)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Publication makes a named person's work public under their own slug. The agent may reach shadow mode on the readiness score and the queue ordering; approval and visibility stay with a career reviewer permanently.",
+      "blocked_by": [
+        "human-decision invariant for publication",
+        "Dhee has not validated the readiness policy for interns specifically"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains which readiness requirements an intern's portfolio does not yet meet, and refuses to call anyone job ready",
+          "acceptance_criteria": "Unmet list matches computeReadiness() under DEFAULT_POLICY; any employability language fails the release"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-scores readiness beside reviewer decisions already made",
+          "acceptance_criteria": "Zero visibility or decision writes attributable to the agent; the score is reproducible from the projection alone"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.intern_project_portfolio_assembly",
+      "name": "Intern project portfolio assembly and demonstration evidence",
+      "business_outcome": "An intern's build becomes a presentable portfolio of releases and stories with real evidence attached, so what they did can be shown rather than described.",
+      "intended_users": [
+        "intern",
+        "Dhee",
+        "career reviewers"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipProjectPortfolio.ts plus the career portfolio services",
+      "supporting_evidence": [
+        "internshipProjectPortfolio.ts:42 InternProjectStories, :55 InternProject, :80 InternProjectPortfolio, :98 assembleProjectPortfolio (pure), :155 internProjectPortfolio",
+        "backend/src/services/career/portfolioEvidence.ts, careerEvidenceAdapters.ts, portfolioCaseStudyLinks.ts, portfolioHeroImage.ts, portfolioOverview.ts",
+        "backend/src/services/portfolioGenerationService.ts, portfolioEnhancementService.ts, portfolioShareService.ts",
+        "AI_INTERNSHIP_DISCOVERY.md: the internship_activity curriculum card type is already registered with evidence_required, github_required, instructor_review and portfolio_eligible at timeline/typeRegistry.ts:141",
+        "internshipProjectGeneration.ts:26-30 the three tables an intern project occupies, which is what makes the portfolio render identically to a student's"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "projects",
+        "student_task_lists",
+        "student_tasks",
+        "evidence records"
+      ],
+      "outputs": [
+        "InternProjectPortfolio with releases and stories",
+        "evidence links",
+        "case-study links"
+      ],
+      "workflow": [
+        "Read the intern's projects, releases and stories",
+        "Assemble them into the portfolio shape",
+        "Attach verified evidence and case-study links",
+        "Hand the projection to the readiness scorer and the review queue"
+      ],
+      "exceptions": [
+        "Self-reported completion must be distinguishable from verified completion in the portfolio",
+        "An intern with no published build has an empty portfolio, which is an honest state, not an error",
+        "Evidence that cannot be verified must not be presented as verified",
+        "Assembly is a projection; it must not write to the underlying task records"
+      ],
+      "dependencies": [
+        "projects",
+        "student_task_lists",
+        "student_tasks",
+        "portfolioEvidence",
+        "timeline/typeRegistry internship_activity card"
+      ],
+      "application_pages": [
+        "student portfolio page",
+        "admin Intern Console project tab"
+      ],
+      "apis": [
+        "unknown (portfolio read routes not enumerated in this pass)"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipProjectPortfolio.ts",
+        "backend/src/services/career/portfolioEvidence.ts",
+        "backend/src/services/career/portfolioOverview.ts"
+      ],
+      "required_tools": [
+        "portfolio_projection_read",
+        "sandbox_database_read",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "portfolio_projection_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship",
+            "requireCareerReviewer"
+          ],
+          "agent": [
+            "portfolio_projection_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "Assembly is a pure projection with no writes, so a separately approved supervised production pilot is reachable. It stays below action automation because everything that makes the portfolio public is the separate publication capability.",
+      "blocked_by": [
+        "Dhee has not validated what belongs in an intern portfolio"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Describes what an intern's portfolio contains and which items are verified",
+          "acceptance_criteria": "Matches assembleProjectPortfolio() on fixtures; self-reported items are never described as verified"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: assembles portfolios across the cohort for reviewer triage",
+          "acceptance_criteria": "Separately approved; zero writes to student_tasks; an empty-build fixture yields an empty portfolio rather than an error"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.certification_readiness_tracking",
+      "name": "Certification readiness and attempt tracking for interns",
+      "business_outcome": "A manager sees each intern's certification readiness, their official claim and every sitting with its item count, so a stalled certification is visible before it becomes a surprise.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff",
+        "intern"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipCertification.ts",
+      "supporting_evidence": [
+        "internshipCertification.ts:35 InternCertReadiness, :49 InternOfficialCert, :94 summarizeOfficialClaim (pure), :112 internCertification, :199 toCertAttempts (pure), :221 certAttempts",
+        "internConsoleRoster.ts:38 ConsoleCert on the roster row; internshipRoutes.ts:131 console detail returns the cert attempt series with each sitting's item count and the readiness and claim pair",
+        "AI_INTERNSHIP_DISCOVERY.md: CertSession, CertReadinessSnapshot, CertDomain, CertTrack and ensureCertPrepSchema already exist and are to be read, not changed, with the instruction do not change timing",
+        "CCAR-F is Anthropic's credential and Colaberry sells preparation, so readiness here is prep readiness and not an issued certification"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "CertSession rows",
+        "CertReadinessSnapshot",
+        "official claim rows"
+      ],
+      "outputs": [
+        "InternCertification with readiness and official claim",
+        "CertAttemptSeries with per-sitting item counts"
+      ],
+      "workflow": [
+        "Read the intern's readiness snapshot and official claim",
+        "Summarise the claim deterministically",
+        "Build the attempt series with each sitting's item count",
+        "Surface both on the roster and the console detail"
+      ],
+      "exceptions": [
+        "Readiness is preparation readiness; Colaberry issues no certification and must never imply it does",
+        "A readiness snapshot that does not exist is unknown, not zero",
+        "The certification timing logic must be read, not changed, from the internship side",
+        "A readiness figure must not be presented as a pass prediction for a named person"
+      ],
+      "dependencies": [
+        "CertSession",
+        "CertReadinessSnapshot",
+        "CertDomain",
+        "CertTrack"
+      ],
+      "application_pages": [
+        "admin Intern Console",
+        "admin Intern Console detail"
+      ],
+      "apis": [
+        "GET /api/admin/internship/console",
+        "GET /api/admin/internship/console/:enrollmentId"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipCertification.ts"
+      ],
+      "required_tools": [
+        "cert_readiness_read",
+        "sandbox_database_read",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "cert_readiness_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "internship_admin_api_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "Read-only over an existing subsystem the internship domain is instructed not to change, so a separately approved supervised production pilot of the report is the reasonable ceiling.",
+      "blocked_by": [
+        "Dhee has not validated what certification signal matters for interns"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Reports an intern's certification readiness and sitting history without predicting an outcome",
+          "acceptance_criteria": "Matches internCertification() and toCertAttempts(); no pass prediction appears and no issued credential is implied"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: produces the cohort certification view for Dhee",
+          "acceptance_criteria": "Separately approved; zero writes to any cert table; a missing snapshot reports unknown"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.standup_attendance_tracking",
+      "name": "Standup and required-meeting attendance tracking",
+      "business_outcome": "Participation in the Monday and Friday scrum is recorded where it can be recorded, and where no denominator exists it is reported as unknown rather than as absence.",
+      "intended_users": [
+        "Dhee",
+        "intern"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipAttendanceService.ts and internshipMeetingRooms.ts",
+      "supporting_evidence": [
+        "internshipAttendanceService.ts:30 summarizeAttendance (pure), :41 centralDateKey, :52 recordMeetingJoin, :71 meetingAttendanceSummary, :126 toConsoleAttendance, :138 consoleAttendance",
+        "internshipMeetingRooms.ts:35 INTERNS_ROOM_SLUG ai-internship-standup, :130 ensureInternInStandupRoom, :145 ensureInternshipMeetingRooms",
+        "internshipCohortService.ts:44 RequiredMeeting in the cohort settings",
+        "internshipRoutes.ts:99-100: there is no attendance field in the console response, by product decision, because 7 join rows existed across 2 interns and no denominator exists",
+        "internshipReviewQueue.ts:282-290 attendance_rate is hard-coded unknown and excluded from the recommendation",
+        "AI_INTERNSHIP_SPEC.md: scrum Monday and Friday, project work Tuesday to Thursday",
+        "table: internship_meeting_attendance (ensureInternshipSchema.ts:377)"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "enrollment id",
+        "meeting room join events",
+        "required meeting schedule"
+      ],
+      "outputs": [
+        "AttendanceSummary",
+        "ConsoleAttendance",
+        "internship_meeting_attendance rows"
+      ],
+      "workflow": [
+        "Ensure the intern is a member of the standup room",
+        "Record a join event keyed on the Central-time date",
+        "Summarise joins per intern",
+        "Report unknown wherever no denominator of required meetings exists"
+      ],
+      "exceptions": [
+        "NO DENOMINATOR MEANS UNKNOWN, NOT ZERO. The console deliberately carries no attendance field for this reason and the review queue hard-codes attendance_rate unknown",
+        "A duplicate join on the same day must not inflate the count; the date key is the idempotency boundary",
+        "Central time is the day boundary; a UTC boundary would miscount evening sessions",
+        "Attendance must never be used as an admission signal while it is unreliable",
+        "An agent must never record attendance on an intern's behalf"
+      ],
+      "dependencies": [
+        "internship_meeting_attendance",
+        "meeting rooms",
+        "internshipCohortService required meetings"
+      ],
+      "application_pages": [
+        "admin Intern Console detail"
+      ],
+      "apis": [
+        "GET /api/admin/internship/console/:enrollmentId"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipAttendanceService.ts",
+        "backend/src/services/internship/internshipMeetingRooms.ts"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "internship_admin_api_read",
+        "meeting_room_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "meeting_room_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "The data is known-unreliable and the product has already decided not to render it. Until a denominator exists, nothing above sandbox analysis can be justified, because a production attendance report would be a number nobody can defend.",
+      "blocked_by": [
+        "no denominator of required meetings is recorded, so a rate cannot be computed",
+        "Dhee has not defined required attendance"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains why attendance is reported as unknown and what would be needed to make it reliable",
+          "acceptance_criteria": "The explanation states the missing denominator and never quotes an attendance percentage"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Computes join summaries against sandbox fixtures including the duplicate-join and Central-time boundary cases",
+          "acceptance_criteria": "A same-day duplicate join yields one record; an evening session near midnight Central lands on the correct day"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.interview_preparation_support",
+      "name": "Career interview preparation support and nudges",
+      "business_outcome": "An intern or alumnus with a real interview booked is moved one step down the preparation funnel at a time, and the staff report shows who is least prepared with the least time left.",
+      "intended_users": [
+        "intern",
+        "mentors",
+        "Dhee",
+        "placement staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/scripts/lib/interviewPrepData.js and interviewPrepNudges.js",
+      "supporting_evidence": [
+        "interviewPrepData.js:3-24 pure classifier over the CCPP view vw_ColaberryInterviewPreparation_UpcomingInterviews, validated against live CCPP 2026-06-10, with the funnel logged, review 10 questions, generate answers, practice, auto mock, mentor mock, interview, post-interview survey",
+        "interviewPrepData.js:26-30 the readiness model blends the app's Preparationscore with auto-mock and mentor-mock counts, so a zero prep score with real activity still reads as activity",
+        "interviewPrepNudges.js:3-22 pure content builder, one beat per interview per day, beatKey stored in state so the same beat is not re-sent, flipping from prepare to how did it go after the interview",
+        "interviewPrepNudges.js:32-34 a shared student-appropriate sign-off, deliberately not Ali's signature block",
+        "backend/src/scripts/lib/interviewPrepPeople.js, renderInterviewPrepReport.js",
+        "backend/src/services/interviewService.ts, backend/src/services/resumeIngestService.ts, resumeHistory.ts, backend/src/services/career/resumeHistoryAdapter.ts"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "CCPP interview recordset",
+        "days to interview",
+        "preparation score",
+        "auto and mentor mock counts",
+        "survey response state"
+      ],
+      "outputs": [
+        "classified interview rows with readiness and priority",
+        "the day's nudge beat per interview",
+        "staff preparation report"
+      ],
+      "workflow": [
+        "Read the CCPP upcoming-interviews view",
+        "Classify each row into a funnel stage with a readiness and an urgency",
+        "Select at most one nudge beat per interview per day",
+        "Send the student-facing beat and record the beatKey",
+        "Render the priority-ranked staff report"
+      ],
+      "exceptions": [
+        "One beat per interview per day; a new beat fires only on a stage advance or a timeline threshold crossing",
+        "After the interview the messaging must flip from prepare to how did it go, or it reads as ignoring what happened",
+        "The sign-off is the coaching system's, never Ali's signature block",
+        "A missing preparation score with real mock activity must not read as unprepared",
+        "This pipeline is CCPP-sourced and is NOT part of the internship application lifecycle; the link between an internship exit and entering this funnel is the separate handoff capability and does not exist in code"
+      ],
+      "dependencies": [
+        "CCPP SQL Server view",
+        "Mandrill preflight",
+        "nudge state file",
+        "reportRunRecorder"
+      ],
+      "application_pages": [
+        "interview preparation report HTML",
+        "student email"
+      ],
+      "apis": [
+        "CCPP SQL (external, read-only view)"
+      ],
+      "source_modules": [
+        "backend/src/scripts/lib/interviewPrepData.js",
+        "backend/src/scripts/lib/interviewPrepNudges.js",
+        "backend/src/scripts/lib/renderInterviewPrepReport.js",
+        "backend/src/services/interviewService.ts"
+      ],
+      "required_tools": [
+        "ccpp_sql_read",
+        "approved_template_notification_send",
+        "sandbox_email_sink",
+        "structured_output_validation"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship",
+            "requireCareerReviewer"
+          ],
+          "agent": [
+            "ccpp_sql_read",
+            "sandbox_email_sink"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship",
+            "requireCareerReviewer"
+          ],
+          "agent": [
+            "ccpp_sql_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R7",
+      "max_autonomy_rationale": "Like the reminder capability, the sending half is an approved-template action class with a one-beat-per-day idempotency key, so R7 is reachable for that class alone once separately approved. R8 and R9 are not proposed, because handing a candidate onward is a human act that ends at recruiters.",
+      "blocked_by": [
+        "live email is a default-denied capability (executionPolicy.ts:33), so production sending requires a separately approved action class",
+        "Dhee has not confirmed this pipeline belongs to the internship domain rather than to placement",
+        "the CCPP view's current column contract was validated in 2026-06 and has not been re-verified in this pass"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains which funnel stage a candidate is in and which beat is next",
+          "acceptance_criteria": "Stage and beat match interviewPrepData.normalize and interviewPrepNudges on the unit fixtures"
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Shadow-produces the day's beat list into a sink beside what was actually sent",
+          "acceptance_criteria": "Zero sends to real candidates; a same-day re-run produces zero additional beats"
+        },
+        {
+          "autonomy": "autonomy:R7",
+          "behaviour": "Separately approved: sends only the authorized preparation beats, one per interview per day",
+          "acceptance_criteria": "A replay test produces exactly one beat; a post-interview fixture flips to the survey beat; a mutation test removing the beatKey state check fails the suite"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.career_support_handoff",
+      "name": "Career preparation and support handoff out of the internship",
+      "business_outcome": "An intern who lands a role, or who needs placement support, is handed to the right human with their evidence intact, instead of falling between the internship console and the placement pipeline.",
+      "intended_users": [
+        "Dhee",
+        "placement staff",
+        "intern"
+      ],
+      "classification": "manager_defined",
+      "source": "owner discovery candidate 2026-10-09; the destination pipeline exists, the handoff itself does not",
+      "supporting_evidence": [
+        "AI_INTERNSHIP_SPEC.md: the programme runs until you secure a full-time position in the AI field, there is no end date, and on landing a role the intern gives one to two weeks notice",
+        "internshipStateMachine.ts:59 completed is a terminal state, and :223 and :230 show active and paused to completed are reviewer-only, so the exit from the programme is already a human act",
+        "backend/src/scripts/lib/interviewPrepData.js and interviewPrepPeople.js are the destination pipeline and are CCPP-sourced",
+        "internshipWeek3Handoff.ts is an INTERNAL project handoff at week 3 and is not a career handoff, despite the similar name",
+        "no module, table, column or route linking a completed internship application to the placement or interview-preparation pipeline was found in this pass"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "completed or completing application",
+        "portfolio projection",
+        "unknown: the placement intake contract"
+      ],
+      "outputs": [
+        "unknown",
+        "a named receiving human",
+        "an audit record of the handoff"
+      ],
+      "workflow": [
+        "Detect that an intern is completing or has landed a role",
+        "Assemble their evidence and portfolio state",
+        "Hand off to a named human in the placement pipeline",
+        "Record the handoff and who owns the person next"
+      ],
+      "exceptions": [
+        "A handoff must name a receiving human; routing to a queue with no owner is how people get lost",
+        "Completion is a reviewer act; an agent must never mark an internship completed",
+        "No in-code join exists between the internship lifecycle and the CCPP placement pipeline, so any claim that a handoff happens today would be invented",
+        "Employment outcome data must not be reported as a Colaberry-issued credential or a placement guarantee"
+      ],
+      "dependencies": [
+        "internship_applications completed state",
+        "CCPP placement pipeline",
+        "portfolio projection",
+        "unknown placement intake contract"
+      ],
+      "application_pages": [
+        "unknown (no handoff surface exists)"
+      ],
+      "apis": [
+        "unknown (no endpoint exists today)"
+      ],
+      "source_modules": [
+        "unknown (not implemented)"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "ccpp_sql_read",
+        "portfolio_projection_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "Nothing is built and the join between the two systems does not exist. A handoff transfers accountability for a person, which is a human act, so the agent is capped at describing the gap until Dhee defines the contract.",
+      "blocked_by": [
+        "not implemented",
+        "no in-code join between the internship lifecycle and the placement pipeline",
+        "Dhee has not named the receiving human or the trigger"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines the handoff trigger, the receiving human and the evidence that must travel with the person",
+          "acceptance_criteria": "Dhee names the receiving human and the trigger in writing; until then this capability stays absent"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.cohort_kpi_reporting",
+      "name": "Internship cohort KPI and funnel reporting",
+      "business_outcome": "The programme's funnel and health are reported as numbers with their reliability stated, so a decision about the internship rests on measured volume rather than impression.",
+      "intended_users": [
+        "Dhee",
+        "Ali",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipTrackingService.ts and internshipAnalytics.ts",
+      "supporting_evidence": [
+        "internshipTrackingService.ts:39 Reliability reliable|unknown, :41 TrackedMetric, :134 internshipProfileSection, :342 InternshipKpi, :359 internshipKpis",
+        "internshipAnalytics.ts:39 InternshipAnalyticsEvent, :84 sanitizeMeta, :104 emitInternshipEvent",
+        "internConsoleRoster.ts:386 consoleCounts, :373 ConsoleCounts",
+        "internshipRoutes.ts:887 GET /kpis, :902 GET /profile/:enrollmentId",
+        "backend/src/scripts/weeklyInternReport.js:3-8 the weekly activity report with STRONG, LIGHT and INACTIVE buckets over the last ten days, posted to a Basecamp message board and emailed",
+        "reportingRegistry.js:133-144 the weekly report runs Saturday 13:00 UTC with STANDARD_RECIPIENTS and a skip flag"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "application states",
+        "cohort membership",
+        "activity buckets",
+        "analytics events"
+      ],
+      "outputs": [
+        "InternshipKpi list with reliability labels",
+        "weekly activity report",
+        "console counts"
+      ],
+      "workflow": [
+        "Aggregate application states and activity into KPI rows",
+        "Label each metric reliable or unknown",
+        "Render the weekly report with its buckets",
+        "Post to the message board and email the standard recipients"
+      ],
+      "exceptions": [
+        "Every metric carries a reliability label; an unknown metric must not be rendered as a number",
+        "A report must not quote a count it did not measure in that run",
+        "Aggregates must not become re-identifiable at small cohort sizes; the weekly report names individuals, so it is not aggregate-only",
+        "The weekly report send must honour its skip flag and the kill switch"
+      ],
+      "dependencies": [
+        "internship_applications",
+        "cohort_memberships",
+        "Basecamp message board",
+        "reportRunRecorder"
+      ],
+      "application_pages": [
+        "admin internship KPI view",
+        "Basecamp intern message board",
+        "weekly report email"
+      ],
+      "apis": [
+        "GET /api/admin/internship/kpis",
+        "GET /api/admin/internship/profile/:enrollmentId"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipTrackingService.ts",
+        "backend/src/services/internship/internshipAnalytics.ts",
+        "backend/src/scripts/weeklyInternReport.js"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read",
+        "kpi_aggregate_read",
+        "basecamp_read",
+        "approved_template_notification_send"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "kpi_aggregate_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": [
+            "kpi_aggregate_read"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "Reporting reads and aggregates and writes nothing to a person's record, so a separately approved supervised production pilot is reachable. The weekly report names individuals and is sent to staff, so the sending half would need its own authorized action class before any higher level.",
+      "blocked_by": [
+        "Dhee has not validated which KPIs matter",
+        "no accepted threshold exists for any KPI"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Reports the funnel counts with reliability labels and refuses to state an unmeasured number",
+          "acceptance_criteria": "Counts match internshipKpis(); every unknown is labelled unknown rather than rendered as zero"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: produces the weekly internship report for staff review before any send",
+          "acceptance_criteria": "Separately approved; the draft reconciles against the live counts; zero sends without a human release"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.existing_intern_conversion_planning",
+      "name": "Existing-intern conversion planning with a zero-write dry run",
+      "business_outcome": "Interns who predate the portal are brought onto the managed lifecycle from a plan a human has read, with the dry run guaranteed to write nothing and send nothing.",
+      "intended_users": [
+        "Dhee",
+        "internship-section staff"
+      ],
+      "classification": "existing_application",
+      "source": "backend/src/services/internship/internshipConversionService.ts",
+      "supporting_evidence": [
+        "internshipConversionService.ts:124 planConversion, :350 commitConversion, :91 ConversionPlan, :68 ConversionPlanRow, :113 importedSignatureDocumentTypes, :330 ConversionReport",
+        "internshipRoutes.ts:935 POST /conversion/plan, :968 POST /conversion/commit, both requireSection('internship')",
+        "AI_INTERNSHIP_DISCOVERY.md risk R8: existing-intern conversion writes during dry-run, mitigated because the dry run returns a plan object and takes no transaction, with a test asserting zero writes and zero sends",
+        "internshipReviewQueue.ts:146-148 the converted bucket is driven by the converted_from_existing_intern flag; InternshipApplication.ts:72 is the column",
+        "INTENDED_INTERN_ROSTER_2026-10-07.md: 21 application rows measured on 2026-10-08, distributed 13 active, 4 started, 1 withdrawn, 1 under_review, 1 offer_letter_ready, 1 signed_documents_uploaded, with 13 distinct active interns in the ai_internship cohort"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "existing intern identifiers",
+        "requirement and document expectations",
+        "commit confirmation"
+      ],
+      "outputs": [
+        "ConversionPlan (dry run, zero writes)",
+        "ConversionReport on commit",
+        "converted_from_existing_intern flag"
+      ],
+      "workflow": [
+        "Plan the conversion and return the plan object with no transaction opened",
+        "A human reads the plan row by row",
+        "Commit applies the plan and records the report",
+        "Converted applications appear in the converted bucket"
+      ],
+      "exceptions": [
+        "THE DRY RUN MUST WRITE NOTHING AND SEND NOTHING; a test asserts zero writes and zero sends",
+        "COMMIT IS A HUMAN ACT after reading the plan",
+        "A re-run of commit must be idempotent; a converted intern must not be converted twice",
+        "Ruth Kumera must not be swept into a conversion that advances her application state",
+        "Imported signature documents must be recorded as imported, not as newly signed"
+      ],
+      "dependencies": [
+        "internship_applications",
+        "internship_documents",
+        "internship_requirement_acknowledgements",
+        "cohort_memberships"
+      ],
+      "application_pages": [
+        "admin internship conversion panel"
+      ],
+      "apis": [
+        "POST /api/admin/internship/conversion/plan",
+        "POST /api/admin/internship/conversion/commit"
+      ],
+      "source_modules": [
+        "backend/src/services/internship/internshipConversionService.ts"
+      ],
+      "required_tools": [
+        "internship_admin_api_read",
+        "sandbox_database_read",
+        "sandbox_database_write"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "fixture_fork_write"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin, admissions)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "The dry run is a zero-write sandbox-safe operation, which is exactly R4 work. Commit changes the lifecycle state of real people in bulk, which is the highest-blast-radius write in the domain and stays with a human.",
+      "blocked_by": [
+        "human-decision invariant for commit",
+        "Dhee has not validated the conversion plan shape"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains what a conversion plan contains and why the dry run cannot write",
+          "acceptance_criteria": "Matches ConversionPlan and the no-transaction guarantee; never claims a conversion was applied"
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Produces a conversion plan against sandbox fixtures",
+          "acceptance_criteria": "Zero writes and zero sends during planning, proven by a test that fails if a transaction is opened; a second plan on the same fixture is identical"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.employment_readiness_gap_flag",
+      "name": "Daily employment-readiness gap flag as a workforce task",
+      "business_outcome": "The day's largest employment-readiness gap is raised as a task with an owner, so a career-readiness problem gets a ticket rather than a mention.",
+      "intended_users": [
+        "Dhee",
+        "workforce directors"
+      ],
+      "classification": "inherited",
+      "source": "legacy row WorkforceCareerDirector (the domain's single inherited behaviour row)",
+      "supporting_evidence": [
+        "legacy-slices/internship.json: WorkforceCareerDirector, kind behavior, source registry, cron 20 6 * * * wired at aiOpsScheduler.ts:343, registered at agentRegistrySeed.ts:2224, domain name Career",
+        "agentRegistrySeed.ts:2260-2269 the row: agent_type workforce_director, module workforce, source_file backend/src/services/workforce/directorActions.ts, trigger_type cron, schedule 20 6 * * *, description Jordan Ellis reads the daily employment-readiness signal and flags the gap as a WorkforceTask, No LLM call, enabled true",
+        "backend/src/services/workforce/directorActions.ts:72 runCareerDirector = runDomainFlag('career', 'WorkforceCareerDirector', 'career'), :215 registered in the director dispatch table",
+        "it is one of a family of identically shaped director rows (curriculum, certification, finance, student success), so the behaviour is a shared runDomainFlag and not career-specific logic"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "the daily employment-readiness signal for domain career"
+      ],
+      "outputs": [
+        "one WorkforceTask naming the top gap"
+      ],
+      "workflow": [
+        "At 06:20 daily, read the career domain signal",
+        "Select the top gap",
+        "Create a WorkforceTask for it",
+        "Take no further action"
+      ],
+      "exceptions": [
+        "No LLM call: the row's own description says so, and adding one would change its character",
+        "A duplicate run on the same day must not create a second task for the same gap",
+        "The flag is a task, not a decision about any named person",
+        "The shared runDomainFlag shape means a change here affects the whole director family, so it is not a local edit",
+        "The underlying signal's reliability was not verified in this pass"
+      ],
+      "dependencies": [
+        "directorActions.runDomainFlag",
+        "WorkforceTask",
+        "aiOpsScheduler cron"
+      ],
+      "application_pages": [
+        "unknown (workforce task surface not enumerated in this pass)"
+      ],
+      "apis": [
+        "unknown (cron-triggered, no inbound route identified)"
+      ],
+      "source_modules": [
+        "backend/src/services/workforce/directorActions.ts",
+        "backend/src/services/agentRegistrySeed.ts",
+        "backend/src/services/aiOpsScheduler.ts"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "workforce_task_write"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "fixture_fork_write"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship",
+            "requireSection:intelligence"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "aggregate_only",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "It writes a task, not a change to a person, and already runs deterministically on a cron. A separately approved supervised production pilot under the new employee is reachable, but the shared runDomainFlag shape means the blast radius of a change reaches four sibling directors, so no higher level is proposed.",
+      "blocked_by": [
+        "Dhee has not validated that this flag is worth keeping",
+        "the reliability of the underlying career signal is unknown"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains what the career director flags, on what schedule, and that it makes no model call",
+          "acceptance_criteria": "Matches the registry row and directorActions.ts:72 exactly; no claim of analysis the row does not perform"
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Supervised pilot: continues the daily flag under the new employee with the manager reviewing each task",
+          "acceptance_criteria": "Separately approved; a same-day re-run creates no duplicate task; Dhee confirms the flagged gaps were real for a measured period"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.da_cohort_analysis_automation",
+      "name": "Data-analyst cohort analysis moving to the AI employee",
+      "business_outcome": "The recurring cohort and funnel analysis a data analyst assembles by hand is produced by the AI employee with its sources cited, freeing analyst time for questions nobody has asked yet.",
+      "intended_users": [
+        "Dhee",
+        "Ali",
+        "data analysts"
+      ],
+      "classification": "proposed_new",
+      "source": "owner scope amendment 2026-10-07: proposed future responsibilities including DA work transitioning to AI (execution-contract.md:47)",
+      "supporting_evidence": [],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "unknown: which DA deliverables are in scope"
+      ],
+      "outputs": [
+        "unknown"
+      ],
+      "workflow": [
+        "unknown until Dhee names the specific analyst deliverables to transition"
+      ],
+      "exceptions": [
+        "An analysis must cite its source query or dataset; a number without a source is not a deliverable",
+        "A metric whose reliability is unknown must be reported as unknown, not computed anyway",
+        "No existing DA deliverable for the internship domain was identified in this pass, so naming one would be an invention",
+        "Transitioning analyst work must not transition the judgement about what the numbers mean"
+      ],
+      "dependencies": [
+        "unknown"
+      ],
+      "application_pages": [
+        "unknown (no surface exists today)"
+      ],
+      "apis": [
+        "unknown (no endpoint exists today)"
+      ],
+      "source_modules": [
+        "unknown (not implemented)"
+      ],
+      "required_tools": [
+        "kpi_aggregate_read",
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read",
+            "kpi_aggregate_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "aggregate_only",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "The owner named DA work transitioning to AI as a source of proposed responsibilities, but no specific internship DA deliverable was identified, so there is nothing to validate and nothing to measure. R0 definition work with at most R2 question-answering is the honest ceiling.",
+      "blocked_by": [
+        "no DA deliverable for this domain identified",
+        "Dhee has not named which analyst work should transition"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Inventories which recurring analyst deliverables touch the internship domain and which are candidates",
+          "acceptance_criteria": "Dhee names at least one specific deliverable; the inventory lists only artifacts that were observed, with no invented reports"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.applicant_pii_access_audit",
+      "name": "Applicant PII access audit over the internship surface",
+      "business_outcome": "Every read of an applicant's resume, phone number or interview transcript is attributable, so the widest PII grant in the platform can be shown to have been used appropriately.",
+      "intended_users": [
+        "Dhee",
+        "Ali"
+      ],
+      "classification": "proposed_new",
+      "source": "derived from the domain's PII constraint; proposed because no access-audit surface was found",
+      "supporting_evidence": [],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "unknown: no access log over the internship document and transcript routes was identified"
+      ],
+      "outputs": [
+        "unknown"
+      ],
+      "workflow": [
+        "unknown until Dhee confirms an access audit is wanted and what it must answer"
+      ],
+      "exceptions": [
+        "An audit of PII access must not itself copy the PII it audits; it records who read what, not what they read",
+        "The internship section grant is coarse, so every holder can reach the raw signed-document download; an audit that cannot distinguish readers would add nothing",
+        "No access log over those routes was identified in this pass, so no coverage claim can be made",
+        "An agent must never be granted the raw document read in order to audit it"
+      ],
+      "dependencies": [
+        "unknown",
+        "internship_status_events (state audit exists; a READ audit does not)"
+      ],
+      "application_pages": [
+        "unknown (no surface exists today)"
+      ],
+      "apis": [
+        "unknown (no endpoint exists today)"
+      ],
+      "source_modules": [
+        "unknown (not implemented)"
+      ],
+      "required_tools": [
+        "audit_event_write",
+        "sandbox_database_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireSection:internship"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireSection:internship (owner, admin)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "aggregate_only",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "Nothing exists. The write audit on state transitions is real, but no READ audit over the document or transcript routes was found, so there is no evidence to promote on and definition work is the only justifiable level.",
+      "blocked_by": [
+        "not implemented",
+        "no read-access log over the internship PII routes exists",
+        "Dhee has not said whether an access audit is wanted"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines what a PII access audit must answer and which reads must be logged",
+          "acceptance_criteria": "Dhee accepts the audit question set in writing; until then this capability stays absent and no coverage is claimed"
+        }
+      ]
+    },
+    {
+      "capability_id": "internship.manager_surface_access_verification",
+      "name": "Verifying the accountable manager can actually reach the agent surface",
+      "business_outcome": "Dhee can open the AI employee's detail and talk surfaces under a scoped role, so accountability is exercisable rather than nominal.",
+      "intended_users": [
+        "Dhee",
+        "Ali"
+      ],
+      "classification": "manager_defined",
+      "source": "HUMAN_OWNERSHIP_MAP.md and MANAGER_AUTHORIZATION_MAP.md, the programme prerequisite for this domain",
+      "supporting_evidence": [
+        "HUMAN_OWNERSHIP_MAP.md row 7: Internship and Career Readiness, Dhee, has an admin login dhee@colaberry.com with role admin but had no org_members row, so reports_to could not point at Dhee",
+        "HUMAN_OWNERSHIP_MAP.md answer 3: one additive org_members row approved, to be created when the Internship employee's Phase 1 begins",
+        "execution-contract.md:275 the domain table row, and :308-310 A5 the Internship org_members row for Dhee may be created because Ali pre-approved it; one row, additive",
+        "MANAGER_AUTHORIZATION_MAP.md point 2: both agent-detail and agent-governance routes use only requireAdmin today, so any admin can act on any agent",
+        "MANAGER_AUTHORIZATION_MAP.md proposed requireAgentManagerOrAdmin over OrgMember.email equals AuthPayload.email plus isAgentInHumanDownstream (orgChartHierarchyService.ts:110-141), NOT built and NOT authorized to build",
+        "MANAGER_AUTHORIZATION_MAP.md: initial management capability stays admin-only until requireAgentManagerOrAdmin ships and is verified",
+        "mgmtRoles.ts admissions role sections are dashboard, lead_ingestion and internship, the narrowest existing role that fits Dhee"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Dhee must confirm scope, exceptions and success measures",
+      "inputs": [
+        "admin_users login for dhee@colaberry.com",
+        "org_members row bbf01827-c005-5cb2-8a96-903fe8ddadac",
+        "mgmt_role assignment",
+        "agent reports_to chain"
+      ],
+      "outputs": [
+        "a verified chain from the agent to one real human",
+        "a recorded statement of which surfaces the manager can reach"
+      ],
+      "workflow": [
+        "Confirm the org_members row exists and matches the admin login email",
+        "Point the employee's reports_to at that org_members id",
+        "Grant the narrowest mgmt_role that reaches the internship section",
+        "Verify by having the manager open the surface, not by asserting the grant"
+      ],
+      "exceptions": [
+        "Manager instructions may only RESTRICT an agent, never expand its authority",
+        "Every management action must be authorized server-side against a real is-this-human-the-manager check, never frontend visibility alone",
+        "No manager-versus-admin distinction exists today; until requireAgentManagerOrAdmin ships, any admin can act on any agent, and that must be stated rather than assumed away",
+        "An agent must never hold accountable or approver for itself in either direction",
+        "A grant is not verification; Phase 5 must confirm the manager actually opened the surface"
+      ],
+      "dependencies": [
+        "org_members",
+        "admin_users",
+        "mgmtRoles",
+        "orgChartHierarchyService.isAgentInHumanDownstream",
+        "ai_agents.reports_to_id"
+      ],
+      "application_pages": [
+        "admin Agent Detail",
+        "admin Agent Talk tab",
+        "admin internship section"
+      ],
+      "apis": [
+        "unknown (agentDetailRoutes and agentGovernanceRoutes use requireAdmin today)"
+      ],
+      "source_modules": [
+        "backend/src/services/access/mgmtRoles.ts",
+        "backend/src/middlewares/authMiddleware.ts",
+        "backend/src/services/orgChartHierarchyService.ts"
+      ],
+      "required_tools": [
+        "sandbox_database_read",
+        "internship_admin_api_read"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "requireAdmin"
+          ],
+          "agent": [
+            "sandbox_database_read"
+          ]
+        },
+        "production": {
+          "human": [
+            "requireAdmin",
+            "mgmt_role:admissions (dashboard, lead_ingestion, internship)"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "none",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "This is the governance prerequisite for every other capability here. Granting or changing a role is an authorization change, which no agent may make at any level, so the ceiling is explaining the chain and its gap.",
+      "blocked_by": [
+        "requireAgentManagerOrAdmin is proposed and not built",
+        "no org_members.id is present in the JWT on any login path today",
+        "verification that Dhee opened the surface has not happened"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Explains the manager chain, which surfaces the manager can reach, and the manager-versus-admin gap that still exists",
+          "acceptance_criteria": "Names the requireAdmin-only state of the agent routes and does not claim a manager-scoped gate that has not shipped"
+        }
+      ]
+    }
+  ],
+  "legacy_dispositions": [
+    {
+      "agent_name": "WorkforceCareerDirector",
+      "proposed_kind": "behavior",
+      "disposition": "migrated_to_capability",
+      "capability_id": "internship.employment_readiness_gap_flag",
+      "reason": "The single inherited row is a live, enabled cron (20 6 * * *, aiOpsScheduler.ts:343, agentRegistrySeed.ts:2260-2269) that reads the daily employment-readiness signal for domain career and flags the top gap as a WorkforceTask, with no LLM call. The behaviour is real and still wanted, so it migrates rather than retiring. Two honesty notes carried into the capability: (1) it is one of an identically shaped director family driven by the shared runDomainFlag at directorActions.ts:72, so the behaviour is not career-specific logic and a change reaches four sibling directors; (2) the reliability of the underlying career signal was not verified in this pass and is recorded as unknown there. Per AI_EMPLOYEE_ROSTER.md:45 the name WorkforceCareerDirector must not be reused as the new employee name."
+    }
+  ],
+  "notes": [
+    "Near-zero inheritance, confirmed: one legacy behaviour row. The owner named this domain as the worked example for \"do not assume that an empty legacy bucket means an empty job\", and the finding supports it emphatically. Source 2 (existing application) carries almost the whole job: 41 service modules under backend/src/services/internship/, 10 Internship* Sequelize models, 14 tables in ensureInternshipSchema.ts, 27 admin routes in internshipRoutes.ts, plus a parallel Basecamp-sourced intern delivery and nudge pipeline in backend/src/scripts/ and a full backend/src/services/career/ subtree for the career-readiness half of the domain name.",
+    "Owner candidate 1, document and onboarding tracking: EVIDENCED and implemented (internshipDocumentService.ts, internshipOnboarding.ts CHECKLIST:58, internshipRoutes.ts:707/780/823). Split across three capabilities because package generation, human verification and checklist tracking have different human-decision answers.",
+    "Owner candidate 2, internship readiness assessment: EVIDENCED and implemented, and notably better-governed than the candidate implies. The eight hard requirements are deterministic (internshipRequirementChecks.ts:5-11, no model) and only the summary and posture come from gpt-4o-mini (internshipApplicantAssessment.ts:27) with applicant words fenced as untrusted evidence at :108 and a deterministic fallback at :158-173.",
+    "Owner candidate 3, project matching recommendations: PARTLY EVIDENCED, and the honest answer is that the application does something different. It GENERATES projects through the Student Build Pipeline (internshipProjectGeneration.ts:137) and GATES assignment on the weeks 1-3 training gate (internshipProjectReadiness.ts:36). internshipRecommendation.ts is an application-review recommendation, not project matching, despite the name. No catalog of assignable projects exists, so internship.intern_project_to_catalog_matching is classified proposed_new with empty supporting_evidence and implementation_state absent.",
+    "Owner candidate 4, project progress and deadline monitoring: EVIDENCED and implemented, including the deadline half. internDeliveryCoachNote.js computes a completion percentage and a projected completion date deterministically on purpose, because \"a model that rounds 46.5% to about half or nudges a date by a week is not an acceptable failure mode here\". Split into progress/pace monitoring and active-project drift detection.",
+    "Owner candidate 5, manager check-in preparation and follow-up: PARTLY EVIDENCED. The preparation and the composed follow-up note exist (internDeliveryCoachNote.js, internConsoleDetail.ts, internshipProjectReview.ts answers a manager question). No check-in or 1:1 record model was found, so implementation_state is partial and the follow-up cannot be claimed as tracked.",
+    "Owner candidate 6, skill-gap identification: WEAKEST of the eight. skillGenomeService.ts is real (SkillMastery, a 30-day decay rule, ontology.json, lessonSkillMap.json), but no import of it, of SkillMastery, or of lessonSkillMap was found anywhere under backend/src/services/internship/ in this pass, and no target skill profile for internship work exists. Classified manager_defined, implementation_state partial, with the missing target profile recorded as unknown and named as a blocker rather than filled in with a number.",
+    "Owner candidate 7, portfolio and demonstration readiness: EVIDENCED and implemented, with a constraint worth preserving. careerReadiness.ts:11-15 forbids describing anyone as employable on the strength of a portfolio rule: \"Keep Portfolio Publication Readiness separate from Job/Career Readiness.\" Publication is a human decision through decidePortfolioReview (careerPortfolioPageWriteService.ts:208) behind requireCareerReviewer.",
+    "Owner candidate 8, career preparation and support handoffs: SPLIT RESULT. The preparation pipeline is EVIDENCED and implemented (interviewPrepData.js over the CCPP view vw_ColaberryInterviewPreparation_UpcomingInterviews, interviewPrepNudges.js one beat per interview per day). The HANDOFF is NOT evidenced: no module, table, column or route linking a completed internship application to the placement pipeline was found, so internship.career_support_handoff is manager_defined with implementation_state absent. internshipWeek3Handoff.ts is an internal project handoff at week 3, not a career handoff, despite the similar name.",
+    "Capabilities the application revealed that the owner did not list: the single-writer state machine with 22 states and a reviewer-only admission path; the two-channel interview over one versioned question bank; the AI voice interview with two separate consents and a transcript withheld at read time without recording consent; the payment gate and payment_pending state that exists specifically so document verification cannot grant paid training free; class-to-internship movement via cohort_memberships; standup attendance (deliberately not rendered, because no denominator exists); certification readiness and attempt tracking; the inactivity escalation ladder with its documented false-BLACK incidents; existing-intern conversion with a zero-write dry run; and cohort KPI reporting with per-metric reliability labels.",
+    "HUMAN-DECISION SPLIT, encoded explicitly per the owner instruction. Ten capabilities carry human_decision true: admission_decision_recording, signed_document_verification, activation_and_entitlement_grant, class_internship_movement, generated_build_project_authoring (publication half), inactivity_escalation_and_exit_recommendation (exit half), portfolio_publication_readiness (publication half), career_support_handoff, existing_intern_conversion_planning (commit half) and manager_surface_access_verification. The reminder capability is deliberately NOT one of them: it is the owner worked example of an authorized routine action class, capped at autonomy:R7 for that class alone, with an exception stating in terms that no reminder path may advance state and that an agent may never self-approve an applicant.",
+    "The structural reason acceptance stays human is not convention. internshipStateMachine.ts:155-161 and :170-175 make approved, rejected and waitlisted reachable only by the reviewer actor; :67-76 says the system actor is deliberately the weakest and may never decide admission; :177-178 says system can only ever move an ALREADY-APPROVED application; and :266-279 records that canTransition has no force, isAdmin or override parameter. Every outbound edge of signed_documents_uploaded (:191-199) is reviewer-only, so document verification is unconditionally human too.",
+    "PII is treated as a first-class constraint. The identifiable surface is concentrated in internship_administrative_intakes (legal_name, preferred_name, phone, resume_document_id, linkedin/github/portfolio URLs, work_auth_category, accommodation_request) and internship_interview_sessions.transcript. internship_applications itself carries NO PII by design. 31 capabilities are marked applicant_identifiable, 3 aggregate_only, 1 none. No agent is granted a production read of the review queue or the raw signed-document route at any level in this matrix.",
+    "A real gap, recorded rather than smoothed over: requireSection(internship) is a single coarse grant. Every holder can reach every one of the 27 routes, including POST /decide, POST /documents/:id/verify, POST /activate and GET /documents/:id/file (the raw signed-document download). There is no finer split between reading the queue and approving an applicant, and no second-person approval on admission. The state machine guarantee is about human versus automated, not about WHICH human; the only per-human control is the audit trail (internship_status_events.actor_id, internship_decisions.decided_by).",
+    "No internship cron exists in aiOpsScheduler.ts or schedulerService.ts. internshipNudge is manager-triggered from the console only. The scheduled intern pipeline that does exist is Basecamp-sourced and runs outside the backend via reportingRegistry.js (daily nudges 17:00 UTC, weekly report Saturday 13:00 UTC). This is why routine_document_reminder_sending is implementation_state partial rather than implemented, and why its blocked_by names the missing scheduled path.",
+    "Marked unknown and why. (a) Participant-facing interview, call-trigger and career-review routes: not enumerated, because the pass prioritised the admin surface the manager uses; (b) comp expiry storage location: AI_INTERNSHIP_SPEC.md requires the advance warning but no column, table or job was found; (c) the target skill profile for internship work: does not exist, so no gap figure can be produced; (d) the placement intake contract for a career handoff: no in-code join exists; (e) read-access logging over the internship PII routes: a state-change audit exists, a read audit was not found; (f) the reliability of the career signal behind the inherited director row; (g) whether the CCPP interview-prep view still matches the column contract validated in 2026-06; (h) no drift-detection admin surface or endpoint was identified. In every case the field says unknown rather than carrying a manufactured count, percentage or path.",
+    "Read-only pass, nothing built and nothing activated. No application state advanced, no intern or applicant contacted, no reminder sent, no requirement marked verified. Ruth Kumera remains at signed_documents_uploaded awaiting staff verification and was not touched; her protection is named as an exception on application_intake_and_state_transitions, signed_document_verification, activation_and_entitlement_grant and existing_intern_conversion_planning, because those are the four capabilities that could otherwise move her.",
+    "Autonomy values are namespaced autonomy:R0 through autonomy:R9 throughout, never bare, to keep them separate from the platform risk tiers in deliveryRiskLevels.ts where bare R3 means schema_security_or_external_side_effect. Every capability starts at autonomy:R0. None of the eight default-denied capabilities from executionPolicy.ts:33 appears in any required_tools list; where production sending would cross the live-email denial, it is named in blocked_by as needing a separately approved action class rather than requested as a tool.",
+    "Every capability is requirement_validation_state draft with Dhee as the validation dependency. There is no path to confirmed in this task, by design. Dhee holds an admin login (dhee@colaberry.com) and the org_members row created 2026-10-08 under Ali pre-approval A5, and the narrowest fitting mgmt_role is admissions, whose sections are dashboard, lead_ingestion and internship. That Dhee can REACH the surface is a grant, not a verification; MANAGER_AUTHORIZATION_MAP.md records that requireAgentManagerOrAdmin is proposed and not built, so any admin can still act on any agent today."
+  ]
+}

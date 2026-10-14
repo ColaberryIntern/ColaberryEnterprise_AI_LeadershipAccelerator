@@ -188,13 +188,13 @@ export async function handleCreateFreeAccount(
     });
 
     console.log(
-      `[Enrollment] Free account ${created ? 'created' : 'already existed'} for ${data.email}`
+      `[Enrollment] Free account ${created ? 'created' : 'already existed'} for enrollment ${enrollment.id}`
     );
 
     res.status(created ? 201 : 200).json({
       message: created
-        ? 'Your free account is ready. Check your email for your sign-in link.'
-        : 'You already have a free account. Check your email for your sign-in link.',
+        ? 'Your account is ready. Check your email for your sign-in link.'
+        : 'You already have an account. Check your email for your sign-in link.',
       enrollmentId: enrollment.id,
       created,
     });

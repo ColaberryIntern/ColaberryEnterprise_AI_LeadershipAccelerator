@@ -32,9 +32,70 @@ export async function reactivateAgent(agentId: string, autonomyLevel: AutonomyLe
     if (!agent) {
       return { agentId, agentName: agentId, found: false, reactivated: false, autonomyLevel: null, error: 'Agent not found' };
     }
-    await agent.update({ enabled: true, autonomy_level: autonomyLevel, autonomy_level_set_at: new Date() });
+    // `autonomy_level_source: 'manual'` added 2026-10-11. This function's own premise is that
+    // reactivation is "a deliberate act, never a silent flip back to unlimited trust" -- but until
+    // now it recorded only `autonomy_level_set_at`, leaving `source` untouched. That was adequate
+    // while this was the ONLY writer of `set_at`. It stopped being adequate when
+    // agentAutonomyReclassificationService and classifyAiAgentAutonomyLevels began stamping the
+    // same column with `source: 'auto'`: from that point `set_at` no longer distinguished a human
+    // choice from a classifier's output, and agentAuthorizationService.resolveLevel -- which keys
+    // on `set_at` and never selects `source` -- honoured both identically. The human path now says
+    // so about itself, which is what makes the distinction recoverable at all.
+    await agent.update({
+      enabled: true,
+      autonomy_level: autonomyLevel,
+      autonomy_level_set_at: new Date(),
+      autonomy_level_source: 'manual',
+    } as any);
     return { agentId, agentName: agent.agent_name, found: true, reactivated: true, autonomyLevel, error: null };
   } catch (err: any) {
     return { agentId, agentName: agentId, found: true, reactivated: false, autonomyLevel: null, error: err.message };
+  }
+}
+
+export interface HumanAutonomyDecisionResult {
+  agentName: string;
+  found: boolean;
+  recorded: boolean;
+  previous: { level: string | null; source: string | null; setAt: Date | null } | null;
+  level: AutonomyLevel | null;
+  error: string | null;
+}
+
+/**
+ * Record a HUMAN decision about an already-enabled agent's autonomy level.
+ *
+ * Separate from `reactivateAgent` on purpose. That function forces `enabled: true` because its job
+ * is bringing a deactivated agent back; using it on a running agent would be the wrong verb and
+ * would hide an enablement change inside what is meant to be an authority decision. This one
+ * touches three columns and nothing else -- it never changes `enabled`, `status`,
+ * `abac_mode_override` or any tool grant.
+ *
+ * It returns the PREVIOUS values so the caller can record a rollback before the write lands. An
+ * authority change with no recorded prior state is not reversible, and an irreversible authority
+ * change is not one an agent should be making on a human's behalf.
+ */
+export async function recordHumanAutonomyDecision(
+  agentName: string,
+  autonomyLevel: AutonomyLevel,
+): Promise<HumanAutonomyDecisionResult> {
+  try {
+    const agent: any = await AiAgent.findOne({ where: { agent_name: agentName } });
+    if (!agent) {
+      return { agentName, found: false, recorded: false, previous: null, level: null, error: 'Agent not found' };
+    }
+    const previous = {
+      level: agent.autonomy_level ?? null,
+      source: agent.autonomy_level_source ?? null,
+      setAt: agent.autonomy_level_set_at ?? null,
+    };
+    await agent.update({
+      autonomy_level: autonomyLevel,
+      autonomy_level_set_at: new Date(),
+      autonomy_level_source: 'manual',
+    } as any);
+    return { agentName, found: true, recorded: true, previous, level: autonomyLevel, error: null };
+  } catch (err: any) {
+    return { agentName, found: true, recorded: false, previous: null, level: null, error: err.message };
   }
 }

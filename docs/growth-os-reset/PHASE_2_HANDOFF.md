@@ -141,15 +141,30 @@ it, so a real occurrence means a test is wrong — which is worth knowing.
 
 You do not need to do this yourself, but so it is written down:
 
-1. **Nothing needs undoing in the database, but one column WAS added.** Phase 2 added
-   `explorer_entered_at` to the `enrollments` table. It is empty for everybody today, nothing
-   reads it yet, and leaving it in place is harmless — but an earlier version of this line said
-   "no column was added", which was simply wrong and contradicted the checkpoint beside it.
-   The repair script wrote nothing at all.
+1. **One column WAS added.** Phase 2 added `explorer_entered_at` to the `enrollments` table. It is
+   empty for everybody today, nothing reads it yet, and leaving it in place is harmless — but an
+   earlier version of this line said "no column was added", which was simply wrong and contradicted
+   the checkpoint beside it.
 2. **To put the previous version back:** redeploy the previous image using the same deploy command,
    or revert the merge on `main`.
-3. **The riskiest thing in this phase is the repair script**, and it has not been run. If it ever
-   is, it writes a reversible log of exactly which record changed from what to what.
+3. **The riskiest thing in this phase is the repair script, and on 2026-10-13 Ali authorised it and
+   it RAN.** An earlier version of this line said it had not. It changed **56 records** out of 630:
+   37 moved into the Explorer programme, 19 had their access level corrected to guest. No record
+   was created or deleted — the table still holds 630 rows.
+
+   **To undo it**, the script wrote a log of exactly which record changed from what to what, saved
+   on the server at `/root/t207-ledger-20261013.json`, and it can replay that log backwards:
+
+   ```
+   docker exec accelerator-backend node dist/scripts/backfillFreeAccountCoherence.js \
+     --invert /root/t207-ledger-20261013.json --confirm-production
+   ```
+
+   Two honest caveats. **All 56** of those records have an empty "entered the programme on" date,
+   and no piece of work currently owns filling it in — that date has in fact never been filled in
+   for anybody. And the script printed `committed NaN` instead of a record count when it finished —
+   a defect in its own reporting, not in the write, now fixed; the change was confirmed by counting
+   the table directly before and after.
 
 ---
 

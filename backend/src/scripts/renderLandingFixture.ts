@@ -35,7 +35,7 @@ function main(): void {
 
   const { html } = renderLandingPage({
     content: parsed.content,
-    brand: { name: 'Colaberry Training', default_theme_key: 'training' },
+    brand: { name: process.env.LP_BRAND_NAME || 'Colaberry Training', default_theme_key: process.env.LP_THEME_KEY || 'training' },
     siteSlug: 'colaberry-training',
     pageUrl: 'https://enterprise.colaberry.ai/lp/colaberry-training/ai-learning-platform',
   });

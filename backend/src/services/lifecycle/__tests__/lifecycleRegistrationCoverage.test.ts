@@ -228,6 +228,13 @@ describe('LC-01 — the set of project-creation sites is derived, not listed', (
       'scripts/seedDevClientReviewer.ts:183 DeliveryProject.create(',
       'scripts/seedFactoryDemoContract.ts:31 DeliveryProject.create(',
       'scripts/seedOrdinaryProjectDemo.ts:27 DeliveryProject.create(',
+      // The Agent Factory provisioner (CC-20261006-a4k7). An EIGHTH creation site, declared here
+      // because this list is the mechanism for declaring one. It first wrote `projects` with raw
+      // SQL and a hand-written `project_lifecycle_states` row -- firing neither hook and building
+      // the parallel path this whole module exists to eliminate -- and the raw-insert tripwire
+      // above is what caught it. It now goes through the model inside its own transaction and
+      // passes `lifecycleEntryPoint: 'agent_domain_factory_provisioner'`.
+      'services/agentDomain/agentDomainProvisioner.ts:209 Project.findOrCreate(',
       'services/businessProcessSeedService.ts:135 Project.findOrCreate(',
       'services/delivery/leadConversion.ts:175 DeliveryProject.create(',
       'services/factory/govDeliveryProject.ts:134 DeliveryProject.create(',

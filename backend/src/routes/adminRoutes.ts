@@ -57,6 +57,7 @@ import coryRoutes from './admin/coryRoutes';
 import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
 import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 import admissionsRoutes from './admin/admissionsRoutes';
+import agentDomainRoutes from './admin/agentDomainRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
@@ -256,6 +257,9 @@ router.use(coryRoutes);
 router.use(departmentIntelligenceRoutes);
 router.use(websiteIntelligenceRoutes);
 router.use(admissionsRoutes);
+// The ten AI employee domain projects. Read-only; every route carries its own
+// requireSection guard, because the repo's route-auth lint is per FILE not per route.
+router.use(agentDomainRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);

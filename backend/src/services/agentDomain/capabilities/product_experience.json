@@ -1,0 +1,2930 @@
+{
+  "domain_key": "product_experience",
+  "accountable_human": "Mohammed Abdul Aleem",
+  "manager_identity_id": "d2efd70b-4016-4ad6-bd7b-cf0610c93370",
+  "researched_at": "2026-10-09",
+  "zero_inheritance": true,
+  "counts": {
+    "legacy_rows_analyzed": 0,
+    "distinct_capabilities": 25,
+    "unique_tools_required": 21,
+    "by_classification": {
+      "inherited": 0,
+      "existing_application": 17,
+      "manager_defined": 3,
+      "proposed_new": 5
+    }
+  },
+  "capabilities": [
+    {
+      "capability_id": "product_experience.design_token_drift_audit",
+      "name": "Design-token drift audit across every styled surface",
+      "business_outcome": "One list of every place the UI paints a colour or spacing value outside the token contract, so brand drift is a measured number that can be driven down instead of an impression.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "frontend/src/styles/tokens.css plus the stated no-hardcoded-colour rule in frontend/CLAUDE.md, measured against the actual React and CSS source",
+      "supporting_evidence": [
+        "frontend/src/styles/tokens.css:6",
+        "frontend/CLAUDE.md:35",
+        "frontend/CLAUDE.md:41",
+        ".claude/skills/baseline-ui/SKILL.md:19",
+        ".claude/skills/frontend-design/SKILL.md:155",
+        "frontend/src/pages/admin/orchestration/studio/studioKit.tsx:1",
+        "frontend/src/components/timeline/CardDetailBody.tsx:1",
+        "frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx:1"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "frontend/src/**/*.tsx",
+        "frontend/src/**/*.css",
+        "frontend/src/styles/tokens.css as the token contract",
+        "an agreed allow-list of legitimate raw-colour cases (e.g. brand marks, chart scales)"
+      ],
+      "outputs": [
+        "ranked violation inventory by file with line numbers",
+        "per-token substitution proposal (raw value -> var(--token))",
+        "a drift count that can be ratcheted, in the shape of the existing copy-lint baseline",
+        "unknown values left as unknown where a raw colour has no token equivalent"
+      ],
+      "workflow": [
+        "Parse tokens.css to build the authoritative token set (101 custom properties measured 2026-10-09 in the :root block at tokens.css:6).",
+        "Walk frontend/src and record every raw hex, rgb()/rgba() and inline style={{ }} occurrence with file and line.",
+        "Classify each occurrence: has an exact token equivalent, has a near equivalent, or has none.",
+        "Exclude allow-listed cases; any occurrence the classifier cannot categorise is reported as unclassified, never as a pass.",
+        "Emit the inventory plus a proposed diff for the exact-equivalent cases only.",
+        "Hand the diff to a human. The agent does not merge it."
+      ],
+      "exceptions": [
+        "A raw colour with no token equivalent is a token-set gap, not a code defect, and is escalated as a design decision rather than auto-substituted.",
+        "Chart and data-visualisation scales may legitimately carry their own ramp; the dataviz palette is governed separately and must be excluded or the audit will produce noise.",
+        "Third-party or vendored CSS under apps/*/src/assets/design is owned upstream (design-system-sync.yml) and must not be rewritten here.",
+        "An occurrence inside a code sample or documentation string is not a styling violation."
+      ],
+      "dependencies": [
+        "read access to the frontend source tree",
+        "an agreed allow-list, which does not exist yet",
+        "tokens.css remaining the single token authority"
+      ],
+      "application_pages": [
+        "all 445 route-reachable pages measured 2026-10-09; the audit is surface-wide rather than per-page"
+      ],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/styles/tokens.css",
+        "frontend/src/styles/global.css",
+        "frontend/src/styles/brand-bridge.css",
+        "frontend/src/styles/admin-shell.css",
+        "frontend/src/styles/agentDetailV2.css",
+        "frontend/src/styles/orchestration.css",
+        "frontend/src/styles/rungTones.css"
+      ],
+      "required_tools": [
+        "repo_read",
+        "css_token_parser",
+        "typescript_ast_scan",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Detection and reporting have no customer-visible effect, so shadow mode against a human-reviewed reference inventory (autonomy:R5) is the honest ceiling. It stops below autonomy:R6/autonomy:R7 because the remediation this audit proposes repaints the product, and repainting the product is a brand decision a human makes.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "no agreed raw-colour allow-list exists, so the first run's true violation count is unknown: measured 2026-10-09 there are 4,492 hex literals in frontend/src/**/*.tsx, 1,778 in CSS other than tokens.css, 488 rgb()/rgba() literals and 8,219 inline style={{ }} occurrences, and the legitimate share of those is unknown until the manager sets the exceptions",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Writes the audit definition: what counts as a violation, which surfaces are in scope, which raw-colour cases are legitimate, and who decides a token-set gap.",
+          "acceptance_criteria": "Mohammed Abdul Aleem signs off a written scope and exception list; no scan has run against the repo yet."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the scanner against fixtures with known violation counts in an isolated sandbox.",
+          "acceptance_criteria": "A fixture seeded with N violations reports exactly N; removing one makes the count drop by one; a fixture with zero reports zero and does not report clean on an empty directory."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers 'is this colour tokenized?' and 'which token should this be?' from the approved token set.",
+          "acceptance_criteria": "Every answer cites tokens.css by line; no answer invents a token name that does not exist in the file."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Runs the full audit each cycle in shadow mode and compares its inventory against the human-reviewed reference inventory.",
+          "acceptance_criteria": "Agreement with the reference inventory on in-scope files, with every disagreement itemised; unclassified occurrences reported as unclassified rather than silently dropped."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.brand_design_system_sync_review",
+      "name": "Review the vendored design-system drift pull request",
+      "business_outcome": "Every upstream token change that would restyle a live brand site arrives with a written statement of what it changes visually and where, so the human merging it is reviewing a described change rather than a colour diff.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the existing Design system sync workflow, which already opens a pull request on drift precisely because a token change is a visual change to live sites",
+      "supporting_evidence": [
+        ".github/workflows/design-system-sync.yml:8",
+        ".github/workflows/design-system-sync.yml:23",
+        ".github/workflows/design-system-sync.yml:65",
+        ".github/workflows/design-system-sync.yml:87",
+        ".github/workflows/design-system-sync.yml:99",
+        "backend/src/scripts/syncDesignSystems.js:1",
+        "scripts/validate-app-boundaries.js:1"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the chore/design-system-sync branch diff",
+        "the sync log produced by syncDesignSystems.js",
+        "the vendored token files under apps/*/src/assets/design/"
+      ],
+      "outputs": [
+        "a per-brand visual impact note: which tokens moved, which surfaces consume them",
+        "a contrast re-check on any colour pair the diff touches",
+        "an explicit 'needs a human eye' flag where the impact cannot be derived statically"
+      ],
+      "workflow": [
+        "Detect the open design-system-sync pull request and read its diff and sync log.",
+        "For each changed token, find the surfaces that consume it across the platform frontend and the three public apps.",
+        "Recompute contrast for any foreground/background pair the change affects.",
+        "Write the impact note onto the pull request as a comment.",
+        "Stop. The merge is the human's, by the workflow's own stated design."
+      ],
+      "exceptions": [
+        "A font-file-only change has no colour impact and should say so rather than manufacture one.",
+        "A token that no surface consumes is a dead token; that is a finding, not a no-op.",
+        "If the sync log shows a failed sync, the review must report the failure rather than review a partial diff.",
+        "Hand-authored files in the same directories are excluded by the ownership manifest and must not be reviewed as upstream drift."
+      ],
+      "dependencies": [
+        "the design-system-sync workflow continuing to open a pull request rather than committing",
+        "read access to apps/*/src/assets/design/",
+        "a contrast calculator"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "backend/src/scripts/syncDesignSystems.js",
+        "scripts/validate-app-boundaries.js",
+        "apps/ai-flotation-public/src/assets/design/",
+        "apps/cpn-public/src/assets/design/",
+        "apps/refactored-public/src/assets/design/"
+      ],
+      "required_tools": [
+        "repo_read",
+        "git_diff_read",
+        "css_token_parser",
+        "contrast_calculator",
+        "pull_request_comment",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "read_pull_request_diff",
+            "run_static_analysis_in_sandbox",
+            "write_review_comment"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "The workflow's own comment states these are live brand styles and that the pull request IS the review. An agent that could merge it would delete the control the workflow was built to create, so the ceiling sits at multi-step sandbox analysis with a written recommendation and no merge authority.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the set of surfaces consuming each token is not mapped today, so first-run impact coverage is unknown"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines what a brand impact note must contain and what makes one insufficient for a merge decision.",
+          "acceptance_criteria": "The manager confirms the note format answers the question he actually has before merging."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers which surfaces consume a named token, from the approved token-to-surface map.",
+          "acceptance_criteria": "Every answer cites a file and line; an unmapped token is reported as unmapped, not guessed."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "On each sync pull request, produces the full impact note and posts it as a comment.",
+          "acceptance_criteria": "Note posted within one cycle of the pull request opening, covering every changed token, with contrast recomputed for affected pairs and no merge attempted."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.multi_brand_surface_consistency_audit",
+      "name": "Cross-brand consistency audit across the platform and the three public apps",
+      "business_outcome": "Four separately-built surfaces stay recognisably one company where they should and deliberately distinct where they should, with the difference recorded rather than accidental.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the apps/ tree, which carries three independently-built public applications each with its own DESIGN_SYSTEM.md and token set, alongside the platform frontend",
+      "supporting_evidence": [
+        "apps/ai-flotation-public/src/assets/design/DESIGN_SYSTEM.md:1",
+        "apps/cpn-public/src/assets/design/DESIGN_SYSTEM.md:1",
+        "apps/refactored-public/src/assets/design/styles.css:1",
+        "scripts/validate-app-boundaries.js:1",
+        ".github/workflows/design-system-sync.yml:99",
+        "frontend/src/styles/brand-bridge.css:1"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "each app's DESIGN_SYSTEM.md and token files",
+        "frontend/src/styles/tokens.css and brand-bridge.css",
+        "the manager's statement of which brands must converge and which must stay distinct"
+      ],
+      "outputs": [
+        "a per-brand token comparison table",
+        "a list of divergences flagged as intended or unexplained",
+        "unknown wherever a brand's intended relationship to the others has not been stated"
+      ],
+      "workflow": [
+        "Read each brand's declared design system and token set.",
+        "Build a comparison across the four surfaces for shared concepts: primary, surface, text, spacing scale, type scale, radius.",
+        "Mark each divergence against the manager's intended-divergence list.",
+        "Report unexplained divergences; report missing intent as unknown rather than assuming convergence is wanted."
+      ],
+      "exceptions": [
+        "Deliberate brand separation is the normal case for distinct companies and must never be reported as drift.",
+        "validate-app-boundaries.js forbids apps importing each other or the platform frontend, so a shared component is not an available remedy and must not be proposed as one.",
+        "A brand with no DESIGN_SYSTEM.md cannot be audited for intent; that absence is the finding."
+      ],
+      "dependencies": [
+        "the manager's intended-divergence statement, which does not exist today",
+        "the extraction boundary rules enforced by validate-app-boundaries.js"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "apps/ai-flotation-public/src/assets/design/",
+        "apps/cpn-public/src/assets/design/",
+        "apps/refactored-public/src/assets/design/",
+        "frontend/src/styles/brand-bridge.css",
+        "scripts/validate-app-boundaries.js"
+      ],
+      "required_tools": [
+        "repo_read",
+        "css_token_parser",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Whether two brands should look alike is a positioning decision, not a lint result. The agent can only compare and report; the intent against which divergence is judged comes from a human, so it stays below shadow mode until that reference exists.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "intended-divergence statement absent, so the ratio of real findings to intended differences is unknown",
+        "whether the Product Experience domain owns the three public apps at all is unknown; Website Portfolio & Conversion is a separate domain with its own manager (docs/architecture/ai-workforce-management/AI_EMPLOYEE_ROSTER.md:36), and the boundary has not been drawn"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Draws the ownership boundary against the Website domain and records which brands must converge.",
+          "acceptance_criteria": "Mohammed Abdul Aleem and the Website domain's manager agree in writing which surfaces this domain audits."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Produces the comparison table and divergence report across the agreed surfaces.",
+          "acceptance_criteria": "Every divergence classified intended, unexplained or unknown, with no divergence left unclassified."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.wcag_aa_accessibility_audit",
+      "name": "WCAG 2.1 AA accessibility audit with severity-ranked remediation proposals",
+      "business_outcome": "The product is usable by people relying on assistive technology, and the gap to AA is a known, ranked list rather than an untested assumption.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the fixing-accessibility skill, which already encodes a twelve-check AA audit against this codebase, applied to a surface that has no automated accessibility check at all",
+      "supporting_evidence": [
+        ".claude/skills/fixing-accessibility/SKILL.md:21",
+        ".claude/skills/fixing-accessibility/SKILL.md:22",
+        ".claude/skills/fixing-accessibility/SKILL.md:46",
+        ".claude/skills/fixing-accessibility/SKILL.md:51",
+        ".claude/skills/fixing-accessibility/SKILL.md:56",
+        ".claude/skills/fixing-accessibility/SKILL.md:88",
+        ".claude/skills/fixing-accessibility/SKILL.md:115",
+        "frontend/src/styles/responsive.css:73",
+        "frontend/src/styles/responsive.css:131",
+        ".claude/skills/baseline-ui/SKILL.md:204"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the 445 route-reachable pages and 449 components measured 2026-10-09",
+        "the twelve AA checks enumerated in the fixing-accessibility skill",
+        "the manager's ranking of which surfaces are audited first"
+      ],
+      "outputs": [
+        "findings ranked Critical / Major / Minor in the skill's stated output format",
+        "a proposed patch per finding, in a sandbox branch",
+        "a per-surface AA conformance statement, or unknown where the surface was not reached"
+      ],
+      "workflow": [
+        "Take the agreed surface list in the manager's priority order.",
+        "Run the twelve checks: contrast, semantic HTML, ARIA, keyboard, form labels, alt text, touch targets, reduced motion, high contrast, live regions, heading hierarchy, skip navigation.",
+        "Rank each finding by the skill's severity definitions.",
+        "Prepare a patch per finding on a sandbox branch and leave it for review.",
+        "Report surfaces that could not be reached as unknown rather than as conformant."
+      ],
+      "exceptions": [
+        "Admin-only internal surfaces may carry a different AA obligation from public marketing pages; the manager sets that, and the audit must not assume one standard for both.",
+        "A fix that changes visible layout or colour is a visual change and leaves the accessibility lane for the approval gate.",
+        "Third-party embeds cannot be remediated in this repo; they are reported as upstream.",
+        "A contrast pass computed from tokens is not proof of a visible result, which is the exact failure recorded in storyVisualReview.js."
+      ],
+      "dependencies": [
+        "no accessibility engine dependency exists in the repo (no axe-core, eslint-plugin-jsx-a11y, pa11y or lighthouse in frontend/package.json); adding one is an external-dependency decision that CLAUDE.md routes to escalation",
+        "a rendered surface to audit, which needs a sandbox deployment",
+        "the manager's surface priority order"
+      ],
+      "application_pages": [
+        "unknown until the manager sets the surface priority order; 445 route-reachable pages are in scope as measured"
+      ],
+      "apis": [],
+      "source_modules": [
+        ".claude/skills/fixing-accessibility/SKILL.md",
+        "frontend/src/styles/responsive.css",
+        "frontend/src/styles/global.css"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "headless_browser_sandbox",
+        "contrast_calculator",
+        "accessibility_rule_engine",
+        "sandbox_git_branch",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "render_surface_in_sandbox",
+            "run_static_analysis_in_sandbox",
+            "write_sandbox_branch",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Auditing is safe and shadow-mode comparable against a human-reviewed reference audit, so autonomy:R5. It stops below automation because almost every remediation alters rendered markup or visible styling, and what the customer sees is a human decision.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "no accessibility engine dependency exists in the repo (no axe-core, eslint-plugin-jsx-a11y, pa11y or lighthouse in frontend/package.json); adding one is an external-dependency decision that CLAUDE.md routes to escalation",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the current conformance level is unknown: no accessibility audit result exists in the repo. Partial signals measured 2026-10-09: 649 aria-label usages present, 29 of 68 CSS files honour prefers-reduced-motion, focus-visible outlines and a prefers-contrast: high block exist in responsive.css. These indicate real accessibility work, not conformance"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Records which surfaces carry an AA obligation, which carry a lower bar, and what evidence counts as a pass.",
+          "acceptance_criteria": "A written, manager-approved standard per surface class; no audit has run."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the checks against fixture components with known, seeded violations.",
+          "acceptance_criteria": "Each of the twelve checks detects its seeded violation and reports clean on a clean fixture; a mutation that removes a label is caught by name."
+        },
+        {
+          "autonomy": "autonomy:R3",
+          "behaviour": "On request, audits one named component or page in the sandbox and returns ranked findings.",
+          "acceptance_criteria": "Findings use the skill's severity definitions and cite line numbers; no finding is asserted without a located source line."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Audits the agreed surface set each cycle in shadow mode against a human-reviewed reference audit.",
+          "acceptance_criteria": "Critical and Major findings agree with the reference audit, with every disagreement itemised and no finding invented."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.color_contrast_regression_check",
+      "name": "Rendered colour-contrast regression check",
+      "business_outcome": "Text that is invisible against its background cannot reach a customer, because contrast is measured on the rendered pixel rather than inferred from the token file.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "a recorded production failure: this surface shipped three separate invisible-text failures that every token check and every unit test passed",
+      "supporting_evidence": [
+        "tests/systemV2/storyVisualReview.js:12",
+        "tests/systemV2/storyVisualReview.js:1",
+        ".claude/skills/fixing-accessibility/SKILL.md:22",
+        "frontend/src/styles/tokens.css:6",
+        "tests/systemV2/v2-page-health.js:1"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "a rendered surface in a sandbox browser",
+        "the AA thresholds: 4.5:1 for normal text, 3:1 for large text at 18px bold or 24px",
+        "the surface list to sweep"
+      ],
+      "outputs": [
+        "every text node whose computed contrast falls below its threshold, with the measured ratio",
+        "the three historically-failing ratios as named regression cases",
+        "unknown for any surface the sweep could not render"
+      ],
+      "workflow": [
+        "Render each surface in a sandbox browser at the agreed viewports.",
+        "Walk text nodes and read computed foreground and effective background, resolving through transparency and stacked backgrounds.",
+        "Compute the contrast ratio and compare against the threshold for that node's size and weight.",
+        "Fail on any node below threshold and report the measured ratio, never a pass/fail bit alone.",
+        "Report surfaces that failed to render as unknown."
+      ],
+      "exceptions": [
+        "Decorative text and text over imagery need a human judgement about the effective background and must be flagged rather than scored.",
+        "Text hidden by design, including visually-hidden screen-reader text, is excluded and must not be measured.",
+        "A node whose effective background cannot be resolved is reported as unresolved, which is a finding, not a pass. This is the specific trap: a token-level check reported clean on all three real failures.",
+        "Synthetic or injected content must be reported as synthetic, following the AUGMENT convention already documented in storyVisualReview.js."
+      ],
+      "dependencies": [
+        "a sandbox browser",
+        "a rendered deployment of the surface under test",
+        "agreement on which viewports constitute the sweep"
+      ],
+      "application_pages": [
+        "the 11 public V2 routes already swept by v2-page-health.js are the known starting set; coverage beyond them is unknown"
+      ],
+      "apis": [],
+      "source_modules": [
+        "tests/systemV2/storyVisualReview.js",
+        "tests/systemV2/v2-page-health.js",
+        "frontend/src/styles/tokens.css"
+      ],
+      "required_tools": [
+        "headless_browser_sandbox",
+        "contrast_calculator",
+        "repo_read",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "render_surface_in_sandbox",
+            "read_repository",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "A measured ratio is an objective fact with a reference answer, so shadow mode against human-confirmed results is reachable. It stays below automation because the fix for a contrast failure is a colour change, and a colour change is a brand decision.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "no rendered-contrast check exists in the repo today; the nearest thing, storyVisualReview.js, makes a human look at frames rather than measuring ratios",
+        "current platform-wide contrast conformance is unknown",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines thresholds, the viewport set, and how decorative and image-backed text are handled.",
+          "acceptance_criteria": "Written definition approved; the three historical failures are recorded as named regression cases."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs against fixtures reproducing the 1.06:1, 1.03:1 and 1.00:1 failures.",
+          "acceptance_criteria": "All three fixtures fail by name with the ratio reported; a compliant fixture passes; an empty render reports unknown rather than clean."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Sweeps the agreed surfaces each cycle in shadow mode against human-confirmed results.",
+          "acceptance_criteria": "No false clean on any seeded regression case; unresolved backgrounds reported as unresolved."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.keyboard_and_semantic_interaction_audit",
+      "name": "Keyboard and semantic-interaction audit",
+      "business_outcome": "Every interactive element can be reached and operated without a mouse, and announces itself correctly, so keyboard and screen-reader users are not locked out of a control a sighted mouse user can click.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the fixing-accessibility skill's keyboard and semantics checks, which name non-semantic click handlers as a recurring pattern in this codebase",
+      "supporting_evidence": [
+        ".claude/skills/fixing-accessibility/SKILL.md:39",
+        ".claude/skills/fixing-accessibility/SKILL.md:27",
+        ".claude/skills/fixing-accessibility/SKILL.md:33",
+        ".claude/skills/fixing-accessibility/SKILL.md:128",
+        ".claude/skills/fixing-accessibility/SKILL.md:134",
+        "frontend/src/styles/responsive.css:73",
+        "frontend/src/styles/responsive.css:78"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "frontend/src/**/*.tsx",
+        "the agreed surface priority order"
+      ],
+      "outputs": [
+        "every click handler on a non-interactive element, with file and line",
+        "every icon-only control lacking an accessible name",
+        "focus-order and focus-visibility findings per surface",
+        "proposed patches converting non-semantic handlers to real controls"
+      ],
+      "workflow": [
+        "Scan the React source for click handlers attached to span, div and other non-interactive elements.",
+        "Scan for controls whose only content is an icon or glyph and which carry no accessible name.",
+        "Render the agreed surfaces and walk the tab order, recording unreachable controls and focus traps.",
+        "Verify the focus-visible outline actually appears on each focusable control.",
+        "Propose patches following the before/after conversions the skill already documents."
+      ],
+      "exceptions": [
+        "A div with a click handler that is purely a backdrop dismissal is a known pattern with a keyboard equivalent elsewhere; it needs confirming, not converting blindly.",
+        "A control rendered inside a third-party widget cannot be remediated here.",
+        "Converting a span to a button can change layout, which moves the fix into the visual-approval lane.",
+        "Static scanning cannot see controls created at runtime, so a static count is a lower bound and must be reported as one."
+      ],
+      "dependencies": [
+        "a sandbox browser for tab-order walking",
+        "no accessibility engine dependency exists in the repo (no axe-core, eslint-plugin-jsx-a11y, pa11y or lighthouse in frontend/package.json); adding one is an external-dependency decision that CLAUDE.md routes to escalation"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        ".claude/skills/fixing-accessibility/SKILL.md",
+        "frontend/src/styles/responsive.css"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "headless_browser_sandbox",
+        "sandbox_git_branch",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "render_surface_in_sandbox",
+            "run_static_analysis_in_sandbox",
+            "write_sandbox_branch",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Detection is objective and shadow-comparable. Remediation converts markup and can move layout, so the agent proposes and a human ships.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the true count is unknown. A single-line regex scan on 2026-10-09 found 87 click handlers on span or div elements across frontend/src/**/*.tsx, but the scan cannot match handlers spread across multiple lines of JSX, so 87 is a lower bound and the real figure is unknown until an AST scan runs"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines which patterns count as violations and which are approved exceptions.",
+          "acceptance_criteria": "Manager-approved pattern list, including the backdrop-dismissal exception."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the AST scan against fixtures with seeded non-semantic handlers.",
+          "acceptance_criteria": "Multi-line JSX handlers are detected, proving the AST scan beats the regex lower bound; a clean fixture reports zero."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Audits the agreed surfaces each cycle in shadow mode against a human-reviewed reference list.",
+          "acceptance_criteria": "No seeded violation missed; runtime-created controls reported as out of static scope rather than as absent."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.image_alt_and_media_accessibility_audit",
+      "name": "Image, media and icon alternative-text audit",
+      "business_outcome": "Non-text content carries a correct text alternative, so the product's meaning survives for screen-reader users and for anyone whose images fail to load.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the fixing-accessibility skill's alt-text check, applied across the real media surface",
+      "supporting_evidence": [
+        ".claude/skills/fixing-accessibility/SKILL.md:51",
+        "tests/systemV2/v2-page-health.js:29",
+        ".claude/skills/fixing-accessibility/SKILL.md:115"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "frontend/src/**/*.tsx image, video and icon usages",
+        "the rendered surfaces, for images injected at runtime"
+      ],
+      "outputs": [
+        "images with no alt attribute",
+        "images whose alt text is a filename or placeholder, which is worse than empty",
+        "decorative images that should carry an empty alt rather than a description",
+        "broken images, which v2-page-health.js already detects on its 11 routes"
+      ],
+      "workflow": [
+        "Scan the source for image, video and icon elements and record the presence and content of their text alternatives.",
+        "Classify each: missing, placeholder, plausible description, or correctly empty for decorative.",
+        "Render the agreed surfaces and record images that fail to load, reusing the naturalWidth check already written in v2-page-health.js.",
+        "Propose alt text only where the surrounding content makes the meaning determinable; otherwise ask."
+      ],
+      "exceptions": [
+        "Whether an image is decorative is an editorial judgement the agent must not make silently; a wrong empty alt hides real content.",
+        "Generated or user-uploaded media cannot have alt text authored at build time and needs a capture-time solution instead.",
+        "Icon fonts carry no intrinsic alternative; the accessible name belongs on the control, which overlaps the keyboard-and-semantics audit."
+      ],
+      "dependencies": [
+        "a sandbox browser for runtime images"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "tests/systemV2/v2-page-health.js",
+        ".claude/skills/fixing-accessibility/SKILL.md"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "headless_browser_sandbox",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "render_surface_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Writing alt text is authoring customer-facing copy, so it is a human decision. The agent can find gaps and draft candidates but stays below shadow mode because there is no approved reference set of correct alt text to shadow against.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the count is unknown. A single-line regex scan on 2026-10-09 found 109 img elements in frontend/src/**/*.tsx of which 8 had no alt attribute on the matched line, but multi-line JSX attributes are invisible to that scan, so both figures are lower bounds",
+        "no inventory exists of which images are decorative"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines what a good alternative is here and who decides decorative versus meaningful.",
+          "acceptance_criteria": "Written, manager-approved rule covering decorative images and icon-only controls."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Produces the gap inventory and drafts candidate alt text for human editing.",
+          "acceptance_criteria": "Every gap located by file and line; every draft marked as a draft; no alt text committed by the agent."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.unrouted_page_detection",
+      "name": "Unrouted and orphaned page detection",
+      "business_outcome": "Nobody maintains, tests or reviews a page the product cannot reach, and nobody deletes one that is deliberately parked, because the difference is recorded.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "measured reachability of the real page tree against the four route trees, plus an existing in-repo comment showing a deliberately parked page",
+      "supporting_evidence": [
+        "frontend/src/routes/adminRoutes.tsx:305",
+        "frontend/src/routes/portalRoutes.tsx:143",
+        "frontend/src/routes/publicRoutes.tsx:76",
+        "frontend/src/routes/referralRoutes.tsx:17",
+        "frontend/src/App.tsx:56",
+        "frontend/src/App.tsx:116",
+        "frontend/src/pages/admin/AdminAISettingsPage.tsx:1",
+        "frontend/src/pages/admin/ops/OperationsCenterPage.tsx:1",
+        "frontend/src/pages/admin/AdminGovernancePage.tsx:1",
+        "frontend/src/pages/publicV2/SignupV2.tsx:1"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the four route trees plus App.tsx as reachability roots",
+        "the import graph of frontend/src",
+        "a register of deliberately parked pages, which does not exist as data today"
+      ],
+      "outputs": [
+        "pages reachable from a route",
+        "pages imported by something but not route-reachable",
+        "pages never imported by any non-test module",
+        "orphan clusters, where one unreachable parent strands a subtree",
+        "a parked-or-stranded classification per orphan, or unknown"
+      ],
+      "workflow": [
+        "Build the module import graph over frontend/src, resolving directory and index imports and React.lazy dynamic imports.",
+        "Mark everything reachable from the four route trees and App.tsx.",
+        "Partition the page set into reachable, imported-but-unreachable, and never-imported.",
+        "Group never-imported parents with the subtrees they strand, so a cluster is reported once rather than as many findings.",
+        "Check each orphan against the parked register and against in-repo comments before proposing anything.",
+        "Report. Deletion is a separate, human decision."
+      ],
+      "exceptions": [
+        "A deliberately parked page must never be reported as dead. App.tsx:116-124 documents exactly this for SignupV2, which is kept on purpose and whose comment ends 'Check what that button does before calling SignupV2 dead code'.",
+        "A page reached only by a redirect or by a feature flag is reachable, and a naive graph walk will miss it.",
+        "Test and fixture files are excluded from the page set but must still count as importers for the never-imported question, or a tested page looks dead.",
+        "A route path built from a template string cannot be resolved statically and must be reported as unresolved."
+      ],
+      "dependencies": [
+        "a parked-page register, which does not exist",
+        "the import graph staying statically resolvable"
+      ],
+      "application_pages": [
+        "frontend/src/pages/admin/AdminAISettingsPage.tsx",
+        "frontend/src/pages/admin/ops/OperationsCenterPage.tsx",
+        "frontend/src/pages/admin/AdminGovernancePage.tsx",
+        "frontend/src/pages/admin/AdminSequencesPage.tsx",
+        "frontend/src/pages/admin/AdminLeadDetailPage.tsx",
+        "frontend/src/pages/admin/AdminCurriculumTab.tsx",
+        "frontend/src/pages/admin/ai-settings/DepartmentAgentsTab.tsx",
+        "frontend/src/pages/admin/orchestration/CurriculumTypesTab.tsx",
+        "frontend/src/pages/admin/orchestration/PromptControlTab.tsx",
+        "frontend/src/pages/PilotAITeamPage.tsx",
+        "frontend/src/pages/PilotExclusivePage.tsx",
+        "frontend/src/pages/PilotZeroRiskPage.tsx",
+        "frontend/src/pages/StrategyCallPrepPage.tsx",
+        "frontend/src/pages/publicV2/SignupV2.tsx"
+      ],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/routes/adminRoutes.tsx",
+        "frontend/src/routes/portalRoutes.tsx",
+        "frontend/src/routes/publicRoutes.tsx",
+        "frontend/src/routes/referralRoutes.tsx",
+        "frontend/src/App.tsx"
+      ],
+      "required_tools": [
+        "repo_read",
+        "import_graph_analyzer",
+        "typescript_ast_scan",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Reachability is a computed fact with a checkable reference answer, so shadow mode is appropriate. It stops below automation because acting on a finding means deleting or routing a page, which changes the product.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "no parked-page register exists, so the parked-versus-stranded split is unknown for every orphan except SignupV2, which App.tsx documents in a comment",
+        "measured 2026-10-09 by import-graph walk from the four route trees and App.tsx: 477 non-test page components, 445 route-reachable, 32 unreachable, of which 17 are never imported by any non-test module. The largest cluster is frontend/src/pages/admin/AdminAISettingsPage.tsx, which is never imported and strands 13 route-unreachable tab components under frontend/src/pages/admin/ai-settings/. Independent grep confirmed zero references to AdminAISettingsPage, OperationsCenterPage, AdminGovernancePage, AdminSequencesPage, PilotZeroRiskPage and StrategyCallPrepPage anywhere outside their own files"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines reachability, the roots, and the parked-page register's format and owner.",
+          "acceptance_criteria": "Manager-approved definition, and a parked register seeded with at least the SignupV2 case already documented in App.tsx."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the graph walk against fixtures with known orphans and known lazy and index imports.",
+          "acceptance_criteria": "A lazily-imported page is reported reachable; an index-barrel import resolves; a seeded orphan is found; a page imported only by its own test is reported never-imported."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Reports the orphan inventory each cycle in shadow mode against the human-maintained register.",
+          "acceptance_criteria": "No parked page reported as dead; every new orphan surfaced within one cycle of becoming unreachable; template-string routes reported as unresolved."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.route_surface_inventory",
+      "name": "Route and surface inventory with review-coverage map",
+      "business_outcome": "There is one current answer to 'what surfaces does this product have, and which of them has anybody actually looked at', so review effort goes where there is no coverage.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the four route trees and the existing page-health sweep, which covers a named subset of the public routes and nothing else",
+      "supporting_evidence": [
+        "frontend/src/routes/adminRoutes.tsx:305",
+        "frontend/src/routes/portalRoutes.tsx:143",
+        "frontend/src/routes/publicRoutes.tsx:76",
+        "frontend/src/routes/referralRoutes.tsx:17",
+        "frontend/src/App.tsx:44",
+        "tests/systemV2/v2-page-health.js:8",
+        "tests/systemV2/storyVisualReview.js:1"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the route trees",
+        "the capture-script inventory under scripts/",
+        "the review-doc corpus under docs/"
+      ],
+      "outputs": [
+        "every route path with its component and auth context",
+        "per-route coverage flags: smoke-swept, screenshotted, accessibility-audited, never reviewed",
+        "unknown for routes whose auth context cannot be resolved statically"
+      ],
+      "workflow": [
+        "Extract route paths and their components from all four trees and the inline routes in App.tsx.",
+        "Resolve each route's guard and audience: public, portal, admin, referral.",
+        "Join against the page-health route list, the capture scripts and the review docs to compute coverage.",
+        "Rank never-reviewed routes by audience exposure for the manager's attention."
+      ],
+      "exceptions": [
+        "Dynamic and parameterised routes represent many real surfaces and must not be counted as one.",
+        "A redirect route is not a surface.",
+        "Nested and index routes compose into paths that are not literal strings in any one file.",
+        "Routes gated by a feature flag may be unreachable in practice; flag state is not in the source."
+      ],
+      "dependencies": [
+        "the orphan detection capability, which answers the inverse question",
+        "a stable naming convention for review docs"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/routes/",
+        "frontend/src/App.tsx",
+        "tests/systemV2/v2-page-health.js",
+        "scripts/captureHelpers.js"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "import_graph_analyzer",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "An inventory is a read-only derived fact, shadow-comparable against a human-checked list. No customer-visible change follows directly from it, but it stops below automation because its consumers are the audits that do propose changes.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "measured 2026-10-09: 160 literal path attributes across the four route trees (93 admin, 38 portal, 27 public, 2 referral) plus inline routes in App.tsx. The true surface count is unknown because parameterised routes expand to many real surfaces and nested paths are composed rather than literal",
+        "review coverage is thin and the exact share is unknown: tests/systemV2/v2-page-health.js sweeps 11 public V2 routes, and no equivalent sweep exists for the 93 admin or 38 portal route paths"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines what counts as one surface, how parameterised routes are counted, and what counts as review coverage.",
+          "acceptance_criteria": "Written, manager-approved counting rule; no inventory published under an undefined rule."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers 'what is at this path' and 'has this surface been reviewed' from the approved inventory.",
+          "acceptance_criteria": "Every answer cites the route tree file and line; an unresolved route is reported as unresolved."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Regenerates the inventory and coverage map each cycle in shadow mode against a human-checked list.",
+          "acceptance_criteria": "New routes appear within one cycle of merge; removed routes disappear; composed and parameterised paths expand per the approved rule."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.page_health_smoke_sweep",
+      "name": "Page-health smoke sweep on direct load and client-side navigation",
+      "business_outcome": "A surface that renders empty, errors in the console, overflows horizontally or breaks its images is caught by a sweep rather than by a customer.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "tests/systemV2/v2-page-health.js, which already implements this for 11 public routes and exists because a reveal bug appeared only on client-side navigation",
+      "supporting_evidence": [
+        "tests/systemV2/v2-page-health.js:1",
+        "tests/systemV2/v2-page-health.js:8",
+        "tests/systemV2/v2-page-health.js:24",
+        "tests/systemV2/v2-page-health.js:29",
+        "tests/systemV2/v2-page-health.js:30",
+        "tests/systemV2/v2-page-health.js:50"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the agreed route list",
+        "a rendered sandbox deployment",
+        "the existing thresholds: an h1 present, no hidden reveal elements, content below the hero, no horizontal overflow, no broken images"
+      ],
+      "outputs": [
+        "a per-route pass table in both navigation modes",
+        "console errors and 4xx or 5xx responses per route",
+        "unknown for routes that failed to load"
+      ],
+      "workflow": [
+        "Visit each route by direct load and again by client-side navigation, because the original bug only appeared on the second.",
+        "Probe for the existing signals: h1 presence, section count, hidden reveal elements, content height below the hero, text length, broken images, horizontal overflow.",
+        "Collect page errors and failed network responses.",
+        "Fail the sweep on any route failing in either mode and report which mode."
+      ],
+      "exceptions": [
+        "A surface legitimately behind authentication needs a session; an unauthenticated probe will report a false empty.",
+        "A legitimately short page will trip the content-below-hero threshold and needs an explicit exemption.",
+        "Third-party script errors are reported separately from product errors.",
+        "A sweep that renders nothing must report unknown; a probe that silently reads an empty page would report every route clean."
+      ],
+      "dependencies": [
+        "a sandbox deployment of the frontend",
+        "a sandbox browser",
+        "session credentials for authenticated routes"
+      ],
+      "application_pages": [
+        "the 11 routes already listed in v2-page-health.js:8; extension to the 93 admin and 38 portal route paths is not implemented"
+      ],
+      "apis": [],
+      "source_modules": [
+        "tests/systemV2/v2-page-health.js"
+      ],
+      "required_tools": [
+        "headless_browser_sandbox",
+        "repo_read",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "render_surface_in_sandbox",
+            "read_repository",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "The checks are objective, already written, and comparable against a known-good run, so shadow mode fits. It stays below automation because every remedy is a code or layout change that a human reviews.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "coverage beyond the 11 public V2 routes is absent, and the admin and portal sweeps would need authenticated sessions that are not provisioned",
+        "current platform-wide page health is unknown; no sweep result is stored in the repo beyond tests/systemV2/logs/run-1.md"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines the route list, the thresholds, the exemptions and what a sweep failure obliges.",
+          "acceptance_criteria": "Manager-approved route list and threshold set, including exemptions for legitimately short pages."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the sweep against fixtures with a seeded empty page, a seeded overflow and a seeded broken image.",
+          "acceptance_criteria": "Each seeded defect is caught in both navigation modes; an empty route list fails loudly instead of reporting clean."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Runs the full sweep on the sandbox deployment and reports the table.",
+          "acceptance_criteria": "Both navigation modes run for every route; unreachable routes reported unknown; no route silently skipped."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Runs each cycle in shadow mode against the last human-accepted sweep.",
+          "acceptance_criteria": "Regressions named against the accepted baseline, with no false clean on a seeded defect."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.public_copy_claims_compliance_audit",
+      "name": "Public copy and claims compliance audit",
+      "business_outcome": "What the product says about itself on customer-facing surfaces stays inside the claims the company can actually support, and inside the advertising rules that bind it.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the shipped banned-copy ratchet for the Texas Workforce Commission rule on advertising training as free, plus the claims registry that already gates public claims by evidence",
+      "supporting_evidence": [
+        "backend/src/services/content/bannedCopyScanner.ts:50",
+        "backend/src/services/content/bannedCopyScanner.ts:249",
+        "backend/src/services/content/frontendCopyBaseline.ts:33",
+        "backend/src/services/content/frontendCopyBaseline.ts:108",
+        "backend/src/services/content/frontendCopyBaseline.ts:122",
+        "backend/src/services/content/__tests__/frontendCopyLint.test.ts:18",
+        "frontend/src/config/claimsRegistry.ts:86",
+        "frontend/src/components/publicV2/Claim.tsx:1",
+        "backend/src/services/content/brandGovernance.ts:1",
+        "backend/src/services/content/brandGovernance.ts:17"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the React source in the baseline scope",
+        "the banned-word rule set, today a single rule",
+        "the claims registry and its verification statuses"
+      ],
+      "outputs": [
+        "new banned-copy occurrences outside the recorded baseline",
+        "unverified claims rendered as string literals rather than through the registry",
+        "a shrink-only baseline update when violations are genuinely fixed",
+        "unclassified occurrences reported as failures, never as passes"
+      ],
+      "workflow": [
+        "Scan the in-scope React source for each banned-word rule using the existing AST-aware scanner, which distinguishes user-facing copy from identifiers and comments.",
+        "Compare against the recorded baseline: a new file with a violation, or an old file with more violations, is a failure; fewer means the ratchet turns.",
+        "Separately scan public surfaces for claim-shaped string literals that bypass the claims registry.",
+        "Assert the file count against a floor before believing any result, because the first draft of a sibling lint scanned 1 value instead of 77 and reported clean.",
+        "Report. Changing published copy is a human decision."
+      ],
+      "exceptions": [
+        "An occurrence the scanner cannot classify is a scanner defect and must fail rather than pass. This is already the stated design of the existing lint.",
+        "Only one banned-word rule exists today; extending the rule set is a compliance decision, not an implementation detail.",
+        "brandGovernance.ts deliberately holds no rules of its own and reads whatever rules it is handed, so per-brand rule data must exist before it can govern a brand's surfaces.",
+        "Legal and regulatory wording is never drafted by the agent."
+      ],
+      "dependencies": [
+        "the existing scanner and baseline remaining the single authority",
+        "per-brand rule data for brandGovernance.ts, which is not wired to the frontend today",
+        "legal input for any new rule"
+      ],
+      "application_pages": [
+        "frontend/src/pages/publicV2/HomeV2.tsx",
+        "frontend/src/pages/publicV2/PricingV2.tsx",
+        "frontend/src/pages/publicV2/PlatformV2.tsx",
+        "frontend/src/pages/publicV2/TryV2.tsx",
+        "frontend/src/pages/publicV2/SignupV2.tsx"
+      ],
+      "apis": [],
+      "source_modules": [
+        "backend/src/services/content/bannedCopyScanner.ts",
+        "backend/src/services/content/frontendCopyBaseline.ts",
+        "backend/src/services/content/brandGovernance.ts",
+        "backend/src/services/content/brandGovernanceService.ts",
+        "frontend/src/config/claimsRegistry.ts",
+        "frontend/src/components/publicV2/Claim.tsx"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "copy_lint_scanner",
+        "claims_registry_read",
+        "jest_runner",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "run_tests_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Published copy is customer-facing and carries regulatory exposure, so a human decides every wording change. The agent stays at multi-step sandbox analysis; it does not even reach shadow mode for rule authorship, because no approved reference set of correct copy exists to shadow against.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the rule set is one rule wide. bannedCopyScanner.ts:50 defines only tac-807-172-d-free; whether other advertising or claim rules bind these surfaces is unknown and is a compliance question, not an engineering one",
+        "brandGovernance.ts is not wired to any frontend surface: its callers measured 2026-10-09 are its own seed, service, tests and composerService, so public React copy is governed only by the single-rule ratchet"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Records which rules bind which surfaces, who owns each rule, and what the agent may never draft.",
+          "acceptance_criteria": "Written rule ownership, with legal sign-off recorded for any regulatory rule."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the scanner against fixtures and proves the four documented failure modes plus the empty-directory trap.",
+          "acceptance_criteria": "A new violation fails; more in an old file fails; fewer turns the ratchet; an unclassifiable occurrence fails; an empty scan scope fails on the file-count floor rather than reporting clean. Measured baseline on 2026-10-09: 287 recorded occurrences across the baseline files."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers whether a proposed phrase is permitted, and which claim key backs a figure, from the approved rules and registry.",
+          "acceptance_criteria": "Every answer cites the rule or claim by id; the 34 registry entries measured 2026-10-09 are the only claim authority, and an unregistered claim is reported as unregistered."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Runs the full audit each cycle and reports new violations and registry bypasses.",
+          "acceptance_criteria": "No new violation reaches a merged branch undetected; no copy change made by the agent."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.evidence_labeling_and_sample_data_audit",
+      "name": "Evidence-class and sample-data labelling audit",
+      "business_outcome": "A customer can always tell demo data from their own data, and a figure on screen always says what kind of evidence it rests on.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the Claim and evidence primitives, which exist because a design audit found a dashboard whose sample and live modes were visually identical except for a badge string",
+      "supporting_evidence": [
+        "frontend/src/components/publicV2/Claim.tsx:5",
+        "frontend/src/components/publicV2/Claim.tsx:11",
+        "frontend/src/components/publicV2/Claim.tsx:23",
+        "frontend/src/components/publicV2/Claim.tsx:32",
+        "frontend/src/components/publicV2/Claim.tsx:111",
+        "frontend/src/config/claimsRegistry.ts:26",
+        "frontend/src/config/claimsRegistry.ts:48"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "surfaces rendering metrics, dashboards or sample data",
+        "the four evidence classes: verified, anonymized, illustrative, pending"
+      ],
+      "outputs": [
+        "metrics rendered without an evidence class",
+        "sample-mode surfaces not visually distinguishable from live mode",
+        "status conveyed by colour alone, which the primitives already forbid"
+      ],
+      "workflow": [
+        "Find every rendered metric or figure on in-scope surfaces.",
+        "Check each resolves through the claim and evidence primitives rather than being a bare literal.",
+        "Render sample mode and live mode and compare: a difference of one badge string is the recorded failure, not a pass.",
+        "Verify each evidence state carries text and a glyph, not colour alone, so it survives greyscale and colour-blindness."
+      ],
+      "exceptions": [
+        "A figure that is structurally part of a layout, such as a step number, is not a claim.",
+        "Internal admin dashboards may carry a different labelling obligation from public surfaces; the manager sets that.",
+        "A screenshot of demo data leaving the product is the original harm and is a capture-pipeline concern as well as a UI one."
+      ],
+      "dependencies": [
+        "the claims registry remaining the single claim authority",
+        "a sandbox able to render both sample and live modes"
+      ],
+      "application_pages": [
+        "frontend/src/pages/publicV2/HomeV2.tsx",
+        "frontend/src/pages/publicV2/OpportunityLabV2.tsx",
+        "frontend/src/pages/publicV2/PricingV2.tsx"
+      ],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/components/publicV2/Claim.tsx",
+        "frontend/src/config/claimsRegistry.ts"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "headless_browser_sandbox",
+        "claims_registry_read",
+        "screenshot_capture_sandbox",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "render_surface_in_sandbox",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "How honest the product looks is a brand and trust decision. The agent finds unlabelled figures and indistinguishable modes; a human decides the label and the visual treatment.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "coverage is unknown: the primitives exist and 34 claims are registered as measured 2026-10-09, but which surfaces route their figures through them is not inventoried, and the admin surfaces are not in the publicV2 primitive's scope at all"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines which surfaces owe an evidence class and what makes sample mode adequately distinct.",
+          "acceptance_criteria": "Manager-approved definition covering public and admin surfaces separately."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Audits the agreed surfaces and reports unlabelled figures and indistinguishable sample modes.",
+          "acceptance_criteria": "Every in-scope figure classified; a seeded bare-literal metric is caught; a sample mode differing only by a badge string is reported as a failure."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.responsive_and_touch_target_regression_check",
+      "name": "Responsive layout and touch-target regression check",
+      "business_outcome": "The product stays usable on a phone, a tablet and a wide monitor, and controls stay big enough to hit with a thumb.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the responsive breakpoint and touch-target rules already written into responsive.css and the baseline-ui and ui-ux-design skills, measured against the rendered surfaces",
+      "supporting_evidence": [
+        "frontend/src/styles/responsive.css:55",
+        "frontend/src/styles/responsive.css:61",
+        "frontend/src/styles/responsive.css:67",
+        ".claude/skills/baseline-ui/SKILL.md:192",
+        ".claude/skills/baseline-ui/SKILL.md:199",
+        ".claude/skills/fixing-accessibility/SKILL.md:56",
+        ".claude/skills/ui-ux-design/SKILL.md:114",
+        "tests/systemV2/v2-page-health.js:30"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the breakpoint set named in the ui-ux-design skill: 320, 375, 768, 1024 and 1920 pixels",
+        "the 44 by 44 pixel minimum for interactive elements",
+        "the agreed surface list"
+      ],
+      "outputs": [
+        "horizontal overflow per surface per breakpoint",
+        "interactive elements below the touch-target minimum, measured on the rendered box",
+        "content that disappears or collapses unusably at a breakpoint",
+        "unknown for surfaces not rendered"
+      ],
+      "workflow": [
+        "Render each agreed surface at each breakpoint in a sandbox browser.",
+        "Detect horizontal overflow using the scrollWidth against clientWidth comparison already written in v2-page-health.js.",
+        "Measure the rendered box of every interactive element and compare against the minimum.",
+        "Record elements that meet the minimum only because of a Bootstrap class, separately from those that meet it intrinsically.",
+        "Report per surface per breakpoint, never collapsed to one verdict."
+      ],
+      "exceptions": [
+        "A deliberately wide surface such as a data table may scroll horizontally on purpose, inside a container, and that is not an overflow defect.",
+        "The existing rule in responsive.css applies min-height 44px only under max-width 991.98px and only to .btn, .form-control and .form-select, so any custom or icon-only control outside those classes is uncovered by it and must be measured rather than assumed compliant.",
+        "Dense admin surfaces may carry a different touch obligation from public surfaces; the manager decides.",
+        "A measurement taken at one viewport says nothing about another, so a single-viewport pass is not a pass."
+      ],
+      "dependencies": [
+        "a sandbox browser at multiple viewports",
+        "a rendered deployment",
+        "the manager's per-surface touch-target obligation"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/styles/responsive.css",
+        "tests/systemV2/v2-page-health.js"
+      ],
+      "required_tools": [
+        "headless_browser_sandbox",
+        "repo_read",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "render_surface_in_sandbox",
+            "read_repository",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Overflow and box size are measurable facts, shadow-comparable against an accepted baseline. Remediation changes layout, which is what the customer sees, so a human ships it.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "no multi-viewport check exists today: v2-page-health.js renders at a single 1440 by 900 viewport, so responsive conformance at 320, 375, 768 and 1920 pixels is unknown",
+        "the share of interactive controls covered by the responsive.css Bootstrap-class rule is unknown; 35 occurrences of a 44px rule exist across frontend CSS as measured 2026-10-09, which bounds the rules, not the controls"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Fixes the breakpoint set, the touch minimum per surface class, and the legitimate-horizontal-scroll exceptions.",
+          "acceptance_criteria": "Manager-approved breakpoint and minimum set, with table and dense-admin exceptions named."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs against fixtures with a seeded overflow and a seeded undersized control.",
+          "acceptance_criteria": "Both are caught at the breakpoints where they occur and not reported at breakpoints where they do not; a control passing only via a Bootstrap class is reported as such."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Sweeps the agreed surfaces at every breakpoint each cycle in shadow mode against the accepted baseline.",
+          "acceptance_criteria": "Regressions named per surface per breakpoint; no single-viewport result reported as overall conformance."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.motion_and_reduced_motion_compliance_review",
+      "name": "Motion and reduced-motion compliance review",
+      "business_outcome": "Animation stays smooth and never triggers discomfort, and a visitor who has asked their system for less motion actually gets less motion.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the fixing-motion-performance skill's composited-property and duration rules, and the partial prefers-reduced-motion coverage already present across the stylesheets",
+      "supporting_evidence": [
+        ".claude/skills/fixing-motion-performance/SKILL.md:19",
+        ".claude/skills/fixing-motion-performance/SKILL.md:22",
+        ".claude/skills/fixing-motion-performance/SKILL.md:30",
+        ".claude/skills/fixing-motion-performance/SKILL.md:52",
+        ".claude/skills/fixing-accessibility/SKILL.md:61",
+        "frontend/src/styles/responsive.css:88",
+        "frontend/src/styles/global.css:1"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "every stylesheet declaring a transition or animation",
+        "the composited-property allow-list: transform, opacity, filter",
+        "the duration limits stated in the skill"
+      ],
+      "outputs": [
+        "animations on layout- or paint-triggering properties",
+        "stylesheets that animate without a reduced-motion fallback",
+        "durations outside the stated limits"
+      ],
+      "workflow": [
+        "Parse every stylesheet and collect transition and animation declarations with their animated properties.",
+        "Flag any animating a layout or paint property rather than transform, opacity or filter.",
+        "For each file that animates, check whether a prefers-reduced-motion block covers it.",
+        "Verify in a rendered sandbox that motion actually reduces when the preference is set, rather than trusting the media query's presence."
+      ],
+      "exceptions": [
+        "A height or width animation is sometimes the only honest way to animate a disclosure; a flag is a question, not a verdict.",
+        "A global reduced-motion reset may cover files that contain no query of their own, so per-file coverage counting alone would overstate the gap.",
+        "Inline and JavaScript-driven animation is invisible to a stylesheet parse and must be reported as out of static scope."
+      ],
+      "dependencies": [
+        "a sandbox browser able to set the reduced-motion preference",
+        "a decision on whether the global reset in responsive.css is the intended single authority"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/styles/global.css",
+        "frontend/src/styles/responsive.css",
+        "frontend/src/pages/publicV2/homeV2.css",
+        "frontend/src/components/publicV2/cinematicV2.css",
+        "frontend/src/components/timeline/timeline.css"
+      ],
+      "required_tools": [
+        "repo_read",
+        "css_token_parser",
+        "headless_browser_sandbox",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "render_surface_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Motion is a felt, expressive property of the brand, and the right answer is often a judgement rather than a threshold. The agent reports and proposes; a designer decides. No approved reference motion set exists to shadow against, so it stays below autonomy:R5.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the real gap is unknown. Measured 2026-10-09: 277 transition or animation declarations across frontend CSS, and prefers-reduced-motion appears in 29 of 68 stylesheets. Whether the uncovered files are genuinely uncovered or are caught by the global reset at responsive.css:88 has not been determined"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Decides whether the global reduced-motion reset is the single authority and what duration limits bind this product.",
+          "acceptance_criteria": "Written decision on the reset's scope; per-file obligations stated."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Produces the motion inventory and the reduced-motion coverage report, verified in a rendered sandbox.",
+          "acceptance_criteria": "Every animated property classified; reduced-motion verified by rendering with the preference set, not by the media query's presence; JavaScript-driven motion reported as out of static scope."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.bundle_and_render_performance_review",
+      "name": "Bundle size and render performance review",
+      "business_outcome": "The product loads quickly on an ordinary connection, and a page that gets slower is noticed before a customer feels it.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the fixing-motion-performance skill's bundle and rendering sections, applied to a frontend that already route-splits heavily but has no measured budget",
+      "supporting_evidence": [
+        ".claude/skills/fixing-motion-performance/SKILL.md:71",
+        ".claude/skills/fixing-motion-performance/SKILL.md:104",
+        ".claude/skills/fixing-motion-performance/SKILL.md:128",
+        ".claude/skills/fixing-motion-performance/SKILL.md:130",
+        ".claude/skills/fixing-motion-performance/SKILL.md:147",
+        "frontend/src/routes/adminRoutes.tsx:305",
+        "frontend/src/routes/portalRoutes.tsx:143",
+        "frontend/CLAUDE.md:66"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the production build output",
+        "the route-level code-split map",
+        "an agreed performance budget, which does not exist"
+      ],
+      "outputs": [
+        "per-chunk size and the routes that pull each chunk",
+        "duplicate dependencies and non-tree-shaken imports",
+        "components re-rendering avoidably on the heaviest surfaces",
+        "unknown wherever no budget exists to judge a number against"
+      ],
+      "workflow": [
+        "Produce a production build in the sandbox and read the chunk manifest.",
+        "Map chunks to routes through the lazy-import boundaries.",
+        "Identify duplicate dependencies and default imports that defeat tree-shaking.",
+        "Profile the heaviest surfaces for avoidable re-renders.",
+        "Report numbers against the agreed budget, or report them as unjudged when no budget exists."
+      ],
+      "exceptions": [
+        "A large chunk behind an admin-only lazy route costs an admin once, not every visitor, so raw size is not severity.",
+        "The production build runs a stricter eslint than the local typecheck, so a build that passes locally can still fail; a performance run must use the real build.",
+        "A re-render fix must not reach for an exhaustive-deps disable comment, which is a build failure in this repo rather than a style preference.",
+        "Images and media often dominate real load time and are an authoring concern as much as a bundling one."
+      ],
+      "dependencies": [
+        "a sandbox able to run the production build, which needs the Docker build path",
+        "an agreed performance budget"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/routes/adminRoutes.tsx",
+        "frontend/src/routes/portalRoutes.tsx",
+        "frontend/package.json"
+      ],
+      "required_tools": [
+        "repo_read",
+        "bundle_analyzer",
+        "sandbox_build_runner",
+        "headless_browser_sandbox",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_build_in_sandbox",
+            "render_surface_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Performance work trades against features and visual richness, so the trade is a human call. Without an agreed budget there is no reference outcome to shadow against, which keeps this below autonomy:R5 until a budget exists.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "no performance budget exists, so every measurement would be a number without a verdict",
+        "current bundle size and load timings are unknown; no measurement is stored in the repo. Measured 2026-10-09 the route trees declare 118 lazy imports, 85 in adminRoutes.tsx and 33 in portalRoutes.tsx, which shows route splitting exists but says nothing about size"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Proposes a performance budget per surface class and defines what a regression is.",
+          "acceptance_criteria": "A manager-approved budget exists; until then every measurement is reported as unjudged."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the build and the analyser in an isolated sandbox and establishes a first baseline.",
+          "acceptance_criteria": "The build completes using the real production path; chunk sizes map to routes; the baseline is recorded with its commit."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Reports size and render findings against the baseline and proposes specific, reviewable changes.",
+          "acceptance_criteria": "Every proposal names the chunk or component and the expected effect; no proposal uses an exhaustive-deps disable."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.screenshot_visual_review_packet",
+      "name": "Assemble the screenshot-based design review packet",
+      "business_outcome": "A human reviewer can judge a surface by looking at it, in one document, in a few minutes, which is what makes looking happen at all.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the screenshot-review skill and the fifty capture scripts and review documents already in the repo, which make this an existing practice needing an owner rather than an idea",
+      "supporting_evidence": [
+        ".claude/skills/screenshot-review/SKILL.md:26",
+        ".claude/skills/screenshot-review/SKILL.md:27",
+        ".claude/skills/screenshot-review/SKILL.md:30",
+        ".claude/skills/screenshot-review/SKILL.md:37",
+        ".claude/skills/screenshot-review/SKILL.md:41",
+        "scripts/captureHelpers.js:18",
+        "scripts/captureHelpers.js:84",
+        "scripts/captureProductionScreenshots.js:1",
+        "tests/systemV2/storyVisualReview.js:1",
+        "docs/POST_DEPLOY_WALKTHROUGH.html:1"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the surface list for the sprint",
+        "the safe capture viewport and the 1800 pixel width cap",
+        "the review-document structure the skill defines"
+      ],
+      "outputs": [
+        "screenshots at or below the safe width, with a mandatory summary recording original and final width",
+        "a per-stop review document a human reads top to bottom",
+        "an explicit note wherever content shown is synthetic rather than real"
+      ],
+      "workflow": [
+        "Take the agreed surface list and capture each stop through the shared helper, so the width clamp applies by construction.",
+        "Write the capture summary with original width, final width and whether the image was downscaled, for every image.",
+        "Assemble the per-stop review document following the existing pattern.",
+        "Label any synthetic or injected content as synthetic, following the convention storyVisualReview.js already states.",
+        "Hand the document to the reviewer."
+      ],
+      "exceptions": [
+        "A retina capture is permitted only for human-embedded review images, never for an image an agent will read back.",
+        "Any final width above 1800 pixels is a process violation, not a warning.",
+        "A full-page capture of a very tall surface produces an unreadable image and a context hazard; walk the page a screen at a time instead.",
+        "Capturing an authenticated production surface needs a credential, and that credential must never be committed.",
+        "Synthetic content proves nothing about real content and must be reported as synthetic."
+      ],
+      "dependencies": [
+        "scripts/captureHelpers.js remaining the single capture path",
+        "a sandbox browser",
+        "a credential path for authenticated surfaces"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "scripts/captureHelpers.js",
+        "scripts/captureProductionScreenshots.js",
+        "tests/systemV2/storyVisualReview.js",
+        "tests/systemV2/storyHeroMeasure.js"
+      ],
+      "required_tools": [
+        "screenshot_capture_sandbox",
+        "headless_browser_sandbox",
+        "repo_read",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "render_surface_in_sandbox",
+            "capture_screenshot_in_sandbox",
+            "read_repository",
+            "write_review_document"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "The packet exists so a human can make the visual judgement, so the capability is complete at preparing it. Automating the judgement would defeat the purpose of the artefact, which keeps this below autonomy:R5.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "capturing authenticated production surfaces needs a live credential; the existing script reads a gitignored token file, and no sandbox-safe equivalent is provisioned",
+        "which surfaces need a packet each cycle is unknown until the manager sets the cadence"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines the packet's structure, the surface list, the cadence and the synthetic-content labelling rule.",
+          "acceptance_criteria": "Manager-approved structure and cadence; the width cap and summary requirement restated as hard gates."
+        },
+        {
+          "autonomy": "autonomy:R3",
+          "behaviour": "On request, captures one named surface in the sandbox and returns the stop with its summary entry.",
+          "acceptance_criteria": "Every image at or below 1800 pixels wide; a summary entry present for each with original width, final width and downscaled flag."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Assembles the full multi-stop packet for the sprint's surfaces.",
+          "acceptance_criteria": "Every agreed stop present; no final width above 1800; synthetic content labelled; the document opens and renders for the reviewer."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.component_duplication_detection",
+      "name": "Component duplication and divergence detection",
+      "business_outcome": "One concept has one implementation, so a fix lands once instead of in three places, and two components with the same name do not quietly behave differently.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "existing_application",
+      "source": "the modular composition and reuse rules in the repository contract, measured against the real component tree",
+      "supporting_evidence": [
+        "CLAUDE.md:1",
+        ".claude/skills/frontend-design/SKILL.md:155",
+        ".claude/skills/ui-ux-design/SKILL.md:128",
+        "frontend/CLAUDE.md:41",
+        "frontend/src/pages/admin/ai-settings/AgentDetailModal.tsx:1",
+        "frontend/src/components/publicV2/Claim.tsx:1"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "frontend/src/components and frontend/src/pages",
+        "the repository's size targets: roughly 300 lines per file with a 500-line ceiling"
+      ],
+      "outputs": [
+        "components sharing a name across directories, with a behavioural comparison",
+        "near-duplicate implementations of the same concept",
+        "files over the size ceiling, which the contract says must be split before the next change adds to them",
+        "a consolidation proposal per cluster"
+      ],
+      "workflow": [
+        "Index every component by name and by shape: props, rendered structure, imported dependencies.",
+        "Group components sharing a name across directories and diff their behaviour.",
+        "Detect near-duplicates by structural similarity rather than name alone.",
+        "Flag files above the size ceiling.",
+        "Propose a consolidation per cluster, with the blast radius of each proposal stated."
+      ],
+      "exceptions": [
+        "A shared name across two different domains can be entirely legitimate; an admin tab and a portal tab may rightly differ.",
+        "The extraction boundary rules forbid apps importing the platform frontend, so a shared component is not an available remedy across that boundary.",
+        "Oversize files are grandfathered by the contract until touched, so a size flag is a queue entry rather than a defect.",
+        "Consolidating two components that look alike but serve different audiences makes the product worse, not better."
+      ],
+      "dependencies": [
+        "scripts/validate-app-boundaries.js boundary rules",
+        "the manager's view on which duplications matter"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/components/",
+        "frontend/src/pages/",
+        "scripts/validate-app-boundaries.js"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "import_graph_analyzer",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Whether two similar components should become one is an architecture judgement with a real blast radius, and the contract routes larger refactors to escalation. The agent detects and proposes only.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "a consolidation touching more than a quarter of a module is a large refactor, which CLAUDE.md routes to escalation rather than autonomous action",
+        "the true duplication level is unknown. Measured 2026-10-09: 449 non-test components under frontend/src/components and 13 component basenames appearing more than once across pages and components, including AgentDetailModal, OverviewTab, SettingsTab and StatusBadge. Name collision is not behavioural duplication, and the behavioural overlap has not been measured"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines what counts as a duplication worth fixing and what name reuse is legitimate.",
+          "acceptance_criteria": "Manager-approved definition distinguishing legitimate name reuse from real duplication."
+        },
+        {
+          "autonomy": "autonomy:R1",
+          "behaviour": "Runs the detector against fixtures containing a known duplicate pair and a known legitimate name reuse.",
+          "acceptance_criteria": "The duplicate is found; the legitimate reuse is not reported; a renamed copy is still detected structurally."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Reports duplication clusters with consolidation proposals and stated blast radius.",
+          "acceptance_criteria": "Every proposal names the files and the blast radius; any proposal exceeding the large-refactor threshold is marked for escalation rather than offered as a patch."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.manager_design_review_queue",
+      "name": "Manager-reachable design review and decision queue",
+      "business_outcome": "The accountable manager can see what his AI employee found, decide on it, and have that decision recorded, which is the precondition for every other capability in this domain mattering.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "manager_defined",
+      "source": "the ownership and authorization record for this domain, which states both that Mohammed Abdul Aleem is accountable and that he cannot reach the surface today",
+      "supporting_evidence": [
+        ".loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:42",
+        ".loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44",
+        ".loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:46",
+        "docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13",
+        "docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:46",
+        "docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md:1",
+        "docs/architecture/ai-workforce-management/AI_EMPLOYEE_ROSTER.md:31"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "findings from every audit capability in this domain",
+        "the manager's identity, resolvable only through org_members today",
+        "a decision vocabulary: accept, reject, defer, set exception"
+      ],
+      "outputs": [
+        "a queue of findings awaiting the manager's decision",
+        "a recorded decision per finding, attributable to him",
+        "exceptions fed back so the same finding is not raised twice",
+        "unknown for the surface itself, which does not exist"
+      ],
+      "workflow": [
+        "Collect findings from the domain's audits into one queue, ranked.",
+        "Present each with its evidence, its proposed remedy and its blast radius.",
+        "Record his decision against the finding, server-side, attributable to his identity.",
+        "Feed accepted exceptions back into the audits so settled questions stay settled."
+      ],
+      "exceptions": [
+        "Manager instructions may only restrict the agent, never expand its authority. An instruction that would widen scope is refused, not obeyed.",
+        "Authorization must be checked server-side against a real 'is this human this agent's manager' test. Frontend visibility is not authorization.",
+        "Until a manager-scoped gate exists, any admin could act as this manager, which is the exact hole the authorization map describes.",
+        "A decision recorded without an attributable identity is not a decision; it is an unsigned note."
+      ],
+      "dependencies": [
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "no_manager_scoped_authorization: requireAgentManagerOrAdmin is PROPOSED, not built. Agent-detail and agent-governance routes are flat requireAdmin today, so there is no server-side 'is this human actually this agent's manager' check (docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md 'What exists today' item 2)",
+        "an org_members to admin_users join, which no login path populates in the token today"
+      ],
+      "application_pages": [],
+      "apis": [
+        "unknown: no manager-facing review endpoint exists for this domain"
+      ],
+      "source_modules": [
+        "docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md"
+      ],
+      "required_tools": [
+        "review_queue_write",
+        "decision_record_write",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "record_decision",
+            "set_exceptions"
+          ],
+          "agent": [
+            "write_finding_to_queue",
+            "read_recorded_decisions"
+          ]
+        },
+        "production": {
+          "human": [
+            "review_findings",
+            "record_decision",
+            "set_exceptions"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "This capability exists to carry a human's decision, so the agent's share of it is presenting evidence and recording an answer. It cannot rise above answering from approved knowledge without becoming the decision-maker it was built to serve.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "no_manager_scoped_authorization: requireAgentManagerOrAdmin is PROPOSED, not built. Agent-detail and agent-governance routes are flat requireAdmin today, so there is no server-side 'is this human actually this agent's manager' check (docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md 'What exists today' item 2)",
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "the surface itself is unknown: whether he reaches this through a new admin_users row with a scoped management role or through an alternative surface is an open decision recorded in HUMAN_OWNERSHIP_MAP.md:46, and this domain's Phase 1 is required to state it"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "States how this manager will reach his employee and what a recorded decision must contain, which HUMAN_OWNERSHIP_MAP.md:46 requires of this domain's Phase 1.",
+          "acceptance_criteria": "A written access plan exists naming either a scoped admin_users row or a specific alternative surface, and Mohammed Abdul Aleem confirms he can use it."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Presents queued findings and answers questions about them from the approved evidence, and records his decisions.",
+          "acceptance_criteria": "He opens the queue himself and records at least one decision attributable to his identity, verified server-side rather than by frontend visibility."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.visual_change_approval_gate",
+      "name": "Visual and brand change approval gate",
+      "business_outcome": "No change to what a customer sees reaches production without a named human having looked at it and said yes.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "Ali Muwwakkil (DRI)",
+        "frontend engineers"
+      ],
+      "classification": "manager_defined",
+      "source": "the approval posture this repository already practises for brand styles, plus the manager authorization non-negotiables, drafted here as this domain's explicit gate",
+      "supporting_evidence": [
+        ".github/workflows/design-system-sync.yml:8",
+        ".github/workflows/design-system-sync.yml:99",
+        "docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md:1",
+        "backend/src/services/delivery/execution/executionPolicy.ts:33",
+        ".loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:46"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "any proposed change to rendered markup, styling, tokens or copy",
+        "the diff and a rendered before-and-after",
+        "the named approver for that surface"
+      ],
+      "outputs": [
+        "an approval record per visual change, naming the approver and the diff",
+        "a refusal path for changes that bypass the gate",
+        "a rendered before-and-after for the approver to look at"
+      ],
+      "workflow": [
+        "Classify a proposed change as visual or non-visual; a change to markup, styling, tokens or customer-facing copy is visual.",
+        "For a visual change, render before and after and attach both to the proposal.",
+        "Route to the named approver for the surface.",
+        "Record the decision. Only then may a human merge and deploy."
+      ],
+      "exceptions": [
+        "A purely internal refactor with a proven-identical render is not a visual change, but 'proven' means a rendered comparison, not an assertion.",
+        "An accessibility fix is still a visual change when it alters the rendered result.",
+        "An urgent production visual defect needs a fast path, and who may use it is a decision this domain does not get to make for itself.",
+        "The approval gate must not be satisfiable by the agent itself under any configuration."
+      ],
+      "dependencies": [
+        "the manager review queue, which does not exist",
+        "no_manager_scoped_authorization: requireAgentManagerOrAdmin is PROPOSED, not built. Agent-detail and agent-governance routes are flat requireAdmin today, so there is no server-side 'is this human actually this agent's manager' check (docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md 'What exists today' item 2)",
+        "a rendering sandbox able to produce before-and-after frames"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        ".github/workflows/design-system-sync.yml",
+        "backend/src/services/delivery/execution/executionPolicy.ts"
+      ],
+      "required_tools": [
+        "sandbox_git_branch",
+        "screenshot_capture_sandbox",
+        "headless_browser_sandbox",
+        "approval_record_write",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_diff",
+            "approve_or_reject",
+            "set_fast_path_policy"
+          ],
+          "agent": [
+            "write_sandbox_branch",
+            "render_before_after",
+            "submit_for_approval"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "A gate whose own autonomy could rise would stop being a gate. The agent prepares the evidence and records the outcome, and never holds the approving authority, at any rung.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "no_manager_scoped_authorization: requireAgentManagerOrAdmin is PROPOSED, not built. Agent-detail and agent-governance routes are flat requireAdmin today, so there is no server-side 'is this human actually this agent's manager' check (docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md 'What exists today' item 2)",
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the fast-path policy for urgent visual defects is unknown and is a governance decision"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines what counts as a visual change, who approves each surface, and what the urgent fast path is.",
+          "acceptance_criteria": "Written, manager-approved classification and approver map; the fast path named or explicitly deferred."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Classifies proposed changes, attaches rendered before-and-after evidence, routes to the approver and records the outcome.",
+          "acceptance_criteria": "A seeded visual change cannot reach a merge without a recorded approval; a non-visual change is not blocked; the agent cannot approve its own change under any setting, proven by a negative test."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.ux_quality_exception_register",
+      "name": "UX quality standard and exception register",
+      "business_outcome": "The product has one written answer to 'what good looks like here', and every knowing departure from it is recorded with a reason, so an audit finding is either a real defect or a known exception and never an argument.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "manager_defined",
+      "source": "the manager authorization non-negotiable that manager instructions may only restrict an agent, which requires a register of those restrictions to be a real artefact",
+      "supporting_evidence": [
+        "docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md:1",
+        "docs/architecture/ai-workforce-management/AI_EMPLOYEE_ROSTER.md:31",
+        ".loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:42",
+        ".claude/skills/ui-ux-design/SKILL.md:37",
+        ".claude/skills/ui-ux-design/SKILL.md:24",
+        ".claude/skills/baseline-ui/SKILL.md:7"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the five design principles and the audience definition already written in the skills",
+        "each audit's threshold set",
+        "the manager's accepted exceptions"
+      ],
+      "outputs": [
+        "a written standard per surface class: public, portal, admin",
+        "a dated exception register with a reason and an owner per entry",
+        "unknown for every surface class the manager has not yet ruled on"
+      ],
+      "workflow": [
+        "Draft the standard per surface class from the existing skills and the audience definition.",
+        "Take the manager's decisions on each audit's thresholds and record them.",
+        "Record each accepted exception with its reason, its owner and its date.",
+        "Feed the register into every audit so a settled exception is not re-raised.",
+        "Re-present expired or stale exceptions rather than letting them stand forever."
+      ],
+      "exceptions": [
+        "An exception with no stated reason is not an exception; it is an unexplained defect.",
+        "An exception may restrict what the agent reports but may never expand what it is allowed to do.",
+        "A permanent exception is usually a standard that is wrong; repeated exceptions on the same rule are a signal to revisit the rule.",
+        "This domain cannot grant itself exceptions to another domain's standards."
+      ],
+      "dependencies": [
+        "the manager review queue, which does not exist",
+        "every audit capability consuming the register"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        ".claude/skills/ui-ux-design/SKILL.md",
+        ".claude/skills/baseline-ui/SKILL.md",
+        ".claude/skills/fixing-accessibility/SKILL.md"
+      ],
+      "required_tools": [
+        "repo_read",
+        "exception_register_write",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "author_standard",
+            "accept_exception",
+            "expire_exception"
+          ],
+          "agent": [
+            "draft_standard",
+            "read_register",
+            "propose_exception"
+          ]
+        },
+        "production": {
+          "human": [
+            "author_standard",
+            "accept_exception",
+            "expire_exception"
+          ],
+          "agent": [
+            "read_register"
+          ]
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "The standard is the manager's own statement of what good looks like. The agent may draft it and apply it, never ratify it, so it cannot rise above answering from approved knowledge.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "no_manager_scoped_authorization: requireAgentManagerOrAdmin is PROPOSED, not built. Agent-detail and agent-governance routes are flat requireAdmin today, so there is no server-side 'is this human actually this agent's manager' check (docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md 'What exists today' item 2)",
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "no UX standard document exists for this domain today; the five design principles and the enterprise-executive audience definition in the skills are the nearest thing and were not authored by this manager",
+        "the scope of this domain is unknown in one specific respect: whether it covers the three public brand apps or only the platform frontend, since Website Portfolio & Conversion is a separate domain with its own manager"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Drafts the standard and the register's format, and takes the manager's rulings on each audit's thresholds.",
+          "acceptance_criteria": "A dated standard exists per surface class, with Mohammed Abdul Aleem recorded as its author of record, and every threshold either set or explicitly marked unknown."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Applies the register when reporting findings and answers which standard governs a surface.",
+          "acceptance_criteria": "No finding is raised against an accepted exception; every answer cites the register entry or the standard; an unruled surface class is reported as unruled rather than judged by default."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.dataviz_quality_audit",
+      "name": "Data-visualisation quality audit on product surfaces",
+      "business_outcome": "Charts in the product are the right chart for their data, are readable, and never render empty, so a dashboard informs instead of misleading.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "proposed_new",
+      "source": "Data Analyst responsibilities transitioning to AI: deterministic chart-fitness and configuration checking already runs for the Assistant's generated charts, and is proposed here for the product's own charted surfaces",
+      "supporting_evidence": [
+        "backend/src/intelligence/assistant/agents/chartValidationAgent.ts:1",
+        "docs/agent-catalog/assistant/chart-validation-agent.md:1",
+        "docs/agent-catalog/assistant/chart-validation-agent.md:4",
+        ".claude/skills/fixing-motion-performance/SKILL.md:104",
+        "frontend/src/components/admin/marketing/MarketingFunnelGraph.tsx:1"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "charted surfaces in the platform frontend",
+        "the chart-fitness rules already encoded for the Assistant",
+        "the dataviz colour and form guidance"
+      ],
+      "outputs": [
+        "charts whose type does not fit their data shape",
+        "charts that can render empty or all-zero",
+        "charts whose colour encoding fails in greyscale or for colour-blind readers",
+        "unknown for charts whose data shape cannot be determined statically"
+      ],
+      "workflow": [
+        "Inventory charted surfaces and the chart types each renders.",
+        "Apply the existing data-shape fitness rules to each chart's real data contract.",
+        "Check each chart's configuration keys against the component it renders through, which is the known cause of empty-rendering charts.",
+        "Check colour encodings for greyscale and colour-blind legibility.",
+        "Report. Changing a chart changes what the customer sees."
+      ],
+      "exceptions": [
+        "A chart whose data shape is only known at runtime cannot be judged statically and must be reported as undetermined.",
+        "The Assistant's generated charts are already governed by the existing agent; this capability must not duplicate that governance, only extend to the product's own charts.",
+        "A deliberately sparse chart is not an empty chart.",
+        "Chart palettes are governed by the dataviz guidance, not by the product token set, so a token audit will produce false findings here."
+      ],
+      "dependencies": [
+        "the existing chart validation rules remaining the single fitness authority",
+        "a decision on whether product charts fall to this domain or to the Assistant's owner"
+      ],
+      "application_pages": [
+        "frontend/src/components/admin/marketing/MarketingFunnelGraph.tsx",
+        "unknown: the full charted-surface inventory has not been built"
+      ],
+      "apis": [],
+      "source_modules": [
+        "backend/src/intelligence/assistant/agents/chartValidationAgent.ts",
+        "backend/src/intelligence/assistant/agents/dataAnalystAgent.ts"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "headless_browser_sandbox",
+        "contrast_calculator",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "render_surface_in_sandbox",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Changing a chart changes what a customer reads from their data, which is a product and brand decision. The agent audits and proposes; it stays below shadow mode because no approved reference set of correct product charts exists yet.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the charted-surface inventory is unknown; no count of product charts exists",
+        "ownership is unknown: chart validation for the Assistant sits under the Assistant department, and whether product-surface charts belong to this domain has not been decided"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Decides ownership against the Assistant department and defines chart fitness for product surfaces.",
+          "acceptance_criteria": "A written ownership decision exists; the fitness rule set is named and is either reused from the existing agent or explicitly extended."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Audits the agreed charted surfaces and reports fitness, empty-render risk and legibility findings.",
+          "acceptance_criteria": "Every in-scope chart classified or reported undetermined; a seeded type mismatch and a seeded empty-render case are both caught."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.plain_language_interface_copy_audit",
+      "name": "Plain-language audit of interface copy",
+      "business_outcome": "The product speaks to its reader in their language, not in the vocabulary of the database underneath it.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "proposed_new",
+      "source": "Data Analyst responsibilities transitioning to AI: technical-term filtering and business-label translation already run deterministically on generated reports, and are proposed here for the product's own interface copy",
+      "supporting_evidence": [
+        "backend/src/intelligence/assistant/agents/reportQualityAgent.ts:1",
+        "docs/agent-catalog/assistant/report-quality-agent.md:1",
+        "docs/agent-catalog/assistant/report-quality-agent.md:4",
+        "backend/src/intelligence/assistant/agents/dataAnalystAgent.ts:1",
+        "docs/agent-catalog/assistant/data-analyst-agent.md:1",
+        ".claude/skills/ui-ux-design/SKILL.md:24"
+      ],
+      "implementation_state": "partial",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "interface copy: labels, empty states, error messages, table headers, tooltips",
+        "the technical-term replacement set already encoded for reports",
+        "the audience definition: enterprise executives"
+      ],
+      "outputs": [
+        "interface strings leaking database or programming vocabulary",
+        "error messages that state a cause without an action",
+        "raw column names surfaced as labels",
+        "drafted replacements for human editing"
+      ],
+      "workflow": [
+        "Collect interface strings from the in-scope surfaces.",
+        "Apply the existing technical-term detection to find database, programming and agent-internal vocabulary.",
+        "Flag error messages with no actionable next step.",
+        "Draft replacements and mark them as drafts.",
+        "Hand to a human. Interface copy is customer-facing."
+      ],
+      "exceptions": [
+        "Admin and engineering surfaces may legitimately use technical vocabulary; the audience differs and the manager sets the line.",
+        "A term that looks technical may be the customer's own domain language, and replacing it would be a regression.",
+        "Copy held in the database rather than the source is invisible to a source scan and must be reported as out of scope.",
+        "The agent never finalises customer-facing wording."
+      ],
+      "dependencies": [
+        "the manager's per-surface audience definition",
+        "the existing replacement set remaining the shared authority"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "backend/src/intelligence/assistant/agents/reportQualityAgent.ts",
+        "backend/src/intelligence/assistant/agents/dataAnalystAgent.ts"
+      ],
+      "required_tools": [
+        "repo_read",
+        "typescript_ast_scan",
+        "copy_lint_scanner",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "Interface copy is what the customer reads, so a human approves every word. The agent detects and drafts, and stays below shadow mode because no approved reference copy set exists to shadow against.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "the interface-string inventory is unknown; no extraction of product copy exists, and database-held copy would be invisible to a source scan",
+        "the per-surface audience line between product and engineering vocabulary has not been set"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Sets which surfaces owe plain language and what vocabulary is legitimate on each.",
+          "acceptance_criteria": "Manager-approved per-surface audience definition; admin exceptions named."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Audits in-scope interface copy and drafts replacements for human editing.",
+          "acceptance_criteria": "Every finding cites file and line; every replacement marked a draft; database-held copy reported as out of static scope rather than as clean."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.theme_and_dark_mode_readiness_assessment",
+      "name": "Theme and dark-mode readiness assessment",
+      "business_outcome": "Before anyone commits to a second theme, there is a measured answer to what it would cost and whether the token layer can carry it.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "proposed_new",
+      "source": "the measured state of the token layer, which defines a single light palette and no theme switch, against a product whose surfaces are painted largely outside that layer",
+      "supporting_evidence": [
+        "frontend/src/styles/tokens.css:6",
+        "frontend/CLAUDE.md:35",
+        "frontend/src/styles/brand-bridge.css:1",
+        "frontend/src/styles/responsive.css:131",
+        ".claude/skills/baseline-ui/SKILL.md:19"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the token layer",
+        "the measured raw-colour footprint outside it",
+        "the surfaces a second theme would have to cover"
+      ],
+      "outputs": [
+        "a readiness verdict with the reasoning shown",
+        "the blocking work, ranked",
+        "a cost estimate, or unknown where the footprint is not yet classified"
+      ],
+      "workflow": [
+        "Establish what the token layer would need to express a second theme.",
+        "Measure how much of the rendered product is painted through tokens versus through raw values.",
+        "Identify the surfaces where a theme switch would break first.",
+        "Report readiness with the measurement behind it. Do not start the work."
+      ],
+      "exceptions": [
+        "A high-contrast mode is not a dark mode and already partially exists through a prefers-contrast block; conflating them would misstate both the cost and the benefit.",
+        "The three public brand apps carry their own token sets and would each need their own answer.",
+        "Introducing a theme is a product decision well above this capability's authority."
+      ],
+      "dependencies": [
+        "the design-token drift audit, which supplies the raw-colour classification",
+        "a product decision on whether a second theme is wanted at all"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/styles/tokens.css",
+        "frontend/src/styles/brand-bridge.css",
+        "frontend/src/styles/responsive.css"
+      ],
+      "required_tools": [
+        "repo_read",
+        "css_token_parser",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "This is an assessment that informs a product decision, not a change. Its ceiling is answering the readiness question from measured evidence; the decision it informs is not the agent's to make.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "the token layer has no theme hook today: measured 2026-10-09, tokens.css defines 101 custom properties in a single :root block at line 6 with no prefers-color-scheme and no data-theme selector anywhere in the file",
+        "the cost is unknown until the raw-colour footprint is classified; 4,492 hex literals in TSX, 1,778 in non-token CSS and 8,219 inline style blocks were measured, but the share that is theme-relevant is unknown",
+        "no product decision exists that a second theme is wanted"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Frames the question and names what evidence a credible readiness verdict needs.",
+          "acceptance_criteria": "A written assessment scope; no implementation work proposed or begun."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers the readiness question from the measured token and raw-colour evidence.",
+          "acceptance_criteria": "Every figure in the verdict traces to a measurement with its method stated, and unknowns are named as unknowns rather than estimated."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.stylesheet_architecture_consolidation_proposal",
+      "name": "Stylesheet architecture consolidation proposal",
+      "business_outcome": "A change to the look of the product has one obvious place to be made, instead of several stylesheets that each partly own it.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "proposed_new",
+      "source": "the measured shape of the styling layer: a token file, seven further global stylesheets and sixty-eight stylesheets in total, against a contract that says never hardcode a colour",
+      "supporting_evidence": [
+        "frontend/src/styles/tokens.css:6",
+        "frontend/src/styles/global.css:1",
+        "frontend/src/styles/brand-bridge.css:1",
+        "frontend/src/styles/admin-shell.css:1",
+        "frontend/src/styles/agentDetailV2.css:1",
+        "frontend/src/styles/orchestration.css:1",
+        "frontend/src/styles/rungTones.css:1",
+        "frontend/src/styles/responsive.css:1",
+        "frontend/CLAUDE.md:35",
+        "frontend/CLAUDE.md:41"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "the global stylesheets and their responsibilities",
+        "the per-feature stylesheets",
+        "the measured raw-colour and inline-style footprint"
+      ],
+      "outputs": [
+        "a map of which stylesheet owns which concern, and where ownership overlaps",
+        "a staged consolidation proposal with blast radius per stage",
+        "unknown where a stylesheet's intended responsibility cannot be determined"
+      ],
+      "workflow": [
+        "Read each global stylesheet and state its apparent responsibility.",
+        "Find selectors and declarations contested by more than one stylesheet.",
+        "Propose a staged consolidation, smallest blast radius first.",
+        "State what each stage would and would not change visually.",
+        "Stop at the proposal. This is a refactor of the thing the customer sees."
+      ],
+      "exceptions": [
+        "A large consolidation is a large refactor and is routed to escalation by the repository contract, not performed autonomously.",
+        "Vendored brand assets under apps/*/src/assets/design are owned upstream and excluded.",
+        "A stylesheet that looks redundant may be load-bearing for a surface nobody remembers; the orphan inventory must be consulted first.",
+        "A consolidation that changes the rendered result is a visual change, whatever its intent."
+      ],
+      "dependencies": [
+        "the design-token drift audit",
+        "the orphan detection capability",
+        "an escalation decision for anything crossing the large-refactor threshold"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        "frontend/src/styles/"
+      ],
+      "required_tools": [
+        "repo_read",
+        "css_token_parser",
+        "import_graph_analyzer",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R2",
+      "max_autonomy_rationale": "Restructuring the styling layer is an architecture change with a product-wide blast radius, which the repository contract routes to escalation. The agent's ceiling is mapping and proposing from approved knowledge.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "this crosses the large-refactor threshold and requires escalation rather than autonomous action",
+        "the overlap between stylesheets is unknown; measured 2026-10-09 there are 8 stylesheets in frontend/src/styles and 68 across frontend/src, but no ownership map exists and no contested-selector analysis has been run"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "States the target architecture question and what a consolidation would have to preserve.",
+          "acceptance_criteria": "A written scope naming the stylesheets in play and the no-visual-change constraint."
+        },
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Produces the ownership map and the staged proposal from the measured evidence.",
+          "acceptance_criteria": "Every stage states its blast radius and whether it changes the rendered result; any stage above the large-refactor threshold is marked for escalation."
+        }
+      ]
+    },
+    {
+      "capability_id": "product_experience.empty_error_loading_state_inventory",
+      "name": "Empty, error and loading state inventory",
+      "business_outcome": "A customer who hits no data, a failure or a slow request sees something deliberate, because the unhappy paths are inventoried rather than discovered in production.",
+      "intended_users": [
+        "Mohammed Abdul Aleem (accountable manager)",
+        "frontend engineers",
+        "Ali Muwwakkil (DRI)"
+      ],
+      "classification": "proposed_new",
+      "source": "the design system's own requirements that these states be handled, which name them as deliverables without any inventory proving they exist",
+      "supporting_evidence": [
+        ".claude/skills/frontend-design/SKILL.md:143",
+        ".claude/skills/ui-ux-design/SKILL.md:128",
+        ".claude/skills/fixing-accessibility/SKILL.md:71",
+        ".claude/skills/baseline-ui/SKILL.md:71",
+        "tests/systemV2/v2-page-health.js:24"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Mohammed Abdul Aleem must confirm scope, exceptions and success measures; he has no admin login today",
+      "inputs": [
+        "surfaces that fetch data",
+        "the design system's stated patterns for these three states"
+      ],
+      "outputs": [
+        "per data-fetching surface: which of the three states is handled and which is not",
+        "states that render as a blank region, which is the worst case",
+        "loading states that do not announce themselves to assistive technology",
+        "unknown for states only reachable under conditions the audit cannot induce"
+      ],
+      "workflow": [
+        "Find data-fetching surfaces and the states each renders.",
+        "Induce each state in a sandbox: no data, a failed request, a slow request.",
+        "Record what renders, including whether anything renders at all.",
+        "Check the loading state announces itself, following the live-region pattern the accessibility skill documents.",
+        "Report gaps against the design system's stated patterns."
+      ],
+      "exceptions": [
+        "Some failure states cannot be induced without a fault-injection path that does not exist, and must be reported as uninduced rather than as handled.",
+        "A deliberately blank state can be correct when the surrounding layout carries the message; blankness is a question, not automatically a defect.",
+        "Inducing a failure must never touch production."
+      ],
+      "dependencies": [
+        "a sandbox with a fault-injection path for failed and slow requests, which does not exist",
+        "a rendered sandbox deployment"
+      ],
+      "application_pages": [],
+      "apis": [],
+      "source_modules": [
+        ".claude/skills/frontend-design/SKILL.md",
+        ".claude/skills/ui-ux-design/SKILL.md",
+        "tests/systemV2/v2-page-health.js"
+      ],
+      "required_tools": [
+        "headless_browser_sandbox",
+        "repo_read",
+        "typescript_ast_scan",
+        "report_renderer"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review_findings",
+            "approve_scope",
+            "set_exceptions"
+          ],
+          "agent": [
+            "render_surface_in_sandbox",
+            "read_repository",
+            "run_static_analysis_in_sandbox",
+            "write_audit_report"
+          ]
+        },
+        "production": {
+          "human": [
+            "approve_change",
+            "merge_pull_request",
+            "deploy",
+            "accept_or_reject_finding"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R4",
+      "max_autonomy_rationale": "What an empty or failed state should say is design and copy work, so a human decides it. The agent inventories the gaps and stays below shadow mode because no approved reference set of correct states exists.",
+      "blocked_by": [
+        "no_ai_employee_provisioned: agent_id is null for this domain (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:47)",
+        "manager_has_no_admin_login: Mohammed Abdul Aleem has an org_members row (d2efd70b-4016-4ad6-bd7b-cf0610c93370) but no admin_users row, so he cannot open his agent's Agent Detail or Talk surface (.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46; docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13)",
+        "shipping any UI change requires push_to_protected_main and production_deploy, both default-denied capabilities (backend/src/services/delivery/execution/executionPolicy.ts:33); a human merges and deploys",
+        "no fault-injection path exists in a sandbox, so failure states cannot be induced and their coverage is unknown",
+        "the count of data-fetching surfaces is unknown; no inventory exists"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R0",
+          "behaviour": "Defines the required pattern for each of the three states and which surfaces owe them.",
+          "acceptance_criteria": "Manager-approved pattern per state; the deliberately-blank exception named."
+        },
+        {
+          "autonomy": "autonomy:R4",
+          "behaviour": "Inventories the three states across the agreed surfaces, inducing each where possible.",
+          "acceptance_criteria": "Every surface records handled, unhandled or uninduced for each state; no uninduced state reported as handled."
+        }
+      ]
+    }
+  ],
+  "legacy_dispositions": [],
+  "notes": [
+    "zero legacy rows VERIFIED against the sliced 246-row inventory, not assumed",
+    "Verification method, three independent passes. (1) The slice file .loop-architect/runs/20261007-school-agent-factory/legacy-slices/product_experience.json carries legacy_row_count 0 with an empty rows array and an empty kind_breakdown. (2) Totality: the eleven slice files sum to exactly 246 rows (executive 75, marketing 40, platform 38, admissions 28, UNRESOLVED 21, sales 16, learner_success 11, curriculum 8, website 8, internship 1, product_experience 0), so no row is missing rather than merely unassigned. (3) Source re-parse: docs/architecture/ai-workforce-management/LEGACY_AGENT_CLASSIFICATION.csv was read with a CSV parser on 2026-10-09 and contains 246 data rows whose proposed_owner_domain values distribute across nine canonical domains plus a 21-row unresolved bucket, summing to 246, with the string 'Product Experience & UI/UX' appearing zero times in that column.",
+    "Why the zero is not an artefact of mis-bucketing. The two UX-named legacy rows both exist and both went elsewhere, deliberately: LEGACY_AGENT_CLASSIFICATION.csv:219 UX_Optimization_Agent, proposed kind retire, owner domain Website Portfolio & Conversion, reason recorded as source file backend/src/services/agents/platform/uxOptimizationAgent.ts absent from disk with no git history, classified NO_SOURCE_FILE confirmed_dead; and LEGACY_AGENT_CLASSIFICATION.csv:226 WebsiteUXHeuristicAgent, proposed kind retire, same owner domain, reason recorded as the aiOrchestrator wrapper having zero callers outside aiOrchestrator itself. So the nearest-neighbour rows were examined and dispositioned under another domain, which is why legacy_dispositions here is correctly empty rather than merely unpopulated.",
+    "Independently corroborated twice in the existing record. docs/architecture/ai-workforce-management/AI_EMPLOYEE_ROSTER.md:31 states this domain's legacy items as 0 and calls it 'Greenfield: no legacy behaviour exists for this domain', with AI_EMPLOYEE_ROSTER.md:41 recording 'Total across rows: 246'. .loop-architect/runs/20261007-school-agent-factory/plan.md:14 records that an independent loop-plan-auditor re-parsed the legacy CSV itself and confirmed 246 rows and Product Experience at zero legacy rows.",
+    "An empty legacy bucket is not an empty job, and the evidence says so loudly. Sources 2, 3 and 4 carry the whole matrix: 17 capabilities are drawn from the live product surface, 3 from the manager and ownership record, and 5 are proposed. Measured scale of the surface on 2026-10-09: 613 .tsx files under frontend/src/pages of which 477 are non-test page components, 449 non-test components, 68 stylesheets, 160 literal route paths across four route trees, 3 further public brand applications under apps/, and 5 design-system skills that already encode enforceable rules this domain would own.",
+    "Reachability measurement, method stated so it can be re-run. An import graph was built over frontend/src resolving relative imports, index barrels and React.lazy dynamic imports, then walked from five roots: the four route trees plus App.tsx. Result: 477 non-test page components, 445 reachable, 32 unreachable, of which 17 are never imported by any non-test module and 15 are imported only by another unreachable module. Six of the never-imported pages were re-checked by independent grep across all of frontend/src and had zero references outside their own files: AdminAISettingsPage, OperationsCenterPage, AdminGovernancePage, AdminSequencesPage, PilotZeroRiskPage and StrategyCallPrepPage. The largest orphan cluster is frontend/src/pages/admin/AdminAISettingsPage.tsx, itself never imported, which strands 13 route-unreachable tab components under frontend/src/pages/admin/ai-settings/.",
+    "One orphan is deliberate and must never be reported as dead, which is why the orphan capability requires a parked register before it can act. frontend/src/App.tsx:116-124 documents that SignupV2 is left in the tree on purpose as the account-creation page, and ends 'Check what that button does before calling SignupV2 dead code'. This is the single clearest argument in the repository for why detection here proposes and a human disposes.",
+    "The strongest evidence for a rendered-contrast capability is a recorded production failure, not a hypothesis. tests/systemV2/storyVisualReview.js:12 records that this surface shipped three separate invisible-text failures at 1.06:1, 1.03:1 and 1.00:1 'that every token check and every unit test passed'. That is why color_contrast_regression_check measures the rendered pixel and why a token-level pass is listed as an exception rather than a proof.",
+    "What already exists, so the matrix does not claim greenfield where it is not. .github/workflows/design-system-sync.yml runs daily, vendors five upstream brand design systems and opens a pull request on drift specifically because, in its own words at line 8, 'A token change is a visual change to live sites', and at line 99 'These are live brand styles. Read the colour and spacing changes before merging'. That workflow is the canonical in-repo precedent for this domain's whole posture: the machine detects and prepares, the human merges. It is cited as the rationale for human_decision on the visual capabilities rather than invented as a policy.",
+    "Copy and claims governance is genuinely partial, with real numbers. backend/src/services/content/bannedCopyScanner.ts:50 defines exactly one rule, tac-807-172-d-free, for 40 TAC 807.172(d); backend/src/services/content/__tests__/frontendCopyLint.test.ts enforces it as a shrink-only ratchet that runs in the backend jest suite; backend/src/services/content/frontendCopyBaseline.ts:108 records FRONTEND_COPY_BASELINE_TOTAL = 287 recorded occurrences. frontend/src/config/claimsRegistry.ts:86 holds 34 registered claims and frontend/src/components/publicV2/Claim.tsx gates them by evidence class. By contrast backend/src/services/content/brandGovernance.ts, which is written to take rules as a parameter for exactly this purpose, has no frontend caller: its callers measured on 2026-10-09 are its own seed, service, tests and composerService.",
+    "What does NOT exist, stated as absence rather than left to inference. There is no accessibility engine in the repository: no axe-core, no eslint-plugin-jsx-a11y, no pa11y and no lighthouse in frontend/package.json, whose eslintConfig key is null and whose only lint script is a bare eslint invocation. There is no visual-regression baseline tooling: no percy, chromatic or backstop. There is no automated design-token check. Adding any of these is an external-dependency decision that CLAUDE.md routes to escalation, which is recorded as blocked_by on the capabilities that need it rather than assumed away.",
+    "Token drift is measured, and its legitimate share is explicitly unknown. frontend/src/styles/tokens.css:6 defines 101 custom properties in a single :root block, with no prefers-color-scheme and no data-theme selector anywhere in the file. Against the rule at frontend/CLAUDE.md:35, 'Never hardcode hex values; use var(--color-*)', the measured footprint on 2026-10-09 is 4,492 hex literals in frontend/src/**/*.tsx, 1,778 hex literals in CSS other than tokens.css, 488 rgb() or rgba() literals in TSX, and 8,219 inline style={{ }} occurrences. These are occurrence counts, not violation counts: no allow-list exists for legitimate raw colour such as brand marks and chart ramps, so the true violation total is unknown and is recorded as unknown.",
+    "Everything marked unknown, and why, so no reader mistakes a gap for a measurement. (1) True token-violation count: no allow-list exists. (2) Full accessibility conformance: no audit has ever run and no engine is installed. (3) Non-semantic click handlers: 87 found by single-line regex, a lower bound because multi-line JSX is invisible to it, so the real figure needs an AST scan. (4) Images without alt: 8 of 109 by the same single-line method, same lower-bound caveat. (5) Responsive conformance at 320, 375, 768 and 1920 pixels: the only existing sweep renders at a single 1440 by 900 viewport. (6) Reduced-motion coverage: 29 of 68 stylesheets carry the query, but whether the remainder are covered by the global reset at frontend/src/styles/responsive.css:88 has not been determined. (7) Bundle size and load timings: no measurement stored and no budget agreed, so numbers would have no verdict. (8) Behavioural duplication: 13 repeated component basenames found, but name collision is not duplication and the overlap is unmeasured. (9) Charted-surface and interface-string inventories: never built. (10) Failure-state coverage: no sandbox fault-injection path exists, so failure states cannot be induced. (11) Domain boundary against Website Portfolio & Conversion, whose manager is Sai Tejesh Kowtharapu per AI_EMPLOYEE_ROSTER.md:36: whether the three public brand apps under apps/ belong to this domain is undecided, and several capabilities carry it as a blocker rather than assuming an answer.",
+    "Manager access is the gating blocker for the whole domain and it is doubly broken. First, no login: .loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json:44-46 and docs/architecture/ai-workforce-management/HUMAN_OWNERSHIP_MAP.md:13 both record that Mohammed Abdul Aleem has an org_members row and no admin_users row, so he cannot open his employee's Agent Detail or Talk surface. Second, no manager-scoped authorization even if he had one: docs/architecture/ai-workforce-management/MANAGER_AUTHORIZATION_MAP.md records that agent-detail and agent-governance routes are gated by a flat requireAdmin today, that no function answers 'is this calling admin this agent's actual manager', and that the proposed requireAgentManagerOrAdmin middleware is explicitly NOT built and NOT authorized to be built. Both are recorded as blocked_by on every capability needing his review, and HUMAN_OWNERSHIP_MAP.md:46 requires this domain's Phase 1 to state how he will reach his employee.",
+    "No AI employee exists for this domain: agent_id and agent_name are null at verified-domain-registry.json:47, with Mihret Netsereab recorded as the intended builder in state verified_active. Every capability therefore starts at autonomy:R0 and nothing in this file was built, activated or configured.",
+    "Autonomy posture, and why no capability reaches automation. Shipping a UI change requires push_to_protected_main and production_deploy, both default-denied at backend/src/services/delivery/execution/executionPolicy.ts:33, so they appear as blocked_by and never as required_tools. Every capability whose outcome changes what a customer sees carries human_decision true and a ceiling of autonomy:R4, below the autonomy:R6 supervised pilot and the autonomy:R7 authorized-automation rungs. The detection-only capabilities reach autonomy:R5, shadow mode against a human-reviewed reference, because a computed fact has a checkable reference answer. The two gate capabilities, manager_design_review_queue and visual_change_approval_gate, are capped at autonomy:R2 on purpose: a gate whose own autonomy could rise would stop being a gate, and the approval capability carries a negative test that the agent cannot approve its own change under any setting.",
+    "Tool naming. No global allow-list of tool names exists in the platform; plan.md records that the referent for a declared capability is the blueprint's own declaration, and the only hard constraint is disjointness from the eight default-denied names. The 21 tool names here are this blueprint's declarations, and a generation-time assertion confirmed the set is disjoint from DENIED_CAPABILITIES.",
+    "Scope of this research: read-only. Nothing was built, activated, deployed or configured; no component, token, page or route was changed. The only file written is this one."
+  ]
+}

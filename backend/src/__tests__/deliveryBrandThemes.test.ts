@@ -82,12 +82,42 @@ describe('the client surface theme matches the vendored design system', () => {
   });
 
   it('themes only the brands whose palette was actually agreed', () => {
-    // Five theme keys are seeded - enterprise, training, cpn, ai-flotation, refactored -
-    // and two now have a documented design system. A guessed palette in front of a real
-    // client is worse than the neutral surface, so `enterprise`, `cpn` and `refactored`
-    // must stay absent until their tokens land the way these two did.
+    // Five theme keys are seeded - enterprise, training, cpn, ai-flotation, refactored - and
+    // three now have a documented design system. A guessed palette in front of a real client is
+    // worse than the neutral surface, so a key appears here only once its tokens are SOURCED.
+    //
+    // `cpn` joined on 2026-10-13. Its system had been vendored at apps/cpn-public the whole time
+    // and was never read, so CPN pages rendered navy - the exact outcome this rule exists to
+    // prevent, reached by not looking rather than by guessing.
+    //
+    // `enterprise` genuinely has no design system anywhere in the repo, and `refactored` has one
+    // that is DARK-first (#0C141B ground); the landing renderer's bands assume a light ground, so
+    // wiring it needs a design decision rather than a copy. Both stay out until then.
     const keys = [...ts.matchAll(/^\s{2}'([a-z-]+)':\s*\{/gm)].map((m) => m[1]);
-    expect(keys.sort()).toEqual(['ai-flotation', 'training']);
+    expect(keys.sort()).toEqual(['ai-flotation', 'cpn', 'training']);
+  });
+
+  it('every CPN token equals its value in the vendored cpn design system', () => {
+    // Same contract as AI Flotation above, same direction: the CSS is the source of truth and
+    // the TypeScript is the copy.
+    const cpnCss = fs.readFileSync(path.join(
+      REPO_ROOT, 'apps', 'cpn-public', 'src', 'assets', 'design', 'tokens', 'colors.css',
+    ), 'utf8');
+    const source = forgeLightTokens(cpnCss);
+    const copy = registryTokens(ts, 'cpn');
+
+    expect(Object.keys(copy).length).toBeGreaterThan(0);
+    for (const [name, value] of Object.entries(copy)) {
+      expect(`${name}=${value.toUpperCase()}`).toEqual(`${name}=${(source[name] ?? '').toUpperCase()}`);
+    }
+  });
+
+  it('CPN carries its own green, and not another brand\'s accent', () => {
+    // Named explicitly, so a parser that silently matched nothing cannot pass this.
+    const cpn = registryTokens(ts, 'cpn');
+    expect(cpn['--accent'].toUpperCase()).toEqual('#1D6A4C');
+    expect(cpn['--accent']).not.toEqual(registryTokens(ts, 'training')['--accent']);
+    expect(cpn['--accent']).not.toEqual(registryTokens(ts, 'ai-flotation')['--accent']);
   });
 
   /**

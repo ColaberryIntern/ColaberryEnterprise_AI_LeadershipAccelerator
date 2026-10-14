@@ -90,7 +90,17 @@ describe('resolution always yields something paintable', () => {
     expect(themeForLandingPage('training').theme['--accent']).not.toBe(NEUTRAL_THEME['--accent']);
   });
 
-  it.each(['enterprise', 'cpn', 'refactored'])(
+  it('cpn renders its own green, not the neutral navy it used to', () => {
+    // Regression pin for 2026-10-13. CPN's design system was vendored at apps/cpn-public the
+    // whole time and never read, so a CPN landing page rendered #1A365D - a colour from nobody's
+    // brand - and that is what Ali saw when he built one.
+    const r = themeForLandingPage('cpn');
+    expect(r.branded).toBe(true);
+    expect(r.theme['--accent']).toBe('#1D6A4C');
+    expect(r.theme['--accent']).not.toBe(NEUTRAL_THEME['--accent']);
+  });
+
+  it.each(['enterprise', 'refactored'])(
     '%s has no agreed palette yet, so it renders neutral rather than guessed',
     (key) => {
       const r = themeForLandingPage(key);

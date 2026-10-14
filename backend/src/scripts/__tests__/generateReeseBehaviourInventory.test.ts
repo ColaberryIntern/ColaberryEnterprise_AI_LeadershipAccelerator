@@ -17,7 +17,17 @@ describe('BEHAVIOUR_INVENTORY.md generator', () => {
     expect(committed).toBe(renderReeseBehaviourInventoryMarkdown());
   });
 
-  it('lists exactly the 7 behaviours plan.md names: reactive reply, outreach sweep, follow-ups, welcome DMs, supersession resolver, presence heartbeat, health assessment', () => {
+  /**
+   * EIGHT now, not seven. The eighth, 'Ticket follow-up', was an UNGOVERNED behaviour: it ran on a
+   * cron and had no row in this inventory and no kill switch in the switch service, so nothing
+   * could turn it off. Adding it is what this run's Reese work was for.
+   *
+   * This test is the fifth consumer of `ReeseBehaviourKey` that the eighth behaviour touched, and
+   * I missed it: I updated four maps and the charter and regenerated the markdown, and every test
+   * run I made afterwards was PATH-SCOPED to the agent-domain work, so this suite was never in
+   * one. It failed from the moment the behaviour landed until CI ran the whole suite.
+   */
+  it('lists exactly the 8 behaviours: the original 7 plus Ticket follow-up, which was ungoverned', () => {
     expect(REESE_BEHAVIOURS.map((r) => r.name)).toEqual([
       'Reactive DM reply',
       'Autonomous outreach sweep',
@@ -26,6 +36,7 @@ describe('BEHAVIOUR_INVENTORY.md generator', () => {
       'Student support supersession resolver',
       'Presence heartbeat',
       'Health assessment',
+      'Ticket follow-up',
     ]);
   });
 
@@ -50,6 +61,11 @@ describe('BEHAVIOUR_INVENTORY.md generator', () => {
   // maybeRefreshStudentAssessment is not called).
   it('documents where each kill-switch test actually lives, rather than re-asserting them here', () => {
     const cronGated = REESE_BEHAVIOURS.filter((r) => r.killSwitch.includes('instrumentCronJob'));
-    expect(cronGated.length).toBe(4);
+    // FIVE cron-gated now: the four above plus 'Ticket follow-up'
+    // (`ReeseTicketFollowUpSweep` in CRON_REGISTRY_NAMES), which routes through the same
+    // instrumentCronJob gate and therefore inherits the generic enabled/paused proof in
+    // services/__tests__/cronInstrumentation.test.ts rather than needing its own.
+    expect(cronGated.length).toBe(5);
+    expect(cronGated.map((r) => r.name)).toContain('Ticket follow-up');
   });
 });
