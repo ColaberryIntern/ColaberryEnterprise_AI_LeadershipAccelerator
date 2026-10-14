@@ -43,7 +43,7 @@ by a read-only query naming the project id, with the query and its output record
 
 ---
 
-### B2 — Decide the four legacy delivery projects 🗂️
+### B2 — Decide the four legacy delivery projects 🗂️  ✅ **CLOSED 2026-10-14**
 
 **Why:** two of them are `government_public_sector`. Today they are invisible to the lifecycle,
 and nobody has decided whether that is correct.
@@ -115,9 +115,36 @@ A row moves to ✅ only on evidence that was produced and pasted, never on a rea
 That standard is not pedantry: every failure in this programme's eight phases was a claim that
 did not survive measurement, and not one was a broken behaviour the tests passed over.
 
-**Current score: 3 of 6.** B4 and B5 passed on 2026-10-14. Outstanding: B1 (gov registration has
-never fired), B2 (the four legacy delivery projects need a decision), B3 (no domain has moved off
-`discovery`), B6 (LC-01 row naming both consumers).
+**Current score: 4 of 6.** B2, B4 and B5 closed on 2026-10-14. Outstanding: B1 (gov registration has never fired), B3 (no domain has moved off `discovery`),
+B6 (LC-01 row naming both consumers).
+
+### B2 decision and evidence
+
+**DRI decision, 2026-10-14: DO NOT BACKFILL.** The four legacy delivery projects (two
+`government_public_sector`, created 2026-09-21 to 2026-09-28) are declared legacy and out of
+scope, as are the 62 legacy student projects.
+
+**Verified to cost nothing today.** Every caller of `loadAndAuthorize` is a lifecycle ADMIN
+operation — read status, transition, approve, change-request. There is NO delivery-side
+equivalent of `storyAuthorizationFor`, so nothing in the gov build path refuses work because a
+lifecycle row is missing. The four are invisible to the lifecycle surface, which is the correct
+treatment for ungoverned legacy work, rather than being refused by it.
+
+**What the decision was actually resting on, and now is not.** The only thing keeping those 66
+rows out of the bypass reports is the DEFAULT `since` on the two detectors. The pre-existing
+test asserted `LIVE_SINCE instanceof Date` — a TYPE check that a constant pointing at 1970
+would have passed. Had that default moved, all 66 would have been reported as LC-01 violations
+on B4's new `/health/full` check, sending someone to investigate a breach that never happened.
+
+`registrationCutoff.test.ts` now pins both dates to literals, asserts each is bound as a lower
+bound, asserts the anti-join, and asserts an explicit argument overrides the default (without
+which a function ignoring its argument would pass everything else). Six tests; five mutations
+each RED — default-to-epoch on both sides, the constant moved, the lower bound dropped, the
+anti-join dropped — file restored byte-identically, sha256 `6041323633c79fa5`.
+
+**FORWARD OBLIGATION.** When a delivery-side enforcement gate is built — the gov equivalent of
+the story gate — it MUST carry this same cutoff, or it will refuse these four. That is exactly
+the trap the student side hit, which is why `legacy_compatibility` exists there.
 
 ### B5 evidence — the sweep, with its commands
 
