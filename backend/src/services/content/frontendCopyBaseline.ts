@@ -2,11 +2,15 @@
  * frontendCopyBaseline — the frozen, SHRINK-ONLY high-water mark for banned-word copy in
  * `frontend/src/pages` and `frontend/src/components`.
  *
- * WHY A BASELINE AND NOT A CLEAN GATE. The rule is already being broken, 287 times across 71
- * files, and a lint that simply fails cannot be merged: it would block every unrelated pull
- * request until a 71-file copy rewrite lands, so it would be turned off instead. A baseline
- * makes the existing breach a tracked, named number and gates the only thing that can still be
- * prevented today - a NEW one.
+ * WHY A BASELINE AND NOT A CLEAN GATE. The rule was already being broken 287 times across 71
+ * files when this was written, and a lint that simply fails cannot be merged: it would block
+ * every unrelated pull request until a 71-file copy rewrite lands, so it would be turned off
+ * instead. A baseline makes the existing breach a tracked, named number and gates the only
+ * thing that can still be prevented today - a NEW one.
+ *
+ * AND IT IS WORKING AS INTENDED: **278 across 70 files** since 2026-10-13, when EnrollPage.tsx
+ * went to zero. The ratchet forced that improvement into this file rather than letting it pass
+ * silently, which is exactly what it is for.
  *
  * WHY SHRINK-ONLY AND NOT "AT MOST". The ratchet requires EXACT equality per file, in both
  * directions. Going up is a new violation. Going DOWN also fails, with the new number in the
@@ -62,7 +66,9 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/AgencyPartnerPage.tsx': 2,
   'frontend/src/pages/ContactPage.tsx': 9,
   'frontend/src/pages/DemoDayPage.tsx': 6,
-  'frontend/src/pages/EnrollPage.tsx': 9,
+  // 'frontend/src/pages/EnrollPage.tsx' was 9 until 2026-10-13. It is CLEAN now and the entry
+  // is deleted, as a zeroed entry must be. It mattered more than its count: it is the public
+  // $0-signup page, and its 9 included the <h1> "Start for free" and the submit button.
   'frontend/src/pages/ExecutiveROICalculatorPage.tsx': 3,
   'frontend/src/pages/HomePage.tsx': 23,
   'frontend/src/pages/InstructorPage.tsx': 4,
@@ -104,8 +110,13 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/publicV2/TryV2.tsx': 9,
 };
 
-/** The sum the baseline asserts, kept beside it so a careless edit to the table is visible. */
-export const FRONTEND_COPY_BASELINE_TOTAL = 287;
+/**
+ * The sum the baseline asserts, kept beside it so a careless edit to the table is visible.
+ *
+ * 287 when first measured on 2026-10-06; **278** since 2026-10-13, when EnrollPage.tsx went to
+ * zero. This number may only ever go DOWN.
+ */
+export const FRONTEND_COPY_BASELINE_TOTAL = 278;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the
