@@ -112,12 +112,16 @@ describe('publishPlan — the reviewed plan is the published plan', () => {
     // that first LOCKS the project's rows and then RE-READS the target version. The re-read is
     // not ceremony — the status check in `getPlan` ran before the lock, so a publish that
     // landed in between would otherwise be overwritten instead of returned.
+    // ORDER CHANGED 2026-10-14: supersede runs BEFORE the promote, not after.
+    // `build_plans_one_published_per_project` is a partial unique index, checked
+    // per statement and not deferrable, so promoting first made two published
+    // rows for an instant and the database refused it. See publishPlan's note.
     mockQuery
       .mockResolvedValueOnce([row()])                                        // getPlan
       .mockResolvedValueOnce([{ id: 'r1' }])                                 // SELECT ... FOR UPDATE
       .mockResolvedValueOnce([row()])                                        // re-read inside the lock
-      .mockResolvedValueOnce([row({ status: 'published', published_at: 'now' })])  // UPDATE
-      .mockResolvedValueOnce([]);                                            // supersede
+      .mockResolvedValueOnce([])                                             // supersede the incumbent
+      .mockResolvedValueOnce([row({ status: 'published', published_at: 'now' })]);  // then promote
     const published = await publishPlan('proj-1', 1, hashPlan(plan));
     expect(published.status).toBe('published');
     // Byte-identical: what was reviewed is what shipped.
@@ -153,13 +157,16 @@ describe('publishPlan — the reviewed plan is the published plan', () => {
       .mockResolvedValueOnce([row({ version: 2 })])                       // getPlan
       .mockResolvedValueOnce([{ id: 'r1' }])                              // FOR UPDATE
       .mockResolvedValueOnce([row({ version: 2 })])                       // re-read in lock
-      .mockResolvedValueOnce([row({ version: 2, status: 'published' })])   // UPDATE
-      .mockResolvedValueOnce([]);                                         // supersede
+      .mockResolvedValueOnce([])                                          // supersede the incumbent
+      .mockResolvedValueOnce([row({ version: 2, status: 'published' })]);  // then promote
     await publishPlan('proj-1', 2, hashPlan(plan));
-    // Index 4, not 2: the lock and the re-read sit between. Asserted by CONTENT as well as
-    // position, so a future statement inserted ahead of it fails here rather than silently
-    // shifting what this test checks.
-    expect(String(mockQuery.mock.calls[4][0])).toMatch(/status = 'superseded'/);
+    // Index 3 for the supersede and 4 for the promote. THE RELATIVE ORDER IS THE POINT, not
+    // the indices: the partial unique index on one published row per project is evaluated per
+    // statement, so promoting first put two published rows in play and Postgres refused it.
+    // Asserted by CONTENT as well as position, so a statement inserted ahead fails here rather
+    // than silently shifting what this test checks.
+    expect(String(mockQuery.mock.calls[3][0])).toMatch(/status = 'superseded'/);
+    expect(String(mockQuery.mock.calls[4][0])).toMatch(/SET status = 'published'/);
     expect(String(mockQuery.mock.calls[1][0])).toMatch(/FOR UPDATE/);
   });
 });
