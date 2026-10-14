@@ -1,0 +1,26 @@
+/* Colors — 11 semantic roles × light/dark. All five AA pairs guaranteed (ratios: exports/colaberry-enterprise.payload.json).
+   Reference semantic tokens, never raw hex. Accent marks only the primary action + active state. */
+:root{
+  --system-id:"colaberry-enterprise"; /* @kind other */
+  /* Brand constants — logo artwork only; UI surfaces never use these directly */
+  --brand-cherry:#FB2832; --brand-leaf:#77BB4A; --brand-berry:#367895;
+  /* Semantic — light */
+  --bg:#F8F8F7; --bg-elevated:#FFFFFF;
+  --fg:#1A1A1A; --fg-muted:#6B6B6B;
+  --accent:#2E6A86; --accent-contrast:#FFFFFF; --accent-soft:#EAF2F6;
+  --line:#D8D8D8;
+  --success:#468A2E; --warning:#B26E00; --danger:#E5121D;
+  /* Derived interaction states */
+  --accent-hover:color-mix(in srgb, var(--accent) 88%, #000);
+  --accent-press:color-mix(in srgb, var(--accent) 78%, #000);
+  --focus-ring:0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+[data-theme="dark"]{
+  --bg:#0F0F0F; --bg-elevated:#1A1A1A;
+  --fg:#F4F4F4; --fg-muted:#B4B4B4;
+  --accent:#6F9DB6; --accent-contrast:#0F1E28; --accent-soft:#1A3947;
+  --line:#2E2E2E;
+  --success:#8AC759; --warning:#F0A93A; --danger:#FF6B72;
+  --accent-hover:color-mix(in srgb, var(--accent) 88%, #fff);
+  --accent-press:color-mix(in srgb, var(--accent) 78%, #fff);
+}

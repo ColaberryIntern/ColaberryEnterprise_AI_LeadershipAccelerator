@@ -29,6 +29,7 @@ import { ALL_BRANDS } from './brandScope';
 import { BRAND_TABS, domainNotice, isBrandTab, setupSummary, type BrandSetupFacts, type BrandTabKey } from './brandSetup';
 import BrandSetupTabs from './BrandSetupTabs';
 import { listItems, type ContentItem } from '../../../services/contentComposerApi';
+import { BrandPixelField } from './BrandPixelField';
 import api from '../../../utils/api';
 import { forBrand, missingSlug, toMarketingCampaigns, type MarketingCampaign } from './marketingCampaigns';
 
@@ -469,11 +470,17 @@ function AdminBrandsPage() {
                     <dt className="col-sm-3 text-muted">Support email</dt>
                     <dd className="col-sm-9">{brand.support_email ?? <span className="text-muted">not set</span>}</dd>
                   </dl>
-                  {/* Said plainly rather than implied by the absence of a form. */}
+                  {/* The pixel IS editable; the fields above are not, and saying which is which
+                      beats one sentence that used to claim nothing here could be edited. */}
                   <p className="small text-muted mb-0">
-                    These are read-only here: there is no API for editing a brand yet. Posting times
-                    are set per post in the composer, not as recurring slots.
+                    The fields above are read-only here. Posting times are set per post in the
+                    composer, not as recurring slots.
                   </p>
+                  <BrandPixelField
+                    brand={brand}
+                    onSaved={(updated) => setBrands((prev) =>
+                      prev.map((b) => (b.id === updated.id ? { ...b, ...updated } : b)))}
+                  />
                 </>
               );
             })()}

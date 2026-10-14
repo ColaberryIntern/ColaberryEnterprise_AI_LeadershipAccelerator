@@ -65,6 +65,17 @@ export const BrandPatchSchema = z
     support_email: z.string().email().nullable().optional(),
     default_public_url: z.string().url().nullable().optional(),
     default_theme_key: z.string().trim().min(1).max(100).nullable().optional(),
+    // Meta Pixel ID: the one value an operator supplies to turn on ad tracking for every
+    // hosted page this brand owns. Digits only, matching the column's CHECK constraint and
+    // the renderer's own guard - this value is interpolated into a <script> on a public page,
+    // so it is validated at all three ends rather than trusted from whichever one ran first.
+    // Nullable because clearing it is how an operator turns tracking back OFF.
+    meta_pixel_id: z
+      .string()
+      .trim()
+      .regex(/^[0-9]{8,20}$/, 'meta_pixel_id must be 8-20 digits, as issued by Meta')
+      .nullable()
+      .optional(),
     // IANA Area/Location or UTC. Abbreviations like "CST" are refused: ICU would accept them,
     // and "CST" is Central Standard in one place and China Standard in another.
     timezone: z

@@ -27,6 +27,8 @@ export interface BrandAttributes {
   default_public_url?: string | null;
   /** Key into the application's theme registry. Themes themselves are app-owned. */
   default_theme_key?: string | null;
+  /** Meta Pixel ID. Digits only; the column has a CHECK and the renderer re-validates. */
+  meta_pixel_id?: string | null;
   support_email?: string | null;
   /** IANA zone, e.g. America/Chicago. Null means the code default applies. */
   timezone?: string | null;
@@ -54,6 +56,7 @@ class Brand extends Model<BrandAttributes> implements BrandAttributes {
   declare status: BrandStatus;
   declare default_public_url: string | null;
   declare default_theme_key: string | null;
+  declare meta_pixel_id: string | null;
   declare support_email: string | null;
   declare timezone: string | null;
   declare default_journey_program_id: string | null;
@@ -93,6 +96,15 @@ Brand.init(
     },
     default_theme_key: {
       type: DataTypes.STRING(64),
+      allowNull: true,
+    },
+    /**
+     * The brand's Meta Pixel ID, so an operator sets tracking once per brand instead of pasting
+     * a snippet per page. 32 is wider than Meta's 15-16 digits and matches the column, because a
+     * model wider than its column is a silent 500 on save rather than a validation error.
+     */
+    meta_pixel_id: {
+      type: DataTypes.STRING(32),
       allowNull: true,
     },
     support_email: {

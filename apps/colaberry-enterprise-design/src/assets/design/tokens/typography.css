@@ -1,0 +1,7 @@
+/* Type — Roboto only. Scale 16px × 1.25 → 13/16/20/25/31/39. Headings 700, line-height 1.2; body 400, 1.55. */
+:root{
+  --font-heading:'Roboto', system-ui, sans-serif;
+  --font-body:'Roboto', system-ui, sans-serif;
+  --fw-heading:700; /* @kind font */
+  --fs-caption:13px; --fs-body:16px; --fs-h4:20px; --fs-h3:25px; --fs-h2:31px; --fs-h1:39px;
+}

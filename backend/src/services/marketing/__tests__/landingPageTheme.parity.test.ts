@@ -100,14 +100,15 @@ describe('resolution always yields something paintable', () => {
     expect(r.theme['--accent']).not.toBe(NEUTRAL_THEME['--accent']);
   });
 
-  it.each(['enterprise', 'refactored'])(
-    '%s has no agreed palette yet, so it renders neutral rather than guessed',
-    (key) => {
-      const r = themeForLandingPage(key);
-      expect(r.branded).toBe(false);
-      expect(r.theme).toBe(NEUTRAL_THEME);
-    },
-  );
+  it('every seeded theme key is now branded - none falls through to neutral', () => {
+    // Every one of the five design systems at github.com/aleemcolaberry is wired as of
+    // 2026-10-13, so the neutral theme is no longer any brand's resting state - it is only what
+    // an UNKNOWN key gets, which the test below covers. If a sixth brand is seeded without a
+    // palette this fails, which is the reminder to wire it rather than ship it navy.
+    ['ai-flotation', 'training', 'cpn', 'enterprise', 'refactored'].forEach((key) => {
+      expect([key, themeForLandingPage(key).branded]).toEqual([key, true]);
+    });
+  });
 
   it.each([null, undefined, ''])('%p falls back to neutral instead of throwing', (key) => {
     expect(themeForLandingPage(key as string | null | undefined).branded).toBe(false);
@@ -153,6 +154,24 @@ describe('the extended palette', () => {
   ])('training\'s %s is the style guide\'s %s, not a near-miss of it', (token, rampToken) => {
     expect(EXTENDED_PALETTES.training[token as keyof typeof EXTENDED_PALETTES.training].toUpperCase())
       .toEqual(ramp()[rampToken].toUpperCase());
+  });
+
+  it('enterprise sources its second and third colours from its own system', () => {
+    // Its colors.css publishes --brand-leaf and --brand-berry alongside the eight, so these are
+    // sourced rather than derived. Pinned to the vendored file: a near-miss of a brand colour
+    // across four brands' pages is exactly the drift this suite exists to catch.
+    const css = fs.readFileSync(path.resolve(
+      __dirname, '..', '..', '..', '..', '..', 'apps', 'colaberry-enterprise-design', 'src', 'assets', 'design', 'tokens', 'colors.css',
+    ), 'utf8');
+    const root = /:root\s*\{([^}]*)\}/.exec(css);
+    expect(root).not.toBeNull();
+    const src: Record<string, string> = {};
+    for (const [, n, v] of root![1].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)) src[n] = v.trim();
+
+    expect(src['--brand-leaf']).toBeDefined();
+    expect(EXTENDED_PALETTES.enterprise['--accent-2'].toUpperCase()).toEqual(src['--brand-leaf'].toUpperCase());
+    expect(EXTENDED_PALETTES.enterprise['--accent-3'].toUpperCase()).toEqual(src['--brand-berry'].toUpperCase());
+    expect(EXTENDED_PALETTES.enterprise['--bg-cool'].toUpperCase()).toEqual(src['--accent-soft'].toUpperCase());
   });
 
   it('a brand with no agreed extended palette derives one from its own eight', () => {

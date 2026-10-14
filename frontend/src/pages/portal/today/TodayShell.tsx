@@ -14,6 +14,7 @@ import {
   fmtCentralDateTime, projectWorkspacePath,
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
+import { trackLeadOnce } from '../../../services/metaPixel';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../../services/pointsFx';
 import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi';
 import { runtimeApi } from '../runtime/runtimeApi';
@@ -112,6 +113,19 @@ const TodayShell: React.FC = () => {
   const selectedSkill = capeProfile?.skills.find((s) => s.skill_id === selectedSkillId);
 
   const me = useMemo(readParticipant, []);
+
+  /**
+   * Report this person to Meta as a Lead, ONCE, ever.
+   *
+   * Sohail asked for fbq('track','Lead') on this page. Fired literally it would run every
+   * time a student opens their dashboard - and this is the page they open daily, so one
+   * signup would report as dozens of leads. Cost-per-lead would look superb and be
+   * meaningless, and the optimiser would learn to buy people who open portals rather than
+   * people who enrol. `trackLeadOnce` keys on the person and remembers.
+   *
+   * Fails silent by design: an ad pixel must never be able to break a student's dashboard.
+   */
+  useEffect(() => { void trackLeadOnce(me.email); }, [me.email]);
   const { flags } = usePortalFlags();
   // CAPE Phase 5 — Today-Plan/Explore-feed mount gate; see useTodayPlanGate.ts.
   const { planRefs, setPlanRefs } = useTodayPlanGate(flags);

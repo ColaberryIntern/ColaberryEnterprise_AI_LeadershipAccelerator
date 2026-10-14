@@ -57,6 +57,17 @@ describe('a component that paints its own light surface also sets its own foregr
       //     is the very rule that sets the inherited colour;
       //   - a rule scoped INSIDE a light band (`.band--subtle .panel`) can never render on the
       //     inverse band, because a section carries one tone.
+      //
+      // THE SECOND EXEMPTION ASSUMES THE BRAND IS LIGHT, and that assumption is load-bearing.
+      // Rendering the fixture under Refactored's dark system (#0C141B ground, light text) on
+      // 2026-10-13 showed what it costs: `.band--subtle .panel{background:#FFFFFF}` and its
+      // siblings hardcode a light surface, so on a dark brand the light `--fg` lands on white
+      // and the hero panel, the icon tiles and two callouts render invisible - the same defect
+      // this file exists to catch, arriving by a route it cannot see.
+      //
+      // The fix is to tokenize those literals rather than to loosen this test, and until that
+      // lands no dark-first brand is wired. Stated here because a silent assumption is how the
+      // first version of this bug shipped.
       .filter((sel) => !/^\.band--(?!inverse)/.test(sel))
       .filter((sel) => !isCovered(sel));
 

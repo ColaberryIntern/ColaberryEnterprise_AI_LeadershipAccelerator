@@ -95,6 +95,34 @@ describe('every font file a page asks for actually exists', () => {
   });
 });
 
+describe('the stylesheet actually uses the tokens', () => {
+  /**
+   * h2 did NOT take the heading face for several hours, and a screenshot did not reveal it:
+   * Colaberry's heading and body stacks are both Roboto, so the two are indistinguishable there.
+   * On CPN - a serif display over a humanist body - every section heading rendered in the BODY
+   * face while the hero rendered correctly, and I described that screenshot as "serif headings".
+   *
+   * The cause was a scripted edit anchored on the literal `h2{`, which matched `.band--cool h2{`
+   * earlier in the file. Anchored to start-of-line here, so a scoped selector cannot satisfy it.
+   */
+  const { STYLES } = require('../landingPageStyles') as { STYLES: string };
+
+  it.each(['h1', 'h2'])('the global %s rule takes the heading face', (tag) => {
+    const rule = new RegExp(`^${tag}\\{[^}]*font-family:var\\(--font-heading\\)`, 'm');
+    expect(rule.test(STYLES)).toBe(true);
+  });
+
+  it('body text takes the body face', () => {
+    expect(/^body\{[^}]*font:[^;}]*var\(--font-body\)/m.test(STYLES)).toBe(true);
+  });
+
+  it('no typeface is named directly in the stylesheet any more', () => {
+    // A hardcoded family is how every page ended up in Colaberry's Roboto regardless of brand.
+    const css = STYLES.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(css).not.toMatch(/font-family:\s*['"]?(Roboto|Bitter|Atkinson)/i);
+  });
+});
+
 describe('the CSS it emits', () => {
   it('declares the families as tokens the stylesheet can read', () => {
     const css = fontCssFor('cpn');

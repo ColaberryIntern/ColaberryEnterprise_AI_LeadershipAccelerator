@@ -30,10 +30,10 @@ a{color:inherit}
 /* ---- bands ------------------------------------------------------------ */
 .band{padding-block:clamp(3rem,7vw,5.5rem)}
 .band--subtle{background:var(--bg-elevated)}
-.band--inverse{background:#1A1A1A;color:#FFFFFF}
+.band--inverse{background:var(--contrast-bg,#1A1A1A);color:var(--contrast-fg,#FFFFFF)}
 .band--accent{background:var(--accent-deep);color:var(--accent-contrast)}
 .band--cool{background:var(--bg-cool)}
-.band--cool h2{color:var(--accent-3);font-family:var(--font-heading)}
+.band--cool h2{color:var(--accent-3)}
 
 /* A COMPONENT THAT PAINTS ITS OWN LIGHT SURFACE MUST ALSO SET ITS OWN FOREGROUND.
  *
@@ -53,19 +53,19 @@ a{color:inherit}
 .inner{max-width:68rem;margin:0 auto;padding-inline:1.25rem}
 
 /* ---- header / footer --------------------------------------------------- */
-.site-head{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(255,255,255,.93);backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid var(--line)}
+.site-head{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--head-bg,rgba(255,255,255,.93));backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid var(--line)}
 .site-head .inner{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding-block:.7rem}
 .brand{display:flex;align-items:center;gap:.55rem;text-decoration:none;font-weight:700;letter-spacing:-.01em;color:var(--fg)}
 .brand img{height:30px;width:auto}
-.site-foot{background:#1A1A1A;color:#FFFFFF;padding-block:2.5rem}
+.site-foot{background:var(--contrast-bg,#1A1A1A);color:var(--contrast-fg,#FFFFFF);padding-block:2.5rem}
 .site-foot .inner{display:flex;flex-wrap:wrap;gap:1rem 2rem;align-items:center;justify-content:space-between}
 .foot-logo{height:26px;width:auto}
 .foot-mark{font-weight:700;font-size:1.1rem;letter-spacing:-.01em}
-.foot-note{color:#B4B4B4;font-size:.85rem;margin:0}
+.foot-note{color:var(--contrast-muted,#B4B4B4);font-size:.85rem;margin:0}
 
 /* ---- type -------------------------------------------------------------- */
 h1{font-size:clamp(2.1rem,5.4vw,3.5rem);line-height:1.07;letter-spacing:-.025em;margin:0 0 1.1rem;text-wrap:balance;font-weight:800;font-family:var(--font-heading)}
-h2{font-size:clamp(1.6rem,3.4vw,2.35rem);line-height:1.14;letter-spacing:-.02em;margin:0 0 1rem;text-wrap:balance;font-weight:800}
+h2{font-size:clamp(1.6rem,3.4vw,2.35rem);line-height:1.14;letter-spacing:-.02em;margin:0 0 1rem;text-wrap:balance;font-weight:800;font-family:var(--font-heading)}
 p{margin:0 0 1rem}
 /* Small text in the brand colour is darkened toward black for contrast. Colaberry cherry
    #FB2832 measures 3.86:1 on white - fine for a 3.5rem headline (AA large needs 3:1), under the
@@ -110,17 +110,17 @@ p{margin:0 0 1rem}
 @media (min-width:62rem){.hero-split{grid-template-columns:1.05fr .95fr;align-items:center}}
 /* ---- hero panel: what this contains ------------------------------------ */
 .panel{background:var(--bg);border:1px solid var(--line);border-radius:.9rem;padding:1.4rem 1.5rem;box-shadow:0 10px 30px rgba(0,0,0,.07)}
-.band--subtle .panel{background:#FFFFFF}
-.band--inverse .panel{background:#2B2B2B;border-color:#3A3A3A}
+.band--subtle .panel{background:var(--surface-raised,#FFFFFF)}
+.band--inverse .panel{background:var(--contrast-raised,#2B2B2B);border-color:var(--contrast-line,#3A3A3A)}
 .panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;margin-bottom:.9rem}
 .panel-eyebrow{font-size:.68rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
   color:var(--accent-3);margin:0 0 .25rem}
 .panel-title{font-size:1.05rem;font-weight:700;margin:0}
 .panel-badge{flex:0 0 auto;font-size:.72rem;font-weight:700;padding:.2rem .6rem;border-radius:999px;
-  background:#F1F9EA;color:#468A2E}
+  background:var(--ok-wash,#F1F9EA);color:var(--ok-ink,#468A2E)}
 .pmark{flex:0 0 auto;display:inline-grid;place-items:center;width:1.3rem;height:1.3rem;border-radius:50%;
   border:1.5px solid var(--line);font-size:.7rem;font-weight:700;color:var(--fg-muted)}
-.pmark--start{background:var(--accent-2);border-color:var(--accent-2);color:#fff}
+.pmark--start{background:var(--accent-2);border-color:var(--accent-2);color:var(--accent-contrast)}
 .panel-foot{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:1rem;padding-top:.85rem;
   border-top:1px solid var(--line)}
 .panel-foot-l{font-size:.78rem;font-weight:700;color:var(--fg-muted)}
@@ -129,19 +129,19 @@ p{margin:0 0 1rem}
 .seg{flex:1;height:4px;border-radius:2px;background:var(--line)}
 .seg--on{background:var(--accent-2)}
 .panel-note-l{margin:.6rem 0 0;font-size:.8rem;color:var(--fg-muted)}
-.band--inverse .panel-title{color:#D8D8D8}
+.band--inverse .panel-title{color:var(--contrast-muted,#D8D8D8)}
 .panel-list{list-style:none;margin:0;padding:0;display:grid;gap:.1rem}
 /* Rows wrap rather than collide: the label takes the space it needs and the note drops
    beneath it on a narrow panel instead of being squeezed to one character per line. */
 .panel-list li{display:flex;flex-wrap:wrap;gap:.5rem .75rem;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--line)}
 .panel-list .panel-note{margin-left:auto}
-.band--inverse .panel-list li{border-color:#3A3A3A}
+.band--inverse .panel-list li{border-color:var(--contrast-line,#3A3A3A)}
 .panel-list li:last-child{border-bottom:0}
 .panel-label{font-weight:500;min-width:0;flex:1}
 .panel-note{font-size:.8rem;color:var(--fg-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.band--inverse .panel-note{color:#D8D8D8}
+.band--inverse .panel-note{color:var(--contrast-muted,#D8D8D8)}
 .panel-foot{margin:.9rem 0 0;font-size:.82rem;color:var(--fg-muted)}
-.band--inverse .panel-foot{color:#D8D8D8}
+.band--inverse .panel-foot{color:var(--contrast-muted,#D8D8D8)}
 
 .pills{list-style:none;display:flex;flex-wrap:wrap;gap:.5rem;padding:0;margin:1.4rem 0 0}
 .pills li{background:var(--accent-soft);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:.35rem .85rem;font-size:.85rem;font-weight:600}
@@ -160,12 +160,12 @@ p{margin:0 0 1rem}
 .cta-arrow{transition:transform .15s ease}
 .cta:hover .cta-arrow{transform:translateX(3px)}
 .cta-secondary{background:transparent;color:var(--accent);border:1.5px solid var(--accent);box-shadow:none}
-.band--accent .cta{background:#FFFFFF;color:var(--accent)}
+.band--accent .cta{background:var(--accent-contrast);color:var(--accent)}
 .cta-sm{padding:.55rem 1.1rem;font-size:.9rem}
 /* Every link, not only the buttons. A link inside prose was reachable by keyboard and gave no
    sign of where focus was. */
 a:focus-visible,.cta:focus-visible,details summary:focus-visible,.brand:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.band--accent .cta:focus-visible{outline-color:#FFFFFF}
+.band--accent .cta:focus-visible{outline-color:var(--accent-contrast)}
 
 /* ---- bullets: cards / checks / steps ------------------------------------ */
 .cards,.checks,.steps{list-style:none;padding:0;margin:0}
@@ -178,11 +178,11 @@ a:focus-visible,.cta:focus-visible,details summary:focus-visible,.brand:focus-vi
 .tile-i{width:1.15rem;height:1.15rem;fill:none;stroke:currentColor;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round}
 .tile--a{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 80%,#000)}
-.tile--b{background:#EAF2F6;color:var(--accent-3)}
-.tile--c{background:#F1F9EA;color:#468A2E}
-.band--inverse .tile--a,.band--inverse .tile--b,.band--inverse .tile--c{background:#333;color:#fff}
-.band--subtle .cards li{background:#FFFFFF}
-.band--inverse .cards li{background:#2B2B2B;border-color:#3A3A3A}
+.tile--b{background:var(--tile-wash-b,#EAF2F6);color:var(--accent-3)}
+.tile--c{background:var(--tile-wash-c,#F1F9EA);color:var(--tile-ink-c,#468A2E)}
+.band--inverse .tile--a,.band--inverse .tile--b,.band--inverse .tile--c{background:var(--contrast-raised,#333);color:var(--contrast-fg,#fff)}
+.band--subtle .cards li{background:var(--surface-raised,#FFFFFF)}
+.band--inverse .cards li{background:var(--contrast-raised,#2B2B2B);border-color:var(--contrast-line,#3A3A3A)}
 .checks{display:grid;gap:.85rem;max-width:46rem}
 .checks{gap:1.1rem}
 .checks li{display:flex;gap:.7rem;align-items:flex-start}
@@ -216,23 +216,23 @@ a:focus-visible,.cta:focus-visible,details summary:focus-visible,.brand:focus-vi
 .steps li:nth-child(3n)::before{background:var(--accent-3)}
 .steps li:nth-child(3n+2) .step-n{color:var(--accent-2)}
 .steps li:nth-child(3n) .step-n{color:var(--accent-3)}
-.band--inverse .steps li{background:#2A2A2A;border-color:#3A3A3A}
-.band--subtle .steps li{background:#FFFFFF}
-.band--inverse .steps li{background:#2B2B2B;border-color:#3A3A3A}
+.band--inverse .steps li{background:var(--contrast-raised,#2A2A2A);border-color:var(--contrast-line,#3A3A3A)}
+.band--subtle .steps li{background:var(--surface-raised,#FFFFFF)}
+.band--inverse .steps li{background:var(--contrast-raised,#2B2B2B);border-color:var(--contrast-line,#3A3A3A)}
 .step-n{display:block;font-size:.78rem;font-weight:800;letter-spacing:.08em;color:var(--accent);color:color-mix(in srgb,var(--accent) 76%,#000);margin-bottom:.4rem;font-variant-numeric:tabular-nums}
 .b-label{display:block;font-weight:700}
 .b-detail{display:block;color:var(--fg-muted);margin-top:.25rem;font-size:.95rem}
-.band--inverse .b-detail,.band--accent .b-detail{color:#D8D8D8}
+.band--inverse .b-detail,.band--accent .b-detail{color:var(--contrast-muted,#D8D8D8)}
 
 /* ---- stats / quote / details / faq -------------------------------------- */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:1.25rem}
 .stat{background:var(--bg);border:1px solid var(--line);border-radius:.75rem;padding:1.3rem}
-.band--subtle .stat{background:#FFFFFF}
+.band--subtle .stat{background:var(--surface-raised,#FFFFFF)}
 .stat-value{display:block;font-size:2.2rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05;color:var(--accent)}
 .stat-label{display:block;margin-top:.3rem;font-weight:600}
 .stat-source{display:block;margin-top:.55rem;font-size:.78rem;color:var(--fg-muted)}
 blockquote{margin:0 0 1.25rem;padding:1.4rem 1.5rem;background:var(--bg);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:0 .6rem .6rem 0;max-width:46rem}
-.band--subtle blockquote{background:#FFFFFF}
+.band--subtle blockquote{background:var(--surface-raised,#FFFFFF)}
 blockquote p{font-size:1.08rem}
 blockquote footer{color:var(--fg-muted);font-size:.9rem;font-weight:600}
 blockquote .role{display:block;font-weight:400}
@@ -253,20 +253,21 @@ details p{margin:.75rem 0 0;color:var(--fg-muted)}
 .chips li{background:var(--bg);border:1px solid var(--line);border-radius:.45rem;padding:.5rem .7rem;font-size:.85rem}
 .contrast-cap{margin:.8rem 0 0;font-size:.82rem;color:var(--fg-muted)}
 .contrast-arrow{text-align:center;color:var(--fg-muted);font-size:1.1rem;line-height:1}
-.contrast-result{background:#1A1A1A;color:#fff;border-radius:.75rem;padding:1.1rem 1.2rem}
+.contrast-result{background:var(--contrast-bg,#1A1A1A);color:var(--contrast-fg,#fff);border-radius:.75rem;padding:1.1rem 1.2rem}
 .contrast-result .eyebrow{color:var(--accent-2);margin-bottom:.4rem}
 .contrast-line{margin:0;font-weight:700;font-size:1.02rem}
 
 /* ---- callout: the one-line takeaway under a list ----------------------- */
 .callout{display:flex;flex-wrap:wrap;gap:.4rem 1.5rem;align-items:baseline;margin-top:1.25rem;
   background:var(--bg);border:1px solid var(--line);border-radius:.6rem;padding:.9rem 1.1rem}
-.band--subtle .callout{background:#FFFFFF}
+.band--subtle .callout{background:var(--surface-raised,#FFFFFF)}
+.band--subtle .callout--success{background:var(--ok-wash,#F1F9EA)}
 .callout-lead{color:var(--fg-muted);font-size:.9rem}
 .callout-text{font-weight:700;margin-left:auto}
 @media (max-width:48rem){.callout-text{margin-left:0}}
-.callout--success{background:#F1F9EA;border-color:#DEF0CC}
-.callout--success .callout-lead{color:#356A24;font-weight:700}
-.callout--success .callout-text{font-weight:400;color:#356A24}
+.callout--success{background:var(--ok-wash,#F1F9EA);border-color:var(--ok-line,#DEF0CC)}
+.callout--success .callout-lead{color:var(--ok-ink,#356A24);font-weight:700}
+.callout--success .callout-text{font-weight:400;color:var(--ok-ink,#356A24)}
 .c-accent{color:color-mix(in srgb,var(--accent) 80%,#000)}
 .c-accent-2{color:#468A2E}
 .c-accent-3{color:var(--accent-3)}
