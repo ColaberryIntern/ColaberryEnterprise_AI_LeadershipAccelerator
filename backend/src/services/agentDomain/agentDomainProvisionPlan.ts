@@ -208,6 +208,10 @@ export interface ProvisionPlan {
   readonly stage: LifecycleStage;
   readonly entry_point: string;
   readonly manager_identity_id: string;
+  /** MEASURED reachability, carried onto the anchor row. Never defaulted to true. */
+  readonly manager_can_reach: boolean;
+  /** The named reason a manager cannot reach the surface, or null when they can. */
+  readonly manager_blocker: string | null;
   readonly accountable_human: string;
   readonly intended_builder: string | null;
   readonly intended_builder_state: string | null;
@@ -262,6 +266,8 @@ export function planProvision(domainKey: string): ProvisionPlan {
     stage: PROVISION_STAGE,
     entry_point: AGENT_DOMAIN_ENTRY_POINT,
     manager_identity_id: matrix.manager_identity_id,
+    manager_can_reach: domain.can_reach_surface,
+    manager_blocker: domain.blocker,
     accountable_human: matrix.accountable_human,
     intended_builder: domain.intended_builder,
     intended_builder_state: domain.intended_builder_state,
