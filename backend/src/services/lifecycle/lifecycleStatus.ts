@@ -118,17 +118,55 @@ export async function loadAndAuthorize(
   if (!row) return null;
 
   const tenantId = String(row.get('tenant_id'));
-  const { contextFromAdminRequest } = await import('../../modules/tenancy/adminScopeBridge');
+  const {
+    contextFromAdminRequest, membershipSystemIsUnpopulated, logLegacyAdminScope,
+  } = await import('../../modules/tenancy/adminScopeBridge');
   const { requireTenantAccessAudited } = await import('../../modules/tenancy/tenantAccessGuards');
   const ctx = await contextFromAdminRequest(admin, { requestedTenantId: tenantId });
 
-  // Throws TenantAccessError on denial, and records the decision either way.
-  await requireTenantAccessAudited(ctx, tenantId, {
-    resourceType: RESOURCE_TYPE,
-    action,
-    resourceId: String(row.get('id')),
-    actorEmail: admin.email ?? null,
-  });
+  // THE MIGRATION RAMP, ridden here exactly as `brandAdminScopeForAdmin` and
+  // `intelligenceScopeForAdmin` ride it. Not a second ramp: the same two functions.
+  //
+  // WHY IT IS HERE AT ALL, measured in production on 2026-10-14 rather than reasoned about.
+  // `platform_identities` and `tenant_memberships` BOTH hold zero rows, so
+  // `contextFromAdminRequest` returns an empty context, `canAccessTenant` is false for every
+  // admin, and this guard answered `TenantAccessError('Not found')` to the owner opening the
+  // review surface for the first time. The feature was activated and unusable, and the 404
+  // disguise meant it read as a missing record rather than a refusal.
+  //
+  // SELF-CLOSING, which is the property that makes this acceptable rather than a hole: the
+  // condition is that the WHOLE membership table is empty, so the first row anyone creates
+  // restores strict scoping here and on the other two surfaces at the same instant. There is no
+  // flag to remember and no way to linger in the permissive mode by accident.
+  //
+  // FAILS CLOSED: `membershipSystemIsUnpopulated` returns false if it cannot tell, so a database
+  // hiccup produces strict scoping rather than an open door.
+  //
+  // STILL AUDITED, and distinguishably. The decision is recorded as allowed with reason
+  // `migration_open_legacy_admin`, never `granted` — so a reader of the audit trail can tell a
+  // real membership grant from the ramp, and can count how long the ramp stayed open.
+  if (await membershipSystemIsUnpopulated()) {
+    logLegacyAdminScope(admin);
+    const { recordAccessDecision } = await import('../../modules/tenancy/tenantAccessAudit');
+    await recordAccessDecision({
+      ctx,
+      resourceType: RESOURCE_TYPE,
+      action,
+      resourceId: String(row.get('id')),
+      resourceTenantId: tenantId,
+      decision: 'allowed',
+      reason: 'migration_open_legacy_admin',
+      actorEmail: admin.email ?? null,
+    });
+  } else {
+    // Throws TenantAccessError on denial, and records the decision either way.
+    await requireTenantAccessAudited(ctx, tenantId, {
+      resourceType: RESOURCE_TYPE,
+      action,
+      resourceId: String(row.get('id')),
+      actorEmail: admin.email ?? null,
+    });
+  }
 
   return {
     id: String(row.get('id')),

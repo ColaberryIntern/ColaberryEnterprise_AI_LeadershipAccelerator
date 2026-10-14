@@ -309,7 +309,12 @@ describe('REACHABILITY: the audited guard is actually invoked, not merely presen
 
   afterEach(() => jest.resetModules());
 
-  async function loadWithSpies(allowed: boolean) {
+  /**
+   * `membershipsEmpty` defaults to FALSE on purpose, so every assertion written before the
+   * migration ramp existed keeps its original meaning: a populated membership system runs the
+   * strict audited guard. The ramp branch is exercised explicitly below.
+   */
+  async function loadWithSpies(allowed: boolean, membershipsEmpty = false) {
     jest.resetModules();
     const requireTenantAccessAudited = jest.fn(async () => {
       if (!allowed) {
@@ -321,9 +326,17 @@ describe('REACHABILITY: the audited guard is actually invoked, not merely presen
     jest.doMock('../../../modules/tenancy/tenantAccessGuards', () => ({
       __esModule: true, requireTenantAccessAudited,
     }));
+    const logLegacyAdminScope = jest.fn();
+    const membershipSystemIsUnpopulated = jest.fn(async () => membershipsEmpty);
     jest.doMock('../../../modules/tenancy/adminScopeBridge', () => ({
       __esModule: true,
       contextFromAdminRequest: jest.fn(async () => ({ platformIdentityId: 'identity-1' })),
+      membershipSystemIsUnpopulated,
+      logLegacyAdminScope,
+    }));
+    const recordAccessDecision = jest.fn(async () => true);
+    jest.doMock('../../../modules/tenancy/tenantAccessAudit', () => ({
+      __esModule: true, recordAccessDecision,
     }));
     const get = (k: string) => ({
       id: 'lifecycle-1', tenant_id: ROW_TENANT, student_project_id: null,
@@ -334,7 +347,10 @@ describe('REACHABILITY: the audited guard is actually invoked, not merely presen
       default: { findOne: jest.fn(async () => ({ get })) },
     }));
     const mod = await import('../lifecycleStatus');
-    return { loadAndAuthorize: mod.loadAndAuthorize, requireTenantAccessAudited };
+    return {
+      loadAndAuthorize: mod.loadAndAuthorize, requireTenantAccessAudited,
+      recordAccessDecision, logLegacyAdminScope, membershipSystemIsUnpopulated,
+    };
   }
 
   it('CALLS the audited guard, with the tenant read off the row', async () => {
@@ -359,6 +375,47 @@ describe('REACHABILITY: the audited guard is actually invoked, not merely presen
     await expect(loadAndAuthorize(PROJECT, 'delivery', ADMIN as never, 'write'))
       .rejects.toThrow(/Tenant access denied/);
     expect(requireTenantAccessAudited).toHaveBeenCalledTimes(1);
+  });
+
+  it('THE RAMP: with NO memberships anywhere, it allows and records a DISTINGUISHABLE reason', async () => {
+    // Measured in production on 2026-10-14: `platform_identities` and `tenant_memberships` both
+    // hold zero rows, so the strict guard denied every admin and the review surface was
+    // activated but unusable. This is the same ramp `brandAdminScopeForAdmin` and
+    // `intelligenceScopeForAdmin` already ride.
+    const {
+      loadAndAuthorize, requireTenantAccessAudited, recordAccessDecision, logLegacyAdminScope,
+    } = await loadWithSpies(true, true);
+
+    const row = await loadAndAuthorize(PROJECT, 'delivery', ADMIN as never, 'read');
+
+    expect(row?.tenant_id).toBe(ROW_TENANT);
+    // The strict guard is SKIPPED, not called-and-allowed. Those are different, and only one of
+    // them explains why the owner could not open the page.
+    expect(requireTenantAccessAudited).not.toHaveBeenCalled();
+    expect(logLegacyAdminScope).toHaveBeenCalledTimes(1);
+
+    // STILL AUDITED, and tellable apart from a real grant. An audit trail that recorded this as
+    // `granted` would make the ramp invisible to anyone counting how long it stayed open.
+    expect(recordAccessDecision).toHaveBeenCalledTimes(1);
+    const [decision] = recordAccessDecision.mock.calls[0] as any[];
+    expect(decision.decision).toBe('allowed');
+    expect(decision.reason).toBe('migration_open_legacy_admin');
+    expect(decision.resourceTenantId).toBe(ROW_TENANT);
+  });
+
+  it('SELF-CLOSING: the moment any membership exists, the strict guard runs again', async () => {
+    // The property that makes the ramp acceptable rather than a hole. It keys on the WHOLE table
+    // being empty, so the first row anyone creates restores strict scoping here and on the other
+    // two surfaces at the same instant - with no flag to remember.
+    const {
+      loadAndAuthorize, requireTenantAccessAudited, recordAccessDecision, logLegacyAdminScope,
+    } = await loadWithSpies(false, false);
+
+    await expect(loadAndAuthorize(PROJECT, 'delivery', ADMIN as never, 'read'))
+      .rejects.toThrow(/Tenant access denied/);
+    expect(requireTenantAccessAudited).toHaveBeenCalledTimes(1);
+    expect(logLegacyAdminScope).not.toHaveBeenCalled();
+    expect(recordAccessDecision).not.toHaveBeenCalled();
   });
 
   it('refuses an unauthenticated caller BEFORE reading anything', async () => {
