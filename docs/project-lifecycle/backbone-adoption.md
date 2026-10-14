@@ -59,7 +59,7 @@ started. If they are backfilled, the stage must be the one they are actually at.
 
 ---
 
-### B3 — Prove a Factory domain can MOVE 🏭
+### B3 — Prove a Factory domain can MOVE 🏭  🟡 **HALF CLOSED 2026-10-14**
 
 **Why:** all ten domains are registered and all ten are stuck at `discovery`. Registration is
 proven; the stage machine is not.
@@ -68,6 +68,76 @@ proven; the stage machine is not.
 transition path, with the four discovery prerequisites genuinely assessed rather than waived, and
 the stage change visible on the admin surface. **This is also the only way LC-10's approval
 evidence gets exercised**, because the approval path sits six stages in.
+
+#### What B3 found: the gate was not slow, it was shut
+
+Attempting B3 surfaced a defect, not a missing step. `requirements_ready` needs four things, and
+**two of them had no measurement function at all** — `requirementCount` and
+`uncitedRequirementSourceBlocks` were absent from `EVIDENCE_MEASUREMENTS`, which held seven of
+roughly twenty-five fields. `blockingGaps` filters only `ADVISORY_RULES` and no gap *kind* is
+advisory, so an unassessed prerequisite blocks. **No project could ever leave `discovery`.** The
+lifecycle was built, deployed and activated in that state.
+
+The code said why, and the reasoning was sound: `SourceRef` is documented as "a requirement OR
+OTHER CAPTURED STATEMENT", so `sources.length` would publish a count meaning something other than
+its name, and it is "cheaper to leave the field unassessed — where it BLOCKS — than to measure it
+approximately." True, and it still shipped a closed system. *Unassessed because honest* is only
+the right answer while something is on its way to measuring it.
+
+#### What is now closed
+
+Both fields are measured, **exactly rather than approximately**:
+
+| Field | How it is measured now |
+|---|---|
+| `requirementCount` | `refs.sources` filtered on `SourceRef.source` ∈ `REQUIREMENT_SOURCE_COLLECTIONS`. The superset was a property of the *type's intent*, not of the data — both shipped adapters map `input.requirements` and nothing else, and `source` records which collection each pointer came from. All-or-nothing: one unclassified collection and the field reports unmeasured rather than counting a subset |
+| `uncitedRequirementSourceBlocks` | measured at **composition**, where the data is, and carried on `ManifestRefs.coverage`. Neither half of the question is in a ref set — `sources` holds requirement pointers rather than the process document's source blocks, and `businessTasks` is `PinnedRef[]` with no `source_evidence`. The rule is `factoryValidate`'s shipped `SOURCE_COVERAGE`, moved rather than reimplemented |
+
+**Verification:** 16 new tests, 9 mutations each driving the suite RED (superset count 1,
+never-measured 6, unmeasured-reads-as-clean 3, readable-subset 1, absent-blocks-clean 1,
+kind-filter 4, citation-test 3, uncited-task-skipped 1, sbp-blocks-every-student 2), the three
+source files restored byte-identically at sha256 `3a706af4`. Lifecycle tree 1094 passed, 0 failed.
+tsc at its unchanged 4-error playwright baseline.
+
+#### Two limitations, said out loud
+
+**1. This gate does no work for a student project.** SBP has no source-block layer and no
+business-task layer, so zero blocks are classified `requirement` and `[]` is the literal answer to
+the question asked. The adapter records `[]` rather than `null` deliberately: `null` would read as
+"nobody measured" and block every student project at stage one forever, which is the defect being
+fixed. What protects a student build instead is `requirementsWithoutProvenance` at this same stage
+and `mustHaveRequirementsWithoutStory` at `plan_ready`, which is where an SBP requirement's trace
+into the build actually lives. A reader should not believe the citation rule is guarding a student
+project.
+
+**2. The gate opens ONE stage, not thirteen.** Eighteen fields are still unmeasured and every one
+is read by `process_ready` or later, so stages 3 onward still refuse with `not_assessed` —
+correctly, because nobody has looked. The still-unmeasured set is pinned by a test
+(`lifecycleEvidence.fieldGuards.test.ts`) so this boundary cannot quietly move.
+
+#### What still blocks B3, and it is not a measurement
+
+Nothing writes an `operating_blueprint_manifests` row in production, so `refs` is `null` for every
+real project and **every** refs-derived measurement reports unmeasured regardless of the above.
+Three producers form a chain with no consumer:
+
+| Producer | Production callers | Consequence |
+|---|---|---|
+| `POST /api/admin/project-lifecycle/:id/compose` | is itself the entry point | validates a blueprint and returns refusals — **persists nothing** |
+| `writeBlueprintManifest` | **zero** | the only production `INSERT` into the manifest table; reached from tests only |
+| `factoryToManifestRefs` / `sbpToManifestRefs` | **zero** | reached from tests only |
+
+Measured by grep over `services/`, `routes/`, `controllers/` and `scripts/` on 2026-10-14, and
+corroborated by `manifestWriter.ts`'s own header, which names this as the dependency Phase 4
+closed with: *"Production never CREATES an `operating_blueprint_manifests` row — it only reads and
+updates one."* `blueprintApproval` can therefore only approve a manifest that nothing creates.
+
+**Wiring `/compose` to persist carries one open design question**, which is why it is not done
+here. The compose body's `project` is `FactoryProject`-shaped for **both** project kinds, but a
+student project's requirements do not live in `contract_requirements`. Deciding which adapter
+builds a student project's refs — and therefore what a manifest *means* for a student build versus
+one of the ten Factory domains — changes a cross-module contract rather than adding a measurement.
+That is CLAUDE.md's ESCALATE tier, and it needs the DRI.
 
 ---
 
@@ -115,8 +185,15 @@ A row moves to ✅ only on evidence that was produced and pasted, never on a rea
 That standard is not pedantry: every failure in this programme's eight phases was a claim that
 did not survive measurement, and not one was a broken behaviour the tests passed over.
 
-**Current score: 4 of 6.** B2, B4 and B5 closed on 2026-10-14. Outstanding: B1 (gov registration has never fired), B3 (no domain has moved off `discovery`),
-B6 (LC-01 row naming both consumers).
+**Current score: 4 of 6, with B3 half closed.** B2, B4 and B5 closed on 2026-10-14. Outstanding:
+B1 (gov registration has never fired), B3, B6 (LC-01 row naming both consumers).
+
+**B3 stays open deliberately rather than being scored on the half that is done.** The gate it was
+blocked on is now measurable and mutation-tested, which is a real defect closed — the first stage
+of thirteen could not be passed by any project, and now it can. But B3's pass condition is that a
+domain actually *moves*, and nothing writes the manifest those measurements read, so no domain has
+moved. Scoring it 5 of 6 would record a measurement as a movement. The remaining half needs one
+decision from the DRI, stated at the end of the B3 section above.
 
 ### B2 decision and evidence
 
