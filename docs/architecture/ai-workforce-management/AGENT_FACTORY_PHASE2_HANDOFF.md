@@ -2,7 +2,7 @@
 
 **Run** `20261007-school-agent-factory` · **Session** `CC-20261006-a4k7`
 
-**Deployed commit** `fa7f636bc` (PR #3084, merged 2026-10-14 13:08 UTC) · **Production verified** 2026-10-14, by querying the live database rather than by reading the deploy's exit code.
+**Deployed commit** `fa7f636bc` (PR #3084, merged 8:08 AM CDT on 2026-10-14) · **Production verified** 2026-10-14, by querying the live database rather than by reading the deploy's exit code.
 
 Ten AI employee domain projects exist in production as **plans**. Nothing is activated.
 
@@ -46,14 +46,79 @@ Both existing agents (Reese, Dara) pre-date this work and were neither created n
 
 ## Where to look
 
-- **https://enterprise.colaberry.ai/admin/projects** — the ten projects, in the admin page that already existed.
+> **CORRECTION, measured 2026-10-14.** An earlier version of this document said the ten
+> projects are visible at `/admin/projects`. **They are not.** That page walks
+> cohorts → enrollments (by `cohort_id`) → projects, and all ten are owned by one
+> `ai_staff` enrollment whose `cohort_id` is **NULL** — so the page renders nothing about
+> them. Verified by query, after the claim was questioned.
+
+**There is no page for this work.** The only way to see it is the API below, or SQL.
 - **`GET /api/admin/agent-domains`** — the ten domains with reachability and blockers. Needs the `program` section.
 - **`GET /api/admin/agent-domains-summary`** — counts and the coverage headline.
 - **`GET /api/admin/agent-domains-authorization`** — build-authorization state, answered by the real gate.
 - **`GET /api/admin/agent-domains/:domainKey/coverage`** — the capability → story matrix.
 - **`GET /api/admin/agent-domains-builders`** — intern names. Needs the **`internship`** section, deliberately separate from `program`.
 
-**There is no dedicated UI page.** Phase 2 shipped API routes only.
+**Phase 2 shipped API routes only, and no UI.** All seven routes were probed in production on
+2026-10-14 and every one answered **401, not 404**, which confirms they are deployed and
+guarded — including `/agent-domains/nonsense-domain`, because the section guard runs *before*
+input validation. They are Bearer-token routes with no cookie fallback, so pasting a URL into
+a browser tab returns 401; see **How to test** below.
+
+---
+
+## How to test
+
+The routes need an admin Bearer token and there is no cookie fallback, so a URL pasted into a
+browser tab returns 401. The quickest path is the browser console on a page where you are already
+logged in, because it can read the token itself.
+
+**1.** Log in at https://enterprise.colaberry.ai/admin
+**2.** F12 → Console. Type `allow pasting` first (Chrome blocks the first paste).
+**3.** Paste this. It walks all seven routes and prints a table.
+
+```js
+(async () => {
+  const t = localStorage.getItem('admin_token');
+  if (!t) return console.error('No admin_token - are you logged in as an admin?');
+  const paths = [
+    'agent-domains', 'agent-domains-summary', 'agent-domains-authorization',
+    'agent-domains-builders', 'agent-domains/marketing',
+    'agent-domains/marketing/coverage', 'agent-domains/marketing/authorization',
+  ];
+  for (const p of paths) {
+    const r = await fetch('/api/admin/' + p, { headers: { Authorization: 'Bearer ' + t } });
+    const body = await r.json().catch(() => null);
+    console.log(r.status, p, body);
+  }
+})();
+```
+
+### What a correct answer looks like
+
+Checked against production on 2026-10-14. If any of these differs, something regressed:
+
+| Route | Expect |
+|---|---|
+| `agent-domains` | 10 domains; `manager_can_reach` false on admissions, platform, product_experience, sales and true on the other five, each false one carrying a named `manager_blocker` |
+| `agent-domains-summary` | 503 stories, 443 capabilities, **0** confirmed, and the words **"NO coverage to report"** — not a percentage |
+| `agent-domains-authorization` | all ten `authorized: false`, reason `no_authorization` |
+| `agent-domains-builders` | the intern roster. **403 for a `program`-only role** — this one needs `internship` |
+| `agent-domains/marketing` | the marketing domain, 70 stories |
+| `agent-domains/marketing/coverage` | the capability → story matrix, every capability `draft` |
+| `.../marketing/authorization` | `authorized: false` |
+
+### Three things worth trying to break
+
+1. **Ask for a domain that does not exist** — `agent-domains/not-a-domain` should be a clean 400 or 404, never a 500 and never an empty 200.
+2. **Drop the token** — every route should be 401. It is also 401 for a nonsense domain, because the guard runs before validation.
+3. **Use a curriculum- or support-scoped login on `agent-domains-builders`** — should be 403. Intern names are applicant data (resume, phone, interview transcript), which is why that route sits behind `internship` rather than `program`.
+
+### Seeing it without a browser
+
+```bash
+ssh root@95.216.199.47 "docker exec accelerator-db psql -U accelerator -d accelerator_prod -c   \"SELECT domain_key, manager_can_reach, manager_blocker FROM agent_domain_projects ORDER BY domain_key\""
+```
 
 ---
 
@@ -62,7 +127,7 @@ Both existing agents (Reese, Dara) pre-date this work and were neither created n
 1. **21 legacy agent rows belong to no domain.** Five are live production rows. They are tracked in `backend/src/services/agentDomain/capabilities/_unresolved.json`, each with a disposition of `unresolved` and a measured reason. They need an owner decision.
 2. **Four managers cannot reach the admin surface.** Admissions needs *two* fixes together: Taiwo Oludimimu has no `admin_users` row, **and** no `/api/admin/admissions` prefix is mapped in `mgmtSectionGate`, which is deny-by-default — so a scoped login alone would still 403 him on all nine of his own routes.
 3. **No capability is confirmed.** Every one of the 443 is `draft`. Promotion out of draft is a manager decision, and nothing in the system can make it on their behalf.
-4. **Ruth Kumera is `onboarding_pending`.** Production shows `signed_documents_uploaded`, `updated_at` 2026-10-07 21:19:23 — her own timestamp. She is not assignable and her onboarding has not been routed around.
+4. **Ruth Kumera is `onboarding_pending`.** Production shows `signed_documents_uploaded`, `updated_at` 4:19 PM CDT on 2026-10-07 — her own timestamp. She is not assignable and her onboarding has not been routed around.
 
 ---
 
