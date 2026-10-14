@@ -3,6 +3,7 @@ import { safeHttpUrl } from '../caseStudy/caseStudyPublicSections';
 import { themeCssVars, themeForLandingPage } from './landingPageTheme';
 import { logoForLandingPage, logoOnDarkForLandingPage } from './landingPageLogos';
 import { fontCssFor } from './landingPageFonts';
+import { metaPixelHead } from './landingPagePixel';
 import type { LandingPageContentShape, LandingPageSection } from '../../schemas/landingPageContentSchema';
 import { STYLES } from './landingPageStyles';
 import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
@@ -66,6 +67,14 @@ import { renderCta, renderSectionBody, type Cta } from './landingPageSections';
 export interface RenderableBrand {
   name: string;
   default_theme_key: string | null;
+  /**
+   * The brand's Meta Pixel ID, or null when the brand is not advertised.
+   *
+   * Optional so that every existing caller - tests, the preview route, the fixture script -
+   * keeps compiling and keeps rendering a page with NO third-party script, which is the right
+   * default for a brand nobody is running ads for.
+   */
+  meta_pixel_id?: string | null;
 }
 
 export interface RenderLandingPageInput {
@@ -75,6 +84,13 @@ export interface RenderLandingPageInput {
   siteSlug: string | null;
   /** Absolute URL of this page, for the canonical link and the OG url. */
   pageUrl: string;
+  /**
+   * Per-response CSP nonce, supplied by the route that also sets the header.
+   *
+   * The renderer does not mint it: the nonce in the markup and the nonce in the policy have to
+   * be the same string, and the only way to guarantee that is for one caller to own both.
+   */
+  cspNonce?: string;
 }
 
 /** A link target that is safe to put in an href: absolute http(s), or a site-relative path. */
@@ -124,7 +140,7 @@ export interface RenderedLandingPage {
 }
 
 export function renderLandingPage(input: RenderLandingPageInput): RenderedLandingPage {
-  const { content, brand, siteSlug, pageUrl } = input;
+  const { content, brand, siteSlug, pageUrl, cspNonce } = input;
   const { theme, branded } = themeForLandingPage(brand.default_theme_key);
   const logo = logoForLandingPage(brand.default_theme_key);
   const darkLogo = logoOnDarkForLandingPage(brand.default_theme_key);
@@ -188,6 +204,7 @@ ${themeCssVars(theme)}
 }
 ${STYLES}
 </style>
+${cspNonce ? metaPixelHead(brand.meta_pixel_id, cspNonce) : ''}
 </head>
 <body>
 <header class="site-head">

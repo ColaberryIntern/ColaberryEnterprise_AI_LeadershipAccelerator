@@ -157,6 +157,7 @@ import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributio
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureBrandPixelSchema } from './db/ensureBrandPixelSchema';
 import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
@@ -2692,6 +2693,10 @@ async function start(): Promise<void> {
   // Versioned per-brand governance rules (T022). Rows, not a column, so an approval given
   // under version N can still be read against what N said after N+1 is published.
   await ensureBrandGovernanceSchema();
+  // Right after brand governance, because it only touches the brands table: one nullable
+  // column carrying the brand's Meta Pixel ID, so tracking is configured per brand rather
+  // than pasted per page.
+  await ensureBrandPixelSchema();
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
