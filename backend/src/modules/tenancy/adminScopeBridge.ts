@@ -30,7 +30,15 @@ import { IntelligenceScope, scopeFromContext } from './intelligenceScope';
  */
 
 /** True while `tenant_memberships` is completely empty — the pre-migration state. */
-async function membershipSystemIsUnpopulated(): Promise<boolean> {
+/**
+ * EXPORTED for `services/lifecycle/lifecycleStatus.ts`, which is the third surface to ride this
+ * ramp. It was the one surface that did NOT, and the consequence was measured in production on
+ * 2026-10-14: every lifecycle read returned `TenantAccessError('Not found')`, for every admin,
+ * because `platform_identities` and `tenant_memberships` both hold zero rows. The review surface
+ * was activated and unusable. Exported rather than reimplemented so all three surfaces close at
+ * the same instant, on the same condition.
+ */
+export async function membershipSystemIsUnpopulated(): Promise<boolean> {
   try {
     return (await TenantMembership.count()) === 0;
   } catch {
@@ -64,7 +72,8 @@ async function identityForAdmin(admin: {
   return null;
 }
 
-function logLegacyAdminScope(admin: { email?: string }): void {
+/** EXPORTED alongside `membershipSystemIsUnpopulated`, so the log says the same thing everywhere. */
+export function logLegacyAdminScope(admin: { email?: string }): void {
   console.warn(
     JSON.stringify({
       timestamp: new Date().toISOString(),
