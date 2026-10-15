@@ -39,11 +39,22 @@ export function contentHash(parts: {
   attemptId: string;
   recordingIds: string[];
   draftSummary: string;
+  /**
+   * The portfolio artifact being published, when there is one.
+   *
+   * Part of the hash so that re-filing against a DIFFERENT artifact makes an
+   * existing approval stale, for the same reason swapping the take does: somebody
+   * approved a specific thing, and this is what notices when it stops being that
+   * thing. Optional, and omitted from the canonical form when absent, so every hash
+   * computed before artifacts existed still matches.
+   */
+  artifactId?: string | null;
 }): string {
   const canonical = JSON.stringify({
     attemptId: parts.attemptId,
     recordingIds: [...parts.recordingIds].sort(),
     draftSummary: parts.draftSummary.trim(),
+    ...(parts.artifactId ? { artifactId: parts.artifactId } : {}),
   });
   return crypto.createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 64);
 }

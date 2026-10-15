@@ -215,7 +215,43 @@ export async function submitDemoEvidence(enrollmentId: string, projectId: string
   // paid once. The early `verified_at` return above already stops the second
   // submission; this key is the backstop if it ever does not.
   const points = await payPrepTask(enrollmentId, String(task.project_id), String(task.id), storyId, source);
-  log('demo_evidence_verified', { projectId: String(task.project_id), taskId: String(task.id), storyId, kind: input.kind, source, points });
+
+  // FILE IT IN THE PORTFOLIO. A handed-in rehearsal is the learner's own record of
+  // their own work, so it lands in `runtime_portfolio_artifacts` with no approval -
+  // the same store case studies and cert evidence use. Whether anyone ELSE may see
+  // it is a separate question, answered by `presentation_showcases`.
+  //
+  // Best-effort and never fatal: the points are already paid and the task is already
+  // complete. Losing a portfolio copy is a gap to repair, not a reason to fail a
+  // hand-in that succeeded.
+  let artifactId: string | null = null;
+  if (input.kind === 'recording') {
+    try {
+      const { recordPresentationArtifact } = await import('../presentation/presentationArtifact');
+      const d = detail as Record<string, any>;
+      // Loaded here rather than reused: `loadOwnedPrepTask` has its own `project`
+      // local and it does not escape that function. Inside the best-effort block,
+      // so a missing name degrades the artifact title rather than failing the filing.
+      const owningProject = await Project.findByPk(String(task.project_id));
+      const filed = await recordPresentationArtifact(enrollmentId, {
+        recordingRef: String(ref),
+        storyId,
+        projectName: (owningProject as { name?: string } | null)?.name ?? null,
+        taskTitle: task.title ?? null,
+        attemptNo: typeof d.attempt_no === 'number' ? d.attempt_no : null,
+        durationSeconds: typeof d.duration_seconds === 'number' ? d.duration_seconds : null,
+        hasAudio: typeof d.has_audio === 'boolean' ? d.has_audio : null,
+        hasSharedScreen: typeof d.has_shared_screen === 'boolean' ? d.has_shared_screen : null,
+        mode: typeof d.mode === 'string' ? d.mode : null,
+        recordedAt: typeof d.started_at === 'string' ? d.started_at : null,
+      });
+      artifactId = filed?.id ?? null;
+    } catch (err: any) {
+      log('presentation_artifact_file_failed', { projectId: String(task.project_id), storyId, ref, message: String(err?.message || err) });
+    }
+  }
+
+  log('demo_evidence_verified', { projectId: String(task.project_id), taskId: String(task.id), storyId, kind: input.kind, source, points, artifactId });
   return { ...done, points_awarded: points, already_verified: false };
 }
 

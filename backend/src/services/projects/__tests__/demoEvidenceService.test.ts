@@ -34,6 +34,10 @@ jest.mock('../../pointsService', () => ({ award: (...a: any[]) => mockAward(...a
 // Only the database-backed proof is stubbed; the pure ref helpers stay real, so a
 // test cannot pass against a ref format the service does not actually write.
 const mockResolveRecording = jest.fn();
+const mockFileArtifact = jest.fn();
+jest.mock('../../presentation/presentationArtifact', () => ({
+  recordPresentationArtifact: (...a: any[]) => mockFileArtifact(...a),
+}));
 jest.mock('../recordingEvidenceService', () => ({
   ...jest.requireActual('../recordingEvidenceService'),
   resolveRecordingEvidence: (...a: any[]) => mockResolveRecording(...a),
@@ -272,6 +276,46 @@ describe('an internal recording is first-class evidence', () => {
     mockResolveRecording.mockResolvedValue(resolved);
     await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
     expect(mockResolveRecording).toHaveBeenCalledWith(PROJECT, 'PREP-2', ATTEMPT);
+  });
+
+  /**
+   * THE PLUMBING, not just the pieces.
+   *
+   * `presentationArtifact` is unit-tested on its own and the hand-in is unit-tested
+   * on its own, and until these tests nothing watched the wire between them — the
+   * exact shape of bug that reached production three times in this feature. A
+   * handed-in recording that files no artifact appears nowhere in the learner's
+   * portfolio, silently, with every other test green.
+   */
+  it('FILES A PORTFOLIO ARTIFACT, with the ref and the task it came from', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    mockResolveRecording.mockResolvedValue(resolved);
+    mockFileArtifact.mockResolvedValue({ id: 'artifact-1', created: true });
+
+    await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
+
+    expect(mockFileArtifact).toHaveBeenCalledTimes(1);
+    const [enrollment, input] = mockFileArtifact.mock.calls[0];
+    expect(enrollment).toBe(ENROLLMENT);
+    expect(input).toMatchObject({ recordingRef: `recording:${ATTEMPT}`, storyId: 'PREP-2' });
+  });
+
+  it('does NOT file one for a link hand-in — only a recording is a rehearsal', async () => {
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'link', value: 'https://youtu.be/abc' });
+    expect(mockFileArtifact).not.toHaveBeenCalled();
+  });
+
+  it('still completes and PAYS when filing the artifact throws', async () => {
+    // Filing is a consequence of handing in, never a precondition. A learner who
+    // has earned their points must not lose them because the portfolio copy failed.
+    mockTaskFindOne.mockResolvedValue(task({ story_id: 'PREP-2' }));
+    mockResolveRecording.mockResolvedValue(resolved);
+    mockFileArtifact.mockRejectedValue(new Error('portfolio down'));
+
+    const r = await submitDemoEvidence(ENROLLMENT, PROJECT, 'PREP-2', { kind: 'recording', value: ATTEMPT });
+
+    expect(r).toMatchObject({ status: 'complete', points_awarded: 40 });
   });
 
   it('refuses an attempt that is not on this task, and completes nothing', async () => {
