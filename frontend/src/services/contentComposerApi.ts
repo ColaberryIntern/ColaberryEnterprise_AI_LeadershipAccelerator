@@ -305,6 +305,14 @@ export interface DraftedMessage {
   /** Specifics the model produced that the brief did not support. Shown, never auto-removed. */
   unverifiedClaims: string[];
   model: string;
+  /**
+   * How the attached media informed the draft: 'vision' means the images were read,
+   * 'metadata' means only the file details were, 'none' means nothing was attached.
+   *
+   * Surfaced so the UI can say which. A video is never watched - telling an operator their
+   * footage was analysed when only its duration was known is the one claim worth avoiding here.
+   */
+  mediaBasis: 'vision' | 'metadata' | 'none';
 }
 
 export async function draftCanonicalMessage(input: {
@@ -315,6 +323,8 @@ export async function draftCanonicalMessage(input: {
   is_paid?: boolean;
   has_offer?: boolean;
   destination_url?: string | null;
+  /** The item being drafted for, so the copy can be written from what was uploaded. */
+  content_item_id?: string | null;
 }): Promise<DraftedMessage> {
   const res = await api.post('/api/admin/content/draft-message', input);
   return res.data;
