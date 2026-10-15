@@ -9,7 +9,7 @@ import {
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
   type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement,
-  type ServiceMatch, type ExtractedRequirementCandidate, type GovOpportunity, type GovDossier, type GovRelationship,
+  type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovOpportunity, type GovDossier, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
   type GovResponseFigure, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
 } from '../../services/factoryApi';
@@ -29,6 +29,7 @@ import { StepBar } from './govWorkspace/StepBar';
 import { StepFooter } from './govWorkspace/StepFooter';
 import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
+import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
 type OppDetail = { opportunity: GovOpportunity | null; source: 'live' | 'snapshot'; snapshotDate: string | null };
@@ -880,8 +881,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   // Extract-from-ZIP → confirm → establish. Extraction is read-only (persists nothing); establishment is the write.
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [candidates, setCandidates] = useState<ExtractedRequirementCandidate[] | null>(null);
+  const [items, setItems] = useState<RequirementItem[] | null>(null);
   const [candRows, setCandRows] = useState<Record<string, CandidateRow>>({});
-  const [showAllCandidates, setShowAllCandidates] = useState(false);
+  const [solView, setSolView] = useState<SolView>('map');
   const [extractBusy, setExtractBusy] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   // Discovery details (why-surfaced + overview + Source link) for the decoupled (gws) workspace. Best-effort.
@@ -955,13 +957,23 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     try {
       const r = await extractGovQualificationRequirements(canonical, extractFile);
       setCandidates(r.candidates);
+      const its = r.items ?? null;
+      setItems(its);
+      // Default each candidate's due-stage from its item category when the taxonomy is present (scope -> delivery,
+      // submit/rule -> submission, after_award -> award), so a confirmed scope item lands as a build-stage obligation.
+      const catByCand = new Map<string, ReqItemCategory>();
+      for (const it of its ?? []) catByCand.set(it.sourceFragments[0]?.reqId ?? it.id, it.category);
       const rows: Record<string, CandidateRow> = {};
-      for (const c of r.candidates) rows[c.id] = { checked: true, applicability: 'always', dueStage: 'submission' };
+      for (const c of r.candidates) {
+        const cat = catByCand.get(c.id);
+        rows[c.id] = { checked: true, applicability: 'always', dueStage: cat ? dueStageForCategory(cat) : 'submission' };
+      }
       setCandRows(rows);
       return true;
     } catch (err: any) {
       setExtractError(err?.response?.data?.error ?? 'Could not extract requirements from the document.');
       setCandidates(null);
+      setItems(null);
       return false;
     } finally {
       setExtractBusy(false);
@@ -999,19 +1011,27 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     if (!candidates || !record) return;
     const chosen = candidates.filter((c) => candRows[c.id]?.checked);
     if (chosen.length === 0) return;
-    const mapped: EstablishedRequirement[] = chosen.map((c) => ({
-      id: c.id, text: c.text,
-      applicability: (candRows[c.id]?.applicability ?? 'always') as EstablishedRequirement['applicability'],
-      dueStage: (candRows[c.id]?.dueStage ?? 'submission') as EstablishedRequirement['dueStage'],
-      bindingStatus: 'binding_solicitation_requirement',
-    }));
+    // Look up each candidate's item category (1:1) to carry category + tracks onto the established requirement,
+    // so a confirmed `scope` item reliably becomes a build story and the rest are submission/award-stage.
+    const catByCand = new Map<string, ReqItemCategory>();
+    for (const it of items ?? []) catByCand.set(it.sourceFragments[0]?.reqId ?? it.id, it.category);
+    const mapped: EstablishedRequirement[] = chosen.map((c) => {
+      const cat = catByCand.get(c.id);
+      return {
+        id: c.id, text: c.text,
+        ...(cat ? { category: cat, tracks: tracksForCategory(cat) } : {}),
+        applicability: (candRows[c.id]?.applicability ?? 'always') as EstablishedRequirement['applicability'],
+        dueStage: (candRows[c.id]?.dueStage ?? 'submission') as EstablishedRequirement['dueStage'],
+        bindingStatus: 'binding_solicitation_requirement',
+      };
+    });
     const byId = new Map<string, EstablishedRequirement>();
     for (const e of record.requirements_json?.established ?? []) byId.set(e.id, e);
     for (const m of mapped) byId.set(m.id, m);
     const merged = Array.from(byId.values());
     void run(async () => {
       await recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'needs_evidence', establishedRequirements: merged });
-      setCandidates(null); setCandRows({});
+      setCandidates(null); setItems(null); setCandRows({});
     }, `Established ${mapped.length} requirement(s) from the solicitation.`);
   };
 
@@ -1256,43 +1276,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               )}
               {candidates !== null && candidates.length > 0 && (
                 <>
-                  <div className="small text-secondary mb-2">{candidates.length} candidate requirement(s) detected <span className="badge bg-info-subtle text-info-emphasis ms-1">suggested — confirm</span></div>
-                  <ul className="list-unstyled mb-3">
-                    {(showAllCandidates ? candidates : candidates.slice(0, 10)).map((c, idx) => {
-                      const row = candRows[c.id] ?? { checked: true, applicability: 'always', dueStage: 'submission' };
-                      return (
-                        <li key={c.id + idx} className="py-2 border-bottom">
-                          <div className="d-flex align-items-start gap-2">
-                            <input type="checkbox" className="form-check-input mt-1" checked={row.checked}
-                              aria-label={`Confirm ${c.id}`}
-                              onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, checked: e.target.checked } })} />
-                            <div className="flex-grow-1">
-                              <div className="fw-semibold small">{c.id}</div>
-                              <div className="small">{c.text}</div>
-                              {(c.sourceDocument || c.section || c.kind) && (
-                                <div className="small text-secondary">{c.sourceDocument ?? ''}{c.section ? ` · §${c.section}` : ''}{c.kind ? ` · ${c.kind}` : ''}</div>
-                              )}
-                              <div className="d-flex flex-wrap gap-2 mt-1">
-                                <select className="form-select form-select-sm" style={{ maxWidth: 150 }} value={row.applicability} aria-label={`Applicability for ${c.id}`}
-                                  onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, applicability: e.target.value } })}>
-                                  <option value="always">always</option><option value="conditional">conditional</option><option value="not_applicable">not_applicable</option><option value="unknown">unknown</option>
-                                </select>
-                                <select className="form-select form-select-sm" style={{ maxWidth: 140 }} value={row.dueStage} aria-label={`Due stage for ${c.id}`}
-                                  onChange={(e) => setCandRows({ ...candRows, [c.id]: { ...row, dueStage: e.target.value } })}>
-                                  <option value="submission">submission</option><option value="award">award</option><option value="delivery">delivery</option><option value="unknown">unknown</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {candidates.length > 10 && (
-                    <button type="button" className="btn btn-link btn-sm px-0 mb-2 d-block" onClick={() => setShowAllCandidates((v) => !v)} aria-expanded={showAllCandidates}>
-                      {showAllCandidates ? 'Show fewer' : `Show all ${candidates.length} (${candidates.length - 10} more) — all are selected by default`}
-                    </button>
-                  )}
+                  <SolicitationItemsView
+                    items={items} candidates={candidates} candRows={candRows}
+                    onToggle={(cid, checked) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), checked } }))}
+                    onSetField={(cid, field, value) => setCandRows((prev) => ({ ...prev, [cid]: { ...(prev[cid] ?? { checked: true, applicability: 'always', dueStage: 'submission' }), [field]: value } }))}
+                    view={solView} onView={setSolView}
+                  />
                   {record ? (
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy || selectedCandidateCount === 0} onClick={establishSelected}>
                       <i className="ri-check-double-line me-1" aria-hidden="true" />Establish selected ({selectedCandidateCount})

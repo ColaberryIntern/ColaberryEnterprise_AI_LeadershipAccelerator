@@ -306,6 +306,41 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(rq1.dueStage).toBe('submission');
   });
 
+  it('extract with items: the Map groups by category and a confirmed scope item carries the solution_build track', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({
+      qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 4, rationale: null, source_snapshot_version: 3, reviewer_identity_id: 'rev-1', requirements_json: { established: [] } },
+    }));
+    (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({
+      fileCount: 1,
+      candidates: [
+        { id: 'RQ1', text: 'Provide a work order management system.', sourceDocument: 'rfp.pdf' },
+        { id: 'RQ2', text: 'Submit three references.', sourceDocument: 'rfp.pdf' },
+      ],
+      items: [
+        { id: 'ITEM-SCP01', category: 'scope', title: 'Work order system', definition: 'Provide a work order management system.', sourceFragments: [{ reqId: 'RQ1', text: 'Provide a work order management system.', doc: 'rfp.pdf' }], links: [], inferred: false, status: 'candidate', dueAt: null },
+        { id: 'ITEM-SUB01', category: 'submit', title: 'Three references', definition: 'Submit three references.', sourceFragments: [{ reqId: 'RQ2', text: 'Submit three references.', doc: 'rfp.pdf' }], links: [], inferred: false, status: 'candidate', dueAt: null },
+      ],
+    });
+    (factoryApi.recordGovQualificationDecision as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
+    await renderAt(`?canonical=${CANON}&tab=decide`);
+    await flush();
+    await uploadExtractZip();
+    const text = container.textContent ?? '';
+    expect(text).toContain("What they're buying"); // scope column of the map
+    expect(text).toContain('What we submit');       // submit column
+    await clickButton('Establish selected');
+    await flush();
+    const [, body] = (factoryApi.recordGovQualificationDecision as jest.Mock).mock.calls[0];
+    const rq1 = body.establishedRequirements.find((r: any) => r.id === 'RQ1');
+    const rq2 = body.establishedRequirements.find((r: any) => r.id === 'RQ2');
+    expect(rq1.category).toBe('scope');
+    expect(rq1.tracks).toEqual(['proposal', 'solution_build']);
+    expect(rq1.dueStage).toBe('delivery');
+    expect(rq2.category).toBe('submit');
+    expect(rq2.tracks).toEqual(['proposal']);
+    expect(rq2.dueStage).toBe('submission');
+  });
+
   it('extract: an empty extraction shows the honest "establish manually" note and establishes nothing', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [] });
