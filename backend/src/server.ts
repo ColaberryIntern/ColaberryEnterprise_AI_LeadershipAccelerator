@@ -168,7 +168,7 @@ import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValu
 import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
 import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
-import { ensureAgentDomainProjectSchema } from './db/ensureAgentDomainProjectSchema';
+import { ensureAgentDomainProjectSchemaGuarded } from './db/ensureAgentDomainProjectSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -3079,33 +3079,29 @@ async function start(): Promise<void> {
   await ensureAiAgentDepartmentScopeSchema();
   // Agent Factory - which AI employee domain a project belongs to, plus build authorizations for
   // one. Two tables, zero ALTERs, additive and idempotent; its assert is deliberately not optional.
-  // Guarded, because this is the ONLY one of 106 `ensure*` files whose post-condition throws, and
-  // it is awaited before `app.listen`. `start()` is called bare with no process-level rejection
-  // handler, so an uncontained throw here would stop the backend binding its port -- the rule this
-  // file states twice within 250 lines of here, and wraps two neighbouring calls for. A backend
+  // Guarded because it is awaited before `app.listen`, `start()` is called bare with no
+  // process-level rejection handler, and an uncontained throw here would stop the backend binding
+  // its port.
+  //
+  // CORRECTED 2026-10-15, and the original claim is worth keeping visible because it was wrong in
+  // my own favour. This said "the ONLY one of 106 `ensure*` files whose post-condition throws".
+  // Measured: there are **110** `ensure*.ts` in `src/db`, **five** of them throw, and **this is
+  // the only one of the five that is GUARDED** -- the opposite of what the sentence claimed.
+  // `ensureBrandPixelSchema` (:2703), `ensureBroadcastTelemetrySchema` (:2963),
+  // `ensurePresenterSlotSchema` (:2536) and `ensureZoomHostSchema` (:2523) each throw and are each
+  // awaited BARE before `app.listen`, so any of them can still stop the port binding. They are not
+  // wrapped here on purpose: a bare call is fail-CLOSED, and wrapping it makes that feature boot
+  // with a missing table instead. That trade belongs to those features' owners, not to this
+  // change. Recorded as a finding rather than silently widened. A backend
   // that will not boot is worse than one that boots carrying a named schema problem, and the
   // problem IS named: the module logs a structured SchemaInvariantViolation with its own remedy
   // before throwing, and the integration suite still proves the assert fails loudly when the
   // schema is actually wrong.
-  try {
-    await ensureAgentDomainProjectSchema();
-  } catch (err: any) {
-    // DERIVED, not asserted. This logged a literal `SchemaInvariantViolation` for any caught
-    // error, so a connection failure inside the introspection query -- a likelier boot failure
-    // than a DDL problem -- would have been labelled as a schema violation it is not.
-    const error_class = err instanceof Error ? err.constructor.name : 'UnknownError';
-    console.warn(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      service: 'backend',
-      event: 'agent_domain_schema_boot_failed',
-      error_class,
-      outcome: 'failure',
-      message: err?.message ?? String(err),
-      impact: 'The ten agent-domain projects cannot be provisioned until this is fixed.',
-      remedy: 'Read the agent_domain_schema_statement_failed warnings above for the first DDL error.',
-    }));
-  }
+  // The guard lives in the module, not here, so the FAILURE PATH can be exercised by a test.
+  // Every assertion about it used to read this file as a string: nothing executed `start()`, made
+  // the call reject, or observed `app.listen`. A source-grep is not a behavioural assertion.
+  // `ensureAgentDomainProjectSchemaGuarded` cannot reject, so this await is safe bare.
+  await ensureAgentDomainProjectSchemaGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {
