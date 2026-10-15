@@ -42,6 +42,8 @@ const AdminStudentStoryPage = lazy(() => import('../pages/admin/AdminStudentStor
 const AdminKnowledgeOpsPage = lazy(() => import('../pages/admin/AdminKnowledgeOpsPage'));
 const AdminOrchestrationPage = lazy(() => import('../pages/admin/AdminOrchestrationPage'));
 const WorkforceOSPage = lazy(() => import('../pages/admin/workforce/WorkforceOSPage'));
+// AF2.1 - the landing a domain owner sees after bridging in from the portal.
+const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'));
 const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
@@ -214,6 +216,7 @@ const adminRoutes = (
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        <Route path="/admin/my-domain" element={<AdminMyDomainPage />} />
         {/* Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide
             read-only effective-access resolver + tool catalog. */}
         <Route path="/admin/tools" element={<AdminToolsPage />} />
