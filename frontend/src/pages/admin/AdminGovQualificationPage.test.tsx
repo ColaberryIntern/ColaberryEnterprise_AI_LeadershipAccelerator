@@ -70,7 +70,7 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.matchServicesToOpportunity as jest.Mock).mockResolvedValue({ matches: [
       { id: 'build', name: 'Enterprise AI Build & System Modernization', category: 'IT', score: 2, strength: 'moderate', reason: 'Matches on keywords: case management system', matchedKeywords: ['case management system'], categoryMatched: false, matchedNaics: [] },
     ], catalogSize: 10 });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await flush();
     const text = container.textContent ?? '';
     expect(text).toContain('What they want vs what we offer');
@@ -87,7 +87,7 @@ describe('AdminGovQualificationPage — journey', () => {
       source: { ...base.source!, requirements: [] },
       qualification: { ...base.qualification!, requirements_json: { established: [] } },
     });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await flush();
     expect(container.textContent ?? '').toContain('No requirements established yet');
   });
@@ -128,7 +128,7 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('clean workspace → source facts render and Approve is enabled', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     expect(container.textContent ?? '').toContain('City of Dallas');
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(false);
@@ -140,7 +140,7 @@ describe('AdminGovQualificationPage — journey', () => {
       coverage: { sufficient: false, reasons: ['no_requirements_established'] },
       evaluation: { evals: [], blocking: [], deliveryObligations: [], byDueStage: { submission: [], award: [], delivery: [], unknown: [] }, canApproveBid: true },
     }));
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
     expect(approve.disabled).toBe(true);
     expect(container.textContent ?? '').toContain('Confirm the detected requirements to establish them');
@@ -148,7 +148,7 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('changed source → review-changes prompt and Approve disabled', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({ changedSource: true, canApprove: false }));
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     expect(container.textContent ?? '').toContain('source changed since');
     expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent?.includes('Review changes'))).toBe(true);
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
@@ -157,7 +157,7 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('source unavailable → surfaces it and does not offer a usable approval', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({ sourceState: 'unavailable', sourceStateLabel: 'source unavailable', sourceAvailable: false, source: null, evaluation: null, coverage: null, canApprove: false }));
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     expect(container.textContent ?? '').toContain('Source evidence is unavailable');
     // The record still exists, so the Approve control renders — but it must be DISABLED (no usable approval).
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
@@ -166,7 +166,7 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('a separate build-authorization control is present (distinct from pursuit approval)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     const text = container.textContent ?? '';
     expect(text).toContain('Authorize a build (separate)');
     expect(text).toContain('does not run any build');
@@ -176,7 +176,7 @@ describe('AdminGovQualificationPage — journey', () => {
   it('maps a 422 approve error to a recoverable reason banner', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     (factoryApi.approveGovQualification as jest.Mock).mockRejectedValue({ response: { status: 422, data: { error: 'blocked', reasons: ['R1:applicability_unknown'] } } });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await clickButton('Approve bid pursuit');
     expect(container.textContent ?? '').toContain('Blocked (422)');
   });
@@ -185,7 +185,7 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({ qualification: null }));
     let resolve: (v: any) => void = () => {};
     (factoryApi.createGovQualification as jest.Mock).mockReturnValue(new Promise((r) => { resolve = r; }));
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Open qualification')) as HTMLButtonElement;
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -213,7 +213,7 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('manual doc review: lists the authoritative docs as "not reviewed" and offers upload', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(bonfireWs());
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     const text = container.textContent ?? '';
     expect(text).toContain('Manual document review');
     expect(text).toContain('solicitation.pdf');
@@ -224,7 +224,7 @@ describe('AdminGovQualificationPage — journey', () => {
   it('manual doc review: uploading a ZIP attests the undownloaded authoritative docs (mode add + coveredDocIds)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(bonfireWs());
     (factoryApi.reviewGovQualificationDocuments as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     // The page now has two file inputs (extract card first, manual-review card last); target the manual-review one.
     const fileInput = (Array.from(container.querySelectorAll('input[type=file]')) as HTMLInputElement[]).pop() as HTMLInputElement;
     const file = new File(['zip-bytes'], 'pkg.zip', { type: 'application/zip' });
@@ -242,7 +242,7 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(bonfireWs({
       qualification: { ...cleanWs().qualification!, requirements_json: { established: [], reviewedDocuments: [{ docId: 'DS1', role: 'solicitation', method: 'manual_upload', filename: 'pkg.zip', sha256: 'x', reviewedBy: 'rev', reviewedAt: 't' }] } },
     }));
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     expect((container.textContent ?? '')).toContain('manual');
     expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Revoke')).toBe(true);
   });
@@ -263,7 +263,7 @@ describe('AdminGovQualificationPage — journey', () => {
       { id: 'RQ1', text: 'Offeror shall be registered in SAM.', sourceDocument: 'rfp.pdf', section: 'L.3', kind: 'eligibility' },
       { id: 'RQ2', text: 'Submit three past-performance references.', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission' },
     ] });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await flush();
     await uploadExtractZip();
     const text = container.textContent ?? '';
@@ -284,7 +284,7 @@ describe('AdminGovQualificationPage — journey', () => {
       { id: 'RQ2', text: 'Submit past performance.', sourceDocument: 'rfp.pdf', section: 'M.2', kind: 'submission' },
     ] });
     (factoryApi.recordGovQualificationDecision as jest.Mock).mockResolvedValue({ qualification: { id: 'q1' } });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await flush();
     await uploadExtractZip();
     // Uncheck RQ2 (pre-click activation flips checkedness before React's onChange reads it).
@@ -309,7 +309,7 @@ describe('AdminGovQualificationPage — journey', () => {
   it('extract: an empty extraction shows the honest "establish manually" note and establishes nothing', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
     (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [] });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await flush();
     await uploadExtractZip('empty.zip');
     expect(container.textContent ?? '').toContain('No requirements detected');
@@ -319,7 +319,7 @@ describe('AdminGovQualificationPage — journey', () => {
   it('extract without an opened qualification prompts to open it first (establishment stays a deliberate write)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs({ qualification: null }));
     (factoryApi.extractGovQualificationRequirements as jest.Mock).mockResolvedValue({ fileCount: 1, candidates: [{ id: 'RQ1', text: 'SAM registration required.' }] });
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await flush();
     await uploadExtractZip();
     expect(container.textContent ?? '').toContain('Open the qualification');
@@ -349,7 +349,7 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('decoupled (gws) workspace: capture UI renders on source:null — Extract card + Open-qualification enabled, no Source-facts, no "labeled sample" banner', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs());
-    await renderAt(`?gws=${encodeURIComponent(GWS)}&from=${encodeURIComponent('RFP AI-based IVR Solution')}&agency=Fort%20Worth`);
+    await renderAt(`?gws=${encodeURIComponent(GWS)}&from=${encodeURIComponent('RFP AI-based IVR Solution')}&agency=Fort%20Worth&tab=decide`);
     await flush();
     const text = container.textContent ?? '';
     expect(factoryApi.getGovQualificationWorkspace).toHaveBeenCalledWith(GWS, 'colaberry'); // keyed off the gws id
@@ -365,14 +365,14 @@ describe('AdminGovQualificationPage — journey', () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(decoupledWs({
       qualification: { id: 'q1', bidding_entity: 'colaberry', decision: 'needs_evidence', version: 1, rationale: null, source_snapshot_version: null, reviewer_identity_id: 'rev', requirements_json: { established: [] } },
     }));
-    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=solicitation`);
     await flush();
     const steps = Array.from(container.querySelectorAll('[role="tab"]')).map((b) => (b.textContent ?? '').trim());
-    for (const s of ['Solicitation', 'Requirements', 'Go / No-go', 'Proposal', 'Build', 'Submit', 'Outcome']) {
+    for (const s of ['Snapshot', 'Solicitation', 'Fit', 'Decide', 'Build the bid', 'Submit', 'Outcome']) {
       expect(steps.some((l) => l.includes(s))).toBe(true);
     }
     const current = container.querySelector('[role="tab"][aria-current="step"]');
-    expect(current?.textContent ?? '').toContain('Solicitation'); // default step (no ?tab=) is Solicitation
+    expect(current?.textContent ?? '').toContain('Solicitation'); // the viewed step (?tab=solicitation) is current
   });
 
   it('Phase 3 relationship panel: lists prior pursuits for the same agency with their decision', async () => {
@@ -412,7 +412,7 @@ describe('AdminGovQualificationPage — journey', () => {
       evaluation: { evals: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'RQ1', dueStage: 'submission', applicability: 'always', blocking: false, reason: null }], award: [], delivery: [], unknown: [] }, canApproveBid: true },
       coverage: { sufficient: false, reasons: ['no_zip_attested'] }, // established, but the ZIP isn't attested yet
     }));
-    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=decide`);
     await flush();
     const text = container.textContent ?? '';
     expect(text).toContain('Offeror shall be registered in SAM.'); // "what they want" lists the established requirement (not the empty-state)
@@ -525,7 +525,7 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('canonical workspace renders NEITHER new card (Discovery details / Gaps panel are decoupled-only)', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=decide`);
     await flush();
     const text = container.textContent ?? '';
     expect(text).not.toContain('Discovery details');
@@ -593,7 +593,7 @@ describe('AdminGovQualificationPage — journey', () => {
       canApprove: true,
     }));
     (factoryApi.approveGovQualification as jest.Mock).mockResolvedValue({ qualification: { id: 'q2' } });
-    await renderAt(`?gws=${encodeURIComponent(GWS)}`);
+    await renderAt(`?gws=${encodeURIComponent(GWS)}&tab=decide`);
     await flush();
     expect(container.textContent ?? '').toContain('Attested'); // the attested badge replaces the upload
     const approve = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Approve bid pursuit')) as HTMLButtonElement;
@@ -610,14 +610,14 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('Step bar: renders all seven pursuit steps with Solicitation active by default', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=solicitation`);
     await flush();
     const labels = navTabs().map((b) => (b.textContent ?? '').trim());
-    for (const t of ['Solicitation', 'Requirements', 'Go / No-go', 'Proposal', 'Build', 'Submit', 'Outcome']) {
+    for (const t of ['Snapshot', 'Solicitation', 'Fit', 'Decide', 'Build the bid', 'Submit', 'Outcome']) {
       expect(labels.some((l) => l.includes(t))).toBe(true);
     }
     expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('true');
-    expect(tabByLabel('Proposal').getAttribute('aria-selected')).toBe('false');
+    expect(tabByLabel('Fit').getAttribute('aria-selected')).toBe('false');
   });
 
   it('Step bar: the active step is restored from the URL (?tab=) so a reload keeps your place', async () => {
@@ -630,10 +630,10 @@ describe('AdminGovQualificationPage — journey', () => {
 
   it('Step bar: clicking a step activates it', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(cleanWs());
-    await renderAt(`?canonical=${CANON}`);
+    await renderAt(`?canonical=${CANON}&tab=solicitation`);
     await flush();
-    await act(async () => { tabByLabel('Requirements').dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
-    expect(tabByLabel('Requirements').getAttribute('aria-selected')).toBe('true');
+    await act(async () => { tabByLabel('Fit').dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
+    expect(tabByLabel('Fit').getAttribute('aria-selected')).toBe('true');
     expect(tabByLabel('Solicitation').getAttribute('aria-selected')).toBe('false');
   });
 
@@ -662,7 +662,7 @@ describe('AdminGovQualificationPage — journey', () => {
     await renderAt(`?canonical=${CANON}&tab=proposal`);
     await flush();
     const text = container.textContent ?? '';
-    expect(text).toContain('Response checklist');
+    expect(text).toContain('Proposal responses');
     expect(text).toContain('Offeror shall register in SAM.');
     expect(text).toContain('cites SOLICITATION');   // the citation anchor is shown
     expect(text).toContain('unanswered');            // honest status, never a fabricated "done"
