@@ -26,6 +26,7 @@
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/deck
  *   POST /api/portal/projects/:projectId/tasks/:storyId/deck
  *   GET  /api/portal/showcases
+ *   POST /api/portal/projects/:projectId/tasks/:storyId/showcase
  *   POST /api/portal/projects/:projectId/tasks/:storyId/recording-recovery
  *   POST /api/portal/projects/:projectId/tasks/:storyId/final-take
  */
@@ -365,6 +366,66 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartic
 // `private, no-store` because this is one learner's rehearsal: it must not sit in a
 // shared proxy cache, and the browser should re-ask rather than replay from disk
 // after access is withdrawn.
+// ASK TO SHARE A TAKE WITH THE COHORT.
+//
+// The first thing in this subsystem that can CREATE a showcase. Phase 6 built
+// publish, withdraw and the whole access model for rows nothing ever inserted, so
+// `canPublish` guarded a state no path could reach.
+//
+// This records the AUTHOR'S approval and nothing else. Staff approval is a separate
+// column and a separate act; a demo reaches the feed only when both exist. The
+// audience stays `private` until that happens, so an unapproved request is invisible
+// to everyone but its owner and staff.
+const shareRequestSchema = z.object({
+  attempt_id: z.string().trim().uuid(),
+  summary: z.string().trim().min(1).max(2000),
+}).strict();
+
+router.post('/api/portal/projects/:projectId/tasks/:storyId/showcase', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
+    const body = shareRequestSchema.parse(req.body || {});
+
+    // Ownership proved the same way the hand-in proves it: the attempt must belong
+    // to THIS task on a project this learner owns. An unproved attempt id would let
+    // one student offer another's rehearsal for publication.
+    const { resolveRecordingEvidence } = await import('../services/projects/recordingEvidenceService');
+    const resolved = await resolveRecordingEvidence(String(req.params.projectId), String(req.params.storyId), body.attempt_id);
+    if (!resolved.ok) {
+      return res.status(resolved.reason === 'not_ready' ? 409 : 404)
+        .json({ error: resolved.reason === 'not_ready' ? 'That recording has not arrived yet.' : 'Not found' });
+    }
+
+    const { getOwnedProjectTree } = await import('../services/projects/projectReadService');
+    if (!(await getOwnedProjectTree(eid(req), String(req.params.projectId)))) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // THE SUMMARY IS GROUNDED BEFORE IT CAN BE OFFERED. This is the text a stranger
+    // reads next to the student's name; `showcaseDraft` holds it to a higher bar
+    // than the deck for exactly that reason.
+    const { reviewDraft } = await import('../services/presentation/showcaseDraft');
+    const tree = await getOwnedProjectTree(eid(req), String(req.params.projectId));
+    const { sourcesFromTree } = await import('../services/presentation/deckSources');
+    const verdict = reviewDraft({ summary: body.summary, sources: tree ? sourcesFromTree(tree) : [] });
+    if (!verdict.publishable) {
+      return res.status(422).json({ error: 'The summary needs fixing before it can be shared.', notices: verdict.notices });
+    }
+
+    const { requestShare } = await import('../services/presentation/showcaseLifecycle');
+    const r = await requestShare({
+      enrollmentId: eid(req),
+      attemptId: body.attempt_id,
+      cohortId: req.participant?.cohort_id ?? null,
+      draftSummary: body.summary,
+      recordingIds: [body.attempt_id],
+    });
+    if (!r.ok) return res.status(422).json({ error: r.reason });
+    res.status(r.created ? 201 : 200).json({ showcase_id: r.showcaseId, created: r.created, awaiting: 'staff approval' });
+  } catch (e) { fail(res, e, next); }
+});
+
 // The gallery: showcases this learner is allowed to see.
 //
 // THE FILTER IS HERE, SERVER-SIDE, not in the page. A gallery that returned
