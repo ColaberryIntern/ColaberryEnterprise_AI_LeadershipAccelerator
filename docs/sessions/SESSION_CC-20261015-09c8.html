@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, October 15, 2026 at 8:40 AM</div>
-    <div><span class="sid">CC-20261015-09c8</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Thursday, October 15, 2026 at 12:33 PM</div>
+    <div><span class="sid">CC-20261015-09c8</span><span class="count">4 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,36 @@
       <article class="card">
         <div class="card-head">
           <span class="num">02</span>
+          <h2>**A global kill switch left on after a deploy had been eating all outbound email for four and a half hours**</h2>
+          <span class="badge">2026-10-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Production state only, no code. `system_settings.system_kill_switch` turned from `true` back to `false` at **11:15:54 AM CDT**, through `deactivateKillSwitch()` rather than a direct write, so the reversal carries a `KILL_SWITCH_DEACTIVATED` audit event that the activation never had. Found while diagnosing why Swati Raman was not receiving a portal access link: her enrollment was active, portal-enabled and minting tokens, but `guardedSendMail` (`emailService.ts:62`) was dropping every message. The switch had been set at **6:42:16 AM CDT**, 88 seconds before the 6:43:44 AM container rebuild that deployed `fb236969e` — a pre-deploy safety step nobody reversed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`isKillSwitchActive()`, which is the exact condition `guardedSendMail` branches on, returns **false** after the flip, and the settings row reads `false` at 16:15:54Z. Proven end to end rather than at the gate alone: `requestMagicLink(&#39;swati@colaberry.com&#39;)` returned a real message id `&lt;2005e5b9-…@colaberry.com&gt;` where this morning&#39;s blocked sends logged an EMPTY one, her portal token was re-minted (which the anti-enumeration branch would not have done), and Mandrill independently reports `[Accelerator] Your Portal Access Link` at **12:21 PM CDT**, state `sent`, no bounce and no reject. Campaigns were untouched: 6 active and 25 paused after the flip, because `deactivateKillSwitch` deliberately does not resume anything.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">THE SWITCH WAS SET BY A DIRECT WRITE, not through `activateKillSwitch`. Two independent signs: there is no `CRITICAL_SYSTEM_EVENT` audit row for the activation, and 6 campaigns were still ACTIVE, which that path would have paused. So none of the usual safety side effects ran either. WORSE THAN THE OUTAGE ITSELF: the switch was swallowing its own alarms. Six sends were blocked in three hours and three of them were alerting — two `Cron Job Missed Runs: WorkforceCertificationDirector` and one `25% AI event failure rate` reliability alert. An email outage that suppresses the cron-failure and reliability alerts is indistinguishable from a quiet morning, which is why it ran four and a half hours before a person on WhatsApp reported it. Those two underlying conditions are still unexamined. A REPORTING BUG ALONGSIDE IT, not fixed here: `emailService` logs `Portal magic link sent to: … | msgId:` BEFORE the kill-switch guard returns its stub, so the success line fires with an empty msgId even when nothing was sent. Nothing downstream could have caught this from the logs. Worth a follow-up.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**`auditMiddleware` was writing plaintext passwords into `audit_logs`, and still was**</h2>
+          <span class="badge">2026-10-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/middlewares/auditRedaction.ts` (NEW) and one line plus an import in `backend/src/middlewares/auditMiddleware.ts`. The middleware copied the whole of `req.body` into `audit_logs.new_values` with no redaction at all, and the admin login route is a POST whose body is `{email, password}`. Measured in production, not inferred: **639 rows holding plaintext passwords across 13 staff accounts**, earliest 2026-03-08, most recent written at 9:02 AM CDT the morning this was found. The same path had also captured `currentPassword` AND `newPassword` from the password-change flow, plus `ghl_api_key`, `sms_api_key`, `synthflow_api_key` and `smtp_pass`. `redactSecrets` now runs at capture rather than at write, because the body is snapshotted before the handler runs and that snapshot is what gets persisted.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`npx jest --config jest.ci.config.ts src/middlewares/__tests__/auditRedaction.test.ts` reports **45 passed, 45 total**, and the whole middleware directory reports **132 passed across 11 suites**, so nothing else regressed. Two mutations each drive the suite RED and each targets a different failure: removing the `redactSecrets` call from the middleware fails **1** test — the wiring test, which is the only kind that would have caught the original defect, since a pure-function test stays green while the function goes uncalled — and widening `apikey` to a bare `key` substring fails **11**, which is the over-redaction boundary. Both files were restored byte-identically afterwards, sha256 `743ab5ea8c926737` and `141f562fbe7b42c7` matching their pre-mutation values exactly.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">THE HARD PART IS PRECISION, NOT DETECTION. A blunt `/key|token|pass/` would have redacted field names that carry real audit meaning, every one of which was observed in the same production table: `keywords`, `content_key`, `step_key`, `stepKey`, `surfaceKey`, `metricKeys`, `idempotency_key`, the three `*_variable_keys`, and `ai_max_tokens` — a model parameter that contains the word &quot;token&quot;. Over-redaction is not a safe default when it silently destroys the value of thousands of legitimate rows while looking responsible, so `apikey` is matched as a substring while `key` and `token` are matched only as exact names, and both lists are pinned by tests built from the real field names. THIS ONLY STOPS THE BLEEDING. The 639 existing rows still hold the passwords, and the 13 accounts plus the GHL, SMS, Synthflow and SMTP credentials are still unrotated — a stored secret is a compromised secret under CLAUDE.md&#39;s own rule. Both are the DRI&#39;s call and neither has been done. MY OWN MISTAKE DURING THIS WORK, recorded because it nearly shipped: I used `git checkout --` to undo a mutation, which reverted the tracked file to HEAD and so deleted my actual fix, while silently failing on the new untracked file and leaving ITS mutation in place. Caught by comparing sha256 against the values captured before the first mutation, which is the only reason it was caught at all. A restore step needs its own verification exactly as much as the change does.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
           <h2>**This log exists at all: the two merged commits recorded nothing**</h2>
           <span class="badge">2026-10-15</span>
         </div>
