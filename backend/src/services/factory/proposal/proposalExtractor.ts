@@ -193,10 +193,51 @@ function textFromEntry(name: string, buf: Buffer): string {
   return '';
 }
 
-/** Split into sentences on terminators or newlines; keeps the raw text for verbatim citation. */
-function sentences(text: string): string[] {
-  return text
-    .replace(/\r/g, '\n')
+/** A line that STARTS a new logical block: a bullet/number list marker, or a heading. Such a line is
+ *  never glued onto the previous one, so a list or a new section is not swallowed into a prior sentence. */
+const LIST_MARK = /^(?:[-*•]|\(?\d+[.)]|[A-Za-z][.)])\s+/;
+const HEADING_WORD = /^(?:section|article|part|exhibit|attachment|appendix|schedule|addendum|clause)\b/i;
+function isHardStart(line: string): boolean {
+  if (LIST_MARK.test(line)) return true;
+  if (HEADING_WORD.test(line)) return true;
+  // A multi-word ALL-CAPS line reads as a heading ("SCOPE OF WORK"), so it is not glued to prose.
+  if (line.length >= 4 && line.length <= 80 && /\s/.test(line) && /[A-Z]/.test(line) && !/[a-z]/.test(line)) return true;
+  return false;
+}
+
+/**
+ * Split text into sentences, keeping the raw text for verbatim citation.
+ *
+ * When `joinWraps` is true (plain text and PDF, where a newline is usually a SOFT line wrap from the
+ * renderer, not a real boundary), lines broken mid-sentence are rejoined with a space BEFORE splitting,
+ * so a requirement wrapped across two lines stays ONE sentence (the Herriman "...asset management and" /
+ * "work order tracking..." symptom). A newline stays a HARD break only when the previous line already
+ * ends a sentence (. ; :), the line is blank, or the next line starts a list marker or heading - so a
+ * "...the following elements:" intro keeps its list, and a new section is not swallowed.
+ *
+ * When `joinWraps` is false (.docx / .xlsx, where ooxmlText has already made table rows and spreadsheet
+ * cells the boundaries), behaviour is UNCHANGED: every newline splits, so cells never re-fuse.
+ */
+function sentences(text: string, joinWraps = false): string[] {
+  const normalized = text.replace(/\r\n?/g, '\n');
+  let logicalText = normalized;
+  if (joinWraps) {
+    const logical: string[] = [];
+    let blockBreak = true; // start of text, or just after a blank line or a heading
+    for (const rawLine of normalized.split('\n')) {
+      const line = rawLine.trim();
+      if (line === '') { blockBreak = true; continue; }
+      const prev = logical.length ? logical[logical.length - 1] : null;
+      const hardStart = isHardStart(line);
+      const canContinue = prev !== null && !blockBreak && !/[.;:]$/.test(prev) && !hardStart;
+      if (canContinue) logical[logical.length - 1] = `${prev} ${line}`;
+      else logical.push(line);
+      // After a heading the next line starts fresh; a LIST item still accepts its own wrapped continuation.
+      blockBreak = hardStart && !LIST_MARK.test(line);
+    }
+    logicalText = logical.join('\n');
+  }
+  return logicalText
     .split(/(?<=[.;:])\s+|\n+/)
     .map((s) => s.trim())
     .filter((s) => s.length >= MIN_SENTENCE_LEN);
@@ -283,7 +324,10 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     const ctxId = `blk-ctx-${slug(name)}`;
     blocks.push({ id: ctxId, locator: name, text, kind: 'context' });
 
-    for (const s of sentences(text)) {
+    // Rejoin soft-wrapped lines for plain text and PDFs (renderer wraps mid-sentence). For .docx/.xlsx
+    // the ooxmlText reader already made rows/cells the boundaries, so DON'T join or the cells re-fuse.
+    const joinWraps = ext === 'pdf' || ext === 'txt' || ext === 'md';
+    for (const s of sentences(text, joinWraps)) {
       if (requirements.length >= MAX_REQUIREMENTS) break;
       if (!OBLIGATION.test(s)) continue;
       const norm = s.toLowerCase().replace(/\s+/g, ' ');
