@@ -39,6 +39,13 @@ export const BRAND_FONTS: Readonly<Record<string, BrandFonts>> = {
   // Colaberry: "Brand spec: Roboto (display + body)" per colaberry/tokens/fonts.css.
   training: ROBOTO,
   /**
+   * Colaberry Enterprise is Roboto for both roles, per
+   * apps/colaberry-enterprise-design/tokens/typography.css. Listed explicitly rather than left
+   * to the fallback: the fallback is Roboto by accident of history, this is Roboto because the
+   * brand says so, and only the explicit entry is pinned to the source by test.
+   */
+  enterprise: ROBOTO,
+  /**
    * CPN, from apps/cpn-public/src/assets/design/tokens/typography.css:
    *   --font-heading:'Bitter', Georgia, serif;
    *   --font-body:'Atkinson Hyperlegible', system-ui, sans-serif;

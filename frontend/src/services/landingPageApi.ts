@@ -124,3 +124,74 @@ export function errorMessage(err: unknown, fallback: string): string {
   }
   return server || fallback;
 }
+
+/**
+ * Traffic for every hosted landing page.
+ *
+ * Three numbers per page because they answer different questions and are routinely confused:
+ * `visitors` is people, `sessions` is visits, `views` is loads. The live page recorded 11, 24
+ * and 192 of each over thirty days - leading with views would have overstated the audience
+ * seventeenfold.
+ */
+export interface LandingPageTrafficRow {
+  slug: string;
+  brand_slug: string | null;
+  status: string;
+  /** Null means the page carries NO tracker and cannot be measured at all. */
+  site_slug: string | null;
+  visitors: number;
+  sessions: number;
+  views: number;
+  ad_clicks: number;
+  utm_tagged: number;
+  identified_leads: number;
+  /** Button presses recorded on the page. */
+  cta_clicks: number;
+  /** People who pressed a button - one person can press more than once. */
+  cta_clickers: number;
+  /** Visitors who scrolled or stayed long enough to register time on the page. */
+  engaged_visitors: number;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+export async function fetchLandingPageTraffic(days = 30): Promise<{
+  traffic: LandingPageTrafficRow[];
+  window_days: number;
+}> {
+  const res = await api.get('/api/admin/landing-pages/traffic', { params: { days } });
+  return {
+    traffic: Array.isArray(res.data?.traffic) ? res.data.traffic : [],
+    window_days: Number(res.data?.window_days ?? days),
+  };
+}
+
+/** One person we can name who landed on a page. */
+export interface LandingPageVisitor {
+  leadId: number;
+  email: string | null;
+  name: string | null;
+  firstTouch: string;
+  lastTouch: string;
+  clicked: boolean;
+}
+
+/**
+ * Who landed on a page.
+ *
+ * Returns the anonymous count alongside the names on purpose: showing a short list alone reads
+ * as "almost nobody came", when the truth is usually "most of them have not told us who they
+ * are yet". The UI is expected to show both numbers together.
+ */
+export async function fetchLandingPageAudience(path: string, days = 30): Promise<{
+  people: LandingPageVisitor[];
+  totalVisitors: number;
+  anonymousVisitors: number;
+}> {
+  const res = await api.get('/api/admin/landing-pages/audience', { params: { path, days } });
+  return {
+    people: Array.isArray(res.data?.people) ? res.data.people : [],
+    totalVisitors: Number(res.data?.totalVisitors ?? 0),
+    anonymousVisitors: Number(res.data?.anonymousVisitors ?? 0),
+  };
+}

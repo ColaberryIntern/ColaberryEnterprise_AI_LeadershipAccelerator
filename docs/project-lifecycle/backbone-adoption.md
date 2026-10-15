@@ -13,13 +13,20 @@ proven for each consumer rather than assumed.
 
 ---
 
+> **This register was written twice, in parallel, and reconciled on 2026-10-15.** The gov
+> verification ran in its own tab and created this file on `main`; the lifecycle build created it
+> on `workstream/project-lifecycle-phase7`. Git saw an add/add conflict. Neither copy was a
+> superset — one held a production proof of B1 and the delivery-half commands, the other held B2,
+> B3, B4, B5's student half and B6 — so both were merged rather than one chosen. Nothing was
+> dropped; where the two disagreed, the later measurement wins and says so.
+
 ## Where each consumer stands, measured 2026-10-14
 
 | Consumer | Wired? | Proven in production? | Evidence |
 |---|---|---|---|
 | 🏭 **Project Factory** (10 agent domains) | ✅ | ✅ | All ten domains hold exactly one `project_lifecycle_states` row each, stage `discovery`, created 2026-10-13 14:03Z. 0 duplicates, 0 orphans, 0 tenant mismatches |
-| 🏛️ **Gov contracts** (delivery projects) | ✅ | ❌ **unexercised** | `DeliveryProject.ts:174` carries `afterCreate: deliveryProjectLifecycleHook`, and `govDeliveryProject.ts:134` creates through that model — so the wiring is real. But **zero** delivery projects have been created since the hook shipped on 2026-10-09, so it has never fired in production |
-| Legacy delivery projects | — | n/a | 4 rows, 2 of them `government_public_sector`, created 2026-09-21 → 2026-09-28. All predate the hook. None has a lifecycle row |
+| 🏛️ **Gov contracts** (delivery projects) | ✅ | ✅ **proven 2026-10-14** | The delivery hook fired in production for the first time. A sandbox project created through the real `DeliveryProject` model — the exact hook-carrying path `govDeliveryProject.ts:134` uses — left **exactly one** `project_lifecycle_states` row: stage `discovery`, `tenant_id` matching, `entry_point` `delivery_project.afterCreate`. Created, verified, then removed; baseline restored to 4 projects / 0 delivery lifecycle rows. Full query + output in **B1** below |
+| Legacy delivery projects | — | n/a | 4 rows, 2 of them `government_public_sector`, created 2026-09-21 → 2026-09-28. All predate the hook (2026-10-09). None has a lifecycle row. **Measured 2026-10-14: all four are at delivery status `building`, not `discovery`** — see **B2** |
 | Legacy student projects | — | n/a | 62 rows predating the student hook (2026-10-12). None has a lifecycle row. Covered by `legacy_compatibility` in the story gate |
 
 **The difference that matters:** "wired" means the code path exists. "Proven" means it ran in
@@ -29,21 +36,89 @@ production and left evidence. The Factory is both. Gov is only the first.
 
 ## The tasks. This project is not complete until every one of these passes.
 
-### B1 — Prove a NEW gov delivery project registers 🏛️
+### B1 — Prove a NEW gov delivery project registers 🏛️  ✅ PASS (2026-10-14)
 
-**Why:** the delivery hook has never fired in production. A hook that has never run is a claim.
+**Why:** the delivery hook had never fired in production. A hook that has never run is a claim.
 
 **Pass condition.** A delivery project created through the real gov path
 (`govDeliveryProject.ts`, not a test double) holds **exactly one** `project_lifecycle_states` row
 with `delivery_project_id` set, `tenant_id` matching the project, and stage `discovery` — verified
 by a read-only query naming the project id, with the query and its output recorded.
 
-**Fail-closed note:** if the gov path turns out to create through anything other than
-`DeliveryProject.create`, that is the finding, and it is a defect rather than a surprise.
+**What was done.** `govDeliveryProject.ts` registers nothing itself — it relies entirely on the
+`afterCreate` hook on the `DeliveryProject` model (`DeliveryProject.ts:174`). So the honest test
+drives that same model, inside a transaction, exactly as `ensureGovTwoTrackProject` does at
+`govDeliveryProject.ts:134`. Per the instruction, a **clearly-labelled `sandbox` project** was
+used rather than a fabricated government one (two existing rows already use `project_class`
+`sandbox`). No test double, no stubbed hook: the production model ran against the production
+database (`docker exec accelerator-db psql -U accelerator -d accelerator_prod`).
+
+**Verbatim result — create + verify (ran through the compiled model in `accelerator-backend`):**
+
+```
+{"timestamp":"2026-10-14T14:14:13.506Z","level":"info","service":"backend","event":"project_lifecycle_registered","outcome":"success","delivery_project_id":"b2aee34b-e47e-4ed5-8f7a-005a78fbd7a7","tenant_id":"a1ccf4d3-74a3-4b98-b4dd-ba0087efd924","entry_point":"delivery_project.afterCreate","created":true}
+CREATED_DELIVERY_PROJECT_ID=b2aee34b-e47e-4ed5-8f7a-005a78fbd7a7
+SANDBOX_SLUG=lifecycle-verify-b1-1791987253420
+---
+QUERY: SELECT id, tenant_id, delivery_project_id, stage, entry_point, created_at
+       FROM project_lifecycle_states WHERE delivery_project_id = 'b2aee34b-e47e-4ed5-8f7a-005a78fbd7a7';
+---
+ROW_COUNT=1
+[
+  {
+    "id": "04a6052b-abcf-4e73-b16c-e0b3c39ab98d",
+    "tenant_id": "a1ccf4d3-74a3-4b98-b4dd-ba0087efd924",
+    "delivery_project_id": "b2aee34b-e47e-4ed5-8f7a-005a78fbd7a7",
+    "stage": "discovery",
+    "entry_point": "delivery_project.afterCreate",
+    "created_at": "2026-10-14T14:14:13.490Z"
+  }
+]
+---CHECKS---
+exactly_one_row: true
+delivery_project_id_matches: true
+tenant_id_matches: true
+stage_is_discovery: true
+```
+
+**Verbatim result — cleanup (the test rows removed, baseline restored):**
+
+```
+=== CLEANUP: delete the B1 test lifecycle row, then the test project ===
+DELETE 1
+DELETE 1
+
+=== PROOF test project is gone (expect 0 rows) ===
+ id | slug
+----+------
+(0 rows)
+
+ id
+----
+(0 rows)
+
+=== PROOF baseline restored (expect 4 delivery projects, 0 delivery-side lifecycle rows) ===
+ delivery_projects
+-------------------
+                 4
+ delivery_lifecycle_rows
+-------------------------
+                       0
+```
+
+**Verdict:** PASS. The hook fired, created exactly one correctly-shaped lifecycle row, emitted its
+`project_lifecycle_registered` success event, and the test artifact was removed with the tree left
+at its pre-test baseline.
 
 ---
 
 ### B2 — Decide the four legacy delivery projects 🗂️  ✅ **CLOSED 2026-10-14**
+
+> **How this closed.** The Gov tab measured the four projects and recommended option (b) —
+> legacy, out of scope — adding the fact that all four sit at delivery status `building`
+> rather than `discovery`, so backfilling them at `discovery` would have **contradicted
+> their own delivery state**. The DRI decided on that recommendation. The control that makes
+> the decision safe is below.
 
 **Why:** two of them are `government_public_sector`. Today they are invisible to the lifecycle,
 and nobody has decided whether that is correct.
@@ -59,7 +134,7 @@ started. If they are backfilled, the stage must be the one they are actually at.
 
 ---
 
-### B3 — Prove a Factory domain can MOVE 🏭  🟡 **HALF CLOSED 2026-10-14**
+### B3 — Prove a Factory domain can MOVE 🏭  🟡 **UNBLOCKED 2026-10-15, still open**
 
 **Why:** all ten domains are registered and all ten are stuck at `discovery`. Registration is
 proven; the stage machine is not.
@@ -233,23 +308,26 @@ A row moves to ✅ only on evidence that was produced and pasted, never on a rea
 That standard is not pedantry: every failure in this programme's eight phases was a claim that
 did not survive measurement, and not one was a broken behaviour the tests passed over.
 
-**Current score: 5 of 6, with B3 unblocked but not passed.** B2, B4, B5 and B6 closed on
-2026-10-14. Outstanding: **B1** (gov registration has never fired, handed to the Gov tab) and
-**B3**.
+**Current score: 5 of 6. B3 is the only task still open.**
 
-**B3 is still scored open, and the distinction is the point.** Two real defects were found and
-fixed on the way to it — two prerequisites with no measurement, and a manifest nothing wrote —
-and the chain is now proven end to end in test. But B3's pass condition is that a domain
-*actually moves*, and none has. Scoring it closed would record working machinery as a movement,
-which is the same category error as recording registration as enforcement. It closes when
-somebody composes a real blueprint.
+| | Task | State |
+|---|---|---|
+| **B1** | a NEW gov delivery project registers | ✅ **proven in production 2026-10-14** by the Gov tab — the hook fired, left exactly one correctly-shaped row, and the test artifact was removed with the baseline restored |
+| **B2** | decide the four legacy delivery projects | ✅ closed by the DRI on the Gov tab's recommendation; the default that makes it safe is now a tested control |
+| **B3** | a Factory domain MOVES | ⬜ **open.** Two real defects found and fixed on the way — two prerequisites with no measurement, and a manifest nothing wrote — and the chain is proven end to end in test. No domain has moved |
+| **B4** | the bypass detectors have a caller | ✅ on `/health/full`, 5 mutations |
+| **B5** | no creation path bypasses the hook | ✅ both halves: 4 student + 5 delivery sites, zero raw-SQL inserts |
+| **B6** | LC-01 names both consumers | ✅ split into wired / proven / enforced |
 
-**B3 stays open deliberately rather than being scored on the half that is done.** The gate it was
-blocked on is now measurable and mutation-tested, which is a real defect closed — the first stage
-of thirteen could not be passed by any project, and now it can. But B3's pass condition is that a
-domain actually *moves*, and nothing writes the manifest those measurements read, so no domain has
-moved. Scoring it 5 of 6 would record a measurement as a movement. The remaining half needs one
-decision from the DRI, stated at the end of the B3 section above.
+**B3 stays open, and the distinction is the point.** Its pass condition is that a domain
+*actually moves*, and none has. Scoring it closed would record working machinery as a movement —
+the same category error as recording registration as enforcement. It closes when somebody
+composes a real blueprint, which is a work session rather than a code change.
+
+**Both consumers are now proven on the backbone.** The Factory was already. Gov is as of
+2026-10-14, through a chokepoint shown to have no bypass.
+
+---
 
 ### B2 decision and evidence
 
@@ -302,6 +380,51 @@ grep -rn "tableName: 'projects'|tableName: 'delivery_projects'" models/*.ts
 ```
 
 No `bulkCreate` anywhere, which matters: it does not fire per-row `afterCreate` hooks.
+
+#### The delivery half, as the Gov tab ran it
+
+Recorded because it is **re-runnable by someone else and names exactly what it searched**, which
+the sweep above summarises rather than prints. Both halves now pass; this is the delivery one.
+
+**Command (re-runnable; names exactly what it searched) — the `delivery_projects` half:**
+
+```bash
+# (1) every model-based create of a delivery project
+grep -rnE "DeliveryProject\.(create|bulkCreate|upsert|findOrCreate|build)\b" \
+  backend/src --include=*.ts | grep -v "__tests__"
+# (2) any RAW SQL insert into delivery_projects (ANY hit is a FINDING)
+grep -rniE "insert[[:space:]]+into[[:space:]]+delivery_projects" \
+  backend/src/services backend/src/scripts backend/src/db backend/src/seeds | grep -v "__tests__"
+# (3) any hook-bypassing form (bulkCreate / upsert / hooks:false) on DeliveryProject
+grep -rnE "DeliveryProject\.(bulkCreate|upsert)|hooks:\s*false" \
+  backend/src --include=*.ts | grep -v "__tests__"
+```
+
+**Verbatim output:**
+
+```
+--- (1) Model-based creation sites ---
+backend/src/scripts/seedDevClientReviewer.ts:183:    project = await DeliveryProject.create({
+backend/src/scripts/seedFactoryDemoContract.ts:31:    project = await DeliveryProject.create({
+backend/src/scripts/seedOrdinaryProjectDemo.ts:27:    project = await DeliveryProject.create({
+backend/src/services/delivery/leadConversion.ts:175:  const project = found.project ?? await DeliveryProject.create({
+backend/src/services/factory/govDeliveryProject.ts:134:      project = await DeliveryProject.create({
+(line 9 of the grep — projectLifecycleRegistration.ts:99 — is a comment, not a call site)
+
+--- (2) RAW SQL inserts into delivery_projects (ANY hit here is a FINDING) ---
+NONE — no raw-SQL insert into delivery_projects in backend/src (excluding tests)
+
+--- (3) bulkCreate / upsert / hooks:false on DeliveryProject ---
+(no DeliveryProject.bulkCreate/upsert and no hooks:false; the only grep hits are an unrelated
+ `webhooks: false` in providerCapabilities.ts and comment text in projectLifecycleRegistration.ts)
+```
+
+**Verdict (delivery half):** exactly five call sites create a `delivery_projects` row, every one
+through `DeliveryProject.create` — the model carrying `afterCreate: deliveryProjectLifecycleHook`.
+The gov path (`govDeliveryProject.ts:134`) is in the set. Zero raw-SQL inserts, zero
+hook-bypassing forms. B1 then proves that hook actually fires.
+
+---
 
 ### B4 evidence
 

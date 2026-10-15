@@ -26,6 +26,7 @@ const base = (over: Partial<OccurrenceState> = {}): OccurrenceState => ({
   provider_health: 'unknown',
   version: 1,
   content_started_at: null,
+  ended_at: null,
   ...over,
 });
 
@@ -235,5 +236,50 @@ describe('provider events', () => {
     const r = applyProviderEvent(live, { health: 'ready', occurredAtMs: NOW + 1000 }, NOW);
     expect(r).toMatchObject({ ok: true, noop: true });
     expect(r.patch).toBeUndefined();
+  });
+});
+
+/**
+ * `ended_at` existed on the model and in the schema from the start, and NOTHING EVER WROTE
+ * IT. The first production airing (15 Oct 2026) ended cleanly - state moved to `ended`,
+ * discovery stopped returning the occurrence, the badge cleared - and left `ended_at` null.
+ * Any later report on broadcast duration, watch windows or replay availability would have had
+ * no end instant to work from.
+ */
+describe('the end instant', () => {
+  const live = () => base({ editorial_state: 'live', provider_health: 'ready', content_started_at: new Date(NOW) });
+
+  it('ending a live broadcast stamps ended_at from the injected clock', () => {
+    const r = applyProducerCommand(live(), 'end', ctx({ nowMs: NOW + 90_000 }));
+    expect(r.ok).toBe(true);
+    expect(r.patch!.editorial_state).toBe('ended');
+    expect((r.patch!.ended_at as Date).toISOString()).toBe('2026-07-23T23:31:30.000Z');
+  });
+
+  it('does NOT rewrite an end instant that is already set', () => {
+    const already = new Date(NOW - 60_000);
+    const r = applyProducerCommand(base({
+      editorial_state: 'live', provider_health: 'ready', content_started_at: new Date(NOW), ended_at: already,
+    }), 'end', ctx({ nowMs: NOW }));
+    expect(r.ok).toBe(true);
+    // Present in the patch would mean the second end overwrote the first, losing when the
+    // broadcast actually finished.
+    expect(r.patch).not.toHaveProperty('ended_at');
+  });
+
+  it('CANCELLING does not stamp an end instant - it never aired', () => {
+    // Recording a time it "ended" would assert in the data that something ran and finished.
+    const r = applyProducerCommand(base({ editorial_state: 'scheduled' }), 'cancel', ctx());
+    expect(r.ok).toBe(true);
+    expect(r.patch!.editorial_state).toBe('cancelled');
+    expect(r.patch).not.toHaveProperty('ended_at');
+  });
+
+  it('going live does not stamp an end instant', () => {
+    const r = applyProducerCommand(base({
+      editorial_state: 'backstage', provider_health: 'ready', content_started_at: new Date(NOW),
+    }), 'go_live', ctx());
+    expect(r.ok).toBe(true);
+    expect(r.patch).not.toHaveProperty('ended_at');
   });
 });

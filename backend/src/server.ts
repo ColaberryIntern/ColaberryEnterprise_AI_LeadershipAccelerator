@@ -31,6 +31,7 @@ import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
 import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
+import publicTrackingConfigRoutes from './routes/publicTrackingConfigRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
@@ -157,6 +158,7 @@ import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributio
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureBrandPixelSchema } from './db/ensureBrandPixelSchema';
 import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
@@ -262,6 +264,9 @@ app.use(mediaFetchRoutes);
 // session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
 // publicLandingPageRoutes.test.ts, which builds both orders and asserts 200 above / 404 below.
 app.use(publicLandingPageRoutes);
+// Same reason, same position: the portal asks this before a visitor has signed in, so it has
+// to answer above adminRoutes or a logged-out page gets a 401 for public information.
+app.use(publicTrackingConfigRoutes);
 // LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
 app.use(linkedInCallbackRoutes);
 // Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).
@@ -2692,6 +2697,10 @@ async function start(): Promise<void> {
   // Versioned per-brand governance rules (T022). Rows, not a column, so an approval given
   // under version N can still be read against what N said after N+1 is published.
   await ensureBrandGovernanceSchema();
+  // Right after brand governance, because it only touches the brands table: one nullable
+  // column carrying the brand's Meta Pixel ID, so tracking is configured per brand rather
+  // than pasted per page.
+  await ensureBrandPixelSchema();
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
@@ -3244,6 +3253,16 @@ async function start(): Promise<void> {
     await ensureHandoffSchema();
   } catch (err: any) {
     console.warn('[DB] portal_handoff_tokens schema ensure failed:', err?.message);
+  }
+  // Apollo credit guard counter (idempotent). Must exist before any Apollo call, and
+  // the guard FAILS CLOSED, so if this ensure fails the table is missing and every
+  // Apollo call is refused rather than made without a ceiling. That is the intended
+  // ordering: no counter, no spending. See CC-20260710-a9f2 (credit-leak audit).
+  try {
+    const { ensureApolloCreditGuardSchema } = await import('./db/ensureApolloCreditGuardSchema');
+    await ensureApolloCreditGuardSchema();
+  } catch (err: any) {
+    console.warn('[DB] apollo_credit_usage schema ensure failed:', err?.message);
   }
   // Seed v0 automation rules (idempotent).
   try {

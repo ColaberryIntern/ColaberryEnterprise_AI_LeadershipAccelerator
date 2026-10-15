@@ -129,6 +129,17 @@ export const env = {
   // Default off protects against the scheduled lead-gen agents draining credits
   // unattended. See CC-20260710-a9f2 (Apollo credit-leak audit).
   apolloEnabled: process.env.APOLLO_ENABLED === 'true',
+  // Spend ceilings. APOLLO_ENABLED is an on/off valve, not a brake: once it is on,
+  // nothing else limits volume, and fetchWithRetry RETRIES on 429 — so hitting the
+  // rate limit spends more, not less. These are the brake.
+  //   PER_DAY  persisted per UTC day, so it survives a restart. A runaway restarts.
+  //   PER_RUN  per process, so one loop cannot drain the day's budget in a minute,
+  //            which is the shape the original leak took.
+  // Both default conservatively. Raise them deliberately, never by accident.
+  apolloMaxCallsPerDay: Number(process.env.APOLLO_MAX_CALLS_PER_DAY || 250),
+  apolloMaxCallsPerRun: Number(process.env.APOLLO_MAX_CALLS_PER_RUN || 50),
+  // Fraction of the daily ceiling at which a once-per-day alert fires.
+  apolloAlertFraction: Number(process.env.APOLLO_ALERT_FRACTION || 0.8),
 
   // Curriculum video link health check (daily). Default OFF so the job cannot
   // start raising alerts — which fan out to the catch-all alert subscription —

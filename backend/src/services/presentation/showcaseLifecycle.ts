@@ -1,0 +1,191 @@
+import { contentHash } from './showcaseService';
+
+/**
+ * The three steps nothing could perform: ask, approve, announce.
+ *
+ * Phase 6 built `publishShowcase`, `withdrawShowcase` and the whole access model —
+ * for rows that no code in the repository ever inserted. `canPublish` guarded a
+ * state unreachable by any path. This is the half that makes the other half mean
+ * something.
+ *
+ * WHY A SHOWCASE EXISTS AT ALL, now that a recording already becomes a portfolio
+ * artifact on hand-in. The artifact is the learner's own record and needs nobody's
+ * permission. Showing it to a cohort is a different act, and this one is gated:
+ * the author asks, a staff member approves, and only then does anyone else see it.
+ * Those are two different questions about the same video and they get two different
+ * stores.
+ *
+ * THE POST IS THE PUBLICATION. A published showcase produces a `CommunityPost` —
+ * the same object a text message in the cohort feed is, with the same likes and
+ * comments — rather than a bespoke gallery nobody visits. The registry already
+ * pointed here: the `demo` card type carries `home_surface: 'community'`.
+ *
+ * THE POST REFERENCES THE RECORDING, NEVER CARRIES IT. Community media is served by
+ * `res.sendFile` with no auth and capped at 8 MB for "not so big images". Putting a
+ * rehearsal there would publish bytes on an unauthenticated path and break on any
+ * take over the cap. The post names the recording; the player resolves it through
+ * the ticketed route, which still checks ownership on every request.
+ */
+
+async function db() {
+  const { sequelize } = await import('../../config/database');
+  return sequelize;
+}
+
+function log(event: string, ctx: Record<string, unknown>, outcome: 'success' | 'failure' = 'success'): void {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: outcome === 'failure' ? 'warn' : 'info',
+    service: 'presentation-showcase', event, outcome, context: ctx,
+  }));
+}
+
+export interface RequestShareInput {
+  enrollmentId: string;
+  attemptId: string;
+  cohortId: string | null;
+  /** The blurb a stranger reads. Already grounding-checked by `showcaseDraft`. */
+  draftSummary: string;
+  recordingIds: string[];
+  artifactId?: string | null;
+}
+
+export type RequestShareResult =
+  | { ok: true; showcaseId: string; created: boolean }
+  | { ok: false; reason: string };
+
+/**
+ * The author asks to share. Records THEIR approval and nobody else's.
+ *
+ * Idempotent on the attempt: asking twice is one request, not two pending reviews.
+ * The content hash is frozen here, so a take swapped afterwards makes the approval
+ * stale rather than silently carrying it onto different footage.
+ */
+export async function requestShare(input: RequestShareInput): Promise<RequestShareResult> {
+  const summary = (input.draftSummary || '').trim();
+  if (!summary) return { ok: false, reason: 'A showcase needs a summary somebody can read.' };
+
+  const hash = contentHash({
+    attemptId: input.attemptId,
+    recordingIds: input.recordingIds,
+    draftSummary: summary,
+    artifactId: input.artifactId ?? null,
+  });
+
+  const sequelize = await db();
+  const [rows] = await sequelize.query(
+    `INSERT INTO presentation_showcases
+       (attempt_id, audience, draft_json, content_hash, artifact_id, author_approved_at)
+     VALUES (:attemptId, 'private', CAST(:draft AS jsonb), :hash, :artifactId, NOW())
+     -- The unique index is PARTIAL (\`WHERE withdrawn_at IS NULL\`), so the conflict
+     -- target has to carry the same predicate or Postgres cannot infer it and the
+     -- statement fails outright. The partial scope is deliberate: a withdrawn
+     -- showcase may legitimately be replaced by a new request later.
+     ON CONFLICT (attempt_id) WHERE withdrawn_at IS NULL DO NOTHING
+     RETURNING id`,
+    {
+      replacements: {
+        attemptId: input.attemptId,
+        draft: JSON.stringify({ summary, current_content_hash: hash }),
+        hash,
+        artifactId: input.artifactId ?? null,
+      },
+    },
+  ) as [Array<{ id: string }>, unknown];
+
+  if (rows?.length) {
+    log('showcase_share_requested', { showcaseId: rows[0].id, attemptId: input.attemptId });
+    return { ok: true, showcaseId: String(rows[0].id), created: true };
+  }
+
+  // Already asked. Hand back the existing request rather than minting a second.
+  // Scoped to the LIVE one, matching the partial index: a withdrawn showcase is
+  // history, and returning it here would hand the caller a dead row and then refuse
+  // to publish it.
+  const [found] = await sequelize.query(
+    `SELECT id FROM presentation_showcases
+      WHERE attempt_id = :attemptId AND withdrawn_at IS NULL
+      LIMIT 1`,
+    { replacements: { attemptId: input.attemptId } },
+  ) as [Array<{ id: string }>, unknown];
+
+  return found?.length
+    ? { ok: true, showcaseId: String(found[0].id), created: false }
+    : { ok: false, reason: 'Could not record the request.' };
+}
+
+/**
+ * Staff approve. Separate from the author's approval on purpose: `approvalState`
+ * requires BOTH, and a single column would let one party publish alone.
+ *
+ * Guarded on `staff_approved_at IS NULL` so a second click is a no-op rather than a
+ * re-approval that moves the timestamp and muddies who signed off when.
+ */
+export async function staffApprove(showcaseId: string, staffIdentity: string): Promise<boolean> {
+  const sequelize = await db();
+  const [rows] = await sequelize.query(
+    `UPDATE presentation_showcases
+        SET staff_approved_at = NOW(), staff_approved_by = :by, updated_at = NOW()
+      WHERE id = :id AND staff_approved_at IS NULL AND withdrawn_at IS NULL
+     RETURNING id`,
+    { replacements: { id: showcaseId, by: staffIdentity } },
+  ) as [Array<{ id: string }>, unknown];
+
+  const changed = (rows?.length || 0) > 0;
+  log('showcase_staff_approved', { showcaseId, by: staffIdentity, changed });
+  return changed;
+}
+
+export interface AnnounceInput {
+  showcaseId: string;
+  memberId: string;
+  cohortId: string;
+  /** `recording:<attemptId>` — resolved to a player by the feed, never a file path. */
+  recordingRef: string;
+  summary: string;
+  week?: number | null;
+  sourceCardId?: string | null;
+}
+
+/**
+ * Announce a published showcase to the cohort feed.
+ *
+ * Idempotent on the showcase: the publication ref is carried in `ritual_meta`, and a
+ * second announce finds the existing post instead of double-posting a demo into
+ * everyone's feed — which is the kind of mistake that is visible to thirty people
+ * before anyone can delete it.
+ */
+export async function announceToCommunity(input: AnnounceInput): Promise<{ postId: string; created: boolean } | null> {
+  const sequelize = await db();
+  const ref = `showcase:${input.showcaseId}`;
+
+  const [existing] = await sequelize.query(
+    `SELECT id FROM community_posts WHERE ritual_meta->>'showcase_ref' = :ref LIMIT 1`,
+    { replacements: { ref } },
+  ) as [Array<{ id: string }>, unknown];
+  if (existing?.length) return { postId: String(existing[0].id), created: false };
+
+  const [rows] = await sequelize.query(
+    `INSERT INTO community_posts
+       (member_id, cohort_id, body, category, week, source_card_id, shared_to_portfolio, ritual_meta)
+     VALUES (:memberId, :cohortId, :body, 'demo_video', :week, :cardId, TRUE, CAST(:meta AS jsonb))
+     RETURNING id`,
+    {
+      replacements: {
+        memberId: input.memberId,
+        cohortId: input.cohortId,
+        body: input.summary,
+        week: input.week ?? null,
+        cardId: input.sourceCardId ?? null,
+        // `media_urls` is deliberately left empty. The recording is NOT uploaded
+        // here — community media is unauthenticated and capped at 8 MB. The ref is
+        // what the feed resolves through the ticketed playback route.
+        meta: JSON.stringify({ showcase_ref: ref, recording_ref: input.recordingRef, kind: 'demo_video' }),
+      },
+    },
+  ) as [Array<{ id: string }>, unknown];
+
+  if (!rows?.length) return null;
+  log('showcase_announced', { showcaseId: input.showcaseId, postId: rows[0].id, cohortId: input.cohortId });
+  return { postId: String(rows[0].id), created: true };
+}

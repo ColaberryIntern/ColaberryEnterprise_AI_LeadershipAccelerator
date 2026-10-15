@@ -217,7 +217,7 @@ function EnrollPage() {
     <>
       <SEOHead
         title="Enroll"
-        description="Create your free Colaberry account and start exploring the AI Systems Architect Accelerator, or redeem a sponsor code from your employer."
+        description="Create your Colaberry account at $0 to start and explore the AI Systems Architect Accelerator, or redeem a sponsor code from your employer."
       />
 
       {/* Hero */}
@@ -250,7 +250,7 @@ function EnrollPage() {
               marginBottom: 'var(--space-3)',
             }}
           >
-            Start for free
+            Start for $0
           </h1>
           <p
             style={{
@@ -261,15 +261,15 @@ function EnrollPage() {
             }}
           >
             Most people consume AI. Very few learn to build with it. Create your
-            free account below — no card needed — or redeem a code from your
-            employer.
+            account below — $0 to start, no card needed — or redeem a code from
+            your employer.
           </p>
         </div>
       </section>
 
       {/* Enrollment Form */}
       <section
-        aria-label="Free Account Signup"
+        aria-label="Account Signup"
         style={{
           background: 'var(--surface-page)',
           padding: 'var(--space-16) var(--space-4)',
@@ -296,8 +296,8 @@ function EnrollPage() {
               <p style={{ fontSize: 'var(--fs-body-lg)', color: 'var(--text-body)', marginBottom: 'var(--space-6)' }}>
                 Your login is on its way to{' '}
                 <strong style={{ color: 'var(--text-strong)' }}>{formData.email}</strong> —
-                open that email to enter your portal: free AI material, a community
-                of builders, and free live events.
+                open that email to enter your portal: AI material, a community
+                of builders, and live events.
               </p>
 
               <Card padded style={{ marginBottom: 'var(--space-5)', textAlign: 'left' }}>
@@ -314,7 +314,7 @@ function EnrollPage() {
                 </h3>
                 <ol style={{ lineHeight: 2, marginBottom: 0, color: 'var(--text-body)' }}>
                   <li>Check your email for your sign-in link</li>
-                  <li>Click it to enter your free portal — no card required</li>
+                  <li>Click it to enter your portal — no card required</li>
                   <li>Explore the program, then upgrade whenever you're ready</li>
                 </ol>
               </Card>
@@ -457,7 +457,7 @@ function EnrollPage() {
                   </div>
 
                   <Button type="submit" size="lg" fullWidth disabled={submitting}>
-                    {submitting ? 'Creating your account...' : 'Create My Free Account'}
+                    {submitting ? 'Creating your account...' : 'Create My Account'}
                   </Button>
                   <p
                     className="text-center"
@@ -651,7 +651,7 @@ function EnrollPage() {
                 No Card Needed
               </h3>
               <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
-                Free to start — upgrade anytime from inside the portal
+                $0 to start — upgrade anytime from inside the portal
               </p>
             </div>
             <div className="col-md-4">

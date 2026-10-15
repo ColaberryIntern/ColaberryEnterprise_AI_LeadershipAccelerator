@@ -303,8 +303,17 @@ this is stated rather than assumed.
   activation. All ten projects rest at `discovery` and are never activated by the provisioning run,
   so an unresolved manager is permissible there and **nowhere else** — and where a manager cannot
   reach the surface, the project says so as a named blocker rather than reporting ready. Measured
-  2026-10-08: six of ten domains have a manager who can reach it, across five distinct humans; four
-  carry a named blocker.
+  2026-10-15: seven of ten domains have a manager who can reach it, across six distinct humans;
+  three carry a named blocker.
+
+  **Corrected from six of ten / four blocked, measured 2026-10-08.** Admissions was recorded as
+  blocked on the finding that its manager had no `admin_users` row. He has one. The miss came from
+  an **email mismatch**: his `org_members` row carries his personal address while he signs in with
+  his work one, so matching `org_members.email` against `admin_users.email` found nothing and that
+  was read as "no login". The reliable link is `org_members.enrollment_id` to `enrollments.email`,
+  a real foreign key populated on 29 of 29 rows; `platform_identity_id` would be the proper
+  identity column and is NULL on all 29. The three remaining blockers were re-checked against both
+  addresses and are real.
 
 ### Readiness
 

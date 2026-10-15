@@ -14,7 +14,11 @@ import { LANDING_PAGE_THEMES, NEUTRAL_THEME, themeForLandingPage } from '../land
 const BRAND = { name: 'Colaberry Training', default_theme_key: 'training' };
 const FLOTATION = { name: 'AI Flotation', default_theme_key: 'ai-flotation' };
 /** A brand whose palette and lockup genuinely have not been agreed. */
-const UNBRANDED = { name: 'Colaberry Enterprise', default_theme_key: 'enterprise' };
+// A key with no design system ANYWHERE, which is the only stable stand-in for "unbranded".
+// This was `enterprise` until 2026-10-13, when that brand's system was finally vendored and
+// wired - at which point these tests asserted the opposite of the truth. A real brand makes a
+// poor fixture for "has no palette", because the whole direction of travel is that it gets one.
+const UNBRANDED = { name: 'A Brand With No Design System', default_theme_key: 'no-such-system' };
 
 function render(content: LandingPageContentShape, over: Partial<Parameters<typeof renderLandingPage>[0]> = {}) {
   return renderLandingPage({
@@ -410,7 +414,7 @@ describe('theming is honest about what has been decided', () => {
     // above a different client's page.
     const { html } = render(MINIMAL, { brand: UNBRANDED });
     expect(html).not.toContain('colaberry-horizontal.png');
-    expect(html).toContain('>Colaberry Enterprise</span>');
+    expect(html).toContain('>A Brand With No Design System</span>');
   });
 });
 

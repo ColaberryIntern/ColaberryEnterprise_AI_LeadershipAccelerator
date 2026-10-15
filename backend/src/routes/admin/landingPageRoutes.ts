@@ -5,6 +5,9 @@ import { adminTenantScope, scopeAllows } from '../../modules/tenancy/adminScopeB
 import { WorkflowError } from '../../services/content/contentWorkflowService';
 import { landingPageContentSchema } from '../../schemas/landingPageContentSchema';
 import type LandingPage from '../../models/LandingPage';
+import { landingPageTraffic } from '../../services/marketing/landingPageTraffic';
+import { siteSlugForBrand } from '../../services/marketing/landingPageSiteTag';
+import { landingPageAudience } from '../../services/marketing/landingPageVisitors';
 
 /**
  * Landing page authoring API — brief in, reviewable page out.
@@ -160,7 +163,12 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
     const page = await Model.create({
       tenant_id: brand.tenant_id,
       brand_id: brand.id,
-      site_slug: parsed.data.site_slug ?? null,
+      // DERIVED FROM THE BRAND when the caller does not say, which is always: no screen has
+      // ever sent one. The old default was null, and a null site_slug means the renderer emits
+      // no tracker at all - so every hosted page built through the product was born unable to
+      // record a single visit. An explicit value still wins, for a page that belongs to a
+      // property other than its brand's own.
+      site_slug: parsed.data.site_slug ?? siteSlugForBrand(brand.slug),
       kind: 'hosted',
       status: 'draft',
       name: parsed.data.name,
@@ -361,8 +369,15 @@ router.post('/api/admin/landing-pages/:id/publish', requireAdmin, async (req: Re
       });
     }
 
+    // PUBLISHING REPAIRS A MISSING SITE TAG. Pages created before the create route derived one
+    // still carry null, and a null means the renderer emits no tracker - so publishing such a
+    // page would put it in front of an audience it cannot count. Only filled when absent: an
+    // explicit tag someone chose is never overwritten by a derived one.
+    const siteSlug = page.site_slug ?? siteSlugForBrand(brand.slug);
+
     await page.update({
       slug, status: 'published', published_at: new Date(), path: `/lp/${brand.slug}/${slug}`,
+      site_slug: siteSlug,
     } as never);
 
     /**
@@ -429,6 +444,55 @@ const ListSchema = z.object({
   kind: z.enum(['hosted', 'external_path']).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
 }).strict();
+
+/**
+ * GET /api/admin/landing-pages/traffic - who and how many are landing on each page.
+ *
+ * MOUNTED BEFORE `/:id/...` ROUTES in this file would be a problem if `traffic` could be read as
+ * an id; it cannot, because every id route validates a UUID and `traffic` is not one. It is
+ * declared here beside the list route it belongs with rather than at the top for that reason.
+ *
+ * Tenancy follows the list route exactly: a denied scope gets an empty array, not a 403, because
+ * "you may see no pages" and "there are no pages" are the same answer to this question and the
+ * difference is not worth leaking.
+ */
+/**
+ * GET /api/admin/landing-pages/audience?path=/lp/:brand/:slug - who landed, by name where known.
+ *
+ * Takes the PATH rather than an id because the caller already has it from the traffic row, and
+ * because the audience is a property of the public address: two rows that have ever served the
+ * same path share an audience, and an id would silently split it.
+ */
+router.get('/api/admin/landing-pages/audience', requireAdmin, async (req: Request, res: Response) => {
+  const path = String(req.query.path ?? '');
+  // Shape-checked before it reaches a query. Only a hosted landing path is answerable here.
+  if (!/^\/lp\/[a-z0-9-]{1,64}\/[a-z0-9-]{1,160}$/.test(path)) {
+    return void res.status(400).json({ error: 'A /lp/<brand>/<slug> path is required', error_class: 'ValidationError' });
+  }
+  const days = Number.parseInt(String(req.query.days ?? '30'), 10);
+  try {
+    const scope = await adminTenantScope(req.admin);
+    if (scope.mode === 'denied') {
+      return void res.json({ people: [], totalVisitors: 0, anonymousVisitors: 0 });
+    }
+    res.json(await landingPageAudience(path, Number.isFinite(days) ? days : 30));
+  } catch {
+    res.status(500).json({ error: 'Failed to load the audience', error_class: 'InternalError' });
+  }
+});
+
+router.get('/api/admin/landing-pages/traffic', requireAdmin, async (req: Request, res: Response) => {
+  const days = Number.parseInt(String(req.query.days ?? '30'), 10);
+  try {
+    const scope = await adminTenantScope(req.admin);
+    if (scope.mode === 'denied') return void res.json({ traffic: [], window_days: 30 });
+
+    const rows = await landingPageTraffic(Number.isFinite(days) ? days : 30);
+    res.json({ traffic: rows, window_days: Number.isFinite(days) ? Math.min(Math.max(days, 1), 365) : 30 });
+  } catch {
+    res.status(500).json({ error: 'Failed to load landing page traffic', error_class: 'InternalError' });
+  }
+});
 
 router.get('/api/admin/landing-pages', requireAdmin, async (req: Request, res: Response) => {
   const parsed = ListSchema.safeParse(req.query);

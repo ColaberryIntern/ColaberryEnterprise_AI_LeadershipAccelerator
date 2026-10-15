@@ -12,6 +12,7 @@ import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
 import { newPostGate } from './newPostGate';
 import MarketingHub from './MarketingHub';
+import { channelIssues, blockedProvidersFor, countPostsAtRisk } from './marketingOverviewSignals';
 
 /**
  * Marketing Overview - the landing page, rebuilt around the work instead of the numbers.
@@ -32,6 +33,21 @@ import MarketingHub from './MarketingHub';
  *
  * Every block is a door into the page behind it. That is the property the old landing page
  * lacked entirely, and it is why the tab read as a pile of loose parts.
+ *
+ * ── REDESIGNED 2026-10-15, because the page knew two things and never put them together ──
+ *
+ * It showed three posts scheduled, and a LinkedIn token that had expired two days earlier, in
+ * different cards in different columns. Nothing connected them. A post aimed at a dead channel
+ * read as "scheduled", the dead channel read as a status badge rather than as work, and the
+ * operator found out it had failed after it failed.
+ *
+ * Three changes follow from that:
+ *
+ *   1. CHANNEL HEALTH IS WORK, so it sits at the top of "Needs you" rather than in a sidebar.
+ *      An expired token outranks an approval: it breaks everything downstream of it.
+ *   2. A SCHEDULED POST SAYS WHEN IT CANNOT GO OUT, named by channel, on the row itself.
+ *   3. THE DUPLICATION IS GONE. "2 channels can publish" appeared as a tile, as a sentence
+ *      under the accounts list, and again as a row of health dots. One statement of a fact.
  */
 
 function HealthDot({ tone }: { tone: string }) {
@@ -44,7 +60,7 @@ function HealthDot({ tone }: { tone: string }) {
   );
 }
 
-function UpcomingRow({ post }: { post: UpcomingPost }) {
+function UpcomingRow({ post, blocked }: { post: UpcomingPost; blocked: string[] }) {
   const channels = post.providers.length
     ? post.providers.map(providerLabel).join(' · ')
     : 'No channel chosen';
@@ -64,6 +80,17 @@ function UpcomingRow({ post }: { post: UpcomingPost }) {
       {post.late && <span className="badge bg-danger-subtle text-danger-emphasis">Late</span>}
       {post.status === 'publishing' && (
         <span className="badge bg-info-subtle text-info-emphasis">Publishing</span>
+      )}
+      {/* The join the page used to leave to the reader: this post is queued for a channel that
+          cannot publish, so it will fail when its time comes. Named by channel, because "will
+          fail" without saying which account to fix is only half an answer. */}
+      {blocked.length > 0 && (
+        <span
+          className="badge bg-danger-subtle text-danger-emphasis text-nowrap"
+          title={`Cannot publish to ${blocked.map(providerLabel).join(', ')} - the account needs reconnecting`}
+        >
+          {blocked.map(providerLabel).join(', ')} will fail
+        </span>
       )}
     </Link>
   );
@@ -141,6 +168,10 @@ export default function AdminMarketingOverviewPage() {
   const accounts = overview?.accounts ?? [];
   const handoff = overview?.handoff_providers ?? [];
   const usable = accounts.filter((a) => presentHealth(a.health).usable).length;
+  // The two joins the page exists to make. Computed here so both the banner and the rows read
+  // the same answer - two call sites deriving it separately is how they come to disagree.
+  const issues = channelIssues(accounts, upcoming);
+  const atRisk = countPostsAtRisk(upcoming, accounts, handoff);
   const ready = overviewLoading || overviewError !== null;
   // `ready` is true while loading OR after a failure, which is exactly when the channel count
   // is not known - so the gate is handed null then and stays open.
@@ -182,6 +213,49 @@ export default function AdminMarketingOverviewPage() {
 
         <div className="row g-3">
           <div className="col-12 col-xl-7">
+            {/*
+              CHANNEL HEALTH, ABOVE THE QUEUE. This used to be a status badge in the right
+              column while posts were being scheduled to the dead account it described. It is
+              the highest-consequence state on the page - everything downstream of it fails
+              silently - so it opens the worklist rather than sitting beside it.
+            */}
+            {!ready && issues.length > 0 && (
+              <div className="alert alert-danger py-2 px-3 mb-3" data-testid="channel-issues">
+                <div className="d-flex align-items-start gap-2 flex-wrap">
+                  <i className="ri-plug-line mt-1" aria-hidden="true" />
+                  <div className="flex-grow-1">
+                    <div className="fw-semibold small mb-1">
+                      {issues.length === 1 ? 'A channel needs you' : `${issues.length} channels need you`}
+                      {atRisk > 0 && (
+                        <span className="fw-normal">
+                          {' · '}
+                          {atRisk} scheduled {atRisk === 1 ? 'post' : 'posts'} will fail
+                        </span>
+                      )}
+                    </div>
+                    <ul className="list-unstyled mb-0 small">
+                      {issues.map((i) => (
+                        <li key={i.accountId}>
+                          <strong>{providerLabel(i.provider)}</strong>
+                          {' — '}{i.label.toLowerCase()}
+                          {typeof i.daysLeft === 'number' && i.kind === 'expiring'
+                            && ` in ${i.daysLeft} ${i.daysLeft === 1 ? 'day' : 'days'}`}
+                          {i.scheduledHere > 0 && (
+                            <span className="text-danger-emphasis">
+                              {' · '}{i.scheduledHere} queued here
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <Link className="btn btn-sm btn-danger text-nowrap" to="/admin/marketing/brands">
+                    Reconnect
+                  </Link>
+                </div>
+              </div>
+            )}
+
             <SectionCard title="Needs you" icon="alarm-warning-line" padded={false} className="mb-3">
               <NeedsAttentionQueue
                 loading={attentionLoading}
@@ -225,7 +299,9 @@ export default function AdminMarketingOverviewPage() {
                   {...(gate.allowed ? { actionLabel: 'Write a post', to: '/admin/marketing/composer' } : {})}
                 />
               )}
-              {!ready && upcoming.map((p) => <UpcomingRow key={p.id} post={p} />)}
+              {!ready && upcoming.map((p) => (
+                <UpcomingRow key={p.id} post={p} blocked={blockedProvidersFor(p, accounts, handoff)} />
+              ))}
               {overview?.upcoming_truncated && (
                 <div className="px-3 py-2 small text-muted">
                   More are scheduled than fit here.{' '}
@@ -298,10 +374,11 @@ export default function AdminMarketingOverviewPage() {
                 </Link>
               </div>
               <hr className="my-3" />
+              {/* The landing pages now report their own traffic, and this is the page where a
+                  person asks "did any of it work". One line, one door. */}
               <div className="small text-muted">
-                {accounts.length === 0
-                  ? 'No accounts connected yet.'
-                  : `${usable} of ${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'} can publish today.`}
+                Pages, visitors and where they came from live in{' '}
+                <Link to="/admin/marketing/landing-pages">Landing pages</Link>.
               </div>
             </SectionCard>
           </div>

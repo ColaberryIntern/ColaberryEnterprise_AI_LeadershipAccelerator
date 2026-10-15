@@ -100,6 +100,40 @@ const THEMES: Readonly<Record<string, BrandTheme>> = {
     '--accent-soft': '#DFF0E6',
     '--line': '#DDD8CB',
   },
+  /**
+   * Refactored.ai, copied from `apps/refactored-public/src/assets/design/tokens/colors.css`.
+   *
+   * The only DARK-first system in the set: ground #0C141B, text #E8F0F6. Wired 2026-10-13,
+   * after the landing renderer's hardcoded light surfaces were tokenised - until then a dark
+   * brand rendered white cards under light text.
+   */
+  'refactored': {
+    '--bg': '#0C141B',
+    '--bg-elevated': '#14202A',
+    '--fg': '#E8F0F6',
+    '--fg-muted': '#9FB3C2',
+    '--accent': '#5CA7DA',
+    '--accent-contrast': '#06202F',
+    '--accent-soft': '#123246',
+    '--line': '#263743',
+  },
+  /**
+   * Colaberry Enterprise, copied from `apps/colaberry-enterprise-design/src/assets/design/tokens/colors.css`,
+   * vendored 2026-10-13. Four brands resolve to this key - advisor, colaberry-enterprise,
+   * trustbeforeintelligence, worldoftaxonomy - so it was the largest single source of
+   * unbranded surfaces. The system existed at github.com/aleemcolaberry the whole time and
+   * had simply never been pulled into this repo.
+   */
+  'enterprise': {
+    '--bg': '#F8F8F7',
+    '--bg-elevated': '#FFFFFF',
+    '--fg': '#1A1A1A',
+    '--fg-muted': '#6B6B6B',
+    '--accent': '#2E6A86',
+    '--accent-contrast': '#FFFFFF',
+    '--accent-soft': '#EAF2F6',
+    '--line': '#D8D8D8',
+  },
 };
 
 /** The theme for a brand's key, or null when the surface should stay neutral. */

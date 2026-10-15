@@ -164,7 +164,7 @@ export interface PracticeSession {
   meetingReady: boolean;
   recordingPolicy: string | null;
   /** The learner's own ingested takes, earliest part first. Ids only — never a URL. */
-  recordings?: Array<{ id: string; partNo: number }>;
+  recordings?: Array<{ id: string; partNo: number; playbackUrl: string }>;
 }
 
 const taskPath = (projectId: string, storyId: string, leaf: string) =>

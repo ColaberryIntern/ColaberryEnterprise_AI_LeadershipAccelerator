@@ -62,11 +62,16 @@
  */
 
 const APPLY = process.argv.includes('--apply');
+// Rows provisioned before the anchor INSERT carried `manager_can_reach` and `manager_blocker`
+// landed with NULL in both. This brings them in line with the registry's measured values; it
+// is idempotent and reports how many rows it actually changed.
+const RECONCILE = process.argv.includes('--reconcile-anchor-metadata');
 
 async function main() {
   const { sequelize } = require('/app/dist/config/database');
   const {
     provisionAllDomains,
+    reconcileAnchorMetadata,
   } = require('/app/dist/services/agentDomain/agentDomainProvisioner');
   const {
     planAllProvisions,
@@ -95,6 +100,25 @@ async function main() {
     console.log(`${p.domain_key.padEnd(20)} project=${p.project_id}  anchor=${p.anchor_id}`);
   }
   console.log(`\nreleases: ${ids.releases.length}  stories: ${ids.stories.length}`);
+
+  if (RECONCILE) {
+    if (!APPLY) {
+      console.log('\n--reconcile-anchor-metadata needs --apply as well. Nothing written.');
+      await sequelize.close();
+      return;
+    }
+    console.log('\n--- RECONCILING ANCHOR METADATA ---');
+    const results = await reconcileAnchorMetadata({ sequelize, provisionedBy: 'CC-20261006-a4k7/T19' });
+    for (const r of results) {
+      console.log(
+        `${r.domain_key.padEnd(20)} ${r.changed ? 'UPDATED' : 'already correct'}  `
+        + `can_reach=${r.manager_can_reach}  blocker=${r.manager_blocker ? r.manager_blocker.slice(0, 50) : 'none'}`,
+      );
+    }
+    console.log(JSON.stringify({ changed: results.filter((r) => r.changed).length }, null, 2));
+    await sequelize.close();
+    return;
+  }
 
   if (!APPLY) {
     console.log('\nDRY RUN complete. Nothing was written. Re-run with --apply to provision.');

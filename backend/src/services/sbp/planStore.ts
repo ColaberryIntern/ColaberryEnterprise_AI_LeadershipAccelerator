@@ -261,18 +261,41 @@ export async function publishPlan(
     );
     if (current[0]?.status === 'published') return toStored(current[0]);
 
+    // SUPERSEDE FIRST, THEN PROMOTE. The order is load-bearing and it is the
+    // opposite of what it was.
+    //
+    // `build_plans_one_published_per_project` (added 2026-10-12 by e8d3b5dc,
+    // "two published plans become impossible") is a partial UNIQUE INDEX.
+    // Postgres evaluates it per statement, not at COMMIT, and a partial unique
+    // index cannot be made DEFERRABLE. So the transient two-published state the
+    // old order relied on was not merely untidy — the first UPDATE threw
+    // SequelizeUniqueConstraintError every time a project already had a
+    // published plan. Add-a-story is the path that always does, so every
+    // student adding a story to a published build got "Internal server error",
+    // their draft stranded above the published version. One learner lost five
+    // attempts across two stories before reporting it.
+    //
+    // The original comment above rejected this order because of an interleaving
+    // that leaves ZERO published rows:
+    //   A: supersede != v1 | B: supersede != v2 | A: publish v1 | B: publish v2
+    // That reasoning is sound WITHOUT a lock, and it predates the `FOR UPDATE`
+    // taken at the top of this transaction. With every row of the project
+    // locked, two publishes for one project cannot interleave at all — the
+    // second waits for the first to commit, then re-reads inside the lock. The
+    // erase case needs concurrency this transaction no longer permits, and
+    // `planStore.publishConcurrency.integration.test.ts` proves it against a
+    // real database rather than a mock.
+    await sequelize.query(
+      `UPDATE build_plans SET status = 'superseded', updated_at = NOW()
+        WHERE project_id = :projectId AND version <> :version AND status = 'published'`,
+      { replacements: { projectId, version }, transaction },
+    );
     const rows = await sequelize.query<PlanRow>(
       `UPDATE build_plans
           SET status = 'published', published_at = NOW(), updated_at = NOW()
         WHERE project_id = :projectId AND version = :version
         RETURNING *`,
       { type: QueryTypes.SELECT, replacements: { projectId, version }, transaction },
-    );
-    // Any earlier published version for this project is now history.
-    await sequelize.query(
-      `UPDATE build_plans SET status = 'superseded', updated_at = NOW()
-        WHERE project_id = :projectId AND version <> :version AND status = 'published'`,
-      { replacements: { projectId, version }, transaction },
     );
     return toStored(rows[0]);
   });

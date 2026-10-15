@@ -68,8 +68,23 @@ describe('the ADR describes the fourth project shape', () => {
   });
 
   it('it names the measured reachability rather than a remembered figure', () => {
-    expect(adr).toMatch(/six of ten/i);
-    expect(adr).toMatch(/four carry a named blocker/i);
+    expect(adr).toMatch(/seven of ten/i);
+    expect(adr).toMatch(/three carry a named blocker/i);
+  });
+
+  it('THE ADR FIGURE AGREES WITH THE REGISTRY, rather than being a literal of its own', () => {
+    // This test previously asserted the ADR said "six of ten" and PASSED while the registry had
+    // moved to seven, because asserting a literal is not a parity check. Derive both sides.
+    const reachable = AGENT_DOMAINS.filter((d) => d.can_reach_surface).length;
+    const blocked = AGENT_DOMAINS.length - reachable;
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+    expect(adr.toLowerCase()).toContain(`${words[reachable]} of ten`);
+    expect(adr.toLowerCase()).toContain(`${words[blocked]} carry a named blocker`);
+  });
+
+  it('it records the email-mismatch correction rather than silently restating the new figure', () => {
+    expect(adr).toMatch(/email mismatch/i);
+    expect(adr).toContain('org_members.enrollment_id');
   });
 
   it('it discloses the open gates this shape inherits without claiming to fix them', () => {

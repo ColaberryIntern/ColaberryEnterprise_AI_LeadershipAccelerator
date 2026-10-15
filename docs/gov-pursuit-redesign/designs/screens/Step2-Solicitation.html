@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step 2 Solicitation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#1F4FD8}a:hover{color:#163BA6}
+</style>
+</head>
+<body>
+<!-- Standalone render of design artboard Step2-Solicitation.dc.html. Interactive: clicks update local state. Links go to sibling screens. -->
+<div id="dc-root"></div>
+<script>
+(function () {
+  function get(scope, p) {
+    p = p.trim();
+    if (p === 'true') return true; if (p === 'false') return false;
+    if (/^-?\d+(\.\d+)?$/.test(p)) return Number(p);
+    return p.split('.').reduce(function (o, k) { return o == null ? undefined : o[k]; }, scope);
+  }
+  var WHOLE = /^\s*\{\{([^}]+)\}\}\s*$/;
+  function interp(s, scope) {
+    return s.replace(/\{\{([^}]+)\}\}/g, function (_, p) { var v = get(scope, p); return v == null ? '' : String(v); });
+  }
+  function renderNodes(nodes, scope, parent) {
+    for (var i = 0; i < nodes.length; i++) renderNode(nodes[i], scope, parent);
+  }
+  function renderNode(n, scope, parent) {
+    if (n.nodeType === 3) { parent.appendChild(document.createTextNode(interp(n.nodeValue, scope))); return; }
+    if (n.nodeType !== 1) return;
+    var tag = n.tagName.toLowerCase();
+    if (tag === 'helmet') return;
+    if (tag === 'sc-for') {
+      var m = WHOLE.exec(n.getAttribute('list') || ''); var list = m ? get(scope, m[1]) : [];
+      var as = n.getAttribute('as') || 'item';
+      (list || []).forEach(function (item, idx) {
+        var s = Object.create(scope); s[as] = item; s.$index = idx;
+        renderNodes(n.childNodes, s, parent);
+      });
+      return;
+    }
+    if (tag === 'sc-if') {
+      var mv = WHOLE.exec(n.getAttribute('value') || ''); var v = mv ? get(scope, mv[1]) : false;
+      if (v) renderNodes(n.childNodes, scope, parent);
+      return;
+    }
+    var el = document.createElement(tag === 'svg' || n.namespaceURI === 'http://www.w3.org/2000/svg' ? tag : tag);
+    if (n.namespaceURI === 'http://www.w3.org/2000/svg') el = document.createElementNS('http://www.w3.org/2000/svg', n.tagName);
+    for (var a = 0; a < n.attributes.length; a++) {
+      var at = n.attributes[a]; var name = at.name; var val = at.value;
+      if (name.indexOf('hint-') === 0) continue;
+      var w = WHOLE.exec(val);
+      if (/^on[a-z]+$/i.test(name) && w) {
+        var fn = get(scope, w[1]);
+        if (typeof fn === 'function') el.addEventListener(name.slice(2).toLowerCase(), (function (f) { return function (e) { e.preventDefault(); f(e); }; })(fn));
+        continue;
+      }
+      if (w) {
+        var rv = get(scope, w[1]);
+        if (rv === false || rv == null) { if (name === 'checked') el.checked = false; continue; }
+        if (rv === true) { el.setAttribute(name, ''); if (name === 'checked') el.checked = true; continue; }
+        if (name === 'value') { el.value = String(rv); }
+        el.setAttribute(name, String(rv));
+        continue;
+      }
+      var iv = interp(val, scope);
+      if (name === 'href' && /\.dc\.html(#.*)?$/.test(iv)) iv = iv.replace('.dc.html', '.html');
+      el.setAttribute(name, iv);
+    }
+    renderNodes(n.childNodes, scope, el);
+    parent.appendChild(el);
+  }
+  window.DCLogic = function DCLogic(props) { this.props = props || {}; this.state = {}; };
+  window.DCLogic.prototype.setState = function (p) { Object.assign(this.state, typeof p === 'function' ? p(this.state) : p); window.__dcRender(); };
+  window.DCLogic.prototype.forceUpdate = function () { window.__dcRender(); };
+  window.__dcBoot = function (tplHtml, Component) {
+    var tpl = document.createElement('template'); tpl.innerHTML = tplHtml;
+    var inst = new Component({});
+    var root = document.getElementById('dc-root');
+    window.__dcRender = function () {
+      var scope = inst.renderVals();
+      var frag = document.createDocumentFragment();
+      renderNodes(tpl.content.childNodes, scope, frag);
+      root.innerHTML = ''; root.appendChild(frag);
+    };
+    window.__dcRender();
+    if (inst.componentDidMount) inst.componentDidMount();
+  };
+})();
+</script>
+<script>
+(function(){
+  var TPL = "\n\n<div style=\"font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16181D; background: #F6F6F3; min-height: 100%\">\n\n<header style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 24px 40px 18px; background: #FFFFFF; border-bottom: 1px solid #E4E5E9\">\n<div style=\"display: flex; flex-direction: column; gap: 6px; min-width: 0\">\n<div style=\"font-size: 13px; color: #5B6170\">Gov Opportunities / Qualification</div>\n<h1 style=\"margin: 0; font-size: 24px; font-weight: 600\">Herriman City — Enterprise Work Order Management System RFP</h1>\n<div style=\"font-size: 13px; color: #5B6170\">U3P (Utah) · Bidding as Colaberry</div>\n</div>\n<div style=\"display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #FFF6E5; border: 1px solid #F0D9A8; color: #5C3D00; font-size: 14px; font-weight: 600\">46 days left · closes Dec 1</div>\n</header>\n\n<div style=\"overflow-x: auto; background: #FFFFFF; border-bottom: 1px solid #E4E5E9\">\n<nav aria-label=\"Pursuit steps\" style=\"display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 6px; padding: 14px 40px; min-width: 1100px\">\n<sc-for list=\"{{steps}}\" as=\"s\" hint-placeholder-count=\"7\">\n<a href=\"{{s.href}}\" style=\"{{s.wrap}}\" aria-current=\"{{s.aria}}\">\n<span style=\"{{s.badge}}\">{{s.mark}}</span>\n<span style=\"display: flex; flex-direction: column; gap: 2px; min-width: 0\"><span style=\"{{s.labelStyle}}\">{{s.label}}</span><span style=\"font-size: 12px; color: #5B6170; white-space: nowrap\">{{s.q}}</span></span>\n</a>\n</sc-for>\n</nav>\n</div>\n\n<main style=\"max-width: 1440px; margin: 0 auto; box-sizing: border-box; padding: 28px 40px 48px; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start\">\n\n<section style=\"flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 18px\">\n<div style=\"display: flex; flex-direction: column; gap: 6px\">\n<div style=\"font-size: 13px; font-weight: 600; color: #1F4FD8\">Step 2 of 7 · about 10 minutes</div>\n<h2 style=\"margin: 0; font-size: 30px; font-weight: 700\">What exactly are we submitting, and under what rules?</h2>\n<p style=\"margin: 0; font-size: 16px; color: #3D424D; line-height: 1.5\">The AI turned 21 sentence fragments from the ZIP into 12 defined items: the documents we hand in, the rules they must follow, what the city is buying, and what applies after award. Click any item to read it and see where it came from.</p>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 14px 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px\">\n<div style=\"display: flex; align-items: center; gap: 12px; min-width: 0\">\n<span style=\"flex: none; width: 36px; height: 36px; border-radius: 10px; background: #E6F3EC; color: #1E5C3B; display: inline-flex; align-items: center; justify-content: center\">\n<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"></path></svg>\n</span>\n<div style=\"display: flex; flex-direction: column; gap: 2px; min-width: 0\">\n<div style=\"font-size: 15px; font-weight: 600\">HERR10082026…Management.zip · attested</div>\n<div style=\"font-size: 13px; color: #5B6170\">1-Herriman RFP Work Order.pdf · 21 fragments read · only the hash is stored</div>\n</div>\n</div>\n<div style=\"display: flex; gap: 12px; font-size: 14px\"><a href=\"#\">Replace ZIP</a><a href=\"#\">Revoke</a></div>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 14px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px\">\n<div style=\"display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: #3D424D\">\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 12px; height: 12px; border-radius: 3px; background: #EEF2FD; border: 1.5px solid #6C8BE6\"></span>We submit · 5</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 12px; height: 12px; border-radius: 3px; background: #FFF6E5; border: 1.5px solid #D9A443\"></span>Rules · 5</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 12px; height: 12px; border-radius: 3px; background: #E6F3EC; border: 1.5px solid #6FB08A\"></span>What they're buying · 1</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 12px; height: 12px; border-radius: 3px; background: #F1F2F4; border: 1.5px solid #A9AEB8\"></span>After award · 1</span>\n</div>\n<div style=\"display: flex; border: 1px solid #C9CCD3; border-radius: 8px; overflow: hidden\" role=\"group\" aria-label=\"View\">\n<button type=\"button\" aria-pressed=\"true\" style=\"font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border: none; background: #16181D; color: #FFFFFF; cursor: pointer\">Map</button>\n<button type=\"button\" aria-pressed=\"false\" style=\"font: inherit; font-size: 13px; padding: 7px 14px; border: none; background: #FFFFFF; color: #2B2F38; cursor: pointer\">Checklist</button>\n<button type=\"button\" aria-pressed=\"false\" style=\"font: inherit; font-size: 13px; padding: 7px 14px; border: none; background: #FFFFFF; color: #2B2F38; cursor: pointer\">21 raw fragments</button>\n</div>\n</div>\n\n<div style=\"overflow-x: auto\">\n<div style=\"position: relative; width: 900px; height: 552px; margin: 0 auto\">\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 224px; top: 84px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 224px; top: 180px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 224px; top: 276px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 224px; top: 372px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 224px; top: 468px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"8\" height=\"384\" viewBox=\"0 0 8 384\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 266px; top: 88px; width: 8px; height: 384px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 4 0 L 4 384\"></path></svg>\n<svg width=\"60\" height=\"8\" viewBox=\"0 0 60 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 270px; top: 308px; width: 60px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 60 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 630px; top: 84px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 630px; top: 180px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 630px; top: 276px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 630px; top: 372px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"46\" height=\"8\" viewBox=\"0 0 46 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 630px; top: 468px; width: 46px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 46 4\"></path></svg>\n<svg width=\"8\" height=\"384\" viewBox=\"0 0 8 384\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 626px; top: 88px; width: 8px; height: 384px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 4 0 L 4 384\"></path></svg>\n<svg width=\"60\" height=\"8\" viewBox=\"0 0 60 8\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 570px; top: 308px; width: 60px; height: 8px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round\"><path d=\"M 0 4 L 60 4\"></path></svg>\n<svg width=\"8\" height=\"126\" viewBox=\"0 0 8 126\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 446px; top: 136px; width: 8px; height: 126px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 6 6\"><path d=\"M 4 0 L 4 126\"></path></svg>\n<svg width=\"8\" height=\"94\" viewBox=\"0 0 8 94\" preserveAspectRatio=\"none\" style=\"position: absolute; left: 446px; top: 362px; width: 8px; height: 94px; overflow: visible; fill: none; stroke: #B9BEC9; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 6 6\"><path d=\"M 4 0 L 4 94\"></path></svg>\n\n<div style=\"position: absolute; left: 24px; top: 20px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #163BA6\">WHAT WE SUBMIT</div>\n<div style=\"position: absolute; left: 676px; top: 20px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #7A4A00\">RULES IT MUST FOLLOW</div>\n<div style=\"position: absolute; left: 330px; top: 20px; width: 240px; text-align: center; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #1E5C3B\">WHAT THEY'RE BUYING</div>\n\n<button type=\"button\" onClick=\"{{pk.D1}}\" style=\"position: absolute; left: 24px; top: 56px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #EEF2FD; border: 1.5px solid #6C8BE6; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Signed cover letter</b><br><span style=\"font-size: 12px; color: #3D424D\">authorized officer</span></span></button>\n<button type=\"button\" onClick=\"{{pk.D2}}\" style=\"position: absolute; left: 24px; top: 152px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #EEF2FD; border: 1.5px solid #6C8BE6; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Compliance matrix</b><br><span style=\"font-size: 12px; color: #3D424D\">every requirement + approach</span></span></button>\n<button type=\"button\" onClick=\"{{pk.D3}}\" style=\"position: absolute; left: 24px; top: 248px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #EEF2FD; border: 1.5px dashed #6C8BE6; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Price proposal</b><br><span style=\"font-size: 12px; color: #8A5300\">AI inferred · check</span></span></button>\n<button type=\"button\" onClick=\"{{pk.D4}}\" style=\"position: absolute; left: 24px; top: 344px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #EEF2FD; border: 1.5px dashed #6C8BE6; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Qualifications &amp; references</b><br><span style=\"font-size: 12px; color: #8A5300\">AI inferred · check</span></span></button>\n<button type=\"button\" onClick=\"{{pk.D5}}\" style=\"position: absolute; left: 24px; top: 440px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #EEF2FD; border: 1.5px dashed #6C8BE6; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Exceptions to terms</b><br><span style=\"font-size: 12px; color: #8A5300\">AI inferred · check</span></span></button>\n\n<button type=\"button\" onClick=\"{{pk.S1}}\" style=\"position: absolute; left: 330px; top: 56px; width: 240px; height: 80px; box-sizing: border-box; padding: 8px 14px; display: flex; align-items: center; justify-content: center; text-align: center; font: inherit; font-size: 14px; line-height: 18px; background: #E6F3EC; border: 1.5px solid #6FB08A; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Enterprise work order management system</b><br><span style=\"font-size: 12px; color: #3D424D\">software + services for the City</span></span></button>\n\n<button type=\"button\" onClick=\"{{pk.H}}\" style=\"position: absolute; left: 330px; top: 262px; width: 240px; height: 100px; box-sizing: border-box; padding: 10px 14px; display: flex; align-items: center; justify-content: center; text-align: center; font: inherit; font-size: 15px; line-height: 20px; background: #16181D; border: none; border-radius: 12px; color: #FFFFFF; cursor: pointer\"><span><b>Our proposal package</b><br><span style=\"font-size: 13px; color: #D5D8DF\">1 PDF · 5 parts · due Dec 1</span></span></button>\n\n<button type=\"button\" onClick=\"{{pk.A1}}\" style=\"position: absolute; left: 330px; top: 456px; width: 240px; height: 72px; box-sizing: border-box; padding: 8px 14px; display: flex; align-items: center; justify-content: center; text-align: center; font: inherit; font-size: 14px; line-height: 18px; background: #F1F2F4; border: 1.5px solid #A9AEB8; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>After award: written agreement</b><br><span style=\"font-size: 12px; color: #3D424D\">not part of the submission</span></span></button>\n\n<button type=\"button\" onClick=\"{{pk.R1}}\" style=\"position: absolute; left: 676px; top: 56px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #FFF6E5; border: 1.5px solid #D9A443; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Deadline: Dec 1</b><br><span style=\"font-size: 12px; color: #8A5300\">time missing · check</span></span></button>\n<button type=\"button\" onClick=\"{{pk.R2}}\" style=\"position: absolute; left: 676px; top: 152px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #FFF6E5; border: 1.5px solid #D9A443; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Format: one PDF</b><br><span style=\"font-size: 12px; color: #3D424D\">single electronic copy</span></span></button>\n<button type=\"button\" onClick=\"{{pk.R3}}\" style=\"position: absolute; left: 676px; top: 248px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #FFF6E5; border: 1.5px solid #D9A443; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Questions by Nov 19</b><br><span style=\"font-size: 12px; color: #3D424D\">3:00 PM MDT, by email</span></span></button>\n<button type=\"button\" onClick=\"{{pk.R4}}\" style=\"position: absolute; left: 676px; top: 344px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #FFF6E5; border: 1.5px solid #D9A443; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>One point of contact</b><br><span style=\"font-size: 12px; color: #3D424D\">S. Brown only</span></span></button>\n<button type=\"button\" onClick=\"{{pk.R5}}\" style=\"position: absolute; left: 676px; top: 440px; width: 200px; height: 64px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; text-align: left; font: inherit; font-size: 14px; line-height: 18px; background: #FFF6E5; border: 1.5px solid #D9A443; border-radius: 10px; color: #16181D; cursor: pointer\"><span><b>Comply with laws</b><br><span style=\"font-size: 12px; color: #3D424D\">federal, state, local</span></span></button>\n</div>\n</div>\n\n<div style=\"border-top: 1px solid #E4E5E9; padding-top: 16px; display: flex; flex-direction: column; gap: 12px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px\">\n<div style=\"display: flex; align-items: center; gap: 10px\">\n<span style=\"{{d.catStyle}}\">{{d.cat}}</span>\n<h3 style=\"margin: 0; font-size: 20px; font-weight: 700\">{{d.title}}</h3>\n</div>\n<div style=\"display: flex; gap: 8px\">\n<button type=\"button\" style=\"font: inherit; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 8px; border: 1px solid #1E7A4C; background: #E6F3EC; color: #1E5C3B; cursor: pointer\">Confirm</button>\n<button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 8px 12px; border-radius: 8px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #2B2F38; cursor: pointer\">Edit</button>\n</div>\n</div>\n<div style=\"font-size: 15px; line-height: 1.55; color: #2B2F38\">{{d.what}}</div>\n<sc-if value=\"{{d.flag}}\" hint-placeholder-val=\"{{ false }}\">\n<div style=\"font-size: 14px; line-height: 1.5; color: #5C3D00; background: #FFF6E5; border: 1px solid #F0D9A8; border-radius: 8px; padding: 10px 12px\"><strong>Check:</strong> {{d.flag}}</div>\n</sc-if>\n<div style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px\">\n<div style=\"display: flex; flex-direction: column; gap: 6px\">\n<div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">CONNECTED TO</div>\n<div style=\"display: flex; flex-wrap: wrap; gap: 6px\">\n<sc-for list=\"{{d.links}}\" as=\"l\" hint-placeholder-count=\"3\">\n<button type=\"button\" onClick=\"{{l.go}}\" style=\"font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">{{l.name}}</button>\n</sc-for>\n</div>\n</div>\n<div style=\"display: flex; flex-direction: column; gap: 6px\">\n<div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">BUILT FROM · 1-Herriman RFP Work Order.pdf</div>\n<sc-for list=\"{{d.from}}\" as=\"f\" hint-placeholder-count=\"2\">\n<div style=\"font-size: 13px; line-height: 1.45; color: #3D424D\"><strong>{{f.id}}</strong> “{{f.frag}}”</div>\n</sc-for>\n</div>\n</div>\n</div>\n</div>\n\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; background: #FFFFFF; border: 1px solid #D5DBEA; border-radius: 12px; box-shadow: 0 6px 20px rgba(22, 24, 29, 0.06)\">\n<div style=\"display: flex; flex-direction: column; gap: 4px\">\n<div style=\"font-size: 15px; font-weight: 600\">12 items defined · 4 need your check</div>\n<div style=\"font-size: 13px; color: #5B6170\">Confirmed items become the submission checklist that counts down in Build the bid.</div>\n</div>\n<div style=\"display: flex; flex-wrap: wrap; align-items: center; gap: 12px\">\n<a href=\"Step1-Snapshot.dc.html\" style=\"font-size: 14px; font-weight: 500\">← Back</a>\n<a href=\"Step3-Fit.dc.html\" style=\"font-size: 15px; font-weight: 600; padding: 12px 20px; border-radius: 10px; background: #1F4FD8; color: #FFFFFF; text-decoration: none\">Confirm the package — assess fit →</a>\n</div>\n</div>\n</section>\n\n<aside aria-label=\"Pursuit brief\" style=\"flex: 1 1 320px; max-width: 380px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px\">\n<div style=\"display: flex; flex-direction: column; gap: 2px\">\n<h3 style=\"margin: 0; font-size: 17px; font-weight: 700\">Pursuit brief</h3>\n<div style=\"font-size: 13px; color: #5B6170\">Grows one section per step.</div>\n</div>\n<sc-for list=\"{{brief}}\" as=\"g\" hint-placeholder-count=\"6\">\n<div style=\"{{g.box}}\">\n<div style=\"display: flex; justify-content: space-between; align-items: center; gap: 8px\">\n<span style=\"font-size: 13px; font-weight: 700\">{{g.title}}</span>\n<span style=\"{{g.tagStyle}}\">{{g.tag}}</span>\n</div>\n<sc-for list=\"{{g.items}}\" as=\"it\" hint-placeholder-count=\"2\">\n<div style=\"{{g.itemStyle}}\">{{it.t}}</div>\n</sc-for>\n</div>\n</sc-for>\n</aside>\n\n</main>\n</div>\n";
+  var Component = (function(){ 
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { sel: 'D2' }; }
+  renderVals() {
+    const cur = 2;
+    const S = [
+      ['Snapshot', 'Worth a look?', 'Step1-Snapshot.dc.html'],
+      ['Solicitation', 'What do we submit?', 'Step2-Solicitation.dc.html'],
+      ['Fit', 'Can we deliver?', 'Step3-Fit.dc.html'],
+      ['Decide', 'Should we bid?', 'Step4-Decide.dc.html'],
+      ['Build the bid', 'Product + proposal', 'Step5-BuildTheBid.dc.html'],
+      ['Submit', 'Ship it', 'Step6-Submit.dc.html'],
+      ['Outcome', 'Did we win?', 'Main.dc.html']
+    ];
+    const approved = cur >= 5;
+    const steps = S.map((s, i) => {
+      const n = i + 1, done = n < cur, now = n === cur, locked = n >= 5 && !approved;
+      return {
+        label: s[0], q: locked ? 'After approval' : s[1], href: s[2], mark: done ? '✓' : String(n), aria: now ? 'step' : 'false',
+        wrap: 'display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;text-decoration:none;min-width:0;' + (now ? 'background:#EEF2FD;box-shadow:inset 0 -3px 0 #1F4FD8;' : '') + (locked ? 'opacity:.6;' : ''),
+        badge: 'flex:none;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;' + (done ? 'background:#1E7A4C;color:#FFFFFF;' : now ? 'background:#1F4FD8;color:#FFFFFF;' : 'background:#FFFFFF;color:#5B6170;border:1.5px solid #C9CCD3;'),
+        labelStyle: 'font-size:14px;font-weight:600;white-space:nowrap;color:' + (now ? '#1F4FD8' : done ? '#1E7A4C' : '#16181D')
+      };
+    });
+    const B = [
+      ['Snapshot', ['Enterprise work order management system', '$1.00M est. · closes Dec 1 (46 days)', 'Legacy priority 78 · fit 75', 'Questions due Nov 19, 3:00 PM MDT']],
+      ['Solicitation', ['21 fragments → 12 items', '5 to submit · 5 rules · 1 PDF', 'Contact: S. Brown (single point)']],
+      ['Fit', ['3 covered · 2 new capabilities', '0 hard disqualifiers']],
+      ['Decide', ['Win probability and value', 'Approver and decision']],
+      ['Build the bid', ['Product defined · MVP plan', 'Submission items left']],
+      ['Submit', ['Ship by Nov 30']]
+    ];
+    const brief = B.map((b, i) => {
+      const n = i + 1, known = n < cur, now = n === cur;
+      return {
+        title: n + ' · ' + b[0],
+        tag: known ? 'Known' : now ? 'Adding now' : 'Step ' + n,
+        tagStyle: 'font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;' + (known ? 'background:#E6F3EC;color:#1E5C3B' : now ? 'background:#EEF2FD;color:#163BA6' : 'background:#F1F2F4;color:#5B6170'),
+        box: 'display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:10px;' + (now ? 'border:1.5px solid #1F4FD8;background:#FAFBFF' : known ? 'border:1px solid #E4E5E9' : 'border:1px dashed #D3D5DA'),
+        itemStyle: 'font-size:13px;line-height:1.4;' + (known || now ? 'color:#2B2F38' : 'color:#7A808C'),
+        items: (known || now ? b[1] : ['Unlocks at step ' + n]).map((t) => ({ t }))
+      };
+    });
+    const CAT = {
+      D: ['We submit', 'background:#EEF2FD;color:#163BA6'],
+      R: ['Rule', 'background:#FFF6E5;color:#7A4A00'],
+      S: ['What they’re buying', 'background:#E6F3EC;color:#1E5C3B'],
+      A: ['After award', 'background:#F1F2F4;color:#3D424D'],
+      H: ['Package', 'background:#16181D;color:#FFFFFF']
+    };
+    const N = {
+      H: { title: 'Our proposal package', what: 'One electronic PDF containing the five parts on the left, signed, following the five rules on the right, received by the City before the Dec 1 deadline.', links: ['D1', 'D2', 'D3', 'D4', 'D5', 'R1', 'R2'], from: [['REQ-003', 'One (1) electronic (PDF) copy of Responses are required to be'], ['REQ-005', 'must include the following elements and be signed by an authorized representative of the Proposer:']], flag: '' },
+      D1: { title: 'Signed cover letter', what: 'A letter on Colaberry letterhead introducing the proposal, signed by an officer who can legally bind the company. It opens the PDF.', links: ['R2', 'R5', 'H'], from: [['REQ-005', 'must include the following elements and be signed by an authorized representative of the Proposer:']], flag: '' },
+      D2: { title: 'Compliance matrix and technical approach', what: 'A table with one row per City requirement: Comply / Partial / Exception, then how our system meets it. This is the core of the proposal and is built from the scope node above.', links: ['S1', 'H', 'R2'], from: [['REQ-010', 'Vendors must indicate their compliance and technical approach for each requirement outlined']], flag: '' },
+      D3: { title: 'Price proposal', what: 'Total price and breakdown (licences, implementation, training, annual support). Inferred from the element list that REQ-005 introduces.', links: ['H', 'A1'], from: [['REQ-005', 'must include the following elements…']], flag: 'The extractor cut REQ-005 off before its list. The AI filled the elements from the RFP body; confirm the exact list and order.' },
+      D4: { title: 'Qualifications and references', what: 'Company background, similar projects, and client references the City can call.', links: ['H'], from: [['REQ-005', 'must include the following elements…']], flag: 'Inferred from REQ-005’s element list. Confirm the number of references required.' },
+      D5: { title: 'Exceptions to terms', what: 'Any part of the City’s contract terms we cannot accept, stated up front. Usually “none”.', links: ['A1', 'H'], from: [['REQ-008', 'The successful Proposer will be required to enter into a written agreement']], flag: 'Inferred. Check whether the RFP asks for exceptions to be listed.' },
+      R1: { title: 'Deadline: Dec 1, 2026', what: 'The City must receive the PDF no later than Dec 1. We plan to ship the day before.', links: ['H', 'R3'], from: [['REQ-004', 'Proposals must be submitted no later than']], flag: 'The time of day was cut off in extraction. The daily Bonfire sync will fill it; until then treat it as the start of Dec 1.' },
+      R2: { title: 'Format: one electronic PDF', what: 'Submit a single PDF copy of the whole response. No separate files, no paper copies.', links: ['H', 'D1', 'D2'], from: [['REQ-003', 'One (1) electronic (PDF) copy of Responses are required to be']], flag: '' },
+      R3: { title: 'Questions by Nov 19, 3:00 PM MDT', what: 'Every clarification request goes by email to Steven Brown before Nov 19 at 3:00 PM MDT. After that, no questions. Anything the AI cannot answer later becomes a question here.', links: ['R4', 'R1'], from: [['REQ-007', 'All requests for clarification or additional information regarding this Request must be submitted']], flag: '' },
+      R4: { title: 'One point of contact', what: 'Talk only to Steven Brown (sbrown@herriman.gov). Contacting other City staff can disqualify the bid.', links: ['R3'], from: [['Dossier', 'Detected from the ZIP contact section']], flag: '' },
+      R5: { title: 'Comply with all laws', what: 'We must follow applicable federal, state and local law. Usually a statement in the cover letter.', links: ['D1'], from: [['REQ-006', 'All Proposers must comply with applicable federal, state, and local laws and']], flag: '' },
+      S1: { title: 'Enterprise work order management system', what: 'The City wants a vendor to provide a work order management system and the services to deliver it. Step 3 breaks this into the capabilities we need.', links: ['D2', 'A1'], from: [['REQ-001', 'companies (“Proposers”) to provide work order management system for the City (the “Services”).'], ['REQ-002', 'requesting Proposal to provide a work order management system.']], flag: '' },
+      A1: { title: 'After award: written agreement', what: 'If we win, we sign a contract with the City to provide the services. Nothing to submit now; it shapes pricing and exceptions.', links: ['D3', 'D5'], from: [['REQ-008', 'The successful Proposer will be required to enter into a written agreement'], ['REQ-009', 'with the City to provide the Services.']], flag: '' }
+    };
+    const pk = {};
+    Object.keys(N).forEach((k) => { pk[k] = () => this.setState({ sel: k }); });
+    const sel = this.state.sel;
+    const n = N[sel];
+    const c = CAT[sel === 'H' ? 'H' : sel[0]];
+    const d = {
+      title: n.title, what: n.what, flag: n.flag, cat: c[0],
+      catStyle: 'font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;' + c[1],
+      links: n.links.map((k) => ({ name: N[k].title, go: pk[k] })),
+      from: n.from.map((f) => ({ id: f[0], frag: f[1] }))
+    };
+    return { steps, brief, pk, d };
+  }
+}
+
+  ; return Component; })();
+  window.__dcBoot(TPL, Component);
+})();
+</script>
+</body>
+</html>

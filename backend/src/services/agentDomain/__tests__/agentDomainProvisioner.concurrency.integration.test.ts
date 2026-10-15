@@ -94,6 +94,14 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
     };
   }
 
+  function codeOfExecutor(): string {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('path');
+    return fs.readFileSync(path.join(__dirname, '..', 'agentDomainProvisioner.ts'), 'utf8');
+  }
+
   async function wipe(projectId: string): Promise<void> {
     // Children are deleted EXPLICITLY, in dependency order, because the tables now come from
     // their models and the models' foreign keys do not declare ON DELETE CASCADE -- the
@@ -574,6 +582,71 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
         .filter((o): o is Record<string, unknown> => !!o && o.event === 'agent_domain_provisioned');
       expect(mine).toHaveLength(1);
       expect(mine[0].outcome).toBe('partial');
+    });
+  });
+
+  /**
+   * The anchor's measured reachability, which shipped NULL.
+   *
+   * All ten production rows landed with `manager_can_reach` and `manager_blocker` NULL, because
+   * the INSERT omitted both columns. The API was unaffected -- it reads the registry -- so nothing
+   * failed and nothing looked wrong; it was found by querying the table after provisioning.
+   */
+  describe('the anchor carries the measured reachability', () => {
+    const plan = () => planProvision(DOMAIN);
+
+    beforeEach(async () => { await wipe(plan().project_id); });
+
+    it('a fresh provision writes both columns, not NULL', async () => {
+      await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      const rows = await sequelize.query<{ manager_can_reach: boolean | null; manager_blocker: string | null }>(
+        `SELECT manager_can_reach, manager_blocker FROM agent_domain_projects WHERE domain_key = $1`,
+        { bind: [DOMAIN], type: QueryTypes.SELECT },
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].manager_can_reach).not.toBeNull();
+      expect(rows[0].manager_can_reach).toBe(plan().manager_can_reach);
+    });
+
+    it('RECONCILE repairs a row that already landed NULL', async () => {
+      const { reconcileAnchorMetadata } = await import('../agentDomainProvisioner');
+      await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      // Reproduce the production state exactly.
+      await sequelize.query(
+        `UPDATE agent_domain_projects SET manager_can_reach = NULL, manager_blocker = NULL
+          WHERE domain_key = $1`, { bind: [DOMAIN] });
+
+      const first = await reconcileAnchorMetadata({ sequelize, provisionedBy: PROVISIONED_BY });
+      expect(first.find((r) => r.domain_key === DOMAIN)?.changed).toBe(true);
+
+      const rows = await sequelize.query<{ manager_can_reach: boolean | null }>(
+        `SELECT manager_can_reach FROM agent_domain_projects WHERE domain_key = $1`,
+        { bind: [DOMAIN], type: QueryTypes.SELECT },
+      );
+      expect(rows[0].manager_can_reach).toBe(plan().manager_can_reach);
+    });
+
+    it('a SECOND reconcile changes nothing, and says so', async () => {
+      const { reconcileAnchorMetadata } = await import('../agentDomainProvisioner');
+      await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      await reconcileAnchorMetadata({ sequelize, provisionedBy: PROVISIONED_BY });
+      const second = await reconcileAnchorMetadata({ sequelize, provisionedBy: PROVISIONED_BY });
+      expect(second.find((r) => r.domain_key === DOMAIN)?.changed).toBe(false);
+    });
+
+    it('POSITIVE CONTROL: `<>` would NOT have repaired a NULL, which is why it is IS DISTINCT FROM', () => {
+      // `NULL <> false` is NULL, so a `<>`-scoped UPDATE matches nothing and silently does no
+      // work -- the exact failure this function exists to repair.
+      expect(codeOfExecutor()).toMatch(/IS DISTINCT FROM/);
+    });
+
+    it('reconcile does NOT touch the insert counts, so idempotency still reads true', async () => {
+      const { reconcileAnchorMetadata } = await import('../agentDomainProvisioner');
+      await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      await reconcileAnchorMetadata({ sequelize, provisionedBy: PROVISIONED_BY });
+      const again = await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
+      expect(again.already_present).toBe(true);
+      expect(again.inserted.agent_domain_projects).toBe(0);
     });
   });
 

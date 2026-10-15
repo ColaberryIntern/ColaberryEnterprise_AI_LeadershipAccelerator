@@ -4,6 +4,7 @@ import Lead from '../models/Lead';
 import { syncNewLeadToGhl } from './ghlService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { classifyError } from '../utils/errorClassifier';
+import { claimApolloCall, type ApolloGuardDecision } from './apolloCreditGuard';
 
 // Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
 // the full Sequelize/model graph into every apolloService import — some
@@ -20,6 +21,19 @@ async function emitFailureEvent(params: Parameters<typeof import('./aiEventServi
       context: { event_type: params.event_type, message: err?.message },
     }));
   }
+}
+
+// One place to record a guard refusal, so a refusal is never silent. A call that
+// did not happen because of a ceiling is an operational event, not a no-op: the
+// caller gets an empty result and would otherwise read it as "Apollo has nothing",
+// which is the same confusion the kill switch itself can cause.
+function logGuardRefusal(label: string, decision: ApolloGuardDecision): void {
+  if (decision.allowed) return;
+  console.warn(JSON.stringify({
+    level: 'warn', service: 'backend', event: 'apollo_call_refused_by_guard',
+    outcome: 'failure', error_class: 'ApolloCreditGuard',
+    context: { label, reason: decision.reason, detail: decision.detail },
+  }));
 }
 
 const APOLLO_BASE_URL = 'https://api.apollo.io';
@@ -125,6 +139,12 @@ export async function searchPeople(params: ApolloSearchParams): Promise<{
     return { people: [], total: 0, page: params.page || 1, per_page: params.per_page || 25 };
   }
 
+  const claim = await claimApolloCall('searchPeople');
+  if (!claim.allowed) {
+    logGuardRefusal('searchPeople', claim);
+    return { people: [], total: 0, page: params.page || 1, per_page: params.per_page || 25 };
+  }
+
   const apiKey = env.apolloApiKey;
   if (!apiKey) throw new Error('Apollo API key not configured');
 
@@ -198,6 +218,9 @@ const PHONE_REVEAL_WEBHOOK_URL = 'https://enterprise.colaberry.ai/api/webhook/ap
 async function enrichPersonById(apiKey: string, personId: string, revealPhone = true): Promise<ApolloPersonResult | null> {
   if (apolloDisabled('enrichPersonById')) return null;
 
+  const claim = await claimApolloCall('enrichPersonById');
+  if (!claim.allowed) { logGuardRefusal('enrichPersonById', claim); return null; }
+
   const payload: any = { id: personId };
   if (revealPhone) {
     payload.reveal_phone_number = true;
@@ -237,6 +260,9 @@ async function enrichPersonById(apiKey: string, personId: string, revealPhone = 
 
 export async function enrichPerson(email: string): Promise<ApolloPersonResult | null> {
   if (apolloDisabled('enrichPerson')) return null;
+
+  const claim = await claimApolloCall('enrichPerson');
+  if (!claim.allowed) { logGuardRefusal('enrichPerson', claim); return null; }
 
   const apiKey = env.apolloApiKey;
   if (!apiKey) throw new Error('Apollo API key not configured');
@@ -450,6 +476,9 @@ export function calculateColdLeadScore(
 /** Request async phone number reveal from Apollo — result delivered via webhook */
 export async function requestPhoneReveal(apiKey: string, personId: string): Promise<void> {
   if (apolloDisabled('requestPhoneReveal')) return;
+
+  const claim = await claimApolloCall('requestPhoneReveal');
+  if (!claim.allowed) { logGuardRefusal('requestPhoneReveal', claim); return; }
 
   const response = await fetchWithRetry(`${APOLLO_BASE_URL}/v1/people/match`, {
     method: 'POST',

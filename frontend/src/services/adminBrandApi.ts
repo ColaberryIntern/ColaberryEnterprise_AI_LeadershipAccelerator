@@ -23,6 +23,8 @@ export interface Brand {
   status: BrandStatus;
   default_public_url: string | null;
   support_email: string | null;
+  /** Meta Pixel ID, or null when this brand is not being advertised. Digits only. */
+  meta_pixel_id: string | null;
 }
 
 export interface BrandDomain {
@@ -80,4 +82,23 @@ export async function listBrands(params?: { status?: BrandStatus; q?: string }):
 export async function getBrandSendReadiness(brandId: string): Promise<BrandSendReadiness> {
   const res = await api.get(`/api/admin/brands/${brandId}/send-readiness`);
   return res.data.readiness;
+}
+
+/**
+ * Set or clear a brand's Meta Pixel ID.
+ *
+ * This is the whole "process where the user just passes the id" - one field, saved once per
+ * brand, after which every hosted landing page that brand owns carries the tracking. Passing
+ * null clears it, which is how an operator turns tracking back off.
+ *
+ * The backend validates the digits again, and so does the renderer. Three checks for one value
+ * looks like belt and braces until you remember where it ends up: inside a <script> tag on a
+ * public page.
+ */
+export async function setBrandMetaPixelId(
+  brandId: string,
+  metaPixelId: string | null,
+): Promise<Brand> {
+  const res = await api.patch(`/api/admin/brands/${brandId}`, { meta_pixel_id: metaPixelId });
+  return res.data.brand as Brand;
 }

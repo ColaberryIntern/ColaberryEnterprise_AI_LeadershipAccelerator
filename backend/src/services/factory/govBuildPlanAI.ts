@@ -23,6 +23,7 @@ import { buildSchedule, type CohortWindow } from '../sbp/buildSchedule';
 import type { BuildPlan } from '../sbp/planContract';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_NARRATIVE, COMMAND_CENTER_ACCEPTANCE } from '../sbp/commandCenterStory';
 import { generateBuildSpec } from './govBuildSpec';
+import { govShipByDate, rescaleScheduleToDeadline } from './govScheduleWindow';
 
 interface CacheEntry<T> { value: T; at: number; }
 const TTL_MS = 60 * 60 * 1000; // 1h — advisory, regenerable
@@ -108,16 +109,15 @@ export interface GovBuildPlanAIRequest {
 }
 
 /**
- * PURE: place a decomposed BuildPlan on real dates over the plan's NATURAL weeks (the decomposer assigns each
- * release to week_start..week_end), starting from `now` as a reference, and map it to the GovDatedPlan
- * read-model. This is the POST-AWARD build timeline — it is deliberately NOT bound to the proposal's
- * submission deadline (the build happens after award), so nothing is crammed or flagged "late" against the
- * submission cutoff. Deterministic (now is injected).
+ * PURE: place a decomposed BuildPlan on real dates and map it to the GovDatedPlan read-model. When a
+ * submission `deadline` is known, the plan is back-scheduled to FINISH THE DAY BEFORE IT (the owner's rule:
+ * "day before the deadline; it's already last minute") — the natural-week layout is rescaled onto
+ * [today → day-before-deadline] so dates never spread years out. With no deadline, it falls back to the
+ * plan's natural forward weeks and is flagged `unscheduled`. Deterministic (now is injected).
  */
-export function assembleGovDatedPlan(plan: BuildPlan, now: Date): { plan: GovDatedPlan; verdict: string } {
+export function assembleGovDatedPlan(plan: BuildPlan, now: Date, deadline?: Date | null): { plan: GovDatedPlan; verdict: string } {
   const now0 = startOfUtcDay(now);
-  // Span the plan's own weeks: prep/demo sit just AFTER the last release, so every release fits its natural
-  // window (no deadline compression, no roadmap-overflow).
+  // Lay out over the plan's own weeks first; rescaleScheduleToDeadline then compresses onto the deadline window.
   const maxWeek = Math.max(1, ...plan.releases.map((r) => r.week_end || r.week_start || 1));
   const window: CohortWindow = { cohortStart: now0, asOf: now0, startWeek: 1, prepWeek: maxWeek + 1, demoWeek: maxWeek + 2 };
 
@@ -128,7 +128,7 @@ export function assembleGovDatedPlan(plan: BuildPlan, now: Date): { plan: GovDat
     arr.push(s.id);
     storiesByRelease.set(s.release, arr);
   }
-  const schedule = buildSchedule({ window, releases: releasesIn, storiesByRelease });
+  const schedule = rescaleScheduleToDeadline(buildSchedule({ window, releases: releasesIn, storiesByRelease }), now0, deadline ?? null);
 
   const dueByStory = new Map<string, Date>();
   for (const t of schedule.tasks) dueByStory.set(t.storyId, startOfUtcDay(t.dueOn));
@@ -164,9 +164,14 @@ export function assembleGovDatedPlan(plan: BuildPlan, now: Date): { plan: GovDat
   };
   const allStories = stories.length ? [commandCenter, ...stories] : stories;
 
+  const shipBy = govShipByDate(deadline ?? null, now0);
+  const verdict = shipBy
+    ? `Scheduled to finish by ${iso(shipBy)} — the day before the deadline. ${schedule.verdict}`
+    : schedule.verdict;
+
   return {
-    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories: allStories, unscheduled: false },
-    verdict: schedule.verdict,
+    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories: allStories, unscheduled: !deadline },
+    verdict,
   };
 }
 
@@ -246,7 +251,7 @@ export async function generateGovBuildPlanAI(req: GovBuildPlanAIRequest): Promis
     return { plan: null, verdict: '', cached: raw.cached, generatedAt: nowIso(), error: raw.error ?? 'The AI build plan could not be generated right now.' };
   }
   const now = toDate(req.now) ?? new Date();
-  const assembled = assembleGovDatedPlan(raw.plan, now);
+  const assembled = assembleGovDatedPlan(raw.plan, now, toDate(req.deadline));
   return { plan: assembled.plan, verdict: assembled.verdict, cached: raw.cached, generatedAt: nowIso() };
 }
 

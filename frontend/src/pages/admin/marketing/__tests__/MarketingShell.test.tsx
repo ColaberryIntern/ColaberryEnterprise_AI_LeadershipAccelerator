@@ -16,7 +16,7 @@ let root: Root;
 
 const brand = (id: string, name: string): Brand => ({
   id, tenant_id: 't-1', name, slug: id,
-  status: 'active', default_public_url: null, support_email: null,
+  status: 'active', default_public_url: null, support_email: null, meta_pixel_id: null,
 });
 const BRANDS = [brand('b-1', 'Refactored.ai'), brand('b-2', 'Colaberry Training')];
 

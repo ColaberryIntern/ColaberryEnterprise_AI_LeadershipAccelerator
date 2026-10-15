@@ -16,7 +16,7 @@
 | 2 | Can an unpaid Explorer still be mistaken for converted? | **No — live in production** |
 | 3 | Can I look at one person and see the website journey that led to their signup? | **Yes.** |
 | 4 | Can I see what they have done since registering? | **Yes, with named gaps.** |
-| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet** — three reasons left, down from four |
+| 5 | Is Person 360 trustworthy enough to be the Sales Readiness Score's input in Phase 3? | **Not yet** — but the population is repaired and a loss-of-evidence guard now exists; what remains is coverage for 9 groups, one surviving mutant, an unexplained load flake, and a NULL `explorer_entered_at` |
 
 **The answers are not yes/yes/no/no/no, and they are also not five clean yeses.** Two carry real
 qualifications and the fifth is a no. In detail:
@@ -88,14 +88,21 @@ the existing panels all render on one screen (§D). The gaps are real and listed
 twenty evidence groups the spec names, several have no test, and **there is no registry test that
 would fail if a group silently lost its evidence.**
 
-**5 — Not yet, though one of the four reasons is now gone.** It is deployed and
-production-verified, which was reason (a). Three remain: (b) several evidence groups have no
-test, and no guard detects a group losing its evidence; (c) `trustPanel`'s `matchMethod` has a
-surviving mutant, pre-existing and inherited by a verbatim move; (d) two suites pass in
-isolation and fail under heavy parallel load, which will keep producing false reds in the gate
-that is supposed to protect this. **(b) and (d) are what Phase 3 should require before trusting
-this input.** A fourth item is now visible that was not before: the 86 incoherent rows in §F
-are exactly the population an SRS would score, and they are invisible to the engine today.
+**5 — Still not yet, but two and a half of the five reasons are now gone.** (a) Deployed and
+production-verified. (e) The incoherent population — the rows an SRS would actually score — is
+repaired: **86 invisible became 49**, and 56 rows are coherent where none were. (b) is **half
+closed**: a guard now fails when an evidence group loses its evidence
+(`evidenceRegistry.test.ts`, 22 groups, both halves bound, mutation-proved), but **nine groups
+still have no behavioural test of their own**, which is the open half.
+
+**What still blocks it:** the rest of (b); (c) `trustPanel`'s `matchMethod` has a surviving
+mutant, pre-existing and inherited by a verbatim move; (d) suites that pass in isolation and fail
+under heavy parallel load — **not root-caused**, see the Phase 3 list below for the candidate and
+why it is not yet a finding. A gate that produces false reds is the gate protecting this input.
+
+**And one new reason, created by closing (e):** all 56 now-coherent rows carry
+`explorer_entered_at` NULL. A journey score with no journey start date has no denominator, and
+filling it requires a decision about what the date means for a row recovered from provenance.
 
 ---
 
@@ -501,10 +508,31 @@ it, where a reader scanning sixteen numbered lines would have missed it.
 
 ## H · Known gaps
 
-1. **No registry test fails if an evidence group loses its evidence.** Named by a verifier in
-   attempt 1 and still true.
-2. **Several evidence groups have no test:** appointments, community, Rooms, Open House,
-   affinities, visitor identity, clicks/forms, builds/projects, "current decision and next action".
+1. ~~**No registry test fails if an evidence group loses its evidence.**~~ **CLOSED 2026-10-15**
+   by `adminOs/__tests__/evidenceRegistry.test.ts`. It binds BOTH halves of each of the 22
+   groups — the `profile.<group> =` assignment **and** the backing loader call — because keeping
+   the assignment while swapping the loader for `[]` is exactly how a panel goes dark with every
+   suite still green. Nothing may be assigned on the profile without being declared evidence or
+   derived, so a new panel cannot join silently. Mutation-proved against the real service:
+   deleting `profile.community = community;` fails it by name
+   (`MUTANT_EXIT=1`, 2 failed / 10 passed), and the file restored byte-identical (`cmp` clean).
+2. **MOSTLY CLOSED 2026-10-15, and the count here was wrong.** This line said "several… nine",
+   named by concept. Counted from the tree it was **eleven loaders**, and **four panel modules had
+   no test file at all** (`trustPanel`, `journeyPanel`, `workPanels`, `historyPanels`).
+   `adminOs/__tests__/growthWorkAcquisitionPanels.test.ts` now covers **eight** of the eleven with
+   17 tests, pinning the two properties that have actually gone wrong here: an empty id list
+   never reaches the database, and every query is scoped to exactly the ids it was given.
+   Mutation-proved twice — removing `loadCommunity`'s empty-id guard, and changing
+   `loadAutomation`'s text binding to numeric, each kill their test by name with
+   `MUTANT_EXIT=1`, both restores `cmp`-clean.
+
+   **A measurement trap worth recording:** grepping each loader across `__tests__` now hits for
+   all 22, because `evidenceRegistry.test.ts` (gap 1 above) names every one in its registry map.
+   A naive count reports full coverage. The eleven are only visible when that file is excluded.
+
+   **Still uncovered, three:** `loadCcppHistory` (MSSQL, env-gated — different substrate, needs
+   its own suite), `buildJourney` and `buildTrust` (both compose already-loaded evidence rather
+   than loading any, and `buildTrust` should be closed together with gap 3 below).
 3. **`trustPanel`'s `matchMethod` has a surviving mutant** — pre-existing, inherited by a verbatim
    move; the existing test exercises only the `'none'` branch.
 4. **Nothing typechecks test files.** `tsc -p tsconfig.json` excludes `**/*.test.ts` and ts-jest
@@ -537,18 +565,23 @@ it, where a reader scanning sixteen numbered lines would have missed it.
 
 ## I · Decisions needed before Phase 3
 
-1. **Merge.** The PR needs Ali's click; nothing deploys without it.
-2. **An open TWC breach on the surface this phase calls first priority, which I did not fix.**
-   The repo's own banned-word gate records
-   `controllers/enrollmentController.ts: [4, 'ADVERTISING: two signup-response messages say "your
-   free account"']`. Lines 196–197 return *"Your free account is ready…"* and *"You already have a
-   free account…"* **to a person**, and line 191 logs a **raw email address**. Both breach standing
-   constraints. I left it alone because the file is not in this phase's diff, the gate assigns it
-   to another component, and it is concurrently modified in another working tree — so editing it
-   risks a conflict on a protected path. **This is a decision, not an oversight: say the word and
-   it is a two-line copy change plus a redaction.**
-3. **Whether to run the backfill**, and on what population. It is dry-run by default and reports
-   rows it cannot prove either way for human decision rather than guessing.
+**ALL FOUR WERE DECIDED AND CLOSED BETWEEN 2026-10-13 AND 2026-10-15.** Kept here with their
+outcomes rather than deleted, because what was asked and what was chosen is the record.
+
+1. ~~**Merge.**~~ **DONE** — merged, deployed and production-verified.
+2. ~~**An open TWC breach on the surface this phase calls first priority, which I did not fix.**~~
+   **FIXED, AND I HAD THE SEVERITY WRONG.** I wrote that lines 196–197 returned *"Your free account
+   is ready…"* **to a person**. They did not: the only caller awaits the POST and discards the
+   body —
+   `frontend/src/pages/EnrollPage.tsx:123` → "await api.post('/api/create-free-account', {"
+   — so nothing rendered it. The string a person actually read was on the page itself — the `<h1>`
+   **"Start for free"**, the submit button, the success panel and five more, **nine occurrences**
+   frozen at 9 in `frontendCopyBaseline.ts`. Both are now fixed and deployed: the response and the
+   raw-email log on 2026-10-13, the page on 2026-10-15 (baseline entry deleted, repo total
+   287 → 278). The API response was the lesser half, and I fixed it first.
+3. ~~**Whether to run the backfill**, and on what population.~~ **RUN 2026-10-13 on Ali's
+   authorisation** — 56 writes, `explorer`+`guest` 0 → 56, invisible 86 → 49, 630 total unmoved.
+   See §F.
 4. **Phase 3 should not accept Person 360 as the SRS input until gaps 1, 2 and 5 are closed** —
    see question 5.
 
@@ -563,13 +596,13 @@ merged, deployed in registry mode with a marker check against the running contai
 verification recorded in §F, and `PHASE_2_HANDOFF.md` written with six numbered steps a
 non-developer can follow in a browser.
 
-### Two decisions that belong to Ali, not to Phase 3
+### Two decisions that belonged to Ali — both since taken
 
-1. **Whether to run the coherence backfill.** It has only ever been dry-run. §F has the numbers:
-   56 writes planned of 376 incoherent rows, 86 accounts currently invisible to the engine, 37 of
-   those provable. **Until it runs, question 1 stays answered "yes, 86".**
-2. **The `enrollmentController` copy and the raw-email log.** A two-line change, deliberately left
-   out of this phase on scope-lock grounds and recorded in §I rather than hidden.
+1. ~~**Whether to run the coherence backfill.**~~ **Authorised and run 2026-10-13.** 56 writes;
+   question 1 now answers **"yes, 49"** rather than "yes, 86", and 12 of those 49 are provably not
+   free signups, so the genuine residual is the 37 the script reports as ambiguous.
+2. ~~**The `enrollmentController` copy and the raw-email log.**~~ **Both fixed and deployed**, and
+   the page copy behind them too — see §I item 2 for why the response was the lesser half.
 
 ### What Phase 3 should require before it starts
 
@@ -577,23 +610,39 @@ Phase 3's purpose is the Sales Readiness Score, and §F now shows why it cannot 
 **the 86 invisible accounts are exactly the population an SRS would score.** Scoring a population
 the engine cannot see produces a confident number about the wrong people.
 
-So Phase 3 should open by closing, in this order:
+So Phase 3 should open by closing, in this order. **Progress as of 2026-10-15:**
 
-1. **The backfill decision above**, because it determines the input set.
-2. **Gap 1 and 2 of §H** — a registry test that fails when an evidence group loses its evidence,
-   and coverage for the evidence groups that have none. Without the first, Person 360 can silently
-   stop carrying what the score depends on.
-3. **Gap 5** — the two suites that pass in isolation and fail under parallel load. A gate that
-   produces false reds is a gate people learn to ignore, and it is the gate protecting the SRS
-   input.
-4. **`explorer_entered_at`**, which no task owns and which the backfill would leave NULL for 37
-   people. A journey score with no journey start date is a score with no denominator.
+1. ~~**The backfill decision above**, because it determines the input set.~~ ✅ **DONE** — run
+   2026-10-13; the input set is now 56 coherent rows with 49 still outside it.
+2. **Gap 1 and 2 of §H.** ✅ **Gap 1 CLOSED** by `evidenceRegistry.test.ts` (see §H).
+   ✅ **Gap 2 mostly closed:** it was **eleven** loaders uncovered, not nine; eight now have
+   behavioural tests. Three remain — `loadCcppHistory` (MSSQL, needs its own suite),
+   `buildJourney` and `buildTrust` (composers, and `buildTrust` belongs with gap 3).
+3. ⬜ **Gap 5** — the suites that pass in isolation and fail under parallel load. **NOT root-caused.**
+   `personViewRoles` runs 24 tests in **14.5 s alone**, against its own `jest.setTimeout(120000)`,
+   so reaching that ceiling needs roughly an 8× degradation. The leading candidate is that
+   `config/database.ts` constructs `new Sequelize(...)` **eagerly at import** with
+   `pool.acquire: 30000`, and that suite carries **zero** `jest.mock` calls — so requiring a model
+   for one pure 7-line function builds a real Postgres pool in every worker. **That is a
+   hypothesis, not a finding:** the isolation timing does not confirm it, and nothing here should
+   be refactored until the flake is reproduced under load. Diagnostic: run the full backend suite
+   repeatedly and capture which assertion times out, rather than inferring from module cost.
+4. ⬜ **`explorer_entered_at`.** Measured after the backfill: **all 56** coherent rows are NULL,
+   not the 37 the script's warning names — the column has never been populated for anybody. **This
+   is not purely mechanical.** The honest entry date for a row backfilled from provenance is
+   unknown; using `enrollments.created_at` as a proxy would be the same guess the backfill
+   predicate deliberately refuses to make. **Phase 3 needs a decision on the semantic before the
+   column can be filled.**
 
 Only then the score itself.
 
 ### Honest note on this phase's own record
 
-Three of eight tasks failed independent verification and two were never re-graded after their
-final fixes (§B). The production behaviour is tested and live; what repeatedly failed was the
-evidence I wrote about it. Phase 3 should assume the same risk and budget verification rounds
+**Six of seventeen** tasks never obtained a verifier PASS, and the plan never passed its own audit
+(§B) — an earlier version of this paragraph said "three of eight", which was one of the three
+different counts three artefacts were giving for the same fact. The production behaviour is tested
+and live; what repeatedly failed was the evidence I wrote about it, and that pattern continued
+after the phase closed: the backfill script could not report its own row count, and my
+`explorer_entered_at` disclosure said 37 where the measured answer was 56. Phase 3 should assume
+the same risk and budget verification rounds
 accordingly rather than treating a green suite as a finished task.
