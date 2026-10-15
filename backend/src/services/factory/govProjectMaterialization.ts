@@ -28,7 +28,8 @@ import { gatePlan, blockingViolations } from '../sbp/planGate';
 import type { BuildPlan } from '../sbp/planContract';
 import { linkGovBuildToStudentProject } from './govDeliveryProject';
 import { factoryId } from './factoryIds';
-import { decomposeGovBuildPlanRaw, rescaleScheduleToDeadline } from './govBuildPlanAI';
+import { decomposeGovBuildPlanRaw } from './govBuildPlanAI';
+import { rescaleScheduleToDeadline } from './govScheduleWindow';
 
 export type GovMaterializeReason = 'no_enrollment' | 'no_program' | 'decompose_error' | 'plan_blocked' | 'bad_input';
 export class GovMaterializeError extends Error {
