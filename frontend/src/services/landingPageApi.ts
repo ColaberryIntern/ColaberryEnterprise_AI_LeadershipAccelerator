@@ -124,3 +124,38 @@ export function errorMessage(err: unknown, fallback: string): string {
   }
   return server || fallback;
 }
+
+/**
+ * Traffic for every hosted landing page.
+ *
+ * Three numbers per page because they answer different questions and are routinely confused:
+ * `visitors` is people, `sessions` is visits, `views` is loads. The live page recorded 11, 24
+ * and 192 of each over thirty days - leading with views would have overstated the audience
+ * seventeenfold.
+ */
+export interface LandingPageTrafficRow {
+  slug: string;
+  brand_slug: string | null;
+  status: string;
+  /** Null means the page carries NO tracker and cannot be measured at all. */
+  site_slug: string | null;
+  visitors: number;
+  sessions: number;
+  views: number;
+  ad_clicks: number;
+  utm_tagged: number;
+  identified_leads: number;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+export async function fetchLandingPageTraffic(days = 30): Promise<{
+  traffic: LandingPageTrafficRow[];
+  window_days: number;
+}> {
+  const res = await api.get('/api/admin/landing-pages/traffic', { params: { days } });
+  return {
+    traffic: Array.isArray(res.data?.traffic) ? res.data.traffic : [],
+    window_days: Number(res.data?.window_days ?? days),
+  };
+}
