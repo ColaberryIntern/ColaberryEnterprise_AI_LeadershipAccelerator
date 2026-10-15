@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Intern Build page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#1F4FD8}a:hover{color:#163BA6}
+</style>
+</helmet>
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16181D; background: #F6F6F3; min-height: 100%; display: flex; flex-wrap: wrap">
+
+<nav aria-label="Intern portal" style="flex: 1 1 200px; max-width: 220px; min-width: 0; background: #16181D; color: #FFFFFF; padding: 22px 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 15px; font-weight: 700; padding: 0 10px 16px">Colaberry Intern</div>
+<a href="#" style="color: #D5D8DF; text-decoration: none; font-size: 14px; padding: 10px; border-radius: 8px">My Day</a>
+<a href="#" style="color: #FFFFFF; text-decoration: none; font-size: 14px; font-weight: 600; padding: 10px; border-radius: 8px; background: #2B2F38">My Projects</a>
+<a href="#" style="color: #D5D8DF; text-decoration: none; font-size: 14px; padding: 10px; border-radius: 8px">Profile</a>
+<a href="#" style="color: #D5D8DF; text-decoration: none; font-size: 14px; padding: 10px; border-radius: 8px">Curriculum</a>
+</nav>
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 24px 36px 18px; background: #FFFFFF; border-bottom: 1px solid #E4E5E9">
+<div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<div style="font-size: 13px; color: #5B6170">My Projects / Build</div>
+<h1 style="margin: 0; font-size: 26px; font-weight: 700">Herriman Work Order Hub</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #EEF2FD; color: #163BA6">Gov pursuit · Herriman City</span>
+<span style="font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #F1F2F4; color: #3D424D">Assigned by Dhee</span>
+<span style="font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #E6F3EC; color: #1E5C3B">On your profile</span>
+</div>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap">
+<div style="padding: 8px 14px; border-radius: 10px; background: #F6F6F3; display: flex; flex-direction: column"><span style="font-size: 12px; color: #5B6170">MVP demo-ready</span><span style="font-size: 16px; font-weight: 700">Nov 26</span></div>
+<div style="padding: 8px 14px; border-radius: 10px; background: #FFF6E5; display: flex; flex-direction: column"><span style="font-size: 12px; color: #7A4A00">Proposal due</span><span style="font-size: 16px; font-weight: 700; color: #5C3D00">Dec 1 · 46 days</span></div>
+</div>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 36px; background: #FAFBFF; border-bottom: 1px solid #E4E5E9; font-size: 13px; color: #3D424D">
+<span><strong>Build:</strong> yours to edit</span>
+<span><strong>Proposal:</strong> shared by Dhee · you can comment</span>
+<span><strong>Qualification, decision, pricing:</strong> admin only</span>
+</div>
+
+<main style="box-sizing: border-box; padding: 24px 36px 44px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+<section style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+
+<div style="display: flex; border: 1px solid #C9CCD3; border-radius: 10px; overflow: hidden; align-self: flex-start" role="tablist" aria-label="Project views">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+<button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{isBuild}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 18px">
+<div style="background: #FFFFFF; border: 1.5px solid #1F4FD8; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #1F4FD8">YOUR NEXT THING</div>
+<div style="font-size: 18px; font-weight: 600">Review the product definition draft before the spec starts on Oct 24</div>
+<div style="font-size: 14px; line-height: 1.5; color: #3D424D">Dhee and the AI are finishing it now. Leave comments on anything a builder would trip over; the spec is generated from it.</div>
+<div><a href="#" style="display: inline-block; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 10px; background: #1F4FD8; color: #FFFFFF; text-decoration: none">Open product definition</a></div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">My schedule</h2>
+<span style="font-size: 13px; color: #5B6170">19 stories · 3 releases</span>
+</div>
+<div style="overflow-x: auto">
+<div style="min-width: 640px; display: flex; flex-direction: column">
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); padding-bottom: 6px; border-bottom: 1px solid #E4E5E9">
+<div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170">WORK</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr))">
+<sc-for list="{{weeks}}" as="w" hint-placeholder-count="8">
+<div style="font-size: 12px; color: #5B6170; padding-left: 4px; border-left: 1px solid #E4E5E9">{{w}}</div>
+</sc-for>
+</div>
+</div>
+<sc-for list="{{gantt}}" as="g" hint-placeholder-count="5">
+<div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: center; border-bottom: 1px solid #F1F2F4; min-height: 42px">
+<div style="display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 6px 0"><span style="font-size: 14px; font-weight: 600">{{g.name}}</span><span style="font-size: 12px; color: #5B6170">{{g.dates}}</span></div>
+<div style="position: relative; height: 42px; background: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #F1F2F4 calc(12.5% - 1px), #F1F2F4 12.5%)">
+<div style="{{g.bar}}">{{g.tag}}</div>
+<div style="{{mToday}}"></div>
+<div style="{{mDue}}"></div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 600">Release 1 · Work order core</h2>
+<sc-for list="{{stories}}" as="s" hint-placeholder-count="4">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid #EEEFF1">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">{{s.name}}</span><span style="font-size: 12px; color: #5B6170">cites {{s.cite}}</span></div>
+<span style="font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #F1F2F4; color: #3D424D">{{s.status}}</span>
+</div>
+</sc-for>
+<a href="#" style="font-size: 13px; margin-top: 6px">All 19 stories</a>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isProposal}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 18px">
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Proposal parts</h2>
+<span style="font-size: 13px; color: #5B6170">Shared by Dhee · can comment</span>
+</div>
+<sc-for list="{{parts}}" as="p" hint-placeholder-count="4">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid #EEEFF1">
+<span style="font-size: 14px; font-weight: 500">{{p.name}}</span>
+<span style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; color: #5B6170">{{p.note}}</span><span style="{{p.chip}}">{{p.status}}</span></span>
+</div>
+</sc-for>
+</div>
+<div style="background: #FAFBFF; border: 1.5px solid #1F4FD8; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 15px; font-weight: 700">The AI asked you (compliance matrix)</div>
+<div style="font-size: 14px; line-height: 1.5">Does the mobile app need to work with no signal and sync later? It changes the technical approach for release 3.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" style="font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer">Yes, offline-first</button>
+<button type="button" style="font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer">Online only</button>
+<button type="button" style="font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #2B2F38; cursor: pointer">Ask Dhee</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isChecklist}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">What we're submitting</h2>
+<span style="font-size: 13px; color: #5B6170">5 of 14 done · yours are marked</span>
+</div>
+<sc-for list="{{items}}" as="it" hint-placeholder-count="14">
+<div style="display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid #EEEFF1; font-size: 14px">
+<span style="display: flex; align-items: center; gap: 8px"><span>{{it.name}}</span><sc-if value="{{it.mine}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #EEF2FD; color: #163BA6">yours</span></sc-if></span>
+<span style="{{it.chip}}">{{it.status}}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+</section>
+
+<aside style="flex: 1 1 280px; max-width: 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<div style="background: #16181D; color: #FFFFFF; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #C3C7D0">SUBMISSION COUNTDOWN</div>
+<div style="font-size: 34px; font-weight: 700; line-height: 1">9 <span style="font-size: 15px; font-weight: 500; color: #C3C7D0">of 14 left</span></div>
+<div style="font-size: 14px; color: #D5D8DF">74% on time · 2 of the 9 are yours</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">On your profile</h2>
+<div style="font-size: 14px; line-height: 1.5; color: #2B2F38">Listed as a project: <strong>Herriman Work Order Hub</strong>, a city work order and asset management MVP.</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #EFE8FC; color: #5B2DB3">CMMS</span>
+<span style="font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #EFE8FC; color: #5B2DB3">Offline mobile sync</span>
+<span style="font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #F1F2F4; color: #3D424D">Data migration</span>
+</div>
+<div style="font-size: 13px; color: #5B6170">Stays on your profile whether or not the bid wins.</div>
+</div>
+</aside>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1250}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { tab: 'build' }; }
+  renderVals() {
+    const tab = this.state.tab;
+    const T = [['build', 'Build'], ['proposal', 'Proposal (shared)'], ['checklist', 'Submission checklist']];
+    const tabs = T.map((t) => ({
+      label: t[1], on: tab === t[0] ? 'true' : 'false', pick: () => this.setState({ tab: t[0] }),
+      style: 'font:inherit;font-size:14px;padding:9px 16px;border:none;cursor:pointer;' + (tab === t[0] ? 'background:#16181D;color:#FFFFFF;font-weight:600' : 'background:#FFFFFF;color:#2B2F38')
+    }));
+    const SPAN = 56;
+    const day = (m, d) => (m === 10 ? d - 12 : 20 + d);
+    const pct = (x) => (x / SPAN * 100).toFixed(2) + '%';
+    const G = [
+      ['Spec', 10, 24, 11, 3, '#1F4FD8', 'Starts Oct 24'],
+      ['MVP plan', 11, 3, 11, 7, '#1F4FD8', ''],
+      ['R1 · Work order core', 11, 7, 11, 17, '#1E7A4C', ''],
+      ['R2 · Assets + PM', 11, 12, 11, 21, '#1E7A4C', ''],
+      ['R3 · Mobile field app', 11, 17, 11, 26, '#1E7A4C', 'Critical']
+    ];
+    const M = { 10: 'Oct', 11: 'Nov' };
+    const gantt = G.map((g) => {
+      const s = day(g[1], g[2]), e = day(g[3], g[4]) + 1;
+      return {
+        name: g[0], tag: g[6], dates: M[g[1]] + ' ' + g[2] + '–' + (g[3] === g[1] ? '' : M[g[3]] + ' ') + g[4],
+        bar: 'position:absolute;top:10px;height:22px;border-radius:6px;box-sizing:border-box;padding:0 8px;display:flex;align-items:center;font-size:11px;font-weight:700;color:#FFFFFF;white-space:nowrap;overflow:hidden;left:' + pct(s) + ';width:' + pct(e - s) + ';background:' + g[5] + (g[6] === 'Critical' ? ';box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #B42318' : '')
+      };
+    });
+    const mk = (x, c) => 'position:absolute;top:0;bottom:0;width:2px;left:' + pct(x) + ';background:' + c;
+    const weeks = ['Oct 12', 'Oct 19', 'Oct 26', 'Nov 2', 'Nov 9', 'Nov 16', 'Nov 23', 'Nov 30'];
+    const stories = [
+      { name: 'Create a work order from a request', cite: 'Compliance row 1', status: 'Planned' },
+      { name: 'Assign a work order to a crew', cite: 'Compliance row 2', status: 'Planned' },
+      { name: 'Close out with time and parts', cite: 'Compliance row 4', status: 'Planned' },
+      { name: 'Supervisor dashboard of open orders', cite: 'Compliance row 6', status: 'Planned' }
+    ];
+    const chip = (s) => 'font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;' + (s === 'Done' ? 'background:#E6F3EC;color:#1E5C3B' : s === 'Filler' ? 'background:#FCE8E6;color:#9A1B12' : s === 'Needs you' || s === 'Needs Dhee' ? 'background:#FFF0D6;color:#7A4A00' : s === 'Drafting' ? 'background:#EEF2FD;color:#163BA6' : 'background:#F1F2F4;color:#3D424D');
+    const parts = [['Signed cover letter', 'Drafting', ''], ['Compliance matrix + approach', 'Waits on spec', '1 question for you'], ['Qualifications & references', 'Needs Dhee', '2 comments'], ['Exceptions to terms', 'Done', '']].map((p) => ({ name: p[0], status: p[1], note: p[2], chip: chip(p[1]) }));
+    const I = [['Product definition', 'Needs Dhee', false], ['Spec + MVP plan', 'Not started', true], ['Cover letter', 'Drafting', false], ['Compliance matrix', 'Not started', true], ['Price proposal', 'Admin only', false], ['Qualifications', 'Needs Dhee', false], ['Exceptions to terms', 'Done', false], ['Insurance certificate', 'Filler', false], ['Signing officer named', 'Done', false], ['Single PDF assembled', 'Not started', false], ['Questions sent to City', 'Not started', false], ['Bonfire account ready', 'Done', false], ['Contact rules briefed', 'Done', false], ['Eligibility checks cleared', 'Done', false]];
+    const items = I.map((x) => ({ name: x[0], status: x[1], mine: x[2], chip: chip(x[1]) }));
+    return {
+      tabs, isBuild: tab === 'build', isProposal: tab === 'proposal', isChecklist: tab === 'checklist',
+      gantt, weeks, stories, parts, items,
+      mToday: mk(day(10, 15), '#1F4FD8'), mDue: mk(day(11, 31), '#B42318')
+    };
+  }
+}
+</script>
+</body>
+</html>

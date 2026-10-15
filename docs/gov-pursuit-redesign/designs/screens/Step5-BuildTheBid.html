@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step 5 Build the bid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#1F4FD8}a:hover{color:#163BA6}
+</style>
+</head>
+<body>
+<!-- Standalone render of design artboard Step5-BuildTheBid.dc.html. Interactive: clicks update local state. Links go to sibling screens. -->
+<div id="dc-root"></div>
+<script>
+(function () {
+  function get(scope, p) {
+    p = p.trim();
+    if (p === 'true') return true; if (p === 'false') return false;
+    if (/^-?\d+(\.\d+)?$/.test(p)) return Number(p);
+    return p.split('.').reduce(function (o, k) { return o == null ? undefined : o[k]; }, scope);
+  }
+  var WHOLE = /^\s*\{\{([^}]+)\}\}\s*$/;
+  function interp(s, scope) {
+    return s.replace(/\{\{([^}]+)\}\}/g, function (_, p) { var v = get(scope, p); return v == null ? '' : String(v); });
+  }
+  function renderNodes(nodes, scope, parent) {
+    for (var i = 0; i < nodes.length; i++) renderNode(nodes[i], scope, parent);
+  }
+  function renderNode(n, scope, parent) {
+    if (n.nodeType === 3) { parent.appendChild(document.createTextNode(interp(n.nodeValue, scope))); return; }
+    if (n.nodeType !== 1) return;
+    var tag = n.tagName.toLowerCase();
+    if (tag === 'helmet') return;
+    if (tag === 'sc-for') {
+      var m = WHOLE.exec(n.getAttribute('list') || ''); var list = m ? get(scope, m[1]) : [];
+      var as = n.getAttribute('as') || 'item';
+      (list || []).forEach(function (item, idx) {
+        var s = Object.create(scope); s[as] = item; s.$index = idx;
+        renderNodes(n.childNodes, s, parent);
+      });
+      return;
+    }
+    if (tag === 'sc-if') {
+      var mv = WHOLE.exec(n.getAttribute('value') || ''); var v = mv ? get(scope, mv[1]) : false;
+      if (v) renderNodes(n.childNodes, scope, parent);
+      return;
+    }
+    var el = document.createElement(tag === 'svg' || n.namespaceURI === 'http://www.w3.org/2000/svg' ? tag : tag);
+    if (n.namespaceURI === 'http://www.w3.org/2000/svg') el = document.createElementNS('http://www.w3.org/2000/svg', n.tagName);
+    for (var a = 0; a < n.attributes.length; a++) {
+      var at = n.attributes[a]; var name = at.name; var val = at.value;
+      if (name.indexOf('hint-') === 0) continue;
+      var w = WHOLE.exec(val);
+      if (/^on[a-z]+$/i.test(name) && w) {
+        var fn = get(scope, w[1]);
+        if (typeof fn === 'function') el.addEventListener(name.slice(2).toLowerCase(), (function (f) { return function (e) { e.preventDefault(); f(e); }; })(fn));
+        continue;
+      }
+      if (w) {
+        var rv = get(scope, w[1]);
+        if (rv === false || rv == null) { if (name === 'checked') el.checked = false; continue; }
+        if (rv === true) { el.setAttribute(name, ''); if (name === 'checked') el.checked = true; continue; }
+        if (name === 'value') { el.value = String(rv); }
+        el.setAttribute(name, String(rv));
+        continue;
+      }
+      var iv = interp(val, scope);
+      if (name === 'href' && /\.dc\.html(#.*)?$/.test(iv)) iv = iv.replace('.dc.html', '.html');
+      el.setAttribute(name, iv);
+    }
+    renderNodes(n.childNodes, scope, el);
+    parent.appendChild(el);
+  }
+  window.DCLogic = function DCLogic(props) { this.props = props || {}; this.state = {}; };
+  window.DCLogic.prototype.setState = function (p) { Object.assign(this.state, typeof p === 'function' ? p(this.state) : p); window.__dcRender(); };
+  window.DCLogic.prototype.forceUpdate = function () { window.__dcRender(); };
+  window.__dcBoot = function (tplHtml, Component) {
+    var tpl = document.createElement('template'); tpl.innerHTML = tplHtml;
+    var inst = new Component({});
+    var root = document.getElementById('dc-root');
+    window.__dcRender = function () {
+      var scope = inst.renderVals();
+      var frag = document.createDocumentFragment();
+      renderNodes(tpl.content.childNodes, scope, frag);
+      root.innerHTML = ''; root.appendChild(frag);
+    };
+    window.__dcRender();
+    if (inst.componentDidMount) inst.componentDidMount();
+  };
+})();
+</script>
+<script>
+(function(){
+  var TPL = "\n\n<div style=\"font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16181D; background: #F6F6F3; min-height: 100%\">\n\n<header style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 24px 40px 18px; background: #FFFFFF; border-bottom: 1px solid #E4E5E9\">\n<div style=\"display: flex; flex-direction: column; gap: 6px; min-width: 0\">\n<div style=\"font-size: 13px; color: #5B6170\">Gov Opportunities / Qualification</div>\n<h1 style=\"margin: 0; font-size: 24px; font-weight: 600\">Herriman City — Enterprise Work Order Management System RFP</h1>\n<div style=\"font-size: 13px; color: #5B6170\">U3P (Utah) · Bidding as Colaberry</div>\n</div>\n<div style=\"display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #FFF6E5; border: 1px solid #F0D9A8; color: #5C3D00; font-size: 14px; font-weight: 600\">46 days left · closes Dec 1</div>\n</header>\n\n<div style=\"overflow-x: auto; background: #FFFFFF; border-bottom: 1px solid #E4E5E9\">\n<nav aria-label=\"Pursuit steps\" style=\"display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 6px; padding: 14px 40px; min-width: 1100px\">\n<sc-for list=\"{{steps}}\" as=\"s\" hint-placeholder-count=\"7\">\n<a href=\"{{s.href}}\" style=\"{{s.wrap}}\" aria-current=\"{{s.aria}}\">\n<span style=\"{{s.badge}}\">{{s.mark}}</span>\n<span style=\"display: flex; flex-direction: column; gap: 2px; min-width: 0\"><span style=\"{{s.labelStyle}}\">{{s.label}}</span><span style=\"font-size: 12px; color: #5B6170; white-space: nowrap\">{{s.q}}</span></span>\n</a>\n</sc-for>\n</nav>\n</div>\n\n<main style=\"max-width: 1440px; margin: 0 auto; box-sizing: border-box; padding: 28px 40px 48px; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start\">\n\n<section style=\"flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 18px\">\n<div style=\"display: flex; flex-direction: column; gap: 6px\">\n<div style=\"font-size: 13px; font-weight: 600; color: #1F4FD8\">Step 5 of 7 · approved by [approver] · 6 weeks</div>\n<h2 style=\"margin: 0; font-size: 30px; font-weight: 700\">Define the product, plan the MVP, then write the bid</h2>\n<p style=\"margin: 0; font-size: 16px; color: #3D424D; line-height: 1.5\">The proposal describes a product, so we define and plan the product first. The AI drafts every part and stops to ask you when it needs something only you know.</p>\n</div>\n\n<div style=\"background: #16181D; color: #FFFFFF; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px\">\n<div style=\"display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-end\">\n<div style=\"display: flex; flex-direction: column; gap: 2px\">\n<div style=\"font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #C3C7D0\">LEFT TO SUBMIT</div>\n<div style=\"font-size: 44px; font-weight: 700; line-height: 1\">9 <span style=\"font-size: 18px; font-weight: 500; color: #C3C7D0\">of 14 items</span></div>\n</div>\n<div style=\"display: flex; flex-direction: column; gap: 2px\">\n<div style=\"font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #C3C7D0\">SHIP BY</div>\n<div style=\"font-size: 28px; font-weight: 700; line-height: 1.1\">Nov 30 <span style=\"font-size: 15px; font-weight: 500; color: #C3C7D0\">· 45 days</span></div>\n</div>\n<div style=\"display: flex; flex-direction: column; gap: 2px\">\n<div style=\"font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #C3C7D0\">ON-TIME PROBABILITY</div>\n<div style=\"font-size: 28px; font-weight: 700; line-height: 1.1; color: #8FD6AE\">74%</div>\n</div>\n<div style=\"flex: 1 1 260px; font-size: 13px; line-height: 1.5; color: #D5D8DF\">Remaining work at this team's pace. The biggest risk is 3 answers waiting on you; answering them lifts this to about 88%.</div>\n</div>\n<div style=\"display: flex; flex-wrap: wrap; gap: 8px\">\n<span style=\"font-size: 13px; padding: 5px 10px; border-radius: 999px; background: #2B2F38; color: #FFFFFF\">3 need your answer</span>\n<span style=\"font-size: 13px; padding: 5px 10px; border-radius: 999px; background: #5A1E19; color: #FFD9D4\">{{fillerCount}} blocking export (filler)</span>\n<span style=\"font-size: 13px; padding: 5px 10px; border-radius: 999px; background: #2B2F38; color: #FFFFFF\">1 question for the City · send by Nov 19</span>\n</div>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #D5DBEA; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px\">\n<h3 style=\"margin: 0; font-size: 18px; font-weight: 600\">Team and access</h3>\n<a href=\"Intern-BuildPage.dc.html\" style=\"font-size: 14px; font-weight: 500\">Preview what the intern sees →</a>\n</div>\n<div style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px\">\n<div style=\"display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 10px; background: #F6F6F3\">\n<div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">BUILDER (INTERN)</div>\n<sc-if value=\"{{notAssigned}}\" hint-placeholder-val=\"{{ true }}\">\n<div style=\"display: flex; flex-wrap: wrap; gap: 8px; align-items: center\">\n<label for=\"intern\" style=\"position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)\">Intern</label>\n<select id=\"intern\" style=\"font: inherit; font-size: 14px; padding: 9px 10px; border: 1px solid #C9CCD3; border-radius: 8px; flex: 1 1 180px\"><option>[Intern name] · AI suggested</option><option>[Another intern]</option></select>\n<button type=\"button\" onClick=\"{{assign}}\" style=\"font: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: none; background: #1F4FD8; color: #FFFFFF; cursor: pointer\">Assign</button>\n</div>\n<div style=\"font-size: 13px; line-height: 1.45; color: #3D424D\">Suggested because their profile shows mobile and data work, and they have room for ~20 stories before Nov 26.</div>\n</sc-if>\n<sc-if value=\"{{assigned}}\" hint-placeholder-val=\"{{ false }}\">\n<div style=\"display: flex; align-items: center; gap: 10px\">\n<span style=\"width: 36px; height: 36px; border-radius: 50%; background: #1E7A4C; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700\">IN</span>\n<div style=\"display: flex; flex-direction: column; gap: 2px\"><div style=\"font-size: 15px; font-weight: 600\">[Intern name]</div><div style=\"font-size: 13px; color: #1E5C3B\">Assigned · project created on their profile</div></div>\n</div>\n<div style=\"font-size: 13px; line-height: 1.45; color: #3D424D\">They now have the Build page for this project: the MVP releases and stories assigned to them, plus the submission checklist. <button type=\"button\" onClick=\"{{assign}}\" style=\"font: inherit; font-size: 13px; padding: 0; border: none; background: none; color: #1F4FD8; text-decoration: underline; cursor: pointer\">Change</button></div>\n</sc-if>\n</div>\n<div style=\"display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 10px; background: #F6F6F3\">\n<div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">SHARE THE PROPOSAL WITH THEM</div>\n<div style=\"display: flex; flex-wrap: wrap; gap: 6px\" role=\"group\" aria-label=\"Proposal access\">\n<sc-for list=\"{{shareOpts}}\" as=\"o\" hint-placeholder-count=\"4\">\n<button type=\"button\" onClick=\"{{o.pick}}\" aria-pressed=\"{{o.on}}\" style=\"{{o.style}}\">{{o.label}}</button>\n</sc-for>\n</div>\n<div style=\"font-size: 13px; line-height: 1.45; color: #3D424D\">{{shareNote}}</div>\n</div>\n</div>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #D5DBEA; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px\">\n<div style=\"display: flex; align-items: center; gap: 10px\"><span style=\"width: 28px; height: 28px; border-radius: 50%; background: #1F4FD8; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px\">A</span><h3 style=\"margin: 0; font-size: 18px; font-weight: 600\">Product definition</h3></div>\n<span style=\"font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #FFF0D6; color: #7A4A00\">AI draft · 2 questions for you</span>\n</div>\n<div style=\"display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 20px; font-size: 14px; line-height: 1.5\">\n<div><div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">THE PRODUCT</div>A city work order and asset management system: requests come in, become work orders, go to crews, get closed with time and parts, and roll up into asset history and cost.</div>\n<div><div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">WHO USES IT</div>Public works supervisors, field crews (mobile), city staff filing requests, finance for cost reports.</div>\n<div><div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">MVP</div>Work orders, crew assignment, asset register, preventive schedules, mobile close-out, migration.</div>\n<div><div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">LATER</div>Citizen request portal, inventory and purchasing, advanced reporting.</div>\n</div>\n<div style=\"display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 10px; background: #F6F6F3\">\n<div style=\"font-size: 14px; font-weight: 600\">The AI can't answer these from the RFP</div>\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; font-size: 14px\"><span>What system does the City use today, and how many work orders a year?</span><span style=\"display: flex; gap: 6px\"><button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #C9CCD3; background: #FFFFFF; cursor: pointer\">I know</button><button type=\"button\" style=\"font: inherit; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 8px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">Ask the City (by Nov 19)</button></span></div>\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center; font-size: 14px\"><span>Is a GIS map view of assets expected?</span><span style=\"display: flex; gap: 6px\"><button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #C9CCD3; background: #FFFFFF; cursor: pointer\">Yes</button><button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid #C9CCD3; background: #FFFFFF; cursor: pointer\">No</button><button type=\"button\" style=\"font: inherit; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 8px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">Ask the City</button></span></div>\n</div>\n<div style=\"display: flex; justify-content: flex-end\"><button type=\"button\" style=\"font: inherit; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 10px; border: none; background: #1F4FD8; color: #FFFFFF; cursor: pointer\">Confirm product — generate spec and MVP plan</button></div>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px\">\n<div style=\"display: flex; align-items: center; gap: 10px\"><span style=\"width: 28px; height: 28px; border-radius: 50%; background: #FFFFFF; border: 1.5px solid #C9CCD3; color: #5B6170; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px\">B</span><h3 style=\"margin: 0; font-size: 18px; font-weight: 600\">Spec and MVP build schedule</h3></div>\n<span style=\"font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: #E6F3EC; color: #1E5C3B\">MVP demo-ready Nov 26 · 5 days before due</span>\n</div>\n<div style=\"display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #3D424D\">\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 14px; height: 8px; border-radius: 3px; background: #1F4FD8\"></span>Define + spec</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 14px; height: 8px; border-radius: 3px; background: #1E7A4C\"></span>MVP build</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 14px; height: 8px; border-radius: 3px; background: #8A93A6\"></span>Planned, not built</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 14px; height: 8px; border-radius: 3px; background: #D9A443\"></span>Proposal</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 2px; height: 12px; background: #1F4FD8\"></span>Today</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 2px; height: 12px; background: #D9A443\"></span>Questions due Nov 19</span>\n<span style=\"display: inline-flex; align-items: center; gap: 6px\"><span style=\"width: 2px; height: 12px; background: #B42318\"></span>Proposal due Dec 1</span>\n</div>\n<div style=\"overflow-x: auto\">\n<div style=\"min-width: 760px; display: flex; flex-direction: column\">\n<div style=\"display: grid; grid-template-columns: 230px minmax(0, 1fr); align-items: end; padding-bottom: 6px; border-bottom: 1px solid #E4E5E9\">\n<div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">WORK · OWNER</div>\n<div style=\"display: grid; grid-template-columns: repeat(8, minmax(0, 1fr))\">\n<sc-for list=\"{{weeks}}\" as=\"w\" hint-placeholder-count=\"8\">\n<div style=\"font-size: 12px; color: #5B6170; padding-left: 4px; border-left: 1px solid #E4E5E9\">{{w}}</div>\n</sc-for>\n</div>\n</div>\n<sc-for list=\"{{gantt}}\" as=\"g\" hint-placeholder-count=\"9\">\n<div style=\"display: grid; grid-template-columns: 230px minmax(0, 1fr); align-items: center; border-bottom: 1px solid #F1F2F4; min-height: 44px\">\n<div style=\"display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 6px 0\">\n<span style=\"font-size: 14px; font-weight: 600\">{{g.name}}</span>\n<span style=\"font-size: 12px; color: #5B6170\">{{g.owner}} · {{g.dates}}</span>\n</div>\n<div style=\"position: relative; height: 44px; background: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #F1F2F4 calc(12.5% - 1px), #F1F2F4 12.5%)\">\n<div style=\"{{g.bar}}\">{{g.tag}}</div>\n<div style=\"{{mToday}}\"></div>\n<div style=\"{{mQ}}\"></div>\n<div style=\"{{mDue}}\"></div>\n</div>\n</div>\n</sc-for>\n</div>\n</div>\n<div style=\"font-size: 13px; line-height: 1.5; color: #3D424D\"><strong>Critical path:</strong> Spec → MVP plan → Release 3 (mobile). If release 3 slips more than 5 days the demo misses the proposal. The on-time probability above is computed from this chart. Every story cites a compliance-matrix row, so the plan doubles as the technical approach.</div>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px\">\n<div style=\"display: flex; align-items: center; gap: 10px\"><span style=\"width: 28px; height: 28px; border-radius: 50%; background: #FFFFFF; border: 1.5px solid #C9CCD3; color: #5B6170; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px\">C</span><h3 style=\"margin: 0; font-size: 18px; font-weight: 600\">Proposal parts</h3></div>\n<span style=\"font-size: 13px; color: #5B6170\">from the 5 “We submit” items in step 2</span>\n</div>\n<sc-for list=\"{{parts}}\" as=\"p\" hint-placeholder-count=\"5\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #EEEFF1\">\n<span style=\"font-size: 15px; font-weight: 500\">{{p.name}}</span>\n<span style=\"{{p.chip}}\">{{p.status}}</span>\n</div>\n</sc-for>\n\n<div style=\"border: 1.5px solid #1F4FD8; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; background: #FAFBFF\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center\">\n<div style=\"font-size: 15px; font-weight: 700\">Drafting with AI: Qualifications &amp; references</div>\n<span style=\"font-size: 13px; color: #5B6170\">draft 1 · 2 gaps</span>\n</div>\n<div style=\"font-size: 14px; line-height: 1.6; color: #2B2F38; background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 8px; padding: 12px 14px\">Colaberry has delivered enterprise software and data platforms for public and private clients since [year]. Three clients the City may contact: <span style=\"{{refStyle}}\">{{refText}}</span>. We carry the insurance coverage the City requires: <span style=\"background: #FFF0D6; color: #7A4A00; padding: 1px 4px; border-radius: 4px; font-weight: 600\">[needs you]</span>.</div>\n<div style=\"display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 8px; background: #FFFFFF; border: 1px solid #E4E5E9\">\n<div style=\"font-size: 14px; font-weight: 600\">The AI needs: which three clients can the City call?</div>\n<div style=\"font-size: 13px; color: #5B6170\">Suggested from past performance in Our Services:</div>\n<div style=\"display: flex; flex-wrap: wrap; gap: 6px\">\n<button type=\"button\" onClick=\"{{pickRef}}\" style=\"font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">[Client A] · data platform</button>\n<button type=\"button\" onClick=\"{{pickRef}}\" style=\"font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">[Client B] · workforce training</button>\n<button type=\"button\" onClick=\"{{pickRef}}\" style=\"font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">[Client C] · custom app</button>\n<button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #2B2F38; cursor: pointer\">Type my own</button>\n<button type=\"button\" onClick=\"{{useFiller}}\" style=\"font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px; border: 1px solid #B42318; background: #FFFFFF; color: #B42318; cursor: pointer\">Use a filler for now</button>\n</div>\n<sc-if value=\"{{filler}}\" hint-placeholder-val=\"{{ false }}\">\n<div style=\"font-size: 13px; color: #9A1B12; background: #FCE8E6; border-radius: 6px; padding: 8px 10px\">Filler added and flagged. The draft keeps moving, but this part cannot be exported until the filler is replaced.</div>\n</sc-if>\n</div>\n</div>\n</div>\n\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; background: #FFFFFF; border: 1px solid #D5DBEA; border-radius: 12px; box-shadow: 0 6px 20px rgba(22, 24, 29, 0.06)\">\n<div style=\"display: flex; flex-direction: column; gap: 4px\">\n<div style=\"font-size: 15px; font-weight: 600\">Next for you: answer the 2 product questions</div>\n<div style=\"font-size: 13px; color: #5B6170\">Packaging opens when all 14 items are approved and no filler remains.</div>\n</div>\n<div style=\"display: flex; flex-wrap: wrap; align-items: center; gap: 12px\">\n<a href=\"Step4-Decide.dc.html\" style=\"font-size: 14px; font-weight: 500\">← Back</a>\n<a href=\"Step6-Submit.dc.html\" style=\"font-size: 15px; font-weight: 600; padding: 12px 20px; border-radius: 10px; background: #E4E7EF; color: #3D424D; text-decoration: none\">Package the submission (9 left) →</a>\n</div>\n</div>\n</section>\n\n<aside aria-label=\"Pursuit brief\" style=\"flex: 1 1 320px; max-width: 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px\">\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px\">\n<div style=\"display: flex; justify-content: space-between; align-items: baseline\"><h3 style=\"margin: 0; font-size: 17px; font-weight: 700\">Submission items</h3><span style=\"font-size: 13px; color: #5B6170\">5 of 14 done</span></div>\n<sc-for list=\"{{items}}\" as=\"it\" hint-placeholder-count=\"14\">\n<div style=\"display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 13px\"><span style=\"color: #2B2F38\">{{it.name}}</span><span style=\"{{it.chip}}\">{{it.status}}</span></div>\n</sc-for>\n</div>\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px\">\n<div style=\"display: flex; flex-direction: column; gap: 2px\">\n<h3 style=\"margin: 0; font-size: 17px; font-weight: 700\">Pursuit brief</h3>\n<div style=\"font-size: 13px; color: #5B6170\">Grows one section per step.</div>\n</div>\n<sc-for list=\"{{brief}}\" as=\"g\" hint-placeholder-count=\"6\">\n<div style=\"{{g.box}}\">\n<div style=\"display: flex; justify-content: space-between; align-items: center; gap: 8px\">\n<span style=\"font-size: 13px; font-weight: 700\">{{g.title}}</span>\n<span style=\"{{g.tagStyle}}\">{{g.tag}}</span>\n</div>\n<sc-for list=\"{{g.items}}\" as=\"it\" hint-placeholder-count=\"2\">\n<div style=\"{{g.itemStyle}}\">{{it.t}}</div>\n</sc-for>\n</div>\n</sc-for>\n</div>\n</aside>\n\n</main>\n</div>\n";
+  var Component = (function(){ 
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { filler: false, picked: false, assigned: true, share: 'comment' }; }
+  renderVals() {
+    const cur = 5;
+    const S = [
+      ['Snapshot', 'Worth a look?', 'Step1-Snapshot.dc.html'],
+      ['Solicitation', 'What do we submit?', 'Step2-Solicitation.dc.html'],
+      ['Fit', 'Can we deliver?', 'Step3-Fit.dc.html'],
+      ['Decide', 'Should we bid?', 'Step4-Decide.dc.html'],
+      ['Build the bid', 'Product + proposal', 'Step5-BuildTheBid.dc.html'],
+      ['Submit', 'Ship it', 'Step6-Submit.dc.html'],
+      ['Outcome', 'Did we win?', 'Main.dc.html']
+    ];
+    const approved = cur >= 5;
+    const steps = S.map((s, i) => {
+      const n = i + 1, done = n < cur, now = n === cur, locked = n >= 5 && !approved;
+      return {
+        label: s[0], q: locked ? 'After approval' : s[1], href: s[2], mark: done ? '✓' : String(n), aria: now ? 'step' : 'false',
+        wrap: 'display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;text-decoration:none;min-width:0;' + (now ? 'background:#EEF2FD;box-shadow:inset 0 -3px 0 #1F4FD8;' : '') + (locked ? 'opacity:.6;' : ''),
+        badge: 'flex:none;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;' + (done ? 'background:#1E7A4C;color:#FFFFFF;' : now ? 'background:#1F4FD8;color:#FFFFFF;' : 'background:#FFFFFF;color:#5B6170;border:1.5px solid #C9CCD3;'),
+        labelStyle: 'font-size:14px;font-weight:600;white-space:nowrap;color:' + (now ? '#1F4FD8' : done ? '#1E7A4C' : '#16181D')
+      };
+    });
+    const B = [
+      ['Snapshot', ['Enterprise work order management system', '$1.00M est. · closes Dec 1 (46 days)']],
+      ['Solicitation', ['21 fragments → 12 items', '5 to submit · 5 rules · 1 PDF']],
+      ['Fit', ['3 have · 1 partial · 2 new capabilities']],
+      ['Decide', ['Pursue with conditions · approved by [approver]']],
+      ['Build the bid', ['Product draft · MVP plan due Nov 7', '9 of 14 items left · 74% on time']],
+      ['Submit', ['Ship by Nov 30']]
+    ];
+    const brief = B.map((b, i) => {
+      const n = i + 1, known = n < cur, now = n === cur;
+      return {
+        title: n + ' · ' + b[0],
+        tag: known ? 'Known' : now ? 'Adding now' : 'Step ' + n,
+        tagStyle: 'font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;' + (known ? 'background:#E6F3EC;color:#1E5C3B' : now ? 'background:#EEF2FD;color:#163BA6' : 'background:#F1F2F4;color:#5B6170'),
+        box: 'display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:10px;' + (now ? 'border:1.5px solid #1F4FD8;background:#FAFBFF' : known ? 'border:1px solid #E4E5E9' : 'border:1px dashed #D3D5DA'),
+        itemStyle: 'font-size:13px;line-height:1.4;' + (known || now ? 'color:#2B2F38' : 'color:#7A808C'),
+        items: (known || now ? b[1] : ['Unlocks at step ' + n]).map((t) => ({ t }))
+      };
+    });
+    const P = [['Oct 24', 'Define product', 'now'], ['Nov 7', 'Spec + MVP plan', 'next'], ['Nov 19', 'Questions to City', 'deadline'], ['Nov 26', 'Draft all parts', 'todo'], ['Nov 30', 'Sign + ship', 'todo']];
+    const phases = P.map((p) => ({
+      date: p[0], name: p[1], state: p[2] === 'now' ? 'In progress' : p[2] === 'deadline' ? 'Hard deadline' : p[2] === 'next' ? 'Up next' : 'Planned',
+      box: 'display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:8px;' + (p[2] === 'now' ? 'background:#EEF2FD;box-shadow:inset 0 3px 0 #1F4FD8' : p[2] === 'deadline' ? 'background:#FFF6E5;box-shadow:inset 0 3px 0 #D9A443' : 'background:#F6F6F3;box-shadow:inset 0 3px 0 #C9CCD3')
+    }));
+    const rel = [
+      { name: 'Release 1 · Work order core', detail: '8 stories · requests, work orders, crew assignment, close-out', unlock: '' },
+      { name: 'Release 2 · Assets and preventive maintenance', detail: '6 stories · asset register, PM schedules, cost per asset', unlock: 'Unlocks CMMS' },
+      { name: 'Release 3 · Mobile field app', detail: '5 stories · offline close-out with photos and signatures', unlock: 'Extends mobile' },
+      { name: 'Release 4 · Migration, hosting and go-live', detail: '4 stories · data migration, SLA hosting, training', unlock: 'Unlocks SaaS ops' }
+    ];
+    const chip = (s) => 'font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;' + (s === 'Done' ? 'background:#E6F3EC;color:#1E5C3B' : s === 'Filler' ? 'background:#FCE8E6;color:#9A1B12' : s === 'Needs you' ? 'background:#FFF0D6;color:#7A4A00' : s === 'Drafting' ? 'background:#EEF2FD;color:#163BA6' : 'background:#F1F2F4;color:#3D424D');
+    const parts = [['Signed cover letter', 'Drafting'], ['Compliance matrix + approach', 'Waits on B'], ['Price proposal', 'Needs you'], ['Qualifications & references', this.state.filler ? 'Filler' : 'Needs you'], ['Exceptions to terms', 'Done']].map((p) => ({ name: p[0], status: p[1], chip: chip(p[1]) }));
+    const I = [['Product definition', 'Needs you'], ['Spec + MVP plan', 'Not started'], ['Cover letter', 'Drafting'], ['Compliance matrix', 'Not started'], ['Price proposal', 'Needs you'], ['Qualifications', this.state.filler ? 'Filler' : 'Needs you'], ['Exceptions to terms', 'Done'], ['Insurance certificate', 'Filler'], ['Signing officer named', 'Done'], ['Single PDF assembled', 'Not started'], ['Questions sent to City', 'Not started'], ['Bonfire account ready', 'Done'], ['Contact rules briefed', 'Done'], ['Eligibility checks cleared', 'Done']];
+    const items = I.map((x) => ({ name: x[0], status: x[1], chip: chip(x[1]) }));
+    const filler = this.state.filler;
+    const SPAN = 56;
+    const day = (m, d) => (m === 10 ? d - 12 : 20 + d);
+    const pct = (x) => (x / SPAN * 100).toFixed(2) + '%';
+    const COL = { plan: '#1F4FD8', build: '#1E7A4C', doc: '#8A93A6', prop: '#D9A443', ship: '#16181D' };
+    const G = [
+      ['Define product', 'You + AI', 10, 15, 10, 24, 'plan', 'In progress'],
+      ['Spec', 'AI + intern', 10, 24, 11, 3, 'plan', ''],
+      ['MVP plan: releases + stories', 'Intern', 11, 3, 11, 7, 'plan', ''],
+      ['R1 · Work order core', 'Intern · 8 stories', 11, 7, 11, 17, 'build', ''],
+      ['R2 · Assets + PM (CMMS)', 'Intern · 6 stories', 11, 12, 11, 21, 'build', ''],
+      ['R3 · Mobile field app', 'Intern · 5 stories', 11, 17, 11, 26, 'build', 'Critical'],
+      ['R4 · Migration + hosting', 'AI · documented', 11, 10, 11, 14, 'doc', ''],
+      ['Proposal drafting', 'You + intern (shared)', 11, 3, 11, 26, 'prop', ''],
+      ['Sign + ship', 'You', 11, 27, 11, 30, 'ship', '']
+    ];
+    const M = ['', '', '', '', '', '', '', '', '', '', 'Oct', 'Nov'];
+    const gantt = G.map((g) => {
+      const s = day(g[2], g[3]), e = day(g[4], g[5]) + 1;
+      return {
+        name: g[0], owner: g[1], tag: g[7], dates: M[g[2]] + ' ' + g[3] + '–' + (g[4] === g[2] ? '' : M[g[4]] + ' ') + g[5],
+        bar: 'position:absolute;top:11px;height:22px;border-radius:6px;box-sizing:border-box;padding:0 8px;display:flex;align-items:center;font-size:11px;font-weight:700;color:#FFFFFF;white-space:nowrap;overflow:hidden;left:' + pct(s) + ';width:' + pct(e - s) + ';background:' + COL[g[6]] + (g[7] === 'Critical' ? ';box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #B42318' : '')
+      };
+    });
+    const mk = (x, c) => 'position:absolute;top:0;bottom:0;width:2px;left:' + pct(x) + ';background:' + c;
+    const weeks = ['Oct 12', 'Oct 19', 'Oct 26', 'Nov 2', 'Nov 9', 'Nov 16', 'Nov 23', 'Nov 30'];
+    const share = this.state.share;
+    const SO = [['off', 'Not shared'], ['view', 'Can view'], ['comment', 'Can comment'], ['edit', 'Can edit']];
+    const shareOpts = SO.map((o) => ({
+      label: o[1], on: share === o[0] ? 'true' : 'false', pick: () => this.setState({ share: o[0] }),
+      style: 'font:inherit;font-size:13px;padding:7px 12px;border-radius:999px;cursor:pointer;' + (share === o[0] ? 'background:#16181D;color:#FFFFFF;border:1px solid #16181D;font-weight:600' : 'background:#FFFFFF;color:#2B2F38;border:1px solid #C9CCD3')
+    }));
+    const shareNote = share === 'off' ? 'They see only their build stories. The proposal and submission checklist stay with you.' : 'They see the submission checklist and the proposal parts' + (share === 'view' ? ' (read only)' : share === 'comment' ? ', and can comment and answer the AI’s questions' : ', and can edit drafts') + '. Qualification, decision and pricing stay admin-only.';
+    return {
+      gantt, weeks, mToday: mk(day(10, 15), '#1F4FD8'), mQ: mk(day(11, 19), '#D9A443'), mDue: mk(day(12 - 1, 31), '#B42318'),
+      assigned: this.state.assigned, notAssigned: !this.state.assigned, assign: () => this.setState({ assigned: !this.state.assigned }),
+      shareOpts, shareNote,
+      steps, brief, phases, rel, parts, items, filler,
+      fillerCount: String(items.filter((x) => x.status === 'Filler').length),
+      refText: filler ? '[REFERENCE FILLER — replace before export]' : this.state.picked ? '[Client A], [Client B], [Client C]' : '[needs you]',
+      refStyle: 'padding:1px 4px;border-radius:4px;font-weight:600;' + (filler ? 'background:#FCE8E6;color:#9A1B12' : this.state.picked ? 'background:#E6F3EC;color:#1E5C3B' : 'background:#FFF0D6;color:#7A4A00'),
+      pickRef: () => this.setState({ picked: true, filler: false }),
+      useFiller: () => this.setState({ filler: true, picked: false })
+    };
+  }
+}
+
+  ; return Component; })();
+  window.__dcBoot(TPL, Component);
+})();
+</script>
+</body>
+</html>
