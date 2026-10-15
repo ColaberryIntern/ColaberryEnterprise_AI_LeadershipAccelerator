@@ -542,6 +542,8 @@ export interface GovRelationship {
 /** A reviewer-established, cited applicable requirement (same shape the server coverage/blocking gate evaluates). */
 export interface EstablishedRequirement {
   id: string; text: string; category?: string;
+  /** Downstream tracks. Only a `scope` item carries `solution_build` (becomes a build story); others are ['proposal']. */
+  tracks?: string[];
   applicability: 'always' | 'conditional' | 'not_applicable' | 'unknown';
   applicabilityEvidenceRef?: { docId: string } | null;
   responsibleParty?: string;
@@ -791,9 +793,28 @@ export interface ExtractedRequirementCandidate {
   sourceDocument?: string | null; section?: string | null; kind?: string | null; priority?: string | null;
 }
 
+/** P2: a candidate requirement grouped into one of four categories, citing its source fragment(s). Advisory and
+ *  deterministic (the server builds it from the extracted text); confirming an item establishes the underlying
+ *  requirement through the normal decision path. */
+export type ReqItemCategory = 'submit' | 'rule' | 'scope' | 'after_award';
+export interface RequirementItemFragment { reqId: string; text: string; doc: string; section?: string; }
+export interface RequirementItem {
+  id: string;
+  category: ReqItemCategory;
+  title: string;
+  definition: string;
+  sourceFragments: RequirementItemFragment[];
+  links: string[];
+  inferred: boolean;
+  checkNote?: string;
+  status: 'candidate' | 'confirmed';
+  dueAt?: string | null;
+}
+
 /** READ-ONLY: upload the solicitation ZIP and get back the extractor's candidate requirements for the reviewer to
- *  confirm. Persists nothing server-side — establishment stays the deliberate, confirmed write. */
-export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; fileCount: number }> {
+ *  confirm. Persists nothing server-side — establishment stays the deliberate, confirmed write. `items` is the same
+ *  candidates grouped into the 4-category map; `candidates` stays the Raw/Checklist view. */
+export async function extractGovQualificationRequirements(canonicalOpportunityId: string, file: File): Promise<{ candidates: ExtractedRequirementCandidate[]; items?: RequirementItem[]; fileCount: number }> {
   const form = new FormData();
   form.append('document', file);
   const { data } = await api.post(qUrl(canonicalOpportunityId, '/extract-requirements'), form, { headers: { 'Content-Type': 'multipart/form-data' } });

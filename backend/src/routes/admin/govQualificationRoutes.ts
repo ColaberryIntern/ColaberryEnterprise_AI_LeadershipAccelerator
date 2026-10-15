@@ -768,6 +768,10 @@ const establishedRequirement = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
   category: z.string().max(60).optional(),
+  // P2: optional downstream tracks. Only a `scope` item carries `solution_build` (so deriveGovBuildPlan keeps
+  // generating its build story); others are ['proposal']. Backward-compatible — omitted falls back to the text
+  // classifier in govBuildPlan.ts exactly as before.
+  tracks: z.array(z.string().max(40)).max(8).optional(),
   applicability: z.enum(['always', 'conditional', 'not_applicable', 'unknown']),
   applicabilityEvidenceRef: z.object({ docId: z.string() }).nullable().optional(),
   responsibleParty: z.string().max(60).optional(),
