@@ -749,6 +749,7 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(text).toContain('Needs attention');                            // the preserved-orphan section header (P3-T4)
     expect(text).toContain('STORY-GONE');                                 // the orphan is surfaced, not dropped
     expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Unassign')).toBe(true);
+    expect(text).toContain('Assignment at a glance');                     // advisory assignment summary renders (no buttons)
     // Pick the builder in B1's assign control and click Assign → calls the API with the story + builder.
     const select = container.querySelector('select[aria-label="Assign STORY-B1 to a builder"]') as HTMLSelectElement;
     expect(select).toBeTruthy();
