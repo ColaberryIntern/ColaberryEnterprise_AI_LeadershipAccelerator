@@ -113,3 +113,122 @@ export async function resolvePlayableRecording(
     },
   };
 }
+
+/**
+ * Resolve a recording for ANY permitted viewer — the owner, or somebody the
+ * showcase's audience lets in.
+ *
+ * WHY THIS IS SEPARATE FROM `resolvePlayableRecording`.
+ *
+ * That function proves ownership and nothing else, which is exactly right for a
+ * private rehearsal and exactly wrong for a demo the cohort is meant to watch. A
+ * published demo post would have rendered a player that 404s for every peer.
+ *
+ * The answer is not a second access rule. `canView` already decides who may see a
+ * showcase — owner always, staff always, otherwise only while it is live, then
+ * private means nobody, cohort means the same cohort, community means any signed-in
+ * learner — and it already enumerates every surface so a new one cannot be
+ * forgotten. Writing a second rule here is how two copies of an access policy drift
+ * until the quieter one is wrong.
+ *
+ * THE VIEWER'S COHORT IS READ FRESH, never carried in the ticket. A ticket is a
+ * claim about which link was issued; it must not also be a frozen claim about what
+ * the holder is entitled to, or a learner removed from a cohort keeps watching until
+ * their ticket expires.
+ *
+ * OWNERSHIP IS TRIED FIRST because it is the cheaper and stricter test: an owner
+ * needs no showcase to exist at all, and most playback is an owner watching
+ * themselves back.
+ */
+export async function resolveViewableRecording(
+  viewerEnrollmentId: string,
+  projectId: string,
+  storyId: string,
+  recordingId: string,
+): Promise<PlaybackResolution> {
+  const asOwner = await resolvePlayableRecording(viewerEnrollmentId, projectId, storyId, recordingId);
+  // `file_missing` is a real, owned recording whose bytes are gone. Falling through
+  // to the audience check would turn that into a flat 404 and lose the distinction.
+  if (asOwner.ok || asOwner.reason === 'file_missing') return asOwner;
+
+  if (!isUuid(recordingId)) return { ok: false, reason: 'not_found' };
+
+  const sequelize = await db();
+  const [rows] = await sequelize.query(
+    `SELECT s.id              AS showcase_id,
+            s.audience        AS audience,
+            s.content_hash    AS content_hash,
+            s.draft_json->>'current_content_hash' AS current_content_hash,
+            s.author_approved_at, s.staff_approved_at, s.published_at, s.withdrawn_at,
+            asg.enrollment_id AS owner_enrollment_id,
+            asg.cohort_id     AS cohort_id,
+            rr.storage_key    AS storage_key,
+            rr.mime_type      AS mime_type
+       FROM presentation_recordings r
+       JOIN presentation_attempts    a   ON a.id = r.attempt_id
+       JOIN presentation_assignments asg ON asg.id = a.assignment_id
+       JOIN presentation_showcases   s   ON s.attempt_id = a.id
+       LEFT JOIN room_resources      rr  ON rr.id = r.resource_id
+      WHERE asg.project_id = :projectId
+        AND asg.story_id   = :storyId
+        AND r.id           = :recordingId
+        AND r.ingest_status = 'ingested'
+      LIMIT 1`,
+    { replacements: { projectId, storyId, recordingId } },
+  ) as [Array<Record<string, any>>, unknown];
+
+  const row = rows?.[0];
+  if (!row) return { ok: false, reason: 'not_found' };
+
+  // Read now, not at mint time. See the note above.
+  const { default: Enrollment } = await import('../../models/Enrollment');
+  const viewer = await Enrollment.findByPk(viewerEnrollmentId);
+  if (!viewer) return { ok: false, reason: 'not_found' };
+
+  const { canView } = await import('./showcaseAccess');
+  const permitted = canView(
+    {
+      id: String(row.showcase_id),
+      ownerEnrollmentId: String(row.owner_enrollment_id),
+      cohortId: row.cohort_id ? String(row.cohort_id) : null,
+      audience: row.audience,
+      contentHash: row.content_hash,
+      currentContentHash: row.current_content_hash,
+      authorApprovedAt: row.author_approved_at,
+      staffApprovedAt: row.staff_approved_at,
+      publishedAt: row.published_at,
+      withdrawnAt: row.withdrawn_at,
+    },
+    {
+      enrollmentId: viewerEnrollmentId,
+      cohortId: (viewer as { cohort_id?: string | null }).cohort_id ?? null,
+      // Staff reach recordings through the admin surfaces, which carry their own
+      // identity. A participant ticket never confers staff.
+      isStaff: false,
+    },
+    // `media` - serving the bytes IS the media surface. Deliberately not an eighth
+    // surface: SHOWCASE_SURFACES is iterated by its own suite so that adding one is
+    // a considered act with obligations, and this is not a new kind of access.
+    'media',
+  );
+  // Refused and absent give the same answer, as everywhere else in this subsystem.
+  if (!permitted) return { ok: false, reason: 'not_found' };
+
+  const key = row.storage_key ? String(row.storage_key) : '';
+  if (!key) return { ok: false, reason: 'file_missing' };
+  const safeName = path.basename(key);
+  const full = path.join(ROOM_RECORDING_DIR, safeName);
+  if (!fs.existsSync(full)) return { ok: false, reason: 'file_missing' };
+
+  const stat = fs.statSync(full);
+  return {
+    ok: true,
+    recording: {
+      recordingId: String(recordingId),
+      filePath: full,
+      sizeBytes: stat.size,
+      mimeType: row.mime_type ? String(row.mime_type) : 'video/mp4',
+      downloadName: `${storyId}-demo${path.extname(safeName) || '.mp4'}`,
+    },
+  };
+}
