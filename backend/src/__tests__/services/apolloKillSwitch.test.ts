@@ -19,6 +19,18 @@ jest.mock('../../models/Lead', () => ({
 }));
 jest.mock('../../services/ghlService', () => ({ syncNewLeadToGhl: jest.fn() }));
 
+// Stub the credit guard so these tests isolate their own subject: the KILL SWITCH.
+// The guard sits between the switch and the fetch and FAILS CLOSED, so without this
+// stub the "flag on restores the call path" test fails for the wrong reason: the
+// guard refuses because there is no database in this suite, not because the switch
+// blocked anything. The guard has its own suite (apolloCreditGuard.test.ts) which
+// tests it properly, including that it refuses when the counter is unreadable.
+jest.mock('../../services/apolloCreditGuard', () => ({
+  claimApolloCall: jest.fn().mockResolvedValue({
+    allowed: true, dailyCount: 1, perRunCount: 1,
+  }),
+}));
+
 import {
   searchPeople,
   enrichPerson,
