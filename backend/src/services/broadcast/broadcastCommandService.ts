@@ -62,6 +62,7 @@ function toState(o: BroadcastOccurrence): OccurrenceState {
     provider_health: o.provider_health,
     version: o.version,
     content_started_at: o.content_started_at,
+    ended_at: o.ended_at,
   };
 }
 
