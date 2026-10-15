@@ -37,6 +37,15 @@ import * as path from 'path';
 import { MGMT_ROLES } from '../mgmtRoles';
 
 const SERVER = path.join(__dirname, '..', '..', '..', 'server.ts');
+/**
+ * The THIRD copy. The frontend cannot import backend code, so the role list is restated there,
+ * and it had already drifted the same way: `mentor` reached both backend copies and never this
+ * one, so the role could not be SELECTED in the picker even once the database would accept it.
+ * Two lists agreeing while a third disagrees is the same defect wearing a different hat.
+ */
+const FRONTEND = path.join(
+  __dirname, '..', '..', '..', '..', '..', 'frontend', 'src', 'services', 'communityAdminApi.ts',
+);
 
 /** The roles the CHECK constraint actually permits, read out of the DDL this repo ships. */
 function rolesPermittedByCheckConstraint(): string[] {
@@ -88,5 +97,46 @@ describe('AF2.3 mgmt_role declared list vs stored list', () => {
     // quietly drops it from both lists at once would satisfy every assertion above.
     expect(rolesPermittedByCheckConstraint()).toContain('mentor');
     expect(MGMT_ROLES).toContain('mentor');
+  });
+});
+
+/** The frontend's `MGMT_ROLES` array, read out of the file the picker imports. */
+function rolesOfferedByThePicker(): string[] {
+  const src = fs.readFileSync(FRONTEND, 'utf8');
+  const m = src.match(/export const MGMT_ROLES: MgmtRole\[\] = \[([^\]]*)\]/);
+  if (!m) {
+    throw new Error(
+      'The frontend MGMT_ROLES array was not found in communityAdminApi.ts. Update this test '
+      + 'deliberately rather than deleting it — without it, a role can exist in the database and '
+      + 'be unassignable because no picker offers it.',
+    );
+  }
+  return m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')).filter(Boolean);
+}
+
+describe('AF2.3 the THIRD copy — what the role picker offers', () => {
+  it('finds the frontend list at all', () => {
+    expect(rolesOfferedByThePicker().length).toBeGreaterThan(0);
+  });
+
+  it('offers exactly the roles the backend declares', () => {
+    expect([...rolesOfferedByThePicker()].sort()).toEqual([...MGMT_ROLES].sort());
+  });
+
+  it('has no role that is storable but unassignable', () => {
+    // The exact shape of the drift this file was written for: `mentor` was storable (after the
+    // CHECK fix) and still absent from the picker, so nobody could give it to anyone.
+    const offered = new Set(rolesOfferedByThePicker());
+    expect(MGMT_ROLES.filter((r) => !offered.has(r))).toEqual([]);
+  });
+
+  it('labels every role it offers', () => {
+    // An unlabelled role renders as `undefined` in the dropdown, which is worse than absent:
+    // it is selectable and nobody can tell what it grants.
+    const src = fs.readFileSync(FRONTEND, 'utf8');
+    const block = src.match(/MGMT_ROLE_LABEL: Record<MgmtRole, string> = \{([\s\S]*?)\};/);
+    expect(block).not.toBeNull();
+    const labelled = [...block![1].matchAll(/(\w+)\s*:\s*'/g)].map((x) => x[1]);
+    expect(rolesOfferedByThePicker().filter((r) => !labelled.includes(r))).toEqual([]);
   });
 });

@@ -1,0 +1,19 @@
+{
+  "ticketCode": "AF2.1",
+  "ticketId": 10406234104,
+  "folderTitle": "02 - Intern Management Portal and Access",
+  "posts": [
+    {
+      "file": "/tmp/backfill/AF2.1/AF21_MY_DOMAIN_1PAGE.pdf",
+      "filename": "AF21_MY_DOMAIN_1PAGE.pdf",
+      "caption": "AF2.1 on one page, 15 October 2026",
+      "comment": "<div><strong>VISUAL FIRST: AF2.1 on one page.</strong> Backfilled under the rule that every ticket carries a visual and a document.</div><div><br></div><div>One page, landscape, built from the same data module as the document so a number on it cannot drift from a number in the document.</div><div><br></div><div><strong>The one line worth reading:</strong> 503 stories exist and NONE has been started, so the page must not imply progress.</div>"
+    },
+    {
+      "file": "/tmp/backfill/AF2.1/AF21_MY_DOMAIN.pdf",
+      "filename": "AF21_MY_DOMAIN.pdf",
+      "caption": "AF2.1 My Domain, and the entry point that already existed, 15 October 2026",
+      "comment": "<div><strong>READY FOR ALI REVIEW - DOCUMENT. AF2.1, My Domain, and the entry point that already existed.</strong></div><div><br></div><div>The ticket asked: An intern management portal entry point, and a surface showing the domain they own. Delivered: The surface, at <code>/admin/my-domain</code>. The entry point was already built and shipped, which the ticket did not know.</div><div><br></div><div>This is a BACKFILL. The work shipped in #3110 and the finding was real, but the artifact was never filed where the ticket said it would be, which is the gap your rule closes. The document carries the measured figures, the diagram, and a section stating what the work does NOT establish.</div><div><br></div><div>Review state unchanged. I do not close tickets.</div>"
+    }
+  ]
+}

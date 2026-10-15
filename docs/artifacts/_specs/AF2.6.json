@@ -1,0 +1,19 @@
+{
+  "ticketCode": "AF2.6",
+  "ticketId": 10406234022,
+  "folderTitle": "02 - Intern Management Portal and Access",
+  "posts": [
+    {
+      "file": "/tmp/backfill/AF2.6/AF26_ADMISSIONS_ACCESS_1PAGE.pdf",
+      "filename": "AF26_ADMISSIONS_ACCESS_1PAGE.pdf",
+      "caption": "AF2.6 on one page, 15 October 2026",
+      "comment": "<div><strong>VISUAL FIRST: AF2.6 on one page.</strong> Backfilled under the rule that every ticket carries a visual and a document.</div><div><br></div><div>One page, landscape, built from the same data module as the document so a number on it cannot drift from a number in the document.</div><div><br></div><div><strong>The one line worth reading:</strong> The ticket's premise was wrong. Taiwo has held an admin login since 18 September.</div>"
+    },
+    {
+      "file": "/tmp/backfill/AF2.6/AF26_ADMISSIONS_ACCESS.pdf",
+      "filename": "AF26_ADMISSIONS_ACCESS.pdf",
+      "caption": "AF2.6 Admissions access: the finding, not the fix, 15 October 2026",
+      "comment": "<div><strong>READY FOR ALI REVIEW - DOCUMENT. AF2.6, Admissions access: the finding, not the fix.</strong></div><div><br></div><div>The ticket asked: Map the admissions admin prefix into the section gate and give Taiwo a scoped login. Delivered: Neither, because the premise was wrong. Taiwo is not blocked and never was, and mapping the prefix would have changed nothing for anybody.</div><div><br></div><div>This is a BACKFILL. The work shipped in #3100 and the finding was real, but the artifact was never filed where the ticket said it would be, which is the gap your rule closes. The document carries the measured figures, the diagram, and a section stating what the work does NOT establish.</div><div><br></div><div><strong>It also keeps what I got wrong first</strong>, rather than quietly overwriting it.</div><div><br></div><div>Review state unchanged. I do not close tickets.</div>"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "ticketCode": "AF7.2",
+  "ticketId": 10406234280,
+  "folderTitle": "07 - Capability Validation and Promotion",
+  "posts": [
+    {
+      "file": "/tmp/backfill/AF7.2/AF72_SIX_REGRADES_1PAGE.pdf",
+      "filename": "AF72_SIX_REGRADES_1PAGE.pdf",
+      "caption": "AF7.2 on one page, 15 October 2026",
+      "comment": "<div><strong>VISUAL FIRST: AF7.2 on one page.</strong> Backfilled under the rule that every ticket carries a visual and a document.</div><div><br></div><div>One page, landscape, built from the same data module as the document so a number on it cannot drift from a number in the document.</div><div><br></div><div><strong>The one line worth reading:</strong> Four of six remediations FAILED re-grading, and two scored zero on \"no fabrication\".</div>"
+    },
+    {
+      "file": "/tmp/backfill/AF7.2/AF72_SIX_REGRADES.pdf",
+      "filename": "AF72_SIX_REGRADES.pdf",
+      "caption": "AF7.2 Six independent re-grades, and what they found, 15 October 2026",
+      "comment": "<div><strong>READY FOR ALI REVIEW - DOCUMENT. AF7.2, Six independent re-grades, and what they found.</strong></div><div><br></div><div>The ticket asked: Re-grade the six tasks remediated after the audit. Delivered: Six independent verdicts, each gathering its own evidence rather than reading my account of the remediation. Four of the six failed; three are now fixed.</div><div><br></div><div>This is a BACKFILL. The work shipped in #3120 and the finding was real, but the artifact was never filed where the ticket said it would be, which is the gap your rule closes. The document carries the measured figures, the diagram, and a section stating what the work does NOT establish.</div><div><br></div><div>Review state unchanged. I do not close tickets.</div>"
+    }
+  ]
+}

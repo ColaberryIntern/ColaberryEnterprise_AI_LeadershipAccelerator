@@ -29,6 +29,7 @@ const ACCOUNT = '3945211';
 const API = `https://3.basecampapi.com/${ACCOUNT}`;
 const UA = 'Colaberry Accelerator (ali@colaberry.com)';
 const BUCKET = Number(process.env.BUCKET || 7463955);
+const LIST = Number(process.env.LIST || 10406233777);
 const PARENT_VAULT = Number(process.env.PARENT_VAULT || 10406233371);
 const DRY = process.env.DRY === '1';
 
@@ -81,10 +82,42 @@ async function uploadBlob(filePath, filename) {
   return j.attachable_sgid;
 }
 
+/**
+ * Resolve the ticket by its AF code and REFUSE if it disagrees with the id in the spec.
+ *
+ * This exists because the first backfill run carried six ticket ids written from memory and ALL
+ * SIX were wrong — every artifact would have been attached to somebody else's ticket, and the
+ * upload would have succeeded, because an id is an id. A code like "AF3.2" is checkable against
+ * the list; a nine-digit number is not checkable against anything.
+ *
+ * Exactly one match is required. Zero means the code is wrong; two means the titles are ambiguous
+ * and a human should say which.
+ */
+async function resolveTicket(spec) {
+  if (!spec.ticketCode) return spec.ticketId;
+  const groups = await listAll(`/buckets/${BUCKET}/todolists/${LIST}/groups.json`);
+  const todos = [];
+  for (const g of (groups.length ? groups : [{ id: LIST }])) {
+    todos.push(...await listAll(`/buckets/${BUCKET}/todolists/${g.id}/todos.json`));
+  }
+  const hits = todos.filter((t) => String(t.title).startsWith(`${spec.ticketCode} `));
+  if (hits.length !== 1) {
+    throw new Error(`${spec.ticketCode} matched ${hits.length} tickets, expected exactly 1`);
+  }
+  if (spec.ticketId && spec.ticketId !== hits[0].id) {
+    throw new Error(
+      `${spec.ticketCode} resolves to ${hits[0].id} but the spec says ${spec.ticketId}. `
+      + 'Refusing to attach: one of the two is pointing at the wrong ticket.',
+    );
+  }
+  return hits[0].id;
+}
+
 async function main() {
   const spec = JSON.parse(fs.readFileSync(process.env.SPEC, 'utf8'));
   const me = await api('GET', '/my/profile.json');
   if (!/ali@colaberry\.com/i.test(me.email_address || '')) throw new Error('not acting as Ali');
+  spec.ticketId = await resolveTicket(spec);
 
   const folders = await listAll(`/buckets/${BUCKET}/vaults/${PARENT_VAULT}/vaults.json`);
   const folder = folders.find((f) => f.title === spec.folderTitle);
