@@ -66,6 +66,13 @@ import {
   resolveAgentDomainBuildAuthorization,
   resolveAllFromRows,
 } from '../../services/agentDomain/agentDomainBuildAuthorization';
+import {
+  loadProvisionedDomains,
+  loadProvisionedDomainsForOwner,
+  resolveOwnerIdentityIds,
+  summariseProvisioned,
+} from '../../services/agentDomain/agentDomainProvisionedReader';
+import { sequelize } from '../../config/database';
 
 const router = Router();
 
@@ -181,11 +188,18 @@ router.get(
       researched_at: m.researched_at,
       releases: plan.releases.map((r) => ({ cluster: r.cluster, title: r.title, position: r.position })),
       story_count: plan.stories.length,
-      // A planned project is not a provisioned one. Nothing here claims it exists in the database.
-      provisioned: false,
+      // This handler reads the REGISTRY and the capability files. It does not query the database,
+      // so it must not report a provisioning state as though it had checked one.
+      //
+      // It used to return `provisioned: false` with "T19 is the provisioning step and it has not
+      // run". Provisioning DID run, on 14 Oct 2026 at commit fa7f636bc, and the ten rows exist.
+      // So the field was a hardcoded false that had quietly become a false statement to every
+      // caller -- the failure mode of asserting a fact a handler never measured.
+      provisioned_state: 'not checked by this route',
       provisioning_note:
-        'These are the ids provisioning WOULD use, derived from the domain key. No row has been '
-        + 'written: T19 is the provisioning step and it has not run.',
+        'These are the DERIVED ids, computed from the domain key. For the live database row -- '
+        + 'stage, release and story counts, verified count, authorization count -- call '
+        + 'GET /api/admin/agent-domains-provisioned, which queries it.',
     });
   },
 );
@@ -234,6 +248,59 @@ router.get(
         + 'empty confirmed set is not complete coverage, and the summary above says so.',
     });
   },
+);
+
+/**
+ * The ten provisioned projects, read FROM THE DATABASE.
+ *
+ * Every sibling route above answers from the registry and the capability files, so they report the
+ * same thing whether or not anything was ever provisioned. This one queries the rows.
+ */
+router.get(
+  '/api/admin/agent-domains-provisioned',
+  requireSection('program'),
+  guarded(async (_req: Request, res: Response) => {
+    const rows = await loadProvisionedDomains(sequelize);
+    res.json({ summary: summariseProvisioned(rows), domains: rows });
+  }),
+);
+
+/**
+ * The provisioned projects THE CALLER OWNS.
+ *
+ * Scoped by the caller's own email from the verified JWT, resolved to `org_members` ids inside the
+ * org of record, and matched against `manager_identity_id`. The email is never taken from the
+ * request body or a query param -- only from the token the gate already verified.
+ *
+ * ALI IS A LEGACY FULL ADMIN AND THEREFORE HOLDS EVERY SECTION, so `requireSection('program')`
+ * admits him to this route as it admits him to all of them. That is exactly why this route scopes
+ * by IDENTITY rather than by section: section access decides whether you may ask, ownership
+ * decides what you get back. He owns two domains (executive and learner_success) and this returns
+ * two, not ten -- which is also what makes the route testable as something other than "admin sees
+ * everything".
+ *
+ * A caller who resolves to no `org_members` row gets an EMPTY list and a stated reason, never the
+ * full set. Treating "no filter" as "no restriction" is how a scoping bug becomes a disclosure.
+ */
+router.get(
+  '/api/admin/agent-domains-mine',
+  requireSection('program'),
+  guarded(async (req: Request, res: Response) => {
+    const email = req.admin?.email ?? '';
+    const identityIds = await resolveOwnerIdentityIds(sequelize, email);
+    const rows = await loadProvisionedDomainsForOwner(sequelize, identityIds);
+    res.json({
+      caller_email: email,
+      resolved_identities: identityIds.length,
+      summary: summariseProvisioned(rows),
+      domains: rows,
+      note: identityIds.length === 0
+        ? 'This email resolves to no org_members row in the org of record, so it owns no domain. '
+          + 'That is why the list is empty; it is not a failure to load.'
+        : 'Scoped to the domains this identity is the accountable manager for. Section access '
+          + 'decides whether you may ask; ownership decides what comes back.',
+    });
+  }),
 );
 
 // ─────────────────────────────── internship section ───────────────────────────────

@@ -312,12 +312,26 @@ describe('the surface reports the real state, including the bad parts', () => {
     expect(res.body.disclosure).toMatch(/not complete coverage/);
   });
 
-  it('says a project is NOT provisioned rather than implying it exists', async () => {
+  /**
+   * REWRITTEN FOR AF2.4, and the reason matters more than the change.
+   *
+   * This test used to assert `provisioned: false` and a note reading "No row has been written:
+   * T19 is the provisioning step and it has not run". Both were true when written and became
+   * FALSE on 14 Oct 2026, when provisioning ran at commit fa7f636bc and the ten rows landed.
+   *
+   * So the test was pinning a hardcoded claim the handler never measured, and keeping it green
+   * would have meant keeping a false statement in front of every caller. The handler now reports
+   * that it did not check, and points at the route that does.
+   */
+  it('does not assert a provisioning state this handler never queried', async () => {
     const res = await request(app())
       .get('/api/admin/agent-domains/marketing')
       .set('Authorization', `Bearer ${tokenFor('owner')}`);
-    expect(res.body.provisioned).toBe(false);
-    expect(res.body.provisioning_note).toMatch(/No row has been written/);
+    expect(res.body.provisioned).toBeUndefined();
+    expect(res.body.provisioned_state).toBe('not checked by this route');
+    expect(res.body.provisioning_note).toMatch(/agent-domains-provisioned/);
+    // The derived ids are still offered, because those ARE computable without a query.
+    expect(res.body.derived_project_id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('reports 225 domained and 21 unresolved legacy rows, apart', async () => {
