@@ -516,8 +516,23 @@ it, where a reader scanning sixteen numbered lines would have missed it.
    derived, so a new panel cannot join silently. Mutation-proved against the real service:
    deleting `profile.community = community;` fails it by name
    (`MUTANT_EXIT=1`, 2 failed / 10 passed), and the file restored byte-identical (`cmp` clean).
-2. **Several evidence groups have no test:** appointments, community, Rooms, Open House,
-   affinities, visitor identity, clicks/forms, builds/projects, "current decision and next action".
+2. **MOSTLY CLOSED 2026-10-15, and the count here was wrong.** This line said "several… nine",
+   named by concept. Counted from the tree it was **eleven loaders**, and **four panel modules had
+   no test file at all** (`trustPanel`, `journeyPanel`, `workPanels`, `historyPanels`).
+   `adminOs/__tests__/growthWorkAcquisitionPanels.test.ts` now covers **eight** of the eleven with
+   17 tests, pinning the two properties that have actually gone wrong here: an empty id list
+   never reaches the database, and every query is scoped to exactly the ids it was given.
+   Mutation-proved twice — removing `loadCommunity`'s empty-id guard, and changing
+   `loadAutomation`'s text binding to numeric, each kill their test by name with
+   `MUTANT_EXIT=1`, both restores `cmp`-clean.
+
+   **A measurement trap worth recording:** grepping each loader across `__tests__` now hits for
+   all 22, because `evidenceRegistry.test.ts` (gap 1 above) names every one in its registry map.
+   A naive count reports full coverage. The eleven are only visible when that file is excluded.
+
+   **Still uncovered, three:** `loadCcppHistory` (MSSQL, env-gated — different substrate, needs
+   its own suite), `buildJourney` and `buildTrust` (both compose already-loaded evidence rather
+   than loading any, and `buildTrust` should be closed together with gap 3 below).
 3. **`trustPanel`'s `matchMethod` has a surviving mutant** — pre-existing, inherited by a verbatim
    move; the existing test exercises only the `'none'` branch.
 4. **Nothing typechecks test files.** `tsc -p tsconfig.json` excludes `**/*.test.ts` and ts-jest
@@ -600,7 +615,9 @@ So Phase 3 should open by closing, in this order. **Progress as of 2026-10-15:**
 1. ~~**The backfill decision above**, because it determines the input set.~~ ✅ **DONE** — run
    2026-10-13; the input set is now 56 coherent rows with 49 still outside it.
 2. **Gap 1 and 2 of §H.** ✅ **Gap 1 CLOSED** by `evidenceRegistry.test.ts` (see §H).
-   ⬜ **Gap 2 is open:** nine evidence groups still have no behavioural test.
+   ✅ **Gap 2 mostly closed:** it was **eleven** loaders uncovered, not nine; eight now have
+   behavioural tests. Three remain — `loadCcppHistory` (MSSQL, needs its own suite),
+   `buildJourney` and `buildTrust` (composers, and `buildTrust` belongs with gap 3).
 3. ⬜ **Gap 5** — the suites that pass in isolation and fail under parallel load. **NOT root-caused.**
    `personViewRoles` runs 24 tests in **14.5 s alone**, against its own `jest.setTimeout(120000)`,
    so reaching that ceiling needs roughly an 8× degradation. The leading candidate is that
