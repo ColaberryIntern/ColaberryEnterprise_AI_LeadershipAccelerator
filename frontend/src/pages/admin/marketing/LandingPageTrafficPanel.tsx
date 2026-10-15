@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { fetchLandingPageTraffic, type LandingPageTrafficRow } from '../../../services/landingPageApi';
+import {
+  fetchLandingPageTraffic, fetchLandingPageAudience,
+  type LandingPageTrafficRow, type LandingPageVisitor,
+} from '../../../services/landingPageApi';
 
 /**
  * Who and how many are landing on each landing page.
@@ -91,10 +94,11 @@ export function LandingPageTrafficPanel({ days = 30 }: { days?: number }) {
                 ) : (
                   <div className="d-flex align-items-center flex-wrap">
                     <Metric value={r.visitors} label="visitors" />
-                    <Metric value={r.sessions} label="visits" />
-                    <Metric value={r.identified_leads} label="known leads" />
+                    <Metric value={r.engaged_visitors} label="read it" />
+                    <Metric value={r.cta_clickers} label="clicked" />
+                    <Metric value={r.identified_leads} label="known" />
                     <Metric value={r.ad_clicks} label="from ads" muted />
-                    <Metric value={r.views} label="loads" muted />
+                    <Metric value={r.views} label="views" muted />
                   </div>
                 )}
               </div>
@@ -105,10 +109,93 @@ export function LandingPageTrafficPanel({ days = 30 }: { days?: number }) {
                   <code>fbclid</code> and will be counted here automatically.
                 </div>
               )}
+
+              {!untracked && r.visitors > 0 && (
+                <AudienceDisclosure path={`/lp/${r.brand_slug ?? ''}/${r.slug}`} days={days} />
+              )}
             </div>
           );
         })}
       </div>
     </>
+  );
+}
+
+/**
+ * WHO landed, opened on demand.
+ *
+ * Collapsed by default and fetched only when asked: most pages have a handful of names and
+ * sixteen anonymous visitors, so loading it for every row on every render would be a query per
+ * page to show mostly nothing.
+ *
+ * THE ANONYMOUS COUNT IS SHOWN BESIDE THE NAMES, ALWAYS. The live page had two named people and
+ * sixteen anonymous. A list of two on its own reads as "almost nobody came"; the truth is
+ * "eighteen came and most have not told us who they are yet", and a landing page's whole job is
+ * to turn the second number into the first.
+ */
+function AudienceDisclosure({ path, days }: { path: string; days: number }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<{
+    people: LandingPageVisitor[]; totalVisitors: number; anonymousVisitors: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || data) return;
+    let live = true;
+    fetchLandingPageAudience(path, days)
+      .then((r) => { if (live) setData(r); })
+      .catch(() => { if (live) setError('Could not load who landed.'); });
+    return () => { live = false; };
+  }, [open, data, path, days]);
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        className="btn btn-link btn-sm p-0 text-decoration-none"
+        style={{ fontSize: '.78rem' }}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? 'Hide who landed' : 'Who landed?'}
+      </button>
+
+      {open && error && <div className="small text-danger mt-1">{error}</div>}
+      {open && !error && !data && <div className="small text-muted mt-1">Loading…</div>}
+
+      {open && data && (
+        <div className="mt-2">
+          {data.people.length === 0 ? (
+            <p className="small text-muted mb-1">
+              Nobody here has given us an email yet.
+            </p>
+          ) : (
+            <ul className="list-unstyled mb-1 small">
+              {data.people.map((p) => (
+                <li key={p.leadId} className="d-flex gap-2 align-items-baseline flex-wrap">
+                  <span className="fw-semibold">{p.name && p.name !== p.email ? p.name : (p.email ?? 'Unknown')}</span>
+                  {p.name && p.name !== p.email && p.email && (
+                    <span className="text-muted">{p.email}</span>
+                  )}
+                  {p.clicked && (
+                    <span className="badge bg-success-subtle text-success-emphasis">clicked</span>
+                  )}
+                  <span className="text-muted" style={{ fontSize: '.72rem' }}>
+                    last seen {when(p.lastTouch)} CT
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Never the names alone. See the header. */}
+          <p className="text-muted mb-0" style={{ fontSize: '.72rem' }}>
+            {data.anonymousVisitors} of {data.totalVisitors} visitors are anonymous - they have
+            not given an email yet, so there is no name to show.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
