@@ -145,6 +145,12 @@ export interface LandingPageTrafficRow {
   ad_clicks: number;
   utm_tagged: number;
   identified_leads: number;
+  /** Button presses recorded on the page. */
+  cta_clicks: number;
+  /** People who pressed a button - one person can press more than once. */
+  cta_clickers: number;
+  /** Visitors who scrolled or stayed long enough to register time on the page. */
+  engaged_visitors: number;
   first_seen: string | null;
   last_seen: string | null;
 }
@@ -157,5 +163,35 @@ export async function fetchLandingPageTraffic(days = 30): Promise<{
   return {
     traffic: Array.isArray(res.data?.traffic) ? res.data.traffic : [],
     window_days: Number(res.data?.window_days ?? days),
+  };
+}
+
+/** One person we can name who landed on a page. */
+export interface LandingPageVisitor {
+  leadId: number;
+  email: string | null;
+  name: string | null;
+  firstTouch: string;
+  lastTouch: string;
+  clicked: boolean;
+}
+
+/**
+ * Who landed on a page.
+ *
+ * Returns the anonymous count alongside the names on purpose: showing a short list alone reads
+ * as "almost nobody came", when the truth is usually "most of them have not told us who they
+ * are yet". The UI is expected to show both numbers together.
+ */
+export async function fetchLandingPageAudience(path: string, days = 30): Promise<{
+  people: LandingPageVisitor[];
+  totalVisitors: number;
+  anonymousVisitors: number;
+}> {
+  const res = await api.get('/api/admin/landing-pages/audience', { params: { path, days } });
+  return {
+    people: Array.isArray(res.data?.people) ? res.data.people : [],
+    totalVisitors: Number(res.data?.totalVisitors ?? 0),
+    anonymousVisitors: Number(res.data?.anonymousVisitors ?? 0),
   };
 }

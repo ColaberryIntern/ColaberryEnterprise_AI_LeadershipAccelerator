@@ -54,6 +54,12 @@ export interface LandingPageTrafficRow {
   utm_tagged: number;
   /** Visitors we can put a name to, because they became a lead. */
   identified_leads: number;
+  /** Button presses. The tracker records these as `cta_click`; nothing showed them until now. */
+  cta_clicks: number;
+  /** People who pressed a button, as opposed to presses - one person can press twice. */
+  cta_clickers: number;
+  /** Visitors who scrolled or stayed long enough to register time on page. */
+  engaged_visitors: number;
   first_seen: string | null;
   last_seen: string | null;
 }
@@ -95,8 +101,19 @@ export async function landingPageTraffic(days = 30): Promise<LandingPageTrafficR
     ),
     ev AS (
       SELECT pe.page_path,
-             COUNT(*) AS views,
-             COUNT(DISTINCT pe.lead_id) AS identified_leads
+             -- views counts PAGEVIEWS only. It used to count every row, which folded in
+             -- heartbeats and scroll pings: 194 "loads" for a page that had 42 real views.
+             -- A number that moves when somebody idles on a tab is not a view count.
+             COUNT(*) FILTER (WHERE pe.event_type = 'pageview') AS views,
+             COUNT(DISTINCT pe.lead_id) AS identified_leads,
+             COUNT(*) FILTER (WHERE pe.event_type = 'cta_click') AS cta_clicks,
+             COUNT(DISTINCT pe.visitor_id) FILTER (WHERE pe.event_type = 'cta_click') AS cta_clickers,
+             -- Engagement is "did more than arrive": scrolled, or stayed long enough that the
+             -- tracker recorded time on page. Heartbeats are excluded - an open tab is not
+             -- attention.
+             COUNT(DISTINCT pe.visitor_id) FILTER (
+               WHERE pe.event_type IN ('scroll', 'time_on_page')
+             ) AS engaged_visitors
         FROM page_events pe
        WHERE pe.page_path LIKE '/lp/%'
          AND pe.created_at > NOW() - (:windowDays || ' days')::interval
@@ -112,6 +129,9 @@ export async function landingPageTraffic(days = 30): Promise<LandingPageTrafficR
            COALESCE(sess.ad_clicks, 0)::int       AS ad_clicks,
            COALESCE(sess.utm_tagged, 0)::int      AS utm_tagged,
            COALESCE(ev.identified_leads, 0)::int  AS identified_leads,
+           COALESCE(ev.cta_clicks, 0)::int        AS cta_clicks,
+           COALESCE(ev.cta_clickers, 0)::int      AS cta_clickers,
+           COALESCE(ev.engaged_visitors, 0)::int  AS engaged_visitors,
            sess.first_seen,
            sess.last_seen
       FROM pages p

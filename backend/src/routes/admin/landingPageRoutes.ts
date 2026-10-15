@@ -7,6 +7,7 @@ import { landingPageContentSchema } from '../../schemas/landingPageContentSchema
 import type LandingPage from '../../models/LandingPage';
 import { landingPageTraffic } from '../../services/marketing/landingPageTraffic';
 import { siteSlugForBrand } from '../../services/marketing/landingPageSiteTag';
+import { landingPageAudience } from '../../services/marketing/landingPageVisitors';
 
 /**
  * Landing page authoring API — brief in, reviewable page out.
@@ -455,6 +456,31 @@ const ListSchema = z.object({
  * "you may see no pages" and "there are no pages" are the same answer to this question and the
  * difference is not worth leaking.
  */
+/**
+ * GET /api/admin/landing-pages/audience?path=/lp/:brand/:slug - who landed, by name where known.
+ *
+ * Takes the PATH rather than an id because the caller already has it from the traffic row, and
+ * because the audience is a property of the public address: two rows that have ever served the
+ * same path share an audience, and an id would silently split it.
+ */
+router.get('/api/admin/landing-pages/audience', requireAdmin, async (req: Request, res: Response) => {
+  const path = String(req.query.path ?? '');
+  // Shape-checked before it reaches a query. Only a hosted landing path is answerable here.
+  if (!/^\/lp\/[a-z0-9-]{1,64}\/[a-z0-9-]{1,160}$/.test(path)) {
+    return void res.status(400).json({ error: 'A /lp/<brand>/<slug> path is required', error_class: 'ValidationError' });
+  }
+  const days = Number.parseInt(String(req.query.days ?? '30'), 10);
+  try {
+    const scope = await adminTenantScope(req.admin);
+    if (scope.mode === 'denied') {
+      return void res.json({ people: [], totalVisitors: 0, anonymousVisitors: 0 });
+    }
+    res.json(await landingPageAudience(path, Number.isFinite(days) ? days : 30));
+  } catch {
+    res.status(500).json({ error: 'Failed to load the audience', error_class: 'InternalError' });
+  }
+});
+
 router.get('/api/admin/landing-pages/traffic', requireAdmin, async (req: Request, res: Response) => {
   const days = Number.parseInt(String(req.query.days ?? '30'), 10);
   try {
