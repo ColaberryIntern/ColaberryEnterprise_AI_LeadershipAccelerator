@@ -834,6 +834,8 @@ describe('AdminGovQualificationPage — journey', () => {
     const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Export package')) as HTMLButtonElement;
     expect(exportBtn).toBeTruthy();
     expect(exportBtn.disabled).toBe(false);
+    // Advisory "What gets submitted" summary renders above the release controls.
+    expect(container.textContent ?? '').toContain('What gets submitted');
     await act(async () => { exportBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve(); });
     expect(factoryApi.exportGovSubmission).toHaveBeenCalledWith(CANON);
   });
