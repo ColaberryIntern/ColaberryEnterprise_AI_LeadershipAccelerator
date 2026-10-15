@@ -35,6 +35,14 @@ import {
 } from './autonomyLadder';
 
 /** The four inputs that must never, on their own, promote a capability or authorize an action. */
+// Identity lives in ./promotionIdentity: this file was 515 lines against the 500-line ceiling, so
+// the change split before adding. Re-exported because the suite imports these names from here.
+import {
+  NON_HUMAN_APPROVER, norm, isNonHumanIdentity, isThresholdAccepted, humanityCheck,
+} from './promotionIdentity';
+
+export { NON_HUMAN_APPROVER, isNonHumanIdentity, isThresholdAccepted };
+
 export const NON_PROMOTING_SIGNALS = Object.freeze([
   'story_completed',
   'elapsed_time',
@@ -44,19 +52,8 @@ export const NON_PROMOTING_SIGNALS = Object.freeze([
 
 export type NonPromotingSignal = typeof NON_PROMOTING_SIGNALS[number];
 
-/**
- * Identities that are not a human, and therefore can never be a human approver.
- *
- * `auto_approve_timeout` is named explicitly because it is real. The platform's four-hour
- * auto-approve timer wrote every one of the 106 rows in `approval_requests`, and the owner's
- * constraint is exact: "a four-hour timer must not be recorded as human approval". A verifier
- * demonstrated that an earlier version of this module accepted
- * `human_approval.approver = 'system:auto_approve_timeout'` and promoted, because the only
- * elapsed-time refusal was gated on the `signals` array and this arrived by a different route.
- */
-export const NON_HUMAN_APPROVER =
-  /^(system|agent|bot|cron|scheduler|service|automation|ai|llm):|auto[_ -]?approve|timeout$|^(claude|gpt|gemini|copilot|assistant|autonomous|the agent|automation)\b/i;
-
+// The denylist, the normaliser and the threshold shape-check live in `promotionIdentity.ts`,
+// with the full account of which ten identities walked through the threshold acceptor.
 /**
  * Signals that CAN support a promotion. An allowlist, deliberately.
  *
@@ -74,26 +71,6 @@ export const PROMOTING_SIGNALS = Object.freeze([
   'rollback_exercised',
 ]);
 
-/**
- * Normalise for comparison: a trailing space is not a different signal.
- *
- * Zero-width characters are stripped FIRST, because `\s` does not match them and a verifier
- * defeated `self_evaluated` with a U+200B inside an otherwise-identical name. An invisible
- * character is the cheapest way to make two equal strings compare unequal.
- */
-function norm(v: unknown): string {
-  return String(v ?? '')
-    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
-}
-
-/** True when this identity cannot stand as a human approval, whatever channel it arrived by. */
-export function isNonHumanIdentity(identity: unknown): boolean {
-  const v = String(identity ?? '').trim();
-  return v.length === 0 || NON_HUMAN_APPROVER.test(v);
-}
 
 /**
  * True when an evidence record is itself one of the non-promoting signals, by ANY of its fields.
@@ -184,7 +161,13 @@ export type PromotionRefusal =
   | 'approver_not_a_recorded_human'
   | 'evaluator_is_not_human'
   | 'automating_level_without_human_approval'
-  | 'signal_not_recognised';
+  | 'signal_not_recognised'
+  // 22nd, AF7.2. The allowlist was applied to the approver and to evidence evaluators, and NEVER
+  // to the acceptor of the quality threshold the whole promotion rests on -- so the acceptor was
+  // guarded by the denylist alone. `accepted_by: 'auto-approval'`, one letter off the production
+  // identity, promoted with zero refusals. So did `Mallory`, whom this module already refuses as
+  // an APPROVER on the grounds that a denylist cannot establish humanity.
+  | 'threshold_acceptor_not_a_recorded_human';
 
 export interface PromotionDecision {
   readonly capability_id: string;
@@ -222,22 +205,6 @@ export interface PromotionAttempt {
   readonly recorded_human_approvers?: ReadonlyArray<string>;
 }
 
-/**
- * A threshold is only usable once a NAMED HUMAN has accepted it.
- *
- * The human half of that sentence was unenforced. This checked only that `accepted_by` was a
- * non-blank string, so a verifier made `system:auto_approve_timeout` the acceptor of a quality
- * threshold and reached `promoted: true` -- the 4.25-hour timer that wrote all 106
- * `approval_requests` rows, and the identity this module's own header is written about. The
- * machine check existed and was applied to the approver and to the evaluator; it was never applied
- * here, which made this the seventh channel to the same destination.
- */
-export function isThresholdAccepted(t: QualityThreshold): boolean {
-  return t.state === 'accepted'
-    && typeof t.accepted_by === 'string' && t.accepted_by.trim().length > 0
-    && typeof t.accepted_at === 'string' && t.accepted_at.trim().length > 0
-    && !isNonHumanIdentity(t.accepted_by);
-}
 
 /**
  * Renders a threshold for display. A `proposed` threshold ALWAYS renders with its label, so it
@@ -304,6 +271,21 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
   }
   if (c.thresholds.some((t) => !isThresholdAccepted(t))) {
     refusals.push('threshold_not_accepted');
+  }
+  // THE ACCEPTOR MUST BE A RECORDED HUMAN, not merely not-obviously-a-machine.
+  // `isThresholdAccepted` can only see one threshold, so it can only ever apply the denylist --
+  // and a denylist cannot establish humanity. Ten machine-ish identities walked through here,
+  // including `auto-approval` (one letter off the production timer) and `Mallory`, who this module
+  // already refuses as an approver for exactly this reason.
+  //
+  // ABSENCE IS NOT ACCEPTANCE -- the fourth instance of that mistake in this module, after the
+  // empty signals array, the empty thresholds list and the omitted proposed_by. A threshold that
+  // claims `accepted` with NO roster to check it against is refused rather than waved through.
+  const humans = humanityCheck(attempt.recorded_human_approvers);
+  const claimsAccepted = c.thresholds.filter((t) => t.state === 'accepted');
+  if (claimsAccepted.length > 0
+      && (!humans.hasRoster || claimsAccepted.some((t) => humans.isNotHuman(t.accepted_by)))) {
+    refusals.push('threshold_acceptor_not_a_recorded_human');
   }
   // ABSENCE IS NOT APPROVAL. `some()` over an empty array is false, so a criteria object with no
   // thresholds at all previously sailed past the acceptance gate -- promotion by having nothing to
@@ -400,11 +382,14 @@ export function evaluatePromotion(attempt: PromotionAttempt): PromotionDecision 
   // an identity is a person, so where a recorded set is supplied the evaluator must be in it.
   // Applying the denylist here and the allowlist only to the approver was the inconsistency a
   // verifier used to pass 'agent self', 'timeout handler', 'robot' and 'the-agent' as evaluators.
-  const recordedHumans = (attempt.recorded_human_approvers ?? []).map(norm);
-  const notHuman = (identity: unknown): boolean => {
-    if (isNonHumanIdentity(identity)) return true;
-    return recordedHumans.length > 0 && !recordedHumans.includes(norm(identity));
-  };
+  // Reuses the same roster-aware check as the threshold acceptor above. The previous inline
+  // version returned `recordedHumans.length > 0 && ...`, so omitting the roster silently DEGRADED
+  // every evaluator check back to the denylist -- which composed with the hole above into a
+  // promotion carrying no human identity anywhere. Where evidence exists, the roster is required.
+  const notHuman = (identity: unknown): boolean => humans.isNotHuman(identity);
+  if (attempt.evidence.length > 0 && !humans.hasRoster) {
+    refusals.push('evaluator_is_not_human');
+  }
   // `evidence[].evaluated_by` is a PERSON who looked at a specific piece of evidence, so the
   // recorded-human allowlist applies. `criteria.evaluated_by` holds a ROLE in the shipped data
   // ("the accountable human"), so only the machine denylist applies there -- running an identity
