@@ -5,6 +5,7 @@ import { adminTenantScope, scopeAllows } from '../../modules/tenancy/adminScopeB
 import { WorkflowError } from '../../services/content/contentWorkflowService';
 import { landingPageContentSchema } from '../../schemas/landingPageContentSchema';
 import type LandingPage from '../../models/LandingPage';
+import { landingPageTraffic } from '../../services/marketing/landingPageTraffic';
 
 /**
  * Landing page authoring API — brief in, reviewable page out.
@@ -429,6 +430,30 @@ const ListSchema = z.object({
   kind: z.enum(['hosted', 'external_path']).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
 }).strict();
+
+/**
+ * GET /api/admin/landing-pages/traffic - who and how many are landing on each page.
+ *
+ * MOUNTED BEFORE `/:id/...` ROUTES in this file would be a problem if `traffic` could be read as
+ * an id; it cannot, because every id route validates a UUID and `traffic` is not one. It is
+ * declared here beside the list route it belongs with rather than at the top for that reason.
+ *
+ * Tenancy follows the list route exactly: a denied scope gets an empty array, not a 403, because
+ * "you may see no pages" and "there are no pages" are the same answer to this question and the
+ * difference is not worth leaking.
+ */
+router.get('/api/admin/landing-pages/traffic', requireAdmin, async (req: Request, res: Response) => {
+  const days = Number.parseInt(String(req.query.days ?? '30'), 10);
+  try {
+    const scope = await adminTenantScope(req.admin);
+    if (scope.mode === 'denied') return void res.json({ traffic: [], window_days: 30 });
+
+    const rows = await landingPageTraffic(Number.isFinite(days) ? days : 30);
+    res.json({ traffic: rows, window_days: Number.isFinite(days) ? Math.min(Math.max(days, 1), 365) : 30 });
+  } catch {
+    res.status(500).json({ error: 'Failed to load landing page traffic', error_class: 'InternalError' });
+  }
+});
 
 router.get('/api/admin/landing-pages', requireAdmin, async (req: Request, res: Response) => {
   const parsed = ListSchema.safeParse(req.query);
