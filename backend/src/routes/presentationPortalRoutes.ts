@@ -24,13 +24,11 @@
  *   POST /api/portal/projects/:projectId/tasks/:storyId/presentation-practice
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/recording-evidence
  *   GET  /api/portal/projects/:projectId/tasks/:storyId/deck
- *   GET  /api/portal/projects/:projectId/tasks/:storyId/recordings/:recordingId/file (signed ticket, no bearer)
  *   POST /api/portal/projects/:projectId/tasks/:storyId/deck
  *   GET  /api/portal/showcases
  *   POST /api/portal/projects/:projectId/tasks/:storyId/recording-recovery
  *   POST /api/portal/projects/:projectId/tasks/:storyId/final-take
  */
-import fs from 'fs';
 import { Router, Request, Response, NextFunction } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { env } from '../config/env';
@@ -367,75 +365,6 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartic
 // `private, no-store` because this is one learner's rehearsal: it must not sit in a
 // shared proxy cache, and the browser should re-ask rather than replay from disk
 // after access is withdrawn.
-// AUTHENTICATED BY A SIGNED TICKET IN THE URL, not by the bearer header.
-//
-// A `<video src>` issues a plain browser GET and carries no Authorization header,
-// and this portal holds its token in localStorage behind an axios interceptor. The
-// first version of this route sat behind `requireParticipant`, so every request was
-// 401 by construction — both players rendered on production and neither could play
-// a frame. The ticket is minted by the authenticated session read and bound to one
-// recording and one enrollment; see `recordingTicket`.
-//
-// THE TICKET DOES NOT REPLACE THE OWNERSHIP CHECK. It says "this link was issued to
-// you"; `resolvePlayableRecording` still says "and that recording is yours". Either
-// one alone would be enough to serve somebody else's rehearsal.
-router.get('/api/portal/projects/:projectId/tasks/:storyId/recordings/:recordingId/file', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!gate(res)) return;
-    if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
-
-    const { verifyRecordingTicket } = await import('../services/presentation/recordingTicket');
-    const claims = verifyRecordingTicket(typeof req.query.t === 'string' ? req.query.t : null);
-    // Same answer as a missing recording. A distinct code would tell an unauthorised
-    // caller that the id they guessed is real.
-    if (!claims || claims.recordingId !== String(req.params.recordingId)) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    const { resolvePlayableRecording } = await import('../services/presentation/recordingPlayback');
-    const r = await resolvePlayableRecording(
-      claims.enrollmentId,
-      String(req.params.projectId),
-      String(req.params.storyId),
-      String(req.params.recordingId),
-    );
-    if (!r.ok) {
-      if (r.reason === 'file_missing') {
-        // Distinct from "no such recording": the row is real and theirs, the bytes
-        // are not here. A learner being told "not found" about a rehearsal they
-        // remember doing is the kind of answer that destroys trust in the feature.
-        return res.status(409).json({ error: 'This take is recorded but the video file is not available. Staff can retry collecting it.' });
-      }
-      return res.status(404).json({ error: 'Not found' });
-    }
-
-    const { filePath, sizeBytes, mimeType, downloadName } = r.recording;
-    const { parseRange, contentRangeHeader, rangeLength } = await import('../services/presentation/byteRange');
-    const outcome = parseRange(req.headers.range, sizeBytes);
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'private, no-store');
-    res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`);
-
-    if (outcome.kind === 'unsatisfiable') {
-      res.setHeader('Content-Range', `bytes */${sizeBytes}`);
-      return res.status(416).end();
-    }
-
-    if (outcome.kind === 'partial') {
-      const { range } = outcome;
-      res.status(206);
-      res.setHeader('Content-Range', contentRangeHeader(range, sizeBytes));
-      res.setHeader('Content-Length', String(rangeLength(range)));
-      return fs.createReadStream(filePath, { start: range.start, end: range.end }).pipe(res);
-    }
-
-    res.setHeader('Content-Length', String(sizeBytes));
-    return fs.createReadStream(filePath).pipe(res);
-  } catch (e) { fail(res, e, next); }
-});
-
 // The gallery: showcases this learner is allowed to see.
 //
 // THE FILTER IS HERE, SERVER-SIDE, not in the page. A gallery that returned
