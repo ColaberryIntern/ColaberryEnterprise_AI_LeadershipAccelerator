@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, October 15, 2026 at 2:19 PM</div>
-    <div><span class="sid">CC-20261006-a4k7</span><span class="count">27 changes</span></div>
+    <div class="meta">Generated Thursday, October 15, 2026 at 3:00 PM</div>
+    <div><span class="sid">CC-20261006-a4k7</span><span class="count">28 changes</span></div>
   </header>
   <main>
     
@@ -462,6 +462,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**975 passing across 84 db suites.** Verdicts, each from an independent</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">THREE OF MY CLAIMS WERE FALSE AND TWO VERIFIERS SCORED CRITERION 6 AT ZERO.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">28</span>
+          <h2>AF7.2 (part 2): T14 FAIL 8/12 with a REPRODUCED cross-tenant write, now fixed</h2>
+          <span class="badge">2026-10-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`reconcileAnchorMetadata` is now tenant-scoped - it opens a transaction, resolves</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**29/29 on a fresh real Postgres** with the fix in place, and a direct probe that</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">THE DEFECT WAS MINE, WRITTEN YESTERDAY. The reconcile UPDATE was `WHERE domain_key = $1`</span></div>
           
         </div>
       </article>
