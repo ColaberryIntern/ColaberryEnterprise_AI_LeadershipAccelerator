@@ -64,11 +64,17 @@ const DESIGN_SYSTEMS = Object.freeze([
   {
     brandSlug: 'colaberry-enterprise',
     repo: 'Colaberry-Enterprise-Design-System',
-    target: null,
+    target: 'apps/colaberry-enterprise-design/src/assets/design',
     note:
-      'No target: this brand is served by the React app in frontend/, which consumes CSS ' +
-      'through the CRA build rather than as a linked stylesheet. Wiring it is a separate ' +
-      'change with its own review, not a file copy.',
+      'Vendored 2026-10-13 so the landing page renderer can read it. The note here used to ' +
+      'say "no target", because the React app in frontend/ consumes CSS through the CRA ' +
+      'build rather than as a linked stylesheet - true, and it meant these tokens were in a ' +
+      'repository nobody here read. Four brands resolve to this theme key and every one of ' +
+      'them rendered a landing page in a navy that belongs to no brand. ' +
+      'The directory is "-design", not "-public": there is no site here, only the vendored ' +
+      'system, which the backend pins its copy against. The src/assets/design tail is not ' +
+      'decoration: every target must match one known shape, because this script WRITES to ' +
+      'that path, and a test enforces it. The CRA question is untouched.',
   },
   {
     brandSlug: 'colaberry-training',

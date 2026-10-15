@@ -48,6 +48,16 @@ export interface SessionView {
    */
   meetingReady: boolean;
   recordingPolicy: string | null;
+  /**
+   * The learner's own takes, in the order they happened, so the panel can offer a
+   * player. Ids only — the file is served by its own ownership-checked route and a
+   * URL is never put on this payload, for the same reason `meetingReady` is a flag
+   * rather than the meeting link.
+   *
+   * A split recording is genuinely several parts; offering only the first would
+   * silently hide the half of a rehearsal that came after the break.
+   */
+  recordings: Array<{ id: string; partNo: number; playbackUrl: string }>;
 }
 
 export type SessionResult =
@@ -62,6 +72,8 @@ export type SessionResult =
 export function toSessionView(
   attempt: PresentationAttempt,
   booking: RoomBooking | null,
+  /** Empty for every caller that has not looked them up; never fabricated. */
+  recordings: Array<{ id: string; partNo: number; playbackUrl: string }> = [],
 ): SessionView {
   return {
     attemptId: String(attempt.id),
@@ -79,7 +91,44 @@ export function toSessionView(
     // Presence of a link, never the link itself.
     meetingReady: Boolean(booking?.meeting_link),
     recordingPolicy: booking?.recording_policy ?? null,
+    recordings,
   };
+}
+
+/**
+ * The ingested takes for one attempt, earliest part first.
+ *
+ * `ingested` only: a recording parked in review belongs to nobody yet, and offering
+ * it for playback could hand a learner another cohort member's rehearsal.
+ */
+export async function recordingsForAttempt(
+  attemptId: string,
+  /** Issuing a playback ticket needs the viewer and the path it will be fetched at. */
+  ticketFor?: { enrollmentId: string; projectId: string; storyId: string },
+): Promise<Array<{ id: string; partNo: number; playbackUrl: string }>> {
+  // THE MODEL, NOT RAW SQL. Everything else in this module reads through models, and
+  // a raw query here opened a real connection in a suite that mocks only the models —
+  // which is both a broken test and the wrong shape for this file.
+  const { default: PresentationRecording } = await import('../../models/PresentationRecording');
+  const rows = await PresentationRecording.findAll({
+    where: { attempt_id: attemptId, ingest_status: 'ingested' },
+    order: [['part_no', 'ASC'], ['created_at', 'ASC']],
+  });
+  const { createRecordingTicket } = await import('./recordingTicket');
+  return (rows || []).map((r: any) => {
+    const id = String(r.id);
+    // The URL carries its own authority, because a <video> element cannot send a
+    // bearer header. Minted per read, so it expires shortly after the page does.
+    const ticket = ticketFor ? createRecordingTicket(id, ticketFor.enrollmentId) : '';
+    const base = ticketFor
+      ? `/api/portal/projects/${encodeURIComponent(ticketFor.projectId)}/tasks/${encodeURIComponent(ticketFor.storyId)}/recordings/${encodeURIComponent(id)}/file`
+      : '';
+    return {
+      id,
+      partNo: Number(r.part_no) || 1,
+      playbackUrl: base ? `${base}?t=${encodeURIComponent(ticket)}` : '',
+    };
+  });
 }
 
 /** The assignment row for a task the caller demonstrably owns, or null. */
@@ -130,7 +179,11 @@ export async function resolveSessionForAssignment(
     return { ok: true, session: toSessionView(booked, null) };
   }
 
-  return { ok: true, session: toSessionView(booked, booking) };
+  // Looked up only on the single-session read, which is the one the Practice panel
+  // calls. The list and the create paths deliberately leave it empty rather than
+  // issue a query per attempt for something those screens do not render.
+  const takes = await recordingsForAttempt(String(booked.id), { enrollmentId, projectId, storyId });
+  return { ok: true, session: toSessionView(booked, booking, takes) };
 }
 
 /**

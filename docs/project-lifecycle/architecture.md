@@ -230,6 +230,104 @@ teaches them to click past both. And the approving identity must be recorded as 
 member, never as an AI identity and never as the student, since `PROJECT_APPROVAL_GATE`'s
 removal already settled that students get no say in the build.
 
+## 5.1b Internal AI-employee domain projects: the fourth shape
+
+**Added 2026-10-08** · session CC-20261006-a4k7 · run `20261007-school-agent-factory`
+
+§5.1 and §5.1a between them describe three project shapes: **portal self-serve** (the student
+initiates and receives), **client delivery** (the owner approves what gets built for a client), and
+**staff-initiated student build** (staff initiate, a student receives, and the hold is the point).
+`carried-forward-obligations.md:239-246` enumerates exactly those three.
+
+The Agent Factory introduces a **fourth**, and this section exists because that document left a
+standing instruction for precisely this moment:
+
+> *"Whatever is chosen, it must be stated in `architecture.md` §5.1 rather than only implemented,
+> **because the current wording reads as though it already covers every case.**"*
+> — `carried-forward-obligations.md:267-268`
+
+Provisioning ten projects of an undescribed shape into this governance machine, while leaving the
+governing document reading as though it covered them, is the drift this ADR exists to prevent.
+
+### The shape
+
+An **internal AI-employee domain project**: one per canonical AI employee domain, owned by an
+`ai_staff` enrollment, managed by a Colaberry employee, and built later by an intern. It is neither
+a student build nor a client engagement. Nobody outside Colaberry receives it.
+
+| | |
+|---|---|
+| **Initiated by** | the owner/admin, through a single labelled provisioner. Never by a student, never by an intern, never by an agent. |
+| **Owned by** | a `projects` row whose `enrollment_id` belongs to an `ai_staff` `admin_users` identity. 25 such enrollments already exist (`agentIdentitySeed.ts:227`); before this run, **zero** projects were owned by one. |
+| **Accountable** | a **human Colaberry employee**, recorded as `org_members.id`. Never the AI employee, and never the intern. |
+| **Approver** | a human, and `approver ≠ proposer` applies in full. |
+| **Built by** | an intern, whose assignment is **planning metadata only** until the owner assigns it. |
+| **Received by** | nobody. There is no recipient, which is what distinguishes it from all three existing shapes. |
+
+### Entry point
+
+Registration happens through one explicit, labelled path:
+
+```
+entry_point = 'agent_domain_factory_provisioner'
+```
+
+recorded in `project_lifecycle_states.entry_point`. `architecture.md:109` of this document forbids a *silent*
+bypass of entry-point governance; this is the opposite — a named path, declared here, exported as a
+constant from `services/agentDomain/agentDomainRegistry.ts`, and pinned by a test asserting the
+literal appears in this section so code and document cannot drift apart.
+
+The provisioner does **not** go through `createProjectForEnrollment()` or
+`sbpOrchestrator.startBuild()`. It deliberately avoids
+`projectService.ts:121` `createNewProjectForEnrollment`, which always creates **and activates**, and
+it never calls `publishBuild` or writes `enrollments.active_project_id`. Those are the two paths by
+which a project becomes somebody's active work, and an internal domain project must never displace
+an intern's own build. One intended builder already owns an active student project, which is why
+this is stated rather than assumed.
+
+### What this shape does NOT claim
+
+- **It does not claim §5.1a's separation-of-duty exception.** That carve-out — *"the approver is the
+  initiating staff member, and separation of duty is explicitly not claimed for this path"* — is
+  scoped to staff-initiated **student** builds, where the student is the recipient. Here there is no
+  recipient, so the exception does not transfer and `approver ≠ proposer` stands.
+- **It mints no new role and introduces no new login** (`architecture.md:166`). The existing 13 `DELIVERY_ROLES` are
+  reused.
+- **An agent may never hold accountable or approver for it.** `blueprint-contract.md:67`'s
+  `OVERSIGHT` rule is enforced in both directions, and `:103` invariant 5 requires every
+  agent-performed task to resolve to a human accountable role. The AI employee *owns the enrollment*
+  that holds the project; it does not hold accountability for it. Those are different things, and
+  conflating them would be the failure this paragraph exists to prevent.
+- **Human accountability may be unstaffed only in a draft.** `blueprint-contract.md:63` permits an
+  unstaffed human role in a draft while requiring a resolvable authorized owner for execution or
+  activation. All ten projects rest at `discovery` and are never activated by the provisioning run,
+  so an unresolved manager is permissible there and **nowhere else** — and where a manager cannot
+  reach the surface, the project says so as a named blocker rather than reporting ready. Measured
+  2026-10-15: seven of ten domains have a manager who can reach it, across six distinct humans;
+  three carry a named blocker.
+
+  **Corrected from six of ten / four blocked, measured 2026-10-08.** Admissions was recorded as
+  blocked on the finding that its manager had no `admin_users` row. He has one. The miss came from
+  an **email mismatch**: his `org_members` row carries his personal address while he signs in with
+  his work one, so matching `org_members.email` against `admin_users.email` found nothing and that
+  was read as "no login". The reliable link is `org_members.enrollment_id` to `enrollments.email`,
+  a real foreign key populated on 29 of 29 rows; `platform_identity_id` would be the proper
+  identity column and is NULL on all 29. The three remaining blockers were re-checked against both
+  addresses and are real.
+
+### Readiness
+
+Projects register at `discovery` and stop. No provisioning path may emit a post-approval stage, and
+a test enumerates `POST_APPROVAL_STAGES` plus `awaiting_blueprint_approval` — a deliberate superset
+of the repo's exported set — to prove it. The 11 factory columns on `student_tasks` stay NULL, so
+`source_evidence IS NULL` keeps meaning *unassessed* rather than *assessed as empty*.
+
+This shape inherits, and does not fix, the open gates recorded in
+`carried-forward-obligations.md:57-74`: `release_review` and `launch_ready` pass unconditionally
+today. Because these projects stop at `discovery` they are not exposed to that, but mounting
+readiness on this machine does not make those gates work, and nothing in this programme should be
+read as claiming it does.
+
 ## Related documents
 
 - `entry-point-matrix.md` — the 14 creation paths and 3 chokepoints

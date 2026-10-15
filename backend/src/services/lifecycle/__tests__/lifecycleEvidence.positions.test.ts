@@ -22,7 +22,7 @@ import { completeEvidence as complete } from './evidenceFixture';
 /**
  * EVERY GUARDED READ, AS A (stage, rule, field) POSITION.
  *
- * A SPEC, not a transcript. I derived these 36 positions by probing the predicate layer, then
+ * A SPEC, not a transcript. I derived these 39 positions by probing the predicate layer, then
  * checked each row against the source: every rule is paired with the field it semantically
  * depends on. Pasting whatever the code currently does would encode a mis-binding as correct,
  * which is the exact failure being closed here.
@@ -39,6 +39,11 @@ import { completeEvidence as complete } from './evidenceFixture';
  * Amendment 2 asks for a control per claimed position.
  */
 const GUARDED_POSITIONS: ReadonlyArray<[LifecycleStage, string, EvidenceField]> = [
+  // P6-T4. The rule emitted here is the UNASSESSED one, not the measured failure: this list
+  // is derived by withholding each field in turn, and withholding a field is by definition
+  // the not-assessed branch. `release_without_user_visible_workflow` is the other branch and
+  // has no field-guard position, which is exactly the two-class split being visible here.
+  ['release_review', 'release_workflow_unassessed', 'releasesWithoutUserVisibleWorkflow'],
   ['requirements_ready', 'no_requirements', 'requirementCount'],
   ['requirements_ready', 'requirement_without_provenance', 'requirementsWithoutProvenance'],
   ['requirements_ready', 'source_block_uncited', 'uncitedRequirementSourceBlocks'],
@@ -73,6 +78,11 @@ const GUARDED_POSITIONS: ReadonlyArray<[LifecycleStage, string, EvidenceField]> 
   ['operating', 'approval_self_approved', 'proposedBy'],
   ['operating', 'approval_revision_moved', 'currentManifestRevision'],
   ['operating', 'authority_revoked', 'actorStillAuthorized'],
+  // P6-T5. Two positions on ONE stage, and they must stay two: a single
+  // `publishedPlanSound` field would make "nothing is published" and "the stored hash does not
+  // match its content" the same gap, and they call for different human action.
+  ['launch_ready', 'publish_not_exactly_one', 'publishedPlanIsSingular'],
+  ['launch_ready', 'publish_hash_mismatch', 'publishedPlanHashIntact'],
   ['plan_ready', 'requirement_uncovered_by_story', 'mustHaveRequirementsWithoutStory'],
   ['plan_ready', 'story_without_traceability', 'storiesWithoutTraceability'],
 ];
@@ -122,6 +132,11 @@ describe('EVERY guarded read is bound to the field it actually reads', () => {
 
   it('the declared position list is COMPLETE — no read is unlisted, none is stale', () => {
     const declared = GUARDED_POSITIONS.map(([s_, r, f]) => `${s_}/${r}/${f}`).sort();
+
+    // The header says 39. An apparatus number stated in prose and asserted nowhere goes stale
+    // the first time a row is added — and this one HAD gone stale: the header said 36 while the
+    // list held 37, which is why the number is now asserted rather than narrated.
+    expect(GUARDED_POSITIONS).toHaveLength(39);
 
     // Both directions. A subset assertion would miss a read added to the predicate layer and
     // never added here, which is how this control would quietly stop covering the thing it

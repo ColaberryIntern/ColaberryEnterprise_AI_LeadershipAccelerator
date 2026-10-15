@@ -24,23 +24,39 @@
 import { JOURNEY_KINDS, type JourneyDeclaration, type SelectionInput } from '../../designSelection';
 import { generateDesignAlternatives } from '../../designAlternatives';
 import type { TaskSurfaceBinding, WorkspaceRef } from '../../workspaceBindingTypes';
+import {
+  WORKSPACE_STATES, AA_LABEL_PAIRS, type WorkspaceStateDeclaration,
+} from '../../workspaceStateChecks';
 import { manualOnlyProject } from './manualOnly';
 
 const ROLE = 'role-counsel';
 
-export const ref = (taskId: string): WorkspaceRef => ({
+/**
+ * A workspace ref for one task.
+ *
+ * `roleId` is a parameter because the role must exist in the PROJECT being checked.
+ * `validateTaskSurfaces` takes no `roleIds` argument — it derives them from `project.roles` —
+ * so a ref naming a role the project does not declare produces `SURFACE_ROLE_UNKNOWN` once per
+ * mention, twice per ref. This file's default suits `manualOnlyProject()`, which is what it was
+ * written for; the reference fixtures A, B and C declare `r-1` instead.
+ *
+ * The composition input's own `roleIds` field does NOT affect this check. It reaches
+ * `validateControlSpec` only. A first attempt at a corpus baseline passed `roleIds` expecting
+ * the role refusals to clear, and they did not.
+ */
+export const ref = (taskId: string, roleId: string = ROLE): WorkspaceRef => ({
   workspaceId: `ws-${taskId}`,
   workspaceTitle: `Surface for ${taskId}`,
   action: 'record the decision',
   primaryJob: 'move one contract to its next state',
-  intendedRoles: [ROLE],
+  intendedRoles: [roleId],
   records: ['contract'],
   decisions: [],
   whyNotExisting: 'no existing workspace shows the contract next to the threshold rule',
   requirementIds: [],
   taskIds: [taskId],
   audience: 'internal',
-  permissionViews: [{ roleId: ROLE, visibleActions: [] }],
+  permissionViews: [{ roleId, visibleActions: [] }],
   // BOTH REQUIRED on `WorkspaceRef`, and the hand-copied version of this helper dropped
   // them. The omission was a real TS2739 that NOTHING could see: `tsconfig.json` excludes
   // `**/__tests__/**` and ts-jest strips types, so a green suite proved nothing about it.
@@ -50,7 +66,33 @@ export const ref = (taskId: string): WorkspaceRef => ({
   preservesNavigationState: true,
 });
 
-export const ws = (taskId: string): TaskSurfaceBinding => ({ taskId, kind: 'workspace', ref: ref(taskId) });
+export const ws = (taskId: string, roleId: string = ROLE): TaskSurfaceBinding =>
+  ({ taskId, kind: 'workspace', ref: ref(taskId, roleId) });
+
+
+/**
+ * A workspace-state declaration `validateWorkspaceStates` ACCEPTS, for a task bound by `ws()`.
+ *
+ * Here rather than in a test file for the reason this file's header already gives: the one
+ * hand-copied helper in this programme had already drifted from its original by the time the
+ * commit claiming otherwise was written. `workspaceStateChecks.test.ts` keeps its own local
+ * `decl()` because it needs to perturb every field; this is the passing shape only.
+ *
+ * It declares EVERY member of `WORKSPACE_STATES`, because a partial declaration is what
+ * `STATE_INCOMPLETE` exists to refuse, and uses the first measured AA-contrast token pair
+ * rather than inventing colours.
+ */
+export const wsState = (taskId: string): WorkspaceStateDeclaration => ({
+  workspaceId: `ws-${taskId}`,
+  states: WORKSPACE_STATES.map((state) => ({
+    state,
+    label: `Surface for ${taskId} — ${state}`,
+    tokens: AA_LABEL_PAIRS[0],
+  })),
+  // Exactly the action `ref()` declares. A superset trips ACTION_NOT_DECLARED and a subset
+  // trips ACTION_NOT_KEYBOARD_REACHABLE, so this mirrors the ref rather than guessing.
+  keyboardReachableActions: ['record the decision'],
+});
 
 export const declared = (kind: (typeof JOURNEY_KINDS)[number], taskId = 't-review'): JourneyDeclaration =>
   ({ kind, status: 'declared', steps: [{ taskId, workspaceId: `ws-${taskId}`, action: 'record the decision' }] });

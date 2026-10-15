@@ -191,13 +191,38 @@ export async function firstPublishedAt(projectId: string): Promise<Date | null> 
 export async function publishPlan(
   projectId: string,
   version: number,
-  expectedSha?: string,
+  expectedSha: string,
 ): Promise<StoredPlan> {
   const existing = await getPlan(projectId, version);
   if (!existing) {
     throw new PlanStoreError('NotFound', `no plan version ${version} for project ${projectId}`);
   }
-  if (expectedSha && existing.plan_sha256 !== expectedSha) {
+  // REQUIRED SINCE 2026-10-11, not optional-and-checked-if-present.
+  //
+  // This parameter exists because of a named incident, recorded in
+  // `internshipProjectGeneration.assignGeneratedProject`: "a pilot reviewed a 6/3/1/1/1 plan and
+  // shipped an 8/1/1/1/1 one". It was added to make that impossible — and then left optional,
+  // with the check guarded on its presence, so the exact failure it was created to prevent
+  // remained reachable by omitting one field. Both HTTP publish routes had it as
+  // `.optional()` / `.nullish()`, so an API caller could skip the invariant entirely.
+  //
+  // Made mandatory rather than merely logged BECAUSE THE BLAST RADIUS WAS MEASURED: no frontend
+  // caller omits it (the portal's own `publishBuild` helper has no callers at all, and every
+  // admin path passes a hash), and every server caller has one available — for a
+  // server-initiated publish the graded plan IS the draft just written, which is what
+  // `addStoryService` already passes. That measurement is the difference between this and the
+  // source-overflow decision, which stays non-blocking because its blast radius is unmeasured.
+  // An EXPLICIT refusal for a missing hash, not a TypeError. The parameter is typed required,
+  // but TypeScript cannot reach an untyped caller — a JS script, a test, or a route whose Zod
+  // schema someone relaxes again. Without this the `.slice(0, 12)` below throws a TypeError,
+  // which reads as a bug in publishPlan rather than as the caller's missing invariant.
+  if (!expectedSha) {
+    throw new PlanStoreError(
+      'HashMismatch',
+      `publishing v${version} requires the reviewed plan hash; none was supplied`,
+    );
+  }
+  if (existing.plan_sha256 !== expectedSha) {
     throw new PlanStoreError(
       'HashMismatch',
       `plan v${version} changed since review (reviewed ${expectedSha.slice(0, 12)}…, stored ${existing.plan_sha256.slice(0, 12)}…)`,
@@ -205,20 +230,75 @@ export async function publishPlan(
   }
   if (existing.status === 'published') return existing;   // idempotent
 
-  const rows = await sequelize.query<PlanRow>(
-    `UPDATE build_plans
-        SET status = 'published', published_at = NOW(), updated_at = NOW()
-      WHERE project_id = :projectId AND version = :version
-      RETURNING *`,
-    { type: QueryTypes.SELECT, replacements: { projectId, version } },
-  );
-  // Any earlier published version for this project is now history.
-  await sequelize.query(
-    `UPDATE build_plans SET status = 'superseded', updated_at = NOW()
-      WHERE project_id = :projectId AND version <> :version AND status = 'published'`,
-    { replacements: { projectId, version } },
-  );
-  return toStored(rows[0]);
+  // ONE TRANSACTION, AND A ROW LOCK, because the two statements below are a single fact about
+  // the project: exactly one version is published. Split across two autocommitting statements
+  // they admitted an interleaving that broke that invariant in BOTH directions:
+  //
+  //   A: publish v1 | B: publish v2 | A: supersede != v1 | B: supersede != v2
+  //
+  // leaves ZERO published rows - a project that HAS published reading as never having done so,
+  // which is worse than the duplicate, because every reader treats absence as 'not yet'. The
+  // transient state after the first two statements has TWO published, which is the duplicate.
+  // LC-13 names all three outcomes - duplicate, erase, silently publish - and this sequence
+  // reached two of them.
+  //
+  // The lock is what makes the transaction sufficient. Without `FOR UPDATE` two concurrent
+  // transactions at READ COMMITTED still interleave: each reads a snapshot where the other's
+  // publish is invisible, so both supersede a row they believe is stale. Locking every row of
+  // the project serialises publishes per project while leaving different projects concurrent.
+  return sequelize.transaction(async (transaction) => {
+    await sequelize.query(
+      'SELECT id FROM build_plans WHERE project_id = :projectId FOR UPDATE',
+      { type: QueryTypes.SELECT, replacements: { projectId }, transaction },
+    );
+
+    // RE-READ INSIDE THE LOCK. The status check above ran before it, so a publish that landed
+    // in between would otherwise be overwritten rather than returned - the idempotency guard
+    // would be checking a stale row.
+    const current = await sequelize.query<PlanRow>(
+      'SELECT * FROM build_plans WHERE project_id = :projectId AND version = :version',
+      { type: QueryTypes.SELECT, replacements: { projectId, version }, transaction },
+    );
+    if (current[0]?.status === 'published') return toStored(current[0]);
+
+    // SUPERSEDE FIRST, THEN PROMOTE. The order is load-bearing and it is the
+    // opposite of what it was.
+    //
+    // `build_plans_one_published_per_project` (added 2026-10-12 by e8d3b5dc,
+    // "two published plans become impossible") is a partial UNIQUE INDEX.
+    // Postgres evaluates it per statement, not at COMMIT, and a partial unique
+    // index cannot be made DEFERRABLE. So the transient two-published state the
+    // old order relied on was not merely untidy — the first UPDATE threw
+    // SequelizeUniqueConstraintError every time a project already had a
+    // published plan. Add-a-story is the path that always does, so every
+    // student adding a story to a published build got "Internal server error",
+    // their draft stranded above the published version. One learner lost five
+    // attempts across two stories before reporting it.
+    //
+    // The original comment above rejected this order because of an interleaving
+    // that leaves ZERO published rows:
+    //   A: supersede != v1 | B: supersede != v2 | A: publish v1 | B: publish v2
+    // That reasoning is sound WITHOUT a lock, and it predates the `FOR UPDATE`
+    // taken at the top of this transaction. With every row of the project
+    // locked, two publishes for one project cannot interleave at all — the
+    // second waits for the first to commit, then re-reads inside the lock. The
+    // erase case needs concurrency this transaction no longer permits, and
+    // `planStore.publishConcurrency.integration.test.ts` proves it against a
+    // real database rather than a mock.
+    await sequelize.query(
+      `UPDATE build_plans SET status = 'superseded', updated_at = NOW()
+        WHERE project_id = :projectId AND version <> :version AND status = 'published'`,
+      { replacements: { projectId, version }, transaction },
+    );
+    const rows = await sequelize.query<PlanRow>(
+      `UPDATE build_plans
+          SET status = 'published', published_at = NOW(), updated_at = NOW()
+        WHERE project_id = :projectId AND version = :version
+        RETURNING *`,
+      { type: QueryTypes.SELECT, replacements: { projectId, version }, transaction },
+    );
+    return toStored(rows[0]);
+  });
 }
 
 // ── intake ──────────────────────────────────────────────────────────────────

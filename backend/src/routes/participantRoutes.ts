@@ -98,6 +98,7 @@ import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
 import govProjectPortalRoutes from './govProjectPortalRoutes';
 import presentationPortalRoutes from './presentationPortalRoutes';
+import presentationPlaybackRoutes from './presentationPlaybackRoutes';
 import certPrepRoutes from './certPrepRoutes';
 import certificationRoutes from './certificationRoutes';
 import sbpRoutes from './sbpRoutes';
@@ -633,6 +634,20 @@ router.use(studentOpsRoutes);
 // Path-scoped (plural /api/portal/projects) so it can never leak onto the
 // singular /api/portal/project build-gate mount above — same care as that
 // mount's own comment. Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark).
+// RECORDING PLAYBACK MOUNTS BEFORE THE GATE BELOW, DELIBERATELY.
+//
+// The next line gates the whole `/api/portal/projects` prefix with
+// `requireParticipant`. A `<video src>` issues a plain browser GET and carries no
+// Authorization header, so a playback route mounted after it can never be reached —
+// production answered `{"error":"Authentication required"}` from this gate while the
+// route itself looked perfectly correct (2026-10-15). Third instance in this file's
+// history of "correct route, unreachable because of an earlier mount".
+//
+// It is safe here because it does not rely on the gate: the URL carries a short-lived
+// signed ticket bound to one recording and one enrollment, and the handler still runs
+// the full ownership query. `presentationPlaybackMountOrder.test.ts` asserts this
+// ordering — move it below and playback silently 401s with every test still green.
+router.use(presentationPlaybackRoutes);
 router.use('/api/portal/projects', requireParticipant, requireContentEntitlement('projects'));
 router.use(projectsPortalRoutes);
 // Government project portal (student entry point to an ASSIGNED gov project). Mounted here with the other

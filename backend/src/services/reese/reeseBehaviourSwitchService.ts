@@ -4,12 +4,16 @@ import type { ReeseBehaviourKey } from './agentDetailEmployeeFacts';
 /**
  * Reese Product Phase 1 follow-up (2026-09-18) — Ali, live, on the Employee
  * facts card: "who's in charge of turning on and off behaviors. It should be
- * admins and manager. I have no ability here." Every one of the 7 real
- * switches BEHAVIOUR_INVENTORY.md documents is now actually writable, from
- * the same card that displays it. Reese-only by construction: this file
- * resolves the target row itself (never trusts a caller-supplied agent id
- * for the sibling rows) and only ever writes Reese's own row or one of her 4
- * named cron siblings -- never an arbitrary agent.
+ * admins and manager. I have no ability here." Every real switch
+ * BEHAVIOUR_INVENTORY.md documents is now actually writable, from the same
+ * card that displays it. Reese-only by construction: this file resolves the
+ * target row itself (never trusts a caller-supplied agent id for the sibling
+ * rows) and only ever writes Reese's own row or one of her 5 named cron
+ * siblings -- never an arbitrary agent.
+ *
+ * The fifth sibling, `ticket_follow_up`, was added 2026-10-09. It had been
+ * live and DMing students since 2026-10-02 with no manager-facing kill switch,
+ * which is the precise thing Ali's quote above asked for.
  *
  * `reactive_dm_reply` and `health_assessment` share ONE underlying column
  * (Reese's own `ai_agents.enabled`) -- the exact same real coupling
@@ -30,6 +34,9 @@ export const SIBLING_REGISTRY_NAME: Partial<Record<ReeseBehaviourKey, string>> =
   outreach_follow_ups: 'ReeseOutreachFollowUps',
   presence_heartbeat: 'ReesePresenceHeartbeat',
   student_support_supersession_resolver: 'ReeseStudentSupportSupersessionResolver',
+  // Eighth, 2026-10-09. Without this entry the key would render on the card and
+  // silently fail to write, which is worse than being absent.
+  ticket_follow_up: 'ReeseTicketFollowUpSweep',
 };
 
 export class ReeseAgentMissingError extends Error {

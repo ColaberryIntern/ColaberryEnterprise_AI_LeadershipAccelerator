@@ -145,7 +145,15 @@ describe('a gate-clean plan reaches the student without anyone publishing it', (
     await flush();
     expect(mockPublishPlan).toHaveBeenCalledTimes(1);
     expect(finalStatus()).toBe('published');
-  });
+    // 30s, and the cost is MODULE LOAD rather than this assertion. This is the first test in the
+    // file, so it pays for compiling the whole orchestrator graph: measured at 8.8s against
+    // jest's 5s default, while the same test passes in milliseconds once the module is warm. The
+    // whole file passes 20 of 20 at a raised timeout.
+    //
+    // Neither jest config sets a testTimeout, so on a slow CI runner this failed for a reason
+    // that is not a defect and would have blocked a PR. A timeout on slow apparatus reads exactly
+    // like a broken invariant, which is the same trap the publish-concurrency suite hit.
+  }, 30_000);
 
   it('materializes it into student tasks — the rows the portal actually renders', async () => {
     await startBuild(INPUT as any);

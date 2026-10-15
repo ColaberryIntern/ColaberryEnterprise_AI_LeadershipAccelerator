@@ -1,5 +1,9 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import {
+  studentProjectTenantHook,
+  studentProjectLifecycleHook,
+} from '../services/lifecycle/projectLifecycleRegistration';
 
 export type ProjectStage = 'discovery' | 'architecture' | 'implementation' | 'portfolio' | 'complete';
 
@@ -16,6 +20,11 @@ export type ProjectApprovalState = 'pending_approval' | 'approved' | 'changes_re
 
 export interface ProjectAttributes {
   id?: string;
+  /**
+   * Optional, because a project created before P6-T1b has none and because an unattributable
+   * one is still created. `null` means NOT ATTRIBUTABLE, never no tenant.
+   */
+  tenant_id?: string | null;
   enrollment_id: string;
   program_id: string;
   name?: string; // project display name, derived from the idea
@@ -75,6 +84,16 @@ export interface ProjectAttributes {
 
 class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare id: string;
+  /**
+   * The tenant this project belongs to. NULLABLE, and the null case is load-bearing.
+   *
+   * Added by P6-T1b so a student project can be registered with a lifecycle at all:
+   * `project_lifecycle_states.tenant_id` is NOT NULL, and nothing on this table’s join path
+   * carried a tenant. `null` means NOT ATTRIBUTABLE, never "no tenant" -- the registration
+   * hook skips it and logs a ContractViolation, and `services/sbp/storyAuthorization.ts`
+   * refuses it authorized stories once enforcement is on.
+   */
+  declare tenant_id: string | null;
   declare enrollment_id: string;
   declare program_id: string;
   declare name: string;
@@ -121,6 +140,15 @@ Project.init(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    tenant_id: {
+      type: DataTypes.UUID,
+      // Deliberately nullable. NOT NULL would make a project the resolver cannot attribute
+      // fail to INSERT, which would break student project creation on a live path for a
+      // governance reason while the feature flag is off. See the field docblock above.
+      allowNull: true,
+      references: { model: 'tenants', key: 'id' },
+    },
+
     enrollment_id: {
       type: DataTypes.UUID,
       allowNull: false,
@@ -296,7 +324,20 @@ Project.init(
     indexes: [
       { fields: ['enrollment_id'] }, // non-unique: multiple projects per enrollment
       { fields: ['project_stage'] },
+      { fields: ['tenant_id'] },
     ],
+    /**
+     * LC-01, student half (P6-T1b). Two hooks, not one: `beforeCreate` attributes the row to
+     * a tenant when it arrives without one, so the row is correct at INSERT rather than
+     * corrected by a second write; `afterCreate` registers the lifecycle.
+     *
+     * Named, imported functions rather than inline closures, so each can be tested directly
+     * and so this wiring reads as a reference to a documented contract.
+     */
+    hooks: {
+      beforeCreate: studentProjectTenantHook,
+      afterCreate: studentProjectLifecycleHook,
+    },
   }
 );
 

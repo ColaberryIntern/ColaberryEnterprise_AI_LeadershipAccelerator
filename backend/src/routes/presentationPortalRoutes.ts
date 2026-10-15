@@ -349,6 +349,22 @@ router.post('/api/portal/projects/:projectId/tasks/:storyId/deck', requirePartic
   } catch (e) { fail(res, e, next); }
 });
 
+// WATCH YOUR OWN REHEARSAL BACK.
+//
+// The Practice panel has told learners "Your recording is available to watch back"
+// since it was written, and nothing could serve one: the file was downloaded to disk
+// and linked to nothing a student could reach. The sentence only became visible on
+// 2026-10-12 when the `ready` transition started working - the gap behind it was
+// older. This is the route that makes the sentence true.
+//
+// RANGE REQUESTS ARE HONOURED, which is why this is not a two-line pipe. Without
+// `Accept-Ranges` and a 206 the scrub bar does nothing and Safari will not play at
+// all - and the entire point of a rehearsal recording is jumping to the part that
+// went wrong, not watching three minutes from the top.
+//
+// `private, no-store` because this is one learner's rehearsal: it must not sit in a
+// shared proxy cache, and the browser should re-ask rather than replay from disk
+// after access is withdrawn.
 // The gallery: showcases this learner is allowed to see.
 //
 // THE FILTER IS HERE, SERVER-SIDE, not in the page. A gallery that returned

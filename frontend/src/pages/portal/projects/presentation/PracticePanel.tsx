@@ -136,6 +136,38 @@ function BookedSlot(
           The room is being created. This usually takes a few seconds — reload the page to check.
         </p>
       )}
+      {/* THE PLAYER THE "available to watch back" LINE ALWAYS PROMISED.
+          `playbackUrl` is SIGNED and comes from the server: a <video> element sends a
+          plain GET with no Authorization header, so a bearer-protected path 401s every
+          time — which is exactly what shipped on 2026-10-12 and what Ali hit. The URL
+          carries its own short-lived authority instead.
+
+          `preload="metadata"` so opening the page does not pull several megabytes
+          before anyone presses play; the route honours Range requests, so seeking works.
+
+          TAKES, NOT PARTS. Each row here is a separate rehearsal of the same task.
+          `partNo` distinguishes the halves of ONE recording that Zoom split, which is a
+          different thing — labelling two independent takes "Part 1 of 2" was wrong and
+          is what the numbering below avoids. */}
+      {!demo && (session.recordings || []).filter((t) => t.playbackUrl).map((take, i, all) => (
+        <div key={take.id} className="ps-card" data-testid={`ps-practice-player-${i + 1}`} style={{ marginTop: 12 }}>
+          {all.length > 1 && (
+            <p className="ps-note ps-note--soft" style={{ margin: '0 0 6px' }}>
+              Take {i + 1} of {all.length}
+              {take.partNo > 1 ? ` · part ${take.partNo}, Zoom split this one` : ''}
+            </p>
+          )}
+          <video
+            controls
+            preload="metadata"
+            style={{ width: '100%', borderRadius: 8, background: '#000' }}
+            src={take.playbackUrl}
+          >
+            {/* Shown only where the element is unsupported; same signed URL. */}
+            <a href={take.playbackUrl}>Download this take</a>
+          </video>
+        </div>
+      ))}
     </div>
     {/* The get-ready step only appears once there is actually a room to go into.
         Offering it earlier would be a consent screen for a door that is not there. */}

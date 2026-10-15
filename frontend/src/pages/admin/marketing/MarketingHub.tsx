@@ -21,8 +21,12 @@ import { Link } from 'react-router-dom';
  * what happened, set up who it goes as.
  */
 
+export type HubGroup = 'Plan & write' | 'Ship & measure' | 'Set up';
+
 export interface MarketingHubDestination {
   to: string;
+  /** Which stage of the work this door belongs to. */
+  group: HubGroup;
   label: string;
   /** What this page is for, in the operator's words rather than the system's. */
   blurb: string;
@@ -30,31 +34,50 @@ export interface MarketingHubDestination {
 }
 
 export const MARKETING_DESTINATIONS: readonly MarketingHubDestination[] = [
-  { to: '/admin/marketing/composer', label: 'New post', blurb: 'Write once, publish to each network with tracked links.', icon: 'quill-pen-line' },
-  { to: '/admin/marketing/content', label: 'All posts', blurb: 'Everything drafted, scheduled or published, for this brand.', icon: 'list-check-2' },
-  { to: '/admin/marketing/calendar', label: 'Calendar', blurb: 'What is going out and when, in Central time.', icon: 'calendar-2-line' },
-  { to: '/admin/marketing/landing-pages', label: 'Landing pages', blurb: 'Build a page from a brief and publish it with tracking wired.', icon: 'layout-masonry-line' },
-  { to: '/admin/marketing/publishing', label: 'Publishing queue', blurb: 'What is in flight, what failed, and what needs a person.', icon: 'send-plane-line' },
-  { to: '/admin/marketing/performance', label: 'Performance', blurb: 'Funnel, revenue, campaign links and the outreach queue.', icon: 'line-chart-line' },
-  { to: '/admin/marketing/brands', label: 'Brands & channels', blurb: 'Where each brand posts from, and whether it still can.', icon: 'price-tag-3-line' },
+  { to: '/admin/marketing/composer', group: 'Plan & write', label: 'New post', blurb: 'Write once, publish to each network with tracked links.', icon: 'quill-pen-line' },
+  { to: '/admin/marketing/content', group: 'Plan & write', label: 'All posts', blurb: 'Everything drafted, scheduled or published, for this brand.', icon: 'list-check-2' },
+  { to: '/admin/marketing/calendar', group: 'Plan & write', label: 'Calendar', blurb: 'What is going out and when, in Central time.', icon: 'calendar-2-line' },
+  { to: '/admin/marketing/landing-pages', group: 'Plan & write', label: 'Landing pages', blurb: 'Build a page from a brief and publish it with tracking wired.', icon: 'layout-masonry-line' },
+  { to: '/admin/marketing/publishing', group: 'Ship & measure', label: 'Publishing queue', blurb: 'What is in flight, what failed, and what needs a person.', icon: 'send-plane-line' },
+  { to: '/admin/marketing/performance', group: 'Ship & measure', label: 'Performance', blurb: 'Funnel, revenue, campaign links and the outreach queue.', icon: 'line-chart-line' },
+  { to: '/admin/marketing/brands', group: 'Set up', label: 'Brands & channels', blurb: 'Where each brand posts from, and whether it still can.', icon: 'price-tag-3-line' },
 ];
 
+export const HUB_GROUPS: readonly HubGroup[] = ['Plan & write', 'Ship & measure', 'Set up'];
+
+/**
+ * GROUPED, NOT A FLAT SEVEN. Seven equal cards is a list to read; three labelled stages is a
+ * shape to recognise, and the labels say what the work IS - write it, ship it and see how it
+ * went, set up who it goes as. An operator looking for Performance does not scan seven blurbs,
+ * they look under "Ship & measure".
+ */
 export default function MarketingHub() {
   return (
-    <div className="row g-2" data-testid="marketing-hub">
-      {MARKETING_DESTINATIONS.map((d) => (
-        <div className="col-12 col-md-6 col-xl-4" key={d.to}>
-          <Link
-            to={d.to}
-            className="d-flex gap-3 text-decoration-none border rounded-3 bg-white p-3 h-100"
-            data-testid={`hub-${d.to.split('/').pop()}`}
+    <div className="row g-3" data-testid="marketing-hub">
+      {HUB_GROUPS.map((group) => (
+        <div className="col-12 col-lg-4" key={group}>
+          <div
+            className="text-uppercase text-muted fw-semibold mb-2"
+            style={{ fontSize: '.68rem', letterSpacing: '.08em' }}
           >
-            <i className={`ri-${d.icon} fs-5 text-primary`} aria-hidden="true" />
-            <span className="d-block">
-              <span className="d-block fw-semibold text-body">{d.label}</span>
-              <span className="d-block small text-muted mt-1">{d.blurb}</span>
-            </span>
-          </Link>
+            {group}
+          </div>
+          <div className="d-flex flex-column gap-2">
+            {MARKETING_DESTINATIONS.filter((d) => d.group === group).map((d) => (
+              <Link
+                to={d.to}
+                key={d.to}
+                className="d-flex gap-3 text-decoration-none border rounded-3 bg-white p-3"
+                data-testid={`hub-${d.to.split('/').pop()}`}
+              >
+                <i className={`ri-${d.icon} fs-5 text-primary`} aria-hidden="true" />
+                <span className="d-block">
+                  <span className="d-block fw-semibold text-body">{d.label}</span>
+                  <span className="d-block small text-muted mt-1">{d.blurb}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       ))}
     </div>

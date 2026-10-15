@@ -11,6 +11,13 @@ jest.mock('../../../models/RoomBooking', () => ({
   __esModule: true,
   default: { findByPk: jest.fn(), findAll: jest.fn() },
 }));
+// The session read now also looks up the learner's ingested takes, so the panel can
+// offer a player. Default to none: these tests are about room resolution, and an
+// attempt with no recording is the ordinary case before anyone rehearses.
+jest.mock('../../../models/PresentationRecording', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn().mockResolvedValue([]) },
+}));
 
 import { getOwnedProjectTree } from '../../projects/projectReadService';
 import PresentationAssignment from '../../../models/PresentationAssignment';

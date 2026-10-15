@@ -557,6 +557,10 @@ export async function ingestRecordingForBooking(
         // Only the webhook sees the file list, so only it can say. The sweep leaves
         // this undefined, which correlation stores as null — unknown, not false.
         hasAudio: (inst.match as { hasAudio?: boolean | null }).hasAudio ?? null,
+        // THE LINK TO THE BYTES. Without it the recording row knows a file was
+        // stored and cannot say which one, so nothing can play it back - the state
+        // every recording was in until 2026-10-12.
+        resourceId: result.resourceId ?? null,
         // A webhook supplied the match directly; anything else came from the sweep.
         provenance: preResolvedMatch ? 'webhook' : 'cron_sweep',
       });

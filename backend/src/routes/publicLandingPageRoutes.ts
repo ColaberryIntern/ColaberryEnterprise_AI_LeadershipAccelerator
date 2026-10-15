@@ -3,6 +3,8 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { renderLandingPage } from '../services/marketing/landingPageRenderer';
 import { parseLandingPageContent } from '../schemas/landingPageContentSchema';
+import { metaPixelCspAdditions } from '../services/marketing/landingPagePixel';
+import { randomBytes } from 'crypto';
 
 /**
  * GET /lp/:brand/:slug — a hosted landing page, served to strangers.
@@ -116,11 +118,21 @@ router.get('/lp/:brand/:slug', landingPageRateLimiter, async (req: Request, res:
       return;
     }
 
+    // One nonce per RESPONSE, minted here because the same string has to appear in both the
+    // markup and the Content-Security-Policy header. 16 random bytes: a guessable nonce is the
+    // same as no nonce, since an injected script could simply carry it.
+    const cspNonce = randomBytes(16).toString('base64');
+
     const { html, branded } = renderLandingPage({
       content: content.content,
-      brand: { name: brand.name, default_theme_key: brand.default_theme_key },
+      brand: {
+        name: brand.name,
+        default_theme_key: brand.default_theme_key,
+        meta_pixel_id: brand.meta_pixel_id,
+      },
       siteSlug: page.site_slug,
       pageUrl: absoluteUrl(req),
+      cspNonce,
     });
 
     if (!page.site_slug) {
@@ -136,9 +148,26 @@ router.get('/lp/:brand/:slug', landingPageRateLimiter, async (req: Request, res:
     // response - the same approach the unsubscribe page uses. `script-src 'self'` is what lets
     // /v1/track.js load while leaving no room for an inline script, which matters on a page
     // built from operator-supplied content.
+    // Built from a base policy plus whatever the pixel needs, so a brand with NO pixel keeps the
+    // strictest policy this page has always had. The relaxation is scoped to pages that actually
+    // carry a third-party tag rather than applied to every landing page in the estate.
+    const scriptSrc = ["'self'"];
+    for (const [directive, value] of metaPixelCspAdditions(brand.meta_pixel_id, cspNonce)) {
+      if (directive === 'script-src') scriptSrc.push(value);
+    }
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; script-src 'self'; connect-src 'self' https:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      [
+        "default-src 'none'",
+        "style-src 'unsafe-inline'",
+        "img-src 'self' https: data:",
+        "font-src 'self'",
+        `script-src ${scriptSrc.join(' ')}`,
+        "connect-src 'self' https:",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'none'",
+      ].join('; '),
     );
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Content-Type-Options', 'nosniff');

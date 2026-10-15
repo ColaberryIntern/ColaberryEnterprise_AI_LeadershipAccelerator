@@ -22,6 +22,8 @@ import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
 import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
 import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
+import { SubmissionReadinessPanel } from './govWorkspace/SubmissionReadinessPanel';
+import { AssignmentOverviewPanel } from './govWorkspace/AssignmentOverviewPanel';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -1568,6 +1570,16 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
           {(
+            <SectionCard title="Assignment at a glance" icon="user-shared-line"
+              subtitle="Who can build this contract and how much is already assigned — advisory. The assign controls are the two cards below; this summary changes nothing.">
+              <AssignmentOverviewPanel
+                deliveryProjectId={ws.build?.deliveryProjectId ?? null}
+                builders={ws.build?.assignableBuilders ?? []}
+                stories={ws.build?.stories ?? []}
+              />
+            </SectionCard>
+          )}
+          {(
             <SectionCard title="Create the monitored project" icon="rocket-2-line"
               subtitle="Once the plan looks right, assign the build to an intern — this creates a real project under their profile, monitored like the Command Center. It materializes the reviewed plan's releases and stories; it starts no build and changes no gate.">
               <GovMaterializePanel canonical={canonical}
@@ -1607,6 +1619,18 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </GovTabPanel>{/* end Build */}
 
           <GovTabPanel active={activeStep === 'submit'}>
+          {/* ── What gets submitted (advisory summary: legible bid, changes nothing) ─ */}
+          <SectionCard title="What gets submitted" icon="file-list-3-line"
+            subtitle="A read-only summary of the bid — what it must answer, how far along it is, and the deadline with a day-before ship target. It changes nothing; the release controls are below.">
+            <SubmissionReadinessPanel
+              readiness={ws.submissionReadiness}
+              slots={ws.responseSlots ?? []}
+              requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text, dueStage: r.dueStage }))}
+              deadlineUtc={ws.source?.deadline?.utc ?? oppDetail?.opportunity?.closeDate ?? null}
+              daysLeft={daysLeft(ws.source?.deadline?.utc ?? oppDetail?.opportunity?.closeDate ?? null)}
+            />
+          </SectionCard>
+
           {/* ── Complete Your Submission (forward: readiness mirror + the response checklist) ─ */}
           {(
             <SectionCard title="Complete your submission" icon="send-plane-line"

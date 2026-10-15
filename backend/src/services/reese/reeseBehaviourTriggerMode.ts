@@ -26,6 +26,14 @@ const TRIGGER_MODE_BY_BEHAVIOUR: Record<ReeseBehaviourKey, ReeseTriggerMode> = {
   welcome_dms: 'rule_triggered',
   student_support_supersession_resolver: 'rule_triggered',
   presence_heartbeat: 'rule_triggered',
+  // The eighth behaviour. `rule_triggered` is MEASURED, not guessed: `CRON_REGISTRY_NAMES` maps
+  // 'Ticket follow-up' to `ReeseTicketFollowUpSweep`, so it fires on a schedule with no model
+  // choice over whether or when to run -- the same shape as the four cron behaviours above it.
+  //
+  // This map is the FIFTH consumer of `ReeseBehaviourKey` and I missed it when adding the
+  // behaviour: four maps and the charter were updated, and this one is exhaustive by type rather
+  // than by a list I was reading, so only the compiler could see it was incomplete.
+  ticket_follow_up: 'rule_triggered',
 };
 
 export function getTriggerMode(key: ReeseBehaviourKey): ReeseTriggerMode {

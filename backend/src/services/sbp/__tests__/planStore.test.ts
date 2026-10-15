@@ -6,7 +6,18 @@
  * regenerates, and a hash re-check makes a silent substitution impossible.
  */
 const mockQuery = jest.fn();
-jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: any[]) => mockQuery(...a) } }));
+// `transaction` is part of the mock since 2026-10-11: `publishPlan` now wraps its publish and
+// supersede statements in ONE transaction with a row lock, because split across two
+// autocommitting statements they admitted an interleaving that left ZERO published rows. The
+// stub runs the callback immediately and threads a sentinel, so these unit tests keep asserting
+// the STATEMENTS while the concurrency property itself is proven against a real Postgres in
+// `planStore.publishConcurrency.integration.test.ts` — a race cannot be verified against a mock.
+jest.mock('../../../config/database', () => ({
+  sequelize: {
+    query: (...a: any[]) => mockQuery(...a),
+    transaction: async (fn: any) => fn('TX'),
+  },
+}));
 
 import { hashPlan, canonicalPlanJson } from '../planHash';
 import { savePlanDraft, publishPlan, getPlan, saveIntake, PlanStoreError } from '../planStore';
@@ -97,10 +108,20 @@ describe('savePlanDraft', () => {
 // ── publish: the invariant ──────────────────────────────────────────────────
 describe('publishPlan — the reviewed plan is the published plan', () => {
   it('promotes the SAME row and never regenerates', async () => {
+    // FIVE queries since 2026-10-11, not three: the publish now happens inside a transaction
+    // that first LOCKS the project's rows and then RE-READS the target version. The re-read is
+    // not ceremony — the status check in `getPlan` ran before the lock, so a publish that
+    // landed in between would otherwise be overwritten instead of returned.
+    // ORDER CHANGED 2026-10-14: supersede runs BEFORE the promote, not after.
+    // `build_plans_one_published_per_project` is a partial unique index, checked
+    // per statement and not deferrable, so promoting first made two published
+    // rows for an instant and the database refused it. See publishPlan's note.
     mockQuery
       .mockResolvedValueOnce([row()])                                        // getPlan
-      .mockResolvedValueOnce([row({ status: 'published', published_at: 'now' })])  // UPDATE
-      .mockResolvedValueOnce([]);                                            // supersede
+      .mockResolvedValueOnce([{ id: 'r1' }])                                 // SELECT ... FOR UPDATE
+      .mockResolvedValueOnce([row()])                                        // re-read inside the lock
+      .mockResolvedValueOnce([])                                             // supersede the incumbent
+      .mockResolvedValueOnce([row({ status: 'published', published_at: 'now' })]);  // then promote
     const published = await publishPlan('proj-1', 1, hashPlan(plan));
     expect(published.status).toBe('published');
     // Byte-identical: what was reviewed is what shipped.
@@ -122,19 +143,31 @@ describe('publishPlan — the reviewed plan is the published plan', () => {
   });
 
   it('is idempotent — republishing returns the same row without a second UPDATE', async () => {
+    // The hash is REQUIRED since 2026-10-11, so a replay supplies it like any other publish.
+    // The short-circuit still happens BEFORE the transaction opens: one query, no lock taken,
+    // which is what makes a retry cheap rather than merely correct.
     mockQuery.mockResolvedValueOnce([row({ status: 'published', published_at: 'earlier' })]);
-    const result = await publishPlan('proj-1', 1);
+    const result = await publishPlan('proj-1', 1, hashPlan(plan));
     expect(result.published_at).toBe('earlier');
     expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
   it('supersedes any previously published version', async () => {
     mockQuery
-      .mockResolvedValueOnce([row({ version: 2 })])
-      .mockResolvedValueOnce([row({ version: 2, status: 'published' })])
-      .mockResolvedValueOnce([]);
-    await publishPlan('proj-1', 2);
-    expect(String(mockQuery.mock.calls[2][0])).toMatch(/status = 'superseded'/);
+      .mockResolvedValueOnce([row({ version: 2 })])                       // getPlan
+      .mockResolvedValueOnce([{ id: 'r1' }])                              // FOR UPDATE
+      .mockResolvedValueOnce([row({ version: 2 })])                       // re-read in lock
+      .mockResolvedValueOnce([])                                          // supersede the incumbent
+      .mockResolvedValueOnce([row({ version: 2, status: 'published' })]);  // then promote
+    await publishPlan('proj-1', 2, hashPlan(plan));
+    // Index 3 for the supersede and 4 for the promote. THE RELATIVE ORDER IS THE POINT, not
+    // the indices: the partial unique index on one published row per project is evaluated per
+    // statement, so promoting first put two published rows in play and Postgres refused it.
+    // Asserted by CONTENT as well as position, so a statement inserted ahead fails here rather
+    // than silently shifting what this test checks.
+    expect(String(mockQuery.mock.calls[3][0])).toMatch(/status = 'superseded'/);
+    expect(String(mockQuery.mock.calls[4][0])).toMatch(/SET status = 'published'/);
+    expect(String(mockQuery.mock.calls[1][0])).toMatch(/FOR UPDATE/);
   });
 });
 

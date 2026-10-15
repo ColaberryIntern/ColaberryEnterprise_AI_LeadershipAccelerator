@@ -87,10 +87,12 @@
     <tbody>
       <tr>
         <td class="q">Can a Free AI account still exist without an Explorer Growth profile?</td>
-        <td><span class="pill no">No for new</span> <span class="pill unk">Yes for 86 existing</span></td>
+        <td><span class="pill no">No for new</span> <span class="pill unk">Yes for 49 existing</span></td>
         <td>Both signup paths establish the identity at registration. For legacy rows the answer
-            is now <strong>measured, not unknown</strong>: 86 active accounts are invisible to
-            Explorer Growth. The backfill still has not been run for real.</td>
+            is <strong>measured, and now mostly repaired</strong>: 86 active accounts were
+            invisible to Explorer Growth. The backfill ran on 2026-10-13 and wrote 56 rows, so
+            <strong>49 remain</strong> — 12 of those provably not free signups, 37 reported as
+            ambiguous rather than guessed at.</td>
       </tr>
       <tr>
         <td class="q">Can an unpaid Explorer still be mistaken for converted?</td>
@@ -145,8 +147,8 @@
   </div>
 
   <div class="warn">
-    <p style="margin:0 0 8px"><strong>Three of the eight tasks failed independent verification, and
-    two are still unverified.</strong></p>
+    <p style="margin:0 0 8px"><strong>Six of the seventeen tasks never obtained a verifier PASS, and the
+    plan never passed its own audit.</strong></p>
     <p style="margin:0">T212 scored <strong>zero on criterion 6 for a false claim of mine</strong>:
     I wrote that the duplicated stage map was fixed "on the profile AND the roster", and the roster
     was untouched — still rendering the raw lowercase enum for the one stage this phase exists to
@@ -227,8 +229,9 @@ guards:             secret-scan, route-auth, explorer-copy, banned-word — all 
               to Week 0 <em>in production</em> — the entitlement consequence the pre-deploy
               checkpoint could only assert from a sample env file.</td></tr>
       <tr><td>Row counts by tier and type</td>
-          <td><strong>630 enrollments.</strong> 290 <code>explorer</code>+<code>member</code> (wrong
-              tier), 86 active <code>standard</code>+<code>guest</code> (wrong programme), and
+          <td><strong>630 enrollments.</strong> 288 <code>explorer</code>+<code>member</code> (wrong
+              tier — 2 more share that shape but are paid converts, correctly), 86 active
+              <code>standard</code>+<code>guest</code> (wrong programme), and
               <strong>zero coherent <code>explorer</code>+<code>guest</code></strong> — which is
               what a Free AI learner is defined to be.</td></tr>
       <tr><td>Whether the legacy population is reachable</td>
@@ -240,14 +243,23 @@ guards:             secret-scan, route-auth, explorer-copy, banned-word — all 
   </div>
 
   <div class="warn">
-    <p style="margin:0 0 8px"><strong>Question 1, answered with a number instead of "unknown".</strong></p>
-    <p style="margin:0">Yes — Free AI accounts exist right now that Explorer Growth cannot see.
-    <strong>86 of them.</strong> The backfill's dry run plans <strong>56 writes</strong> (37
-    programme, 19 tier) and reports the rest for human decision rather than guessing, because it
-    demands positive free-signup provenance and excludes org members, prospect accounts, staff,
-    agent identities and paid rows. <strong>It has not been run for real — that is your call.</strong>
-    It also discloses that 37 joiners would have <code>explorer_entered_at</code> left NULL, and no
-    task owns that column.</p>
+    <p style="margin:0 0 8px"><strong>Question 1, answered with a number instead of "unknown" — and then largely repaired.</strong></p>
+    <p style="margin:0"><strong>86</strong> Free AI accounts were invisible to Explorer Growth. The
+    backfill demanded positive free-signup provenance and excluded org members, prospect accounts,
+    staff, agent identities and paid rows, which is why it planned only <strong>56 writes</strong>
+    (37 programme, 19 tier) out of 376 incoherent rows. <strong>Ali authorised it and it ran on
+    2026-10-13.</strong> Measured from the table: coherent <code>explorer</code>+<code>guest</code>
+    went <strong>0 → 56</strong>, invisible <code>standard</code>+<code>guest</code> went
+    <strong>86 → 49</strong>, and the <strong>630</strong> row total did not move. The two
+    genuinely paid Explorers were untouched. A 56-entry rollback ledger sits on the host.</p>
+    <p style="margin:8px 0 0">Two things it did <em>not</em> fix. <strong>All 56</strong> coherent
+    rows carry <code>explorer_entered_at</code> NULL and no task owns that column — the script's own
+    warning names only the 37 it wrote into the programme, which understates it, since the column
+    has never been populated for anybody (measured: 56 null, 0 set). And the remaining
+    <strong>49</strong> include <strong>37</strong> the script reports as ambiguous rather than
+    guessing at. Its success line also printed <code>committed NaN of 56</code> — a real reporting
+    defect, now fixed, and the reason the numbers above come from an independent query rather than
+    from the script.</p>
   </div>
 
   <p><strong>Nothing sends, now confirmed in production as well as in tests.</strong>

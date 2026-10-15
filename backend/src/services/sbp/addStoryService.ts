@@ -45,9 +45,22 @@ import { getPublishedPlan, savePlanDraft } from './planStore';
 import { gatePlan, blockingViolations, GateViolation } from './planGate';
 import { publishBuild, PublishResult } from './sbpOrchestrator';
 
-/** A build stops accepting stories here. Generated plans run 12–18; a plan
- *  growing past thirty is a scoping problem, not a feature request. */
-export const MAX_STORIES_PER_BUILD = 30;
+/**
+ * A build stops accepting stories here.
+ *
+ * Raised from 30 to 50 on 2026-10-14 by the DRI. Generated plans still run
+ * 12-18, so the cap is not a target and the scoping argument it was built on
+ * has not changed: a plan sprawling past its releases is still a scoping
+ * problem. What changed is where the line sits for the people who are not
+ * sprawling.
+ *
+ * The case that moved it: a learner finished 27 of her 29 stories, then found
+ * two genuine gaps while using her own build and could add only one of them,
+ * because 29 plus one is exactly 30. The cap was refusing considered additions
+ * from the person who had done the most work, which is the opposite of what it
+ * is for.
+ */
+export const MAX_STORIES_PER_BUILD = 50;
 
 export const addStorySchema = z.object({
   title: z.string().trim().min(4).max(120),

@@ -262,6 +262,29 @@ describe('buildStoryRevision — every refusal names its rule', () => {
     expect(plan.stories).toHaveLength(MAX_STORIES_PER_BUILD);
     expectClass(() => buildStoryRevision(plan, input()), 'StoryCap', 422);
   });
+
+  it('still accepts the story that takes a build UP TO the cap', () => {
+    // The boundary, not the breach. A learner with 29 stories and a cap of 30
+    // could add one more and then not the second, which is how the limit first
+    // drew attention to itself. This pins that the last admissible story is
+    // admitted rather than refused one early.
+    const plan = publishedPlan();
+    for (let n = 3; n <= MAX_STORIES_PER_BUILD - 1; n++) {
+      plan.stories.push(story(`STORY-${String(n).padStart(3, '0')}`, 'r1', ['REQ-002']));
+    }
+    expect(plan.stories).toHaveLength(MAX_STORIES_PER_BUILD - 1);
+
+    const r = buildStoryRevision(plan, input());
+    expect(r.plan.stories).toHaveLength(MAX_STORIES_PER_BUILD);
+    expect(blockingViolations(gatePlan(r.plan).violations)).toEqual([]);
+  });
+
+  it('the cap is 50, so a raise is a deliberate edit rather than a drift', () => {
+    // Named explicitly: the number is a product decision (DRI, 2026-10-14) and
+    // a silent change to it should fail here and be argued for, not noticed
+    // later by a student who cannot add a story.
+    expect(MAX_STORIES_PER_BUILD).toBe(50);
+  });
 });
 
 describe('addStorySchema — the boundaries', () => {

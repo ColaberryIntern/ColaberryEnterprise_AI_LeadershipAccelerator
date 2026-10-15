@@ -33,6 +33,14 @@ export const REESE_CHARTER_V2_AUTHORITY_AUTONOMOUS: string[] = [
   "Refresh a student's health assessment opportunistically after a reply, when due (assess_student_health; Health assessment).",
   'Maintain her own online presence signal every minute (Presence heartbeat) -- internal only, not student-facing.',
   'Auto-close a student_support ticket once a strictly newer ticket supersedes it (Student support supersession resolver).',
+  // Added 2026-10-09. This line RECORDS a behaviour that has been running since 2026-10-02;
+  // it grants nothing new. `ReeseTicketFollowUpSweep` was live, enabled and DMing students
+  // while absent from BEHAVIOUR_INVENTORY.md, from REESE_BEHAVIOUR_KEYS and from this charter,
+  // so `ROLE_CHARTER_v2.md`'s own "no behaviour outside the 7" was true of the charter and
+  // false of production. reeseCharterAuthority.ts's coverage check is what forced this entry,
+  // which is the check working as designed: a real behaviour the charter never mentions is
+  // exactly the declared-vs-real drift it exists to catch.
+  'Send one check-in on a quiet student_support ticket -- the student has not replied for at least 3 days and Reese spoke last -- within the 3-attempt cap and its own 10/day ceiling, separate from the outreach caps (Ticket follow-up).',
 ];
 
 export const REESE_CHARTER_V2_AUTHORITY_APPROVAL_REQUIRED: string[] = [

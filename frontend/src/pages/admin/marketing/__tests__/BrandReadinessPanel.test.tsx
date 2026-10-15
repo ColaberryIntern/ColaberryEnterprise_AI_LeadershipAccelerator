@@ -28,7 +28,7 @@ let root: Root;
 
 const BRAND: Brand = {
   id: 'b1', tenant_id: 't1', slug: 'colaberry-enterprise', name: 'Colaberry Enterprise',
-  status: 'active', default_public_url: null, support_email: null,
+  status: 'active', default_public_url: null, support_email: null, meta_pixel_id: null,
 };
 
 function baseProps(over: Partial<BrandReadinessPanelProps> = {}): BrandReadinessPanelProps {

@@ -8,36 +8,62 @@
 
 ---
 
-## Where Phase 5 left this — deployed, and deliberately switched off
+## Where this stands now — ACTIVATED on 2026-10-14
 
 Phase 5 shipped the review surface to production on 2026-10-09 at release `a11961e3c714`. The
 workspace lives at:
 
 ```
-/admin/project-lifecycle/<the project's id>?kind=delivery
+/admin/project-lifecycle/<the project's id>?kind=student    # a student build
+/admin/project-lifecycle/<the project's id>?kind=delivery   # a client engagement
 ```
 
-**It is switched off, on purpose.** The environment setting `ENABLE_PROJECT_LIFECYCLE` is not set,
-so every part of it refuses rather than half-working. Switching it on is Phase 8's decision, not a
-step in this guide, and the project's own contract treats flipping it as a change that needs
-explicit authorisation.
+**It is switched ON.** `ENABLE_PROJECT_LIFECYCLE=true` was set on 2026-10-14 on release
+`afeb04bb`, with the DRI's authorisation. Three things are worth separating, because they are
+not the same claim:
 
-### The one test you can run today
+**What is proven.** The setting is live inside the running backend (read back from the process
+itself, not from a config file). The registration half works on real traffic: ten projects were
+created in production on 2026-10-13 and **every one of them got exactly one lifecycle record**,
+with no duplicates and no orphans. The database protections are in place and were checked by
+name.
 
-Open the URL above for any project. **You should see a yellow box** reading *"Project lifecycle
-enforcement is not enabled in this environment"*, followed by *"Set
-ENABLE_PROJECT_LIFECYCLE=true to enable it."*
+**What is NOT proven, and is your first job below.** Nobody has yet SEEN the workspace render.
+Every page in it requires a logged-in session with program permission, which the build process
+cannot create for itself, so Test 1 is genuinely unverified rather than assumed. If it does not
+render, that is a real finding and rollback is one line (see the operator runbook).
 
-That is the correct and complete result. What makes it worth checking is the alternative: if you
-see an **empty page**, or a page that looks like a project with nothing in it, that is a defect
-worth reporting — a blank screen and a switched-off feature are indistinguishable to a reader, and
-a great deal of care went into making sure you never have to guess which one you are looking at.
+**What activation does NOT do, stated plainly so you are not misled.** It does not yet refuse
+anything. The gate that would require an approved blueprint before work gets planned is built,
+but it is not wired into the live plan generator, so **no build will be blocked today**. That
+is deliberate sequencing, not an oversight: no blueprint has ever been approved in production
+(the approval screen was itself behind this setting), so switching the requirement on first
+would have refused every build in the system. Approve a blueprint through the now-reachable
+screen first; wiring the requirement is the next, separate change.
+
+### Start here — the two-minute check
+
+Open the URL above for any project. **You should now see the lifecycle workspace**, not a yellow
+box.
+
+If you still see a yellow box reading *"Project lifecycle enforcement is not enabled in this
+environment"*, the setting did not reach the running server and nothing else in this guide will
+work. That is the single most useful thing you can tell us.
+
+If you see an **empty page**, or a page that looks like a project with nothing in it, that is a
+different defect and also worth reporting — a blank screen and a switched-off feature are
+indistinguishable to a reader, and a great deal of care went into making sure you never have to
+guess which one you are looking at.
+
+Expect the workspace to look EARLY. Every project in the system is at the first stage
+(`discovery`) and no blueprint exists yet, so there is nothing approved to show. That is the
+correct starting state, not a loading failure.
 
 ### What cannot be tested yet, and why — so you are not left wondering
 
 | | |
 |---|---|
-| Tests 1–8 below | All need the feature switched on. Phase 8. |
+| Tests 1-8 below | Now runnable. Test 1 first: if the workspace does not render, stop and say so. |
 | Screenshots | None were captured. The capture tool was not installable in the working copy where Phase 5 was built without damaging a parallel piece of work. The existing production screenshot process can do it now that the surface is deployed. |
 | How it looks on a phone | Checked structurally — nothing fixes a pixel width and every row of controls is allowed to wrap, and three rows that would have overflowed were found that way and fixed. But **nobody has looked at it on a phone.** Those are different claims. |
 
@@ -154,23 +180,57 @@ _Phase 8 fills in: exact navigation path, screenshot of a traced story._
 
 **You should see,** after the typo: nothing invalidated. You are not asked to re-approve.
 
-**You should see,** after the material edit: a list of exactly what is now affected — which requirements, tasks, agents, policies, screens, stories and tests — and a request to re-approve **only those**. Work that did not depend on what you changed should keep its existing approval.
+**You should see,** after the material edit: downstream work that is now stale is **blocked**, not
+quietly allowed to proceed on the old approval. Approving against a superseded version is refused
+outright.
 
-**You should also see** that downstream work which is now stale is **blocked**, not quietly allowed to proceed on the old approval.
+**WHAT IS NOT BUILT, so you do not report it as a bug.** The *selective* half of this is absent.
+You will NOT get a list of exactly which requirements, tasks, agents, policies, screens, stories
+and tests are affected, and you will not be asked to re-approve only those. That half is recorded
+as an open item (LC-11, PARTIAL) and is deferred to a later change. What exists today is the
+blocking half, which is the half that protects you from shipping against a stale approval.
 
-**Failure looks like:** a typo forcing full re-approval; a material change invalidating nothing; or — the serious one — downstream planning continuing against the superseded version.
+**Failure looks like:** a typo forcing full re-approval; or — the serious one — downstream
+planning continuing against the superseded version. A material change producing no itemised
+impact list is the known gap above, not a new failure.
 
 _Phase 8 fills in: exact navigation path, screenshot of the impact list._
 
 ---
 
-## What this guide will also tell you at Phase 8
+## The Phase 8 answers
 
-- The production URL and the exact path to the lifecycle workspace.
-- Whether **every** new-project entry point is enforced, and any exception named plainly.
-- How projects that existed before this feature behave.
-- Known limitations.
-- Who to call and how to roll back, in the operator runbook.
+**The path to the workspace** is `/admin/project-lifecycle/<the project's id>?kind=student` for a
+student build, or `?kind=delivery` for a client engagement. **Getting that wrong does not look like
+an error in the feature**: the server answers "No lifecycle is registered for that project", which is
+correct for the kind you asked about and misleading if you meant the other one. Every project in
+production today is a student project. The path is on
+the normal application host. The host is deliberately not written into this file, because the
+repository is public.
+
+**Is every new-project entry point enforced?** No, and here is the exception named plainly.
+REGISTRATION is universal: the hook sits on the project model itself rather than on a list of
+call sites, so every path that creates a project gets a lifecycle record, including paths added
+after the hook was written. That was a deliberate choice after the original list of call sites
+turned out to be wrong within a week. But ENFORCEMENT — refusing to plan work without an
+approved blueprint — is not yet wired into the live plan generator. Nothing is refused today.
+
+**How do projects that existed before behave?** They keep working, untouched. 62 projects
+predate the hook and have no lifecycle record; they are not retrofitted and nothing blocks them.
+The 10 created since all have one.
+
+**Known limitations.**
+
+- The itemised reapproval impact list is not built (LC-11, see Test 6).
+- The delivery-project path has never run in production: 4 such projects exist and all predate
+  the hook, so that half of registration is live but unexercised.
+- One security refusal (an authenticated conflict response) has still not been observed in
+  production, because observing it needs an admin token the build process cannot mint.
+- No screenshots have been captured, and nobody has viewed the workspace on a phone.
+
+**How to roll back, and who does it.** Rollback is removing one line of configuration and
+restarting the backend; it never re-opens an ungoverned path, because registration does not
+depend on the setting. Full detail is in `operator-runbook.md` next to this file.
 
 ---
 

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, October 7, 2026 at 10:30 AM</div>
-    <div><span class="sid">CC-20261006-a4k7</span><span class="count">13 changes</span></div>
+    <div class="meta">Generated Thursday, October 15, 2026 at 8:53 AM</div>
+    <div><span class="sid">CC-20261006-a4k7</span><span class="count">24 changes</span></div>
   </header>
   <main>
     
@@ -252,6 +252,171 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">docs only. He was already the only `org_members` row with role `manager` on team</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">this was the last of the five identity questions the Phase 0 map left open. That domain</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>Agent Factory T01: factory branch cut, production baseline censused, two source documents corrected</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">no product code. Cut `workstream/agent-domain-factory` from `origin/main` `b9edf58a`</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">independently graded by `loop-task-verifier` at **11/12**, no criterion at 0. It</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">three findings worth carrying. (1) This database has **three schemas** and 3 of the 8</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>Agent Factory T02: the two pre-approved additive identity/data rows written to production</h2>
+          <span class="badge">2026-10-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/scripts/seedAgentDomainIdentityPrereqs.js`, and two rows in</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**idempotency proven by running it twice**, not by reading it - the second `--apply`</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">row 1 is pre-approved verbatim at `HUMAN_OWNERSHIP_MAP.md:52` (&quot;one additive org_members</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>Agent Factory T02 fix: the test two acceptance criteria had only named</h2>
+          <span class="badge">2026-10-07</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/scripts/__tests__/seedAgentDomainIdentityPrereqs.test.ts`</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**19 tests, 1 suite, 2.78s**, in four groups each carrying a positive control.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the verifier was right and the fix was to write the test, **not to soften the criteria**.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>Reese: the eighth student-contacting behaviour had no manager kill switch</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commit `7f28d720`. `ReeseTicketFollowUpSweep` shipped 2026-10-02 as a live,</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**438 tests across 30 Reese suites**, all passing. `BEHAVIOUR_INVENTORY.md`</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">be precise about what was wrong, because the overstatement is tempting. Its individual</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>Revenue dashboard: the third service computing revenue as enrollments x 4500</h2>
+          <span class="badge">2026-10-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commit `dc0e3afe` implements **ESCALATION-002 decision 1**, which Ali took on</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**15 tests.** Mutation-proven by restoring the original defect, which killed</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the same defect had already been found and removed twice**, from `campaignLinkService.ts`</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>Authorization gate: a keyword classifier was being honoured as a deliberate human choice</h2>
+          <span class="badge">2026-10-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commits `04530e7e` and `afc8cc57`. (1) `agentAuthorizationService.resolveLevel`</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**13 tests in 1 suite** for the gate; **118 tests across 5 agentDomain suites** for</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**my own suggested fix was wrong, and measuring is what showed it.** I proposed making the</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>Autonomy: the one field that could tell human from machine was written exclusively by the machine</h2>
+          <span class="badge">2026-10-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">commits `896aca6b` and `49c3877a`. Ali approved recording a human decision for the</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**27 tests across 2 suites.** The production write ran in **one transaction** with</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the root cause is the more useful half. `agentReactivationService.reactivateAgent` - the</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>Agent Factory T19/T20/T21: ten domain projects provisioned in production, verified against the live database, and handed off</h2>
+          <span class="badge">2026-10-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">deployed `fa7f636bc` (PR #3084, merged **8:08 AM CDT on 2026-10-14**) with</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">production **read back from the database**, not from any script&#39;s return value.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**the defect worth the whole phase was found by querying production before writing to it.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">22</span>
+          <h2>AF2.4: the ten provisioned projects are retrievable by the human who owns the domain</h2>
+          <span class="badge">2026-10-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `backend/src/services/agentDomain/agentDomainProvisionedReader.ts` and two</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**28 new tests, 564 passing across 20 agentDomain suites.** MUTATION PROOF of the</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">TWO THINGS THE TICKET DID NOT ANTICIPATE, both found by measuring rather than reading.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>AF2.6 finding: admissions was never blocked, and the 6/4 reachability split was wrong</h2>
+          <span class="badge">2026-10-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`agentDomainRegistry.ts` admissions `can_reach_surface` false -&gt; **true**, blocker</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**570 passing across 20 agentDomain suites.** The ADR parity test now DERIVES both</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">AF2.6&#39;s PREMISE WAS WRONG AND THE TICKET IS LARGELY VOID. Taiwo Oludimimu has an</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">24</span>
+          <h2>AF3.2: the agent count, and why neither 217 nor 257 is the right claim</h2>
+          <span class="badge">2026-10-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">the reconciliation posted to AF3.2; the Basecamp MASTER INDEX and</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">measured in production 2026-10-15, read-only. **257** rows in `ai_agents`, **175**</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**217 IS NOT REPRODUCIBLE.** The fleet was exactly 217 for about eight MILLISECONDS on</span></div>
           
         </div>
       </article>

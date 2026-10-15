@@ -31,6 +31,7 @@ import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
 import publicLandingPageRoutes from './routes/publicLandingPageRoutes';
+import publicTrackingConfigRoutes from './routes/publicTrackingConfigRoutes';
 import linkedInCallbackRoutes from './routes/linkedInCallbackRoutes';
 import marketingOAuthCallbackRoutes from './routes/marketingOAuthCallbackRoutes';
 import v1Routes from './routes/v1Routes';
@@ -78,6 +79,7 @@ import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
+import { ensureProjectTenantSchema } from './db/ensureProjectTenantSchema';
 import { ensureProjectLifecycleSchema } from './db/ensureProjectLifecycleSchema';
 import { ensureGovQualificationSchema } from './db/ensureGovQualificationSchema';
 import { ensureGovOpportunityDismissalSchema } from './db/ensureGovOpportunityDismissalSchema';
@@ -156,6 +158,7 @@ import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributio
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureBrandPixelSchema } from './db/ensureBrandPixelSchema';
 import { ensureContentItemDestinationSchema } from './db/ensureContentItemDestinationSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapstoneSchema } from './db/ensureCapstoneSchema';
@@ -165,6 +168,7 @@ import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValu
 import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
 import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
+import { ensureAgentDomainProjectSchema } from './db/ensureAgentDomainProjectSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -260,6 +264,9 @@ app.use(mediaFetchRoutes);
 // session, so mounted below adminRoutes this would 401 every click on every campaign. Pinned by
 // publicLandingPageRoutes.test.ts, which builds both orders and asserts 200 above / 404 below.
 app.use(publicLandingPageRoutes);
+// Same reason, same position: the portal asks this before a visitor has signed in, so it has
+// to answer above adminRoutes or a logged-out page gets a 401 for public information.
+app.use(publicTrackingConfigRoutes);
 // LinkedIn's browser redirect after consent: no JWT, trusts the signed state. Above adminRoutes, like /r/ /i/ /m/.
 app.use(linkedInCallbackRoutes);
 // Every other network's browser redirect after consent (Meta, YouTube, TikTok, X, LinkedIn Pages).
@@ -2690,6 +2697,10 @@ async function start(): Promise<void> {
   // Versioned per-brand governance rules (T022). Rows, not a column, so an approval given
   // under version N can still be read against what N said after N+1 is published.
   await ensureBrandGovernanceSchema();
+  // Right after brand governance, because it only touches the brands table: one nullable
+  // column carrying the brand's Meta Pixel ID, so tracking is configured per brand rather
+  // than pasted per page.
+  await ensureBrandPixelSchema();
   // After brand governance: the FK it adds to content_variants needs the accounts table, and
   // the accounts table references brands.
   await ensureChannelAccountSchema();
@@ -2802,6 +2813,9 @@ async function start(): Promise<void> {
   // reaches production on the next backend deploy by ANY session, regardless of the
   // ENABLE_PROJECT_LIFECYCLE flag — the code ships dark, the schema does not. The paired assert
   // is what makes a failed migration visible, since the statement loop is warn-only.
+  // BEFORE the lifecycle schema, because the student registration hook reads projects.tenant_id
+  // and a project created between the two would be unattributable for no reason.
+  await ensureProjectTenantSchema();
   await ensureProjectLifecycleSchema();
   // AI Project Factory Phase 2: the Enterprise-owned gov qualification model (gov_qualifications,
   // build_authorizations, gov_opportunity_aliases). Additive NEW tables that FK to delivery_projects
@@ -3063,6 +3077,35 @@ async function start(): Promise<void> {
   // AI Workforce Reset, Phase D.1 "Inventory" — department/scope (Ali signed off on
   // abac-design.md's own recommendations wholesale, 2026-08-24). Additive, idempotent, no flag.
   await ensureAiAgentDepartmentScopeSchema();
+  // Agent Factory - which AI employee domain a project belongs to, plus build authorizations for
+  // one. Two tables, zero ALTERs, additive and idempotent; its assert is deliberately not optional.
+  // Guarded, because this is the ONLY one of 106 `ensure*` files whose post-condition throws, and
+  // it is awaited before `app.listen`. `start()` is called bare with no process-level rejection
+  // handler, so an uncontained throw here would stop the backend binding its port -- the rule this
+  // file states twice within 250 lines of here, and wraps two neighbouring calls for. A backend
+  // that will not boot is worse than one that boots carrying a named schema problem, and the
+  // problem IS named: the module logs a structured SchemaInvariantViolation with its own remedy
+  // before throwing, and the integration suite still proves the assert fails loudly when the
+  // schema is actually wrong.
+  try {
+    await ensureAgentDomainProjectSchema();
+  } catch (err: any) {
+    // DERIVED, not asserted. This logged a literal `SchemaInvariantViolation` for any caught
+    // error, so a connection failure inside the introspection query -- a likelier boot failure
+    // than a DDL problem -- would have been labelled as a schema violation it is not.
+    const error_class = err instanceof Error ? err.constructor.name : 'UnknownError';
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'agent_domain_schema_boot_failed',
+      error_class,
+      outcome: 'failure',
+      message: err?.message ?? String(err),
+      impact: 'The ten agent-domain projects cannot be provisioned until this is fixed.',
+      remedy: 'Read the agent_domain_schema_statement_failed warnings above for the first DDL error.',
+    }));
+  }
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

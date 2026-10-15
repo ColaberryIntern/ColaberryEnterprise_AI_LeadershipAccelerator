@@ -144,6 +144,24 @@ export async function ensureSbpSchema(): Promise<void> {
     // Versions are immutable once written (FR-004): a regeneration is a new
     // version, never an overwrite.
     `CREATE UNIQUE INDEX IF NOT EXISTS build_plans_unique_project_version ON build_plans (project_id, version)`,
+    // AT MOST ONE PUBLISHED PLAN PER PROJECT (P6-T5 / LC-13). The structural half of a fix
+    // whose other half is `publishPlan`'s row lock: a lock stops the interleaving THIS
+    // service can create, and only an index stops the state existing at all - a script, a
+    // psql session or a future writer can all set `status = 'published'` without going
+    // through `publishPlan`.
+    //
+    // PARTIAL, on `status = 'published'`, because `draft` and `superseded` are legitimately
+    // many per project. A plain unique index on `project_id` would refuse the second draft.
+    //
+    // SAFE TO ADD, measured rather than assumed: this statement FAILS on a database that
+    // already holds two published rows for one project, and production held none on
+    // 2026-10-12 (47 published rows, 0 duplicate holders, counted read-only on the box).
+    // The failure mode if that ever stops being true is already correct and needs nothing
+    // added here: every statement in this loop is best-effort, so boot continues, and
+    // `assertSbpSchema` then reports the index MISSING as a SchemaInvariantViolation
+    // rather than the schema quietly lacking it.
+    `CREATE UNIQUE INDEX IF NOT EXISTS build_plans_one_published_per_project
+       ON build_plans (project_id) WHERE status = 'published'`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_project ON build_plans (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_status ON build_plans (status)`,
 
@@ -220,9 +238,14 @@ export const REQUIRED_COLUMNS = [
   // and every story renders "not started" while the run logs success.
   'student_tasks.verification_json',
 ] as const;
-const REQUIRED_INDEXES = [
+/** Indexes ensureSbpSchema must have produced. Exported so a test can assert membership. */
+export const REQUIRED_INDEXES = [
   'build_intake_unique_project',
   'build_plans_unique_project_version',
+  // Missing => two concurrent publishes can leave a project with two published plans, and
+  // then with NONE, because each supersedes the other's row. Demonstrated against the
+  // shipped statement sequence in `planStore.publishConcurrency.integration`.
+  'build_plans_one_published_per_project',
 ] as const;
 
 /**

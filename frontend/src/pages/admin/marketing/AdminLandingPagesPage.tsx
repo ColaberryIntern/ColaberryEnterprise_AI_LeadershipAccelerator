@@ -4,6 +4,7 @@ import { useMarketingBrand } from './MarketingBrandContext';
 import { ALL_BRANDS } from './brandScope';
 import * as lp from '../../../services/landingPageApi';
 import { previewFileName, OPEN_REVOKE_MS, DOWNLOAD_REVOKE_MS } from './landingPagePreviewFile';
+import { LandingPageTrafficPanel } from './LandingPageTrafficPanel';
 import {
   briefIsUsable, draftWarnings, pageActions, publicUrl, slugProblem, statusLabel, suggestSlug,
 } from './landingPageState';
@@ -233,6 +234,14 @@ export default function AdminLandingPagesPage() {
       />
 
       {notice && <div className={`alert alert-${notice.tone} py-2 small`} role="status">{notice.text}</div>}
+
+      <SectionCard
+        title="Who is landing on these pages"
+        subtitle="Every hosted page, across brands. Visitors is people; loads counts refreshes."
+        icon="line-chart-line"
+      >
+        <LandingPageTrafficPanel days={30} />
+      </SectionCard>
 
       {!scoped && (
         <SectionCard title="Choose a brand" icon="price-tag-3-line">

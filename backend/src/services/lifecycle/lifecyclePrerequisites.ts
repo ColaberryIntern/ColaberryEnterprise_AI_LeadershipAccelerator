@@ -52,7 +52,11 @@ export type PrerequisiteRule =
   | 'approval_revision_moved'
   | 'authority_revoked'
   | 'requirement_uncovered_by_story'
-  | 'story_without_traceability';
+  | 'story_without_traceability'
+  | 'release_without_user_visible_workflow'
+  | 'release_workflow_unassessed'
+  | 'publish_not_exactly_one'
+  | 'publish_hash_mismatch';
 
 /**
  * WHETHER THE GAP IS A MEASUREMENT OR AN ABSENCE OF ONE.
@@ -101,6 +105,18 @@ export interface PrerequisiteGap {
  */
 export const ADVISORY_RULES: ReadonlySet<PrerequisiteRule> = new Set<PrerequisiteRule>([
   'screen_without_rationale',
+  /**
+   * ADVISORY ON PURPOSE, and the reason is a student, not a preference.
+   *
+   * `addStoryService.ts:343` refuses Add-a-Story with `PlanPredatesGate` when the PUBLISHED
+   * plan fails the gate. A new BLOCKING release-level rule would therefore lock students out
+   * of their own builds for a plan shape that was acceptable when it was generated — through
+   * no act of theirs. The gate's own principle: write broken data, block; merely untidy, warn.
+   *
+   * Promoting this to blocking belongs to Phase 8, AFTER the affected-student count is
+   * measured. Until then it rides along in `advisoryGaps` where a reviewer sees it.
+   */
+  'release_without_user_visible_workflow',
 ]);
 
 export function blockingGaps(gaps: ReadonlyArray<PrerequisiteGap>): PrerequisiteGap[] {
@@ -125,82 +141,13 @@ export function satisfied(gaps: ReadonlyArray<PrerequisiteGap>): boolean {
 }
 
 /**
- * What the coordinator must know to evaluate any stage.
- *
- * Counts and id lists rather than whole domain objects, so the adapters decide what a
- * "requirement" is in their own model and the coordinator stays ignorant of both. Unknown is
- * represented explicitly — `null` for "not assessed" — because a zero would read as a measured
- * value, and this system's whole posture is that "don't know" is a value, not a guess.
+ * The evidence contract moved to `lifecycleEvidenceContract.ts` (P6-T5, 2026-10-12) to keep this
+ * file under CLAUDE.md's 500-line ceiling before `launch_ready` was added. Re-exported here so
+ * every existing consumer keeps its import path — 21 files read these two types.
  */
-export interface LifecycleEvidence {
-  tenantId: string | null;
+export type { LifecycleEvidence, EvidenceField } from './lifecycleEvidenceContract';
+import type { LifecycleEvidence, EvidenceField } from './lifecycleEvidenceContract';
 
-  // requirements_ready
-  requirementCount: number;
-  requirementsWithoutProvenance: ReadonlyArray<string>;
-  uncitedRequirementSourceBlocks: ReadonlyArray<string>;
-  unresolvedSourceBlocks: ReadonlyArray<string>;
-
-  // process_ready
-  processesWithoutTasks: ReadonlyArray<string>;
-  graphHasStart: boolean;
-  graphHasEnd: boolean;
-  unreachableTasks: ReadonlyArray<string>;
-  unboundedReworkLoops: ReadonlyArray<string>;
-
-  // allocation_ready
-  tasksWithoutExecutionClass: ReadonlyArray<string>;
-  tasksWithoutAccountableHuman: ReadonlyArray<string>;
-  agentTasksAccountableForThemselves: ReadonlyArray<string>;
-
-  // design_ready
-  tasksUnmappedToSurface: ReadonlyArray<string>;
-  screensWithoutRationale: ReadonlyArray<string>;
-  selectedDesignRef: string | null;
-
-  // awaiting_blueprint_approval
-  manifestContentHash: string | null;
-  unknownAllocationCount: number;
-  effortCoverageDisclosed: boolean;
-  proposedBy: string | null;
-
-  // blueprint_approved
-  approval: {
-    approvedBy: string;
-    approvedByRole: string | null;
-    revision: number;
-    contentSha256: string;
-    superseded: boolean;
-  } | null;
-  currentManifestRevision: number | null;
-  actorStillAuthorized: boolean;
-
-  // plan_ready
-  mustHaveRequirementsWithoutStory: ReadonlyArray<string>;
-  storiesWithoutTraceability: ReadonlyArray<string>;
-
-  /**
-   * WHICH OF THE FIELDS ABOVE WERE ACTUALLY MEASURED. Anything absent is NOT ASSESSED, and
-   * **its value above is meaningless** — do not read a field without checking this first.
-   *
-   * This exists because the header comment on this interface promised that unknown is
-   * represented explicitly, "because a zero would read as a measured value", and then
-   * `gatherEvidence` returned `false` for `graphHasStart`, `graphHasEnd` and
-   * `effortCoverageDisclosed` and `[]` for every array. Three of those are the strongest
-   * possible claim — "somebody checked and the graph has no start node" — about a graph nobody
-   * had looked at. A surface rendering live blockers would have shown permanent fabricated
-   * ones.
-   *
-   * A SET, not twenty `| null` widenings, because `selectedDesignRef`, `manifestContentHash`,
-   * `proposedBy` and `approval` are already nullable and null there means something specific
-   * ("not selected", "no approval"). Widening could not separate those from "not assessed".
-   * It is also readable at runtime, which a TypeScript type is not.
-   */
-  assessedFields: ReadonlySet<EvidenceField>;
-}
-
-/** Every measurable field. Excludes `tenantId` (always known) and the set itself. */
-export type EvidenceField = Exclude<keyof LifecycleEvidence, 'tenantId' | 'assessedFields'>;
 
 type Predicate = (e: LifecycleEvidence) => PrerequisiteGap[];
 
@@ -394,17 +341,26 @@ const PREREQUISITES: Readonly<Record<LifecycleStage, Predicate>> = {
   building: (e) => PREREQUISITES.planning(e),
 
   /**
-   * EMPTY MEANS 'NOT YET IMPLEMENTED', NOT 'NOTHING IS REQUIRED HERE'.
+   * IMPLEMENTED 2026-10-09 (P6-T4). `release_review` no longer permits unconditionally.
    *
-   * The contract of this map is "unmet prerequisites", so an empty list means none unmet and the
-   * stage PASSES. These two therefore permit unconditionally, which is the opposite of every
-   * other entry here and must not be mistaken for a decision.
+   * The blocker this note used to describe is gone: the architecture doc requires that "each
+   * release demonstrates a business workflow in the approved workspaces, including its human
+   * decision", which could not be evaluated until a story carried a workspace/action reference —
+   * and P6-T3 added `StoryReferences.workspace`. The rule reads that declared field, never a
+   * keyword over story text.
    *
-   * The architecture doc specifies what release_review owes: "each release demonstrates a
-   * business workflow in the approved workspaces, including its human decision". That cannot be
-   * evaluated until a story carries a workspace/action reference, which Phase 6 (P6-T3/T4) adds.
-   * Implementing a placeholder rule now would either block every transition or wave every one
-   * through, and neither is more honest than saying so here.
+   * IT IS ADVISORY, registered in `ADVISORY_RULES` above with the reason: a blocking release-level
+   * rule would retroactively refuse Add-a-Story via `PlanPredatesGate` for students whose
+   * published plans predate the field.
+   *
+   * AND IT REPORTS `not_assessed` RATHER THAN PASSING when nothing declares a workspace, which is
+   * every legacy plan. `storyTraceability.releasesWithoutUserVisibleWorkflow` returns `null` in
+   * that case, the gatherer turns `null` into `NOT_MEASURED`, and `listGaps` emits the
+   * `not_assessed` gap. Absence is not a finding in either direction.
+   *
+   * `launch_ready` below is still `() => []` and still means NOT YET IMPLEMENTED rather than
+   * nothing-is-required. It is P6-T5's, because what makes a project launch-ready is that
+   * publication cannot have happened against a stale revision — T5's property, and T5's signal.
    *
    * WHY THIS IS WRITTEN DOWN AT ALL: a peer session traced a real production failure to exactly
    * this gap on 2026-10-02 - a student finished 20 of 20 stories, platform-verified, with twelve
@@ -418,8 +374,61 @@ const PREREQUISITES: Readonly<Record<LifecycleStage, Predicate>> = {
    * Nothing routes through the coordinator yet and FLAGS.lifecycleEnforcement defaults off, so
    * the present blast radius is nil. That is why it has not bitten, not that it is safe.
    */
-  release_review: () => [],
-  launch_ready: () => [],
+  release_review: (e) => (
+    // TWO RULE CLASSES, NOT ONE, and the split is the whole honesty of this rule.
+    //
+    // The MEASURED failure is advisory, because a blocking release-level rule would
+    // retroactively refuse Add-a-Story via PlanPredatesGate for students whose published plans
+    // predate the workspace field. Phase 8 promotes it, after the affected count is measured.
+    //
+    // But NOT-MEASURED MUST BLOCK, because this file's own doctrine says so: "an unmeasured
+    // prerequisite is not a satisfied one". Emitting the advisory rule for the unassessed case
+    // too would mean a stub PERMITS release_review while reporting a waivable note — which is
+    // the "stub that waves projects through" the evidence gatherer's header forbids, and it is
+    // what the first draft of this rule did. A single `listGaps` call cannot express the
+    // difference, because it emits one rule for both branches.
+    !e.assessedFields.has('releasesWithoutUserVisibleWorkflow')
+      ? [unassessed('release_workflow_unassessed',
+        'Release demonstrates a business workflow in an approved workspace')]
+      : each(e.releasesWithoutUserVisibleWorkflow, 'release_without_user_visible_workflow',
+        (key) => `Release ${key} demonstrates no user-visible workflow: every story in it `
+          + 'that declares a workspace declares a headless one.')
+  ),
+  /**
+   * IMPLEMENTED 2026-10-12 (P6-T5). `launch_ready` no longer permits unconditionally.
+   *
+   * What makes a project launch-ready is T5's property: publication cannot have happened
+   * against a stale revision. Two things are measurable about a published row, and both were
+   * REACHABLE failures before T5 closed the write path:
+   *
+   *   - exactly one plan is published. Zero or several both mean a publish interleaved with
+   *     another, and zero reads as "never published" to every consumer.
+   *   - the published plan's stored hash still describes its stored content. `expectedSha`
+   *     protects that invariant when the row is WRITTEN; this checks it when the row is READ,
+   *     which is the only way to notice a `plan_json` edited afterwards.
+   *
+   * BLOCKING, not advisory, and the contrast with `release_review` is deliberate rather than
+   * inconsistent. That rule is advisory because a blocking release-SHAPE rule would
+   * retroactively refuse students whose published plans predate the workspace field. These two
+   * carry no such retroactivity: a project with zero published plans, or a stored hash that
+   * does not match its own stored content, is broken NOW and was broken under the old code too.
+   * Refusing to call it launch-ready is the correct answer, not a new burden.
+   *
+   * Unmeasurable for a delivery project, which has no `build_plans` row at all: the gatherer
+   * returns NOT_MEASURED and the stage blocks on `not_assessed` rather than passing.
+   */
+  launch_ready: (e) => [
+    ...condGaps(e, 'publishedPlanIsSingular', e.publishedPlanIsSingular,
+      'publish_not_exactly_one',
+      'This project does not have exactly one published plan: zero or several are published, '
+      + 'which means one publish interleaved with another.',
+      'Exactly one published plan'),
+    ...condGaps(e, 'publishedPlanHashIntact', e.publishedPlanHashIntact,
+      'publish_hash_mismatch',
+      'The published plan’s stored hash no longer matches its stored content, so the plan '
+      + 'that shipped is not the plan that was reviewed.',
+      'Published-plan integrity'),
+  ],
   // Runtime business actions re-check the approved revision and current authority at execution.
   operating: (e) => PREREQUISITES.planning(e),
 };
@@ -436,3 +445,4 @@ export function prerequisiteGaps(target: LifecycleStage, evidence: LifecycleEvid
 export function stagesWithPrerequisites(): ReadonlyArray<LifecycleStage> {
   return LIFECYCLE_STAGES.filter((s) => typeof PREREQUISITES[s] === 'function');
 }
+

@@ -25,7 +25,7 @@ jest.mock('../../../models/InboxVip', () => ({
 jest.mock('../../../models/InboxRule', () => ({ findAll: jest.fn() }));
 jest.mock('../senderHistory', () => ({ countPriorEmailsFromSender: jest.fn() }));
 
-import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender, isSlackSender, isSchoolNotificationSender, isAccountSecurityMail, evaluateHardRules } from '../hardRuleEngine';
+import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender, isSlackSender, isSchoolNotificationSender, isAccountSecurityMail, evaluateHardRules, isVendorOperationalAlert } from '../hardRuleEngine';
 import InboxVip from '../../../models/InboxVip';
 import InboxRule from '../../../models/InboxRule';
 
@@ -694,5 +694,56 @@ describe('evaluateHardRules — recurring event reminders (event_reminder_34)', 
     const result = await evaluateHardRules(reminder('Field trip permission reminder  (1 day out)'));
     expect(result.state).toBe('INBOX');
     expect(result.rule_id).not.toBe('event_reminder_34');
+  });
+});
+
+/**
+ * Rule 00b — a vendor saying one of our systems has stopped.
+ *
+ * On 2026-10-06 Twilio sent "Action Required: Your Twilio account is suspended"
+ * and fifteen error alarms. Every one was archived unread by the noreply and
+ * List-Unsubscribe rules, the account stayed suspended six days, and all
+ * outbound AI calls failed throughout. These cases are the real subject lines,
+ * positive and negative, taken from the 26,776 the engine archived in the 60
+ * days to 2026-10-14.
+ */
+describe('isVendorOperationalAlert (rule 00b)', () => {
+  it('catches the suspension notice that caused the 6-day outage', () => {
+    expect(isVendorOperationalAlert('Action Required: Your Twilio account is suspended (Low Balance)')).toBe(true);
+  });
+
+  it('catches other stopped-service shapes without naming a vendor', () => {
+    expect(isVendorOperationalAlert('Your subscription has been deactivated')).toBe(true);
+    expect(isVendorOperationalAlert('Service terminated for non-payment')).toBe(true);
+    expect(isVendorOperationalAlert('Your account is past due')).toBe(true);
+    expect(isVendorOperationalAlert('Your domain was disabled')).toBe(true);
+  });
+
+  it('catches a credential expiring or revoked', () => {
+    expect(isVendorOperationalAlert('[GitHub] Your personal access token (classic) is about to expire')).toBe(true);
+    expect(isVendorOperationalAlert('Your API key will expire in 7 days')).toBe(true);
+    expect(isVendorOperationalAlert('TLS certificate expiring soon')).toBe(true);
+  });
+
+  it('does NOT surface repetitive monitoring chatter, which is the whole trade', () => {
+    // Backtested: matching these would have moved 3,180 emails (12% of everything
+    // archived, ~53/day) into the inbox, including 584 copies of this one alarm.
+    expect(isVendorOperationalAlert('[Twilio Alarm] Error alarm triggered by 16 errors')).toBe(false);
+    expect(isVendorOperationalAlert('[reliability_error_rate] Reliability Alert: 90% AI event failure rate')).toBe(false);
+    expect(isVendorOperationalAlert('[Warning] Cron Job Error Spike: SecurityDirectorAgent')).toBe(false);
+    expect(isVendorOperationalAlert('[Warning] Curriculum video REMOVED: g9ufiV9Tc3g')).toBe(false);
+  });
+
+  it('does NOT match marketing that borrows the vocabulary', () => {
+    expect(isVendorOperationalAlert('[Just for you] The guide to Twilio Branded Communications')).toBe(false);
+    expect(isVendorOperationalAlert('What failure actually reveals...')).toBe(false);
+    expect(isVendorOperationalAlert('Fall for Your Agents')).toBe(false);
+    expect(isVendorOperationalAlert('35% off every plan, plus 10 extra Third party integrations')).toBe(false);
+  });
+
+  it('is safe on empty and missing input', () => {
+    expect(isVendorOperationalAlert('')).toBe(false);
+    expect(isVendorOperationalAlert(null)).toBe(false);
+    expect(isVendorOperationalAlert(undefined)).toBe(false);
   });
 });
