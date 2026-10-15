@@ -6,6 +6,7 @@ import { WorkflowError } from '../../services/content/contentWorkflowService';
 import { landingPageContentSchema } from '../../schemas/landingPageContentSchema';
 import type LandingPage from '../../models/LandingPage';
 import { landingPageTraffic } from '../../services/marketing/landingPageTraffic';
+import { siteSlugForBrand } from '../../services/marketing/landingPageSiteTag';
 
 /**
  * Landing page authoring API — brief in, reviewable page out.
@@ -161,7 +162,12 @@ router.post('/api/admin/landing-pages', requireAdmin, async (req: Request, res: 
     const page = await Model.create({
       tenant_id: brand.tenant_id,
       brand_id: brand.id,
-      site_slug: parsed.data.site_slug ?? null,
+      // DERIVED FROM THE BRAND when the caller does not say, which is always: no screen has
+      // ever sent one. The old default was null, and a null site_slug means the renderer emits
+      // no tracker at all - so every hosted page built through the product was born unable to
+      // record a single visit. An explicit value still wins, for a page that belongs to a
+      // property other than its brand's own.
+      site_slug: parsed.data.site_slug ?? siteSlugForBrand(brand.slug),
       kind: 'hosted',
       status: 'draft',
       name: parsed.data.name,
@@ -362,8 +368,15 @@ router.post('/api/admin/landing-pages/:id/publish', requireAdmin, async (req: Re
       });
     }
 
+    // PUBLISHING REPAIRS A MISSING SITE TAG. Pages created before the create route derived one
+    // still carry null, and a null means the renderer emits no tracker - so publishing such a
+    // page would put it in front of an audience it cannot count. Only filled when absent: an
+    // explicit tag someone chose is never overwritten by a derived one.
+    const siteSlug = page.site_slug ?? siteSlugForBrand(brand.slug);
+
     await page.update({
       slug, status: 'published', published_at: new Date(), path: `/lp/${brand.slug}/${slug}`,
+      site_slug: siteSlug,
     } as never);
 
     /**
