@@ -189,3 +189,95 @@ export async function announceToCommunity(input: AnnounceInput): Promise<{ postI
   log('showcase_announced', { showcaseId: input.showcaseId, postId: rows[0].id, cohortId: input.cohortId });
   return { postId: String(rows[0].id), created: true };
 }
+
+export type ApproveAndPublishResult =
+  | { ok: true; showcaseId: string; postId: string | null; alreadyPublished: boolean }
+  | { ok: false; reason: string };
+
+/**
+ * Staff approve, publish, and announce — the whole second half, in order.
+ *
+ * ONE CALL BECAUSE THEY ARE ONE DECISION. A staff member approving a demo means
+ * "the cohort may see this". Leaving publish as a separate click would create a
+ * state where something is approved and invisible, which nobody would ever go back
+ * and finish, and which the student would experience as silence.
+ *
+ * THE POST IS LAST AND IS ALLOWED TO FAIL. Approval and publication are the record;
+ * the feed entry is a consequence. If announcing throws, the showcase is still
+ * published and `announceToCommunity` is idempotent, so a retry posts exactly once
+ * rather than twice.
+ */
+export async function approveAndPublish(
+  showcaseId: string,
+  staffIdentity: string,
+  audience: 'cohort' | 'community' = 'cohort',
+): Promise<ApproveAndPublishResult> {
+  const sequelize = await db();
+
+  await staffApprove(showcaseId, staffIdentity);
+
+  // Re-read AFTER approving: publishing decides on current state, never on what the
+  // caller believed when they clicked. The same reason `commitOps` re-reads.
+  const [rows] = await sequelize.query(
+    `SELECT s.id, s.audience, s.content_hash,
+            s.draft_json->>'current_content_hash' AS current_content_hash,
+            s.draft_json->>'summary'              AS summary,
+            s.author_approved_at, s.staff_approved_at, s.published_at, s.withdrawn_at,
+            s.attempt_id,
+            asg.enrollment_id AS owner_enrollment_id,
+            asg.cohort_id     AS cohort_id
+       FROM presentation_showcases s
+       JOIN presentation_attempts    a   ON a.id = s.attempt_id
+       JOIN presentation_assignments asg ON asg.id = a.assignment_id
+      WHERE s.id = :id
+      LIMIT 1`,
+    { replacements: { id: showcaseId } },
+  ) as [Array<Record<string, any>>, unknown];
+
+  const row = rows?.[0];
+  if (!row) return { ok: false, reason: 'No such showcase.' };
+
+  const { publishShowcase } = await import('./showcaseService');
+  const published = await publishShowcase(
+    {
+      id: String(row.id),
+      ownerEnrollmentId: String(row.owner_enrollment_id),
+      cohortId: row.cohort_id ? String(row.cohort_id) : null,
+      audience,
+      contentHash: row.content_hash,
+      currentContentHash: row.current_content_hash,
+      authorApprovedAt: row.author_approved_at,
+      staffApprovedAt: row.staff_approved_at,
+      publishedAt: row.published_at,
+      withdrawnAt: row.withdrawn_at,
+    },
+    audience,
+  );
+  if (!published.ok) return { ok: false, reason: published.reason };
+
+  // The author's community identity. No member row means they were never onboarded
+  // to the feed; the showcase stays published and simply has no post.
+  const { default: CommunityMember } = await import('../../models/CommunityMember');
+  const member = await CommunityMember.findOne({ where: { enrollment_id: String(row.owner_enrollment_id) } });
+  if (!member || !row.cohort_id) {
+    log('showcase_announce_skipped', { showcaseId, hasMember: Boolean(member), hasCohort: Boolean(row.cohort_id) }, 'failure');
+    return { ok: true, showcaseId, postId: null, alreadyPublished: published.alreadyPublished };
+  }
+
+  let postId: string | null = null;
+  try {
+    const announced = await announceToCommunity({
+      showcaseId,
+      memberId: String(member.id),
+      cohortId: String(row.cohort_id),
+      recordingRef: `recording:${String(row.attempt_id)}`,
+      summary: String(row.summary || 'Shared a demo video.'),
+    });
+    postId = announced?.postId ?? null;
+  } catch (err: any) {
+    // Published is published. A missing post is a retry, not a rollback.
+    log('showcase_announce_failed', { showcaseId, message: String(err?.message || err) }, 'failure');
+  }
+
+  return { ok: true, showcaseId, postId, alreadyPublished: published.alreadyPublished };
+}

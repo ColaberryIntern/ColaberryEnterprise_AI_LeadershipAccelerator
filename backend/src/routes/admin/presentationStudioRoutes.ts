@@ -159,4 +159,41 @@ router.post('/api/admin/presentation/session-map/commit', requireAdmin, async (r
   } catch (e) { fail(res, e, next); }
 });
 
+/**
+ * STAFF APPROVE A DEMO, WHICH PUBLISHES IT AND POSTS IT TO THE COHORT FEED.
+ *
+ * One call because it is one decision: a staff member approving a demo means the
+ * cohort may see it. Splitting approval from publication would leave things
+ * approved and invisible — a state nobody returns to finish, and which the student
+ * experiences as silence.
+ *
+ * The service re-reads the showcase AFTER recording the approval, so publication is
+ * decided on current state rather than on what this request believed when it
+ * arrived. Announcing is last and may fail without rolling back a publication; it
+ * is idempotent, so a retry posts once.
+ */
+const approveBody = z.object({
+  audience: z.enum(['cohort', 'community']).optional(),
+}).strict();
+
+router.post('/api/admin/presentation/showcases/:showcaseId/approve', requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const b = approveBody.parse(req.body || {});
+    // The identity is who vouched for it. Recorded on the row, never inferred.
+    const staffIdentity = String((req as any).admin?.email || (req as any).admin?.sub || 'admin');
+    const { approveAndPublish } = await import('../../services/presentation/showcaseLifecycle');
+    const r = await approveAndPublish(String(req.params.showcaseId), staffIdentity, b.audience ?? 'cohort');
+    if (!r.ok) return res.status(409).json({ error: r.reason });
+    res.json({
+      showcase_id: r.showcaseId,
+      post_id: r.postId,
+      already_published: r.alreadyPublished,
+      // Said explicitly: published with no post is a real outcome, not a silent
+      // half-success, and the operator needs to know which happened.
+      posted: Boolean(r.postId),
+    });
+  } catch (e) { fail(res, e, next); }
+});
+
 export default router;
