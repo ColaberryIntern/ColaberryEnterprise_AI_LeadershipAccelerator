@@ -52,6 +52,18 @@ export function metaPixelHead(pixelId: string | null | undefined, nonce: string)
     's=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,',
     "'script','https://connect.facebook.net/en_US/fbevents.js');",
     `fbq('init','${id}');fbq('track','PageView');`,
+    // REMEMBER WHICH PIXEL SAW THIS PERSON, so the signup page can report the Lead against
+    // the same one.
+    //
+    // The portal cannot work this out for itself. It resolves a pixel from its HOSTNAME, and
+    // the hostname belongs to a different brand than the page: /lp/colaberry-training/... is
+    // served on www.refactored.ai, which brand_domains maps to the `refactored` brand, which
+    // has no pixel. So the host lookup returns null and the Lead never fires - which is
+    // exactly what it did on 2026-10-15, with the pixel correctly installed on this page.
+    //
+    // Same origin, so localStorage is readable by the portal. Wrapped because a browser with
+    // storage disabled must still get a working pixel - it only loses the carry-forward.
+    `try{localStorage.setItem('cb.meta.pixel','${id}')}catch(e){}`,
     '</script>',
     '<noscript><img height="1" width="1" style="display:none" alt=""',
     ` src="https://www.facebook.com/tr?id=${id}&ev=PageView&noscript=1"></noscript>`,
