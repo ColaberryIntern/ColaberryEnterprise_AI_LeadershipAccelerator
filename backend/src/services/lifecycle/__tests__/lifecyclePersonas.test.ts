@@ -346,17 +346,75 @@ describe('ABSENCE TRIPWIRE: nothing but the one route may approve a blueprint', 
     return out;
   };
 
-  const importers = () => walk(SRC)
-    .filter((f) => !f.includes('__tests__') && !f.endsWith('.test.ts'))
-    .filter((f) => fs.readFileSync(f, 'utf8').includes('approveLifecycleBlueprint'))
-    .map((f) => path.relative(SRC, f).split(path.sep).join('/'))
-    .sort();
+  /**
+   * Comments stripped BEFORE the match. A symbol named in prose is not a caller.
+   *
+   * ## Found by this tripwire firing on a file that cannot approve anything
+   *
+   * On 2026-10-15 `services/lifecycle/blueprintPersistence.ts` joined the importer set and failed
+   * this test. It does not call `approveLifecycleBlueprint`, does not import it, and cannot reach
+   * it — the name appears once, in a doc comment listing which handlers delegate to a service. A
+   * substring check over raw text cannot tell that from a call.
+   *
+   * The DIRECTION of the false alarm is why this is worth fixing rather than working around. A
+   * tripwire that cries wolf gets edited by whoever hits it next, and the cheapest edit is to
+   * append the offending filename to the expected list — which permanently excuses a file that
+   * might later really call the thing, while the control still looks green. Stripping comments
+   * costs three lines and keeps the tripwire meaning what it says.
+   *
+   * This repo has now recorded the prose-versus-code trap four times: prose satisfied
+   * `lint-route-auth`; this suite's own module-scope-import check carries a comment saying to
+   * match import statements rather than substrings; `projectLifecycleRoutes.test.ts`'s tenant
+   * sweep strips comments for exactly this reason; and now this.
+   *
+   * ## CRLF IS NORMALISED FIRST, and that is not housekeeping
+   *
+   * These files are CRLF in this worktree. In `/\/\/.*$/` the dot does not match `\r`, so `$`
+   * never matches and the line-comment strip SILENTLY NO-OPS — leaving the sweep reading prose as
+   * code, which is the defect being fixed. A no-op strip is worse than no strip because it looks
+   * like a control. The same note is in the route suite, where the same mistake was made first.
+   */
+  const stripComments = (raw: string): string => raw
+    .replace(/\r\n/g, '\n')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+
+  const importers = (sources?: Record<string, string>): string[] => {
+    if (sources) {
+      return Object.keys(sources)
+        .filter((f) => stripComments(sources[f]).includes('approveLifecycleBlueprint'))
+        .sort();
+    }
+    return walk(SRC)
+      .filter((f) => !f.includes('__tests__') && !f.endsWith('.test.ts'))
+      .filter((f) => stripComments(fs.readFileSync(f, 'utf8')).includes('approveLifecycleBlueprint'))
+      .map((f) => path.relative(SRC, f).split(path.sep).join('/'))
+      .sort();
+  };
 
   it('is referenced by EXACTLY the definition and the one route', () => {
     expect(importers()).toEqual([
       'routes/admin/projectLifecycleRoutes.ts',
       'services/lifecycle/lifecycleStatus.ts',
     ]);
+  });
+
+  it('POSITIVE CONTROL: the strip keeps CODE and discards PROSE, in both directions', () => {
+    // Without this, the strip could be deleting everything, and the two-item list above would be
+    // luck rather than measurement. Both directions, because a strip that removed real calls
+    // would also make the claim above pass.
+    const SYNTHETIC = {
+      'calls-it.ts': "const { approveLifecycleBlueprint } = await import('./lifecycleStatus');",
+      // CRLF ON PURPOSE. If the line-comment strip ever no-ops on carriage returns, this file is
+      // reported and this test fails — which is the whole point of writing it this way.
+      'only-mentions-it.ts': [
+        '// a comment naming approveLifecycleBlueprint, which is not a call',
+        '/* nor is this block comment about approveLifecycleBlueprint */',
+        'const x = 1;',
+      ].join('\r\n'),
+    };
+
+    expect(importers(SYNTHETIC)).toEqual(['calls-it.ts']);
   });
 
   it('POSITIVE CONTROL: the walk really does find files and really does read them', () => {

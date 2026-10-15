@@ -238,11 +238,17 @@ router.post(`${PREFIX}/:projectId/compose`, requireSection(SECTION), async (req:
   const b = composeBody.safeParse(req.body ?? {});
   if (!b.success) { res.status(400).json({ error: 'Invalid body.', issues: zodIssues(b.error) }); return; }
 
-  // THE URL AND THE PAYLOAD MUST AGREE. `project.id` is what every validator and every ref in the
-  // manifest is keyed on, so composing a body carrying project B under project A's URL would file
-  // B's blueprint against A. Refused rather than reconciled: picking one of the two would be
-  // guessing which the caller meant.
-  const bodyProjectId = b.data.project.id;
+  // THE URL AND THE PAYLOAD MUST AGREE, and this guard was DEAD until today.
+  //
+  // It read `project.id` alone. `FactoryProject` has no `id` field — its identity column is
+  // `delivery_project_id` — so `typeof bodyProjectId === 'string'` was false for every real body
+  // and no mismatch was ever detected. Harmless while compose persisted nothing. NOT harmless
+  // now: the manifest is filed against the URL's project id under that project's tenant, so a
+  // body carrying project B under project A's URL would file B's blueprint against A.
+  //
+  // Both names are checked, and `??` rather than `||` so an EMPTY-STRING id is still compared
+  // and refused instead of falling through to the next candidate.
+  const bodyProjectId = b.data.project.delivery_project_id ?? b.data.project.id;
   if (typeof bodyProjectId === 'string' && bodyProjectId !== p.data.projectId) {
     log('project_lifecycle_compose', correlationId, 'failure', {
       project_id: p.data.projectId, error_class: 'ProjectIdMismatch',
@@ -284,6 +290,28 @@ router.post(`${PREFIX}/:projectId/compose`, requireSection(SECTION), async (req:
       ...(composed ? {} : { error_class: 'BlueprintCompositionRefused' }),
     });
 
+    // PERSIST ONLY A BLUEPRINT THAT PASSED, and only after composition has spoken.
+    //
+    // Until 2026-10-14 this handler validated and wrote nothing, so no
+    // `operating_blueprint_manifests` row was ever created in production — which meant
+    // `latestManifestRefs` returned null for every project, every refs-derived evidence
+    // measurement reported NOT_MEASURED, and the lifecycle could not leave `discovery`.
+    // `writeBlueprintManifest` had ZERO production callers; so did both adapters.
+    //
+    // ORDER MATTERS AND IS NOT INTERCHANGEABLE. Composition is pure and cheap; the write is
+    // neither. Persisting first and validating after would file refused blueprints and burn a
+    // revision on each one.
+    const manifest = composed
+      ? await (await import('../../services/lifecycle/blueprintPersistence'))
+        .persistComposedBlueprint({
+          projectId: p.data.projectId,
+          kind: b.data.kind,
+          admin: adminOf(req),
+          project: b.data.project,
+          correlationId,
+        })
+      : null;
+
     res.status(composed ? 200 : 422).json({
       composed,
       // Both lists, always. An advisory dropped from the response is a validation result the
@@ -291,14 +319,26 @@ router.post(`${PREFIX}/:projectId/compose`, requireSection(SECTION), async (req:
       refusals: out.refusals,
       advisories: out.advisories,
       selectedDesign: out.selectedDesign,
+      // ALWAYS PRESENT ON A 200, carrying either the manifest or the REASON there is none. A
+      // composed-but-unpersisted blueprint returning a bare 200 would be an absence reported as
+      // a success, which is the one failure shape this whole evidence path exists to refuse.
+      manifest,
     });
   } catch (err: any) {
     const errorClass = err?.name ?? 'UnclassifiedError';
-    // NO TenantAccessError BRANCH HERE, unlike the other handlers. `composeBlueprint` is pure
-    // and touches no tenant-scoped row, so it cannot raise one — a mutation deleting the
-    // branch survived every test, which is Amendment 4 category 2: an operand no input can
-    // reach. Copied from the neighbours out of symmetry rather than need, and removed rather
-    // than left as a declared expectation nothing can check.
+    // THE TenantAccessError BRANCH IS BACK, AND THIS TIME IT IS REACHABLE — a correction to what
+    // this comment used to say.
+    //
+    // It said: "NO TenantAccessError BRANCH HERE, unlike the other handlers. `composeBlueprint`
+    // is pure and touches no tenant-scoped row, so it cannot raise one — a mutation deleting the
+    // branch survived every test." That was correct when compose only validated. Persisting
+    // calls `loadAndAuthorize`, which throws `TenantAccessError` for a project in another tenant,
+    // so the branch now has an input that reaches it and a test that proves it.
+    //
+    // The guard's OWN status is honoured rather than hardcoded to 403: it deliberately throws 404
+    // for a row in another tenant, because a 403 confirms the row exists. Hardcoding 403 would
+    // turn that decision back into an existence oracle.
+    if (errorClass === 'TenantAccessError') { res.status(err.status ?? 403).json({ error: err.message }); return; }
     log('project_lifecycle_compose', correlationId, 'failure', {
       project_id: p.data.projectId, error_class: errorClass,
       ...(await redactPayload({ message: String(err?.message ?? err) })),

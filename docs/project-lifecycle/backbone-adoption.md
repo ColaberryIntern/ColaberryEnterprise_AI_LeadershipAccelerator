@@ -115,29 +115,56 @@ is read by `process_ready` or later, so stages 3 onward still refuse with `not_a
 correctly, because nobody has looked. The still-unmeasured set is pinned by a test
 (`lifecycleEvidence.fieldGuards.test.ts`) so this boundary cannot quietly move.
 
-#### What still blocks B3, and it is not a measurement
+#### The second defect B3 found: nothing wrote a manifest at all
 
-Nothing writes an `operating_blueprint_manifests` row in production, so `refs` is `null` for every
-real project and **every** refs-derived measurement reports unmeasured regardless of the above.
-Three producers form a chain with no consumer:
+Measured by grep over `services/`, `routes/`, `controllers/` and `scripts/` on 2026-10-14. Three
+producers formed a chain with **no consumer**:
 
 | Producer | Production callers | Consequence |
 |---|---|---|
-| `POST /api/admin/project-lifecycle/:id/compose` | is itself the entry point | validates a blueprint and returns refusals — **persists nothing** |
+| `POST /api/admin/project-lifecycle/:id/compose` | is itself the entry point | validated a blueprint and returned refusals — **persisted nothing** |
 | `writeBlueprintManifest` | **zero** | the only production `INSERT` into the manifest table; reached from tests only |
 | `factoryToManifestRefs` / `sbpToManifestRefs` | **zero** | reached from tests only |
 
-Measured by grep over `services/`, `routes/`, `controllers/` and `scripts/` on 2026-10-14, and
-corroborated by `manifestWriter.ts`'s own header, which names this as the dependency Phase 4
-closed with: *"Production never CREATES an `operating_blueprint_manifests` row — it only reads and
-updates one."* `blueprintApproval` can therefore only approve a manifest that nothing creates.
+So `refs` was `null` for every real project and **every** refs-derived measurement reported
+unmeasured regardless of the two fixed above. Corroborated by `manifestWriter.ts`'s own header,
+which names this as the dependency Phase 4 closed with: *"Production never CREATES an
+`operating_blueprint_manifests` row — it only reads and updates one."* `blueprintApproval` could
+only approve a manifest that nothing created.
 
-**Wiring `/compose` to persist carries one open design question**, which is why it is not done
-here. The compose body's `project` is `FactoryProject`-shaped for **both** project kinds, but a
-student project's requirements do not live in `contract_requirements`. Deciding which adapter
-builds a student project's refs — and therefore what a manifest *means* for a student build versus
-one of the ten Factory domains — changes a cross-module contract rather than adding a measurement.
-That is CLAUDE.md's ESCALATE tier, and it needs the DRI.
+**CLOSED 2026-10-15.** `services/lifecycle/blueprintPersistence.ts` gives the writer and both
+adapters their first production caller, and `/compose` now files the blueprint it just validated.
+Composition runs first and only a blueprint with zero refusals is persisted — the order is not
+interchangeable, because persisting first would file refused work and burn a revision on each.
+
+| Decision | What shipped, and why |
+|---|---|
+| Which adapter per kind | **The kind picks it.** The compose body is `FactoryProject`-shaped for *both* kinds, so running the factory adapter for everything typechecks — and writes a wrong pointer. A student project's requirements live in `build_plans`, not `contract_requirements`; mislabelling them makes every pointer in a student manifest dangle, which is worse than no manifest because it looks resolvable |
+| Where the tenant comes from | the authorized lifecycle row, never the request |
+| Authorization | `loadAndAuthorize(..., 'write')`, the same guard as every sibling service, **before** the write. `/compose` regained the `TenantAccessError` branch it had removed as unreachable — it is reachable now, and tested |
+| Idempotency | inherited from `writeBlueprintManifest`'s `(tenant, project, sha256(refs))` key, so re-submitting an unchanged blueprint returns the first row with `created: false` rather than minting a revision per click |
+| What is declined | a project with **no lifecycle row** (the legacy case — composes fine, nowhere to file) and a blueprint with **no requirements** (a measured zero; writing it would let an empty row take the refs key while a real blueprint takes the next revision). Both come back as `{ persisted: false, reason }` on the 200, never as a bare success |
+
+**A latent defect fixed on the way.** The handler's id-mismatch guard read `project.id` alone, and
+`FactoryProject` has no `id` — its identity column is `delivery_project_id` — so the check was
+**dead for every realistic body**. Harmless while compose persisted nothing. Not harmless once the
+manifest is filed against the URL's project id under that project's tenant.
+
+**Verification:** 18 new service tests, 7 new route tests, **13 mutations each driving the suite
+RED**, both files restored byte-identically at sha256 `2bcbe0a7`. Lifecycle + route regression
+**1,206 passed, 0 failed**. tsc at its unchanged 4-error playwright baseline.
+
+#### What still blocks B3
+
+**Only a real blueprint.** The machinery is complete and proven end to end in test: the refs this
+service persists, fed through the real evidence measurements, produce zero blocking gaps at
+`requirements_ready`. What has not happened is a human composing an actual blueprint for one of
+the ten agent domains in production and taking the transition.
+
+That is deliberately not done here. It would mean inventing requirement content for a real agent
+domain and writing it to the production database, and fabricated evidence in a governance record
+is the one thing this whole programme is built to refuse. B3 closes when a real blueprint is
+composed — a work session, not a code change.
 
 ---
 
@@ -206,8 +233,16 @@ A row moves to ✅ only on evidence that was produced and pasted, never on a rea
 That standard is not pedantry: every failure in this programme's eight phases was a claim that
 did not survive measurement, and not one was a broken behaviour the tests passed over.
 
-**Current score: 5 of 6, with B3 half closed.** B2, B4, B5 and B6 all closed on 2026-10-14.
-Outstanding: **B1** (gov registration has never fired, handed to the Gov tab) and **B3**.
+**Current score: 5 of 6, with B3 unblocked but not passed.** B2, B4, B5 and B6 closed on
+2026-10-14. Outstanding: **B1** (gov registration has never fired, handed to the Gov tab) and
+**B3**.
+
+**B3 is still scored open, and the distinction is the point.** Two real defects were found and
+fixed on the way to it — two prerequisites with no measurement, and a manifest nothing wrote —
+and the chain is now proven end to end in test. But B3's pass condition is that a domain
+*actually moves*, and none has. Scoring it closed would record working machinery as a movement,
+which is the same category error as recording registration as enforcement. It closes when
+somebody composes a real blueprint.
 
 **B3 stays open deliberately rather than being scored on the half that is done.** The gate it was
 blocked on is now measurable and mutation-tested, which is a real defect closed — the first stage

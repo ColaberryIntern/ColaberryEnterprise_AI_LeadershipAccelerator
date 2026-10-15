@@ -44,6 +44,21 @@ jest.mock('../../../services/lifecycle/generation/blueprintComposition', () => (
   composeBlueprint: (...a: any[]) => composeBlueprint(...a),
 }));
 
+// The PERSISTENCE module, which the compose handler gained on 2026-10-15 when it stopped being a
+// pure validator. Complete FOR THE ROUTE: `persistComposedBlueprint` is the only symbol imported.
+// Its own behaviour — which adapter each kind uses, what is declined and why, that authorization
+// runs before the write — is tested in `blueprintPersistence.test.ts`. What is tested here is the
+// route's contract around it: that a composed blueprint reaches it, that the result rides back in
+// the response rather than being dropped, and that a tenancy refusal keeps the guard's own status.
+//
+// IT MUST BE MOCKED, not left real. It reaches `loadAndAuthorize`, which imports a Sequelize
+// model, and this suite stubs `config/database` — so a real call 500s. That is what three tests
+// in this file did the moment the handler changed, which is the mock's own positive control.
+const persistComposedBlueprint = jest.fn();
+jest.mock('../../../services/lifecycle/blueprintPersistence', () => ({
+  persistComposedBlueprint: (...a: any[]) => persistComposedBlueprint(...a),
+}));
+
 // The review module. Complete FOR THE ROUTE: these are the only two symbols it imports. The
 // service's own behaviour (idempotency, the derived permission, the revision guard) is tested in
 // `blueprintChangeRequest.test.ts`; what is tested here is the route's contract around it, which
@@ -427,6 +442,14 @@ describe('POST /compose, the first non-test caller the pipeline has ever had', (
     advisories,
   });
 
+  const FILED = {
+    persisted: true, manifestId: 'm-1', revision: 1, created: true, contentSha256: 'a'.repeat(64),
+  };
+
+  // The default for every test in this block that is not ABOUT persistence. Set here rather than
+  // per test so a test added later cannot silently 500 on an unmocked service.
+  beforeEach(() => { persistComposedBlueprint.mockResolvedValue(FILED); });
+
   it('the Zod body covers every field composeBlueprint requires', () => {
     // WHY THIS EXISTS. The handler casts the parsed body with `as unknown as`, because the
     // schema is deliberately shallow. That cast means a field added to
@@ -568,6 +591,108 @@ describe('POST /compose, the first non-test caller the pipeline has ever had', (
     await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
       .set('X-Correlation-ID', 'corr-abc').send(body());
     expect(composeBlueprint.mock.calls[0][0].correlationId).toBe('corr-abc');
+  });
+
+  /**
+   * COMPOSE PERSISTS, as of 2026-10-15.
+   *
+   * It validated and wrote nothing, so no `operating_blueprint_manifests` row was ever created in
+   * production — which meant every refs-derived evidence measurement reported NOT_MEASURED and no
+   * project could leave `discovery`. The service's own behaviour is tested in
+   * `blueprintPersistence.test.ts`; these four are the route's contract around it.
+   */
+  describe('and now it FILES the blueprint it just validated', () => {
+    it('persists a composed blueprint and rides the result back in the response', async () => {
+      composeBlueprint.mockReturnValue(composed());
+      const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+        .send(body());
+
+      expect(r.status).toBe(200);
+      expect(persistComposedBlueprint).toHaveBeenCalledTimes(1);
+      // The response carries it. A 200 that wrote a manifest and did not say so would leave the
+      // caller unable to tell a filed blueprint from one that was merely valid.
+      expect(r.body.manifest).toEqual(FILED);
+    });
+
+    it('passes the URL’s project id and the body’s KIND, not the other way round', async () => {
+      // The kind picks which adapter builds the refs and which FK column the row lands in, so
+      // reading it from the wrong place files a student blueprint as a delivery one.
+      composeBlueprint.mockReturnValue(composed());
+      await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+        .set('X-Correlation-ID', 'corr-xyz')
+        .send(body({ kind: 'student' }));
+
+      expect(persistComposedBlueprint.mock.calls[0][0]).toMatchObject({
+        projectId: PROJECT, kind: 'student', correlationId: 'corr-xyz',
+      });
+    });
+
+    it('A REFUSED BLUEPRINT IS NOT PERSISTED, and the 422 says so with `manifest: null`', async () => {
+      // The order is not interchangeable. Composition is pure and cheap, the write is neither, so
+      // persisting first would file refused blueprints and burn a revision on each.
+      composeBlueprint.mockReturnValue(composed([{ stage: 'process', code: 'SOURCE_COVERAGE', message: 'x' }]));
+      const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+        .send(body());
+
+      expect(r.status).toBe(422);
+      expect(persistComposedBlueprint).not.toHaveBeenCalled();
+      expect(r.body.manifest).toBeNull();
+    });
+
+    it('a DECLINED persist is reported with its reason rather than a bare 200', async () => {
+      // A project with no lifecycle row composes fine and has nowhere to be filed. Reporting that
+      // as an unqualified success is an absence reported as a pass.
+      composeBlueprint.mockReturnValue(composed());
+      persistComposedBlueprint.mockResolvedValue({ persisted: false, reason: 'no_lifecycle_row' });
+
+      const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+        .send(body());
+
+      expect(r.status).toBe(200);
+      expect(r.body.manifest).toEqual({ persisted: false, reason: 'no_lifecycle_row' });
+    });
+
+    it('CROSS-TENANT: a tenancy refusal keeps the guard’s 404 and never becomes a 500', async () => {
+      // The branch this handler lost when it was a pure validator, and regained with the write.
+      // 404 rather than 403 is the guard's own decision: a 403 confirms the row exists. A 500 here
+      // would turn a deliberate non-oracle into an error the caller can distinguish anyway.
+      composeBlueprint.mockReturnValue(composed());
+      persistComposedBlueprint.mockRejectedValue(
+        Object.assign(new Error('Not found'), { name: 'TenantAccessError', status: 404 }),
+      );
+
+      const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+        .send(body());
+
+      expect(r.status).toBe(404);
+      expect(r.body.error).toBe('Not found');
+    });
+
+    it('THE ID-MISMATCH GUARD FIRES ON `delivery_project_id`, which it never did before', async () => {
+      // The guard read `project.id` alone. `FactoryProject` has no `id` — its identity column is
+      // `delivery_project_id` — so the check was DEAD for every realistic body. Harmless while
+      // compose persisted nothing; now it decides which project, and which tenant, a blueprint is
+      // filed against.
+      const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+        .send(body({ project: { delivery_project_id: 'some-other-project' } }));
+
+      expect(r.status).toBe(400);
+      expect(r.body.errorClass).toBe('ProjectIdMismatch');
+      expect(composeBlueprint).not.toHaveBeenCalled();
+      expect(persistComposedBlueprint).not.toHaveBeenCalled();
+    });
+
+    it('and still accepts a body whose project id MATCHES the URL under either name', async () => {
+      // The control on the test above: a guard that refused everything would pass it.
+      composeBlueprint.mockReturnValue(composed());
+      for (const project of [{ delivery_project_id: PROJECT }, { id: PROJECT }, {}]) {
+        composeBlueprint.mockClear();
+        const r = await request(app()).post(`/api/admin/project-lifecycle/${PROJECT}/compose`)
+          .send(body({ project }));
+        expect(r.status).toBe(200);
+        expect(composeBlueprint).toHaveBeenCalled();
+      }
+    });
   });
 });
 
@@ -979,10 +1104,23 @@ describe('LC-14 per ROUTE, over a route list derived from the source', () => {
    * Comments are stripped first. A guard name mentioned in a comment is not a guard, and a
    * sweep satisfied by prose reports coverage it does not have.
    */
-  const handlersWithoutTenantBranch = (excused: Record<string, string>): string[] => {
+  const handlersWithoutTenantBranch = (
+    excused: Record<string, string>,
+    /**
+     * Source text to sweep INSTEAD of the real route files.
+     *
+     * Added 2026-10-15 so the positive control below can be real. It used to assert that
+     * `/compose` was the one handler with no tenant branch — true at the time, and it meant the
+     * control depended on a handler staying unguarded. The moment compose gained its branch the
+     * control failed, which is correct behaviour and a bad place to leave a control: the next
+     * person would have deleted it rather than replaced it. Synthetic sources let the sweep be
+     * tested against a handler that is MEANT to be missing a branch.
+     */
+    sources?: Record<string, string>,
+  ): string[] => {
     const out: string[] = [];
-    for (const file of FILES) {
-      const raw = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    for (const file of sources ? Object.keys(sources) : FILES) {
+      const raw = sources ? sources[file] : fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
       const code = raw
       // CRLF IS NORMALISED FIRST, and that is not housekeeping. These route files are CRLF in
       // this worktree, so every line ends with a carriage return. In /\/\/.*$/ the dot does not
@@ -1004,11 +1142,23 @@ describe('LC-14 per ROUTE, over a route list derived from the source', () => {
     return out;
   };
 
-  const NO_TENANT_BRANCH: Record<string, string> = {
-    '/compose': 'composeBlueprint is pure and touches no tenant-scoped row, so it cannot raise '
-      + 'TenantAccessError. The branch was removed rather than left as an expectation nothing '
-      + 'could reach - a mutation deleting it survived every test.',
-  };
+  /**
+   * EMPTY SINCE 2026-10-15. Every handler in both files now has a tenant branch.
+   *
+   * `/compose` was the single entry, excused because "composeBlueprint is pure and touches no
+   * tenant-scoped row, so it cannot raise TenantAccessError. The branch was removed rather than
+   * left as an expectation nothing could reach - a mutation deleting it survived every test."
+   *
+   * That was accurate while compose only validated. It now persists the manifest through
+   * `persistComposedBlueprint`, which calls `loadAndAuthorize`, which throws `TenantAccessError`
+   * for a project in another tenant - so the branch has an input that reaches it and a test that
+   * drives it. The exclusion is removed rather than kept pointing at a handler that no longer
+   * needs it.
+   *
+   * The MECHANISM stays, exercised by the positive control below against synthetic sources, so an
+   * exclusion added later is known to do real work.
+   */
+  const NO_TENANT_BRANCH: Record<string, string> = {};
 
   it('CROSS-TENANT READ: every route maps a tenancy denial to the guard’s own status', () => {
     // Asserted on the source, because each handler reaches a different service and a
@@ -1018,16 +1168,44 @@ describe('LC-14 per ROUTE, over a route list derived from the source', () => {
     expect(missing).toEqual([]);
   });
 
-  it('POSITIVE CONTROL: the exclusion is a LIVE mechanism, not documentation', () => {
-    // The verifier found that `/compose` was excused by an exclusion that never fired: the
-    // handler's own explanatory comment contains the string `TenantAccessError`, so a substring
-    // check already passed. Comments are now stripped before the check — which means the
-    // exclusion has to do real work, and this test proves it does by removing it.
+  it('POSITIVE CONTROL: the sweep DETECTS a missing branch, and the exclusion suppresses it', () => {
+    // WHAT THIS CONTROL IS FOR. `handlersWithoutTenantBranch(NO_TENANT_BRANCH)` returning `[]` is
+    // the claim above, and an empty result is exactly what a sweep that scans nothing returns. So
+    // the sweep has to be shown finding something.
     //
-    // This repo has recorded the same trap twice: prose containing a guard name satisfied
-    // `lint-route-auth`, and this suite's own module-scope-import check carries a comment saying
-    // to match import statements rather than substrings. The warning was already written here.
-    expect(handlersWithoutTenantBranch({})).toEqual(['projectLifecycleRoutes.ts/:projectId/compose']);
+    // It used to be shown by removing the `/compose` exclusion, because that handler genuinely had
+    // no branch. Compose has one now, so that control is gone — and a control whose subject is
+    // "a handler that is still missing its guard" was always going to expire the moment somebody
+    // fixed the handler. Synthetic sources do not expire.
+    //
+    // The trap being guarded against is real and this repo has hit it twice: prose containing a
+    // guard name satisfied `lint-route-auth`, and this suite's own module-scope-import check
+    // carries a comment saying to match import statements rather than substrings. Hence the
+    // `/* */` and `//` strip, and hence the UNGUARDED handler below mentioning
+    // `TenantAccessError` in a comment — if the strip ever no-ops, this test fails.
+    const SYNTHETIC = {
+      'synthetic.ts': [
+        'router.get(`${PREFIX}/:projectId/guarded`, h, async (req, res) => {',
+        '  try { await svc(); } catch (err: any) {',
+        '    if (err?.name === \'TenantAccessError\') { res.status(404).end(); return; }',
+        '    res.status(500).end();',
+        '  }',
+        '});',
+        'router.post(`${PREFIX}/:projectId/unguarded`, h, async (req, res) => {',
+        '  // this handler cannot raise TenantAccessError, honestly',
+        '  /* nor can it, says this block comment about TenantAccessError */',
+        '  res.status(200).end();',
+        '});',
+      ].join('\n'),
+    };
+
+    // Found, by reading code rather than prose.
+    expect(handlersWithoutTenantBranch({}, SYNTHETIC))
+      .toEqual(['synthetic.ts/:projectId/unguarded']);
+
+    // And suppressed when excused, which is the mechanism the claim above depends on.
+    expect(handlersWithoutTenantBranch({ '/unguarded': 'excused for this test' }, SYNTHETIC))
+      .toEqual([]);
   });
 
   it('CROSS-TENANT READ: a denial keeps the guard’s status rather than becoming a 500', async () => {

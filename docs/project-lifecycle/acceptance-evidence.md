@@ -142,8 +142,10 @@ two of which are live government work.
 #### What this row deliberately does not claim
 
 - **Not that the lifecycle gate turns.** Registration is not movement. Stage 2 of 13 became
-  passable on 2026-10-14 and no project has moved, because nothing writes the manifest its
-  prerequisites read. See B3 in `backbone-adoption.md`.
+  passable on 2026-10-14, and on 2026-10-15 `/compose` began writing the manifest its
+  prerequisites read — so the machinery is complete and proven end to end in test. **No project
+  has actually moved**, because that needs a real blueprint composed by a human rather than
+  content invented to make a record look complete. See B3 in `backbone-adoption.md`.
 - **Not that the 14 entry points in `entry-point-matrix.md` are each individually exercised.**
   The derived sweep covers the nine paths that *create a project row*. The matrix's fourteen are
   entry points that could *publish an authorized plan*, which is the clause LC-14's row records
