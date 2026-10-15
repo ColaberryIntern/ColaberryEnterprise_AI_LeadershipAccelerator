@@ -208,6 +208,55 @@ describe('credential expiry mid-playback — the reason this module exists', () 
     expect(h.adapter.snapshot()).toMatchObject({ phase: 'playing', credentialExpiresAt: T0 + 240_000 });
   });
 
+  /**
+   * THE 15 OCTOBER 2026 DEFECT, pinned.
+   *
+   * The first production airing replayed the last ~100 seconds on every credential renewal.
+   * Two viewers reported it independently as "the last lines keep repeating". The cause was
+   * that a LIVE renewal restored the viewer's old position, as a replay renewal correctly
+   * does — but a live manifest restarts its timeline on reload, so restoring seeks backwards
+   * into the DVR buffer instead of staying at the live edge.
+   *
+   * The test above proves restoring is still right for a replay. This one proves it is not
+   * done for live. Both must pass: the two cases are genuinely different.
+   */
+  it('a LIVE renewal does NOT seek backwards - the viewer stays at the live edge', async () => {
+    const h = harness();
+    await playing(h);
+
+    h.media.currentTime = 1_337;
+    const renewed = grant({
+      url: 'https://customer-keedfbz9hwevyrdm.cloudflarestream.com/TOKEN/manifest/video.m3u8',
+      expires_at: T0 + 240_000,
+      is_live: true,
+    });
+    h.fetchGrant.mockResolvedValue(renewed);
+
+    await h.fire();
+
+    expect(h.media.src).toBe(renewed.url);
+    // Playback resumes immediately rather than waiting on a restore that must not happen.
+    expect(h.media.play).toHaveBeenCalledTimes(2);
+
+    // The element reloads and reports metadata. Nothing may drag the viewer back to 1337.
+    h.media.currentTime = 0;
+    h.emitMedia('loadedmetadata');
+    expect(h.media.currentTime).toBe(0);
+  });
+
+  it('a live viewer who PAUSED is still not un-paused by a renewal', async () => {
+    const h = harness();
+    await playing(h);
+    h.media.currentTime = 500;
+    h.media.paused = true;
+    h.fetchGrant.mockResolvedValue(grant({ expires_at: T0 + 240_000, is_live: true }));
+
+    await h.fire();
+
+    // Two calls would mean the renewal restarted a video the viewer deliberately stopped.
+    expect(h.media.play).toHaveBeenCalledTimes(1);
+  });
+
   it('does NOT un-pause a video the viewer deliberately paused', async () => {
     const h = harness();
     await playing(h);
