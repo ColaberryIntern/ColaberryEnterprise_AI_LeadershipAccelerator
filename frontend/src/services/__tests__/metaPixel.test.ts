@@ -118,3 +118,41 @@ describe('tracking can never break the page it is loaded by', () => {
   });
 });
 
+describe('the pixel that saw the PageView is the one that sees the Lead', () => {
+  /**
+   * The bug this fixes, in full: the landing page carried the right pixel, the portal asked
+   * "which pixel belongs to my hostname", and got null - because /lp/colaberry-training/... is
+   * served on www.refactored.ai, whose brand has no pixel. One person, one ad click, one
+   * signup, and the Lead reported against nobody.
+   */
+  const CARRIED = '9999888877776666';
+
+  it('prefers the pixel the landing page left behind over the hostname lookup', async () => {
+    window.localStorage.setItem('cb.meta.pixel', CARRIED);
+    const mod = await freshModule(PIXEL); // host would answer with a DIFFERENT pixel
+    expect(await mod.loadMetaPixel()).toBe(CARRIED);
+  });
+
+  it('falls back to the hostname when nothing was carried', async () => {
+    // Someone who reaches the portal without passing a landing page.
+    const mod = await freshModule(PIXEL);
+    expect(await mod.loadMetaPixel()).toBe(PIXEL);
+  });
+
+  it('ignores a carried value that is not a pixel id', async () => {
+    window.localStorage.setItem('cb.meta.pixel', '<script>alert(1)</script>');
+    const mod = await freshModule(PIXEL);
+    expect(await mod.loadMetaPixel()).toBe(PIXEL);
+  });
+
+  it('still reports a Lead against the carried pixel', async () => {
+    window.localStorage.setItem('cb.meta.pixel', CARRIED);
+    const mod = await freshModule(null); // the host knows nothing, as in production
+    const fbq = jest.fn();
+    (window as unknown as { fbq: jest.Mock }).fbq = fbq;
+
+    expect(await mod.trackLeadOnce('student@example.com')).toBe(true);
+    expect(fbq.mock.calls).toContainEqual(['init', CARRIED]);
+    expect(fbq.mock.calls.filter((c: unknown[]) => c[1] === 'Lead')).toHaveLength(1);
+  });
+});

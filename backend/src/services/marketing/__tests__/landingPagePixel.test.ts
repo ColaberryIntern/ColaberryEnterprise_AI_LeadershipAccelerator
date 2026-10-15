@@ -129,3 +129,20 @@ describe('without a nonce there is no pixel', () => {
     expect(html).not.toContain('fbq');
   });
 });
+
+describe('the page leaves its pixel for the signup page to find', () => {
+  it('writes the pixel id to same-origin storage', () => {
+    // The portal cannot derive this: the hostname it runs on belongs to a different brand than
+    // the page, so its own lookup returns null. Carrying it is what makes the Lead attributable.
+    expect(render(REAL_ID)).toContain(`localStorage.setItem('cb.meta.pixel','${REAL_ID}')`);
+  });
+
+  it('is wrapped, so a browser with storage disabled still gets a working pixel', () => {
+    const html = render(REAL_ID);
+    expect(html).toMatch(/try\{localStorage\.setItem\('cb\.meta\.pixel'[^}]*\}catch\(e\)\{\}/);
+  });
+
+  it('writes nothing when there is no pixel', () => {
+    expect(render(null)).not.toContain('cb.meta.pixel');
+  });
+});

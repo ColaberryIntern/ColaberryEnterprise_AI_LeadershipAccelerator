@@ -45,8 +45,31 @@ const LEAD_KEY_PREFIX = 'cb.meta.lead.';
 
 let loading: Promise<string | null> | null = null;
 
-/** Read the pixel for this hostname. Cached for the life of the tab; one request per load. */
-async function fetchPixelId(): Promise<string | null> {
+/** Where the landing page leaves the pixel that saw this visitor. Same origin, so readable. */
+const CARRIED_PIXEL_KEY = 'cb.meta.pixel';
+
+/**
+ * Which pixel this person should be reported against.
+ *
+ * THE CARRIED VALUE WINS, and that ordering is the whole fix. The portal used to ask only
+ * "which pixel belongs to my hostname", and on 2026-10-15 that returned null while the pixel
+ * was correctly installed on the landing page: /lp/colaberry-training/... is served on
+ * www.refactored.ai, whose brand_domains row points at the `refactored` brand, which has no
+ * pixel. The ad click, the PageView and the signup were all one person, and the Lead was
+ * reported against nobody.
+ *
+ * The pixel that saw the PageView is the one that must see the Lead - any other answer
+ * attributes the conversion to the wrong advertiser, or to none. The hostname lookup stays as
+ * the fallback for someone who reaches the portal without passing a landing page.
+ */
+async function resolvePixelId(): Promise<string | null> {
+  try {
+    const carried = window.localStorage.getItem(CARRIED_PIXEL_KEY);
+    if (typeof carried === 'string' && PIXEL_ID.test(carried)) return carried;
+  } catch {
+    // Storage disabled. Fall through to the host lookup rather than giving up.
+  }
+
   try {
     const res = await api.get('/api/public/tracking-config');
     const id = res?.data?.meta_pixel_id;
@@ -67,7 +90,7 @@ export function loadMetaPixel(): Promise<string | null> {
 
   loading = (async () => {
     try {
-      const id = await fetchPixelId();
+      const id = await resolvePixelId();
       // No pixel for this host is the normal case for most brands. Load nothing: a third-party
       // script on a page nobody is advertising is a request to an outside host for no return.
       if (!id) return null;
