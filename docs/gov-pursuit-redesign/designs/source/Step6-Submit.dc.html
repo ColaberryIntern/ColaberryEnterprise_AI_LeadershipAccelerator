@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Step 6 Submit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#1F4FD8}a:hover{color:#163BA6}
+</style>
+</helmet>
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16181D; background: #F6F6F3; min-height: 100%">
+
+<header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 24px 40px 18px; background: #FFFFFF; border-bottom: 1px solid #E4E5E9">
+<div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<div style="font-size: 13px; color: #5B6170">Gov Opportunities / Qualification</div>
+<h1 style="margin: 0; font-size: 24px; font-weight: 600">Herriman City — Enterprise Work Order Management System RFP</h1>
+<div style="font-size: 13px; color: #5B6170">U3P (Utah) · Bidding as Colaberry</div>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #FFF6E5; border: 1px solid #F0D9A8; color: #5C3D00; font-size: 14px; font-weight: 600">46 days left · closes Dec 1</div>
+</header>
+
+<div style="overflow-x: auto; background: #FFFFFF; border-bottom: 1px solid #E4E5E9">
+<nav aria-label="Pursuit steps" style="display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 6px; padding: 14px 40px; min-width: 1100px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="7">
+<a href="{{s.href}}" style="{{s.wrap}}" aria-current="{{s.aria}}">
+<span style="{{s.badge}}">{{s.mark}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="{{s.labelStyle}}">{{s.label}}</span><span style="font-size: 12px; color: #5B6170; white-space: nowrap">{{s.q}}</span></span>
+</a>
+</sc-for>
+</nav>
+</div>
+
+<main style="max-width: 1440px; margin: 0 auto; box-sizing: border-box; padding: 28px 40px 48px; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+
+<section style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 13px; font-weight: 600; color: #1F4FD8">Step 6 of 7 · about an hour</div>
+<h2 style="margin: 0; font-size: 30px; font-weight: 700">Is it out the door?</h2>
+<p style="margin: 0; font-size: 16px; color: #3D424D; line-height: 1.5">Work down the list. Nothing here submits to the buyer's portal; you upload the package yourself and record the confirmation.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px">
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; color: #5B6170">Ship by</div>
+<div style="font-size: 26px; font-weight: 700">Nov 30</div>
+<div style="font-size: 12px; color: #5B6170">day before close</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; color: #5B6170">Closes</div>
+<div style="font-size: 26px; font-weight: 700">Dec 1</div>
+<div style="font-size: 12px; color: #5B6170">cutoff time from daily Bonfire sync</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; color: #5B6170">Submission items done</div>
+<div style="font-size: 26px; font-weight: 700">5 of 14</div>
+<div style="font-size: 12px; color: #5B6170"><a href="Step5-BuildTheBid.dc.html">go to Build the bid</a></div>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 4px">
+<h3 style="margin: 0 0 8px; font-size: 18px; font-weight: 600">Submission checklist</h3>
+<sc-for list="{{checks}}" as="c" hint-placeholder-count="4">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #EEEFF1">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="{{c.dot}}">{{c.n}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 15px; font-weight: 500">{{c.label}}</div>
+<div style="font-size: 13px; color: #5B6170">{{c.detail}}</div>
+</div>
+</div>
+<sc-if value="{{c.cta}}" hint-placeholder-val="{{ true }}">
+<button type="button" style="font: inherit; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 8px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #3D424D; cursor: pointer">{{c.cta}}</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-size: 16px; font-weight: 600">Record the external submission</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; flex: 1 1 200px">Portal confirmation #<input type="text" style="font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid #C9CCD3; border-radius: 8px"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; flex: 1 1 160px">Submitted on<input type="text" placeholder="MM/DD/YYYY" style="font: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid #C9CCD3; border-radius: 8px"></label>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; background: #FFFFFF; border: 1px solid #D5DBEA; border-radius: 12px; box-shadow: 0 6px 20px rgba(22, 24, 29, 0.06)">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 15px; font-weight: 600">Not yet: 9 items left, 1 filler to replace</div>
+<div style="font-size: 13px; color: #5B6170">Once recorded, the pursuit moves to Outcome.</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<a href="Step5-BuildTheBid.dc.html" style="font-size: 14px; font-weight: 500">← Back</a>
+<a href="Main.dc.html" style="font-size: 15px; font-weight: 600; padding: 12px 20px; border-radius: 10px; background: #E4E7EF; color: #3D424D; text-decoration: none">Record submission →</a>
+</div>
+</div>
+</section>
+
+<aside aria-label="Pursuit brief" style="flex: 1 1 320px; max-width: 380px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h3 style="margin: 0; font-size: 17px; font-weight: 700">Pursuit brief</h3>
+<div style="font-size: 13px; color: #5B6170">Grows one section per step.</div>
+</div>
+<sc-for list="{{brief}}" as="g" hint-placeholder-count="6">
+<div style="{{g.box}}">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+<span style="font-size: 13px; font-weight: 700">{{g.title}}</span>
+<span style="{{g.tagStyle}}">{{g.tag}}</span>
+</div>
+<sc-for list="{{g.items}}" as="it" hint-placeholder-count="2">
+<div style="{{g.itemStyle}}">{{it.t}}</div>
+</sc-for>
+</div>
+</sc-for>
+</aside>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1150}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const cur = 6;
+    const S = [
+      ['Snapshot', 'Worth a look?', 'Step1-Snapshot.dc.html'],
+      ['Solicitation', 'What do we submit?', 'Step2-Solicitation.dc.html'],
+      ['Fit', 'Can we deliver?', 'Step3-Fit.dc.html'],
+      ['Decide', 'Should we bid?', 'Step4-Decide.dc.html'],
+      ['Build the bid', 'Product + proposal', 'Step5-BuildTheBid.dc.html'],
+      ['Submit', 'Ship it', 'Step6-Submit.dc.html'],
+      ['Outcome', 'Did we win?', 'Main.dc.html']
+    ];
+    const approved = cur >= 5;
+    const steps = S.map((s, i) => {
+      const n = i + 1, done = n < cur, now = n === cur, locked = n >= 5 && !approved;
+      return {
+        label: s[0], q: locked ? 'After approval' : s[1], href: s[2], mark: done ? '✓' : String(n), aria: now ? 'step' : 'false',
+        wrap: 'display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;text-decoration:none;min-width:0;' + (now ? 'background:#EEF2FD;box-shadow:inset 0 -3px 0 #1F4FD8;' : '') + (locked ? 'opacity:.6;' : ''),
+        badge: 'flex:none;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;' + (done ? 'background:#1E7A4C;color:#FFFFFF;' : now ? 'background:#1F4FD8;color:#FFFFFF;' : 'background:#FFFFFF;color:#5B6170;border:1.5px solid #C9CCD3;'),
+        labelStyle: 'font-size:14px;font-weight:600;white-space:nowrap;color:' + (now ? '#1F4FD8' : done ? '#1E7A4C' : '#16181D')
+      };
+    });
+    const B = [
+      ['Snapshot', ['Enterprise work order management system', '$1.00M est. · closes Dec 1 (46 days)']],
+      ['Solicitation', ['21 fragments → 12 items', '5 to submit · 5 rules · 1 PDF']],
+      ['Fit', ['3 have · 1 partial · 2 new capabilities']],
+      ['Decide', ['Pursue with conditions · approved by [approver]']],
+      ['Build the bid', ['MVP plan ready · 9 of 14 items left', '74% on time']],
+      ['Submit', ['Ship by Nov 30 · not exported']]
+    ];
+    const brief = B.map((b, i) => {
+      const n = i + 1, known = n < cur, now = n === cur;
+      return {
+        title: n + ' · ' + b[0],
+        tag: known ? 'Known' : now ? 'Adding now' : 'Step ' + n,
+        tagStyle: 'font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;' + (known ? 'background:#E6F3EC;color:#1E5C3B' : now ? 'background:#EEF2FD;color:#163BA6' : 'background:#F1F2F4;color:#5B6170'),
+        box: 'display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:10px;' + (now ? 'border:1.5px solid #1F4FD8;background:#FAFBFF' : known ? 'border:1px solid #E4E5E9' : 'border:1px dashed #D3D5DA'),
+        itemStyle: 'font-size:13px;line-height:1.4;' + (known || now ? 'color:#2B2F38' : 'color:#7A808C'),
+        items: (known || now ? b[1] : ['Unlocks at step ' + n]).map((t) => ({ t }))
+      };
+    });
+    const dot = 'flex:none;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:#FFFFFF;color:#5B6170;border:1.5px solid #C9CCD3';
+    const checks = [
+      { n: '1', label: 'All 14 submission items done', detail: '9 left · 1 filler must be replaced', cta: 'Open Build the bid' },
+      { n: '2', label: 'Package assembled', detail: 'Responses + required forms in the RFP’s submittal format', cta: '' },
+      { n: '3', label: 'Exported', detail: 'Download the bid package', cta: 'Export bid package' },
+      { n: '4', label: 'Submitted on the buyer portal', detail: 'Upload yourself, then record the confirmation below', cta: '' }
+    ].map((c) => ({ ...c, dot }));
+    return { steps, brief, checks };
+  }
+}
+</script>
+</body>
+</html>

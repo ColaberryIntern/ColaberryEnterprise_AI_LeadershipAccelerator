@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intern Build page</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#1F4FD8}a:hover{color:#163BA6}
+</style>
+</head>
+<body>
+<!-- Standalone render of design artboard Intern-BuildPage.dc.html. Interactive: clicks update local state. Links go to sibling screens. -->
+<div id="dc-root"></div>
+<script>
+(function () {
+  function get(scope, p) {
+    p = p.trim();
+    if (p === 'true') return true; if (p === 'false') return false;
+    if (/^-?\d+(\.\d+)?$/.test(p)) return Number(p);
+    return p.split('.').reduce(function (o, k) { return o == null ? undefined : o[k]; }, scope);
+  }
+  var WHOLE = /^\s*\{\{([^}]+)\}\}\s*$/;
+  function interp(s, scope) {
+    return s.replace(/\{\{([^}]+)\}\}/g, function (_, p) { var v = get(scope, p); return v == null ? '' : String(v); });
+  }
+  function renderNodes(nodes, scope, parent) {
+    for (var i = 0; i < nodes.length; i++) renderNode(nodes[i], scope, parent);
+  }
+  function renderNode(n, scope, parent) {
+    if (n.nodeType === 3) { parent.appendChild(document.createTextNode(interp(n.nodeValue, scope))); return; }
+    if (n.nodeType !== 1) return;
+    var tag = n.tagName.toLowerCase();
+    if (tag === 'helmet') return;
+    if (tag === 'sc-for') {
+      var m = WHOLE.exec(n.getAttribute('list') || ''); var list = m ? get(scope, m[1]) : [];
+      var as = n.getAttribute('as') || 'item';
+      (list || []).forEach(function (item, idx) {
+        var s = Object.create(scope); s[as] = item; s.$index = idx;
+        renderNodes(n.childNodes, s, parent);
+      });
+      return;
+    }
+    if (tag === 'sc-if') {
+      var mv = WHOLE.exec(n.getAttribute('value') || ''); var v = mv ? get(scope, mv[1]) : false;
+      if (v) renderNodes(n.childNodes, scope, parent);
+      return;
+    }
+    var el = document.createElement(tag === 'svg' || n.namespaceURI === 'http://www.w3.org/2000/svg' ? tag : tag);
+    if (n.namespaceURI === 'http://www.w3.org/2000/svg') el = document.createElementNS('http://www.w3.org/2000/svg', n.tagName);
+    for (var a = 0; a < n.attributes.length; a++) {
+      var at = n.attributes[a]; var name = at.name; var val = at.value;
+      if (name.indexOf('hint-') === 0) continue;
+      var w = WHOLE.exec(val);
+      if (/^on[a-z]+$/i.test(name) && w) {
+        var fn = get(scope, w[1]);
+        if (typeof fn === 'function') el.addEventListener(name.slice(2).toLowerCase(), (function (f) { return function (e) { e.preventDefault(); f(e); }; })(fn));
+        continue;
+      }
+      if (w) {
+        var rv = get(scope, w[1]);
+        if (rv === false || rv == null) { if (name === 'checked') el.checked = false; continue; }
+        if (rv === true) { el.setAttribute(name, ''); if (name === 'checked') el.checked = true; continue; }
+        if (name === 'value') { el.value = String(rv); }
+        el.setAttribute(name, String(rv));
+        continue;
+      }
+      var iv = interp(val, scope);
+      if (name === 'href' && /\.dc\.html(#.*)?$/.test(iv)) iv = iv.replace('.dc.html', '.html');
+      el.setAttribute(name, iv);
+    }
+    renderNodes(n.childNodes, scope, el);
+    parent.appendChild(el);
+  }
+  window.DCLogic = function DCLogic(props) { this.props = props || {}; this.state = {}; };
+  window.DCLogic.prototype.setState = function (p) { Object.assign(this.state, typeof p === 'function' ? p(this.state) : p); window.__dcRender(); };
+  window.DCLogic.prototype.forceUpdate = function () { window.__dcRender(); };
+  window.__dcBoot = function (tplHtml, Component) {
+    var tpl = document.createElement('template'); tpl.innerHTML = tplHtml;
+    var inst = new Component({});
+    var root = document.getElementById('dc-root');
+    window.__dcRender = function () {
+      var scope = inst.renderVals();
+      var frag = document.createDocumentFragment();
+      renderNodes(tpl.content.childNodes, scope, frag);
+      root.innerHTML = ''; root.appendChild(frag);
+    };
+    window.__dcRender();
+    if (inst.componentDidMount) inst.componentDidMount();
+  };
+})();
+</script>
+<script>
+(function(){
+  var TPL = "\n\n<div style=\"font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16181D; background: #F6F6F3; min-height: 100%; display: flex; flex-wrap: wrap\">\n\n<nav aria-label=\"Intern portal\" style=\"flex: 1 1 200px; max-width: 220px; min-width: 0; background: #16181D; color: #FFFFFF; padding: 22px 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px\">\n<div style=\"font-size: 15px; font-weight: 700; padding: 0 10px 16px\">Colaberry Intern</div>\n<a href=\"#\" style=\"color: #D5D8DF; text-decoration: none; font-size: 14px; padding: 10px; border-radius: 8px\">My Day</a>\n<a href=\"#\" style=\"color: #FFFFFF; text-decoration: none; font-size: 14px; font-weight: 600; padding: 10px; border-radius: 8px; background: #2B2F38\">My Projects</a>\n<a href=\"#\" style=\"color: #D5D8DF; text-decoration: none; font-size: 14px; padding: 10px; border-radius: 8px\">Profile</a>\n<a href=\"#\" style=\"color: #D5D8DF; text-decoration: none; font-size: 14px; padding: 10px; border-radius: 8px\">Curriculum</a>\n</nav>\n\n<div style=\"flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column\">\n<header style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 24px 36px 18px; background: #FFFFFF; border-bottom: 1px solid #E4E5E9\">\n<div style=\"display: flex; flex-direction: column; gap: 6px; min-width: 0\">\n<div style=\"font-size: 13px; color: #5B6170\">My Projects / Build</div>\n<h1 style=\"margin: 0; font-size: 26px; font-weight: 700\">Herriman Work Order Hub</h1>\n<div style=\"display: flex; flex-wrap: wrap; gap: 6px\">\n<span style=\"font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #EEF2FD; color: #163BA6\">Gov pursuit · Herriman City</span>\n<span style=\"font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #F1F2F4; color: #3D424D\">Assigned by Dhee</span>\n<span style=\"font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #E6F3EC; color: #1E5C3B\">On your profile</span>\n</div>\n</div>\n<div style=\"display: flex; gap: 10px; flex-wrap: wrap\">\n<div style=\"padding: 8px 14px; border-radius: 10px; background: #F6F6F3; display: flex; flex-direction: column\"><span style=\"font-size: 12px; color: #5B6170\">MVP demo-ready</span><span style=\"font-size: 16px; font-weight: 700\">Nov 26</span></div>\n<div style=\"padding: 8px 14px; border-radius: 10px; background: #FFF6E5; display: flex; flex-direction: column\"><span style=\"font-size: 12px; color: #7A4A00\">Proposal due</span><span style=\"font-size: 16px; font-weight: 700; color: #5C3D00\">Dec 1 · 46 days</span></div>\n</div>\n</header>\n\n<div style=\"display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 36px; background: #FAFBFF; border-bottom: 1px solid #E4E5E9; font-size: 13px; color: #3D424D\">\n<span><strong>Build:</strong> yours to edit</span>\n<span><strong>Proposal:</strong> shared by Dhee · you can comment</span>\n<span><strong>Qualification, decision, pricing:</strong> admin only</span>\n</div>\n\n<main style=\"box-sizing: border-box; padding: 24px 36px 44px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start\">\n\n<section style=\"flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 18px\">\n\n<div style=\"display: flex; border: 1px solid #C9CCD3; border-radius: 10px; overflow: hidden; align-self: flex-start\" role=\"tablist\" aria-label=\"Project views\">\n<sc-for list=\"{{tabs}}\" as=\"t\" hint-placeholder-count=\"3\">\n<button type=\"button\" role=\"tab\" aria-selected=\"{{t.on}}\" onClick=\"{{t.pick}}\" style=\"{{t.style}}\">{{t.label}}</button>\n</sc-for>\n</div>\n\n<sc-if value=\"{{isBuild}}\" hint-placeholder-val=\"{{ true }}\">\n<div style=\"display: flex; flex-direction: column; gap: 18px\">\n<div style=\"background: #FFFFFF; border: 1.5px solid #1F4FD8; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px\">\n<div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #1F4FD8\">YOUR NEXT THING</div>\n<div style=\"font-size: 18px; font-weight: 600\">Review the product definition draft before the spec starts on Oct 24</div>\n<div style=\"font-size: 14px; line-height: 1.5; color: #3D424D\">Dhee and the AI are finishing it now. Leave comments on anything a builder would trip over; the spec is generated from it.</div>\n<div><a href=\"#\" style=\"display: inline-block; font-size: 14px; font-weight: 600; padding: 10px 16px; border-radius: 10px; background: #1F4FD8; color: #FFFFFF; text-decoration: none\">Open product definition</a></div>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px\">\n<h2 style=\"margin: 0; font-size: 18px; font-weight: 600\">My schedule</h2>\n<span style=\"font-size: 13px; color: #5B6170\">19 stories · 3 releases</span>\n</div>\n<div style=\"overflow-x: auto\">\n<div style=\"min-width: 640px; display: flex; flex-direction: column\">\n<div style=\"display: grid; grid-template-columns: 200px minmax(0, 1fr); padding-bottom: 6px; border-bottom: 1px solid #E4E5E9\">\n<div style=\"font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B6170\">WORK</div>\n<div style=\"display: grid; grid-template-columns: repeat(8, minmax(0, 1fr))\">\n<sc-for list=\"{{weeks}}\" as=\"w\" hint-placeholder-count=\"8\">\n<div style=\"font-size: 12px; color: #5B6170; padding-left: 4px; border-left: 1px solid #E4E5E9\">{{w}}</div>\n</sc-for>\n</div>\n</div>\n<sc-for list=\"{{gantt}}\" as=\"g\" hint-placeholder-count=\"5\">\n<div style=\"display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: center; border-bottom: 1px solid #F1F2F4; min-height: 42px\">\n<div style=\"display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 6px 0\"><span style=\"font-size: 14px; font-weight: 600\">{{g.name}}</span><span style=\"font-size: 12px; color: #5B6170\">{{g.dates}}</span></div>\n<div style=\"position: relative; height: 42px; background: repeating-linear-gradient(to right, transparent 0, transparent calc(12.5% - 1px), #F1F2F4 calc(12.5% - 1px), #F1F2F4 12.5%)\">\n<div style=\"{{g.bar}}\">{{g.tag}}</div>\n<div style=\"{{mToday}}\"></div>\n<div style=\"{{mDue}}\"></div>\n</div>\n</div>\n</sc-for>\n</div>\n</div>\n</div>\n\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px\">\n<h2 style=\"margin: 0 0 8px; font-size: 18px; font-weight: 600\">Release 1 · Work order core</h2>\n<sc-for list=\"{{stories}}\" as=\"s\" hint-placeholder-count=\"4\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid #EEEFF1\">\n<div style=\"display: flex; flex-direction: column; gap: 2px\"><span style=\"font-size: 14px; font-weight: 500\">{{s.name}}</span><span style=\"font-size: 12px; color: #5B6170\">cites {{s.cite}}</span></div>\n<span style=\"font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #F1F2F4; color: #3D424D\">{{s.status}}</span>\n</div>\n</sc-for>\n<a href=\"#\" style=\"font-size: 13px; margin-top: 6px\">All 19 stories</a>\n</div>\n</div>\n</sc-if>\n\n<sc-if value=\"{{isProposal}}\" hint-placeholder-val=\"{{ false }}\">\n<div style=\"display: flex; flex-direction: column; gap: 18px\">\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px\">\n<h2 style=\"margin: 0; font-size: 18px; font-weight: 600\">Proposal parts</h2>\n<span style=\"font-size: 13px; color: #5B6170\">Shared by Dhee · can comment</span>\n</div>\n<sc-for list=\"{{parts}}\" as=\"p\" hint-placeholder-count=\"4\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid #EEEFF1\">\n<span style=\"font-size: 14px; font-weight: 500\">{{p.name}}</span>\n<span style=\"display: flex; align-items: center; gap: 10px\"><span style=\"font-size: 12px; color: #5B6170\">{{p.note}}</span><span style=\"{{p.chip}}\">{{p.status}}</span></span>\n</div>\n</sc-for>\n</div>\n<div style=\"background: #FAFBFF; border: 1.5px solid #1F4FD8; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px\">\n<div style=\"font-size: 15px; font-weight: 700\">The AI asked you (compliance matrix)</div>\n<div style=\"font-size: 14px; line-height: 1.5\">Does the mobile app need to work with no signal and sync later? It changes the technical approach for release 3.</div>\n<div style=\"display: flex; flex-wrap: wrap; gap: 6px\">\n<button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">Yes, offline-first</button>\n<button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #1F4FD8; background: #FFFFFF; color: #1F4FD8; cursor: pointer\">Online only</button>\n<button type=\"button\" style=\"font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #2B2F38; cursor: pointer\">Ask Dhee</button>\n</div>\n</div>\n</div>\n</sc-if>\n\n<sc-if value=\"{{isChecklist}}\" hint-placeholder-val=\"{{ false }}\">\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px\">\n<div style=\"display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px\">\n<h2 style=\"margin: 0; font-size: 18px; font-weight: 600\">What we're submitting</h2>\n<span style=\"font-size: 13px; color: #5B6170\">5 of 14 done · yours are marked</span>\n</div>\n<sc-for list=\"{{items}}\" as=\"it\" hint-placeholder-count=\"14\">\n<div style=\"display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid #EEEFF1; font-size: 14px\">\n<span style=\"display: flex; align-items: center; gap: 8px\"><span>{{it.name}}</span><sc-if value=\"{{it.mine}}\" hint-placeholder-val=\"{{ false }}\"><span style=\"font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #EEF2FD; color: #163BA6\">yours</span></sc-if></span>\n<span style=\"{{it.chip}}\">{{it.status}}</span>\n</div>\n</sc-for>\n</div>\n</sc-if>\n\n</section>\n\n<aside style=\"flex: 1 1 280px; max-width: 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px\">\n<div style=\"background: #16181D; color: #FFFFFF; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px\">\n<div style=\"font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: #C3C7D0\">SUBMISSION COUNTDOWN</div>\n<div style=\"font-size: 34px; font-weight: 700; line-height: 1\">9 <span style=\"font-size: 15px; font-weight: 500; color: #C3C7D0\">of 14 left</span></div>\n<div style=\"font-size: 14px; color: #D5D8DF\">74% on time · 2 of the 9 are yours</div>\n</div>\n<div style=\"background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px\">\n<h2 style=\"margin: 0; font-size: 16px; font-weight: 600\">On your profile</h2>\n<div style=\"font-size: 14px; line-height: 1.5; color: #2B2F38\">Listed as a project: <strong>Herriman Work Order Hub</strong>, a city work order and asset management MVP.</div>\n<div style=\"display: flex; flex-wrap: wrap; gap: 6px\">\n<span style=\"font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #EFE8FC; color: #5B2DB3\">CMMS</span>\n<span style=\"font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #EFE8FC; color: #5B2DB3\">Offline mobile sync</span>\n<span style=\"font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #F1F2F4; color: #3D424D\">Data migration</span>\n</div>\n<div style=\"font-size: 13px; color: #5B6170\">Stays on your profile whether or not the bid wins.</div>\n</div>\n</aside>\n\n</main>\n</div>\n</div>\n";
+  var Component = (function(){ 
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { tab: 'build' }; }
+  renderVals() {
+    const tab = this.state.tab;
+    const T = [['build', 'Build'], ['proposal', 'Proposal (shared)'], ['checklist', 'Submission checklist']];
+    const tabs = T.map((t) => ({
+      label: t[1], on: tab === t[0] ? 'true' : 'false', pick: () => this.setState({ tab: t[0] }),
+      style: 'font:inherit;font-size:14px;padding:9px 16px;border:none;cursor:pointer;' + (tab === t[0] ? 'background:#16181D;color:#FFFFFF;font-weight:600' : 'background:#FFFFFF;color:#2B2F38')
+    }));
+    const SPAN = 56;
+    const day = (m, d) => (m === 10 ? d - 12 : 20 + d);
+    const pct = (x) => (x / SPAN * 100).toFixed(2) + '%';
+    const G = [
+      ['Spec', 10, 24, 11, 3, '#1F4FD8', 'Starts Oct 24'],
+      ['MVP plan', 11, 3, 11, 7, '#1F4FD8', ''],
+      ['R1 · Work order core', 11, 7, 11, 17, '#1E7A4C', ''],
+      ['R2 · Assets + PM', 11, 12, 11, 21, '#1E7A4C', ''],
+      ['R3 · Mobile field app', 11, 17, 11, 26, '#1E7A4C', 'Critical']
+    ];
+    const M = { 10: 'Oct', 11: 'Nov' };
+    const gantt = G.map((g) => {
+      const s = day(g[1], g[2]), e = day(g[3], g[4]) + 1;
+      return {
+        name: g[0], tag: g[6], dates: M[g[1]] + ' ' + g[2] + '–' + (g[3] === g[1] ? '' : M[g[3]] + ' ') + g[4],
+        bar: 'position:absolute;top:10px;height:22px;border-radius:6px;box-sizing:border-box;padding:0 8px;display:flex;align-items:center;font-size:11px;font-weight:700;color:#FFFFFF;white-space:nowrap;overflow:hidden;left:' + pct(s) + ';width:' + pct(e - s) + ';background:' + g[5] + (g[6] === 'Critical' ? ';box-shadow:0 0 0 2px #FFFFFF,0 0 0 4px #B42318' : '')
+      };
+    });
+    const mk = (x, c) => 'position:absolute;top:0;bottom:0;width:2px;left:' + pct(x) + ';background:' + c;
+    const weeks = ['Oct 12', 'Oct 19', 'Oct 26', 'Nov 2', 'Nov 9', 'Nov 16', 'Nov 23', 'Nov 30'];
+    const stories = [
+      { name: 'Create a work order from a request', cite: 'Compliance row 1', status: 'Planned' },
+      { name: 'Assign a work order to a crew', cite: 'Compliance row 2', status: 'Planned' },
+      { name: 'Close out with time and parts', cite: 'Compliance row 4', status: 'Planned' },
+      { name: 'Supervisor dashboard of open orders', cite: 'Compliance row 6', status: 'Planned' }
+    ];
+    const chip = (s) => 'font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;' + (s === 'Done' ? 'background:#E6F3EC;color:#1E5C3B' : s === 'Filler' ? 'background:#FCE8E6;color:#9A1B12' : s === 'Needs you' || s === 'Needs Dhee' ? 'background:#FFF0D6;color:#7A4A00' : s === 'Drafting' ? 'background:#EEF2FD;color:#163BA6' : 'background:#F1F2F4;color:#3D424D');
+    const parts = [['Signed cover letter', 'Drafting', ''], ['Compliance matrix + approach', 'Waits on spec', '1 question for you'], ['Qualifications & references', 'Needs Dhee', '2 comments'], ['Exceptions to terms', 'Done', '']].map((p) => ({ name: p[0], status: p[1], note: p[2], chip: chip(p[1]) }));
+    const I = [['Product definition', 'Needs Dhee', false], ['Spec + MVP plan', 'Not started', true], ['Cover letter', 'Drafting', false], ['Compliance matrix', 'Not started', true], ['Price proposal', 'Admin only', false], ['Qualifications', 'Needs Dhee', false], ['Exceptions to terms', 'Done', false], ['Insurance certificate', 'Filler', false], ['Signing officer named', 'Done', false], ['Single PDF assembled', 'Not started', false], ['Questions sent to City', 'Not started', false], ['Bonfire account ready', 'Done', false], ['Contact rules briefed', 'Done', false], ['Eligibility checks cleared', 'Done', false]];
+    const items = I.map((x) => ({ name: x[0], status: x[1], mine: x[2], chip: chip(x[1]) }));
+    return {
+      tabs, isBuild: tab === 'build', isProposal: tab === 'proposal', isChecklist: tab === 'checklist',
+      gantt, weeks, stories, parts, items,
+      mToday: mk(day(10, 15), '#1F4FD8'), mDue: mk(day(11, 31), '#B42318')
+    };
+  }
+}
+
+  ; return Component; })();
+  window.__dcBoot(TPL, Component);
+})();
+</script>
+</body>
+</html>

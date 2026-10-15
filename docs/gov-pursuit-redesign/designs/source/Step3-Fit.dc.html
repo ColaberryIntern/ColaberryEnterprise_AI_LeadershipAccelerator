@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Step 3 Fit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#1F4FD8}a:hover{color:#163BA6}
+</style>
+</helmet>
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16181D; background: #F6F6F3; min-height: 100%">
+
+<header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 24px 40px 18px; background: #FFFFFF; border-bottom: 1px solid #E4E5E9">
+<div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<div style="font-size: 13px; color: #5B6170">Gov Opportunities / Qualification</div>
+<h1 style="margin: 0; font-size: 24px; font-weight: 600">Herriman City — Enterprise Work Order Management System RFP</h1>
+<div style="font-size: 13px; color: #5B6170">U3P (Utah) · Bidding as Colaberry</div>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #FFF6E5; border: 1px solid #F0D9A8; color: #5C3D00; font-size: 14px; font-weight: 600">46 days left · closes Dec 1</div>
+</header>
+
+<div style="overflow-x: auto; background: #FFFFFF; border-bottom: 1px solid #E4E5E9">
+<nav aria-label="Pursuit steps" style="display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 6px; padding: 14px 40px; min-width: 1100px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="7">
+<a href="{{s.href}}" style="{{s.wrap}}" aria-current="{{s.aria}}">
+<span style="{{s.badge}}">{{s.mark}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0"><span style="{{s.labelStyle}}">{{s.label}}</span><span style="font-size: 12px; color: #5B6170; white-space: nowrap">{{s.q}}</span></span>
+</a>
+</sc-for>
+</nav>
+</div>
+
+<main style="max-width: 1440px; margin: 0 auto; box-sizing: border-box; padding: 28px 40px 48px; display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+
+<section style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 13px; font-weight: 600; color: #1F4FD8">Step 3 of 7 · about 10 minutes</div>
+<h2 style="margin: 0; font-size: 30px; font-weight: 700">Can we deliver it, and what would it teach us?</h2>
+<p style="margin: 0; font-size: 16px; color: #3D424D; line-height: 1.5">The AI broke the scope into the capabilities it takes to deliver, then checked each one against Our Services. What we lack is not a dead end: it is a capability this bid can unlock.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px">
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; color: #5B6170">We have it</div>
+<div style="font-size: 26px; font-weight: 700; color: #1E5C3B">3</div>
+<div style="font-size: 12px; color: #5B6170">matched to Our Services</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; color: #5B6170">Partly</div>
+<div style="font-size: 26px; font-weight: 700; color: #7A4A00">1</div>
+<div style="font-size: 12px; color: #5B6170">extend an existing service</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #C9B8F0; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; color: #5B6170">New capabilities</div>
+<div style="font-size: 26px; font-weight: 700; color: #5B2DB3">2</div>
+<div style="font-size: 12px; color: #5B6170">this bid can unlock</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; color: #5B6170">Disqualifiers</div>
+<div style="font-size: 26px; font-weight: 700">0</div>
+<div style="font-size: 12px; color: #5B6170">2 checks still to tick</div>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px">
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">Capabilities this contract needs</h3>
+<a href="#" style="font-size: 13px">Open Our Services</a>
+</div>
+<sc-for list="{{caps}}" as="c" hint-placeholder-count="6">
+<div style="border-top: 1px solid #EEEFF1">
+<button type="button" onClick="{{c.toggle}}" aria-expanded="{{c.exp}}" style="font: inherit; width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; background: none; border: none; text-align: left; color: #16181D; cursor: pointer">
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 300px"><span style="font-size: 15px; font-weight: 600">{{c.name}}</span><span style="font-size: 13px; color: #5B6170">{{c.why}}</span></span>
+<span style="display: flex; align-items: center; gap: 10px"><span style="font-size: 13px; color: #3D424D">{{c.match}}</span><span style="{{c.chip}}">{{c.status}}</span></span>
+</button>
+<sc-if value="{{c.isOpen}}" hint-placeholder-val="{{ false }}">
+<div style="margin: 0 0 16px; padding: 16px 18px; border-radius: 10px; background: #F8F5FF; border: 1px solid #DCCFF7; display: flex; flex-direction: column; gap: 12px">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B2DB3">WHAT IT IS</div><div style="font-size: 14px; line-height: 1.5">{{c.what}}</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B2DB3">WHAT THIS BID GIVES US</div><div style="font-size: 14px; line-height: 1.5">{{c.gain}}</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #5B2DB3">TO DELIVER IT</div><div style="font-size: 14px; line-height: 1.5">{{c.how}}</div></div>
+</div>
+<sc-if value="{{c.claimed}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 8px; background: #FFFFFF; border: 1px solid #DCCFF7">
+<div style="font-size: 14px; font-weight: 600">Update Our Services: the AI drafted this entry, edit and save</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #5B6170; flex: 1 1 220px">Service name<input type="text" value="{{c.name}}" style="font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid #C9CCD3; border-radius: 8px; color: #16181D"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #5B6170; flex: 2 1 300px">Past performance (where have we done it?)<input type="text" placeholder="Client, year, what we delivered" style="font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid #C9CCD3; border-radius: 8px; color: #16181D"></label>
+</div>
+<div style="font-size: 13px; color: #5B6170">Keywords: {{c.kw}}</div>
+<div style="display: flex; gap: 8px"><button type="button" style="font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 8px; border: none; background: #5B2DB3; color: #FFFFFF; cursor: pointer">Save to Our Services</button><button type="button" onClick="{{c.claim}}" style="font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #2B2F38; cursor: pointer">Cancel</button></div>
+</div>
+</sc-if>
+<sc-if value="{{c.notClaimed}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" onClick="{{c.claim}}" style="font: inherit; font-size: 13px; font-weight: 600; padding: 9px 14px; border-radius: 8px; border: 1px solid #5B2DB3; background: #FFFFFF; color: #5B2DB3; cursor: pointer">We already do this — update Our Services</button>
+<button type="button" style="font: inherit; font-size: 13px; font-weight: 600; padding: 9px 14px; border-radius: 8px; border: none; background: #5B2DB3; color: #FFFFFF; cursor: pointer">Add as a growth capability</button>
+<button type="button" style="font: inherit; font-size: 13px; padding: 9px 14px; border-radius: 8px; border: 1px solid #C9CCD3; background: #FFFFFF; color: #2B2F38; cursor: pointer">Find a teaming partner</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-size: 16px; font-weight: 600">Eligibility checks</h3>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 20px">
+<label style="display: flex; gap: 10px; align-items: center; font-size: 15px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #1F4FD8">Can comply with federal, state, local law</label>
+<label style="display: flex; gap: 10px; align-items: center; font-size: 15px"><input type="checkbox" checked style="width: 18px; height: 18px; accent-color: #1F4FD8">Officer available to sign</label>
+<label style="display: flex; gap: 10px; align-items: center; font-size: 15px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1F4FD8">References we can name</label>
+<label style="display: flex; gap: 10px; align-items: center; font-size: 15px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #1F4FD8">Insurance the City requires</label>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; background: #FFFFFF; border: 1px solid #D5DBEA; border-radius: 12px; box-shadow: 0 6px 20px rgba(22, 24, 29, 0.06)">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 15px; font-weight: 600">Workable: 3 have · 1 partial · 2 to unlock · 0 disqualifiers</div>
+<div style="font-size: 13px; color: #8A5300">Still open: 2 eligibility checks · decide how to cover the 2 new capabilities</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<a href="Step2-Solicitation.dc.html" style="font-size: 14px; font-weight: 500">← Back</a>
+<button type="button" style="font: inherit; font-size: 15px; font-weight: 600; padding: 12px 18px; border-radius: 10px; border: 1px solid #B42318; background: #FFFFFF; color: #B42318; cursor: pointer">Disqualified — no bid</button>
+<a href="Step4-Decide.dc.html" style="font-size: 15px; font-weight: 600; padding: 12px 20px; border-radius: 10px; background: #1F4FD8; color: #FFFFFF; text-decoration: none">Fit is workable — decide →</a>
+</div>
+</div>
+</section>
+
+<aside aria-label="Pursuit brief" style="flex: 1 1 320px; max-width: 380px; min-width: 0; background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h3 style="margin: 0; font-size: 17px; font-weight: 700">Pursuit brief</h3>
+<div style="font-size: 13px; color: #5B6170">Grows one section per step.</div>
+</div>
+<sc-for list="{{brief}}" as="g" hint-placeholder-count="6">
+<div style="{{g.box}}">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+<span style="font-size: 13px; font-weight: 700">{{g.title}}</span>
+<span style="{{g.tagStyle}}">{{g.tag}}</span>
+</div>
+<sc-for list="{{g.items}}" as="it" hint-placeholder-count="2">
+<div style="{{g.itemStyle}}">{{it.t}}</div>
+</sc-for>
+</div>
+</sc-for>
+</aside>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1400}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { open: 'c5', claimed: {} }; }
+  renderVals() {
+    const cur = 3;
+    const S = [
+      ['Snapshot', 'Worth a look?', 'Step1-Snapshot.dc.html'],
+      ['Solicitation', 'What do we submit?', 'Step2-Solicitation.dc.html'],
+      ['Fit', 'Can we deliver?', 'Step3-Fit.dc.html'],
+      ['Decide', 'Should we bid?', 'Step4-Decide.dc.html'],
+      ['Build the bid', 'Product + proposal', 'Step5-BuildTheBid.dc.html'],
+      ['Submit', 'Ship it', 'Step6-Submit.dc.html'],
+      ['Outcome', 'Did we win?', 'Main.dc.html']
+    ];
+    const approved = cur >= 5;
+    const steps = S.map((s, i) => {
+      const n = i + 1, done = n < cur, now = n === cur, locked = n >= 5 && !approved;
+      return {
+        label: s[0], q: locked ? 'After approval' : s[1], href: s[2], mark: done ? '✓' : String(n), aria: now ? 'step' : 'false',
+        wrap: 'display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;text-decoration:none;min-width:0;' + (now ? 'background:#EEF2FD;box-shadow:inset 0 -3px 0 #1F4FD8;' : '') + (locked ? 'opacity:.6;' : ''),
+        badge: 'flex:none;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;' + (done ? 'background:#1E7A4C;color:#FFFFFF;' : now ? 'background:#1F4FD8;color:#FFFFFF;' : 'background:#FFFFFF;color:#5B6170;border:1.5px solid #C9CCD3;'),
+        labelStyle: 'font-size:14px;font-weight:600;white-space:nowrap;color:' + (now ? '#1F4FD8' : done ? '#1E7A4C' : '#16181D')
+      };
+    });
+    const B = [
+      ['Snapshot', ['Enterprise work order management system', '$1.00M est. · closes Dec 1 (46 days)', 'Legacy priority 78 · fit 75', 'Questions due Nov 19, 3:00 PM MDT']],
+      ['Solicitation', ['21 fragments → 12 items', '5 to submit · 5 rules · 1 PDF', 'Contact: S. Brown (single point)']],
+      ['Fit', ['3 have · 1 partial · 2 new capabilities', '0 hard disqualifiers']],
+      ['Decide', ['Win probability and value', 'Approver and decision']],
+      ['Build the bid', ['Product defined · MVP plan', 'Submission items left']],
+      ['Submit', ['Ship by Nov 30']]
+    ];
+    const brief = B.map((b, i) => {
+      const n = i + 1, known = n < cur, now = n === cur;
+      return {
+        title: n + ' · ' + b[0],
+        tag: known ? 'Known' : now ? 'Adding now' : 'Step ' + n,
+        tagStyle: 'font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;' + (known ? 'background:#E6F3EC;color:#1E5C3B' : now ? 'background:#EEF2FD;color:#163BA6' : 'background:#F1F2F4;color:#5B6170'),
+        box: 'display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:10px;' + (now ? 'border:1.5px solid #1F4FD8;background:#FAFBFF' : known ? 'border:1px solid #E4E5E9' : 'border:1px dashed #D3D5DA'),
+        itemStyle: 'font-size:13px;line-height:1.4;' + (known || now ? 'color:#2B2F38' : 'color:#7A808C'),
+        items: (known || now ? b[1] : ['Unlocks at step ' + n]).map((t) => ({ t }))
+      };
+    });
+    const chip = (s) => 'font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;' + (s === 'We have it' ? 'background:#E6F3EC;color:#1E5C3B' : s === 'Partly' ? 'background:#FFF0D6;color:#7A4A00' : 'background:#EFE8FC;color:#5B2DB3');
+    const C = [
+      { id: 'c1', name: 'Custom workflow application', why: 'Create, assign, track and close work orders', match: 'Our Services: [custom application service]', status: 'We have it', what: '', gain: '', how: '', kw: '' },
+      { id: 'c2', name: 'Data migration from the legacy system', why: 'Move the City’s existing work orders and assets', match: 'Our Services: [data engineering service]', status: 'We have it', what: '', gain: '', how: '', kw: '' },
+      { id: 'c3', name: 'Implementation and staff training', why: 'Roll out and train City crews and supervisors', match: 'Our Services: [training service]', status: 'We have it', what: '', gain: '', how: '', kw: '' },
+      { id: 'c4', name: 'Mobile app for field crews', why: 'Crews close work orders from the field, offline', match: 'Extends [custom application service]', status: 'Partly', what: 'A phone and tablet app that works without signal and syncs later, with photos and signatures.', gain: 'A reusable offline-sync mobile shell for every future field-service bid.', how: 'Add an offline mobile release to the MVP plan; ~3 extra weeks.', kw: '' },
+      { id: 'c5', name: 'Asset and maintenance management (CMMS)', why: 'Asset inventory, preventive maintenance schedules, cost per asset', match: 'No match in Our Services', status: 'New capability', what: 'A computerized maintenance management system: the register of everything the City maintains (roads, vehicles, parks, pipes), with schedules that create work orders automatically and track labour and parts cost.', gain: 'Our first public-works product. Even without the award, the spec and MVP give us a demo and a service entry to bid the next CMMS RFP.', how: 'Model assets, PM schedules and cost roll-ups as release 2 of the MVP. Pair with a public-works SME for the proposal.', kw: 'CMMS, asset management, preventive maintenance, public works' },
+      { id: 'c6', name: 'Hosted SaaS operations with an SLA', why: 'Uptime, backups, security and 24/7 support commitments', match: 'No match in Our Services', status: 'New capability', what: 'Running the system for the City as a service: hosting, monitoring, backups, security reviews and a support desk with response-time guarantees.', gain: 'A standard SaaS operations package we can attach to every software bid.', how: 'Define the SLA tiers and hosting stack in the spec; price support as a yearly line.', kw: 'SaaS, hosting, SLA, managed services, support' }
+    ];
+    const caps = C.map((c) => {
+      const canOpen = c.status !== 'We have it';
+      const isOpen = canOpen && this.state.open === c.id;
+      const claimed = !!this.state.claimed[c.id];
+      return {
+        ...c, chip: chip(c.status), isOpen, exp: isOpen ? 'true' : 'false', claimed, notClaimed: !claimed,
+        toggle: () => this.setState({ open: this.state.open === c.id ? '' : c.id }),
+        claim: () => this.setState({ claimed: { ...this.state.claimed, [c.id]: !claimed } })
+      };
+    });
+    return { steps, brief, caps };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gov pursuit flow map</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#1F4FD8}a:hover{color:#163BA6}
+</style>
+</helmet>
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16181D; background: #F6F6F3; min-height: 100%; box-sizing: border-box; padding: 56px 40px 64px">
+<div style="max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px">
+
+<header style="display: flex; flex-direction: column; gap: 12px; max-width: 900px">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #1F4FD8">Qualification workspace · redesign</div>
+<h1 style="margin: 0; font-size: 44px; line-height: 1.1; font-weight: 700">One question per step. One action to move on.</h1>
+<p style="margin: 0; font-size: 18px; line-height: 1.55; color: #3D424D">Each step answers a single question, adds what you learned to the Pursuit brief, and ends with one primary button that takes you to the next step. Cheap questions come first, so you can pass early before spending real effort.</p>
+</header>
+
+<div style="overflow-x: auto">
+<div style="display: grid; grid-template-columns: repeat(7, minmax(180px, 1fr)); gap: 12px; min-width: 1300px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="7">
+<article style="{{s.card}}">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="{{s.badge}}">{{s.n}}</span>
+<span style="font-size: 12px; font-weight: 600; color: #5B6170">{{s.effort}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 20px; font-weight: 700">{{s.label}}</h2>
+<div style="font-size: 15px; font-weight: 500; color: #1F4FD8">{{s.q}}</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #5B6170">You learn</div>
+<div style="font-size: 14px; line-height: 1.45; color: #2B2F38">{{s.learn}}</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #5B6170">You do</div>
+<div style="font-size: 14px; line-height: 1.45; color: #2B2F38">{{s.doit}}</div>
+</div>
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid #E4E5E9">
+<div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #5B6170">Primary button</div>
+<a href="{{s.href}}" style="display: inline-block; padding: 8px 10px; border-radius: 8px; background: #1F4FD8; color: #FFFFFF; font-size: 13px; font-weight: 600; text-decoration: none; line-height: 1.3">{{s.cta}}</a>
+<div style="font-size: 12px; line-height: 1.4; color: #5B6170">{{s.exit}}</div>
+</div>
+</article>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 12px; background: #FFF6E5; border: 1px solid #F0D9A8; font-size: 15px; color: #5C3D00">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+<span><strong>Approval is the hinge.</strong> Steps 1–4 are qualification (cheap, reversible). Steps 5–7 open only after a second admin approves the pursuit; before that they show a preview of what unlocks, not live controls.</span>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-size: 26px; font-weight: 700">What changes from today's workspace</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px">
+<sc-for list="{{fixes}}" as="f" hint-placeholder-count="8">
+<div style="background: #FFFFFF; border: 1px solid #E4E5E9; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 12px; font-weight: 600; color: #B42318">Today: {{f.today}}</div>
+<div style="font-size: 15px; line-height: 1.5; color: #16181D"><strong>Redesign:</strong> {{f.fix}}</div>
+<div style="font-size: 12px; color: #5B6170; font-family: ui-monospace, Menlo, monospace">{{f.code}}</div>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const S = [
+      ['Snapshot', 'Is it worth a look?', '2 min', 'What they want in one paragraph, value, deadline, buyer, legacy scores, whether we have pursued this agency before.', 'Read the brief. Pass with a reason, or pull the solicitation.', 'Worth a look: get the solicitation', 'Moves on when you choose to look further.', 'Step1-Snapshot.dc.html'],
+      ['Solicitation', 'What do we submit, under what rules?', '10 min', 'Raw fragments turned into defined items: what we submit, the rules, what they are buying, what applies after award. Shown as a clickable map.', 'Drop the ZIP. Click each item, read its definition and source, confirm or edit. Check the ones the AI inferred.', 'Confirm the package: assess fit', 'Moves on when the ZIP is attested and every item is confirmed. Items become the submission checklist.', 'Step2-Solicitation.dc.html'],
+      ['Fit', 'Can we deliver, and what would we learn?', '10 min', 'The capabilities the work needs, each assessed by AI against Our Services: have it, partly, or a new capability to unlock.', 'Confirm matches. For a new capability: claim it (updates Our Services), add it as growth, or find a partner.', 'Fit is workable: decide', 'Moves on when every capability has a decision and no hard disqualifier is open.', 'Step3-Fit.dc.html'],
+      ['Decide', 'Should we bid?', '5 min', 'Win probability, expected value against bid cost, a recommendation.', 'Rate the factors only you know. Pick go / go with conditions / no-bid. Send to an approver.', 'Request approval', 'Moves on when a second admin approves (separation of duties).', 'Step4-Decide.dc.html'],
+      ['Build the bid', 'What is the product, and is the bid ready?', 'Weeks', 'Product definition, then spec and MVP plan (done before the proposal), then each proposal part. A live countdown and on-time probability.', 'Answer what the AI asks. Pick its suggestions or a flagged filler. Approve each part.', 'Package the submission', 'Moves on when every submission item is done and no filler remains.', 'Step5-BuildTheBid.dc.html'],
+      ['Submit', 'Is it out the door?', '1 hr', 'Ship-by date, what is still missing, the export.', 'Export the package, submit on the portal, record the confirmation.', 'Record submission', 'Moves on when the external submission is recorded.', 'Step6-Submit.dc.html'],
+      ['Outcome', 'Did we win?', '5 min', 'Award result and debrief notes.', 'Record win / loss; a private case-study candidate is drafted.', 'Close the pursuit', 'Ends the pursuit.', 'Main.dc.html']
+    ];
+    const steps = S.map((s, i) => {
+      const post = i >= 4;
+      return {
+        n: String(i + 1), label: s[0], q: s[1], effort: s[2], learn: s[3], doit: s[4], cta: s[5], exit: s[6], href: s[7],
+        card: 'background:' + (post ? '#FBFBFA' : '#FFFFFF') + ';border:1px solid ' + (post ? '#E4E5E9' : '#D5DBEA') + ';' + (post ? 'border-style:dashed;' : '') + 'border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:16px;min-height:430px',
+        badge: 'width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;' + (post ? 'background:#FFFFFF;color:#5B6170;border:1.5px solid #C9CCD3' : 'background:#1F4FD8;color:#FFFFFF')
+      };
+    });
+    const fixes = [
+      { today: 'the “Next:” banner only shows on Go/No-go.', fix: 'every step ends in the same footer: what is done, what blocks, and one primary button to the next step.', code: 'govNextStep.ts → per-step {title, cta, targetStep, blockers}' },
+      { today: 'the stepper colors the clicked tab, and Build shows a green check before approval.', fix: 'the stepper shows where the pursuit really is (the first unfinished step); steps after approval are locked previews.', code: 'workspaceSteps.ts deriveStepState → frontier, not activeStep' },
+      { today: 'the “Qualification drawer” sits under every step with requirement entry and Approve mixed together.', fix: 'split it: “add a requirement” lives in Solicitation, decision and approval live in Decide. The drawer goes away.', code: 'AdminGovQualificationPage.tsx ~L1474–1550' },
+      { today: '“What they want” first appears at Proposal (step 4).', fix: 'it is the first thing you read, in Snapshot, so you can pass in two minutes.', code: 'ProposalSummaryPanel → Snapshot step' },
+      { today: 'Fit (“what we offer”) and Gaps are collapsed cards inside Requirements.', fix: 'Fit is its own step, one row per requirement, with eligibility checks you tick.', code: 'govGaps.ts + service matches → Fit step' },
+      { today: 'requirements arrive as broken fragments (“…both asset management and”).', fix: 'the extractor stops splitting on PDF line wraps; fragments are merged and flagged for confirmation.', code: 'proposalExtractor.ts L200 split(/…|\\n+/)' },
+      { today: 'Go/No-go shows “Approval allowed: yes” beside “Blocking requirements: 4”.', fix: 'one recommendation with its reasons; submission-stage evidence is shown as “needed before submit”, not “blocking”.', code: 'BidDecisionDashboard + Go/No-go StatCards' },
+      { today: 'requirements are a flat list of 20–30 sentence fragments, all ticked by default.', fix: 'the AI classifies them into what we submit, rules, scope and after-award, merges fragments, and shows them as a connected map you click into.', code: 'new: requirementTaxonomy (category, links, sourceRefs)' },
+      { today: 'Fit only says strong / moderate / none against Our Services.', fix: 'missing capabilities become “new capability” cards with an explanation, and “We already do this” writes back to Our Services.', code: 'serviceCatalog.ts createServiceOffering ← Fit' },
+      { today: 'the build spec and plan appear after approval with no deadline tie.', fix: 'product definition → spec → MVP plan are scheduled to finish weeks before the proposal is due, and feed the technical approach.', code: 'BuildSpecPanel + GovBuildPlanAIPanel → Build the bid, track A/B' },
+      { today: 'Draft with AI fills gaps silently or not at all.', fix: 'it stops and asks, offers suggestions, or inserts a filler that is flagged and blocks export; a countdown and on-time probability sit on top.', code: 'responseSlots: gaps[], filler flag, export gate' },
+      { today: 'you hunt across cards and the right rail for facts.', fix: 'the Pursuit brief in the right rail grows one section per step, so everything learned so far is in one place.', code: 'RightRail.tsx → PursuitBrief' }
+    ];
+    return { steps, fixes };
+  }
+}
+</script>
+</body>
+</html>
