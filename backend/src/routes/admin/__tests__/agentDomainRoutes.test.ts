@@ -284,15 +284,16 @@ describe('the surface reports the real state, including the bad parts', () => {
       .get('/api/admin/agent-domains')
       .set('Authorization', `Bearer ${tokenFor('owner')}`);
     const blocked = res.body.domains.filter((d: { manager_can_reach: boolean }) => !d.manager_can_reach);
-    // Four domains are genuinely blocked. A zero here would mean the measurement was dropped.
-    expect(blocked.length).toBe(4);
+    // THREE domains are genuinely blocked, corrected from four on 2026-10-15: admissions was a
+    // false negative from an email mismatch. A zero here would mean the measurement was dropped.
+    expect(blocked.length).toBe(3);
     for (const d of blocked) {
       expect(typeof d.blocker).toBe('string');
       expect(d.blocker.length).toBeGreaterThan(20);
       expect(d.blocker).toMatch(/^manager_[a-z_]+:/);
     }
-    expect(res.body.blocked).toBe(4);
-    expect(res.body.reachable).toBe(6);
+    expect(res.body.blocked).toBe(3);
+    expect(res.body.reachable).toBe(7);
   });
 
   it('no capability or threshold renders as accepted', async () => {

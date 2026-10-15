@@ -92,6 +92,23 @@ const BASE_SQL = `
  * member row in a stale org and hand someone a domain through it.
  *
  * Returns ids as TEXT, because that is what `manager_identity_id` stores.
+ *
+ * ## IT MATCHES TWO ADDRESSES, AND THAT IS NOT DEFENSIVENESS
+ *
+ * People here hold a work login and a personal address, and `org_members` sometimes carries the
+ * personal one. Measured 15 Oct 2026 across all ten domain managers, 2 of 10 differ:
+ *
+ *   admissions  org_members taiwooludimimu@gmail.com  ->  enrollment taiwo@colaberry.com
+ *   platform    org_members kesetebirhan@gmail.com    ->  enrollment kes@colaberry.com
+ *
+ * An exact `org_members.email` match therefore resolves TAIWO TO ZERO IDENTITIES even though he
+ * signs in as a full admin, and he would open his own portal to an empty list. The first version
+ * of this function did exactly that.
+ *
+ * The join goes through `org_members.enrollment_id`, which is a REAL FOREIGN KEY and is populated
+ * on 29 of 29 rows. It is not a string heuristic: matching on the localpart would have failed here
+ * anyway, because `taiwo` and `taiwooludimimu` do not share one. `platform_identity_id` would be
+ * the proper identity link and is NULL on all 29 rows, so that layer cannot be used yet.
  */
 export async function resolveOwnerIdentityIds(
   sequelize: Sequelize,
@@ -100,11 +117,15 @@ export async function resolveOwnerIdentityIds(
   const trimmed = (email || '').trim();
   if (!trimmed) return [];
   const rows = await sequelize.query<{ id: string }>(
-    `SELECT id::text AS id FROM org_members
-      WHERE lower(email) = lower($1) AND org_id = $2`,
+    `SELECT om.id::text AS id
+       FROM org_members om
+       LEFT JOIN enrollments e ON e.id = om.enrollment_id
+      WHERE om.org_id = $2
+        AND (lower(om.email) = lower($1) OR lower(e.email) = lower($1))`,
     { bind: [trimmed, AGENT_DOMAIN_ORG_ID], type: QueryTypes.SELECT },
   );
-  return rows.map((r) => r.id);
+  // One person can hold more than one member row; de-duplicate so a domain is not counted twice.
+  return [...new Set(rows.map((r) => r.id))];
 }
 
 /** Every provisioned domain, unscoped. */

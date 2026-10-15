@@ -127,20 +127,42 @@ describe('AF2.4 the cohort route is not reintroduced', () => {
   const src = fs.readFileSync(READER_SRC, 'utf8');
   const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
-  it('the reader SQL never mentions cohorts', () => {
+  it('nothing in the reader mentions cohorts, anywhere', () => {
     // The whole defect is that visibility was routed through `cohort_id`. If the word appears in
     // executable code here, the bug has a path back in.
     expect(/cohort/i.test(code)).toBe(false);
   });
 
-  it('the reader SQL never touches the enrollments table', () => {
-    // `/admin/projects` reaches projects VIA enrollments. This reader starts from the anchor, so a
-    // project whose enrollment has a NULL cohort is returned like any other.
-    expect(/\benrollments\b/i.test(code)).toBe(false);
+  /**
+   * THIS ASSERTION WAS WRONG ON ITS FIRST VERSION, and the correction is the interesting part.
+   *
+   * It originally said the reader must not touch `enrollments` at all. That conflated two
+   * different uses of the same table:
+   *
+   *   - routing VISIBILITY through enrollments (and thus cohorts) is the defect;
+   *   - resolving IDENTITY through `org_members.enrollment_id` is a real foreign key, and is the
+   *     only way to match a manager whose org_members row carries their personal address while
+   *     they sign in with their work one. Two of ten managers are in exactly that state.
+   *
+   * So the ban belongs on the DOMAIN query, not on the file.
+   */
+  it('the DOMAIN query reaches projects from the anchor, never through enrollments', () => {
+    const base = code.slice(code.indexOf('const BASE_SQL'), code.indexOf('export async function'));
+    expect(/\benrollments\b/i.test(base)).toBe(false);
+    expect(/cohort/i.test(base)).toBe(false);
+    // It starts from the anchor table, which is what makes a cohort-less project visible.
+    expect(base).toMatch(/FROM agent_domain_projects adp/);
   });
 
-  it('POSITIVE CONTROL: the cohort detector fires on text that does mention it', () => {
-    // Proves the two assertions above can fail rather than being vacuously true.
+  it('the IDENTITY resolver is allowed to join enrollments, and does', () => {
+    const resolver = code.slice(code.indexOf('resolveOwnerIdentityIds'));
+    expect(resolver).toMatch(/LEFT JOIN enrollments e ON e\.id = om\.enrollment_id/);
+    // but still never by cohort
+    expect(/cohort/i.test(resolver)).toBe(false);
+  });
+
+  it('POSITIVE CONTROL: the detectors fire on text that does mention them', () => {
+    // Proves the assertions above can fail rather than being vacuously true.
     const planted = 'JOIN enrollments e ON e.id = p.enrollment_id WHERE e.cohort_id IS NOT NULL';
     expect(/cohort/i.test(planted)).toBe(true);
     expect(/\benrollments\b/i.test(planted)).toBe(true);
@@ -232,6 +254,36 @@ describe('AF2.4 /agent-domains-mine scopes by identity, not by section', () => {
     // in a stale org and hand someone a domain through it.
     const orgBind = seenBinds.find((b) => b.includes(AGENT_DOMAIN_ORG_ID));
     expect(orgBind).toBeDefined();
+  });
+
+  it('resolves a manager whose login email differs from their org_members email', async () => {
+    // THE CONCRETE CASE, measured 15 Oct: admissions' org_members row carries
+    // taiwooludimimu@gmail.com while Taiwo signs in as taiwo@colaberry.com. An exact
+    // org_members.email match resolved him to ZERO identities and showed him an empty portal,
+    // even though he is a full admin. The resolver now also matches the enrollment email.
+    identityRows.push({ id: 'id-taiwo' });
+    domainRows.push(domain('admissions', 'id-taiwo', { stories: 53 }));
+
+    const res = await request(app())
+      .get('/api/admin/agent-domains-mine')
+      .set('Authorization', `Bearer ${scopedToken('taiwo@colaberry.com')}`);
+
+    expect(res.body.domains.map((d: { domain_key: string }) => d.domain_key)).toEqual(['admissions']);
+    // and the query it used offered BOTH addresses a chance to match
+    const sql = seenSql.find((s) => /FROM\s+org_members/i.test(s)) ?? '';
+    expect(sql).toMatch(/lower\(om\.email\)\s*=\s*lower\(\$1\)/);
+    expect(sql).toMatch(/lower\(e\.email\)\s*=\s*lower\(\$1\)/);
+  });
+
+  it('de-duplicates when one person holds more than one member row', async () => {
+    // The two-address join can return the same member row twice. Counting a domain twice would
+    // overstate what someone owns.
+    identityRows.push({ id: 'id-ali' }, { id: 'id-ali' });
+    const res = await request(app())
+      .get('/api/admin/agent-domains-mine')
+      .set('Authorization', `Bearer ${scopedToken('ali@colaberry.com')}`);
+    expect(res.body.resolved_identities).toBe(1);
+    expect(res.body.domains).toHaveLength(2);
   });
 
   it('the email comes from the verified token, never from the query string', async () => {
