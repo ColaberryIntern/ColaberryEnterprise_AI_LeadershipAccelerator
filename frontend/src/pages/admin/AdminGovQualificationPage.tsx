@@ -24,8 +24,10 @@ import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
 import { SubmissionReadinessPanel } from './govWorkspace/SubmissionReadinessPanel';
 import { AssignmentOverviewPanel } from './govWorkspace/AssignmentOverviewPanel';
-import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
+import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep, type StepStateInput } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
+import { StepFooter } from './govWorkspace/StepFooter';
+import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
 
 /** The discovery opportunity's display details fetched for the decoupled (ZIP) workspace. */
@@ -1035,6 +1037,22 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     }
   }, [extract, isDecoupled, record, version, extractFile, ws, run, canonical, biddingEntity, fromParam, agencyParam]);
 
+  const stepInput: StepStateInput | null = ws ? {
+    zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
+    establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
+    decision: record ? record.decision : null,
+    proposalContentReady: (ws.responseSlots?.length ?? 0) > 0 && (ws.responseSlots ?? []).every((s) => s.status === 'approved'),
+    hasBuild: !!(ws.build && (ws.build.deliveryProjectId || (ws.build.buildStoryCount ?? 0) > 0)),
+    submissionStatus: ws.submission ? ws.submission.status : null,
+    outcome: ws.submission ? ws.submission.outcome : null,
+  } : null;
+  const stepModel = stepInput ? deriveStepState(activeStep, stepInput) : null;
+  const frontier = stepModel ? stepModel.frontier : null;
+  // Land on the frontier (first unfinished step) on a fresh load with no explicit ?tab=.
+  useEffect(() => {
+    if (ws && !tabParam && frontier && frontier !== activeStep) setStep(frontier);
+  }, [ws, tabParam, frontier, activeStep, setStep]);
+
   return (
     <div className="admin-page">
       {header}
@@ -1057,24 +1075,19 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </div>
           )}
 
-          <StepBar
-            steps={WORKSPACE_STEPS}
-            onStep={setStep}
-            stateByStep={deriveStepState(activeStep, {
-              zipAttested: !!(ws.zipAttestation && ws.zipAttestation.sha256),
-              establishedCount: ws.evaluation ? ws.evaluation.evals.length : 0,
-              decision: record ? record.decision : null,
-              proposalContentReady: (ws.responseSlots?.length ?? 0) > 0 && (ws.responseSlots ?? []).every((s) => s.status === 'approved'),
-              hasBuild: !!(ws.build && (ws.build.deliveryProjectId || (ws.build.buildStoryCount ?? 0) > 0)),
-              submissionStatus: ws.submission ? ws.submission.status : null,
-              outcome: ws.submission ? ws.submission.outcome : null,
-            })}
-          />
+          {stepModel && (
+            <StepBar
+              steps={WORKSPACE_STEPS}
+              onStep={setStep}
+              statuses={stepModel.statuses}
+              frontier={stepModel.frontier}
+            />
+          )}
 
           <div className="row g-4">
             <div className="col-12 col-lg-8">{/* ── LEFT: the active step's panel + the always-reachable qualification drawer ── */}
 
-          <GovTabPanel active={activeStep === 'gono'}>
+          <GovTabPanel active={activeStep === 'decide'}>
 
           {(() => {
             const ns = deriveNextStep({
@@ -1132,6 +1145,16 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {/* Deadline countdown now lives in the persistent right rail (see RightRail below). */}
+
+          {stepModel && (
+            <StepFooter
+              ready={stepModel.approved}
+              statusLine={stepModel.approved ? 'Approved — the build and submission steps are unlocked.' : 'Open the qualification, record your call, and approve (a second admin) below.'}
+              nextLine={stepModel.approved ? 'Next: define the product and build the bid.' : 'Approval is the hinge — steps 5–7 unlock once a second admin approves.'}
+              onBack={() => setStep('fit')}
+              primary={stepModel.approved ? { label: 'Build the bid', onClick: () => setStep('build') } : { label: 'Approve below to continue', disabled: true, onClick: () => undefined }}
+            />
+          )}
 
           </GovTabPanel>{/* end Go/No-go (was Overview) */}
 
@@ -1276,7 +1299,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                     </button>
                   ) : (
                     <div className="alert alert-info py-2 mb-0" role="status">
-                      <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification (in <strong>Qualification actions</strong> below) to confirm these into established requirements.
+                      <i className="ri-information-line me-1" aria-hidden="true" />Open the qualification on the <strong>Decide</strong> step to confirm these into established requirements.
                     </div>
                   )}
                 </>
@@ -1352,12 +1375,26 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
+          {stepModel && (
+            <StepFooter
+              ready={!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0}
+              statusLine={!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0 ? 'Ready: the ZIP is attested and requirements are established.' : 'Not yet: attest the ZIP and establish the cited requirements.'}
+              nextLine="Next: assess whether we can deliver it, and what it would teach us."
+              onBack={() => setStep('snapshot')}
+              primary={{ label: 'Confirm the package — assess fit', disabled: !(!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0), onClick: () => setStep('fit') }}
+              blockers={[
+                ...(ws.zipAttestation && ws.zipAttestation.sha256 ? [] : ['Upload and attest the solicitation ZIP.']),
+                ...((ws.evaluation?.evals.length ?? 0) > 0 ? [] : ['Establish at least one cited requirement.']),
+              ]}
+            />
+          )}
+
           </GovTabPanel>{/* end Solicitation */}
 
           {/* The former Dates & Messages tab (dossier, key dates, amendments inbox) now lives in the
               persistent right rail (see RightRail below), visible on every step. */}
 
-          <GovTabPanel active={activeStep === 'proposal'}>
+          <GovTabPanel active={activeStep === 'snapshot'}>
 
           {(ws.source || isDecoupled) && (
             <SectionCard title="What they want / what we&apos;d build (AI)" icon="sparkling-2-line"
@@ -1369,22 +1406,30 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {(
-            <SectionCard title="Response checklist" icon="draft-line"
-              subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
-              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} authoring={{
-                canAuthor: !!ws.build?.deliveryProjectId,
-                busy,
-                onSave: (rid, content) => run(() => saveGovProposalResponse(canonical, rid, content), 'Response saved.'),
-                onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
-                onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
-                onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
-              }} />
+            <SectionCard title="Snapshot facts" icon="dashboard-3-line"
+              subtitle="The quick read — value, timing and the legacy scores — so you can pass in two minutes if it is clearly not for us.">
+              <div className="row g-3">
+                <div className="col-6 col-lg-3"><StatCard label="Estimated value" value={fmtValue(oppDetail?.opportunity?.estimatedValue ?? null)} icon="money-dollar-circle-line" tone="neutral" hint="unverified" /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Closes" value={closeLabel(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} icon="calendar-event-line" tone="neutral" hint={daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null) !== null ? `${daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null)} days` : undefined} /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Legacy priority" value={oppDetail?.opportunity?.priorityScore ?? '—'} icon="bar-chart-box-line" tone="neutral" hint="advisory" /></div>
+                <div className="col-6 col-lg-3"><StatCard label="Legacy fit" value={oppDetail?.opportunity?.fitScore ?? '—'} icon="scales-3-line" tone="neutral" hint="advisory" /></div>
+              </div>
             </SectionCard>
           )}
 
-          </GovTabPanel>{/* end Proposal */}
+          {stepModel && (
+            <StepFooter
+              ready
+              statusLine="Read the short version. If it is clearly not for us, pass now."
+              nextLine="Next: pull the solicitation ZIP and read the real requirements."
+              secondary={record ? { label: 'Pass on this', onClick: () => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'no_bid', rationale: rationale || 'passed at snapshot' }), 'Recorded: no bid.') } : null}
+              primary={{ label: 'Worth a look — get the solicitation', onClick: () => setStep('solicitation') }}
+            />
+          )}
 
-          <GovTabPanel active={activeStep === 'requirements'}>
+          </GovTabPanel>{/* end Snapshot */}
+
+          <GovTabPanel active={activeStep === 'fit'}>
 
           {ws.evaluation && (ws.source || isDecoupled) && (
             <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
@@ -1467,6 +1512,17 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
+          {stepModel && (
+            <StepFooter
+              ready
+              statusLine="Confirm the matches and eligibility, then decide."
+              nextLine="Next: weigh win probability and value, and request approval."
+              onBack={() => setStep('solicitation')}
+              secondary={record ? { label: 'Disqualified — no bid', onClick: () => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: 'no_bid', rationale: rationale || 'disqualified at fit' }), 'Recorded: no bid.') } : null}
+              primary={{ label: 'Fit is workable — decide', onClick: () => setStep('decide') }}
+            />
+          )}
+
           </GovTabPanel>{/* end Requirements */}
 
           {/* Manual document review moved up into the Solicitation step above (one panel per step). */}
@@ -1474,7 +1530,8 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* ── Qualification drawer: provenance / assessment / approvals. Always reachable from any tab, but
                 de-emphasized (collapsible) so it does not dominate the workspace; open by default only until a
                 record exists so "Open qualification" is one glance away on arrival. ─ */}
-          <SectionCard key={record?.decision ?? 'none'} title="Qualification drawer — open, decide & approve" icon="quill-pen-line" collapsible defaultOpen={!record || record.decision !== 'approved_bid_pursuit'}>
+          {activeStep === 'decide' && (
+          <SectionCard key={record?.decision ?? 'none'} title="Open, decide &amp; approve" icon="quill-pen-line" collapsible defaultOpen={!record || record.decision !== 'approved_bid_pursuit'}>
             <div className="mb-3 d-flex flex-wrap align-items-end gap-2">
               <label className="form-label small mb-0">Bidding entity
                 <input className="form-control form-control-sm" value={biddingEntity} onChange={(e) => setBiddingEntity(e.target.value)} />
@@ -1548,6 +1605,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               </>
             )}
           </SectionCard>
+          )}
 
           <GovTabPanel active={activeStep === 'build'}>
           {/* ── Build tab: the AI build spec/research (advisory) + the solution-build track (forward) + the separate build authorization ─ */}
@@ -1616,6 +1674,20 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </SectionCard>
           )}
 
+          {(
+            <SectionCard title="Proposal responses" icon="draft-line"
+              subtitle="One slot per established requirement the proposal must answer, each citing its source. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
+              <ResponseSlotsChecklist slots={ws.responseSlots ?? []} authoring={{
+                canAuthor: !!ws.build?.deliveryProjectId,
+                busy,
+                onSave: (rid, content) => run(() => saveGovProposalResponse(canonical, rid, content), 'Response saved.'),
+                onReview: (rid, decision) => run(() => reviewGovProposalResponse(canonical, rid, decision), 'Response updated.'),
+                onAddFigure: (rid, fig) => run(() => addGovProposalFigure(canonical, rid, fig), 'Figure attached.'),
+                onRemoveFigure: (rid, ref) => run(() => removeGovProposalFigure(canonical, rid, ref), 'Figure removed.'),
+              }} />
+            </SectionCard>
+          )}
+
           </GovTabPanel>{/* end Build */}
 
           <GovTabPanel active={activeStep === 'submit'}>
@@ -1672,7 +1744,29 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </GovTabPanel>{/* end Outcome & Case Study */}
 
             </div>{/* end LEFT column */}
-            <aside className="col-12 col-lg-4">{/* ── RIGHT: persistent pursuit rail (deadline, dates+buyer, messages, team) — on every step ── */}
+            <aside className="col-12 col-lg-4">{/* ── RIGHT: pursuit brief + persistent rail (deadline, dates+buyer, messages, team) ── */}
+              {stepModel && (
+                <PursuitBrief sections={WORKSPACE_STEPS.filter((s) => s.n <= 6).map((s): BriefSection => {
+                  const st = stepModel.statuses[s.key];
+                  const state: BriefSection['state'] = st === 'current' ? 'adding' : st === 'done' ? 'known' : 'future';
+                  const facts: string[] = [];
+                  if (state !== 'future') {
+                    if (s.key === 'snapshot') {
+                      if (oppDetail?.opportunity?.title) facts.push(oppDetail.opportunity.title);
+                      const dl = daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? null);
+                      if (dl !== null) facts.push(`${dl} days to close`);
+                    } else if (s.key === 'solicitation') {
+                      facts.push(`${ws.evaluation?.evals.length ?? 0} requirements established`);
+                      if (ws.zipAttestation && ws.zipAttestation.sha256) facts.push('ZIP attested');
+                    } else if (s.key === 'decide' && record) {
+                      facts.push(`Decision: ${record.decision.replace(/_/g, ' ')}`);
+                    } else if (s.key === 'build' && ws.build?.deliveryProjectId) {
+                      facts.push('Monitored project created');
+                    }
+                  }
+                  return { n: s.n, label: s.label, state, facts };
+                })} />
+              )}
               <RightRail
                 deadline={
                   <DeadlineCard
