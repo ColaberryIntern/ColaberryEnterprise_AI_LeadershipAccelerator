@@ -345,46 +345,55 @@ export interface LiveLifecycle {
  * This is the fact `provider_health` is folded from — and per broadcastStateMachine, a provider
  * event may change health freely but never publishes content on its own.
  */
+/** `status.state` on a per-broadcast video while it is still being received. */
+const LIVE_IN_PROGRESS = 'live-inprogress';
+
+interface RawLiveVideo {
+  uid?: unknown;
+  status?: { state?: unknown };
+}
+
+/**
+ * WHY THIS NO LONGER CALLS `/lifecycle`.
+ *
+ * It used to, on the delivery domain, exactly as Cloudflare's own documentation shows. During
+ * the first production airing (15 Oct 2026) that endpoint returned **401 Unauthorized** the
+ * moment the input was actually broadcasting with `requireSignedURLs` on — while answering
+ * perfectly a few minutes earlier when the same input was idle. Cloudflare documents nothing
+ * about this; the L5.1 research flagged it as an open question and the airing answered it.
+ *
+ * The failure mode was the dangerous kind: a healthy, broadcasting input reported as not
+ * ready, which makes the state machine refuse `go_live` on a class that is airing perfectly
+ * well. An outage reading as "nothing is live".
+ *
+ * So readiness now comes from the API domain, which authenticates with the API token and
+ * worked throughout the airing. Two things are deliberately NOT used:
+ *   - `/lifecycle`, for the reason above.
+ *   - the live input's own `status` field, which stayed **null** for the entire broadcast and
+ *     is therefore not a readiness signal at all, whatever its name suggests.
+ *
+ * `GET /live_inputs/{uid}/videos` is documented only in Cloudflare's guide, not its API
+ * reference, so the response is shape-checked rather than trusted.
+ */
 export async function readLiveLifecycle(uid: string, opts: CloudflareCallOptions = {}): Promise<LiveLifecycle> {
-  const config = requireConfig(opts.config === undefined ? readCloudflareStreamConfig() : opts.config);
   const safe = assertSafeUid(uid);
-  const host = assertSafeSubdomain(config.subdomain);
-  const doFetch = opts.fetchImpl ?? fetch;
-  const started = Date.now();
+  const result = await callApi<unknown>('GET', `/stream/live_inputs/${safe}/videos`, undefined, opts);
 
-  let res: Response;
-  try {
-    res = await doFetch(`https://${host}.cloudflarestream.com/${safe}/lifecycle`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${config.apiToken}` },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (err) {
-    const aborted = (err as Error)?.name === 'TimeoutError' || (err as Error)?.name === 'AbortError';
-    const error_class: CloudflareErrorClass = aborted ? 'Timeout' : 'UpstreamUnavailable';
-    log('cloudflare_lifecycle_failed', 'failure', { uid: safe, error_class, duration_ms: Date.now() - started, correlation_id: opts.correlationId });
-    throw new CloudflareStreamError(error_class, aborted ? 'Cloudflare did not respond in time.' : 'Cloudflare is unreachable.');
-  }
+  // A live input with no broadcasts yet returns an empty list. That is "not live", not an error.
+  const list: RawLiveVideo[] = Array.isArray(result) ? (result as RawLiveVideo[]) : [];
+  const first = list[0];
 
-  if (!res.ok) {
-    const error_class: CloudflareErrorClass = res.status === 401 || res.status === 403
-      ? 'Unauthorized' : res.status === 404 ? 'NotFound' : res.status === 429 ? 'RateLimited' : 'UpstreamUnavailable';
-    log('cloudflare_lifecycle_failed', 'failure', { uid: safe, status: res.status, error_class, correlation_id: opts.correlationId });
-    throw new CloudflareStreamError(error_class, `Cloudflare refused the request (${error_class}).`);
-  }
-
-  let parsed: { live?: unknown; videoUID?: unknown };
-  try {
-    parsed = (await res.json()) as { live?: unknown; videoUID?: unknown };
-  } catch {
-    throw new CloudflareStreamError('MalformedResponse', 'Cloudflare returned a lifecycle response this server could not read.');
-  }
-  // `live` is only true when Cloudflare says so. Anything else — absent, a string, null — is
-  // not live, because the state machine refuses go_live unless health is ready and the safe
-  // direction for an unreadable answer is "not ready".
+  // Only the documented in-progress state counts as live. Anything else — `ready` (a finished
+  // recording), `not-started`, `not-found`, an absent status, a non-string — is NOT live.
+  // The safe direction for an unreadable answer is "not ready", because the state machine
+  // refuses go_live on an unready provider and a wrong "ready" would publish backstage content.
+  const live = first?.status?.state === LIVE_IN_PROGRESS;
+  const rawUid = first?.uid;
   return {
-    live: parsed?.live === true,
-    videoUid: typeof parsed?.videoUID === 'string' && UID_PATTERN.test(parsed.videoUID) ? parsed.videoUID : null,
+    live,
+    // The per-broadcast video uid, and only while that broadcast is actually live. Returning
+    // the uid of a finished recording would invite a caller to treat a replay as a stream.
+    videoUid: live && typeof rawUid === 'string' && UID_PATTERN.test(rawUid) ? rawUid : null,
   };
 }
 
