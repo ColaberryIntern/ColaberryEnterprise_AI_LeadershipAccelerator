@@ -64,7 +64,25 @@ async function listAll(p) {
   return out;
 }
 
-/** Register the bytes with Basecamp and get the sgid everything else refers to. */
+/**
+ * Register the bytes with Basecamp and get an `attachable_sgid`.
+ *
+ * AN SGID CAN BE CONSUMED EXACTLY ONCE. Call this separately for every place the file is going.
+ *
+ * The first run of this tool uploaded once and used the same sgid for the vault upload AND for
+ * the comment's `<bc-attachment>`. Every POST returned 201, the files all landed in Docs & Files,
+ * and all fourteen comments rendered as a single broken-attachment glyph with no preview. Ali's
+ * report was "i don't see any pictures pdf's visuals diagrams something".
+ *
+ * Proved by running both arms against a real ticket rather than reasoning about it, because the
+ * first hypothesis -- that the `<bc-attachment>` needed a wrapping `<div>` -- was WRONG, and a
+ * probe of only the suspected-good case would have appeared to confirm it:
+ *
+ *     ARM A  one sgid, spent on a vault upload, then reused in a comment   preview NO,  glyph YES
+ *     ARM B  two uploads, one sgid for the vault and one for the comment   preview YES, glyph no
+ *
+ * The 201 is the trap. Nothing in the response says the sgid was already spent.
+ */
 async function uploadBlob(filePath, filename) {
   if (DRY) { console.log(`  [DRY] upload ${filename}`); return 'DRY-SGID'; }
   const buf = fs.readFileSync(filePath);
@@ -137,9 +155,8 @@ async function main() {
       continue;
     }
 
-    const sgid = await uploadBlob(post.file, post.filename);
-
     // File it in the numbered folder, unless an upload of that name is already there.
+    // This consumes its OWN sgid; the comment gets a second one below.
     let vaultUrl = null;
     const dupe = alreadyFiled.find((u) => u.filename === post.filename
       || u.title === post.filename);
@@ -148,24 +165,53 @@ async function main() {
       console.log(`  (already in ${spec.folderTitle}, reusing link)`);
     } else {
       const up = await api('POST', `/buckets/${BUCKET}/vaults/${folder.id}/uploads.json`, {
-        attachable_sgid: sgid, base_name: post.filename.replace(/\.pdf$/i, ''),
+        attachable_sgid: await uploadBlob(post.file, post.filename),
+        base_name: post.filename.replace(/\.pdf$/i, ''),
         description: post.caption,
       });
       vaultUrl = up.app_url || null;
     }
 
+    // A SECOND upload of the same bytes, for the comment. Not a duplicate by accident: an sgid
+    // is single-use, so sharing one between the vault and the comment is what produced fourteen
+    // broken-attachment glyphs. Basecamp de-duplicates the underlying blob, so this costs a
+    // request rather than storage.
+    const commentSgid = await uploadBlob(post.file, post.filename);
+
     const filedLine = vaultUrl
       ? `<div style="font-size:12px;color:#475569"><strong>Filed in ${spec.folderTitle}:</strong> `
         + `<a href="${vaultUrl}">${post.filename}</a></div>`
       : '';
+    // Wrapped in its own <div> to match the format the reference ticket uses. This is NOT what
+    // fixed the broken previews — see `uploadBlob` — but it is the shape Basecamp's own editor
+    // produces, so it is the shape worth matching.
     const content = `${post.comment}<div><br></div>`
-      + `<bc-attachment sgid="${sgid}" caption="${post.caption.replace(/"/g, '&quot;')}">`
-      + '</bc-attachment>'
+      + `<div><bc-attachment sgid="${commentSgid}" `
+      + `caption="${post.caption.replace(/"/g, '&quot;')}"></bc-attachment></div>`
       + `<div><br></div>${filedLine}`;
 
     const posted = await api('POST', `/buckets/${BUCKET}/recordings/${spec.ticketId}/comments.json`,
       { content });
-    console.log(`${post.filename}: attached (${(bytes / 1024).toFixed(0)} KB) `
+
+    // READ IT BACK. The POST returns 201 whether or not the attachment resolved, which is how
+    // fourteen broken previews shipped looking like fourteen successes. Basecamp expands a live
+    // attachment server-side into <figure><img previewable="true">, so the stored content is the
+    // only honest answer to "did a human get a picture".
+    let preview = 'not checked (dry run)';
+    if (!DRY) {
+      const back = await api('GET', `/buckets/${BUCKET}/comments/${posted.id}.json`);
+      const body = String(back.content || '');
+      const rendered = /previewable="true"/.test(body) && body.includes('<figure>');
+      const broken = body.includes('☒');
+      preview = rendered ? 'preview OK' : `PREVIEW FAILED${broken ? ' (broken glyph)' : ''}`;
+      if (!rendered) {
+        throw new Error(
+          `${post.filename} posted but its preview did not render. The comment is on the ticket `
+          + 'and shows a broken attachment. Fix before continuing rather than posting the rest.',
+        );
+      }
+    }
+    console.log(`${post.filename}: attached (${(bytes / 1024).toFixed(0)} KB) ${preview} `
       + `-> ${posted.app_url || '(dry)'}`);
   }
 
