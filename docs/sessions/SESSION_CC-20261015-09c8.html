@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261015-09c8 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Thursday, October 15, 2026 at 6:45 AM</div>
+    <div><span class="sid">CC-20261015-09c8</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**&quot;Add a story&quot; was failing for every student: the publish promoted before it superseded, and the cap went 30 to 50**</h2>
+          <span class="badge">2026-10-14</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/sbp/planStore.ts`, the cap in `backend/src/services/sbp/addStoryService.ts`, and the two test files that pin them (PR #3095, merged as `ae27b1b3` and `b96d28aa`). Inside `publishPlan`&#39;s existing locked transaction the two UPDATEs swapped places: the incumbent is now SUPERSEDED FIRST and the target version promoted second. `build_plans_one_published_per_project` arrived on 2026-10-12 with the lifecycle work in `e8d3b5dc`, under the heading that &quot;two published plans become impossible&quot;, as a PARTIAL UNIQUE INDEX — and Postgres evaluates one of those per statement rather than at COMMIT, with no DEFERRABLE available for a partial index. Promoting first therefore put two published rows in play for the instant between the two statements, the index refused it, and the resulting `SequelizeUniqueConstraintError` surfaced to students as a bare &quot;Internal server error&quot; at the last step of Add a story. The reorder is safe because the transaction already takes `FOR UPDATE` on the project&#39;s rows, so the interleaving the original order was written to avoid cannot occur. Separately, and at the DRI&#39;s instruction, `MAX_STORIES_PER_BUILD` went 30 to 50.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">PR #3095 merged with all nine CI checks green — Backend typecheck, Backend unit tests, Frontend typecheck, Frontend unit tests, Frontend build, static security scan, secret scan plus route-auth lint, and both secret-scan history jobs. Locally the sbp suites report **56 passed, 5 skipped** and backend `tsc --noEmit` exits **0** under the pinned TypeScript 5.9.3, both measured after the last edit. The two reordered planStore assertions check the statements by CONTENT as well as by call index, so a statement inserted ahead of them fails the test rather than silently shifting what it checks, and reverting the cap to 30 fails the pinned cap test by name. The production recovery was read back from the database rather than from any script&#39;s return value: Swati&#39;s project holds published plan **v19** with STORY-030 and STORY-031 both present, REQ-036 and REQ-037 distinct, **exactly one** published row, and her **27** prior completions intact.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">NOT DEPLOYED, and that distinction is the whole state of this for every other student. The running backend container was built at **4:52 PM CDT on 2026-10-14**, roughly seventy minutes before the merge at about **6:03 PM CDT**, and reading the live image back confirms it rather than inferring it: `MAX_STORIES_PER_BUILD = 30`, and in the compiled `publishPlan` the promote sits at line 181 with the supersede at 185. Add a story therefore still fails for everyone except Swati until a backend deploy ships `ae27b1b3`. THE AUTHORITATIVE TEST FOR THIS CHANGE WAS NEVER RUN. `planStore.publishConcurrency.integration.test.ts` exists for exactly this function, needs a real Postgres, and self-skips without `DATABASE_URL` — which is how the defect reached production in the first place: the test covered the concurrent case, stayed green by skipping, and the statement ordering it documents went unchecked. That is unrun rather than failing, and the PR body states it plainly instead of leaving it to be discovered. ON THE RECOVERY: each of Swati&#39;s five failed attempts left an unpublished draft behind, and two of them had independently minted REQ-036 for DIFFERENT requirements, so publishing her v16 verbatim would have put one id on two requirements and rolled her build back to thirty stories by dropping the story she had just added. Her second story was re-minted onto the live plan as STORY-031 / REQ-037 with her wording kept exactly. ON THIS LOG&#39;S SESSION ID: the id this session had been carrying, `CC-20260901-r3k7`, already belongs to a 2026-09-01 billing-message session with its own file in this directory, so this log is a freshly minted `CC-20261015-09c8` rather than a collision compounded. The index itself belongs to the lifecycle workstream, which is no longer a live session on this machine, so the integration-test handoff has nowhere to go but the PR.</span></div>
+          
+        <div class="files">
+          <div class="files-label">Files touched</div>
+          <table><tbody>
+          <tr><td class="path">`backend/src/services/sbp/planStore.ts`</td><td>Supersede before promote, inside the existing locked transaction</td></tr>
+          <tr><td class="path">`backend/src/services/sbp/addStoryService.ts`</td><td>`MAX_STORIES_PER_BUILD` 30 to 50</td></tr>
+          <tr><td class="path">`backend/src/services/sbp/__tests__/planStore.test.ts`</td><td>Two order-sensitive tests, asserted by content and position</td></tr>
+          <tr><td class="path">`backend/src/services/sbp/__tests__/addStoryService.test.ts`</td><td>Accepts a story AT the cap; the cap value itself is pinned</td></tr></tbody></table>
+        </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**This log exists at all: the two merged commits recorded nothing**</h2>
+          <span class="badge">2026-10-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`docs/sessions/CC-20261015-09c8.md` (this file) and its generated report. Both commits in PR #3095 touch `/backend` and neither touched a session log, which CLAUDE.md&#39;s hard gate forbids, so the entry above is written under the catch-up rule and dated for the day the work landed rather than today.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`node scripts/generateSessionChangelog.js CC-20261015-09c8` renders `docs/sessions/SESSION_CC-20261015-09c8.html` and exits 0, which it refuses to do for a log with no entries.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The first attempt appended to `PROGRESS.md`, which is wrong — that file was sealed at the 2026-08-23 cutover and the changelog generator says so in its own failure message. The append was reverted rather than left in place, and the CLAUDE.md copy in this session&#39;s context is the stale one that still describes the shared file. Worth knowing for the next session that inherits the same stale copy: the live gate is `docs/sessions/CC-&lt;id&gt;.md`, one file per session, and `PROGRESS.md` is read-only history.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261015-09c8.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
