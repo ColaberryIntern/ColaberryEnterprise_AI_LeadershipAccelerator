@@ -19,7 +19,7 @@ import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { decomposeBuild, DecomposeError } from '../sbp/decomposeService';
 import { gateAndRepair } from '../sbp/planRepair';
 import { isPublishable } from '../sbp/planGate';
-import { buildSchedule, type CohortWindow } from '../sbp/buildSchedule';
+import { buildSchedule, type CohortWindow, type Schedule } from '../sbp/buildSchedule';
 import type { BuildPlan } from '../sbp/planContract';
 import { COMMAND_CENTER_STORY_ID, COMMAND_CENTER_TITLE, COMMAND_CENTER_NARRATIVE, COMMAND_CENTER_ACCEPTANCE } from '../sbp/commandCenterStory';
 import { generateBuildSpec } from './govBuildSpec';
@@ -57,6 +57,51 @@ function startOfUtcDay(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 const iso = (d: Date): string => d.toISOString().slice(0, 10);
+const DAY_MS = 86_400_000;
+
+/**
+ * The ship-by date: the day BEFORE the deadline, never earlier than today. Null when no deadline is known.
+ * The build/proposal must land before the cutoff, and a plan that finishes ON the deadline leaves no margin —
+ * so we target the day before (the owner's rule: "day before the deadline; it's already last minute").
+ */
+export function govShipByDate(deadline: Date | null | undefined, now0: Date): Date | null {
+  if (!deadline) return null;
+  const dayBefore = startOfUtcDay(new Date(startOfUtcDay(deadline).getTime() - DAY_MS));
+  return dayBefore.getTime() < now0.getTime() ? now0 : dayBefore;
+}
+
+/**
+ * Linearly rescale every date in a schedule onto the window [now0, ship-by], so the plan finishes the day
+ * before the deadline instead of spreading over the plan's natural weeks (which can land years out — the
+ * "pushed to 2027" bug). Order and relative spacing are preserved; the last date lands exactly on ship-by.
+ * PURE, and the identity function when no deadline is known (keeps the natural-weeks forward estimate).
+ */
+export function rescaleScheduleToDeadline(schedule: Schedule, now0: Date, deadline: Date | null): Schedule {
+  const shipBy = govShipByDate(deadline, now0);
+  if (!shipBy) return schedule;
+  const toT = (d: Date): number => startOfUtcDay(d).getTime();
+  // Anchor on the STORY dates (the real build work), so the LAST story lands exactly on ship-by. Demo/prep
+  // sit naturally after the last story, so they map past ship-by and clamp onto it (demo = the day before).
+  const taskT = schedule.tasks.map((t) => toT(t.dueOn));
+  if (taskT.length === 0) return schedule; // nothing to place
+  const minT = Math.min(...taskT);
+  const maxT = Math.max(...taskT);
+  const span = maxT - minT;
+  const target = shipBy.getTime() - now0.getTime();
+  const map = (d: Date): Date => {
+    const frac = span > 0 ? (toT(d) - minT) / span : 1; // single-date plans collapse onto ship-by
+    const nd = now0.getTime() + Math.round(frac * target);
+    return new Date(Math.min(Math.max(nd, now0.getTime()), shipBy.getTime()));
+  };
+  return {
+    ...schedule,
+    buildStart: map(schedule.buildStart),
+    buildEnd: map(schedule.buildEnd),
+    demoDay: map(schedule.demoDay),
+    tasks: schedule.tasks.map((t) => ({ ...t, dueOn: map(t.dueOn) })),
+    prep: schedule.prep.map((p) => ({ ...p, dueOn: map(p.dueOn) })),
+  };
+}
 
 export interface GovDatedStory {
   id: string;
@@ -108,16 +153,15 @@ export interface GovBuildPlanAIRequest {
 }
 
 /**
- * PURE: place a decomposed BuildPlan on real dates over the plan's NATURAL weeks (the decomposer assigns each
- * release to week_start..week_end), starting from `now` as a reference, and map it to the GovDatedPlan
- * read-model. This is the POST-AWARD build timeline — it is deliberately NOT bound to the proposal's
- * submission deadline (the build happens after award), so nothing is crammed or flagged "late" against the
- * submission cutoff. Deterministic (now is injected).
+ * PURE: place a decomposed BuildPlan on real dates and map it to the GovDatedPlan read-model. When a
+ * submission `deadline` is known, the plan is back-scheduled to FINISH THE DAY BEFORE IT (the owner's rule:
+ * "day before the deadline; it's already last minute") — the natural-week layout is rescaled onto
+ * [today → day-before-deadline] so dates never spread years out. With no deadline, it falls back to the
+ * plan's natural forward weeks and is flagged `unscheduled`. Deterministic (now is injected).
  */
-export function assembleGovDatedPlan(plan: BuildPlan, now: Date): { plan: GovDatedPlan; verdict: string } {
+export function assembleGovDatedPlan(plan: BuildPlan, now: Date, deadline?: Date | null): { plan: GovDatedPlan; verdict: string } {
   const now0 = startOfUtcDay(now);
-  // Span the plan's own weeks: prep/demo sit just AFTER the last release, so every release fits its natural
-  // window (no deadline compression, no roadmap-overflow).
+  // Lay out over the plan's own weeks first; rescaleScheduleToDeadline then compresses onto the deadline window.
   const maxWeek = Math.max(1, ...plan.releases.map((r) => r.week_end || r.week_start || 1));
   const window: CohortWindow = { cohortStart: now0, asOf: now0, startWeek: 1, prepWeek: maxWeek + 1, demoWeek: maxWeek + 2 };
 
@@ -128,7 +172,7 @@ export function assembleGovDatedPlan(plan: BuildPlan, now: Date): { plan: GovDat
     arr.push(s.id);
     storiesByRelease.set(s.release, arr);
   }
-  const schedule = buildSchedule({ window, releases: releasesIn, storiesByRelease });
+  const schedule = rescaleScheduleToDeadline(buildSchedule({ window, releases: releasesIn, storiesByRelease }), now0, deadline ?? null);
 
   const dueByStory = new Map<string, Date>();
   for (const t of schedule.tasks) dueByStory.set(t.storyId, startOfUtcDay(t.dueOn));
@@ -164,9 +208,14 @@ export function assembleGovDatedPlan(plan: BuildPlan, now: Date): { plan: GovDat
   };
   const allStories = stories.length ? [commandCenter, ...stories] : stories;
 
+  const shipBy = govShipByDate(deadline ?? null, now0);
+  const verdict = shipBy
+    ? `Scheduled to finish by ${iso(shipBy)} — the day before the deadline. ${schedule.verdict}`
+    : schedule.verdict;
+
   return {
-    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories: allStories, unscheduled: false },
-    verdict: schedule.verdict,
+    plan: { projectName: plan.project_name, descriptor: plan.descriptor, releases, stories: allStories, unscheduled: !deadline },
+    verdict,
   };
 }
 
@@ -246,7 +295,7 @@ export async function generateGovBuildPlanAI(req: GovBuildPlanAIRequest): Promis
     return { plan: null, verdict: '', cached: raw.cached, generatedAt: nowIso(), error: raw.error ?? 'The AI build plan could not be generated right now.' };
   }
   const now = toDate(req.now) ?? new Date();
-  const assembled = assembleGovDatedPlan(raw.plan, now);
+  const assembled = assembleGovDatedPlan(raw.plan, now, toDate(req.deadline));
   return { plan: assembled.plan, verdict: assembled.verdict, cached: raw.cached, generatedAt: nowIso() };
 }
 

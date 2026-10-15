@@ -28,7 +28,7 @@ import { gatePlan, blockingViolations } from '../sbp/planGate';
 import type { BuildPlan } from '../sbp/planContract';
 import { linkGovBuildToStudentProject } from './govDeliveryProject';
 import { factoryId } from './factoryIds';
-import { decomposeGovBuildPlanRaw } from './govBuildPlanAI';
+import { decomposeGovBuildPlanRaw, rescaleScheduleToDeadline } from './govBuildPlanAI';
 
 export type GovMaterializeReason = 'no_enrollment' | 'no_program' | 'decompose_error' | 'plan_blocked' | 'bad_input';
 export class GovMaterializeError extends Error {
@@ -66,11 +66,12 @@ function startOfUtcDay(d: Date): Date {
 }
 
 /**
- * Schedule the build over the plan's NATURAL weeks (the POST-AWARD build timeline), starting from `now`.
- * Deliberately NOT bound to the proposal's submission deadline — the build happens after award — so the
- * materialized tasks are never crammed or born late against the submission cutoff. PURE.
+ * Schedule the build, then — when a submission `deadline` is known — back-schedule it to FINISH THE DAY
+ * BEFORE IT (the owner's rule: "day before the deadline; it's already last minute"), so the materialized
+ * tasks match the dated plan the operator approved instead of spreading over natural weeks into 2027. With
+ * no deadline it keeps the plan's natural forward weeks. PURE.
  */
-export function govSyntheticSchedule(plan: BuildPlan, now: Date): Schedule {
+export function govSyntheticSchedule(plan: BuildPlan, now: Date, deadline?: Date | null): Schedule {
   const now0 = startOfUtcDay(now);
   const maxWeek = Math.max(1, ...plan.releases.map((r) => r.week_end || r.week_start || 1));
   const window: CohortWindow = { cohortStart: now0, asOf: now0, startWeek: 1, prepWeek: maxWeek + 1, demoWeek: maxWeek + 2 };
@@ -81,7 +82,7 @@ export function govSyntheticSchedule(plan: BuildPlan, now: Date): Schedule {
     arr.push(s.id);
     storiesByRelease.set(s.release, arr);
   }
-  return buildSchedule({ window, releases, storiesByRelease });
+  return rescaleScheduleToDeadline(buildSchedule({ window, releases, storiesByRelease }), now0, deadline ?? null);
 }
 
 /** Resolve a builder's PlatformIdentity to an Enrollment id: the link graph first, then a case-insensitive email match. */
@@ -146,7 +147,9 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
   }
 
   // 4. Schedule + materialize (idempotent on (project_id, story_id); injects the STORY-000 Command Center).
-  const schedule = govSyntheticSchedule(plan, now);
+  //    Back-scheduled to finish the day before the deadline when one is known (owner's "day before" rule).
+  const deadlineDate = input.deadline ? new Date(input.deadline) : null;
+  const schedule = govSyntheticSchedule(plan, now, deadlineDate && !Number.isNaN(deadlineDate.getTime()) ? deadlineDate : null);
   const mat = await materializePlanAsTasks(projectId, enrollmentId, plan, { schedule, now });
 
   return {

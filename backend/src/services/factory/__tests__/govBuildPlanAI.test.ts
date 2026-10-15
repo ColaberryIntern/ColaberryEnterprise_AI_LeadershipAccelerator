@@ -51,10 +51,10 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     expect(getInstrumentedOpenAI).not.toHaveBeenCalled();
   });
 
-  it("success → a dated plan over the plan's natural build weeks; STORY-000 leads; not bound to the submission deadline", async () => {
+  it('success → a dated plan back-scheduled to finish the day before the deadline; STORY-000 leads', async () => {
     const client = fakeClient(okCreate);
     (getInstrumentedOpenAI as jest.Mock).mockReturnValue(client);
-    const r = await generateGovBuildPlanAI(baseReq);
+    const r = await generateGovBuildPlanAI(baseReq);                    // deadline 2026-10-19, now 2026-10-01
     expect(r.error).toBeUndefined();
     expect(r.plan).not.toBeNull();
     expect(r.plan!.stories[0].id).toBe('STORY-000');            // the Command Center leads the preview
@@ -62,9 +62,14 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
     expect(r.plan!.releases).toHaveLength(2);
     for (const s of r.plan!.stories) {
       expect(s.dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      expect(s.dueDate >= '2026-10-01').toBe(true);          // scheduled forward from the build start
+      expect(s.dueDate >= '2026-10-01').toBe(true);             // never before today
+      expect(s.dueDate <= '2026-10-18').toBe(true);             // never on/after the deadline — day before at the latest
       expect(Array.isArray(s.acceptance)).toBe(true);
     }
+    // the last build story lands exactly the day before the Oct-19 deadline (no 2027 overrun)
+    const last = r.plan!.stories.map((s) => s.dueDate).sort().slice(-1)[0];
+    expect(last).toBe('2026-10-18');
+    expect(r.verdict).toContain('day before the deadline');
     for (const rel of r.plan!.releases) {
       expect(rel.startDate <= rel.endDate).toBe(true);
     }
@@ -125,20 +130,29 @@ describe('govBuildPlanAI (advisory, reuses the SBP engine, fail-soft)', () => {
 });
 
 describe('assembleGovDatedPlan (pure, deterministic)', () => {
-  it("schedules over the plan's natural weeks from the start, orders windows, leads with STORY-000, and is NOT bound to the submission deadline", () => {
-    const { plan, verdict } = assembleGovDatedPlan(PLAN, new Date('2026-10-01'));
-    expect(typeof verdict).toBe('string');
+  it('WITH a deadline → back-scheduled to finish the day before it; STORY-000 leads; ordered windows', () => {
+    const { plan, verdict } = assembleGovDatedPlan(PLAN, new Date('2026-10-01'), new Date('2026-10-19'));
+    expect(verdict).toContain('day before the deadline');
     expect(plan.stories[0].id).toBe('STORY-000');
-    expect(plan.stories.every((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.dueDate) && s.dueDate >= '2026-10-01')).toBe(true);
+    expect(plan.stories.every((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.dueDate) && s.dueDate >= '2026-10-01' && s.dueDate <= '2026-10-18')).toBe(true);
     expect(plan.releases.every((r) => r.startDate <= r.endDate)).toBe(true);
     expect(plan.unscheduled).toBe(false);
-    // PLAN's r1 (weeks 3-4) lands well AFTER an Oct-19 submission deadline — proving the build is NOT clamped to it.
+    // the latest story lands exactly the day before the Oct-19 deadline — never 2027
     const last = plan.stories.map((s) => s.dueDate).sort().slice(-1)[0];
-    expect(last > '2026-10-19').toBe(true);
+    expect(last).toBe('2026-10-18');
   });
 
-  it('unscheduled is always false — the build timeline no longer depends on a deadline', () => {
-    const { plan } = assembleGovDatedPlan(PLAN, new Date('2026-10-01'));
+  it('a deadline at/already past today → everything clamps to today, never before it', () => {
+    const { plan } = assembleGovDatedPlan(PLAN, new Date('2026-10-01'), new Date('2026-10-01'));
+    expect(plan.stories.every((s) => s.dueDate === '2026-10-01')).toBe(true);
     expect(plan.unscheduled).toBe(false);
+  });
+
+  it('NO deadline → keeps the natural forward weeks and is flagged unscheduled (honest estimate)', () => {
+    const { plan } = assembleGovDatedPlan(PLAN, new Date('2026-10-01'));
+    expect(plan.unscheduled).toBe(true);
+    // PLAN's r1 (weeks 3-4) runs past an Oct-19 date — natural weeks, not clamped
+    const last = plan.stories.map((s) => s.dueDate).sort().slice(-1)[0];
+    expect(last > '2026-10-19').toBe(true);
   });
 });
