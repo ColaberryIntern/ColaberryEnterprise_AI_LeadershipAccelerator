@@ -87,6 +87,12 @@ export interface OccurrenceState {
   provider_health: ProviderHealth;
   version: number;
   content_started_at: Date | null;
+  /**
+   * When the broadcast finished. Needed here, not merely on the model, so the transition can
+   * be idempotent about it the same way `content_started_at` is: a second `end` must not
+   * rewrite the first end instant.
+   */
+  ended_at: Date | null;
 }
 
 export interface CommandContext {
@@ -174,7 +180,30 @@ export function applyProducerCommand(
     };
   }
 
-  return { ok: true, patch: { editorial_state: target, version: current.version + 1 } };
+  const patch: Partial<OccurrenceState> = { editorial_state: target, version: current.version + 1 };
+
+  /**
+   * THE END INSTANT, RECORDED ONCE.
+   *
+   * `ended_at` existed on the model and in the schema from the start and NOTHING EVER WROTE
+   * IT. The first production airing ended cleanly — state moved to `ended`, discovery
+   * stopped returning the occurrence, the badge cleared — and left `ended_at` null, so there
+   * was no end instant for any later report on duration, watch windows or replay
+   * availability to work from.
+   *
+   * Idempotent, like `content_started_at`: a second `end` must not rewrite the first end
+   * instant. `editorial_state === target` already returns a noop above, but this guard stands
+   * on its own so the property survives a future path that reaches here twice.
+   *
+   * ONLY `ended`, DELIBERATELY NOT `cancelled`. A cancelled occurrence never aired, and
+   * stamping it with a time it "ended" would assert in the data that something ran and
+   * finished. Cancellation is its own state and reads as one.
+   */
+  if (target === 'ended' && !current.ended_at) {
+    patch.ended_at = new Date(ctx.nowMs);
+  }
+
+  return { ok: true, patch };
 }
 
 export interface ProviderEvent {
