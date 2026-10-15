@@ -6,6 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import AuditLog from '../models/AuditLog';
+import { redactSecrets } from './auditRedaction';
 
 /**
  * Extract entity type and ID from the request URL.
@@ -58,7 +59,12 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
     return next();
   }
 
-  const startBody = { ...req.body };
+  // REDACT AT CAPTURE, not at write. The body is snapshotted here because a
+  // handler may mutate req.body before the response finishes, and the snapshot
+  // is what gets persisted — so the secret must be gone from the snapshot
+  // itself. Redacting later would leave the plaintext sitting in this closure
+  // for the life of the request, which is the shape of the defect this fixes.
+  const startBody = redactSecrets({ ...req.body });
   const { entityType, entityId } = extractEntityInfo(req);
 
   // Hook into response finish to log after success
