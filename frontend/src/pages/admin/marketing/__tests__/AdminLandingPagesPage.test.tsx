@@ -16,6 +16,11 @@ jest.mock('../../../../services/landingPageApi', () => ({
   publishLandingPage: jest.fn(),
   unpublishLandingPage: jest.fn(),
   previewLandingPage: jest.fn(),
+  // The traffic panel on this page calls this on mount. An explicit mock factory replaces the
+  // WHOLE module, so an export missing here is `undefined` at the call site - which failed every
+  // test in this file with "fetchLandingPageTraffic is not a function", not just the ones that
+  // care about traffic. Resolving empty keeps the panel silent and the page under test unchanged.
+  fetchLandingPageTraffic: jest.fn(),
   errorMessage: (_e: unknown, fallback: string) => fallback,
 }));
 
@@ -37,6 +42,7 @@ const mockReviseLandingPage = lpApi.reviseLandingPage as jest.Mock;
 const mockPublishLandingPage = lpApi.publishLandingPage as jest.Mock;
 const mockUnpublishLandingPage = lpApi.unpublishLandingPage as jest.Mock;
 const mockPreviewLandingPage = lpApi.previewLandingPage as jest.Mock;
+const mockFetchTraffic = lpApi.fetchLandingPageTraffic as jest.Mock;
 const mockUseBrand = useMarketingBrand as jest.Mock;
 
 import AdminLandingPagesPage from '../AdminLandingPagesPage';
@@ -95,6 +101,12 @@ beforeEach(() => {
   mockUseBrand.mockReturnValue({ brandId: BRAND.id, brand: BRAND });
   mockListLandingPages.mockResolvedValue([page()]);
   mockPreviewLandingPage.mockResolvedValue('<!doctype html><title>t</title><h1>Ship an AI project</h1>');
+  // Set HERE and not in the mock factory: `jest.clearAllMocks()` above wipes a
+  // `mockResolvedValue` declared at mock-definition time, leaving a bare fn that returns
+  // undefined - which fails as "Cannot read properties of undefined (reading 'then')" in
+  // the panel's useEffect, in every test in this file. The traffic panel is not what these
+  // tests are about; it just has to stay quiet.
+  mockFetchTraffic.mockResolvedValue({ traffic: [], window_days: 30 });
 });
 
 afterEach(() => { act(() => { root.unmount(); }); container.remove(); });
