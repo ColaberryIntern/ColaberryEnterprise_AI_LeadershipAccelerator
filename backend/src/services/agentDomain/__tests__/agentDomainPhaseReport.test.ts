@@ -42,12 +42,17 @@ describe('the report covers every domain, with figures read from the data', () =
     expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(443);
   });
 
-  it('reports six reachable managers and four blocked', () => {
-    expect(r.totals.managers_reachable).toBe(6);
-    expect(r.totals.managers_blocked).toBe(4);
+  it('reports seven reachable managers and three blocked', () => {
+    // CORRECTED 2026-10-15 from six/four. Taiwo Oludimimu DOES have an admin_users row
+    // (taiwo@colaberry.com, role admin, a legacy full admin). The original 'no login'
+    // finding was a false negative from an EMAIL MISMATCH: his org_members row carries his
+    // personal address, his login is the work one. So admissions is reachable and the split
+    // is SEVEN reachable / THREE blocked (platform, product_experience, sales).
+    expect(r.totals.managers_reachable).toBe(7);
+    expect(r.totals.managers_blocked).toBe(3);
   });
 
-  it('distinguishes 9 accountable humans from the 5 T03 measured as REACHABLE', () => {
+  it('distinguishes 9 accountable humans from the 6 now measured as REACHABLE', () => {
     // Two different figures that are easy to conflate, and I conflated them: T03's headline "five
     // distinct humans" counts the humans behind the SIX REACHABLE domains, where Ali holds two.
     // Across all ten domains there are NINE distinct accountable humans. Both are asserted here so
@@ -56,7 +61,9 @@ describe('the report covers every domain, with figures read from the data', () =
     const reachableHumans = new Set(
       r.rows.filter((x) => x.manager_can_reach_surface).map((x) => x.accountable_human),
     );
-    expect(reachableHumans.size).toBe(5);
+    // Moved 5 -> 6 on 2026-10-15: admissions became reachable. The NINE total is unchanged --
+    // Taiwo was always one of the nine accountable humans, just recorded as blocked.
+    expect(reachableHumans.size).toBe(6);
   });
 
   it('every blocked domain carries a named reason, never a default', () => {

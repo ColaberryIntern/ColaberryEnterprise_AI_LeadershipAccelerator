@@ -145,33 +145,35 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Admissions & Applicant Experience',
     manager_identity_id: '1fbb5316-1381-4b8a-81a8-3a7325b39d5f',
     manager_email: 'taiwooludimimu@gmail.com',
-    can_reach_surface: false,
-    // NOT just a missing login, and the ownership half is now SETTLED.
+    // CORRECTED 2026-10-15. This was `false` and that was WRONG.
     //
-    // OWNER DECISION, 2026-10-11: "admissions is taiwo." So the Admissions DOMAIN manager is
-    // Taiwo Oludimimu, full stop. What remains is NOT a question about who owns the domain; it is
-    // two mechanical access failures plus one naming collision, and they are different things:
+    // The original finding said "Taiwo has no admin_users row". He has one:
+    // `taiwo@colaberry.com`, role `admin`, created 2026-09-18, display_name "Taiwo Oludimimu".
+    // Role `admin` is a LEGACY FULL ADMIN -- `adminAllowedSections` returns ALL_SECTIONS for it,
+    // and `requireAdmin` accepts it -- so he reaches all nine admissions routes today.
     //
-    //   (a) Taiwo has no `admin_users` row, so he cannot authenticate to the surface at all.
-    //   (b) Measured 2026-10-09: `/api/admin/admissions` appears ZERO times in
-    //       `middlewares/mgmtSectionGate.ts`, whose :213-215 allows a scoped role ONLY its mapped
-    //       sections and 403s everything else. So granting him a scoped login would STILL refuse
-    //       him on all nine of his own routes. Fixing (a) without (b) looks like a fix and is not.
-    //   (c) Separately, the mgmt ROLE literally named `admissions` grants the `internship`
-    //       section, and `mgmtSectionGate.ts:100` attributes that role to Dhee. With ownership
-    //       decided, that is no longer an ownership dispute -- it is a role NAME that means
+    // THE FALSE NEGATIVE CAME FROM AN EMAIL MISMATCH, which is worth recording because it is a
+    // reusable trap: his `org_members` row carries his PERSONAL address
+    // (taiwooludimimu@gmail.com) while he signs in with his WORK one (taiwo@colaberry.com).
+    // Matching org_members.email against admin_users.email finds nothing and reads as "no login".
+    // The reliable link is `org_members.enrollment_id` -> `enrollments.email`, a real foreign key
+    // populated on 29 of 29 rows. `platform_identity_id` would be the proper identity column and
+    // is NULL on all 29, so it cannot carry this yet.
+    //
+    // What is still true, and what is not:
+    //   (a) WRONG AS ORIGINALLY STATED. He has a login, and it is a full admin login.
+    //   (b) TRUE BUT NOT A BLOCKER FOR HIM. `/api/admin/admissions` really does appear ZERO times
+    //       in `mgmtSectionGate` PATH_SECTION. It does not block him, because all nine routes in
+    //       `admissionsRoutes.ts` carry `requireAdmin`, NOT `requireSection` -- so the section
+    //       gate is not what decides them. It would become a blocker the moment those routes move
+    //       to `requireSection`, and there is no `admissions` SECTION KEY to map to either (the
+    //       14 keys in SECTION_KEYS do not include one). Recorded for whoever does that work.
+    //   (c) STILL TRUE. The mgmt ROLE literally named `admissions` grants the `internship`
+    //       section and `mgmtSectionGate.ts:100` attributes it to Dhee -- a role NAME meaning
     //       something other than the domain it is named after. Recorded so nobody later "fixes"
     //       the domain owner to match the role name and undoes the owner's decision.
-    blocker:
-      'manager_access_unreachable_two_ways: Taiwo Oludimimu owns this domain (owner decision, '
-      + '2026-10-11) and is already the reports_to target for 4 agents, but he cannot reach the '
-      + 'surface for two independent reasons: (a) he has no admin_users row, and (b) no '
-      + '/api/admin/admissions prefix is mapped in mgmtSectionGate PATH_SECTION, which is '
-      + 'deny-by-default for scoped roles -- so granting a scoped login alone would still 403 him '
-      + 'on all nine of his own routes. Both must be fixed together. Note separately that the mgmt '
-      + "ROLE named 'admissions' grants the 'internship' section and is attributed to Dhee at "
-      + 'mgmtSectionGate.ts:100: a role-name collision, not an ownership question. Neither is '
-      + 'fixed by this build.',
+    can_reach_surface: true,
+    blocker: null,
     agent_id: null,
     intended_builder: 'Kalkidan Bezabeh',
     intended_builder_state: 'verified_active',
