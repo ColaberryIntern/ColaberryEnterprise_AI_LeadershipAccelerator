@@ -22,6 +22,7 @@ import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
 import { BuildSpecPanel } from './govWorkspace/BuildSpecPanel';
 import { GovBuildPlanAIPanel } from './govWorkspace/GovBuildPlanAIPanel';
 import { GovMaterializePanel } from './govWorkspace/GovMaterializePanel';
+import { SubmissionReadinessPanel } from './govWorkspace/SubmissionReadinessPanel';
 import { WORKSPACE_STEPS, resolveStep, deriveStepState, type WorkspaceStep } from './govWorkspace/workspaceSteps';
 import { StepBar } from './govWorkspace/StepBar';
 import { RightRail } from './govWorkspace/RightRail';
@@ -1607,6 +1608,18 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           </GovTabPanel>{/* end Build */}
 
           <GovTabPanel active={activeStep === 'submit'}>
+          {/* ── What gets submitted (advisory summary: legible bid, changes nothing) ─ */}
+          <SectionCard title="What gets submitted" icon="file-list-3-line"
+            subtitle="A read-only summary of the bid — what it must answer, how far along it is, and the deadline with a day-before ship target. It changes nothing; the release controls are below.">
+            <SubmissionReadinessPanel
+              readiness={ws.submissionReadiness}
+              slots={ws.responseSlots ?? []}
+              requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text, dueStage: r.dueStage }))}
+              deadlineUtc={ws.source?.deadline?.utc ?? oppDetail?.opportunity?.closeDate ?? null}
+              daysLeft={daysLeft(ws.source?.deadline?.utc ?? oppDetail?.opportunity?.closeDate ?? null)}
+            />
+          </SectionCard>
+
           {/* ── Complete Your Submission (forward: readiness mirror + the response checklist) ─ */}
           {(
             <SectionCard title="Complete your submission" icon="send-plane-line"
