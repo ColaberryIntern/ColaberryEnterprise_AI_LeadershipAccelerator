@@ -142,7 +142,13 @@ describe('account honesty', () => {
     expect(text()).toContain('Token expired');
     expect(text()).toContain('expired 2 days ago');
     expect(text()).not.toContain('Connected');
-    expect(text()).toContain('0 of 1 account can publish today');
+    // The sentence "0 of 1 account can publish today" used to carry this; it was removed in the
+    // 2026-10-15 redesign because the same fact appeared three times on one screen. The property
+    // it protected is unchanged and still pinned, now against the two places that state it: the
+    // tile that counts publishable channels, and the banner that makes it actionable.
+    expect(text()).toContain('0Channels that can publish');
+    expect(text()).toContain('A channel needs you');
+    expect(text()).toContain('token expired');
   });
 
   it('a healthy account is counted, and the hand-posted networks are named', async () => {
@@ -156,7 +162,10 @@ describe('account honesty', () => {
     }));
     await render();
     expect(text()).toContain('Connected');
-    expect(text()).toContain('1 of 1 account can publish today');
+    expect(text()).toContain('1Channels that can publish');
+    // And a healthy account raises NO alarm - without this the banner could fire always and the
+    // assertion above would still pass.
+    expect(text()).not.toContain('A channel needs you');
     expect(text()).toContain('Posted by hand: X');
     expect(text()).toContain('Instagram');
   });
